@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title>Live Video - Blue Iris</title>
+	<script type="text/javascript" src="clappr/clappr.min.js"></script>
+	<script type="text/javascript">
+		var UrlParameters =
+		{
+			loaded: false,
+			parsed_url_params: {},
+			Get: function (key)
+			{
+				if (!this.loaded)
+				{
+					var params = this.parsed_url_params;
+					window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value) { params[key.toLowerCase()] = decodeURIComponent(value); })
+					this.loaded = true;
+				}
+				if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
+					return this.parsed_url_params[key.toLowerCase()];
+				return "";
+			}
+		};
+		function onResize()
+		{
+			var dataplayer = getElementWithAttribute("data-player");
+			if (dataplayer != null)
+			{
+				dataplayer.style.width = window.innerWidth + "px";
+				dataplayer.style.height = window.innerHeight + "px";
+			}
+		}
+		function getElementWithAttribute(attribute)
+		{
+			var allElements = document.getElementsByTagName('*');
+			for (var i = 0, n = allElements.length; i < n; i++)
+				if (allElements[i].getAttribute(attribute) !== null)
+					return allElements[i];
+			return null;
+		}
+		function onStreamingError(obj)
+		{
+			var description = "Unknown";
+			try
+			{
+				var code = obj.error.code;
+				if (code == 1)
+					description = "Aborted";
+				else if (code == 2)
+					description = "Network Error";
+				else if (code == 3)
+					description = "Decoding Error";
+				else if (code == 4)
+					description = "Source Not Supported";
+			}
+			catch (ex)
+			{
+			}
+			ShowErrorMessage("Video player reports error: " + description);
+		}
+		function ShowErrorMessage(message)
+		{
+			var errorDiv = document.createElement("div");
+			errorDiv.style.position = "absolute";
+			errorDiv.style.top = "10px";
+			errorDiv.style.left = "10px";
+			errorDiv.style.width = "350px";
+			errorDiv.style.height = "100px";
+			errorDiv.style.borderStyle = "solid";
+			errorDiv.style.borderWidth = "3px";
+			errorDiv.style.borderRadius = "5px";
+			errorDiv.style.borderColor = "#FF0000";
+			errorDiv.style.backgroundColor = "#FFFFFF";
+			errorDiv.style.padding = "10px";
+			errorDiv.style.color = "#000000";
+			errorDiv.innerHTML = message;
+			errorDiv.id = "errordiv";
+			errorDiv.onclick = function ()
+			{
+				errorDiv.remove();
+			}
+			document.body.appendChild(errorDiv);
+		}
+		window.onresize = onResize;
+	</script>
+	<style type="text/css">
+		body
+		{
+			background-color: Black;
+			margin: 0px;
+			overflow: hidden;
+		}
+	</style>
+</head>
+<body>
+	<div>
+		<div id="player"></div>
+	</div>
+	<script type="text/javascript">
+		var camId = (UrlParameters.Get("cam") == "" ? "index" : UrlParameters.Get("cam"));
+		var src = "/h264/" + camId + "/temp.m3u8";
+		var player = new Clappr.Player({ source: src, parentId: "#player", autoPlay: false, disableVideoTagContextMenu: true });
+		player.on('error', onStreamingError);
+		player.on('fullscreen', function () { setTimeout(onResize, 0); setTimeout(onResize, 100); });
+		player.play();
+		onResize();
+	</script>
+</body>
+</html>

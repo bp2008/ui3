@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Blue Iris Login</title>
+	<script type="text/javascript">
+		var login_version = "3";
+	</script>
+	<script type="text/javascript">
+		window.onerror = function (msg, url, line, charIdx)
+		{
+			try
+			{
+				var versionStr = "unknown";
+				if (typeof login_version != "undefined")
+					versionStr = login_version;
+				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
+				alert("An unexpected error has occurred in Blue Iris Login (version " + versionStr + ").\n\nIf you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nURL: " + url + "\nLine: " + line + "\nChar: " + charIdx);
+			}
+			catch (ex)
+			{
+				alert(ex);
+			}
+		};
+	</script>
+	<script src="applet/loginScripts.js" type="text/javascript"></script>
+	<script type="text/javascript">
+		var autologin_timeout_1 = null;
+		var autologin_timeout_2 = null;
+		var existingSession = "";
+		$(function ()
+		{
+			if (typeof window.JSON == 'undefined')
+			{
+				alert("Your browser is too old to use the Blue Iris web interface.");
+				return;
+			}
+			$(window).resize(resized);
+			resized();
+			window.onbeforeunload = function ()
+			{
+				cbLoginAutomaticallyClicked();
+				return;
+			}
+
+			// Handle automatic login
+			if (GetPersistedValue("loginautomatically") == "1")
+			{
+				$("#cbLoginAutomatically").attr('checked', 'checked');
+				if (UrlParameters.Get("autologin") == "0")
+				{
+					SetPersistedValue("override_disable_auto_login_once", "1");
+					location.href = location.href.replace(/autologin=0/gi, '');
+				}
+				if (GetPersistedValue("override_disable_auto_login_once") != "1")
+				{
+					$("#txtUn").val(Base64.decode(GetPersistedValue("un64")));
+					$("#txtPw").val(Base64.decode(GetPersistedValue("pw64")));
+					if ($("#txtUn").val() != "" && $("#txtPw").val() != "")
+					{
+						if ($("#txtUn").val() == "SOME_USER_NAME_TO_LOG_IN_INSTANTLY")
+						{
+							if ($("#cbLoginAutomatically").is(":checked"))
+								login();
+						}
+						else
+						{
+							$("#btnLogin").val("Logging in, in 2 seconds");
+							autologin_timeout_1 = setTimeout(function () { $("#btnLogin").val("Logging in, in 1 second"); }, 1000);
+							autologin_timeout_2 = setTimeout(function ()
+							{
+								if ($("#cbLoginAutomatically").is(":checked"))
+									login();
+							}, 2000);
+						}
+					}
+				}
+				SetPersistedValue("override_disable_auto_login_once", "0");
+			}
+			else
+				$("#cbLoginAutomatically").removeAttr('checked');
+
+			// Check for existing session
+			ExecJSON({ cmd: "login", session: $.cookie("session") }, function (response)
+			{
+				if (response.result == "fail")
+				{
+					// No existing session. Attempt Anonymous login
+					var myResponse = md5("Anonymous:" + response.session + ":");
+					ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
+					{
+						if (response.result == "success")
+						{
+							existingSession = response.session;
+							SetStatus("An anonymous " + (response.data.admin ? "administrator" : "user") + ' session is available. <a href="javascript:LeaveLoginPage()">Click here to use it.</a>');
+						}
+					},
+						function (jqXHR, textStatus, errorThrown)
+						{
+							HandleError("Unable to contact Blue Iris server");
+						});
+				}
+				else if (response.result == "success")
+				{
+					existingSession = response.session;
+					SetStatus("An existing " + (response.data.admin ? "administrator" : "user") + ' session is available. <a href="javascript:LeaveLoginPage()">Click here to use it.</a>');
+				}
+			},
+				function (jqXHR, textStatus, errorThrown)
+				{
+					HandleError("Unable to contact Blue Iris server");
+				});
+		});
+		function login()
+		{
+			cbLoginAutomaticallyClicked();
+			$("#btnLogin").val("Logging in ...");
+			SetStatus();
+			ExecJSON({ cmd: "login" }, function (response)
+			{
+				var myResponse = md5($("#txtUn").val() + ":" + response.session + ":" + $("#txtPw").val());
+				ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
+				{
+					$("#btnLogin").val("Log in");
+					if (response.result == "success")
+					{
+						existingSession = response.session;
+						LeaveLoginPage();
+					}
+					else
+					{
+						HandleError(response.data.reason);
+					}
+				},
+					function (jqXHR, textStatus, errorThrown)
+					{
+						HandleError("Unable to contact Blue Iris server");
+						$("#btnLogin").val("Log in");
+					});
+			},
+				function (jqXHR, textStatus, errorThrown)
+				{
+					HandleError("Unable to contact Blue Iris server");
+					$("#btnLogin").val("Log in");
+				});
+		}
+		function LeaveLoginPage()
+		{
+			$.cookie("session", existingSession, { path: "/" });
+			var page = UrlParameters.Get("page");
+			if (page == "")
+				page = "/";
+			location.href = page;
+		}
+		function cancelAutoLogin()
+		{
+			if (autologin_timeout_1 != null)
+			{
+				clearTimeout(autologin_timeout_1);
+				autologin_timeout_1 = null;
+			}
+			if (autologin_timeout_2 != null)
+			{
+				clearTimeout(autologin_timeout_2);
+				autologin_timeout_2 = null;
+			}
+			$("#btnLogin").val("Log in");
+		}
+		function cbLoginAutomaticallyClicked()
+		{
+			cancelAutoLogin();
+			var isChecked = $("#cbLoginAutomatically").is(":checked");
+			SetPersistedValue("loginautomatically", isChecked ? "1" : "0");
+			SetPersistedValue("un64", isChecked ? Base64.encode($("#txtUn").val()) : "");
+			SetPersistedValue("pw64", isChecked ? Base64.encode($("#txtPw").val()) : "");
+		}
+		function GetPersistedValue(key)
+		{
+			if (typeof Storage !== "undefined")
+				return localStorage.getItem("bi_" + key);
+			else
+				return $.cookie(key);
+		}
+		function SetPersistedValue(key, value)
+		{
+			if (typeof Storage !== "undefined")
+				return localStorage.setItem("bi_" + key, value);
+			else
+				return $.cookie(key, value, { expires: 365 });
+		}
+		function pwKeypress(ele, e)
+		{
+			var keycode;
+			if (window.event) keycode = window.event.keyCode;
+			else if (typeof e != "undefined" && e) keycode = e.which;
+			else return true;
+
+			if (keycode == 13)
+			{
+				login();
+				return false;
+			}
+			else
+				return true;
+		}
+		function resized()
+		{
+			$("#status").hide();
+			$("#status").css("max-width", $("#login").width() + "px");
+			$("#status").show();
+			$('#login').css({ position: 'absolute', left: ($(window).width() - $('#login').outerWidth()) / 2, top: ($(window).height() - $('#login').outerHeight()) / 2 });
+			$("#status").css("max-width", $("#login").width() + "px");
+			var heightTotal = 0;
+			$("#login").children().each(function (idx, ele)
+			{
+				heightTotal += $(ele).outerHeight(true);
+			});
+			if (heightTotal > $(window).height())
+			{
+				if ($("#status").parent().attr("id") != "status_wrapper_upper")
+					$("#status_wrapper_upper").append($("#status"));
+			}
+			else
+			{
+				if ($("#status").parent().attr("id") != "status_wrapper_lower")
+					$("#status_wrapper_lower").append($("#status"));
+			}
+			$("#lblLoginAutomatically").parent().css("margin-left", (($('#login').outerWidth() - $("#lblLoginAutomatically").outerWidth(true)) / 2) + "px");
+		};
+		function HandleError(error)
+		{
+			SetStatus(error, "#FF6262");
+		}
+		function SetStatus(html, color)
+		{
+			if (typeof html == "undefined" || html == null || html == "")
+			{
+				html = "";
+				$("#status").hide();
+			}
+			else
+				$("#status").show();
+			if (typeof color == "undefined" || color == null || color == "")
+				color = "#FFFFFF";
+			$("#status").html(html);
+			$("#status").css("color", color);
+			resized();
+		}
+		function ExecJSON(args, callbackSuccess, callbackFail)
+		{
+			$.ajax({
+				type: 'POST',
+				url: "json",
+				data: JSON.stringify(args),
+				dataType: "json",
+				success: function (data)
+				{
+					if (callbackSuccess)
+						callbackSuccess(data);
+				},
+				error: function (jqXHR, textStatus, errorThrown)
+				{
+					if (callbackFail)
+						callbackFail(jqXHR, textStatus, errorThrown);
+				}
+			});
+		}
+		var UrlParameters =
+			{
+				loaded: false,
+				parsed_url_params: {},
+				Get: function (key)
+				{
+					if (!this.loaded)
+					{
+						var params = this.parsed_url_params;
+						window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value) { params[key.toLowerCase()] = decodeURIComponent(value); })
+						this.loaded = true;
+					}
+					if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
+						return this.parsed_url_params[key.toLowerCase()];
+					return "";
+				}
+			};
+	</script>
+	<style type="text/css">
+		/**
+		* Html5 Placeholder Polyfill - v2.1.0 - 2016-02-26
+		* web: http://blog.ginader.de/dev/jquery/HTML5-placeholder-polyfill/
+		* issues: https://github.com/ginader/HTML5-placeholder-polyfill/issues
+		* Copyright (c) 2016 Dirk Ginader; Licensed MIT, GPL
+		*/
+
+		span.placeholder
+		{
+			position: absolute;
+			font-size: 75%;
+			color: #999;
+			font-family: sans-serif;
+			padding: 4px 3px;
+			z-index: 1;
+			cursor: text;
+		}
+
+		span.placeholder-hide-except-screenreader
+		{
+			clip: rect(1px 1px 1px 1px);
+			clip: rect(1px,1px,1px,1px);
+			padding: 0 !important;
+			border: 0 !important;
+			height: 1px !important;
+			width: 1px !important;
+			overflow: hidden;
+		}
+
+		span.placeholder-hide
+		{
+			display: none;
+		}
+
+		label.visuallyhidden-with-placeholder
+		{
+			height: auto !important;
+			overflow: visible !important;
+			position: absolute !important;
+			left: -999em;
+		}
+
+		::-webkit-input-placeholder, ::-moz-placeholder, :-ms-input-placeholder, :-moz-placeholder, ::placeholder, label .placeholder
+		{
+		}
+
+		input:placeholder-shown, input.placeholder-shown
+		{
+		}
+	</style>
+	<style type="text/css">
+		html
+		{
+			height: 100%;
+		}
+
+		body
+		{
+			margin: 0px;
+			width: 100%;
+			height: 100%;
+			font-family: sans-serif;
+			background: #212325; /* Old browsers */
+			background: -moz-radial-gradient(center, ellipse cover, #45484d 0%, #000000 100%); /* FF3.6-15 */
+			background: -webkit-radial-gradient(center, ellipse cover, #45484d 0%,#000000 100%); /* Chrome10-25,Safari5.1-6 */
+			background: radial-gradient(ellipse at center, #45484d 0%,#000000 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+			filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#45484d', endColorstr='#000000',GradientType=0 ); /* IE6-9 fallback on horizontal gradient */
+		}
+
+		#login
+		{
+			position: absolute;
+			max-width: 90%;
+			max-height: 90%;
+		}
+
+		h1
+		{
+			color: #fff;
+			text-shadow: 0 0 10px rgba(0,0,0,0.3);
+			margin: 0 0 20px 0;
+			text-align: center;
+		}
+
+		input
+		{
+			outline: none;
+		}
+
+		.text, .btn
+		{
+			width: 100%;
+			font-size: 1.15em;
+			margin: 0 0 10px 0;
+			background: #333333;
+			background: rgba(0,0,0,0.3);
+			padding: 10px;
+			color: #ffffff;
+			text-shadow: 1px 1px 1px rgba(0,0,0,0.3);
+			border: 1px solid rgba(0,0,0,0.3);
+			border-radius: 4px;
+			box-shadow: inset 0 -5px 45px rgba(100,100,100,0.2), 0 1px 1px rgba(255,255,255,0.2);
+			transition: box-shadow .2s ease;
+			box-sizing: border-box;
+		}
+
+			.text:focus
+			{
+				background: #444444;
+				background: rgba(0,0,0,0.3);
+				box-shadow: inset 0 -5px 45px rgba(100,100,100,0.4), 0 1px 1px rgba(255,255,255,0.2);
+			}
+
+			.btn:focus
+			{
+				box-shadow: inset 0 -5px 45px rgba(100,100,100,0.7), 0 1px 1px rgba(255,255,255,0.6);
+			}
+
+		.btn
+		{
+			margin: 0 0 10px 0;
+			display: block;
+			text-shadow: 0 0 5px rgba(0, 0, 0, 0.75);
+			vertical-align: middle;
+			background-color: #1D4D7B;
+			cursor: pointer;
+		}
+
+			.btn:hover
+			{
+				background-color: #225b91;
+				transition: background-color 0.1s linear;
+			}
+
+			.btn:active
+			{
+				color: #DDDDDD;
+				background-color: #184167;
+				transition: none;
+			}
+
+		.checkboxWrapper
+		{
+			margin: 5px 0 15px 0;
+		}
+
+		label
+		{
+			font-size: 1.15em;
+			color: #bfbfbf;
+			text-shadow: 0 0 5px rgba(0, 0, 0, 0.75);
+		}
+
+		#status
+		{
+			color: white;
+			padding: 5px 0 15px 0;
+			text-align: center;
+			display: none;
+		}
+
+		a, a:visited
+		{
+			color: #00ffff;
+		}
+		/* Custom Checkbox */
+		[type="checkbox"]:not(:checked),
+		[type="checkbox"]:checked
+		{
+			position: absolute;
+			left: -9999px;
+		}
+
+			[type="checkbox"]:not(:checked) + label,
+			[type="checkbox"]:checked + label
+			{
+				position: relative;
+				padding-right: 75px;
+				cursor: pointer;
+			}
+
+				[type="checkbox"]:not(:checked) + label:before,
+				[type="checkbox"]:checked + label:before,
+				[type="checkbox"]:not(:checked) + label:after,
+				[type="checkbox"]:checked + label:after
+				{
+					content: '';
+					position: absolute;
+				}
+
+				[type="checkbox"]:not(:checked) + label:before,
+				[type="checkbox"]:checked + label:before
+				{
+					right: 0;
+					top: -3px;
+					width: 65px;
+					height: 30px;
+					background: #2B2D30;
+					box-shadow: 0 0 1px rgba(255,255,255,0.75);
+					border-radius: 15px;
+					transition: background-color .2s;
+				}
+
+				[type="checkbox"]:not(:checked) + label:after,
+				[type="checkbox"]:checked + label:after
+				{
+					width: 20px;
+					height: 20px;
+					transition: all .2s;
+					border-radius: 50%;
+					background: #a9b2bc;
+					top: 2px;
+					right: 40px;
+				}
+
+				/* on checked */
+				[type="checkbox"]:checked + label:before
+				{
+					background: #3C3F43;
+				}
+
+				[type="checkbox"]:checked + label:after
+				{
+					background: #6ea8dd;
+					top: 2px;
+					right: 5px;
+				}
+
+				[type="checkbox"]:checked + label .ui,
+				[type="checkbox"]:not(:checked) + label .ui:before,
+				[type="checkbox"]:checked + label .ui:after
+				{
+					position: absolute;
+					right: 6px;
+					width: 65px;
+					border-radius: 15px;
+					font-size: 14px;
+					font-weight: bold;
+					line-height: 22px;
+					transition: all .2s;
+				}
+
+				[type="checkbox"]:not(:checked) + label .ui:before
+				{
+					content: "no";
+					right: -32px;
+					color: #A9A9A9;
+				}
+
+				[type="checkbox"]:checked + label .ui:after
+				{
+					right: -18px;
+					content: "yes";
+					color: #6ea8dd;
+				}
+
+		[type="checkbox"]:focus + label:before
+		{
+			border: 1px dashed #777;
+			margin-top: -1px;
+		}
+	</style>
+
+</head>
+<body>
+	<div id="login">
+		<h1>%%SYSNAME%%</h1>
+		<input id="txtUn" type="text" class="text" placeholder="Username" />
+		<input id="txtPw" type="password" class="text" placeholder="Password" onkeypress="return pwKeypress(this,event)" />
+		<div class="checkboxWrapper">
+			<input id="cbLoginAutomatically" type="checkbox" class="checkbox" onclick="cbLoginAutomaticallyClicked()" /><label for="cbLoginAutomatically" id="lblLoginAutomatically"><span class="ui"></span>Log in automatically:</label>
+		</div>
+		<div id="status_wrapper_upper"></div>
+		<input id="btnLogin" type="button" class="btn" value="Log in" onclick="login()" />
+		<div id="status_wrapper_lower"><div id="status"></div></div>
+	</div>
+</body>
+</html>
