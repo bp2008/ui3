@@ -786,6 +786,7 @@ div.icon, a.icon
 	font-size: 16px;
 	border: 1px solid #969BA7;
 	line-height: 17px;
+	cursor: pointer;
 }
 
 .sizeMedium #dateRange

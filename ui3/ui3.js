@@ -1,6 +1,7 @@
 /// <reference path="ui3-local-overrides.js" />
 /// <reference path="libs-src/jquery-1.11.3.js" />
 /// <reference path="libs-ui3.js" />
+/// This web interface is licensed under the GNU LGPL Version 3
 "use strict";
 var toaster = new Toaster();
 var loadingHelper = new LoadingHelper();
@@ -20,6 +21,8 @@ var dateFilter = null;
 var hlsPlayer = null;
 var jpegSuppressionDialog = null;
 var canvasContextMenu = null;
+var calendarContextMenu = null;
+var togglableContextMenus = null;
 var cameraConfig = null;
 var imageLoader = null;
 var imageRenderer = null;
@@ -30,7 +33,11 @@ var clipLoader = null;
 
 var currentPrimaryTab = "";
 
-// TODO: Context menu on Clip List Calendar button, including "Select a Range", "Today Only", and "Clear Filter" options.
+var togglableUIFeatures =
+	[
+		["#volumeBar", "volumeBar", "Volume Controls"]
+	];
+
 // TODO: Context menu for Clip Player (similar to live view context menu)
 // TODO: Context menu for Clip List Items
 // TODO: Context menu for volume bar, allowing the controls to be enabled/disabled
@@ -50,6 +57,9 @@ var currentPrimaryTab = "";
 // CONSIDER: "Your profile has changed" messages could include the previous and new profile names and numbers.
 // CONSIDER: Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
 // CONSIDER: Multiple-server support, like in UI2
+// TODO: Adjust frame rate status bar maximum based on currently active camera or group (defaulting to 10 FPS if none is available)
+// CONSIDER: Artificially limit the jpeg refresh rate if Blue Iris reports the camera has a lower frame rate than we are actually streaming.  This would reduce wasted bandwidth.
+// CONSIDER: Timeline control.  Simplified format at first.  Maybe show the current day, the last 24 hours, or the currently loaded time range.  Selecting a time will scroll the clip list (and begin playback of the most appropriate clip?)
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -103,7 +113,11 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_enableHotkeys"
-			, value: ""
+			, value: "1"
+		}
+		, {
+			key: "ui3_feature_enabled_volumeBar" // This key is tied to the unique ID "volumeBar"
+			, value: "1"
 		}
 	];
 
@@ -306,13 +320,15 @@ $(function ()
 		{
 			tabDisplayName = "Live";
 			$("#layoutleftLive").show();
-			$("#layoutleftRecordings").hide(); //,#layoutbottom
+			$("#layoutleftRecordings").hide();
+			//$("#layoutbottom").hide();
 		}
 		else
 		{
 			tabDisplayName = currentPrimaryTab == "clips" ? "Clips" : "Alerts";
 			$("#layoutleftLive").hide();
-			$("#layoutleftRecordings").show(); //,#layoutbottom
+			$("#layoutleftRecordings").show();
+			//$("#layoutbottom").show();
 			$("#recordingsFilterByHeading").text("Filter " + tabDisplayName + " by:");
 		}
 		BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
@@ -360,6 +376,12 @@ $(function ()
 	jpegSuppressionDialog = new JpegSuppressionDialog();
 
 	canvasContextMenu = new CanvasContextMenu();
+
+	calendarContextMenu = new CalendarContextMenu();
+
+	togglableContextMenus = new Array();
+	for (var i = 0; i < togglableUIFeatures.length; i++)
+		togglableContextMenus.push(new ContextMenu_EnableDisableItem(togglableUIFeatures[i][0], togglableUIFeatures[i][1], togglableUIFeatures[i][2]));
 
 	cameraConfig = new CameraConfig();
 
@@ -714,8 +736,11 @@ var ProgressBar =
 			$ele.on("mousedown touchstart", function (e)
 			{
 				mouseCoordFixer.fix(e);
-				ele.isDragging = true;
-				ele.onDragHandleDragged(e.pageX);
+				if (e.which != 3)
+				{
+					ele.isDragging = true;
+					ele.onDragHandleDragged(e.pageX);
+				}
 			});
 			$(document).on("mouseup touchend touchcancel", function (e)
 			{
@@ -1827,6 +1852,15 @@ function DateFilter(dateRangeLabelSelector)
 			$datePickerDialog.show();
 		}
 	};
+	this.SelectToday = function ()
+	{
+		if (suppressDatePickerCallbacks)
+			return;
+		suppressDatePickerCallbacks = true;
+		dp1.SelectToday();
+		suppressDatePickerCallbacks = false;
+		dp2.SelectToday();
+	}
 	this.Clear = function ()
 	{
 		if (suppressDatePickerCallbacks)
@@ -1916,6 +1950,10 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 		suppressDatePickerCallbacks = true;
 		$dateInput.data('Zebra_DatePicker').clear_date();
 		suppressDatePickerCallbacks = false;
+	}
+	this.SelectToday = function ()
+	{
+		$calendarContainer.find("td.dp_today").click();
 	}
 	this.SetDate = function (dateYMD)
 	{
@@ -5020,15 +5058,9 @@ function CanvasContextMenu()
 			alias: "cmroot_live", width: 200, items:
 			[
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onLiveContextMenuAction }
-				, {
-					text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Download", alias: "saveas", action: onLiveContextMenuAction
-				}
-				, {
-					text: "Open HLS Stream", icon: "", alias: "openhls", action: onLiveContextMenuAction
-				}
-				, {
-					type: "splitLine"
-				}
+				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Download", alias: "saveas", action: onLiveContextMenuAction }
+				, { text: "Open HLS Stream", icon: "", alias: "openhls", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
 				, {
 					text: "UI Size (Temporary)", icon: "", alias: "uiSize", type: "group", width: 180, items:
 					[
@@ -5050,40 +5082,17 @@ function CanvasContextMenu()
 						, { text: "FadeScale (5)", icon: "", alias: "viewChangeMode_FadeScale", action: onLiveContextMenuAction }
 					]
 				}
-				, {
-					type: "splitLine"
-				}
-				, {
-					text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname"
-				}
-				, {
-					type: "splitLine"
-				}
-				, {
-					text: "Trigger Now", icon: "#svg_x5F_Alert1", alias: "trigger", action: onLiveContextMenuAction
-				}
-				, {
-					text: "<span title=\"Toggle Manual Recording\" id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", alias: "record", action: onLiveContextMenuAction
-				}
-				, {
-					text: "<span title=\"Blue Iris will record a snapshot\">Snapshot in Blue Iris</span>", icon: "#svg_x5F_Snapshot", alias: "snapshot", action: onLiveContextMenuAction
-				}
-				, {
-					text: "Restart Camera", icon: "#svg_x5F_Restart", alias: "restart", action: onLiveContextMenuAction
-				}
-				, {
-					type: "splitLine"
-				}
-				, {
-					text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "", alias: "maximize", action: onLiveContextMenuAction
-				}
-				, {
-					type: "splitLine"
-				}
-				, {
-					text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction
-				}
-
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
+				, { type: "splitLine" }
+				, { text: "Trigger Now", icon: "#svg_x5F_Alert1", alias: "trigger", action: onLiveContextMenuAction }
+				, { text: "<span title=\"Toggle Manual Recording\" id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", alias: "record", action: onLiveContextMenuAction }
+				, { text: "<span title=\"Blue Iris will record a snapshot\">Snapshot in Blue Iris</span>", icon: "#svg_x5F_Snapshot", alias: "snapshot", action: onLiveContextMenuAction }
+				, { text: "Restart Camera", icon: "#svg_x5F_Restart", alias: "restart", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "", alias: "maximize", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
 			]
 			, onContextMenu: onTriggerLiveContextMenu
 			, onCancelContextMenu: onCancelContextMenu
@@ -5091,6 +5100,85 @@ function CanvasContextMenu()
 			, clickType: "right"
 		};
 	$("#layoutbody").contextmenu(optionLive);
+}
+///////////////////////////////////////////////////////////////
+// Calendar Context Menu //////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function CalendarContextMenu()
+{
+	var self = this;
+
+	var onContextMenuAction = function ()
+	{
+		switch (this.data.alias)
+		{
+			case "select":
+				dateFilter.OpenDatePicker($("#dateRange").get(0));
+				break;
+			case "today":
+				dateFilter.SelectToday();
+				break;
+			case "clear":
+				dateFilter.Clear();
+				break;
+			default:
+				toaster.Error(this.data.alias + " is not implemented!");
+				break;
+		}
+	}
+	var menuOptions =
+		{
+			alias: "cmroot_calendar", width: 200, items:
+			[
+				{ text: "Filter by Date Range", icon: "", alias: "select", action: onContextMenuAction }
+				, { text: "Today Only", icon: "", alias: "today", action: onContextMenuAction }
+				, { text: "Clear Filter", icon: "", alias: "clear", action: onContextMenuAction }
+
+			]
+			, clickType: "right"
+		};
+	$("#dateRange").contextmenu(menuOptions);
+}
+///////////////////////////////////////////////////////////////
+// Generic Enable/Disable Item Context Menu ///////////////////
+///////////////////////////////////////////////////////////////
+function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName)
+{
+	var self = this;
+
+	var onTriggerContextMenu = function ()
+	{
+		var label = $("#cmToggleLabel_" + uniqueSettingsId);
+		var isEnabledNow = settings.getItem("ui3_feature_enabled_" + uniqueSettingsId) == "1";
+		if (isEnabledNow)
+			label.html("Disable");
+		else
+			label.html("Enable");
+		return true;
+	}
+	var onContextMenuAction = function ()
+	{
+		switch (this.data.alias)
+		{
+			case "toggle":
+				var isEnabledNow = settings.getItem("ui3_feature_enabled_" + uniqueSettingsId) == "1";
+				settings.setItem("ui3_feature_enabled_" + uniqueSettingsId, isEnabledNow ? "0" : "1");
+				break;
+			default:
+				toaster.Error(this.data.alias + " is not implemented!");
+				break;
+		}
+	}
+	var menuOptions =
+		{
+			alias: "cmroot_" + uniqueSettingsId, width: 200, items:
+			[
+				{ text: '<span id="cmToggleLabel_' + uniqueSettingsId + '">Toggle</span> ' + itemName, icon: "", alias: "toggle", action: onContextMenuAction }
+			]
+			, onContextMenu: onTriggerContextMenu
+			, clickType: "right"
+		};
+	$(selector).contextmenu(menuOptions);
 }
 ///////////////////////////////////////////////////////////////
 // Get / Set Camera Config ////////////////////////////////////
