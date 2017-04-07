@@ -431,12 +431,12 @@ div.icon, a.icon
 
 	.squareButton.disabled, .oneByTwoSquareButton.disabled
 	{
-		color: #464a53;
-		border-color: #464a53;
-		cursor: default;
+		color: #3e4149;
+		border-color: #3e4149;
+		cursor: not-allowed;
 	}
 
-		.squareButton.disabled:hover, .oneByTwoSquareButton.disabled:active
+		.squareButton.disabled:hover, .oneByTwoSquareButton.disabled:hover
 		{
 			background-color: transparent;
 		}
@@ -645,6 +645,11 @@ div.icon, a.icon
 {
 	width: 125px;
 	height: 125px;
+}
+
+#ptzButtonsMain.disabled
+{
+	cursor: not-allowed;
 }
 
 .ptzGraphic
@@ -938,6 +943,12 @@ div.icon, a.icon
 	opacity: 1;
 }
 
+#stoplightBtn.disabled
+{
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
 #stoplightBtn div
 {
 	display: inline-block;
@@ -1060,10 +1071,20 @@ div.icon, a.icon
 	margin-bottom: 2px;
 	cursor: pointer;
 }
+
+	.progressBarOuter.withDragHandle.disabled
+	{
+		cursor: not-allowed;
+	}
 /* Volume Bar */
 #volumeBar
 {
 }
+
+	#volumeBar.disabled
+	{
+		opacity: 0.333;
+	}
 
 	#volumeBar .statusBarLabel
 	{
@@ -1114,9 +1135,20 @@ div.icon, a.icon
 	cursor: pointer;
 }
 
+	.dropdownBox.disabled
+	{
+		cursor: not-allowed;
+		border-color: #34363a;
+	}
+
 	#stoplightBtn:hover, .dropdownBox:hover, #dateRange:hover
 	{
 		background-color: rgba(255,255,255,0.1);
+	}
+
+	#stoplightBtn.disabled:hover, .dropdownBox.disabled:hover
+	{
+		background-color: transparent;
 	}
 
 .sizeMedium .dropdownBox
@@ -1153,6 +1185,10 @@ div.icon, a.icon
 	line-height: 19px;
 }
 
+.dropdownBox.disabled .dropdownLabel
+{
+	color: #666666;
+}
 
 .dropdownArrow
 {
@@ -1273,11 +1309,13 @@ div.icon, a.icon
 	float: left;
 	margin-right: 10px;
 }
+
 .sizeMedium .mainMenuIcon
 {
 	width: 20px;
 	height: 20px;
 }
+
 .sizeSmall .mainMenuIcon
 {
 	width: 16px;
@@ -2132,3 +2170,107 @@ div.icon, a.icon
 	cursor: -webkit-grabbing !important;
 	cursor: grabbing !important;
 }
+/* Simple text buttons */
+.simpleTextButton
+{
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+	padding: 5px;
+	border: 0px solid transparent;
+}
+
+.btnBlue
+{
+	background-color: #B9B9B9;
+	color: black;
+}
+
+	.btnBlue:hover
+	{
+		background-color: #9D9DC4;
+	}
+
+	.btnBlue:active
+	{
+		background-color: #9494D8;
+	}
+
+.btnBlue2
+{
+	background-color: #377EC0;
+	color: white;
+}
+
+	.btnBlue2:hover
+	{
+		background-color: #75a7d7;
+		color: white;
+	}
+
+	.btnBlue2:active
+	{
+		background-color: #b0cde8;
+		color: white;
+	}
+
+.btnYellow
+{
+	background-color: #B9B9B9;
+	color: black;
+}
+
+	.btnYellow:hover
+	{
+		background-color: #C4C49D;
+	}
+
+	.btnYellow:active
+	{
+		background-color: #E3E34A;
+	}
+
+.btnRed
+{
+	background-color: #B9B9B9;
+	color: black;
+}
+
+	.btnRed:hover
+	{
+		background-color: #C49D9D;
+	}
+
+	.btnRed:active
+	{
+		background-color: #D86666;
+	}
+
+.btnGreen
+{
+	background-color: #B9B9B9;
+	color: black;
+}
+
+	.btnGreen:hover
+	{
+		background-color: #9DC49D;
+	}
+
+	.btnGreen:active
+	{
+		background-color: #66D866;
+	}
+
+.btnTransparent
+{
+	background-color: transparent;
+	color: black;
+	border: 1px solid black;
+}
+
+	.btnTransparent:hover
+	{
+		background-color: rgba(255,255,255,0.1);
+	}

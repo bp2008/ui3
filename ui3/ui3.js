@@ -12,7 +12,6 @@ var statusBars = null;
 var dropdownBoxes = null;
 var imageQualityHelper = null;
 var ptzButtons = null;
-var profileButtons = null;
 var playbackControls = null;
 var seekBar = null;
 var clipTimeline = null;
@@ -35,16 +34,37 @@ var currentPrimaryTab = "";
 
 var togglableUIFeatures =
 	[
-		["#volumeBar", "volumeBar", "Volume Controls"]
+		// The uniqueId is also used in the name of a setting which remembers the enabled state.
+		// If you add a new togglabe UI feature here, also add the corresponding default setting value.
+		// [selector, uniqueId, displayName, onToggle, extraMenuButtons]
+		["#volumeBar", "volumeBar", "Volume Controls", function (enabled)
+		{
+			statusBars.setEnabled("volume", enabled);
+			if (enabled)
+				$("#volumeBar").removeClass("disabled")
+			else
+				$("#volumeBar").addClass("disabled")
+		}, null]
+		, ["#profileStatusBox", "profileStatus", "Profile Status Controls", function (enabled) { statusLoader.SetProfileButtonsEnabled(enabled); }, null]
+		, ["#stoplightBtn", "stopLight", "Stoplight Controls", function (enabled) { statusLoader.SetStoplightButtonEnabled(enabled); }, null]
+		, ["#globalScheduleBox", "globalSchedule", "Schedule Controls", function (enabled) { dropdownBoxes.setEnabled("schedule", enabled); }, null]
+		// The PTZ Controls hot area specifically does not include the main button pad because a context menu on that pad would break touchscreen usability
+		, [".ptzpreset", "ptzControls", "PTZ Controls", function (enabled) { ptzButtons.setEnabled(enabled); }
+			, [{
+				getName: function (ele) { return "Goto Preset " + ele.getAttribute("presetnum"); }
+				, action: function (ele) { ptzButtons.PTZ_goto_preset(ele.presetnum); }
+				, shouldDisable: function () { return !ptzButtons.isEnabledNow(); }
+			}
+				, {
+				getName: function (ele) { return "Set Preset " + ele.getAttribute("presetnum"); }
+				, action: function (ele) { ptzButtons.PresetSet(ele.getAttribute("presetnum")); }
+				, shouldDisable: function () { return !ptzButtons.isEnabledNow(); }
+			}]
+		]
 	];
 
 // TODO: Context menu for Clip Player (similar to live view context menu)
 // TODO: Context menu for Clip List Items
-// TODO: Context menu for volume bar, allowing the controls to be enabled/disabled
-// TODO: Context menu for PTZ Presets, allowing the controls to be enabled/disabled, and allowing Preset Load / Save ("Goto"/"Set"?) operations
-// TODO: Context menu for Profile Status, allowing the controls to be enabled/disabled
-// TODO: Context menu for Stoplight, allowing the controls to be enabled/disabled
-// TODO: Context menu for Schedule, allowing the controls to be enabled/disabled
 
 // TODO: UI Settings
 // TODO: About this UI
@@ -116,7 +136,23 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_feature_enabled_volumeBar" // This key is tied to the unique ID "volumeBar"
+			key: "ui3_feature_enabled_volumeBar" // ui3_feature_enabled keys are tied to unique IDs in togglableUIFeatures
+			, value: "1"
+		}
+		, {
+			key: "ui3_feature_enabled_profileStatus"
+			, value: "1"
+		}
+		, {
+			key: "ui3_feature_enabled_stopLight"
+			, value: "1"
+		}
+		, {
+			key: "ui3_feature_enabled_globalSchedule"
+			, value: "1"
+		}
+		, {
+			key: "ui3_feature_enabled_ptzControls"
 			, value: "1"
 		}
 	];
@@ -357,8 +393,6 @@ $(function ()
 
 	imageQualityHelper = new ImageQualityHelper();
 
-	profileButtons = new ProfileButtons();
-
 	SetupCollapsibleTriggers();
 
 	playbackControls = new PlaybackControls();
@@ -379,10 +413,6 @@ $(function ()
 
 	calendarContextMenu = new CalendarContextMenu();
 
-	togglableContextMenus = new Array();
-	for (var i = 0; i < togglableUIFeatures.length; i++)
-		togglableContextMenus.push(new ContextMenu_EnableDisableItem(togglableUIFeatures[i][0], togglableUIFeatures[i][1], togglableUIFeatures[i][2]));
-
 	cameraConfig = new CameraConfig();
 
 	imageLoader = new ImageLoader();
@@ -396,6 +426,10 @@ $(function ()
 	cameraListLoader = new CameraListLoader();
 
 	clipLoader = new ClipLoader("#clipsbody");
+
+	togglableContextMenus = new Array();
+	for (var i = 0; i < togglableUIFeatures.length; i++)
+		togglableContextMenus.push(new ContextMenu_EnableDisableItem(togglableUIFeatures[i][0], togglableUIFeatures[i][1], togglableUIFeatures[i][2], togglableUIFeatures[i][3], togglableUIFeatures[i][4]));
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -684,6 +718,13 @@ function StatusBars()
 			if (statusEles.length > 0) // Add the listener only to the first element, so in case of multiple elements with the same name, we only create one callback.
 				ProgressBar.addOnProgressChangedListener(statusEles[0].$pb, onProgressChanged);
 	};
+	this.setEnabled = function (name, enabled)
+	{
+		var statusEles = statusElements[name];
+		if (statusEles)
+			for (var i = 0; i < statusEles.length; i++)
+				ProgressBar.setEnabled(statusEles[0].$pb, enabled);
+	};
 }
 var ProgressBar =
 	{
@@ -738,6 +779,8 @@ var ProgressBar =
 				mouseCoordFixer.fix(e);
 				if (e.which != 3)
 				{
+					if ($ele.hasClass("disabled"))
+						return;
 					ele.isDragging = true;
 					ele.onDragHandleDragged(e.pageX);
 				}
@@ -776,6 +819,13 @@ var ProgressBar =
 					progressBackgroundColor = $ele.get(0).Background;
 				$ele.css("background-color", progressBackgroundColor);
 			}
+		}
+		, setEnabled: function ($ele, enabled)
+		{
+			if (enabled)
+				$ele.removeClass("disabled");
+			else
+				$ele.addClass("disabled");
 		}
 	};
 ///////////////////////////////////////////////////////////////
@@ -976,6 +1026,8 @@ function DropdownBoxes()
 		}
 		$ele.click(function ()
 		{
+			if ($ele.hasClass("disabled"))
+				return;
 			LoadDropdownList(name, $ele);
 		});
 		if (!handleElements[name])
@@ -1004,6 +1056,22 @@ function DropdownBoxes()
 					return ele.$label.text();
 			}
 		return "";
+	}
+	this.setEnabled = function (name, enabled)
+	{
+		var handleEles = handleElements[name];
+		if (handleEles)
+			for (var i = 0; i < handleEles.length; i++)
+			{
+				var ele = handleEles[i];
+				if (ele)
+				{
+					if (enabled)
+						$(ele).removeClass("disabled");
+					else
+						$(ele).addClass("disabled");
+				}
+			}
 	}
 	var getFirstVisibleEle = function (name)
 	{
@@ -1126,17 +1194,6 @@ function DropdownBoxes()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Profile Buttons ////////////////////////////////////////////
-///////////////////////////////////////////////////////////////
-function ProfileButtons()
-{
-	var elements = {};
-	$(".profilebtn").each(function (idx, ele)
-	{
-		elements[name] = ele;
-	});
-}
-///////////////////////////////////////////////////////////////
 // PTZ Pad Buttons ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function PtzButtons()
@@ -1146,6 +1203,8 @@ function PtzButtons()
 	var ptzControlsEnabled = false; // TODO: Implement PTZ hotkeys.
 	var $hoveredEle = null; // TODO: Implement clip navigation hotkeys.
 	var $activeEle = null; // TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
+
+	var currentlyLoadedPtzThumbsCamId = "";
 
 	var unsafePtzActionNeedsStopped = false;
 	var currentPtz = "0";
@@ -1369,30 +1428,50 @@ function PtzButtons()
 	// PTZ Control display state //
 	this.UpdatePtzControlDisplayState = function ()
 	{
+		var featureEnabled = GetUi3FeatureEnabled("ptzControls");
 		LoadPtzPresetThumbs();
 		if (imageLoader.currentlyLoadingImage.ptz)
-		{
-			ptzControlsEnabled = true;
-			$ptzControlsContainers.removeAttr("title");
-			$ptzPresets.addClass("enabled");
-			$ptzPresets.removeClass("disabled");
-			$ptzBackgroundGraphics.css("color", $ptzBackgroundGraphics.get(0).defaultColor);
-		}
+			ptzControlsEnabled = featureEnabled;
 		else
 		{
 			onHoverLeave();
 			ptzControlsEnabled = false;
-			$ptzControlsContainers.attr("title", "PTZ not available for current camera");
-			$ptzPresets.removeClass("enabled");
+		}
+		if (ptzControlsEnabled)
+		{
+			$ptzControlsContainers.removeAttr("title");
+			$ptzPresets.removeClass("disabled");
+			$ptzButtons.removeClass("disabled");
+			$ptzBackgroundGraphics.css("color", $ptzBackgroundGraphics.get(0).defaultColor);
+		}
+		else
+		{
+			$ptzControlsContainers.attr("title", featureEnabled ? "PTZ not available for current camera" : "PTZ disabled by user preference");
 			$ptzPresets.addClass("disabled");
-			$ptzBackgroundGraphics.css("color", "#272c34");
+			$ptzButtons.addClass("disabled");
+			$ptzBackgroundGraphics.css("color", "#20242b");
 		}
 	}
-	var PresetButtonSetEvent = function (presetNumStr)
+	this.isEnabledNow = function ()
 	{
+		return ptzControlsEnabled;
+	}
+	this.setEnabled = function (enabled)
+	{
+		self.UpdatePtzControlDisplayState();
+	}
+	this.PresetSet = function (presetNumStr)
+	{
+		if (!ptzControlsEnabled)
+			return;
+		if (!imageLoader.currentlyLoadingImage.ptz)
+			return;
 		var presetNum = parseInt(presetNumStr);
-		if (confirm("You are about to assign preset " + presetNum))
-			PTZ_set_preset(presetNum);
+		AskYesNo('<div style="margin-bottom:20px;width:300px;">' + CleanUpGroupName(cameraListLoader.currentlyLoadingCamera.optionDisplay) + '<br/><br/>Set preset ' + presetNum
+			+ ' now?</div>', function ()
+			{
+				PTZ_set_preset(presetNum);
+			});
 	}
 	// Enable preset buttons //
 	$ptzPresets.each(function (idx, ele)
@@ -1400,21 +1479,14 @@ function PtzButtons()
 		var $ele = $(ele);
 		ele.presetnum = parseInt($ele.attr("presetnum"));
 		$ele.text(ele.presetnum);
-		$ele.on("contextmenu", function (e)
-		{
-			PresetButtonSetEvent(ele.getAttribute("presetnum"));
-			e.preventDefault();
-		});
 		$ele.click(function (e)
 		{
 			self.PTZ_goto_preset(ele.presetnum);
 		});
-		$ele.longpress(function ()
-		{
-			PresetButtonSetEvent(ele.getAttribute("presetnum"));
-		});
 		$ele.mouseenter(function (e)
 		{
+			if (!ptzControlsEnabled)
+				return;
 			var imgData = settings.getItem("ui2_preset_" + imageLoader.currentlyLoadingImage.id + "_" + ele.presetnum);
 			if (imgData != null && imgData.length > 0)
 			{
@@ -1441,31 +1513,35 @@ function PtzButtons()
 	// Presets //
 	var LoadPtzPresetThumbs = function ()
 	{
-		if (imageLoader.currentlyLoadingImage.ptz)
+		if (imageLoader.currentlyLoadingImage.ptz && GetUi3FeatureEnabled("ptzControls"))
 		{
-			$ptzPresets.each(function (idx, ele)
+			if (currentlyLoadedPtzThumbsCamId != imageLoader.currentlyLoadingImage.id)
 			{
-				var imgData = settings.getItem("ui2_preset_" + imageLoader.currentlyLoadingImage.id + "_" + ele.presetnum);
-				if (imgData != null && imgData.length > 0)
+				$ptzPresets.each(function (idx, ele)
 				{
-					$(ele).empty();
-					var $thumb = $('<img src="" alt="' + ele.presetnum + '" title="Preset ' + ele.presetnum + '" class="presetThumb" />');
-					$thumb.load(function ()
+					var imgData = settings.getItem("ui2_preset_" + imageLoader.currentlyLoadingImage.id + "_" + ele.presetnum);
+					if (imgData != null && imgData.length > 0)
 					{
-						try
+						$(ele).empty();
+						var $thumb = $('<img src="" alt="' + ele.presetnum + '" title="Preset ' + ele.presetnum + '" class="presetThumb" />');
+						$thumb.load(function ()
 						{
-							var remainder = $thumb[0].getBoundingClientRect().height % 1;
-							if (remainder != 0)
-								$thumb.css("padding-bottom", (1 - remainder) + "px");
-						}
-						catch (ex) { }
-					});
-					$thumb.attr("src", imgData);
-					$(ele).append($thumb);
-				}
-				else
-					$(ele).text(ele.presetnum);
-			});
+							try
+							{
+								var remainder = $thumb[0].getBoundingClientRect().height % 1;
+								if (remainder != 0)
+									$thumb.css("padding-bottom", (1 - remainder) + "px");
+							}
+							catch (ex) { }
+						});
+						$thumb.attr("src", imgData);
+						$(ele).append($thumb);
+					}
+					else
+						$(ele).text(ele.presetnum);
+				});
+				currentlyLoadedPtzThumbsCamId = imageLoader.currentlyLoadingImage.id;
+			}
 		}
 		else
 		{
@@ -1473,6 +1549,7 @@ function PtzButtons()
 			{
 				$(ele).text(ele.presetnum);
 			});
+			currentlyLoadedPtzThumbsCamId = "";
 		}
 	}
 	this.PTZ_goto_preset = function (presetNumber)
@@ -1484,7 +1561,7 @@ function PtzButtons()
 			toaster.Error("Current camera is not PTZ");
 			return;
 		}
-		self.PTZ_async_noguarantee(imageLoader.currentlyLoadingImage.id, 100 + presetNumber);
+		self.PTZ_async_noguarantee(imageLoader.currentlyLoadingImage.id, 100 + parseInt(presetNumber));
 	}
 	var PTZ_set_preset = function (presetNumber)
 	{
@@ -3462,7 +3539,7 @@ function StatusLoader()
 				schedule = "N/A";
 			var lock = lastResponse.data.lock;
 			$profileBtns.removeClass("selected");
-			$profileBtns.css("color", "inherit");
+			$profileBtns.css("color", "");
 			var $selectedProfileBtn = $('.profilebtn[profilenum="' + selectedProfile + '"]');
 			$selectedProfileBtn.addClass("selected");
 			$selectedProfileBtn.css("color", $selectedProfileBtn.attr("selColor"));
@@ -3526,16 +3603,36 @@ function StatusLoader()
 	{
 		loadStatusInternal(null, null, scheduleName);
 	}
+	this.SetProfileButtonsEnabled = function (enabled)
+	{
+		if (enabled)
+			$("#schedule_lock_button,.profilebtn").removeClass("disabled");
+		else
+			$("#schedule_lock_button,.profilebtn").addClass("disabled");
+	}
+	this.SetStoplightButtonEnabled = function (enabled)
+	{
+		if (enabled)
+			$("#stoplightBtn").removeClass("disabled");
+		else
+			$("#stoplightBtn").addClass("disabled");
+	}
 	$("#schedule_lock_button").click(function ()
 	{
+		if ($(this).hasClass("disabled"))
+			return;
 		loadStatusInternal(-1);
 	});
 	$(".profilebtn").click(function ()
 	{
+		if ($(this).hasClass("disabled"))
+			return;
 		loadStatusInternal($(this).attr("profilenum"));
 	});
 	$("#stoplightBtn").click(function ()
 	{
+		if ($(this).hasClass("disabled"))
+			return;
 		if (lastResponse == null)
 			return;
 		var newSignal = 0;
@@ -4022,7 +4119,6 @@ function CameraListLoader()
 		cli.isGroup = false;
 		imageLoader.ResetClipPlaybackFields();
 		playbackControls.Show();
-		ptzButtons.UpdatePtzControlDisplayState();
 		audioPlayer.audioStop();
 		if (imageLoader.hasStarted)
 			imageLoader.GetNewImage();
@@ -5142,43 +5238,85 @@ function CalendarContextMenu()
 ///////////////////////////////////////////////////////////////
 // Generic Enable/Disable Item Context Menu ///////////////////
 ///////////////////////////////////////////////////////////////
-function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName)
+function GetUi3FeatureEnabled(uniqueSettingsId)
+{
+	return settings.getItem("ui3_feature_enabled_" + uniqueSettingsId) == "1";
+}
+function SetUi3FeatureEnabled(uniqueSettingsId, enabled)
+{
+	return settings.setItem("ui3_feature_enabled_" + uniqueSettingsId, enabled ? "1" : "0");
+}
+function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onToggle, extraMenuButtons)
 {
 	var self = this;
-
-	var onTriggerContextMenu = function ()
+	var onShowContextMenu = function (menu)
 	{
+		var itemsToDisable = [];
+		var itemsToEnable = [];
+		if (extraMenuButtons)
+			for (var i = 0; i < extraMenuButtons.length; i++)
+				if (extraMenuButtons[i].shouldDisable && extraMenuButtons[i].shouldDisable())
+					itemsToDisable.push(uniqueSettingsId + '_extra_alias_' + i);
+				else
+					itemsToEnable.push(uniqueSettingsId + '_extra_alias_' + i);
+		menu.applyrule({ name: "enable_items_" + uniqueSettingsId, disable: false, items: itemsToEnable });
+		menu.applyrule({ name: "disable_items_" + uniqueSettingsId, disable: true, items: itemsToDisable });
+	};
+	var onTriggerContextMenu = function (e)
+	{
+		// Set text for Enable/Disable button
 		var label = $("#cmToggleLabel_" + uniqueSettingsId);
-		var isEnabledNow = settings.getItem("ui3_feature_enabled_" + uniqueSettingsId) == "1";
-		if (isEnabledNow)
+		if (GetUi3FeatureEnabled(uniqueSettingsId))
 			label.html("Disable");
 		else
 			label.html("Enable");
+		// Set text for Extra buttons.
+		if (extraMenuButtons)
+			for (var i = 0; i < extraMenuButtons.length; i++)
+				$("#" + uniqueSettingsId + "_extra_" + i).html(extraMenuButtons[i].getName(e.currentTarget));
 		return true;
-	}
-	var onContextMenuAction = function ()
+	};
+	var onContextMenuAction = function (ele)
 	{
 		switch (this.data.alias)
 		{
 			case "toggle":
-				var isEnabledNow = settings.getItem("ui3_feature_enabled_" + uniqueSettingsId) == "1";
-				settings.setItem("ui3_feature_enabled_" + uniqueSettingsId, isEnabledNow ? "0" : "1");
+				var enabled = !GetUi3FeatureEnabled(uniqueSettingsId);
+				SetUi3FeatureEnabled(uniqueSettingsId, enabled);
+				if (onToggle)
+					onToggle(enabled);
 				break;
 			default:
-				toaster.Error(this.data.alias + " is not implemented!");
+				if (extraMenuButtons && this.data.alias.startsWith(uniqueSettingsId + '_extra_alias_'))
+				{
+					var i = parseInt(this.data.alias.substr((uniqueSettingsId + '_extra_alias_').length));
+					if (!isNaN(i) && i >= 0 && i < extraMenuButtons.length)
+						extraMenuButtons[i].action(ele);
+				}
+				else
+					toaster.Error(this.data.alias + " is not implemented!");
 				break;
 		}
-	}
+	};
+	var menuItemArray = [{ text: '<span id="cmToggleLabel_' + uniqueSettingsId + '">Toggle</span> ' + itemName, icon: "", alias: "toggle", action: onContextMenuAction }];
+	if (extraMenuButtons)
+		for (var i = 0; i < extraMenuButtons.length; i++)
+		{
+			var btnDef = extraMenuButtons[i];
+			menuItemArray.push({ text: '<span id="' + uniqueSettingsId + '_extra_' + i + '">Extra ' + i + '</span>', icon: "", alias: uniqueSettingsId + '_extra_alias_' + i, action: onContextMenuAction });
+		}
 	var menuOptions =
 		{
-			alias: "cmroot_" + uniqueSettingsId, width: 200, items:
-			[
-				{ text: '<span id="cmToggleLabel_' + uniqueSettingsId + '">Toggle</span> ' + itemName, icon: "", alias: "toggle", action: onContextMenuAction }
-			]
+			alias: "cmroot_" + uniqueSettingsId
+			, width: "auto"
+			, items: menuItemArray
 			, onContextMenu: onTriggerContextMenu
+			, onShow: onShowContextMenu
 			, clickType: "right"
 		};
 	$(selector).contextmenu(menuOptions);
+	if (onToggle)
+		onToggle(GetUi3FeatureEnabled(uniqueSettingsId));
 }
 ///////////////////////////////////////////////////////////////
 // Get / Set Camera Config ////////////////////////////////////
@@ -6236,6 +6374,44 @@ function Clamp(i, min, max)
 	if (i > max)
 		return max;
 	return i;
+}
+function AskYesNo(question, onYes, onNo)
+{
+	var $dialog = $('<div></div>');
+	$dialog.css("text-align", "center");
+	$dialog.css("margin", "10px");
+	$dialog.addClass("inlineblock");
+	if (typeof question == "string")
+		$dialog.append("<div>" + question + "</div>");
+	else if (typeof question == "object")
+		$dialog.append(question);
+
+	var $yesBtn = $('<input type="button" class="simpleTextButton btnGreen" style="font-size:1.5em;" value="Yes" draggable="false" unselectable="on" />');
+	var $noBtn = $('<input type="button" class="simpleTextButton btnRed" style="font-size:1.5em;" value="No" draggable="false" unselectable="on" />');
+	var $yesNoContainer = $("<div></div>");
+	$yesNoContainer.append($yesBtn).append("<span>&nbsp;&nbsp;&nbsp;</span>").append($noBtn);
+	$dialog.append($yesNoContainer);
+
+	var modalDialog = $dialog.modal({ sizeToFitContent: true, shrinkOnBothResizePasses: true });
+
+	$yesBtn.click(function ()
+	{
+		if (typeof onYes == "function")
+			try
+			{
+				onYes();
+			} catch (ex) { showErrorToast(ex); }
+		modalDialog.close();
+	});
+	$noBtn.click(function ()
+	{
+		if (typeof onNo == "function")
+			try
+			{
+				onNo();
+			} catch (ex) { showErrorToast(ex); }
+		modalDialog.close();
+	});
 }
 String.prototype.padLeft = function (len, c)
 {
