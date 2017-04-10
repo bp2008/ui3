@@ -2314,6 +2314,10 @@ function PlaybackControls()
 	{
 		return pointInsideElement($playbackSettings, e.pageX, e.pageY);
 	}
+	this.SettingsPanelIsOpen = function (e)
+	{
+		return $playbackSettings.length > 0;
+	}
 	this.GetPlaybackSpeed = function ()
 	{
 		return playSpeed;
@@ -2444,7 +2448,8 @@ function SeekBar()
 			setSeekHintCanvasVisibility(false);
 			setSeekHintHelperVisibility(false);
 		}
-		else if ((!touch && !isDragging && imageLoader.Playback_IsPaused()) || (touch && isDragging))
+		else if (!playbackControls.SettingsPanelIsOpen()
+			&& ((!touch && !isDragging && imageLoader.Playback_IsPaused()) || (touch && isDragging)))
 		{
 			// (Mouse hovering while paused) or (touch dragging): show preview image
 			setSeekHintCanvasVisibility(true);
@@ -2461,7 +2466,7 @@ function SeekBar()
 		else
 		{
 			setSeekHintCanvasVisibility(false);
-			setSeekHintHelperVisibility(true);
+			setSeekHintHelperVisibility(!playbackControls.SettingsPanelIsOpen());
 		}
 		seekhint_label.html(msToTime(seekHintMs, msec < 30000 ? 1 : 0));
 		seekhint.css("top", ((barO.top - 10) - seekhint.outerHeight(true)) + "px");
