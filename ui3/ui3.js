@@ -63,16 +63,33 @@ var togglableUIFeatures =
 		]
 	];
 
-// TODO: Context menu for Clip Player (similar to live view context menu)
-// TODO: Context menu for Clip List Items
+// TODO: Context menu for Clip List Items (Requires clip multi-select feature, and ability to delete or flag multiple clips with one API call!)
+// -- TODO: Flag/unflag
+// -- TODO: Download
+// -- TODO: Delete
+// -- Flagging or downloading more than 1 clip at once requires confirmation.  Deleting always requires confirmation.  Deleting one clip shows a copy of the clip tile in the confirmation dialog, as in UI2.
+// TODO: Fullscreen mode for clips and live view using a placeholder button in lower right.  Fullscreen mode should allocate all available space to the video, hiding unnecessary UI elements.  It should also request that the browser enters full-screen mode.
+// TODO: Clip title appears at top of clip player when mouse draws near.
+// TODO: Close button appears at top right of clip player when mouse draws near.
 
 // TODO: UI Settings
 // TODO: About this UI
 // TODO: System Log
 // TODO: System Configuration
 // TODO: Full Camera List
+// TODO: Camera properties
+// TODO: Clip properties
 
 // TODO: Detect when the web interface has been loaded from the file system, and show an error message.
+
+// TODO: Automatic clip list refresh.
+// -- Automatic clip list updates will only work if the date filter is cleared, but they will work automatically and without user-interaction.
+// -- Consider making the automatic clip list update only request clips starting with the date of the most recent clip already found, and add new items to the top of the list.  This will almost certainly break layout, but hopefully the UI sizing code I already wrote can be leveraged to re-do the layout efficiently.
+// -- Before automatically loading a new clip list, the current clip should be remembered, as well as its position onscreen, and if possible the clip list scroll/selection state should be restored upon loading the new list.
+// -- Automatic clip list updates should only happen if there has been no user input to the clip list within the last N seconds, to minimize the chance of disruption.
+// -- Auto-scroll to top if the clip list was previously scrolled to top, even if clips are selected.
+
+// TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
 // CONSIDER: "Your profile has changed" messages could include the previous and new profile names and numbers.
 // CONSIDER: Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
@@ -80,6 +97,7 @@ var togglableUIFeatures =
 // TODO: Adjust frame rate status bar maximum based on currently active camera or group (defaulting to 10 FPS if none is available)
 // CONSIDER: Artificially limit the jpeg refresh rate if Blue Iris reports the camera has a lower frame rate than we are actually streaming.  This would reduce wasted bandwidth.
 // CONSIDER: Timeline control.  Simplified format at first.  Maybe show the current day, the last 24 hours, or the currently loaded time range.  Selecting a time will scroll the clip list (and begin playback of the most appropriate clip?)
+// CONSIDER: Double-click in the clip player could perform some action, like play/pause or fullscreen mode.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -2134,7 +2152,7 @@ function PlaybackControls()
 			hideTimeout = null;
 		}
 	}
-	this.SetDownloadLink = function (clipData)
+	this.SetDownloadClipLink = function (clipData)
 	{
 		var $btn = $("#clipDownloadButton");
 		$btn.attr("href", currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetRemoteSessionArg("?"));
@@ -2149,6 +2167,14 @@ function PlaybackControls()
 
 			$btn.attr("download", fileName);
 		}
+	}
+	this.GetDownloadClipLink = function ()
+	{
+		return $("#clipDownloadButton").attr("href");
+	}
+	this.GetDownloadClipFileName = function ()
+	{
+		return $("#clipDownloadButton").attr("download");
 	}
 	$layoutbody.on("mouseleave", function (e)
 	{
@@ -2688,6 +2714,7 @@ function ClipLoader(clipsBodySelector)
 	var lastUiSizeWasSmall; // Initialized at end of constructor
 	var currentTopDate = new Date(0);
 	var lastLoadedCameraFilter = "index";
+	this.suppressClipListLoad = false;
 
 	this.LoadClips = function (listName)
 	{
@@ -2697,7 +2724,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad)
 	{
-		if (currentPrimaryTab != "clips" && currentPrimaryTab != "alerts")
+		if ((currentPrimaryTab != "clips" && currentPrimaryTab != "alerts") || self.suppressClipListLoad)
 		{
 			QueuedClipListLoad = null;
 			return;
@@ -4049,7 +4076,7 @@ function CameraListLoader()
 			{
 				self.currentlyLoadingCamera = camData[i];
 				self.UpdateSelectedClipFields(clipData.path, clipData.msec);
-				playbackControls.SetDownloadLink(clipData);
+				playbackControls.SetDownloadClipLink(clipData);
 				if (clipLoader.ClipDataIndicatesFlagged(clipData))
 					$("#clipFlagButton").addClass("flagged");
 				else
@@ -4095,6 +4122,7 @@ function CameraListLoader()
 		cli.ptz = clc.ptz;
 		cli.audio = clc.audio;
 		cli.isGroup = clc.group ? true : false;
+		imageLoader.lastLiveCameraOrGroupId = clc.optionValue;
 		imageLoader.ResetClipPlaybackFields();
 		playbackControls.Hide();
 		ptzButtons.UpdatePtzControlDisplayState();
@@ -4191,7 +4219,10 @@ function ImageLoader()
 	this.currentlyLoadingImage = new BICameraData();
 	this.currentlyLoadedImage = new BICameraData();
 	this.isFirstCameraImageLoaded = false;
-	var concurrentSameImageURLs = 1;
+	var repeatedSameImageURLs = 1;
+
+	this.lastLiveCameraOrGroupId = "";
+
 	this.Start = function ()
 	{
 		self.hasStarted = true;
@@ -4357,7 +4388,7 @@ function ImageLoader()
 			else
 			{
 				lastRequestedWidth = widthToRequest;
-				concurrentSameImageURLs = 1;
+				repeatedSameImageURLs = 1;
 				SetImageLoadTimeout();
 				$("#camimg").attr('src', imgSrcPath);
 			}
@@ -4463,8 +4494,17 @@ function ImageLoader()
 	{
 		if (self.currentlyLoadingImage == null || self.currentlyLoadingImage.isLive)
 			return;
-		clipLoader.UnselectAllClips();
-		cameraListLoader.LoadHomeGroup();
+		var camData = cameraListLoader.GetCameraWithId(self.lastLiveCameraOrGroupId);
+		if (camData)
+		{
+			clipLoader.suppressClipListLoad = true;
+			cameraListLoader.LoadLiveCamera(camData);
+			clipLoader.suppressClipListLoad = false;
+		}
+		else
+		{
+			cameraListLoader.LoadHomeGroup();
+		}
 	}
 	var imgLoadTimeout = null;
 	var SetImageLoadTimeout = function ()
@@ -4488,7 +4528,7 @@ function ImageLoader()
 	var GetNewImageAfterTimeout = function ()
 	{
 		// <summary>Calls GetNewImage after increasing delay, to reduce CPU usage a bit while idling</summary>
-		getNewImageTimeout = setTimeout(self.GetNewImage, Math.min(500, 25 + 2 * concurrentSameImageURLs++));
+		getNewImageTimeout = setTimeout(self.GetNewImage, Math.min(500, 25 + 2 * repeatedSameImageURLs++));
 	}
 	var ClearGetNewImageTimeout = function ()
 	{
@@ -5011,6 +5051,7 @@ function ImageRenderer()
 function CanvasContextMenu()
 {
 	var lastLiveContextMenuSelectedCamera = null;
+	var lastRecordContextMenuSelectedClip = null;
 	var self = this;
 
 	var onShowLiveContextMenu = function (menu)
@@ -5201,6 +5242,89 @@ function CanvasContextMenu()
 			, clickType: "right"
 		};
 	$("#layoutbody").contextmenu(optionLive);
+	var onShowRecordContextMenu = function (menu)
+	{
+		menu.applyrule(
+			{
+				name: "disable_clipname",
+				disable: true,
+				items: ["clipname"]
+			});
+	}
+	var onTriggerRecordContextMenu = function (e)
+	{
+		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").parents(".b-m-item");
+		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
+			downloadButton.parent().attr("href", imageLoader.lastSnapshotUrl);
+		else
+			downloadButton.wrap('<a id="cmroot_recordview_downloadlink" style="display:block" href="'
+				+ imageLoader.lastSnapshotUrl
+				+ '" onclick="saveSnapshot(&quot;#cmroot_recordview_downloadlink&quot;)" target="_blank"></a>');
+		$("#cmroot_recordview_downloadlink").attr("download", "temp.jpg");
+
+		var downloadClipButton = $("#cmroot_recordview_downloadclipbutton_findme").parents(".b-m-item");
+		if (downloadClipButton.parent().attr("id") == "cmroot_recordview_downloadcliplink")
+			downloadClipButton.parent().attr("href", playbackControls.GetDownloadClipLink());
+		else
+			downloadClipButton.wrap('<a id="cmroot_recordview_downloadcliplink" style="display:block" href="'
+				+ playbackControls.GetDownloadClipLink()
+				+ '" target="_blank"></a>');
+		$("#cmroot_recordview_downloadcliplink").attr("download", playbackControls.GetDownloadClipFileName());
+
+		if (!imageLoader.currentlyLoadingImage.isLive)
+		{
+			imageRenderer.CamImgClickStateReset();
+			lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(imageLoader.currentlyLoadingImage.id, imageLoader.currentlyLoadingImage.path);
+			if (lastRecordContextMenuSelectedClip != null)
+			{
+				console.log(lastRecordContextMenuSelectedClip);
+			}
+			$("#contextMenuClipName").text(playbackControls.GetDownloadClipFileName());
+			return true;
+		}
+		return false;
+	}
+	var onRecordContextMenuAction = function ()
+	{
+		switch (this.data.alias)
+		{
+			//case "properties":
+			//	break;
+			case "opennewtab":
+				imageLoader.Playback_Pause();
+				window.open(imageLoader.lastSnapshotFullUrl);
+				break;
+			case "saveas":
+				return true;
+			case "downloadclip":
+				return true;
+			case "closeclip":
+				imageLoader.goLive();
+				return;
+			default:
+				toaster.Error(this.data.alias + " is not implemented!");
+				break;
+		}
+	}
+	var optionRecord =
+		{
+			alias: "cmroot_record", width: 200, items:
+			[
+				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
+				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Download", alias: "saveas", action: onRecordContextMenuAction }
+				, { text: '<div id="cmroot_recordview_downloadclipbutton_findme" style="display: none"></div>Download clip', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
+				, { type: "splitLine" }
+				, { text: "Close Clip", icon: "#svg_x5F_Error", alias: "closeclip", action: onRecordContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onRecordContextMenuAction }
+			]
+			, onContextMenu: onTriggerRecordContextMenu
+			, onShow: onShowRecordContextMenu
+			, clickType: "right"
+		};
+	$("#layoutbody").contextmenu(optionRecord);
 }
 ///////////////////////////////////////////////////////////////
 // Calendar Context Menu //////////////////////////////////////
