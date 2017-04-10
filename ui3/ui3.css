@@ -2274,3 +2274,9 @@ div.icon, a.icon
 	{
 		background-color: rgba(255,255,255,0.1);
 	}
+
+/* Context Menu Icon Classes */
+.iconBlue
+{
+	color: #0097F0;
+}

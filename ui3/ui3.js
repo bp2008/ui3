@@ -5097,7 +5097,7 @@ function CanvasContextMenu()
 			{
 				LoadDynamicManualRecordingButtonState(camData);
 				$("#contextMenuCameraName").text(CleanUpGroupName(camData.optionDisplay));
-				$("#contextMenuCameraName").attr("title", "The buttons in this menu are specific to the camera: " + camData.optionDisplay);
+				$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons in this menu are specific to the camera: " + camData.optionDisplay);
 				$("#contextMenuMaximize").text((camData.optionValue == imageLoader.currentlyLoadedImage.id && homeGroupObj == null)
 					? "Back to Group" : "Maximize");
 			}
@@ -5199,9 +5199,13 @@ function CanvasContextMenu()
 		{
 			alias: "cmroot_live", width: 200, items:
 			[
-				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onLiveContextMenuAction }
-				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Download", alias: "saveas", action: onLiveContextMenuAction }
-				, { text: "Open HLS Stream", icon: "", alias: "openhls", action: onLiveContextMenuAction }
+				{ text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
+				, { type: "splitLine" }
+				, { text: "Open image in new tab", icon: "", alias: "opennewtab", action: onLiveContextMenuAction }
+				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
+				, { text: "Open HLS Stream", icon: "", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "", alias: "maximize", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, {
 					text: "UI Size (Temporary)", icon: "", alias: "uiSize", type: "group", width: 180, items:
@@ -5225,14 +5229,10 @@ function CanvasContextMenu()
 					]
 				}
 				, { type: "splitLine" }
-				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
-				, { type: "splitLine" }
-				, { text: "Trigger Now", icon: "#svg_x5F_Alert1", alias: "trigger", action: onLiveContextMenuAction }
-				, { text: "<span title=\"Toggle Manual Recording\" id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", alias: "record", action: onLiveContextMenuAction }
-				, { text: "<span title=\"Blue Iris will record a snapshot\">Snapshot in Blue Iris</span>", icon: "#svg_x5F_Snapshot", alias: "snapshot", action: onLiveContextMenuAction }
-				, { text: "Restart Camera", icon: "#svg_x5F_Restart", alias: "restart", action: onLiveContextMenuAction }
-				, { type: "splitLine" }
-				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "", alias: "maximize", action: onLiveContextMenuAction }
+				, { text: "Trigger Now", icon: "#svg_x5F_Alert1", iconClass: "iconBlue", alias: "trigger", action: onLiveContextMenuAction }
+				, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
+				, { text: "Snapshot in Blue Iris", icon: "#svg_x5F_Snapshot", iconClass: "iconBlue", alias: "snapshot", tooltip: "Blue Iris will record a snapshot", action: onLiveContextMenuAction }
+				, { text: "Restart Camera", icon: "#svg_x5F_Restart", iconClass: "iconBlue", alias: "restart", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
 			]
@@ -5311,7 +5311,7 @@ function CanvasContextMenu()
 			alias: "cmroot_record", width: 200, items:
 			[
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
-				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Download", alias: "saveas", action: onRecordContextMenuAction }
+				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadclipbutton_findme" style="display: none"></div>Download clip', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }

@@ -10,7 +10,7 @@
 		var mitems = {};
 		var actions = {};
 		var showGroups = [];
-		var itemTpl = "<div class='b-m-$[type]' unselectable=on><nobr unselectable=on><div class=\"b-m-icon\"><svg class=\"icon\"><use xlink:href=\"$[icon]\"></use></svg></div><span unselectable=on>$[text]</span></nobr></div>";
+		var itemTpl = "<div class='b-m-$[type]' unselectable=on><nobr unselectable=on><div class=\"b-m-icon$[iconClass]\"><svg class=\"icon\"><use xlink:href=\"$[icon]\"></use></svg></div><span unselectable=on>$[text]</span></nobr></div>";
 		var gTemplet = $("<div/>").addClass("b-m-mpanel").attr("unselectable", "on").css("display", "none");
 		var iTemplet = $("<div/>").addClass("b-m-item").attr("unselectable", "on");
 		var sTemplet = $("<div/>").addClass("b-m-split");
@@ -36,9 +36,17 @@
 			T.idx = obj.alias;
 			T.gidx = obj.gidx;
 			T.data = obj;
+			var tooltip = obj["tooltip"];
+			if (tooltip)
+				$(T).attr('title', tooltip);
 			T.innerHTML = itemTpl.replace(/\$\[([^\]]+)\]/g, function ()
 			{
-				return obj[arguments[1]];
+				var value = obj[arguments[1]];
+				if (!value)
+					value = "";
+				if (arguments[1] == "iconClass")
+					return value == "" ? "" : " " + value;
+				return value;
 			});
 			if (obj.disable)
 			{
