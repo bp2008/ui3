@@ -3756,6 +3756,7 @@ function SessionManager()
 	}
 	var LoginWithCredentials = function (user, pass, onFail)
 	{
+		var oldSession = currentServer.isUsingRemoteServer ? "" : $.cookie("session");
 		var args = { cmd: "login" };
 		ExecJSON(args, function (response)
 		{
@@ -3769,7 +3770,10 @@ function SessionManager()
 				{
 					lastResponse = response;
 					if (response.result && response.result == "success")
+					{
 						self.HandleSuccessfulLogin(user);
+						setTimeout(function () { logoutOldSession(oldSession); }, 1000);
+					}
 					else
 						onFail(response, 'Failed to log in. ' + GetFailReason(response));
 				}, function ()
@@ -3859,7 +3863,7 @@ function SessionManager()
 				toaster.Error(errorMessage, 3000);
 			});
 	}
-	this.PwKeypress = function(ele, e)
+	this.PwKeypress = function (ele, e)
 	{
 		var keycode;
 		if (window.event) keycode = window.event.keyCode;
@@ -6567,10 +6571,18 @@ function logout()
 		{
 			location.href = currentServer.remoteBaseURL + "login.htm?autologin=0&page=" + encodeURIComponent(location.pathname);
 		}, function ()
-		{
-			location.href = currentServer.remoteBaseURL + 'logout.htm';
+			{
+				location.href = currentServer.remoteBaseURL + 'logout.htm';
 			});
 	}
+}
+function logoutOldSession(oldSession)
+{
+	// When running multiple instances of the UI in the same browser, this causes instances to log out the session belonging to another instance.
+	// As long as cookies are sharing sessions between multiple browser tabs, this code should not be enabled.
+	// An alternative would be to have Ken include the user name in the session data, so we could avoid creating unnecessary new sessions in the first place.  Then maybe it would be safe to turn this feature on.
+	//if (oldSession != null && oldSession != $.cookie("session"))
+	//	ExecJSON({ cmd: "logout", session: oldSession });
 }
 function Clamp(i, min, max)
 {
