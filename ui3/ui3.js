@@ -63,6 +63,7 @@ var togglableUIFeatures =
 		]
 	];
 
+// TODO: Automatically log out of an old session, say, one second after creating a new one successfully.
 // TODO: Context menu for Clip List Items (Requires clip multi-select feature, and ability to delete or flag multiple clips with one API call!)
 // -- TODO: Flag/unflag
 // -- TODO: Download
@@ -73,6 +74,7 @@ var togglableUIFeatures =
 // TODO: Close button appears at top right of clip player when mouse draws near.
 
 // TODO: UI Settings
+// -- Including an option to forget saved credentials.
 // TODO: About this UI
 // TODO: System Log
 // TODO: System Configuration
@@ -138,15 +140,15 @@ var defaultSettings =
 			, value: "0"
 		}
 		, {
-			key: "ui3_adminRememberMe"
+			key: "bi_rememberMe"
 			, value: "0"
 		}
 		, {
-			key: "ui3_adminUsername"
+			key: "bi_username"
 			, value: ""
 		}
 		, {
-			key: "ui3_adminPassword"
+			key: "bi_password"
 			, value: ""
 		}
 		, {
@@ -452,11 +454,7 @@ $(function ()
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
 
-	statusLoader.LoadStatus();
-	if (settings.ui3_adminRememberMe == "1")
-		sessionManager.Login(Base64.decode(settings.ui3_adminUsername), Base64.decode(settings.ui3_adminPassword));
-	else
-		sessionManager.Login("", "");
+	sessionManager.Initialize();
 
 	$(window).resize(resized);
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
@@ -3396,7 +3394,6 @@ function StatusLoader()
 	var self = this;
 	var updateDelay = 5000;
 	var lastResponse = null;
-	var updateTimeout = null;
 	var currentProfileNames = null;
 	var currentlySelectedSchedule = null;
 	var globalScheduleEnabled = false;
@@ -3445,8 +3442,8 @@ function StatusLoader()
 	}
 	var loadStatusInternal = function (profileNum, stoplightState, schedule)
 	{
-		if (updateTimeout != null)
-			clearTimeout(updateTimeout);
+		if (statusUpdateTimeout != null)
+			clearTimeout(statusUpdateTimeout);
 		var args = { cmd: "status" };
 		if (typeof profileNum != "undefined" && profileNum != null)
 		{
@@ -3526,12 +3523,16 @@ function StatusLoader()
 			var nextStatusUpdateDelay = updateDelay;
 			if (typeof args.schedule != "undefined")
 				nextStatusUpdateDelay = 1000; // We just updated the schedule. Refresh again soon in case of profile change.
+			if (statusUpdateTimeout != null)
+				clearTimeout(statusUpdateTimeout);
 			statusUpdateTimeout = setTimeout(function ()
 			{
 				self.LoadStatus();
 			}, nextStatusUpdateDelay);
 		}, function ()
 			{
+				if (statusUpdateTimeout != null)
+					clearTimeout(statusUpdateTimeout);
 				statusUpdateTimeout = setTimeout(function ()
 				{
 					self.LoadStatus();
@@ -3684,67 +3685,117 @@ function SessionManager()
 	var isAdministratorSession = false;
 	var lastResponse = null;
 	var latestAPISession = null;
-	this.Login = function (user, pass)
+	this.Initialize = function ()
 	{
-		var isLoggingInWithCredentials = user != "" || pass != "";
-		var oldSession = $.cookie("session");
-		var args = { cmd: "login" };
-		if (oldSession != "" && !isLoggingInWithCredentials)
-			args.session = oldSession;
-		// We will now attempt to get session status
-		ExecJSON(args, function (response)
+		// Called once during page initialization
+		if (settings.bi_rememberMe == "1")
+		{
+			var user = Base64.decode(settings.bi_username);
+			var pass = Base64.decode(settings.bi_password);
+
+			if (user != "" || pass != "")
+			{
+				LoginWithCredentials(user, pass, function (response, errorMessage)
+				{
+					// The login failed
+					toaster.Error(errorMessage, 3000);
+					Init_LearnSessionStatus();
+				});
+			}
+			else
+				Init_LearnSessionStatus();
+		}
+		else
+			Init_LearnSessionStatus();
+	}
+	var Init_LearnSessionStatus = function ()
+	{
+		// This method is only to be called during initialization
+		var oldSession = currentServer.isUsingRemoteServer ? "" : $.cookie("session");
+		ExecJSON({ cmd: "login", session: oldSession }, function (response)
 		{
 			lastResponse = response;
-			isAdministratorSession = false;
-			if (response.result && response.result == "success")
-				self.HandleSuccessfulLogin(user, true); // Session is valid
-			else if (response.data && response.data.reason == "missing response")
+			var errorInfo = "";
+			if (response.result)
+			{
+				if (response.result == "success")
+				{
+					self.HandleSuccessfulLogin("", true); // Session is valid
+					return;
+				}
+				else if (response.result == "fail")
+				{
+					if (response.data)
+					{
+						if (response.data.reason == "missing response")
+						{
+							// The { cmd: "login", session: oldSession } method of learning session status always seemed a little hacky.  If this error ever arises, it means Blue Iris has broken this method and we need a replacement.
+							loadingHelper.SetErrorStatus("login", 'Blue Iris sent an authentication challenge instead of session data (probably indicates a Blue Iris bug).');
+							return;
+						}
+						else
+							errorInfo = JSON.stringify(response);
+					}
+					else
+					{
+						loadingHelper.SetErrorStatus("login", 'The current session is invalid or expired.  Reloading this page momentarily.');
+						setTimeout(function () { location.reload(); }, 5000);
+						return;
+					}
+				}
+				else
+				{
+					errorInfo = JSON.stringify(response);
+				}
+			}
+			loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo);
+		}, function ()
+			{
+				loadingHelper.SetErrorStatus("login", 'Unable to contact Blue Iris server to check session status.');
+			});
+	}
+	var LoginWithCredentials = function (user, pass, onFail)
+	{
+		var args = { cmd: "login" };
+		ExecJSON(args, function (response)
+		{
+			// We expect a result of "fail" and data.reason of "missing response"
+			if (response && response.result == "fail" && response.data && response.data.reason == "missing response")
 			{
 				// We need to log in
-				var newSession = response.session ? response.session : oldSession;
-				args.session = newSession;
-				args.response = md5(user + ":" + newSession + ":" + pass);
+				args.session = response.session;
+				args.response = md5(user + ":" + response.session + ":" + pass);
 				ExecJSON(args, function (response)
 				{
 					lastResponse = response;
-					isAdministratorSession = false;
 					if (response.result && response.result == "success")
 						self.HandleSuccessfulLogin(user);
 					else
-					{
-						if (isLoggingInWithCredentials)
-							toaster.Error('Failed to log in.', 3000);
-						loadingHelper.SetLoadedStatus("login");
-						cameraListLoader.LoadCameraList();
-					}
+						onFail(response, 'Failed to log in. ' + GetFailReason(response));
 				}, function ()
 					{
-						toaster.Error('Unable to contact Blue Iris server.', 3000);
-						if (oldSession != "" && $.cookie("session") != oldSession)
-							$.cookie("session", oldSession, { path: "/" });
-						loadingHelper.SetLoadedStatus("login");
-						cameraListLoader.LoadCameraList();
+						onFail(null, "Unable to contact server.");
 					});
 			}
 			else
-			{
-				toaster.Error('Unrecognized response from login command.', 3000);
-				loadingHelper.SetLoadedStatus("login");
-				cameraListLoader.LoadCameraList();
-			}
+				onFail(response, 'Failed to log in. ' + GetFailReason(response));
 		}, function ()
 			{
-				toaster.Error('Unable to contact Blue Iris server.', 3000);
-				loadingHelper.SetLoadedStatus("login");
-				cameraListLoader.LoadCameraList();
+				onFail(null, "Unable to contact server.");
 			});
+	}
+	var GetFailReason = function (response)
+	{
+		if (response)
+			return response.data && response.data.reason ? " " + response.data.reason : JSON.stringify(response);
+		else
+			return "null response";
 	}
 	this.HandleSuccessfulLogin = function (user, wasJustCheckingSessionStatus)
 	{
 		loadingHelper.SetLoadedStatus("login");
 		latestAPISession = lastResponse.session;
 		self.ApplyLatestAPISessionIfNecessary();
-		cameraListLoader.LoadCameraList();
 
 		$("#systemname").text(lastResponse.data["system name"]);
 		if (lastResponse.data.admin)
@@ -3767,6 +3818,9 @@ function SessionManager()
 			statusLoader.SetCurrentProfileNames(lastResponse.data.profiles);
 		if (lastResponse && lastResponse.data && lastResponse.data.schedules)
 			dropdownBoxes.listDefs["schedule"].rebuildItems(lastResponse.data.schedules);
+
+		statusLoader.LoadStatus();
+		cameraListLoader.LoadCameraList();
 	}
 	this.ApplyLatestAPISessionIfNecessary = function ()
 	{
@@ -3775,7 +3829,7 @@ function SessionManager()
 		if ($.cookie("session") != latestAPISession)
 		{
 			// If this happens a lot, usually the cause is another window with a web UI open that has a different latestAPISession value
-			bilog.verbose("ExecJSON.success Changing session from " + $.cookie("session") + " to " + latestAPISession);
+			bilog.verbose("APISession Changing session from " + $.cookie("session") + " to " + latestAPISession);
 			$.cookie("session", latestAPISession, { path: "/" });
 		}
 	}
@@ -3784,21 +3838,41 @@ function SessionManager()
 	{
 		if ($("#cbRememberMe").is(":checked"))
 		{
-			settings.ui3_adminRememberMe = "1";
-			settings.ui3_adminUsername = Base64.encode($('#loginDialog input[type="text"][varname="user"]').val());
-			settings.ui3_adminPassword = Base64.encode($('#loginDialog input[type="password"][varname="pass"]').val());
+			settings.bi_rememberMe = "1";
+			settings.bi_username = Base64.encode($('#loginDialog input[type="text"][varname="user"]').val());
+			settings.bi_password = Base64.encode($('#loginDialog input[type="password"][varname="pass"]').val());
 		}
 		else
 		{
-			settings.ui3_adminRememberMe = "0";
-			settings.ui3_adminUsername = "";
-			settings.ui3_adminPassword = "";
+			settings.bi_rememberMe = "0";
+			settings.bi_username = "";
+			settings.bi_password = "";
 		}
 	}
 	this.DoAdministratorDialogLogin = function ()
 	{
 		self.AdminLoginRememberMeChanged();
-		self.Login($('#loginDialog input[type="text"][varname="user"]').val(), $('#loginDialog input[type="password"][varname="pass"]').val());
+		LoginWithCredentials($('#loginDialog input[type="text"][varname="user"]').val(), $('#loginDialog input[type="password"][varname="pass"]').val(),
+			function (response, errorMessage)
+			{
+				// The login failed
+				toaster.Error(errorMessage, 3000);
+			});
+	}
+	this.PwKeypress = function(ele, e)
+	{
+		var keycode;
+		if (window.event) keycode = window.event.keyCode;
+		else if (typeof e != "undefined" && e) keycode = e.which;
+		else return true;
+
+		if (keycode == 13)
+		{
+			self.DoAdministratorDialogLogin();
+			return false;
+		}
+		else
+			return true;
 	}
 	this.IsAdministratorSession = function ()
 	{
@@ -3886,6 +3960,8 @@ function CameraListLoader()
 			}, 5000);
 		}, function ()
 			{
+				if (cameraListUpdateTimeout != null)
+					clearTimeout(cameraListUpdateTimeout);
 				setTimeout(function ()
 				{
 					self.LoadCameraList(successCallbackFunc);
@@ -5277,7 +5353,8 @@ function CanvasContextMenu()
 			lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(imageLoader.currentlyLoadingImage.id, imageLoader.currentlyLoadingImage.path);
 			if (lastRecordContextMenuSelectedClip != null)
 			{
-				console.log(lastRecordContextMenuSelectedClip);
+				//console.log(lastRecordContextMenuSelectedClip);
+				// TODO: use this clip information to load the properties.
 			}
 			$("#contextMenuClipName").text(playbackControls.GetDownloadClipFileName());
 			return true;
@@ -5690,15 +5767,15 @@ function SaveSnapshotInBlueIris(camId)
 var loginModal = null;
 function openLoginDialog()
 {
-	if (settings.ui3_adminRememberMe == "1")
+	if (settings.bi_rememberMe == "1")
 	{
-		$('#loginDialog input[type="text"][varname="user"]').val(Base64.decode(settings.ui3_adminUsername));
-		$('#loginDialog input[type="password"][varname="pass"]').val(Base64.decode(settings.ui3_adminPassword));
+		$('#loginDialog input[type="text"][varname="user"]').val(Base64.decode(settings.bi_username));
+		$('#loginDialog input[type="password"][varname="pass"]').val(Base64.decode(settings.bi_password));
 		$("#cbRememberMe").prop("checked", true);
 	}
 	else
 		$("#cbRememberMe").prop("checked", false);
-	loginModal = $("#loginDialog").modal({ maxWidth: 500, maxHeight: 300 });
+	loginModal = $("#loginDialog").modal({ maxWidth: 500, maxHeight: 325 });
 }
 function closeLoginDialog()
 {
@@ -6166,6 +6243,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 	$.ajax({
 		type: 'POST',
 		url: currentServer.remoteBaseURL + "json",
+		contentType: "text/plain",
 		data: JSON.stringify(args),
 		dataType: "json",
 		async: !synchronous,
@@ -6176,7 +6254,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 			else if (typeof data.session != "undefined" && data.session != $.cookie("session"))
 			{
 				// If this happens a lot, usually the cause is another window with a web UI open that has a different latestAPISession value
-				bilog.verbose("ExecJSON.success Changing session from " + $.cookie("session") + " to " + data.session);
+				bilog.verbose('ExecJSON("' + args.cmd + '").success Changing session from ' + $.cookie("session") + ' to ' + data.session);
 				$.cookie("session", data.session, { path: "/" });
 			}
 			if (callbackSuccess)
@@ -6485,14 +6563,12 @@ function logout()
 	}
 	else
 	{
-		$.get(currentServer.remoteBaseURL + 'logout.htm')
-			.done(function ()
-			{
-				location.href = currentServer.remoteBaseURL + "login.htm?autologin=0&page=" + encodeURIComponent(location.pathname);
-			})
-			.fail(function ()
-			{
-				location.href = currentServer.remoteBaseURL + 'logout.htm';
+		ExecJSON({ cmd: "logout" }, function ()
+		{
+			location.href = currentServer.remoteBaseURL + "login.htm?autologin=0&page=" + encodeURIComponent(location.pathname);
+		}, function ()
+		{
+			location.href = currentServer.remoteBaseURL + 'logout.htm';
 			});
 	}
 }

@@ -71,17 +71,17 @@
 				</div>
 				<div>
 					<div class="loadinglabel">
-						Loading Server Status...
+						Checking Session Status...
 					</div>
-					<div id="loadingServerStatus" class="loadingstatus">
+					<div id="loadingLogin" class="loadingstatus">
 						BUSY
 					</div>
 				</div>
 				<div>
 					<div class="loadinglabel">
-						Checking Session Status...
+						Loading Server Status...
 					</div>
-					<div id="loadingLogin" class="loadingstatus">
+					<div id="loadingServerStatus" class="loadingstatus">
 						BUSY
 					</div>
 				</div>
@@ -321,8 +321,13 @@
 		<div class="title">Administrator Login</div>
 		<div style="margin-top: 10px;">An administrator session is required to access this feature.  Please log in, then try your action again:</div>
 		<div class="section monospace">User: <input type="text" varname="user" placeholder="Username" /></div>
-		<div class="monospace" style="margin-top: 5px;">Pass: <input type="password" varname="pass" placeholder="Password" /></div>
-		<div class="section"><input type="checkbox" id="cbRememberMe" onchange="sessionManager.AdminLoginRememberMeChanged()" /><label for="cbRememberMe">Remember Me</label></div>
+		<div class="monospace" style="margin-top: 5px;">Pass: <input type="password" varname="pass" placeholder="Password" onkeypress="return sessionManager.PwKeypress(this,event)" /></div>
+		<div class="section">
+			<div class="customCheckboxWrapper" >
+				<input id="cbRememberMe" type="checkbox" onchange="sessionManager.AdminLoginRememberMeChanged()" />
+				<label for="cbRememberMe"><span class="ui"></span>Log in automatically<div class="customCheckboxSpacer"></div></label>
+			</div>
+		</div>
 		<div class="section"><input type="button" id="btnLogin" value="Log in" onclick="sessionManager.DoAdministratorDialogLogin()" /></div>
 	</div>
 	<div id="aboutDialog" style="display: none">

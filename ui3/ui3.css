@@ -1852,26 +1852,39 @@ div.icon, a.icon
 		text-align: right;
 	}
 
-.playbackSettingsLine, .playbackSettingsCheckboxWrapper
+.playbackSettingsLine, .playbackSettingsCheckboxWrapper, .customCheckboxWrapper
 {
 	font-size: 18.4px;
 }
 
-	.playbackSettingsCheckboxWrapper label
+	.playbackSettingsCheckboxWrapper label, .customCheckboxWrapper label
 	{
-		display: block;
 		height: 42px;
 		padding: 0px 10px;
 		line-height: 42px;
 	}
 
-		.playbackSettingsLine:hover, .playbackSettingsCheckboxWrapper label:hover, .playbackSettingsLine.selected
-		{
-			background-color: rgba(255,255,255,0.3);
-		}
+	.playbackSettingsCheckboxWrapper label
+	{
+		display: block;
+	}
 
+	.customCheckboxWrapper label
+	{
+		display: inline-block;
+	}
 
-	.playbackSettingsCheckboxWrapper input
+	.playbackSettingsLine:hover, .playbackSettingsCheckboxWrapper label:hover, .playbackSettingsLine.selected
+	{
+		background-color: rgba(255,255,255,0.3);
+	}
+
+	.customCheckboxWrapper label:hover
+	{
+		background-color: rgba(255,255,255,0.1);
+	}
+
+	.playbackSettingsCheckboxWrapper input, .customCheckboxWrapper input
 	{
 		vertical-align: middle;
 	}
@@ -1882,7 +1895,7 @@ div.icon, a.icon
 	font-size: 14px;
 }
 
-.playbackSettingsSpacer
+.playbackSettingsSpacer, .customCheckboxSpacer
 {
 	display: inline-block;
 	width: 30px;
