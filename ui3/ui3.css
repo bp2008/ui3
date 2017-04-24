@@ -6,6 +6,11 @@ svg.icon
 	height: 100%;
 	transform: scaleY(-1);
 }
+
+.noflip svg.icon
+{
+	transform: scaleY(1);
+}
 /* Loading */
 .loadinglabel
 {

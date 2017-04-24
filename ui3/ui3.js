@@ -5178,8 +5178,10 @@ function CanvasContextMenu()
 				LoadDynamicManualRecordingButtonState(camData);
 				$("#contextMenuCameraName").text(CleanUpGroupName(camData.optionDisplay));
 				$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons in this menu are specific to the camera: " + camData.optionDisplay);
-				$("#contextMenuMaximize").text((camData.optionValue == imageLoader.currentlyLoadedImage.id && homeGroupObj == null)
-					? "Back to Group" : "Maximize");
+				var $maximize = $("#contextMenuMaximize");
+				var isMaxAlready = (camData.optionValue == imageLoader.currentlyLoadedImage.id && homeGroupObj == null);
+				$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
+				$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
 			}
 			return true;
 		}
@@ -5281,11 +5283,11 @@ function CanvasContextMenu()
 			[
 				{ text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
 				, { type: "splitLine" }
-				, { text: "Open image in new tab", icon: "", alias: "opennewtab", action: onLiveContextMenuAction }
+				, { text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
 				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
-				, { text: "Open HLS Stream", icon: "", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
+				, { text: "Open HLS Stream", icon: "#svg_mio_ViewStream", iconClass: "noflip", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
-				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "", alias: "maximize", action: onLiveContextMenuAction }
+				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, {
 					text: "UI Size (Temporary)", icon: "", alias: "uiSize", type: "group", width: 180, items:
