@@ -8,6 +8,7 @@ var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
 var uiSizeHelper = null;
 var audioPlayer = null;
+var diskUsageGUI = null;
 var statusBars = null;
 var dropdownBoxes = null;
 var imageQualityHelper = null;
@@ -93,6 +94,8 @@ var togglableUIFeatures =
 // -- Auto-scroll to top if the clip list was previously scrolled to top, even if clips are selected.
 
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
+
+// TODO: Enable the local_overrides file callouts
 
 // CONSIDER: "Your profile has changed" messages could include the previous and new profile names and numbers.
 // CONSIDER: Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
@@ -398,6 +401,8 @@ $(function ()
 	uiSizeHelper = new UiSizeHelper();
 
 	audioPlayer = new AudioPlayer();
+
+	diskUsageGUI = new DiskUsageGUI();
 
 	statusBars = new StatusBars();
 	statusBars.setLabel("volume", '<svg class="volumeButton icon"><use xlink:href="#svg_x5F_Volume"></use></svg>');
@@ -3500,24 +3505,47 @@ function StatusLoader()
 				statusBars.setProgress("cpu", cpu / 100.0, cpu + "%");
 				statusBars.setTooltip("cpu", "Total CPU usage on server: " + cpu + "%");
 				var mem = response.data.mem;
-				var memBytes = getBytesFromBISizeStr(mem);
-				var memPercent = memBytes / 4000000000;
-				statusBars.setProgress("mem", memPercent, parseInt(memPercent * 100) + "%");
-				statusBars.setTooltip("mem", mem);
+				var memFree = response.data.memfree;
+				var memLoad = response.data.memload;
+				var memLoadNum = parseFloat(memLoad) / 100;
+				statusBars.setProgress("mem", memLoadNum, memLoad);
+				statusBars.setTooltip("mem", "Total Computer Memory Usage: " + memLoad
+					+ "\n\nBlue Iris: " + mem + "."
+					+ "\nFree memory: " + memFree + ".");
 
-				var match = new RegExp(", (.+)\/(.+);").exec(response.data.clips);
-				if (match)
+				// Disk info example: "disks":[{ "disk":"V:", "allocated":1841152, "used":1563676, "free":343444, "total":1907599 }]
+				// Values are in Mebibytes (MiB)
+				if (response.data.disks)
 				{
-					var used = getBytesFromBISizeStr(match[1]);
-					var total = getBytesFromBISizeStr(match[2]);
-					var diskPercent = total == 0 ? 0 : used / total;
+					var totalAvailable = 0;
+					var totalUsed = 0;
+					for (var i = 0; i < response.data.disks.length; i++)
+					{
+						var disk = response.data.disks[i];
+						totalAvailable += disk.allocated;
+						totalUsed += disk.used;
+					}
+					var diskPercent = totalAvailable == 0 ? 0 : totalUsed / totalAvailable;
 					statusBars.setProgress("disk", diskPercent, parseInt(diskPercent * 100) + "%");
-					statusBars.setTooltip("disk", response.data.clips);
+					statusBars.setTooltip("disk", "Click to visualize disk usage." + (response.data.clips ? "\n\n" + response.data.clips + '\n\n' + JSON.stringify(response.data.disks) : ""));
 				}
-				else
+				else if (response.data.clips)
 				{
-					statusBars.setProgress("disk", 0, "ERR");
-					statusBars.setTooltip("disk", "Disk information was in an unexpected format: " + response.data.clips);
+					// Fall back to old format
+					var match = new RegExp(", (.+)\/(.+);").exec(response.data.clips);
+					if (match)
+					{
+						var used = getBytesFromBISizeStr(match[1]);
+						var total = getBytesFromBISizeStr(match[2]);
+						var diskPercent = total == 0 ? 0 : used / total;
+						statusBars.setProgress("disk", diskPercent, parseInt(diskPercent * 100) + "%");
+						statusBars.setTooltip("disk", response.data.clips);
+					}
+					else
+					{
+						statusBars.setProgress("disk", 0, "ERR");
+						statusBars.setTooltip("disk", "Disk information was in an unexpected format: " + response.data.clips);
+					}
 				}
 
 				dropdownBoxes.setLabelText("schedule", response.data.schedule);
@@ -3681,6 +3709,161 @@ function StatusLoader()
 			newSignal = 2;
 		loadStatusInternal(null, newSignal);
 	});
+	this.diskUsageClick = function ()
+	{
+		if (lastResponse == null)
+		{
+			toaster.Error("Server status was not loaded!");
+			return;
+		}
+		if (lastResponse.data && lastResponse.data.disks && lastResponse.data.disks.length > 0)
+			diskUsageGUI.open(lastResponse.data.disks);
+	};
+}
+///////////////////////////////////////////////////////////////
+// Disk Usage GUI /////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function DiskUsageGUI()
+{
+	// Disk info example: "disks":[{ "disk":"V:", "allocated":1841152, "used":1563676, "free":343444, "total":1907599 }]
+	var self = this;
+	var overallocationOccurred = false;
+	var normalAllocationOccurred = false;
+	this.open = function (disks)
+	{
+		overallocationOccurred = normalAllocationOccurred = false;
+		var $dud = $('<div id="diskUsageDialog"><div class="title">Disk Usage</div></div>');
+		var $legend = $('<div class="pieLegend"></div>');
+		$dud.append($legend);
+		for (var i = 0; i < disks.length; i++)
+		{
+			var disk = disks[i];
+			$dud.append(GetDisk(disk));
+		}
+		var fakeDisk =
+			{
+				disk: "F:",
+				allocated: 102400,
+				used: 122880,
+				free: 30720,
+				total: 163840
+			};
+		$dud.append(GetDisk(fakeDisk));
+		if (normalAllocationOccurred)
+		{
+			$legend.append(CreateLegendItem('#0097F0', 'Used by recordings'));
+			$legend.append(CreateLegendItem('#0065aa', 'Allocated free space'));
+		}
+		if (overallocationOccurred)
+		{
+			$legend.append(CreateLegendItem('#FF9900', 'Allocated space (fully used)'));
+			$legend.append(CreateLegendItem('#FF0000', 'Over-allocated recordings'));
+		}
+		$legend.append(CreateLegendItem('#66DD66', 'Unallocated free space'));
+		$legend.append(CreateLegendItem('#666666', 'Other files'));
+		$dud.modal({ removeElementOnClose: true });
+	}
+	var CreateLegendItem = function (color, label)
+	{
+		return $('<div class="pieLegendItem"><div class="pieLegendBox" style="background-color:' + color + ';"></div>' + label + '</div>');
+	}
+	var GetDisk = function (disk)
+	{
+		// Make sure we have numeric values for all of these, no strings.
+		disk.allocated = parseInt(disk.allocated);
+		disk.used = parseInt(disk.used);
+		disk.free = parseInt(disk.free);
+		disk.total = parseInt(disk.total);
+
+		// Extrapolate complete usage information
+		var all_total = disk.total;
+		if (all_total - disk.used - disk.free < -5)
+			toaster.Warning("Reported disk info is invalid.  Possibly Blue Iris's clip database is corrupt and needs repaired.", 30000);
+		if (all_total - disk.used - disk.free < 0)
+			all_total = disk.used + disk.free;
+		var all_free = disk.free;
+		var all_used = all_total - all_free;
+
+		var bi_allocated = disk.allocated;
+		var bi_used = disk.used;
+		var bi_free = bi_allocated - bi_used;
+
+		var other_total = all_total - Math.max(bi_allocated, bi_used);
+		var other_used = all_used - bi_used;
+		var other_free = other_total - other_used;
+
+		var overAllocated = bi_free < 0;
+		var $disk = $('<div class="diskUsageDisk"></div>');
+		$disk.append('<div class="diskName">' + disk.disk + ' ' + (overAllocated ? '<span class="diskStatusOverallocated">Overallocated</span>' : '<span class="diskStatusNormal">Normal</span>') + '</div>');
+
+		var chartData;
+		if (overAllocated)
+		{
+			overallocationOccurred = true;
+			chartData =
+				[
+					[bi_allocated, '#FF9900']
+					, [-bi_free, '#FF0000']
+					, [other_free, '#66DD66']
+					, [other_used, '#666666']
+				];
+		}
+		else
+		{
+			normalAllocationOccurred = true;
+			chartData =
+				[
+					[bi_used, '#0097F0']
+					, [bi_free, '#0065aa']
+					, [other_free, '#66DD66']
+					, [other_used, '#666666']
+				];
+		}
+		$disk.append(GetPieChart(chartData));
+
+		var allocatedSpaceUsage = (bi_allocated == 0 ? 0 : parseInt((bi_used / bi_allocated) * 100)) + "%";
+		var allocatedSpaceUsagePercentStr = (overAllocated ? '<span class="diskStatusOverallocated">' + allocatedSpaceUsage + '</span>' : allocatedSpaceUsage);
+
+		$disk.append('<div class="diskInfo">Used: ' + formatBytes(getBytesFrom_MiB(bi_used)) + ' / ' + formatBytes(getBytesFrom_MiB(bi_allocated)) + ' (' + allocatedSpaceUsagePercentStr + ')</div>');
+		$disk.append('<div class="diskInfo">Unallocated free: ' + formatBytes(getBytesFrom_MiB(other_free)) + '</div>');
+		$disk.append('<div class="diskInfo">Other files: ' + formatBytes(getBytesFrom_MiB(other_used)) + '</div>');
+
+		$disk.attr('title', 'Disk capacity: ' + formatBytes(getBytesFrom_MiB(all_total))
+			+ '\nUsed by Blue Iris: ' + formatBytes(getBytesFrom_MiB(bi_used))
+			+ '\nUsed by other files: ' + formatBytes(getBytesFrom_MiB(other_used))
+			+ '\nFree space: ' + formatBytes(getBytesFrom_MiB(all_free)));
+
+		return $disk;
+	}
+	var GetPieChart = function (data, sizePx)
+	{
+		if (sizePx)
+			sizePx = parseInt(sizePx);
+		else
+			sizePx = 200;
+
+		var $canvas = $('<canvas width="' + sizePx + '" height="' + sizePx + '" />');
+		var canvas = $canvas.get(0);
+		var ctx = canvas.getContext("2d");
+		var lastend = 0;
+		var myColor = ['#000099', '#0099FF', '#666666', '#222222']
+
+		var myTotal = 0;
+		for (var i = 0; i < data.length; i++)
+			myTotal += data[i][0];
+
+		for (var i = 0; i < data.length; i++)
+		{
+			ctx.fillStyle = data[i][1];
+			ctx.beginPath();
+			ctx.moveTo(canvas.width / 2, canvas.height / 2);
+			ctx.arc(canvas.width / 2, canvas.height / 2, canvas.height / 2, lastend, lastend + (Math.PI * 2 * (data[i][0] / myTotal)), false);
+			ctx.lineTo(canvas.width / 2, canvas.height / 2);
+			ctx.fill();
+			lastend += Math.PI * 2 * (data[i][0] / myTotal);
+		}
+		return $canvas;
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Session Manager ////////////////////////////////////////////
@@ -6909,13 +7092,31 @@ function binarySearch(ar, el, compare_fn)
 function getBytesFromBISizeStr(str)
 {
 	if (str.endsWith("K"))
-		return parseInt(parseFloat(str) * 1000);
+		return parseInt(parseFloat(str) * 1024);
 	else if (str.endsWith("M"))
-		return parseInt(parseFloat(str) * 1000000);
+		return parseInt(parseFloat(str) * 1048576);
 	else if (str.endsWith("G"))
-		return parseInt(parseFloat(str) * 1000000000);
-	if (str.endsWith("T"))
-		return parseInt(parseFloat(str) * 1000000000000);
+		return parseInt(parseFloat(str) * 1073741824);
+	else if (str.endsWith("T"))
+		return parseInt(parseFloat(str) * 1073741824 * 1024);
+	else
+		return parseInt(parseFloat(str));
+}
+function getBytesFrom_MiB(MiB)
+{
+	return MiB * 1048576;
+}
+function formatBytes(bytes, decimals)
+{
+	if (bytes == 0) return '0B';
+	var negative = bytes < 0;
+	if (negative)
+		bytes = -bytes;
+	var k = 1024,
+		dm = decimals || 2,
+		sizes = ['B', 'K', 'M', 'G', 'T', 'PB', 'EB', 'ZB', 'YB'],
+		i = Math.floor(Math.log(bytes) / Math.log(k));
+	return (negative ? '-' : '') + parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + sizes[i];
 }
 var mouseCoordFixer =
 	{

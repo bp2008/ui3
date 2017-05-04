@@ -1027,6 +1027,11 @@ div.icon, a.icon
 	height: 3px;
 }
 
+.clickableStatusBar
+{
+	cursor: pointer;
+}
+
 .statusBarLabel
 {
 	display: inline-block;
@@ -2109,7 +2114,7 @@ div.icon, a.icon
 			color: #6666FF;
 		}
 
-	#aboutDialog .title, #loginDialog .title
+	#aboutDialog .title, #loginDialog .title, #diskUsageDialog .title
 	{
 		color: #377EC0;
 		font-size: 32px;
@@ -2119,6 +2124,7 @@ div.icon, a.icon
 	{
 		margin-top: 25px;
 	}
+
 	#aboutDialog .lesserSection, #loginDialog .lesserSection
 	{
 		margin-top: 10px;
@@ -2301,4 +2307,65 @@ div.icon, a.icon
 .iconBlue
 {
 	color: #0097F0;
+}
+/* Disk Usage Dialog */
+.pieLegend
+{
+	float: right;
+	border: 1px solid #999999;
+	padding: 5px;
+	margin: 5px 10px 5px 5px;
+}
+
+.pieLegendItem
+{
+	margin: 1px 0px;
+}
+
+.pieLegendBox
+{
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	border: 1px solid #999999;
+	margin-right: 5px;
+	vertical-align: text-bottom;
+}
+
+.diskUsageDisk
+{
+	display: inline-block;
+	border: 1px solid #666666;
+	background-color: rgba(255,255,255,0.1);
+	padding: 5px;
+	margin: 5px 10px;
+}
+
+	.diskUsageDisk:hover
+	{
+		border: 1px solid #777777;
+		background-color: rgba(255,255,255,0.15);
+	}
+
+.diskName
+{
+	text-align: center;
+	font-size: 1.1em;
+	margin-bottom: 5px;
+}
+
+.diskInfo
+{
+	margin: 2px 0px;
+}
+
+.diskStatusOverallocated
+{
+	color: #FF0000;
+	font-weight: bold;
+}
+
+.diskStatusNormal
+{
+	color: #00FF00;
 }
