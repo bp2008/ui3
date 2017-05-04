@@ -3527,7 +3527,7 @@ function StatusLoader()
 					}
 					var diskPercent = totalAvailable == 0 ? 0 : totalUsed / totalAvailable;
 					statusBars.setProgress("disk", diskPercent, parseInt(diskPercent * 100) + "%");
-					statusBars.setTooltip("disk", "Click to visualize disk usage." + (response.data.clips ? "\n\n" + response.data.clips + '\n\n' + JSON.stringify(response.data.disks) : ""));
+					statusBars.setTooltip("disk", "Click to visualize disk usage." + (response.data.clips ? "\n\n" + response.data.clips : ""));
 				}
 				else if (response.data.clips)
 				{
@@ -3740,15 +3740,15 @@ function DiskUsageGUI()
 			var disk = disks[i];
 			$dud.append(GetDisk(disk));
 		}
-		var fakeDisk =
-			{
-				disk: "F:",
-				allocated: 102400,
-				used: 122880,
-				free: 30720,
-				total: 163840
-			};
-		$dud.append(GetDisk(fakeDisk));
+		//var fakeDisk =
+		//	{
+		//		disk: "F:",
+		//		allocated: 102400,
+		//		used: 122880,
+		//		free: 30720,
+		//		total: 163840
+		//	};
+		//$dud.append(GetDisk(fakeDisk));
 		if (normalAllocationOccurred)
 		{
 			$legend.append(CreateLegendItem('#0097F0', 'Used by recordings'));
