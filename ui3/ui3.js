@@ -44,10 +44,10 @@ var togglableUIFeatures =
 				$("#volumeBar").removeClass("disabled")
 			else
 				$("#volumeBar").addClass("disabled")
-		}, null]
-		, ["#profileStatusBox", "profileStatus", "Profile Status Controls", function (enabled) { statusLoader.SetProfileButtonsEnabled(enabled); }, null]
-		, ["#stoplightBtn", "stopLight", "Stoplight Controls", function (enabled) { statusLoader.SetStoplightButtonEnabled(enabled); }, null]
-		, ["#globalScheduleBox", "globalSchedule", "Schedule Controls", function (enabled) { dropdownBoxes.setEnabled("schedule", enabled); }, null]
+		}, null, null]
+		, ["#profileStatusBox", "profileStatus", "Profile Status Controls", function (enabled) { statusLoader.SetProfileButtonsEnabled(enabled); }, null, null]
+		, ["#stoplightBtn", "stopLight", "Stoplight Controls", function (enabled) { statusLoader.SetStoplightButtonEnabled(enabled); }, null, null]
+		, ["#globalScheduleBox", "globalSchedule", "Schedule Controls", function (enabled) { dropdownBoxes.setEnabled("schedule", enabled); }, null, null]
 		// The PTZ Controls hot area specifically does not include the main button pad because a context menu on that pad would break touchscreen usability
 		, [".ptzpreset", "ptzControls", "PTZ Controls", function (enabled) { ptzButtons.setEnabled(enabled); }
 			, [{
@@ -60,6 +60,7 @@ var togglableUIFeatures =
 				, action: function (ele) { ptzButtons.PresetSet(ele.getAttribute("presetnum")); }
 				, shouldDisable: function () { return !ptzButtons.isEnabledNow(); }
 			}]
+			, function () { return !imageLoader.currentlyLoadingImage.ptz; }
 		]
 	];
 
@@ -335,7 +336,7 @@ $(function ()
 	ptzButtons = new PtzButtons();
 
 	$.ajax({
-		url: "ui3/icons.svg?v=" + ui_version,
+		url: "ui3/icons.svg?v=" + combined_version,
 		dataType: "html",
 		cache: true,
 		success: function (data)
@@ -449,7 +450,7 @@ $(function ()
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
-		togglableContextMenus.push(new ContextMenu_EnableDisableItem(togglableUIFeatures[i][0], togglableUIFeatures[i][1], togglableUIFeatures[i][2], togglableUIFeatures[i][3], togglableUIFeatures[i][4]));
+		togglableContextMenus.push(new ContextMenu_EnableDisableItem(togglableUIFeatures[i][0], togglableUIFeatures[i][1], togglableUIFeatures[i][2], togglableUIFeatures[i][3], togglableUIFeatures[i][4], togglableUIFeatures[i][5]));
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -1482,6 +1483,11 @@ function PtzButtons()
 			return;
 		if (!imageLoader.currentlyLoadingImage.ptz)
 			return;
+		if (!sessionManager.IsAdministratorSession())
+		{
+			openLoginDialog();
+			return;
+		}
 		var presetNum = parseInt(presetNumStr);
 		AskYesNo('<div style="margin-bottom:20px;width:300px;">' + CleanUpGroupName(cameraListLoader.currentlyLoadingCamera.optionDisplay) + '<br/><br/>Set preset ' + presetNum
 			+ ' now?</div>', function ()
@@ -3688,29 +3694,7 @@ function SessionManager()
 	this.Initialize = function ()
 	{
 		// Called once during page initialization
-		if (settings.bi_rememberMe == "1")
-		{
-			var user = Base64.decode(settings.bi_username);
-			var pass = Base64.decode(settings.bi_password);
-
-			if (user != "" || pass != "")
-			{
-				LoginWithCredentials(user, pass, function (response, errorMessage)
-				{
-					// The login failed
-					toaster.Error(errorMessage, 3000);
-					Init_LearnSessionStatus();
-				});
-			}
-			else
-				Init_LearnSessionStatus();
-		}
-		else
-			Init_LearnSessionStatus();
-	}
-	var Init_LearnSessionStatus = function ()
-	{
-		// This method is only to be called during initialization
+		// First, check the current session status
 		var oldSession = currentServer.isUsingRemoteServer ? "" : $.cookie("session");
 		ExecJSON({ cmd: "login", session: oldSession }, function (response)
 		{
@@ -3720,8 +3704,26 @@ function SessionManager()
 			{
 				if (response.result == "success")
 				{
-					self.HandleSuccessfulLogin("", true); // Session is valid
-					return;
+					if (settings.bi_rememberMe == "1")
+					{
+						var user = Base64.decode(settings.bi_username);
+						if (user != "")
+						{
+							var sessionUser = response && response.data && response.data.user ? response.data.user : "";
+							if (user.toLowerCase() != sessionUser.toLowerCase())
+							{
+								var pass = Base64.decode(settings.bi_password);
+								LoginWithCredentials(user, pass, function (failResponse, errorMessage)
+								{
+									// The login failed
+									toaster.Error(errorMessage, 3000);
+									self.HandleSuccessfulLogin(response, true); // Session is valid
+								});
+								return;
+							}
+						}
+					}
+					self.HandleSuccessfulLogin(response, true);
 				}
 				else if (response.result == "fail")
 				{
@@ -3746,13 +3748,33 @@ function SessionManager()
 				else
 				{
 					errorInfo = JSON.stringify(response);
+					loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo);
 				}
 			}
-			loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo);
 		}, function ()
 			{
 				loadingHelper.SetErrorStatus("login", 'Unable to contact Blue Iris server to check session status.');
 			});
+
+		//if (settings.bi_rememberMe == "1")
+		//{
+		//	var user = Base64.decode(settings.bi_username);
+		//	var pass = Base64.decode(settings.bi_password);
+
+		//	if (user != "" || pass != "")
+		//	{
+		//		LoginWithCredentials(user, pass, function (response, errorMessage)
+		//		{
+		//			// The login failed
+		//			toaster.Error(errorMessage, 3000);
+		//			Init_LearnSessionStatus();
+		//		});
+		//	}
+		//	else
+		//		Init_LearnSessionStatus();
+		//}
+		//else
+		//	Init_LearnSessionStatus();
 	}
 	var LoginWithCredentials = function (user, pass, onFail)
 	{
@@ -3771,8 +3793,8 @@ function SessionManager()
 					lastResponse = response;
 					if (response.result && response.result == "success")
 					{
-						self.HandleSuccessfulLogin(user);
-						setTimeout(function () { logoutOldSession(oldSession); }, 1000);
+						self.HandleSuccessfulLogin(response);
+						//setTimeout(function () { logoutOldSession(oldSession); }, 1000);
 					}
 					else
 						onFail(response, 'Failed to log in. ' + GetFailReason(response));
@@ -3795,8 +3817,10 @@ function SessionManager()
 		else
 			return "null response";
 	}
-	this.HandleSuccessfulLogin = function (user, wasJustCheckingSessionStatus)
+	this.HandleSuccessfulLogin = function (response, wasJustCheckingSessionStatus)
 	{
+		lastResponse = response;
+		var user = response && response.data && response.data.user ? response.data.user : "";
 		loadingHelper.SetLoadedStatus("login");
 		latestAPISession = lastResponse.session;
 		self.ApplyLatestAPISessionIfNecessary();
@@ -5458,13 +5482,17 @@ function SetUi3FeatureEnabled(uniqueSettingsId, enabled)
 {
 	return settings.setItem("ui3_feature_enabled_" + uniqueSettingsId, enabled ? "1" : "0");
 }
-function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onToggle, extraMenuButtons)
+function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onToggle, extraMenuButtons, shouldDisableToggler)
 {
 	var self = this;
 	var onShowContextMenu = function (menu)
 	{
 		var itemsToDisable = [];
 		var itemsToEnable = [];
+		if (shouldDisableToggler && shouldDisableToggler())
+			itemsToDisable.push("toggle");
+		else
+			itemsToEnable.push("toggle");
 		if (extraMenuButtons)
 			for (var i = 0; i < extraMenuButtons.length; i++)
 				if (extraMenuButtons[i].shouldDisable && extraMenuButtons[i].shouldDisable())
@@ -5920,7 +5948,7 @@ function HLSPlayer()
 			return;
 		$(window).resize(resizeHlsPlayer);
 		initStarted = true;
-		$.getScript("clappr/clappr.min.js")
+		$.getScript("clappr/clappr.min.js?v=" + combined_version)
 			.done(function (script, textStatus)
 			{
 				initFinished = true;

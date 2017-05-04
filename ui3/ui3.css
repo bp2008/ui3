@@ -2119,6 +2119,10 @@ div.icon, a.icon
 	{
 		margin-top: 25px;
 	}
+	#aboutDialog .lesserSection, #loginDialog .lesserSection
+	{
+		margin-top: 10px;
+	}
 /* jpegSuppressionDialog */
 .jpegSuppressionDialog
 {

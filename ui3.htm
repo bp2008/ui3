@@ -14,8 +14,11 @@
 				var uiVersionStr = "unknown";
 				if (typeof ui_version != "undefined")
 					uiVersionStr = ui_version;
+				var biVersionStr = "unknown";
+				if (typeof bi_version != "undefined")
+					biVersionStr = bi_version;
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
-				alert("An unexpected error has occurred in " + location.pathname + " (version " + uiVersionStr + ").\nA full refresh may solve the problem (CTRL + F5).\n\nIf you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nURL: " + url + "\nLine: " + line + "\nChar: " + charIdx);
+				alert("An unexpected error has occurred in " + location.pathname + " (version " + uiVersionStr + " / " + biVersionStr + ").\nA full refresh may solve the problem (CTRL + F5).\n\nIf you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nURL: " + url + "\nLine: " + line + "\nChar: " + charIdx);
 			}
 			catch (ex)
 			{
@@ -23,14 +26,16 @@
 			}
 		};
 	</script>
-	<script src="ui3/libs-ui3.js" type="text/javascript"></script>
-	<link href="ui3/libs-ui3.css" rel="stylesheet" type="text/css">
-	<script src="ui3/ui3.js" type="text/javascript"></script>
-	<link href="ui3/ui3.css" rel="stylesheet" type="text/css">
-	<!--<script src="ui3/ui3-local-overrides.js" type="text/javascript"></script>
-	<link href="ui3/ui3-local-overrides.css" rel="stylesheet" type="text/css">-->
+	<script src="ui3/libs-ui3.js?v=%%VERSION%%" type="text/javascript"></script>
+	<link href="ui3/libs-ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="ui3/ui3.js?v=%%VERSION%%" type="text/javascript"></script>
+	<link href="ui3/ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
+	<!--<script src="ui3/ui3-local-overrides.js?v=%%VERSION%%" type="text/javascript"></script>
+	<link href="ui3/ui3-local-overrides.css?v=%%VERSION%%" rel="stylesheet" type="text/css">-->
 	<script type="text/javascript">
 		var ui_version = "0.0.1";
+		var bi_version = "%%VERSION%%";
+		var combined_version = ui_version + "-" + bi_version;
 		//$(function ()
 		//{
 		//	$("#ui_version_label").html(ui_version);
@@ -322,13 +327,13 @@
 		<div style="margin-top: 10px;">An administrator session is required to access this feature.  Please log in, then try your action again:</div>
 		<div class="section monospace">User: <input type="text" varname="user" placeholder="Username" /></div>
 		<div class="monospace" style="margin-top: 5px;">Pass: <input type="password" varname="pass" placeholder="Password" onkeypress="return sessionManager.PwKeypress(this,event)" /></div>
-		<div class="section">
+		<div class="lesserSection">
 			<div class="customCheckboxWrapper" >
 				<input id="cbRememberMe" type="checkbox" onchange="sessionManager.AdminLoginRememberMeChanged()" />
 				<label for="cbRememberMe"><span class="ui"></span>Log in automatically<div class="customCheckboxSpacer"></div></label>
 			</div>
 		</div>
-		<div class="section"><input type="button" id="btnLogin" value="Log in" onclick="sessionManager.DoAdministratorDialogLogin()" /></div>
+		<div class="lesserSection"><input type="button" id="btnLogin" value="Log in" onclick="sessionManager.DoAdministratorDialogLogin()" /></div>
 	</div>
 	<div id="aboutDialog" style="display: none">
 		<div class="title">About UI3</div>
