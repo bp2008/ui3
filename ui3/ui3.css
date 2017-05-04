@@ -2098,7 +2098,7 @@ div.icon, a.icon
 	font-family: Consolas, monospace;
 }
 
-#aboutDialog, #loginDialog
+#aboutDialog, #loginDialog, #diskUsageDialog
 {
 	padding: 10px;
 	font-size: 16px;
@@ -2339,6 +2339,7 @@ div.icon, a.icon
 	background-color: rgba(255,255,255,0.1);
 	padding: 5px;
 	margin: 5px 10px;
+	vertical-align: top;
 }
 
 	.diskUsageDisk:hover
@@ -2357,6 +2358,7 @@ div.icon, a.icon
 .diskInfo
 {
 	margin: 2px 0px;
+	max-width: 200px;
 }
 
 .diskStatusOverallocated
@@ -2368,4 +2370,8 @@ div.icon, a.icon
 .diskStatusNormal
 {
 	color: #00FF00;
+}
+.diskUsageSeparator
+{
+	height: 10px;
 }

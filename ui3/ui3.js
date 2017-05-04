@@ -991,6 +991,7 @@ function DropdownBoxes()
 				, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
+				, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
 			]
 			, onItemClick: function (item)
@@ -1006,6 +1007,9 @@ function DropdownBoxes()
 					case "system_configuration":
 						break;
 					case "full_camera_list":
+						break;
+					case "disk_usage":
+						statusLoader.diskUsageClick();
 						break;
 					case "logout":
 						logout();
@@ -3725,14 +3729,15 @@ function StatusLoader()
 ///////////////////////////////////////////////////////////////
 function DiskUsageGUI()
 {
-	// Disk info example: "disks":[{ "disk":"V:", "allocated":1841152, "used":1563676, "free":343444, "total":1907599 }]
 	var self = this;
-	var overallocationOccurred = false;
-	var normalAllocationOccurred = false;
+	var exceededAllocationOccurred = false;
+	var overAllocatedOccurred = false;
+	var normalStateOccurred = false;
 	this.open = function (disks)
 	{
-		overallocationOccurred = normalAllocationOccurred = false;
+		exceededAllocationOccurred = overAllocatedOccurred = normalStateOccurred = false;
 		var $dud = $('<div id="diskUsageDialog"><div class="title">Disk Usage</div></div>');
+		$dud.append('<div class="diskUsageSeparator"></div>');
 		var $legend = $('<div class="pieLegend"></div>');
 		$dud.append($legend);
 		for (var i = 0; i < disks.length; i++)
@@ -3742,25 +3747,38 @@ function DiskUsageGUI()
 		}
 		//var fakeDisk =
 		//	{
-		//		disk: "F:",
+		//		disk: "Y:",
 		//		allocated: 102400,
 		//		used: 122880,
 		//		free: 30720,
 		//		total: 163840
 		//	};
 		//$dud.append(GetDisk(fakeDisk));
-		if (normalAllocationOccurred)
+		//var fakeDisk2 =
+		//	{
+		//		disk: "Z:",
+		//		allocated: 140,
+		//		used: 100,
+		//		free: 25,
+		//		total: 150
+		//	};
+		//$dud.append(GetDisk(fakeDisk2));
+		$legend.append(CreateLegendItem('#666666', 'Other files'));
+		if (normalStateOccurred || overAllocatedOccurred)
 		{
 			$legend.append(CreateLegendItem('#0097F0', 'Used by recordings'));
 			$legend.append(CreateLegendItem('#0065aa', 'Allocated free space'));
 		}
-		if (overallocationOccurred)
+		if (exceededAllocationOccurred)
 		{
-			$legend.append(CreateLegendItem('#FF9900', 'Allocated space (fully used)'));
-			$legend.append(CreateLegendItem('#FF0000', 'Over-allocated recordings'));
+			$legend.append(CreateLegendItem('#FF9900', 'Allocated space (exceeded)'));
+			$legend.append(CreateLegendItem('#FF0000', 'Recordings exceeding allocation'));
+		}
+		if (overAllocatedOccurred)
+		{
+			$legend.append(CreateLegendItem('#FF00FF', 'Overallocated space'));
 		}
 		$legend.append(CreateLegendItem('#66DD66', 'Unallocated free space'));
-		$legend.append(CreateLegendItem('#666666', 'Other files'));
 		$dud.modal({ removeElementOnClose: true });
 	}
 	var CreateLegendItem = function (color, label)
@@ -3775,63 +3793,86 @@ function DiskUsageGUI()
 		disk.free = parseInt(disk.free);
 		disk.total = parseInt(disk.total);
 
-		// Extrapolate complete usage information
-		var all_total = disk.total;
-		if (all_total - disk.used - disk.free < -5)
-			toaster.Warning("Reported disk info is invalid.  Possibly Blue Iris's clip database is corrupt and needs repaired.", 30000);
-		if (all_total - disk.used - disk.free < 0)
-			all_total = disk.used + disk.free;
-		var all_free = disk.free;
-		var all_used = all_total - all_free;
-
 		var bi_allocated = disk.allocated;
 		var bi_used = disk.used;
-		var bi_free = bi_allocated - bi_used;
+		var disk_freeSpace = disk.free;
+		var disk_capacity = disk.total;
 
-		var other_total = all_total - Math.max(bi_allocated, bi_used);
-		var other_used = all_used - bi_used;
-		var other_free = other_total - other_used;
+		// Extrapolate complete disk usage information from the 4 values provided
+		if (disk_capacity - disk.used - disk.free < -5)
+			toaster.Warning("Reported disk info is invalid.  Possibly Blue Iris's clip database is corrupt and needs repaired.", 30000);
+		if (disk_capacity - disk.used - disk.free < 0)
+			disk_capacity = disk.used + disk.free;
 
-		var overAllocated = bi_free < 0;
-		var $disk = $('<div class="diskUsageDisk"></div>');
-		$disk.append('<div class="diskName">' + disk.disk + ' ' + (overAllocated ? '<span class="diskStatusOverallocated">Overallocated</span>' : '<span class="diskStatusNormal">Normal</span>') + '</div>');
+		var disk_usedSpace = disk_capacity - disk_freeSpace; // Overall disk used space
+		var other_used = disk_usedSpace - bi_used; // Space used by other files
+		var other_free = disk_capacity - other_used - bi_used; // Free space outside BI's allocation
+		var bi_free = bi_allocated - bi_used; // Remaining space in allocation.  This may be negative, or may be larger than actual free space.
+		var exceededAllocation = bi_free < 0; // We have more recordings than we're supposed to
+		var overAllocated = bi_free > disk_freeSpace;  // There isn't enough free space for BI to fill its allocation.
 
+		var diskStatus;
+		var problemExplanation = "";
 		var chartData;
-		if (overAllocated)
+		if (exceededAllocation)
 		{
-			overallocationOccurred = true;
+			exceededAllocationOccurred = true;
+			diskStatus = '<span class="diskStatusOverallocated">Exceeded allocation</span>';
+			problemExplanation = "Blue Iris is currently keeping more recordings than allowed.";
 			chartData =
 				[
-					[bi_allocated, '#FF9900']
-					, [-bi_free, '#FF0000']
+					[other_used, '#333333']
+					, [bi_allocated, '#FF9900']
+					, [-bi_free, '#FF0000'] // Amount over allocation
 					, [other_free, '#66DD66']
-					, [other_used, '#666666']
+				];
+		}
+		else if (overAllocated)
+		{
+			overAllocatedOccurred = true;
+			diskStatus = '<span class="diskStatusOverallocated">Overallocated</span>';
+			problemExplanation = "There is not enough free space on the disk for Blue Iris to fill its allocation.";
+			var unavailableAllocatedSpace = bi_free - disk_freeSpace;
+			chartData =
+				[
+					[other_used, '#333333']
+					, [bi_used, '#0097F0']
+					, [disk_freeSpace, '#0065aa'] // Unused available allocation
+					, [bi_free - disk_freeSpace, '#FF00FF'] // Unused unavailable allocation
 				];
 		}
 		else
 		{
-			normalAllocationOccurred = true;
+			normalStateOccurred = true;
+			diskStatus = '<span class="diskStatusNormal">Normal</span>';
 			chartData =
 				[
-					[bi_used, '#0097F0']
+					[other_used, '#333333']
+					, [bi_used, '#0097F0']
 					, [bi_free, '#0065aa']
 					, [other_free, '#66DD66']
-					, [other_used, '#666666']
 				];
 		}
+
+		var $disk = $('<div class="diskUsageDisk"></div>');
+		$disk.append('<div class="diskName">' + disk.disk + ' ' + diskStatus + '</div>');
 		$disk.append(GetPieChart(chartData));
+		if (problemExplanation != "")
+		{
+			$disk.append('<div class="diskInfo">' + problemExplanation + '</div>');
+			$disk.append('<div class="diskUsageSeparator"></div>');
+		}
 
 		var allocatedSpaceUsage = (bi_allocated == 0 ? 0 : parseInt((bi_used / bi_allocated) * 100)) + "%";
-		var allocatedSpaceUsagePercentStr = (overAllocated ? '<span class="diskStatusOverallocated">' + allocatedSpaceUsage + '</span>' : allocatedSpaceUsage);
+		var allocatedSpaceUsagePercentStr = (exceededAllocation ? '<span class="diskStatusOverallocated">' + allocatedSpaceUsage + '</span>' : allocatedSpaceUsage);
 
-		$disk.append('<div class="diskInfo">Used: ' + formatBytes(getBytesFrom_MiB(bi_used)) + ' / ' + formatBytes(getBytesFrom_MiB(bi_allocated)) + ' (' + allocatedSpaceUsagePercentStr + ')</div>');
-		$disk.append('<div class="diskInfo">Unallocated free: ' + formatBytes(getBytesFrom_MiB(other_free)) + '</div>');
-		$disk.append('<div class="diskInfo">Other files: ' + formatBytes(getBytesFrom_MiB(other_used)) + '</div>');
+		$disk.append('<div class="diskInfo">Allocated: ' + formatBytes(getBytesFrom_MiB(bi_allocated)) + '</div>');
+		$disk.append('<div class="diskInfo">Used: ' + formatBytes(getBytesFrom_MiB(bi_used)) + ' (' + allocatedSpaceUsagePercentStr + ')</div>');
+		if (overAllocated)
+			$disk.append('<div class="diskInfo">Overallocated by: ' + formatBytes(getBytesFrom_MiB(bi_free - disk_freeSpace)) + '</div>');
 
-		$disk.attr('title', 'Disk capacity: ' + formatBytes(getBytesFrom_MiB(all_total))
-			+ '\nUsed by Blue Iris: ' + formatBytes(getBytesFrom_MiB(bi_used))
-			+ '\nUsed by other files: ' + formatBytes(getBytesFrom_MiB(other_used))
-			+ '\nFree space: ' + formatBytes(getBytesFrom_MiB(all_free)));
+		$disk.attr('title', 'Disk "' + disk.disk + '" is ' + parseInt(disk_usedSpace / disk_capacity * 100) + '% full.'
+			+ '\n\n' + formatBytes(getBytesFrom_MiB(disk_freeSpace)) + ' free of ' + formatBytes(getBytesFrom_MiB(disk_capacity)));
 
 		return $disk;
 	}
