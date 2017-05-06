@@ -6,6 +6,9 @@
 *.user
 *.userosscache
 *.sln.docstates
+/ui3.sln
+/ui3/ui3-local-overrides.js
+/ui3/ui3-local-overrides.css
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -250,4 +253,3 @@ paket-files/
 # JetBrains Rider
 .idea/
 *.sln.iml
-/ui3.sln

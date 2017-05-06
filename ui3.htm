@@ -36,18 +36,19 @@
 		var ui_version = "0.0.1";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
-		//$(function ()
-		//{
-		//	$("#ui_version_label").html(ui_version);
-		//	if (typeof (Storage) !== "undefined")
-		//	{
-		//		if (settings.ui3_lastLoadedVersion != ui_version)
-		//		{
-		//			settings.ui3_lastLoadedVersion = ui_version;
-		//			location.reload(true);
-		//		}
-		//	}
-		//});
+		$(function ()
+		{
+			$("#ui_version_label").text(ui_version);
+			$("#bi_version_label").text(bi_version);
+			//	if (typeof (Storage) !== "undefined")
+			//	{
+			//		if (settings.ui3_lastLoadedVersion != ui_version)
+			//		{
+			//			settings.ui3_lastLoadedVersion = ui_version;
+			//			location.reload(true);
+			//		}
+			//	}
+		});
 	</script>
 </head>
 <body>
@@ -328,7 +329,7 @@
 		<div class="section monospace">User: <input type="text" varname="user" placeholder="Username" /></div>
 		<div class="monospace" style="margin-top: 5px;">Pass: <input type="password" varname="pass" placeholder="Password" onkeypress="return sessionManager.PwKeypress(this,event)" /></div>
 		<div class="lesserSection">
-			<div class="customCheckboxWrapper" >
+			<div class="customCheckboxWrapper">
 				<input id="cbRememberMe" type="checkbox" onchange="sessionManager.AdminLoginRememberMeChanged()" />
 				<label for="cbRememberMe"><span class="ui"></span>Log in automatically<div class="customCheckboxSpacer"></div></label>
 			</div>
@@ -337,27 +338,29 @@
 	</div>
 	<div id="aboutDialog" style="display: none">
 		<div class="title">About UI3</div>
-		<div class="section">Version <span id="ui_version_label"></span></div>
-		<div class="section">UI3 is a web interface for <a href="http://blueirissoftware.com/">Blue Iris</a></div>
+		<div class="section">UI3 version <span id="ui_version_label"></span>, Blue Iris version: <span id="bi_version_label"></span></div>
+		<div class="section">UI3 is a web interface for <a target="_blank" href="http://blueirissoftware.com/">Blue Iris</a></div>
 		<div class="section">
 			UI3 is designed for use with:
 		</div>
 		<div style="margin-top:10px;">
-			<a href="http://www.google.com/chrome"><img src="ui3/chrome48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Google Chrome</a>
+			<a target="_blank" href="https://www.google.com/chrome"><img src="ui3/chrome48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Google Chrome</a>
 		</div>
 		<div style="margin-top:10px;">
-			<a href="https://www.mozilla.org/en-US/firefox/new/"><img src="ui3/firefox48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Mozilla Firefox</a>
+			<a target="_blank" href="https://www.mozilla.org/en-US/firefox/new/"><img src="ui3/firefox48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Mozilla Firefox</a>
 		</div>
-		<div style="margin-top:10px;">
+		<div style="margin:10px 0px 20px 0px;">
 			Other browsers, including mobile versions of those listed above, may or may not provide full functionality.
 		</div>
-		<div class="section" style="margin-bottom: 5px;">Credits:</div>
-		<div>
-			Built by:
-			<ul>
-				<li><a href="http://www.ipcamtalk.com/member.php?28-bp2008">bp2008</a></li>
-				<li><a href="https://www.ipcamtalk.com/member.php/5123-ruppmeister">ruppmeister</a></li>
-			</ul>
+		<hr />
+		<div style="margin-top:20px;">
+			UI3 is built primarily by <a target="_blank" href="https://ipcamtalk.com/members/bp2008.28/">bp2008</a> and <a target="_blank" href="https://ipcamtalk.com/members/ruppmeister.5023/">ruppmeister</a>.
+		</div>
+		<div class="section">
+			UI3 is available under the <a target="_blank" href="https://www.gnu.org/licenses/lgpl-3.0.en.html">GNU Lesser General Public License V3</a>.
+		</div>
+		<div class="section">
+			GitHub: <a target="_blank" href="https://github.com/bp2008/ui3">https://github.com/bp2008/ui3</a>
 		</div>
 	</div>
 	<div id="datePickerDialog" class="resizable" style="display: none;">

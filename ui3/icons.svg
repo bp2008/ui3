@@ -292,10 +292,10 @@
 </symbol>
 <polygon id="svg_x5F_CarrotUp" points="42.118,17.676 48.518,11.275 48.607,11.364 48.696,11.275 55.096,17.676 53.496,19.275 
 	48.607,14.387 43.718,19.275 "/>
-<symbol id="svg_mio_ViewStream" viewBox="0 0 24 24">
+<symbol id="svg_mio_ViewStream" viewBox="2 2 20 20">
 	<path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
 </symbol>
-<symbol id="svg_mio_Trash" viewBox="0 0 24 24">
+<symbol id="svg_mio_Trash" viewBox="3 3 18 18">
 	<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
 </symbol>
 <symbol id="svg_mio_Fullscreen" viewBox="5 5 14 14">
@@ -304,7 +304,10 @@
 <symbol id="svg_mio_FullscreenExit" viewBox="5 5 14 14">
 	<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
 </symbol>
-<symbol id="svg_mio_Tab" viewBox="0 0 24 24">
+<symbol id="svg_mio_Tab" viewBox="1 1 22 22">
 	<path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h10v4h8v10z"/>
+</symbol>
+<symbol id="svg_mio_Refresh" viewBox="4 4 16 16">
+	<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
 </symbol>
 </svg>

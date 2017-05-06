@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>SVG Icon Test</title>
+	<script src="libs-src/jquery-1.11.3.min.js" type="text/javascript"></script>
+	<style type="text/css">
+		body
+		{
+			font-size: 0px;
+			font-family: Consolas, monospace;
+		}
+
+		.icon
+		{
+			fill: currentColor;
+			width: 100%;
+			height: 100%;
+		}
+
+			.icon:hover
+			{
+				color: #FF9999;
+			}
+
+			.icon:active
+			{
+				color: #FF0000;
+			}
+
+		.iconInverse
+		{
+			transform: scaleY(-1);
+		}
+
+		.iconBox
+		{
+			display: inline-block;
+			border: 1px solid black;
+			margin: 5px;
+			padding: 5px;
+		}
+
+		.svgWrapper
+		{
+			vertical-align: middle;
+			display: inline-block;
+			border: 1px solid black;
+			padding: 5px;
+			width: 32px;
+			height: 32px;
+		}
+
+		.label
+		{
+			display: inline-block;
+			vertical-align: middle;
+			padding-left: 5px;
+			font-size: 16px;
+		}
+
+		label
+		{
+			font-size: 16px;
+		}
+	</style>
+	<script type="text/javascript">
+		$(function ()
+		{
+			$("#svgContainer").load("icons.svg", function ()
+			{
+				var $root = $("#root");
+				$("symbol,g").each(function (idx, ele)
+				{
+					var $icon = $(ele);
+					var icon_id = $icon.attr("id");
+					var doInverse = icon_id.indexOf('svg_x5F') == 0;
+					$root.append('<div class="iconBox">'
+						+ '<div class="svgWrapper"><svg class="icon' + (doInverse ? ' iconInverse' : '') + '"><use xlink:href="#' + icon_id + '"></use></svg></div>'
+						+ ' <div class="label">' + icon_id + '</div> '
+						+ '</div>');
+				});
+			});
+		});
+		function svgPaddingClicked()
+		{
+			$(".svgWrapper").css("padding", $("#cb_svgPadding").is(":checked") ? "5px" : "0px");
+		}
+	</script>
+</head>
+<body>
+	<div><label><input type="checkbox" id="cb_svgPadding" onclick="svgPaddingClicked()" checked="checked" />Padding</label></div>
+	<div id="root">
+	</div>
+	<div id="svgContainer" style="display:none"></div>
+</body>
+</html>

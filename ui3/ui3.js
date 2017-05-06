@@ -9,6 +9,8 @@ var touchEvents = new TouchEventHelper();
 var uiSizeHelper = null;
 var audioPlayer = null;
 var diskUsageGUI = null;
+var systemLog = null;
+var systemConfig = null;
 var statusBars = null;
 var dropdownBoxes = null;
 var imageQualityHelper = null;
@@ -65,7 +67,8 @@ var togglableUIFeatures =
 		]
 	];
 
-// TODO: Automatically log out of an old session, say, one second after creating a new one successfully.
+// TODO: Fix bug where mousing over SVG graphics in Firefox causes main menu (and dropdown menus) to close.
+// TODO: Integrate my custom scroll bars with ui2modal.
 // TODO: Context menu for Clip List Items (Requires clip multi-select feature, and ability to delete or flag multiple clips with one API call!)
 // -- TODO: Flag/unflag
 // -- TODO: Download
@@ -77,14 +80,9 @@ var togglableUIFeatures =
 
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
-// TODO: About this UI
-// TODO: System Log
-// TODO: System Configuration
 // TODO: Full Camera List
 // TODO: Camera properties
 // TODO: Clip properties
-
-// TODO: Detect when the web interface has been loaded from the file system, and show an error message.
 
 // TODO: Automatic clip list refresh.
 // -- Automatic clip list updates will only work if the date filter is cleared, but they will work automatically and without user-interaction.
@@ -403,6 +401,10 @@ $(function ()
 	audioPlayer = new AudioPlayer();
 
 	diskUsageGUI = new DiskUsageGUI();
+
+	systemLog = new SystemLog();
+
+	systemConfig = new SystemConfig();
 
 	statusBars = new StatusBars();
 	statusBars.setLabel("volume", '<svg class="volumeButton icon"><use xlink:href="#svg_x5F_Volume"></use></svg>');
@@ -870,6 +872,7 @@ function DropdownListItem(options)
 	var self = this;
 	// Default Options
 	this.text = "List Item";
+	this.autoSetLabelText = true;
 	// End options
 	$.extend(this, options);
 }
@@ -892,12 +895,13 @@ function DropdownBoxes()
 					statusLoader.ChangeSchedule(scheduleName);
 				}
 			}
-			, rebuildItems: function (schedulesArray)
+			, rebuildItems: function ()
 			{
 				this.items = [];
 				if (statusLoader.IsGlobalScheduleEnabled())
 				{
-					if (schedulesArray.length == 0)
+					var schedulesArray = sessionManager.GetSchedulesArray();
+					if (schedulesArray && schedulesArray.length == 0)
 					{
 						openLoginDialog();
 						return;
@@ -916,9 +920,10 @@ function DropdownBoxes()
 				else
 					this.items.push(new DropdownListItem(
 						{
-							text: "The global schedule must first be enabled in Blue Iris."
+							text: "The global schedule must first be configured in Blue Iris."
 							, id: null
 							, selected: false
+							, autoSetLabelText: false
 						}));
 			}
 		});
@@ -1001,10 +1006,13 @@ function DropdownBoxes()
 					case "ui_settings":
 						break;
 					case "about_this_ui":
+						openAboutDialog();
 						break;
 					case "system_log":
+						systemLog.open();
 						break;
 					case "system_configuration":
+						systemConfig.open();
 						break;
 					case "full_camera_list":
 						break;
@@ -1182,7 +1190,8 @@ function DropdownBoxes()
 			$item.addClass(item.cssClass);
 		$item.click(function ()
 		{
-			self.setLabelText(listDef.name, item.text);
+			if (listDef.autoSetLabelText)
+				self.setLabelText(listDef.name, item.text);
 			listDef.selectedIndex = i;
 			listDef.onItemClick && listDef.onItemClick(listDef.items[i]); // run if not null
 			closeDropdownLists();
@@ -3552,7 +3561,6 @@ function StatusLoader()
 					}
 				}
 
-				dropdownBoxes.setLabelText("schedule", response.data.schedule);
 				UpdateProfileStatus();
 				UpdateScheduleStatus();
 			}
@@ -3660,6 +3668,7 @@ function StatusLoader()
 		globalScheduleEnabled = currentlySelectedSchedule != "";
 		if (!globalScheduleEnabled)
 			currentlySelectedSchedule = "N/A";
+		dropdownBoxes.listDefs["schedule"].rebuildItems();
 		dropdownBoxes.setLabelText("schedule", currentlySelectedSchedule);
 	}
 	this.IsGlobalScheduleEnabled = function ()
@@ -4069,7 +4078,7 @@ function SessionManager()
 		if (lastResponse.data && lastResponse.data.profiles && lastResponse.data.profiles.length == 8)
 			statusLoader.SetCurrentProfileNames(lastResponse.data.profiles);
 		if (lastResponse && lastResponse.data && lastResponse.data.schedules)
-			dropdownBoxes.listDefs["schedule"].rebuildItems(lastResponse.data.schedules);
+			dropdownBoxes.listDefs["schedule"].rebuildItems();
 
 		statusLoader.LoadStatus();
 		cameraListLoader.LoadCameraList();
@@ -4129,6 +4138,12 @@ function SessionManager()
 	this.IsAdministratorSession = function ()
 	{
 		return isAdministratorSession;
+	}
+	this.GetSchedulesArray = function ()
+	{
+		if (lastResponse && lastResponse.data)
+			return lastResponse.data.schedules;
+		return null;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -6000,6 +6015,226 @@ function UpdateClipFlags(path, flags, cbSuccess, cbFailure)
 		});
 }
 ///////////////////////////////////////////////////////////////
+// Delete Alert/Clip //////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function DeleteAlert(path, isClip, cbSuccess, cbFailure)
+{
+	var clipOrAlert = isClip ? "clip" : "alert";
+	ExecJSON({ cmd: "del" + clipOrAlert, path: path }, function (response)
+	{
+		if (typeof response.result != "undefined" && response.result == "fail")
+		{
+			if (typeof cbFailure == "function")
+				cbFailure();
+			else
+				toaster.Warning("Failed to delete " + clipOrAlert + ".<br/>" + (sessionManager.IsAdministratorSession() ? ("The " + clipOrAlert + " may be still recording.") : ("You need administrator permission to delete " + clipOrAlert + "s.")), 5000);
+			if (!sessionManager.IsAdministratorSession())
+				openLoginDialog();
+			return;
+		}
+		else
+		{
+			if (typeof cbSuccess == "function")
+				cbSuccess();
+			else
+				toaster.Success(clipOrAlert + " deleted");
+		}
+	}, function ()
+		{
+			if (typeof cbFailure == "function")
+				cbFailure();
+			else
+				toaster.Error('Unable to contact Blue Iris server.', 3000);
+		});
+}
+///////////////////////////////////////////////////////////////
+// Custom Checkboxes //////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var customCheckboxId = 0;
+function GetCustomCheckbox(tag, label, checked, onChange)
+{
+	var myId = customCheckboxId++;
+	var $wrapper = $('<div class="customCheckboxWrapper"></div>');
+	var $cb = $('<input id="ccb_' + myId + '" type="checkbox" ' + (checked ? 'checked="checked" ' : '') + '/>');
+	$cb.on('change', function () { onChange(tag, $(this).is(":checked")); });
+	$wrapper.append($cb);
+	$wrapper.append('<label for="ccb_' + myId + '"><span class="ui"></span>' + label + '<div class="customCheckboxSpacer"></div></label>');
+	return $wrapper;
+}
+///////////////////////////////////////////////////////////////
+// Get System Configuration ///////////////////////////////////
+///////////////////////////////////////////////////////////////
+function SystemConfig()
+{
+	var self = this;
+	var modal_systemconfigdialog = null;
+	this.open = function ()
+	{
+		if ($("#sysconfigdialog").length == 0)
+			ShowSysConfigDialog();
+		var $sysconfig = $("#sysconfigcontent");
+		if ($sysconfig.length == 0)
+			return;
+		$sysconfig.html('<div style="text-align: center"><img src="ui2/ajax-loader-clips.gif" alt="Loading..." /></div>');
+		ExecJSON({ cmd: "sysconfig" }, function (response)
+		{
+			if (typeof response.result == "undefined")
+			{
+				CloseSysConfigDialog();
+				toaster.Error("Unexpected response when requesting system configuration from server.");
+				return;
+			}
+			if (response.result == "fail")
+			{
+				CloseSysConfigDialog();
+				openLoginDialog();
+				return;
+			}
+			var $sysconfig = $("#sysconfigcontent");
+			if ($sysconfig.length == 0)
+				return;
+			$sysconfig.empty();
+			$sysconfig.append(GetCustomCheckbox('archive', "Clip Web Archival (FTP)", response.data.archive, SetSysConfig));
+			$sysconfig.append(GetCustomCheckbox('schedule', "Global Schedule", response.data.schedule, SetSysConfig));
+		}, function ()
+			{
+				toaster.Error('Unable to contact Blue Iris server.', 3000);
+				CloseSysConfigDialog();
+			});
+	}
+	var ShowSysConfigDialog = function ()
+	{
+		CloseSysConfigDialog();
+		modal_systemconfigdialog = $('<div id="sysconfigdialog"><div class="sysconfigtitle">' + htmlEncode($("#system_name").text()) + ' System Configuration</div>'
+			+ '<div id="sysconfigcontent"></div></div>'
+		).modal({ removeElementOnClose: true, maxWidth: 400, maxHeight: 350 });
+	}
+	var CloseSysConfigDialog = function ()
+	{
+		if (modal_systemconfigdialog != null)
+			modal_systemconfigdialog.close();
+		$("#sysconfigdialog").remove();
+	}
+	var SetSysConfig = function (key, value)
+	{
+		var args = { cmd: "sysconfig" };
+		if (key == "archive")
+			args.archive = value;
+		else if (key == "schedule")
+			args.schedule = value;
+		else
+		{
+			toaster.Error('Unknown system configuration key: ' + htmlEncode(key), 3000);
+			return;
+		}
+		ExecJSON(args, function (response)
+		{
+			if (typeof response.result == "undefined")
+			{
+				toaster.Error("Unexpected response when attempting to set system configuration on server.");
+				return;
+			}
+			if (response.result == "fail")
+			{
+				openLoginDialog();
+				return;
+			}
+			toaster.Success('Set configuration field "' + htmlEncode(key) + '" = "' + htmlEncode(value) + '"');
+		}, function ()
+			{
+				toaster.Error('Unable to contact Blue Iris server to set ' + htmlEncode(key) + ' value.', 3000);
+			});
+	}
+}
+///////////////////////////////////////////////////////////////
+// System Log /////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function SystemLog()
+{
+	var self = this;
+	var modal_systemlogdialog = null;
+	this.open = function ()
+	{
+		if ($("#systemlogdialog").length == 0)
+			ShowLogDialog();
+		var $syslog = $("#systemlogcontent");
+		if ($syslog.length == 0)
+			return;
+		$syslog.html('<div style="text-align: center; margin-top: 20px;">Loading...</div>');
+		$("#systemlog_refresh_btn").addClass("spin2s");
+		ExecJSON({ cmd: "log" }, function (response)
+		{
+			if (typeof response.result == "undefined")
+			{
+				CloseLogDialog();
+				toaster.Error("Unexpected response when requesting system log from server.");
+				return;
+			}
+			if (response.result == "fail")
+			{
+				CloseLogDialog();
+				openLoginDialog();
+				return;
+			}
+			var $syslog = $("#systemlogcontent");
+			if ($syslog.length == 0)
+				return;
+			$("#systemlog_refresh_btn").removeClass("spin2s");
+			$syslog.html('<table><thead><tr><th></th><th>#</th><th>Time</th><th>Object</th><th>Message</th></tr></thead><tbody></tbody></table>');
+			var $tbody = $syslog.find("tbody");
+			for (var i = 0; i < response.data.length; i++)
+			{
+				var data = response.data[i];
+				var date = new Date(data.date * 1000)
+				var dateStr = GetDateStr(date);
+				var level = GetLevelImageMarkup(data.level);
+				var count = typeof data.count == "undefined" ? "" : data.count;
+				$tbody.append('<tr><td class="levelcolumn">' + level + '</td><td class="centercolumn" style="font-weight: bold;">' + count + '</td><td>' + dateStr + '</td><td style="font-weight: bold;">' + htmlEncode(data.obj) + '</td><td>' + htmlEncode(data.msg) + '</td></tr>');
+			}
+		}, function ()
+			{
+				toaster.Error('Unable to contact Blue Iris server.', 3000);
+				CloseLogDialog();
+			});
+	}
+	var GetLevelImageMarkup = function (level)
+	{
+		if (level == 0)
+			return GetLogIcon("#svg_x5F_Info", "#0088FF");
+		if (level == 1)
+			return GetLogIcon("#svg_x5F_Warning", "#FFFF00");
+		if (level == 2)
+			return GetLogIcon("#svg_x5F_Error", "#FF0000");
+		if (level == 3)
+			return GetLogIcon("#svg_x5F_Alert1", "#FF0000");
+		if (level == 4)
+			return GetLogIcon("#svg_x5F_OK", "#00FF00");
+		if (level == 10)
+			return GetLogIcon("#svg_x5F_User", "#FFFFFF");
+		return '<span title="Log level ' + level + ' is unknown">' + level + '</span>';
+	}
+	var GetLogIcon = function (iconId, color)
+	{
+		return '<div class="logicon" style="color: ' + color + '"><svg class="icon"><use xlink:href="' + iconId + '"></use></svg></div>';
+	}
+	var ShowLogDialog = function ()
+	{
+		CloseLogDialog();
+		modal_systemlogdialog = $('<div id="systemlogdialog"><div class="syslogheader">'
+			+ '<div class="systemlogtitle">' + $("#system_name").text()
+			+ ' System Log <div id="systemlog_refresh_btn" class="noflip" onclick="systemLog.open()"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div>'
+			+ '</div></div>'
+			+ '<div id="systemlogcontent"></div></div>'
+		).modal({ removeElementOnClose: true });
+	}
+	var CloseLogDialog = function ()
+	{
+		if (modal_systemlogdialog != null)
+			modal_systemlogdialog.close();
+		$("#systemlogdialog").remove();
+	}
+}
+///////////////////////////////////////////////////////////////
 // Save Snapshot in Blue Iris /////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function SaveSnapshotInBlueIris(camId)
@@ -6018,6 +6253,13 @@ function SaveSnapshotInBlueIris(camId)
 		{
 			toaster.Error("Blue Iris did not save a snapshot for camera " + camId);
 		});
+}
+///////////////////////////////////////////////////////////////
+// About Dialog ///////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function openAboutDialog()
+{
+	$("#aboutDialog").modal({ maxWidth: 550, maxHeight: 600 });
 }
 ///////////////////////////////////////////////////////////////
 // Login Dialog ///////////////////////////////////////////////
@@ -6871,7 +7113,7 @@ function AskYesNo(question, onYes, onNo)
 			try
 			{
 				onYes();
-			} catch (ex) { showErrorToast(ex); }
+			} catch (ex) { toaster.Error(ex); }
 		modalDialog.close();
 	});
 	$noBtn.click(function ()
@@ -6880,7 +7122,7 @@ function AskYesNo(question, onYes, onNo)
 			try
 			{
 				onNo();
-			} catch (ex) { showErrorToast(ex); }
+			} catch (ex) { toaster.Error(ex); }
 		modalDialog.close();
 	});
 }

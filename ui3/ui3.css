@@ -2104,14 +2104,20 @@ div.icon, a.icon
 	font-size: 16px;
 }
 
+	#aboutDialog hr
+	{
+		border-color: #377ec0;
+	}
+
 	#aboutDialog a
 	{
-		color: #0066FF;
+		cursor: pointer; /* Somehow necessary for cursor change before panel is clicked */
+		color: #0099FF;
 	}
 
 		#aboutDialog a:visited
 		{
-			color: #6666FF;
+			color: #9999FF;
 		}
 
 	#aboutDialog .title, #loginDialog .title, #diskUsageDialog .title
@@ -2371,7 +2377,130 @@ div.icon, a.icon
 {
 	color: #00FF00;
 }
+
 .diskUsageSeparator
 {
 	height: 10px;
+}
+
+/* System Log / System Config dialogs */
+
+.logicon
+{
+	width: 24px;
+	height: 24px;
+}
+
+#systemlog_refresh_btn
+{
+	margin-left: 10px;
+	width: 24px;
+	height: 24px;
+	cursor: pointer;
+	transform-origin: center;
+}
+
+.logicon, #systemlog_refresh_btn
+{
+	display: inline-block;
+	font-size: 0px;
+}
+
+#sysconfigdialog
+{
+	overflow-x: hidden;
+}
+#systemlogdialog, #sysconfigdialog
+{
+	padding: 10px;
+}
+
+#sysconfigcontent label
+{
+	display: block;
+}
+
+.syslogheader
+{
+	text-align: center;
+}
+
+.systemlogtitle
+{
+	font-size: 2em;
+	color: #377EC0;
+	margin-bottom: 10px;
+}
+
+#systemlogcontent table, .cameralistcontent table
+{
+	border-collapse: collapse;
+	width: 100%;
+}
+
+#systemlogcontent td, .cameralistcontent td, #systemlogcontent th, .cameralistcontent th
+{
+	border-bottom: 1px solid #555555;
+	padding: 2px 4px;
+}
+
+.cameralistcontent td
+{
+	max-width: 200px;
+	word-wrap: break-word;
+}
+
+#systemlogcontent img
+{
+	vertical-align: middle;
+}
+
+#systemlogcontent td.levelcolumn
+{
+	width: 24px;
+}
+
+#systemlogcontent td.centercolumn
+{
+	text-align: center;
+}
+
+.sysconfigtitle, .cameralisttitle
+{
+	font-size: 2em;
+	color: #377EC0;
+	margin-bottom: 20px;
+	text-align: center;
+}
+
+.spin2s
+{
+	-webkit-animation: spin 2s linear infinite;
+	-moz-animation: spin 2s linear infinite;
+	animation: spin 2s linear infinite;
+}
+
+@-moz-keyframes spin
+{
+	100%
+	{
+		-moz-transform: rotate(360deg);
+	}
+}
+
+@-webkit-keyframes spin
+{
+	100%
+	{
+		-webkit-transform: rotate(360deg);
+	}
+}
+
+@keyframes spin
+{
+	100%
+	{
+		-webkit-transform: rotate(360deg);
+		transform: rotate(360deg);
+	}
 }
