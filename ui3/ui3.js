@@ -5963,7 +5963,7 @@ function CameraProperties()
 				$camprop.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
 				$camprop.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
 				$camprop.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
-				$camprop.append('<div class="camprop_item">' + GetCameraPropertyLabel("Record:")
+				$camprop.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Record:")
 					+ '<select mysetting="record|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 					+ GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
 					+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
@@ -5972,7 +5972,7 @@ function CameraProperties()
 					+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString())
 					+ '</select>'
 					+ '</div>');
-				$camprop.append('<div class="camprop_item">' + GetCameraPropertyLabel("Alerts:")
+				$camprop.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Alerts:")
 					+ '<select mysetting="alerts|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 					+ GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
 					+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
@@ -6010,7 +6010,7 @@ function CameraProperties()
 	}
 	var GetCamPropCheckbox = function (tag, label, checked, onChange)
 	{
-		var $parent = $('<div class="camprop_item"></div>');
+		var $parent = $('<div class="camprop_item camprop_item_cb"></div>');
 		$parent.append(GetCustomCheckbox(tag, label, checked, onChange));
 		return $parent;
 	}

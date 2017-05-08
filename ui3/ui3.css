@@ -2512,6 +2512,10 @@ div.icon, a.icon
 
 /* Camera Properties / Camera List */
 
+#campropdialog
+{
+	min-width: 283px;
+}
 .campropheader
 {
 	text-align: center;
@@ -2598,15 +2602,26 @@ div.icon, a.icon
 	text-align: center;
 	margin: 7px 0px;
 }
-
+.camprop_item_cb
+{
+	max-width: 340px;
+	margin: 7px auto;
+	overflow-x: hidden;
+}
+.camprop_item_ddl
+{
+	max-width: 340px;
+	margin: 7px auto;
+	position: relative;
+	overflow-x: hidden;
+}
 .camprop_label
 {
 	font-size: 16px;
-	width: 217px;
 	vertical-align: top;
 	line-height: 38px;
 	text-align: right;
-	padding-right: 13px;
+	padding: 0px 10px;
 	display: inline-block;
 	white-space: nowrap;
 	overflow: hidden;
@@ -2614,15 +2629,16 @@ div.icon, a.icon
 }
 #campropcontent .customCheckboxWrapper label
 {
+	display: block;
 	font-size: 16px;
-	width: 235px;
-	text-align: right;
 	padding-right: 60px;
 }
 
 #campropcontent select
 {
 	height: 38px;
+	position: absolute;
+	right: 10px;
 }
 
 .largeTextButton
