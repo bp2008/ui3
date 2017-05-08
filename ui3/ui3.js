@@ -3,6 +3,8 @@
 /// <reference path="libs-ui3.js" />
 /// This web interface is licensed under the GNU LGPL Version 3
 "use strict";
+var developerMode = false;
+
 var toaster = new Toaster();
 var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
@@ -11,6 +13,7 @@ var audioPlayer = null;
 var diskUsageGUI = null;
 var systemLog = null;
 var systemConfig = null;
+var cameraProperties = null;
 var statusBars = null;
 var dropdownBoxes = null;
 var imageQualityHelper = null;
@@ -81,7 +84,6 @@ var togglableUIFeatures =
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
 // TODO: Full Camera List
-// TODO: Camera properties
 // TODO: Clip properties
 
 // TODO: Automatic clip list refresh.
@@ -94,6 +96,10 @@ var togglableUIFeatures =
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
 // TODO: Enable the local_overrides file callouts
+
+// TODO: Fix bug in IE where main menu scroll bar appears unnecessarily in medium and large sizes.
+
+// TODO: Fix bug where some browsers can't show a scroll bar in the main menu
 
 // CONSIDER: "Your profile has changed" messages could include the previous and new profile names and numbers.
 // CONSIDER: Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
@@ -405,6 +411,8 @@ $(function ()
 	systemLog = new SystemLog();
 
 	systemConfig = new SystemConfig();
+
+	cameraProperties = new CameraProperties();
 
 	statusBars = new StatusBars();
 	statusBars.setLabel("volume", '<svg class="volumeButton icon"><use xlink:href="#svg_x5F_Volume"></use></svg>');
@@ -2773,7 +2781,7 @@ function ClipLoader(clipsBodySelector)
 			$clipsbody.empty();
 			$("#clipListTopDate").html("...");
 			$clipsbody.html('<div class="clipListText">Loading...<br/><br/><span id="clipListDateRange"></span></div>');
-			$.CustomScroll.callMeOnContainerResize()
+			$.CustomScroll.callMeOnContainerResize();
 
 			tileLoader.unregisterAllOnAppearDisappear();
 			asyncThumbnailDownloader.Stop();
@@ -5484,12 +5492,12 @@ function CanvasContextMenu()
 				else
 					ResetCamera(lastLiveContextMenuSelectedCamera.optionValue);
 				break;
-			//case "properties":
-			//	if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
-			//		toaster.Warning("You cannot view properties of cameras that are part of an auto-cycle.");
-			//	else
-			//		ShowCameraProperties(lastLiveContextMenuSelectedCamera.optionValue);
-			//	break;
+			case "properties":
+				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
+					toaster.Warning("You cannot view properties of cameras that are part of an auto-cycle.");
+				else
+					cameraProperties.open(lastLiveContextMenuSelectedCamera.optionValue);
+				break;
 			case "openhls":
 				hlsPlayer.OpenDialog(imageLoader.currentlyLoadingImage.id);
 				break;
@@ -5880,6 +5888,263 @@ function CameraConfig()
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Camera Properties Dialog ///////////////////////////////////
+///////////////////////////////////////////////////////////////
+function CameraProperties()
+{
+	var self = this;
+	var modal_cameraPropDialog = null;
+	var modal_cameraPropRawDialog = null;
+	this.open = function (camId)
+	{
+		CloseCameraProperties();
+
+		var camName = cameraListLoader.GetCameraName(camId);
+		modal_cameraPropDialog = $('<div id="campropdialog"><div class="campropheader">'
+			+ '<div class="camproptitle">' + htmlEncode(camName)
+			+ ' Properties <div id="camprop_refresh_btn" class="rotating_refresh_btn noflip"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div></div>'
+			+ '</div>'
+			+ '<div id="campropcontent"><div style="text-align: center">Loading...</div></div>'
+			+ '</div>'
+		).modal({
+			removeElementOnClose: true
+			, maxWidth: 500
+			, onClosing: function ()
+			{
+				if ($("#cameralistcontent").length != 0)
+					ShowCameraList();
+			}
+		});
+		$("#camprop_refresh_btn").click(function ()
+		{
+			self.open(camId);
+		});
+		cameraConfig.get(camId, function (response)
+		{
+			$("#camprop_refresh_btn").removeClass("spin2s");
+			var $camprop = $("#campropcontent");
+			$camprop.empty();
+			if ($camprop.length == 0)
+				return;
+			/* Example Response
+			{
+			  "result": "success",
+			  "session": "...",
+			  "data": {
+				"pause": 0,
+				"push": false,
+				"motion": true,
+				"schedule": false,
+				"ptzcycle": false,
+				"ptzevents": false,
+				"alerts": 0,
+				"output": false,
+				"setmotion": {
+				  "audio_trigger": false,
+				  "audio_sense": 10000,
+				  "usemask": true,
+				  "sense": 8650,
+				  "contrast": 67,
+				  "showmotion": 0,
+				  "shadows": true,
+				  "luminance": false,
+				  "objects": true,
+				  "maketime": 16,
+				  "breaktime": 70
+				},
+				"record": 2
+			  }
+			}
+			*/
+			try
+			{
+				$camprop.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
+				$camprop.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
+				$camprop.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
+				$camprop.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
+				$camprop.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
+				$camprop.append('<div class="camprop_item">' + GetCameraPropertyLabel("Record:")
+					+ '<select mysetting="record|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
+					+ GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
+					+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
+					+ GetHtmlOptionElementMarkup("1", "Continuously", response.data.record.toString())
+					+ GetHtmlOptionElementMarkup("2", "When triggered", response.data.record.toString())
+					+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString())
+					+ '</select>'
+					+ '</div>');
+				$camprop.append('<div class="camprop_item">' + GetCameraPropertyLabel("Alerts:")
+					+ '<select mysetting="alerts|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
+					+ GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
+					+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
+					+ GetHtmlOptionElementMarkup("1", "Any camera in group is triggered", response.data.alerts.toString())
+					+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString())
+					+ '</select>'
+					+ '</div>');
+				$camprop.append('<div class="camprop_item">Manual Recording Options:</div>');
+				$camprop.append('<div class="camprop_item camprop_item_center">'
+					+ GetCameraPropertyButtonMarkup("Trigger", "trigger", "largeBtnYellow", camId)
+					+ GetCameraPropertyButtonMarkup("Snapshot", "snapshot", "largeBtnBlue", camId)
+					+ GetCameraPropertyButtonMarkup("Toggle Recording", "manrec", "largeBtnRed", camId)
+					+ '</div>');
+				$camprop.append('<div class="camprop_item">Camera Management:</div>');
+				$camprop.append('<div class="camprop_item camprop_item_center">'
+					+ GetCameraPropertyButtonMarkup("Pause", "pause", "largeBtnDisabled", camId)
+					+ GetCameraPropertyButtonMarkup("Reset", "reset", "largeBtnBlue", camId)
+					+ GetCameraPropertyButtonMarkup("Disable", "disable", "largeBtnRed", camId)
+					+ '</div>');
+				var cam = cameraListLoader.GetCameraWithId(camId);
+				if (cam)
+					SetCameraPropertyEnableButtonState(cam.isEnabled);
+				UpdateCamListAndUpdateUi(camId);
+			}
+			catch (ex)
+			{
+				toaster.Error(ex);
+			}
+			if (developerMode)
+				$camprop.append('<div class="camprop_item camprop_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraProperties.OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
+		}, function ()
+			{
+				CloseCameraProperties();
+			});
+	}
+	var GetCamPropCheckbox = function (tag, label, checked, onChange)
+	{
+		var $parent = $('<div class="camprop_item"></div>');
+		$parent.append(GetCustomCheckbox(tag, label, checked, onChange));
+		return $parent;
+	}
+	var GetCameraPropertyLabel = function (text)
+	{
+		return '<div class="camprop_label" title="' + text + '">' + text + '</div>';
+	}
+	var GetHtmlOptionElementMarkup = function (value, name, selectedValue)
+	{
+		return '<option value="' + value + '"' + (selectedValue == value ? ' selected="selected"' : '') + '>' + name + '</option>';
+	}
+	var GetCameraPropertyButtonMarkup = function (text, buttonId, colorClass, camId)
+	{
+		return '<input type="button" id="camprop_button_' + buttonId + '" class="largeTextButton ' + colorClass + '" onclick="cameraProperties.camPropButtonClick(&quot;' + camId + '&quot;, &quot;' + buttonId + '&quot;)" value="' + text + '" />';
+	}
+	var CloseCameraProperties = function ()
+	{
+		if (modal_cameraPropDialog != null)
+			modal_cameraPropDialog.close();
+		$("#campropdialog").remove();
+	}
+	var camPropOnOffBtnClick = function (mysetting, buttonStateIsOn)
+	{
+		var parts = mysetting.split('|');
+		var settingName = parts[0];
+		var camId = parts[1];
+		//toaster.Info("Pretending to set " + settingName + " = " + $btn.hasClass("on") + " for camera " + camId);
+		cameraConfig.set(camId, settingName, buttonStateIsOn);
+	}
+	this.camPropSelectChange = function (select)
+	{
+		var mysetting = $(select).attr("mysetting");
+		var parts = mysetting.split('|');
+		var settingName = parts[0];
+		var camId = parts[1];
+		var selectedValue = parseInt(select.value);
+		//toaster.Info("Pretending to set " + settingName + " = " + selectedValue + " for camera " + camId);
+		cameraConfig.set(camId, settingName, selectedValue);
+	}
+	this.camPropButtonClick = function (camId, button)
+	{
+		switch (button)
+		{
+			case "trigger":
+				TriggerCamera(camId);
+				break;
+			case "snapshot":
+				SaveSnapshotInBlueIris(camId);
+				break;
+			case "manrec":
+				ManualRecordCamera(camId, $("#camprop_button_manrec").attr("start"), SetCameraPropertyManualRecordButtonState);
+				break;
+			case "reset":
+				ResetCamera(camId);
+				break;
+			case "disable":
+				cameraConfig.set(camId, "enable", $("#camprop_button_disable").attr("enabled") != "1"
+					, function ()
+					{
+						SetCameraPropertyEnableButtonState($("#camprop_button_disable").attr("enabled") != "1");
+					});
+				break;
+			case "pause":
+			default:
+				toaster.Error(button + " not implemented in this UI version");
+				break;
+		}
+	}
+	var UpdateCamListAndUpdateUi = function (camId)
+	{
+		cameraListLoader.LoadCameraList(function (camList)
+		{
+			for (var i = 0; i < camList.data.length; i++)
+			{
+				if (camList.data[i].optionValue == camId)
+				{
+					SetCameraPropertyManualRecordButtonState(camList.data[i].isRecording);
+					SetCameraPropertyEnableButtonState(camList.data[i].isEnabled);
+					break;
+				}
+			}
+		});
+	}
+	var SetCameraPropertyManualRecordButtonState = function (is_recording)
+	{
+		if (is_recording)
+		{
+			$("#camprop_button_manrec").val("Stop Recording");
+			$("#camprop_button_manrec").attr("start", "0");
+		}
+		else
+		{
+			$("#camprop_button_manrec").val("Start Recording");
+			$("#camprop_button_manrec").attr("start", "1");
+		}
+	}
+	var SetCameraPropertyEnableButtonState = function (is_enabled)
+	{
+		if (is_enabled)
+		{
+			$("#camprop_button_disable").val("Disable");
+			$("#camprop_button_disable").attr("enabled", "1");
+			$("#camprop_button_disable").removeClass("largeBtnGreen");
+			$("#camprop_button_disable").addClass("largeBtnRed");
+		}
+		else
+		{
+			$("#camprop_button_disable").val("Enable");
+			$("#camprop_button_disable").attr("enabled", "0");
+			$("#camprop_button_disable").removeClass("largeBtnRed");
+			$("#camprop_button_disable").addClass("largeBtnGreen");
+		}
+	}
+	this.OpenRaw = function (camId)
+	{
+		var camName = cameraListLoader.GetCameraName(camId);
+		cameraConfig.get(camId, function (response)
+		{
+			modal_cameraPropDialog = $('<div id="campropdialog"><div class="campropheader">'
+				+ '<div>' + htmlEncode(camName)
+				+ ' Raw Properties</div>'
+				+ '</div>'
+				+ '<div class="selectable" style="word-wrap: break-word; border:1px solid #000000; background-color: #FFFFFF; color: #000000; margin: 10px; padding: 10px;">'
+				+ JSON.stringify(response)
+				+ '</div>'
+				+ '</div>'
+			).modal({ removeElementOnClose: true, maxWidth: 600, maxHeight: 500 });
+		}, function ()
+			{
+				toaster.Warning("Unable to load camera properties for " + camName);
+			});
+	}
+}
+///////////////////////////////////////////////////////////////
 // Reset Camera ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function ResetCamera(camId)
@@ -6222,7 +6487,7 @@ function SystemLog()
 		CloseLogDialog();
 		modal_systemlogdialog = $('<div id="systemlogdialog"><div class="syslogheader">'
 			+ '<div class="systemlogtitle">' + $("#system_name").text()
-			+ ' System Log <div id="systemlog_refresh_btn" class="noflip" onclick="systemLog.open()"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div>'
+			+ ' System Log <div id="systemlog_refresh_btn" class="rotating_refresh_btn noflip" onclick="systemLog.open()"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div>'
 			+ '</div></div>'
 			+ '<div id="systemlogcontent"></div></div>'
 		).modal({ removeElementOnClose: true });

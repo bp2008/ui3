@@ -1883,7 +1883,10 @@ div.icon, a.icon
 	{
 		display: inline-block;
 	}
-
+	.customCheckboxWrapper .ui
+	{
+		text-align: left;
+	}
 	.playbackSettingsLine:hover, .playbackSettingsCheckboxWrapper label:hover, .playbackSettingsLine.selected
 	{
 		background-color: rgba(255,255,255,0.3);
@@ -2093,6 +2096,11 @@ div.icon, a.icon
 	font-size: 16px;
 }
 
+	.ui2modal a, .ui2modal a:visited
+	{
+		color: #88DDFF;
+	}
+
 .monospace
 {
 	font-family: Consolas, monospace;
@@ -2112,13 +2120,7 @@ div.icon, a.icon
 	#aboutDialog a
 	{
 		cursor: pointer; /* Somehow necessary for cursor change before panel is clicked */
-		color: #0099FF;
 	}
-
-		#aboutDialog a:visited
-		{
-			color: #9999FF;
-		}
 
 	#aboutDialog .title, #loginDialog .title, #diskUsageDialog .title
 	{
@@ -2391,16 +2393,18 @@ div.icon, a.icon
 	height: 24px;
 }
 
-#systemlog_refresh_btn
+.rotating_refresh_btn
 {
 	margin-left: 10px;
 	width: 24px;
 	height: 24px;
 	cursor: pointer;
 	transform-origin: center;
+	display: inline-block;
+	font-size: 0px;
 }
 
-.logicon, #systemlog_refresh_btn
+.logicon
 {
 	display: inline-block;
 	font-size: 0px;
@@ -2410,6 +2414,7 @@ div.icon, a.icon
 {
 	overflow-x: hidden;
 }
+
 #systemlogdialog, #sysconfigdialog
 {
 	padding: 10px;
@@ -2503,4 +2508,240 @@ div.icon, a.icon
 		-webkit-transform: rotate(360deg);
 		transform: rotate(360deg);
 	}
+}
+
+/* Camera Properties / Camera List */
+
+.campropheader
+{
+	text-align: center;
+}
+
+.camproptitle
+{
+	font-size: 2em;
+	color: #377EC0;
+	margin-bottom: 20px;
+}
+
+.camlist_item
+{
+	display: inline-block;
+	vertical-align: top;
+}
+
+.camlist_thumbbox
+{
+	display: inline-block;
+	width: 160px;
+	padding: 2px;
+}
+
+	.camlist_thumbbox:hover
+	{
+		background-color: #CCCCCC !important;
+		cursor: pointer;
+	}
+
+	.camlist_thumbbox:active
+	{
+		background-color: #FFFFFF !important;
+		cursor: pointer;
+	}
+
+.camlist_label
+{
+	padding: 1px 3px;
+	min-height: 38px;
+	line-height: 19px;
+	font-size: 16px;
+}
+
+.camlist_thumb
+{
+	width: 160px;
+	max-height: 120px;
+	background-color: rgba(0,0,0,0.8);
+	vertical-align: middle;
+}
+
+.camlist_thumb_img
+{
+	display: none;
+	max-width: 160px;
+	max-height: 120px;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.camlist_thumb_aligner
+{
+	display: inline-block;
+	vertical-align: middle;
+	width: 0px;
+}
+
+.camlist_thumb_helper
+{
+	display: inline-block;
+	vertical-align: middle;
+	width: 160px;
+}
+
+.camprop_item, .camlist_item
+{
+	margin: 7px;
+}
+
+.camprop_item_center, .camlist_item_center
+{
+	text-align: center;
+	margin: 7px 0px;
+}
+
+.camprop_label
+{
+	font-size: 16px;
+	width: 217px;
+	vertical-align: top;
+	line-height: 38px;
+	text-align: right;
+	padding-right: 13px;
+	display: inline-block;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+#campropcontent .customCheckboxWrapper label
+{
+	font-size: 16px;
+	width: 235px;
+	text-align: right;
+	padding-right: 60px;
+}
+
+#campropcontent select
+{
+	height: 38px;
+}
+
+.largeTextButton
+{
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+	padding: 15px 0px;
+	width: 150px;
+	margin: 5px;
+	text-align: center;
+	border: 0px solid transparent;
+	font-size: 18px;
+}
+
+.largeBtnBlue
+{
+	background-color: #377EC0;
+	color: #FFFFFF;
+}
+
+.largeBtnYellow
+{
+	background-color: #C0C037;
+	color: #000000;
+}
+
+.largeBtnRed
+{
+	background-color: #C03737;
+	color: #FFFFFF;
+}
+
+.largeBtnGreen
+{
+	background-color: #37C037;
+	color: #FFFFFF;
+}
+
+.largeBtnDisabled
+{
+	background-color: #4A4A4A;
+	color: #818181;
+	cursor: default;
+}
+/* Webkit custom scrollbar for modal dialogs */
+div::-webkit-scrollbar
+{
+	width: 16px;
+	height: 16px;
+}
+
+div::-webkit-scrollbar-button
+{
+	background-color: #2A8FCF;
+	background-color: #2A2F6F;
+}
+
+	div::-webkit-scrollbar-button:vertical:increment
+	{
+		background-repeat: no-repeat;
+		background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QwGEBU7GHe7zAAAAMdJREFUOMtj9C48/J+BAsDEQCEYeANYYIzXLx4wvHt0kuH//394NTAyMjEIyZkziEoooBrw6eU1hvsn5zL8/fMdrwHMLJwMLOy8cAPgXpDR9mCQM45mYGJhx+1fFnYGOeNoBhltD8wwYGdhYlA2i2WQN47FaggTCzuDvHEsg7JZLAM7CxP2QMRlCC7NKGGAbggDAwPDw7OLGRgYGHBqxmoAsiGMjMwMDAwMDEqmUVg14zQAZoi6RTTEC4yMhNMB1lDHo3EY5QUA9ZEjbI9V7zcAAAAASUVORK5CYII=);
+		background-position: 0px 1px;
+	}
+
+	div::-webkit-scrollbar-button:vertical:decrement
+	{
+		background-repeat: no-repeat;
+		background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QwGEBMvVPfINwAAAK9JREFUOMvl07EKglAUxvG/F6HNTXS02tyrh+gNgqaeoGe62DO4txmOjgaKL3Hhdm+bBF41cAk66+H7Dd/heMfr3bJgBAvnxwFjLcZOV+SPLZQ2PB83ADa7EytffA8obagLSVNKAKx9sd2fnYg/FTZaAfSQCxFzYQCjFU0pqQuJ0sYNjIXnkB7oqpy2zJzhT6QtM7oqH3YQRCnrwwVrzeTZPE8QROkQCOOEME7+8RfeEIhl6Kub8VIAAAAASUVORK5CYII=);
+		background-position: 0px 0px;
+	}
+
+div::-webkit-scrollbar-track
+{
+	background-color: #2A8FCF;
+}
+
+div::-webkit-scrollbar-track-piece
+{
+	background-color: #2A2F6F;
+}
+
+div::-webkit-scrollbar-thumb
+{
+	height: 50px;
+	background-color: #377EC0;
+}
+
+	div::-webkit-scrollbar-thumb:hover
+	{
+		height: 50px;
+		background-color: #2F66B8;
+	}
+
+	div::-webkit-scrollbar-thumb:active
+	{
+		height: 50px;
+		background-color: #204090;
+		box-shadow: inset 0 0 10px #186280;
+	}
+
+div::-webkit-scrollbar-corner
+{
+	background-color: #173E5F;
+}
+
+div::-webkit-resizer
+{
+	background-color: #277EAF;
+}
+/* For IE */
+.ui2modal
+{
+	scrollbar-face-color: #277EAF;
+	scrollbar-arrow-color: #000000;
+	scrollbar-track-color: #1a557a;
+	scrollbar-shadow-color: #277EAF;
+	scrollbar-highlight-color: #277EAF;
+	scrollbar-3dlight-color: #2A8FCF;
+	scrollbar-darkshadow-color: #2A8FCF;
 }
