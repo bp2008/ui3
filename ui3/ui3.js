@@ -5859,6 +5859,37 @@ function CameraConfig()
 			args.push = value;
 		else if (key == "output")
 			args.output = value;
+		else if (key.startsWith("setmotion."))
+		{
+			args.setmotion = {};
+			if (key == "setmotion.audio_trigger")
+				args.setmotion.audio_trigger = value;
+			else if (key == "setmotion.audio_sense")
+				args.setmotion.audio_sense = value;
+			else if (key == "setmotion.usemask")
+				args.setmotion.usemask = value;
+			else if (key == "setmotion.sense")
+				args.setmotion.sense = value;
+			else if (key == "setmotion.contrast")
+				args.setmotion.contrast = value;
+			else if (key == "setmotion.showmotion")
+				args.setmotion.showmotion = value;
+			else if (key == "setmotion.shadows")
+				args.setmotion.shadows = value;
+			else if (key == "setmotion.luminance")
+				args.setmotion.luminance = value;
+			else if (key == "setmotion.objects")
+				args.setmotion.objects = value;
+			else if (key == "setmotion.maketime")
+				args.setmotion.maketime = value;
+			else if (key == "setmotion.breaktime")
+				args.setmotion.breaktime = value;
+			else
+			{
+				toaster.Error('Unknown camera configuration key: ' + htmlEncode(key), 3000);
+				return;
+			}
+		}
 		else
 		{
 			toaster.Error('Unknown camera configuration key: ' + htmlEncode(key), 3000);
@@ -5958,12 +5989,14 @@ function CameraProperties()
 			*/
 			try
 			{
-				$camprop.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
-				$camprop.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
-				$camprop.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
-				$camprop.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
-				$camprop.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
-				$camprop.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Record:")
+				$camprop.append(GetCameraPropertySectionHeading('gs', "General Settings"));
+				var $generalSection = GetCameraPropertySection('gs');
+				$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
+				$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
+				$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
+				$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
+				$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
+				$generalSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Record:")
 					+ '<select mysetting="record|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 					+ GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
 					+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
@@ -5972,7 +6005,7 @@ function CameraProperties()
 					+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString())
 					+ '</select>'
 					+ '</div>');
-				$camprop.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Alerts:")
+				$generalSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Alerts:")
 					+ '<select mysetting="alerts|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 					+ GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
 					+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
@@ -5980,22 +6013,48 @@ function CameraProperties()
 					+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString())
 					+ '</select>'
 					+ '</div>');
-				$camprop.append('<div class="camprop_item">Manual Recording Options:</div>');
-				$camprop.append('<div class="camprop_item camprop_item_center">'
+				$camprop.append($generalSection);
+
+				$camprop.append(GetCameraPropertySectionHeading('mt', "Motion/Trigger"));
+				var $motionSection = GetCameraPropertySection('mt');
+				$motionSection.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
+				$motionSection.append(GetCamPropCheckbox("setmotion.objects|" + camId, "Object detection", response.data.setmotion.objects, camPropOnOffBtnClick));
+				$motionSection.append(GetCamPropCheckbox("setmotion.usemask|" + camId, "Mask/hotspot", response.data.setmotion.usemask, camPropOnOffBtnClick));
+				$motionSection.append(GetCamPropCheckbox("setmotion.audio_trigger|" + camId, "Audio trigger enabled", response.data.setmotion.audio_trigger, camPropOnOffBtnClick));
+				$motionSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Highlight:")
+					+ '<select mysetting="setmotion.showmotion|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
+					+ GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
+					+ GetHtmlOptionElementMarkup("1", "Motion", response.data.setmotion.showmotion.toString())
+					+ GetHtmlOptionElementMarkup("2", "Objects", response.data.setmotion.showmotion.toString())
+					+ GetHtmlOptionElementMarkup("3", "Motion + Objects", response.data.setmotion.showmotion.toString())
+					+ '</select>'
+					+ '</div>');
+				$camprop.append($motionSection);
+
+				$camprop.append(GetCameraPropertySectionHeading('mro', "Manual Recording Options"));
+				var $manrecSection = GetCameraPropertySection('mro');
+				$manrecSection.append('<div class="camprop_item camprop_item_center">'
 					+ GetCameraPropertyButtonMarkup("Trigger", "trigger", "largeBtnYellow", camId)
 					+ GetCameraPropertyButtonMarkup("Snapshot", "snapshot", "largeBtnBlue", camId)
 					+ GetCameraPropertyButtonMarkup("Toggle Recording", "manrec", "largeBtnRed", camId)
 					+ '</div>');
-				$camprop.append('<div class="camprop_item">Camera Management:</div>');
-				$camprop.append('<div class="camprop_item camprop_item_center">'
+				$camprop.append($manrecSection);
+
+				$camprop.append(GetCameraPropertySectionHeading('mgmt', "Camera Management"));
+				var $mgmtSection = GetCameraPropertySection('mgmt');
+				$mgmtSection.append('<div class="camprop_item camprop_item_center">'
 					+ GetCameraPropertyButtonMarkup("Pause", "pause", "largeBtnDisabled", camId)
 					+ GetCameraPropertyButtonMarkup("Reset", "reset", "largeBtnBlue", camId)
 					+ GetCameraPropertyButtonMarkup("Disable", "disable", "largeBtnRed", camId)
 					+ '</div>');
+				$camprop.append($mgmtSection);
+
 				var cam = cameraListLoader.GetCameraWithId(camId);
 				if (cam)
+				{
+					SetCameraPropertyManualRecordButtonState(cam.isRecording);
 					SetCameraPropertyEnableButtonState(cam.isEnabled);
-				UpdateCamListAndUpdateUi(camId);
+				}
 			}
 			catch (ex)
 			{
@@ -6006,6 +6065,32 @@ function CameraProperties()
 		}, function ()
 			{
 				CloseCameraProperties();
+			});
+	}
+	var GetCameraPropertySectionHeading = function (id, html)
+	{
+		var $heading = $('<div class="camprop_section_heading" mysettingsid="' + id + '">' + html + '</div>');
+		$heading.on('click', CameraPropertiesSectionHeadingClick);
+		return $heading;
+	}
+	var GetCameraPropertySection = function (id)
+	{
+		var $section = $('<div class="camprop_section"></div>');
+		if (settings.getItem("ui3_cps_" + id + "_visible") == "0")
+			$section.hide();
+		return $section;
+	}
+	var CameraPropertiesSectionHeadingClick = function ()
+	{
+		var $ele = $(this);
+		var $section = $ele.next('.camprop_section');
+		$section.slideToggle(
+			{
+				duration: 150
+				, always: function ()
+				{
+					settings.setItem("ui3_cps_" + $ele.attr('mysettingsid') + "_visible", $section.is(":visible") ? "1" : "0");
+				}
 			});
 	}
 	var GetCamPropCheckbox = function (tag, label, checked, onChange)
@@ -6078,21 +6163,6 @@ function CameraProperties()
 				toaster.Error(button + " not implemented in this UI version");
 				break;
 		}
-	}
-	var UpdateCamListAndUpdateUi = function (camId)
-	{
-		cameraListLoader.LoadCameraList(function (camList)
-		{
-			for (var i = 0; i < camList.data.length; i++)
-			{
-				if (camList.data[i].optionValue == camId)
-				{
-					SetCameraPropertyManualRecordButtonState(camList.data[i].isRecording);
-					SetCameraPropertyEnableButtonState(camList.data[i].isEnabled);
-					break;
-				}
-			}
-		});
 	}
 	var SetCameraPropertyManualRecordButtonState = function (is_recording)
 	{

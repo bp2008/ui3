@@ -1883,10 +1883,12 @@ div.icon, a.icon
 	{
 		display: inline-block;
 	}
+
 	.customCheckboxWrapper .ui
 	{
 		text-align: left;
 	}
+
 	.playbackSettingsLine:hover, .playbackSettingsCheckboxWrapper label:hover, .playbackSettingsLine.selected
 	{
 		background-color: rgba(255,255,255,0.3);
@@ -2516,6 +2518,7 @@ div.icon, a.icon
 {
 	min-width: 283px;
 }
+
 .campropheader
 {
 	text-align: center;
@@ -2602,12 +2605,38 @@ div.icon, a.icon
 	text-align: center;
 	margin: 7px 0px;
 }
+
+.camprop_section_heading
+{
+	text-align: center;
+	font-size: 18.6px;
+	margin-top: 8px;
+	padding: 7px 0px;
+	cursor: pointer;
+	background-color: #424242;
+}
+
+	.camprop_section_heading:hover
+	{
+		background-color: #4a4a4a;
+	}
+	.camprop_section_heading:active
+	{
+		background-color: #505050;
+	}
+
+.camprop_section
+{
+	padding: 7px 0px;
+}
+
 .camprop_item_cb
 {
 	max-width: 340px;
 	margin: 7px auto;
 	overflow-x: hidden;
 }
+
 .camprop_item_ddl
 {
 	max-width: 340px;
@@ -2615,6 +2644,7 @@ div.icon, a.icon
 	position: relative;
 	overflow-x: hidden;
 }
+
 .camprop_label
 {
 	font-size: 16px;
@@ -2627,6 +2657,7 @@ div.icon, a.icon
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+
 #campropcontent .customCheckboxWrapper label
 {
 	display: block;
