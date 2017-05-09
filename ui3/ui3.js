@@ -1204,7 +1204,7 @@ function DropdownBoxes()
 			$item.addClass(item.cssClass);
 		$item.click(function ()
 		{
-			if (listDef.autoSetLabelText)
+			if (listDef.items[i].autoSetLabelText)
 				self.setLabelText(listDef.name, item.text);
 			listDef.selectedIndex = i;
 			listDef.onItemClick && listDef.onItemClick(listDef.items[i]); // run if not null
