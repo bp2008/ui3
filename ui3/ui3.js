@@ -6252,28 +6252,25 @@ function ManualRecordCamera(camId, start, successCallback)
 		if (camData != null)
 			start = !camData.isRecording;
 	}
-	cameraListLoader.LoadCameraList(function (camList)
+	cameraConfig.set(camId, "manrec", start, function ()
 	{
-		cameraConfig.set(camId, "manrec", start, function ()
+		setTimeout(function ()
 		{
-			setTimeout(function ()
+			cameraListLoader.LoadCameraList(function (camList)
 			{
-				cameraListLoader.LoadCameraList(function (camList)
+				var camData = cameraListLoader.GetCameraWithId(camId);
+				if (camData != null)
 				{
-					var camData = cameraListLoader.GetCameraWithId(camId);
-					if (camData != null)
-					{
-						toaster.Info(camData.optionDisplay + " " + (camData.isRecording ? '<span style="font-weight: bold;color:Red; background-color: #000000;">IS RECORDING</span>' : '<span style="font-weight: bold;color:Green; background-color: #000000;">IS NOT RECORDING</span>'));
-						if (successCallback)
-							successCallback(camData.isRecording);
-					}
-				});
-			}, 250);
-		}, function ()
-			{
-				toaster.Error("Failed to toggle manual recording for " + camId);
+					toaster.Info(camData.optionDisplay + " " + (camData.isRecording ? '<span style="font-weight: bold;color:Red; background-color: #000000;">IS RECORDING</span>' : '<span style="font-weight: bold;color:Green; background-color: #000000;">IS NOT RECORDING</span>'));
+					if (successCallback)
+						successCallback(camData.isRecording);
+				}
 			});
-	});
+		}, 250);
+	}, function ()
+		{
+			toaster.Error("Failed to toggle manual recording for " + camId);
+		});
 }
 function LoadDynamicManualRecordingButtonState(camData)
 {
