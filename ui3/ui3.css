@@ -2139,6 +2139,11 @@ div.icon, a.icon
 	{
 		margin-top: 10px;
 	}
+
+.about_icon
+{
+	float: right;
+}
 /* jpegSuppressionDialog */
 .jpegSuppressionDialog
 {
@@ -2620,6 +2625,7 @@ div.icon, a.icon
 	{
 		background-color: #4a4a4a;
 	}
+
 	.camprop_section_heading:active
 	{
 		background-color: #505050;
