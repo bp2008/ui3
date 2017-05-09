@@ -2633,7 +2633,7 @@ div.icon, a.icon
 .camprop_item_cb
 {
 	max-width: 340px;
-	margin: 7px auto;
+	margin: 0px auto;
 	overflow-x: hidden;
 }
 
@@ -2649,7 +2649,7 @@ div.icon, a.icon
 {
 	font-size: 16px;
 	vertical-align: top;
-	line-height: 38px;
+	line-height: 28px;
 	text-align: right;
 	padding: 0px 10px;
 	display: inline-block;
@@ -2667,7 +2667,7 @@ div.icon, a.icon
 
 #campropcontent select
 {
-	height: 38px;
+	height: 28px;
 	position: absolute;
 	right: 10px;
 }

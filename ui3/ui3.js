@@ -70,6 +70,12 @@ var togglableUIFeatures =
 		]
 	];
 
+// TODO: Add camera properties:
+//	- audio_sense 0-32000
+//	- sense 11000 - 1000
+//	- contrast 12-84
+//	- maketime 0-100 (tenths of a second)
+//	- breaktime 0-9000 (tenths of a second)
 // TODO: Fix bug where mousing over SVG graphics in Firefox causes main menu (and dropdown menus) to close.
 // TODO: Integrate my custom scroll bars with ui2modal.
 // TODO: Context menu for Clip List Items (Requires clip multi-select feature, and ability to delete or flag multiple clips with one API call!)
@@ -6020,6 +6026,8 @@ function CameraProperties()
 				$motionSection.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
 				$motionSection.append(GetCamPropCheckbox("setmotion.objects|" + camId, "Object detection", response.data.setmotion.objects, camPropOnOffBtnClick));
 				$motionSection.append(GetCamPropCheckbox("setmotion.usemask|" + camId, "Mask/hotspot", response.data.setmotion.usemask, camPropOnOffBtnClick));
+				$motionSection.append(GetCamPropCheckbox("setmotion.luminance|" + camId, "Black &amp; white", response.data.setmotion.luminance, camPropOnOffBtnClick));
+				$motionSection.append(GetCamPropCheckbox("setmotion.shadows|" + camId, "Cancel shadows", response.data.setmotion.shadows, camPropOnOffBtnClick));
 				$motionSection.append(GetCamPropCheckbox("setmotion.audio_trigger|" + camId, "Audio trigger enabled", response.data.setmotion.audio_trigger, camPropOnOffBtnClick));
 				$motionSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Highlight:")
 					+ '<select mysetting="setmotion.showmotion|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
