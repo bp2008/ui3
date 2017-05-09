@@ -1260,6 +1260,7 @@ function PtzButtons()
 	var currentPtzCamId = "";
 	var unsafePtzActionQueued = null;
 	var unsafePtzActionInProgress = false;
+	var currentPtzData = null;
 
 	var $ptzGraphicWrapper = $("#ptzGraphicWrapper");
 	var $ptzGraphics = $("#ptzGraphicWrapper div.ptzGraphic");
@@ -1541,22 +1542,38 @@ function PtzButtons()
 		{
 			if (!ptzControlsEnabled)
 				return;
+
+			var thumb = $("#presetBigThumb");
+			thumb.remove();
+			$("body").append('<div id="presetBigThumb"></div>');
+			thumb = $("#presetBigThumb");
+
+			var desc = null;
+			if (currentPtzData && currentPtzData.cameraId == imageLoader.currentlyLoadingImage.id && currentPtzData.presets && currentPtzData.presets.length > ele.presetnum - 1)
+				desc = currentPtzData.presets[ele.presetnum - 1];
+			if (desc == null || desc == "")
+				desc = "Preset " + (idx + 1);
+
+			var $desc = $('<div class="presetDescription"></div>');
+			$desc.text(desc);
+			thumb.append($desc);
+
 			var imgData = settings.getItem("ui2_preset_" + imageLoader.currentlyLoadingImage.id + "_" + ele.presetnum);
 			if (imgData != null && imgData.length > 0)
 			{
-				var thumb = $("#presetBigThumb");
-				if (thumb.length == 0)
-				{
-					$("body").append('<img id="presetBigThumb" alt="" />');
-					thumb = $("#presetBigThumb");
-				}
-				thumb.attr("src", imgData);
-
-				var thisOffset = $(this).parent().offset();
-				thumb.css("left", thisOffset.left + "px");
-				thumb.css("top", (thisOffset.top - thumb.height()) + "px");
-				thumb.show();
+				var $img = $('<img alt="" />');
+				$img.attr("src", imgData);
+				thumb.append($img);
 			}
+
+			var $parent = $(this).parent();
+			var thisOffset = $parent.offset();
+			var centerOffset = ($parent.width() - thumb.width()) / 2;
+			if (centerOffset <= 0)
+				centerOffset = 0;
+			thumb.css("left", (thisOffset.left + centerOffset) + "px");
+			thumb.css("top", (thisOffset.top - thumb.height() - 3) + "px");
+			thumb.show();
 		});
 		$ele.mouseleave(function (e)
 		{
@@ -1577,7 +1594,7 @@ function PtzButtons()
 					if (imgData != null && imgData.length > 0)
 					{
 						$(ele).empty();
-						var $thumb = $('<img src="" alt="' + ele.presetnum + '" title="Preset ' + ele.presetnum + '" class="presetThumb" />');
+						var $thumb = $('<img src="" alt="' + ele.presetnum + '" class="presetThumb" />');
 						$thumb.load(function ()
 						{
 							try
@@ -1596,6 +1613,7 @@ function PtzButtons()
 				});
 				currentlyLoadedPtzThumbsCamId = imageLoader.currentlyLoadingImage.id;
 			}
+			LoadPTZPresetDescriptions(imageLoader.currentlyLoadingImage.id);
 		}
 		else
 		{
@@ -1658,6 +1676,23 @@ function PtzButtons()
 			}, function (message)
 			{
 				toaster.Error("Failed to save preset image. " + message, 10000);
+			});
+	}
+	var LoadPTZPresetDescriptions = function (cameraId)
+	{
+		if (currentPtzData && currentPtzData.cameraId == cameraId)
+			return;
+		ExecJSON({ cmd: "ptz", camera: cameraId }, function (response)
+		{
+			if (cameraListLoader.currentlyLoadingCamera.optionValue == cameraId)
+			{
+				currentPtzData = response.data;
+				currentPtzData.cameraId = cameraId;
+			}
+		}, function ()
+			{
+				if (cameraListLoader.currentlyLoadingCamera.optionValue == cameraId)
+					toaster.Warning("Unable to load PTZ metadata for camera: " + cameraId);
 			});
 	}
 	// PTZ Actions //
