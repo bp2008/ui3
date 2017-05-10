@@ -26,6 +26,11 @@
 			}
 		};
 	</script>
+	<script type="text/javascript">
+		var ui_version = "0.0.1";
+		var bi_version = "%%VERSION%%";
+		var combined_version = ui_version + "-" + bi_version;
+	</script>
 	<script src="ui3/libs-ui3.js?v=%%VERSION%%" type="text/javascript"></script>
 	<link href="ui3/libs-ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
 	<script src="ui3/ui3.js?v=%%VERSION%%" type="text/javascript"></script>
@@ -33,21 +38,10 @@
 	<!--<script src="ui3/ui3-local-overrides.js?v=%%VERSION%%" type="text/javascript"></script>
 	<link href="ui3/ui3-local-overrides.css?v=%%VERSION%%" rel="stylesheet" type="text/css">-->
 	<script type="text/javascript">
-		var ui_version = "0.0.1";
-		var bi_version = "%%VERSION%%";
-		var combined_version = ui_version + "-" + bi_version;
 		$(function ()
 		{
 			$("#ui_version_label").text(ui_version);
 			$("#bi_version_label").text(bi_version);
-			//	if (typeof (Storage) !== "undefined")
-			//	{
-			//		if (settings.ui3_lastLoadedVersion != ui_version)
-			//		{
-			//			settings.ui3_lastLoadedVersion = ui_version;
-			//			location.reload(true);
-			//		}
-			//	}
 		});
 	</script>
 </head>
@@ -109,7 +103,7 @@
 		<div class="topbar_tab" name="alerts"><span class="topbar_tab_label">Alerts</span></div>
 		<div class="topbar_tab" name="clips"><span class="topbar_tab_label">Clips</span></div>
 		<a id="Something"></a>
-		<div id="btn_main_menu" class="topbar_right_floating icon" name="mainMenu"><svg class="icon"><use xlink:href="#svg_x5F_Menu"></use></svg></div>
+		<div id="btn_main_menu" class="topbar_right_floating icon" name="mainMenu" extendLeft="1"><svg class="icon"><use xlink:href="#svg_x5F_Menu"></use></svg></div>
 		<a id="save_snapshot_btn" class="topbar_right_floating icon" href="javascript:void(0)" onclick="saveSnapshot()" target="_blank"><svg class="icon"><use xlink:href="#svg_x5F_Snapshot"></use></svg></a>
 	</div>
 	<div id="layoutleft" class="resizable">

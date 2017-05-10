@@ -5,6 +5,7 @@ svg.icon
 	width: 100%;
 	height: 100%;
 	transform: scaleY(-1);
+	pointer-events: none; /* Firefox otherwise fires document.mouseleave when mousing over svg */
 }
 
 .noflip svg.icon
@@ -2665,6 +2666,25 @@ div.icon, a.icon
 	position: relative;
 	overflow-x: hidden;
 }
+
+.camprop_item_range
+{
+	max-width: 320px;
+	margin: 0px auto;
+	padding: 5px 10px;
+	position: relative;
+}
+
+	.camprop_item_range:hover
+	{
+		background-color: rgba(255,255,255,0.1);
+	}
+
+	.camprop_item_range input
+	{
+		width: 315px;
+		display: block;
+	}
 
 .camprop_label
 {

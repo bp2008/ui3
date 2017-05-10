@@ -57,7 +57,7 @@ var togglableUIFeatures =
 		// The PTZ Controls hot area specifically does not include the main button pad because a context menu on that pad would break touchscreen usability
 		, [".ptzpreset", "ptzControls", "PTZ Controls", function (enabled) { ptzButtons.setEnabled(enabled); }
 			, [{
-				getName: function (ele) { return "Goto Preset " + ele.getAttribute("presetnum"); }
+				getName: function (ele) { return "Goto Preset " + ele.getAttribute("presetnum") + htmlEncode(ptzButtons.GetPresetDescription(ele.getAttribute("presetnum"), true)); }
 				, action: function (ele) { ptzButtons.PTZ_goto_preset(ele.presetnum); }
 				, shouldDisable: function () { return !ptzButtons.isEnabledNow(); }
 			}
@@ -70,18 +70,11 @@ var togglableUIFeatures =
 		]
 	];
 
-// TODO: Add camera properties:
-//	- audio_sense 0-32000
-//	- sense 11000 - 1000
-//	- contrast 12-84
-//	- maketime 0-100 (tenths of a second)
-//	- breaktime 0-9000 (tenths of a second)
-// TODO: Fix bug where mousing over SVG graphics in Firefox causes main menu (and dropdown menus) to close.
-// TODO: Integrate my custom scroll bars with ui2modal.
 // TODO: Context menu for Clip List Items (Requires clip multi-select feature, and ability to delete or flag multiple clips with one API call!)
 // -- TODO: Flag/unflag
 // -- TODO: Download
 // -- TODO: Delete
+// -- TODO: Clip properties
 // -- Flagging or downloading more than 1 clip at once requires confirmation.  Deleting always requires confirmation.  Deleting one clip shows a copy of the clip tile in the confirmation dialog, as in UI2.
 // TODO: Fullscreen mode for clips and live view using a placeholder button in lower right.  Fullscreen mode should allocate all available space to the video, hiding unnecessary UI elements.  It should also request that the browser enters full-screen mode.
 // TODO: Clip title appears at top of clip player when mouse draws near.
@@ -90,7 +83,6 @@ var togglableUIFeatures =
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
 // TODO: Full Camera List
-// TODO: Clip properties
 
 // TODO: Automatic clip list refresh.
 // -- Automatic clip list updates will only work if the date filter is cleared, but they will work automatically and without user-interaction.
@@ -102,10 +94,6 @@ var togglableUIFeatures =
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
 // TODO: Enable the local_overrides file callouts
-
-// TODO: Fix bug in IE where main menu scroll bar appears unnecessarily in medium and large sizes.
-
-// TODO: Fix bug where some browsers can't show a scroll bar in the main menu
 
 // CONSIDER: "Your profile has changed" messages could include the previous and new profile names and numbers.
 // CONSIDER: Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
@@ -1164,22 +1152,30 @@ function DropdownBoxes()
 			$ddl.css('min-width', $parent.innerWidth() + "px");
 
 		if (name == "mainMenu")
+		{
 			$ddl.css("min-width", ($ddl.width() + 1) + "px"); // Workaround for "System Configuration" wrapping bug
+			if (BrowserIsIE())
+				$ddl.css("height", ($ddl.height() + 3) + "px"); // Workaround for IE bug that adds unnecessary scroll bars
+		}
 
+		var windowH = $(window).height();
+		var windowW = $(window).width();
 		var width = $ddl.outerWidth();
 		var height = $ddl.outerHeight();
 		var top = (offset.top + $ele.outerHeight());
 		var left = offset.left;
 		if (ele.extendLeft)
+		{
 			left = (left + $ele.outerWidth()) - width;
+			if ((BrowserIsIE() || BrowserIsEdge()) && height > windowH)
+				left -= 20; // Workaround for Edge/IE bug that renders scroll bar offscreen
+		}
 
 		// Adjust box position so the box doesn't extend off the bottom, top, right, left, in that order.
-		var windowH = $(window).height();
 		if (top + height > windowH)
 			top = windowH - height;
 		if (top < 0)
 			top = 0;
-		var windowW = $(window).width();
 		if (left + width > windowW)
 			left = windowW - width;
 		if (left < 0)
@@ -1522,11 +1518,15 @@ function PtzButtons()
 			return;
 		}
 		var presetNum = parseInt(presetNumStr);
-		AskYesNo('<div style="margin-bottom:20px;width:300px;">' + CleanUpGroupName(cameraListLoader.currentlyLoadingCamera.optionDisplay) + '<br/><br/>Set preset ' + presetNum
-			+ ' now?</div>', function ()
-			{
-				PTZ_set_preset(presetNum);
-			});
+		var $question = $('<div style="margin-bottom:20px;width:300px;">' + CleanUpGroupName(cameraListLoader.currentlyLoadingCamera.optionDisplay) + '<br/><br/>Set Preset ' + presetNum
+			+ ' now?<br/><br/>Description:<br/></div>');
+		var $descInput = $('<input type="text" />');
+		$question.append($descInput);
+		$descInput.val(self.GetPresetDescription(presetNum));
+		AskYesNo($question, function ()
+		{
+			PTZ_set_preset(presetNum, $descInput.val());
+		});
 	}
 	// Enable preset buttons //
 	$ptzPresets.each(function (idx, ele)
@@ -1538,6 +1538,7 @@ function PtzButtons()
 		{
 			self.PTZ_goto_preset(ele.presetnum);
 		});
+		$ele.longpress(function (e) { self.PresetSet($ele.attr("presetnum")); });
 		$ele.mouseenter(function (e)
 		{
 			if (!ptzControlsEnabled)
@@ -1548,14 +1549,8 @@ function PtzButtons()
 			$("body").append('<div id="presetBigThumb"></div>');
 			thumb = $("#presetBigThumb");
 
-			var desc = null;
-			if (currentPtzData && currentPtzData.cameraId == imageLoader.currentlyLoadingImage.id && currentPtzData.presets && currentPtzData.presets.length > ele.presetnum - 1)
-				desc = currentPtzData.presets[ele.presetnum - 1];
-			if (desc == null || desc == "")
-				desc = "Preset " + (idx + 1);
-
 			var $desc = $('<div class="presetDescription"></div>');
-			$desc.text(desc);
+			$desc.text(self.GetPresetDescription(ele.presetnum));
 			thumb.append($desc);
 
 			var imgData = settings.getItem("ui2_preset_" + imageLoader.currentlyLoadingImage.id + "_" + ele.presetnum);
@@ -1635,7 +1630,7 @@ function PtzButtons()
 		}
 		self.PTZ_async_noguarantee(imageLoader.currentlyLoadingImage.id, 100 + parseInt(presetNumber));
 	}
-	var PTZ_set_preset = function (presetNumber)
+	var PTZ_set_preset = function (presetNumber, description)
 	{
 		if (!ptzControlsEnabled)
 			return;
@@ -1645,11 +1640,14 @@ function PtzButtons()
 			return;
 		}
 		var cameraId = imageLoader.currentlyLoadingImage.id;
-		var args = { cmd: "ptz", camera: cameraId, button: (100 + presetNumber), description: "Preset " + presetNumber };
+		if (description == null || description == "")
+			description = "Preset " + presetNumber;
+		var args = { cmd: "ptz", camera: cameraId, button: (100 + presetNumber), description: description };
 		ExecJSON(args, function (response)
 		{
 			if (response && typeof response.result != "undefined" && response.result == "success")
 			{
+				RememberPresetDescription(cameraId, presetNumber, description);
 				toaster.Success("Preset " + presetNumber + " set successfully.");
 				UpdatePresetImage(cameraId, presetNumber);
 			}
@@ -1694,6 +1692,39 @@ function PtzButtons()
 				if (cameraListLoader.currentlyLoadingCamera.optionValue == cameraId)
 					toaster.Warning("Unable to load PTZ metadata for camera: " + cameraId);
 			});
+	}
+	this.GetPresetDescription = function (presetNum, asAnnotation)
+	{
+		presetNum = parseInt(presetNum);
+		if (presetNum < 0 || presetNum > 20)
+			return asAnnotation ? "" : ("Preset " + presetNum);
+		var desc = null;
+		if (currentPtzData && currentPtzData.cameraId == imageLoader.currentlyLoadingImage.id && currentPtzData.presets && currentPtzData.presets.length > presetNum - 1)
+			desc = currentPtzData.presets[presetNum - 1];
+		if (desc == null || desc == "")
+			desc = "Preset " + presetNum;
+		if (asAnnotation)
+		{
+			if (desc.match(/^Preset [0-9]+$/i) == null)
+				desc = ' (' + desc + ')';
+			else
+				desc = '';
+		}
+		return desc;
+	}
+	var RememberPresetDescription = function (cameraId, presetNum, description)
+	{
+		presetNum = parseInt(presetNum);
+		if (presetNum < 0 || presetNum > 20)
+			return;
+		if (currentPtzData && currentPtzData.cameraId == cameraId)
+		{
+			if (!currentPtzData.presets)
+				currentPtzData.presets = [];
+			while (currentPtzData.presets.length < presetNum)
+				currentPtzData.presets.push('Preset' + (currentPtzData.presets.length + 1));
+			currentPtzData.presets[presetNum - 1] = description;
+		}
 	}
 	// PTZ Actions //
 	window.onbeforeunload = function ()
@@ -5948,6 +5979,7 @@ function CameraConfig()
 				openLoginDialog();
 				return;
 			}
+			console.log('CameraConfig Set ("' + htmlEncode(camId) + '", "' + htmlEncode(key) + '", "' + htmlEncode(value) + '")');
 			if (successCallbackFunc)
 				successCallbackFunc(response, camId, key, value);
 		}, function ()
@@ -6059,11 +6091,26 @@ function CameraProperties()
 				$camprop.append(GetCameraPropertySectionHeading('mt', "Motion/Trigger"));
 				var $motionSection = GetCameraPropertySection('mt');
 				$motionSection.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
+				$motionSection.append(GetRangeSlider("setmotion.sense|" + camId, "Min. object size: "
+					, response.data.setmotion.sense, 1000, 11000, 50, true, motionSenseScalingMethod
+					, camPropSliderChanged));
+				$motionSection.append(GetRangeSlider("setmotion.contrast|" + camId, "Min. contrast: "
+					, response.data.setmotion.contrast, 12, 84, 1, false, null
+					, camPropSliderChanged));
+				$motionSection.append(GetRangeSlider("setmotion.maketime|" + camId, "Make time: "
+					, response.data.setmotion.maketime, 0, 100, 1, false, timeScalingMethod
+					, camPropSliderChanged));
+				$motionSection.append(GetRangeSlider("setmotion.breaktime|" + camId, "Break time: "
+					, response.data.setmotion.breaktime, 0, 9000, 10, false, timeScalingMethod
+					, camPropSliderChanged));
 				$motionSection.append(GetCamPropCheckbox("setmotion.objects|" + camId, "Object detection", response.data.setmotion.objects, camPropOnOffBtnClick));
 				$motionSection.append(GetCamPropCheckbox("setmotion.usemask|" + camId, "Mask/hotspot", response.data.setmotion.usemask, camPropOnOffBtnClick));
 				$motionSection.append(GetCamPropCheckbox("setmotion.luminance|" + camId, "Black &amp; white", response.data.setmotion.luminance, camPropOnOffBtnClick));
 				$motionSection.append(GetCamPropCheckbox("setmotion.shadows|" + camId, "Cancel shadows", response.data.setmotion.shadows, camPropOnOffBtnClick));
 				$motionSection.append(GetCamPropCheckbox("setmotion.audio_trigger|" + camId, "Audio trigger enabled", response.data.setmotion.audio_trigger, camPropOnOffBtnClick));
+				$motionSection.append(GetRangeSlider("setmotion.audio_sense|" + camId, "Audio Sensitivity: "
+					, response.data.setmotion.audio_sense, 0, 32000, 320, false, percentScalingMethod
+					, camPropSliderChanged));
 				$motionSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Highlight:")
 					+ '<select mysetting="setmotion.showmotion|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 					+ GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
@@ -6142,6 +6189,66 @@ function CameraProperties()
 		$parent.append(GetCustomCheckbox(tag, label, checked, onChange));
 		return $parent;
 	}
+	var GetRangeSlider = function (tag, label, value, min, max, step, invert, scalingMethod, onChange)
+	{
+		if (invert)
+			value = (max - value) + min;
+
+		if (!scalingMethod)
+			scalingMethod = function (v) { return v; };
+
+		var $parent = $('<div class="camprop_item camprop_item_range"></div>');
+		$parent.append('<span>' + label + '</span>');
+
+		var $valLabel = $('<span></span>');
+		$valLabel.text(scalingMethod(value, min, max));
+		$parent.append($valLabel);
+
+		var $range = $('<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" />');
+		$range.val(value);
+		$parent.append($range);
+
+		var changeTimeout = null;
+		var inputCb = function () { $valLabel.text(scalingMethod($range.val(), min, max)); };
+		$range.on('input', inputCb); // Raised on every drag
+		$range.on('change', function ()
+		{
+			inputCb();
+			// Some browsers, particularly old versions, will raise the 'change' event like the 'input' event
+			if (onChange)
+			{
+				var v = parseInt($range.val());
+				if (invert)
+					v = (max - v) + min;
+				if (changeTimeout != null)
+					clearTimeout(changeTimeout);
+				changeTimeout = setTimeout(function ()
+				{
+					changeTimeout = null;
+					onChange(tag, v);
+				}, 500);
+			}
+		});
+		return $parent;
+	}
+	var percentScalingMethod = function (value, min, max)
+	{
+		value -= min;
+		var range = max - min;
+		if (range == 0)
+			value = 0;
+		else
+			value = parseInt(Math.round((value / range) * 100));
+		return value + "%";
+	}
+	var timeScalingMethod = function (value, min, max)
+	{
+		return value / 10 + " sec";
+	}
+	var motionSenseScalingMethod = function (value, min, max)
+	{
+		return parseInt(value / 10);
+	}
 	var GetCameraPropertyLabel = function (text)
 	{
 		return '<div class="camprop_label" title="' + text + '">' + text + '</div>';
@@ -6165,8 +6272,14 @@ function CameraProperties()
 		var parts = mysetting.split('|');
 		var settingName = parts[0];
 		var camId = parts[1];
-		//toaster.Info("Pretending to set " + settingName + " = " + $btn.hasClass("on") + " for camera " + camId);
 		cameraConfig.set(camId, settingName, buttonStateIsOn);
+	}
+	var camPropSliderChanged = function (tag, value)
+	{
+		var parts = tag.split('|');
+		var settingName = parts[0];
+		var camId = parts[1];
+		cameraConfig.set(camId, settingName, value);
 	}
 	this.camPropSelectChange = function (select)
 	{
@@ -6175,7 +6288,6 @@ function CameraProperties()
 		var settingName = parts[0];
 		var camId = parts[1];
 		var selectedValue = parseInt(select.value);
-		//toaster.Info("Pretending to set " + settingName + " = " + selectedValue + " for camera " + camId);
 		cameraConfig.set(camId, settingName, selectedValue);
 	}
 	this.camPropButtonClick = function (camId, button)
@@ -7103,11 +7215,11 @@ function showErrorToast(message, showTime, closeButton)
 ///////////////////////////////////////////////////////////////
 // JSON ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var execJsonCounter = 0;
 function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 {
 	if (currentServer.isLoggingOut && args.cmd != "logout")
 		return;
-	BI_CustomEvent.Invoke("BeforeExecJSON", args);
 	sessionManager.ApplyLatestAPISessionIfNecessary();
 	var isLogin = args.cmd == "login";
 	var oldSession = $.cookie("session");
@@ -7115,6 +7227,8 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 	{
 		args.session = oldSession;
 	}
+	var eventArgs = { id: execJsonCounter++, args: args };
+	BI_CustomEvent.Invoke("ExecJSON_Start", eventArgs);
 	$.ajax({
 		type: 'POST',
 		url: currentServer.remoteBaseURL + "json",
@@ -7124,6 +7238,8 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 		async: !synchronous,
 		success: function (data)
 		{
+			eventArgs.data = data;
+			BI_CustomEvent.Invoke("ExecJSON_Success", eventArgs);
 			if (isLogin)
 				$.cookie("session", oldSession, { path: "/" });
 			else if (typeof data.session != "undefined" && data.session != $.cookie("session"))
@@ -7137,6 +7253,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 		},
 		error: function (jqXHR, textStatus, errorThrown)
 		{
+			BI_CustomEvent.Invoke("ExecJSON_Fail", eventArgs);
 			if (callbackFail)
 				callbackFail(jqXHR, textStatus, errorThrown);
 		}
@@ -7814,4 +7931,19 @@ function BI_GetDevicePixelRatio()
 	if (returnValue <= 0)
 		returnValue = 1;
 	return returnValue;
+}
+var _browser_is_ie = -1;
+function BrowserIsIE()
+{
+	if (_browser_is_ie == -1)
+		_browser_is_ie = /MSIE \d|Trident.*rv:/.test(navigator.userAgent) ? 1 : 0;
+	return _browser_is_ie == 1;
+}
+var _browser_is_edge = -1;
+function BrowserIsEdge()
+{
+	if (_browser_is_edge == -1)
+		_browser_is_edge = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
+	return _browser_is_edge == 1;
+
 }
