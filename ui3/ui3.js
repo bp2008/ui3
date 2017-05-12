@@ -14,6 +14,7 @@ var diskUsageGUI = null;
 var systemLog = null;
 var systemConfig = null;
 var cameraProperties = null;
+var cameraListDialog = null;
 var statusBars = null;
 var dropdownBoxes = null;
 var imageQualityHelper = null;
@@ -82,7 +83,6 @@ var togglableUIFeatures =
 
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
-// TODO: Full Camera List
 
 // TODO: Automatic clip list refresh.
 // -- Automatic clip list updates will only work if the date filter is cleared, but they will work automatically and without user-interaction.
@@ -93,8 +93,10 @@ var togglableUIFeatures =
 
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
+
 // TODO: Enable the local_overrides file callouts
 
+// CONSIDER: Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
 // CONSIDER: "Your profile has changed" messages could include the previous and new profile names and numbers.
 // CONSIDER: Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
 // CONSIDER: Multiple-server support, like in UI2
@@ -407,6 +409,8 @@ $(function ()
 	systemConfig = new SystemConfig();
 
 	cameraProperties = new CameraProperties();
+
+	cameraListDialog = new CameraListDialog();
 
 	statusBars = new StatusBars();
 	statusBars.setLabel("volume", '<svg class="volumeButton icon"><use xlink:href="#svg_x5F_Volume"></use></svg>');
@@ -1017,6 +1021,7 @@ function DropdownBoxes()
 						systemConfig.open();
 						break;
 					case "full_camera_list":
+						cameraListDialog.open();
 						break;
 					case "disk_usage":
 						statusLoader.diskUsageClick();
@@ -4299,6 +4304,8 @@ function CameraListLoader()
 				toaster.Error(ex, 30000);
 			}
 
+			BI_CustomEvent.Invoke("CameraListLoaded", lastResponse);
+
 			if (cameraListUpdateTimeout != null)
 				clearTimeout(cameraListUpdateTimeout);
 			cameraListUpdateTimeout = setTimeout(function ()
@@ -4615,6 +4622,10 @@ function CameraListLoader()
 	this.GetCurrentHomeGroupObj = function ()
 	{
 		return self.GetGroupCamera(currentlySelectedHomeGroupId);
+	}
+	this.GetLastResponse = function ()
+	{
+		return lastResponse;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -5893,6 +5904,8 @@ function CameraConfig()
 			}
 			if (response.result == "fail")
 			{
+				if (failCallbackFunc)
+					failCallbackFunc(camId);
 				openLoginDialog();
 				return;
 			}
@@ -5992,13 +6005,156 @@ function CameraConfig()
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Camera List Dialog /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function CameraListDialog()
+{
+	var self = this;
+	var modal_cameralistdialog = null;
+	var timeBetweenCameraListThumbUpdates = 1000 * 60 * 60 * 24; // 1 day
+	this.open = function ()
+	{
+		CloseCameraListDialog();
+		modal_cameralistdialog = $('<div id="cameralistdialog"><div class="cameralisttitle">' + htmlEncode($("#system_name").text()) + ' Camera List <div id="camlist_refresh_btn" class="rotating_refresh_btn noflip spin2s"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div></div>'
+			+ '<div id="cameralistcontent" class="cameralistcontent"></div></div>'
+		).modal({ removeElementOnClose: true, onClosing: DialogClosing });
+
+		$("#camlist_refresh_btn").click(function () { self.open(); });
+
+		BI_CustomEvent.AddListener("CameraListLoaded", CameraListLoaded);
+
+		cameraListLoader.LoadCameraList();
+	}
+	var CameraListLoaded = function ()
+	{
+		$("#camlist_refresh_btn").removeClass("spin2s");
+		var $cameralistcontent = $("#cameralistcontent");
+		if ($cameralistcontent.length == 0)
+			return;
+		$cameralistcontent.empty();
+		var lastCameraListResponse = cameraListLoader.GetLastResponse();
+		if (!lastCameraListResponse || !lastCameraListResponse.data || lastCameraListResponse.data.length == 0)
+		{
+			$cameralistcontent.html("The camera list is empty! Please try reloading the page.");
+			return;
+		}
+		// Add camera boxes
+		for (var i = 0; i < lastCameraListResponse.data.length; i++)
+		{
+			var cam = lastCameraListResponse.data[i];
+			if (!cameraListLoader.CameraIsGroupOrCycle(cam))
+			{
+				$cameralistcontent.append('<div class="camlist_item">'
+					+ GetCameraListLabel(cam)
+					+ '</div>');
+			}
+		}
+		// Finish up
+		$cameralistcontent.append('<div></div>'
+			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.UpdateCameraThumbnails(true)" value="force refresh thumbnails" title="Thumbnails otherwise update only once per day" />'
+			+ (developerMode ? ' <input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.ShowRawCameraList()" value="view raw data" />' : '')
+			+ '</div>');
+		self.UpdateCameraThumbnails();
+	}
+	var DialogClosing = function ()
+	{
+		BI_CustomEvent.RemoveListener("CameraListLoaded", CameraListLoaded);
+	}
+	var CloseCameraListDialog = function ()
+	{
+		if (modal_cameralistdialog != null)
+			modal_cameralistdialog.close();
+		$("#cameralistdialog").remove();
+	}
+	this.ShowRawCameraList = function ()
+	{
+		$('<div class="cameralistcontent selectable"></div>').append(ArrayToHtmlTable(cameraListLoader.GetLastResponse().data)).modal({ removeElementOnClose: true });
+	}
+	var GetCameraListLabel = function (cam)
+	{
+		var labelText = cam.optionDisplay + " (" + cam.optionValue + ")";
+		var colorHex = BlueIrisColorToCssColor(cam.color);
+		var nameColorHex = GetReadableTextColorHexForBackgroundColorHex(colorHex);
+
+		var floatingBadges = '';
+		if (cam.isPaused)
+			floatingBadges += '<div class="icon16" style="color:#FFFF00;" title="paused"><svg class="icon"><use xlink:href="#svg_x5F_Stoplight"></use></svg></div>';
+		if (cam.isRecording)
+			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="recording"><svg class="icon"><use xlink:href="#svg_x5F_Stoplight"></use></svg></div>';
+		if (cam.isAlerting)
+			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="alerting"><svg class="icon"><use xlink:href="#svg_x5F_Alert1"></use></svg></div>';
+		if (cam.isEnabled && (!cam.isOnline || cam.isNoSignal))
+			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="offline / no signal"><svg class="icon"><use xlink:href="#svg_x5F_Warning"></use></svg></div>';
+		if (!cam.isEnabled)
+			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="disabled"><svg class="icon"><use xlink:href="#svg_x5F_Logout"></use></svg></div>';
+		if (floatingBadges != '')
+			floatingBadges = '<div style="float: right;">' + floatingBadges + '</div>';
+
+		return '<div class="camlist_thumbbox" onclick="cameraListDialog.camListThumbClick(\'' + cam.optionValue + '\')" style="background-color: #' + colorHex + ';">'
+			+ '<div class="camlist_thumb">'
+			+ '<div class="camlist_thumb_aligner"></div>'
+			+ '<div class="camlist_thumb_helper"><img src="" alt="" class="camlist_thumb_img" camid="' + cam.optionValue + '" isEnabled="' + (cam.isEnabled ? '1' : '0') + '" aspectratio="' + (cam.width / cam.height) + '" />'
+			+ '<span style="display:none;">No Image</span></div></div>'
+			+ '<div class="camlist_label" style="background-color: #' + colorHex + '; color: #' + nameColorHex + ';">' + floatingBadges + htmlEncode(labelText) + '</div>'
+			+ '</div>';
+	}
+	this.camListThumbClick = function (camId)
+	{
+		cameraProperties.open(camId);
+	}
+	this.UpdateCameraThumbnails = function (overrideImgDate)
+	{
+		$("#cameralistcontent").find("img.camlist_thumb_img").each(function (idx, ele)
+		{
+			var $ele = $(ele);
+			var camId = $ele.attr("camId");
+			var settingsKey = "ui3_camlistthumb_" + camId;
+			var imgData = settings.getItem(settingsKey);
+			if (imgData != null && imgData.length > 0)
+			{
+				$ele.attr("src", imgData);
+				$ele.css("display", "block");
+				$ele.parent().parent().find(".camlist_thumb_aligner").css("height", "120px");
+			}
+			else
+			{
+				$ele.next('span').show();
+			}
+			if ($ele.attr('isEnabled') == '1')
+			{
+				var imgDate = settings.getItem(settingsKey + "_date");
+				if (!imgDate)
+					imgDate = 0;
+				if (imgDate + timeBetweenCameraListThumbUpdates < new Date().getTime() || overrideImgDate)
+				{
+					var sizeArg = "&w=160";
+					if (parseFloat($ele.attr("aspectratio")) < (160 / 120))
+						sizeArg = "&h=120";
+					var tmpImgSrc = currentServer.remoteBaseURL + "image/" + camId + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetRemoteSessionArg("&", true);
+					PersistImageFromUrl(settingsKey, tmpImgSrc, function (imgAsDataURL)
+					{
+						settings.setItem(settingsKey + "_date", new Date().getTime())
+						$ele.next('span').hide();
+						$ele.attr("src", imgAsDataURL);
+						$ele.css("display", "block");
+						$ele.parent().parent().find(".camlist_thumb_aligner").css("height", "120px");
+					}
+						, function (message)
+						{
+							settings.setItem(settingsKey + "_date", new Date().getTime())
+						});
+				}
+			}
+		});
+	}
+}
+///////////////////////////////////////////////////////////////
 // Camera Properties Dialog ///////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function CameraProperties()
 {
 	var self = this;
 	var modal_cameraPropDialog = null;
-	var modal_cameraPropRawDialog = null;
 	this.open = function (camId)
 	{
 		CloseCameraProperties();
@@ -6006,7 +6162,7 @@ function CameraProperties()
 		var camName = cameraListLoader.GetCameraName(camId);
 		modal_cameraPropDialog = $('<div id="campropdialog"><div class="campropheader">'
 			+ '<div class="camproptitle">' + htmlEncode(camName)
-			+ ' Properties <div id="camprop_refresh_btn" class="rotating_refresh_btn noflip"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div></div>'
+			+ ' Properties <div id="camprop_refresh_btn" class="rotating_refresh_btn noflip spin2s"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div></div>'
 			+ '</div>'
 			+ '<div id="campropcontent"><div style="text-align: center">Loading...</div></div>'
 			+ '</div>'
@@ -6016,7 +6172,7 @@ function CameraProperties()
 			, onClosing: function ()
 			{
 				if ($("#cameralistcontent").length != 0)
-					ShowCameraList();
+					cameraListLoader.LoadCameraList();
 			}
 		});
 		$("#camprop_refresh_btn").click(function ()
@@ -6062,6 +6218,20 @@ function CameraProperties()
 			*/
 			try
 			{
+				var cam = cameraListLoader.GetCameraWithId(camId);
+				if (cam)
+				{
+					$camprop.append(GetCameraPropertySectionHeading('info', "Information"));
+					var $infoSection = GetCameraPropertySection('info');
+					$infoSection.append(GetInfo("ID", cam.optionValue));
+					$infoSection.append(GetInfo("Name", cam.optionDisplay));
+					$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
+					$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + " @ " + cam.FPS + " FPS"));
+					$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
+					$infoSection.append(GetInfo("PTZ", cam.ptz ? "Yes" : "No"));
+					$camprop.append($infoSection);
+				}
+
 				$camprop.append(GetCameraPropertySectionHeading('gs', "General Settings"));
 				var $generalSection = GetCameraPropertySection('gs');
 				$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
@@ -6139,7 +6309,6 @@ function CameraProperties()
 					+ '</div>');
 				$camprop.append($mgmtSection);
 
-				var cam = cameraListLoader.GetCameraWithId(camId);
 				if (cam)
 				{
 					SetCameraPropertyManualRecordButtonState(cam.isRecording);
@@ -6156,6 +6325,12 @@ function CameraProperties()
 			{
 				CloseCameraProperties();
 			});
+	}
+	var GetInfo = function (label, value)
+	{
+		var $info = $('<div class="camprop_item camprop_item_info"></div>');
+		$info.text(label + ": " + value);
+		return $info;
 	}
 	var GetCameraPropertySectionHeading = function (id, html)
 	{
@@ -7361,11 +7536,27 @@ var BI_CustomEvent =
 				this.customEventRegistry[eventName] = new Array();
 			this.customEventRegistry[eventName].push(eventHandler);
 		},
+		RemoveListener: function (eventName, eventHandler)
+		{
+			if (typeof this.customEventRegistry[eventName] == "undefined")
+				return;
+			var handlers = this.customEventRegistry[eventName];
+			var idx = handlers.indexOf(eventHandler);
+			if (idx > -1)
+				handlers.splice(idx, 1);
+		},
 		Invoke: function (eventName, args)
 		{
 			if (typeof this.customEventRegistry[eventName] != "undefined")
 				for (var i = 0; i < this.customEventRegistry[eventName].length; i++)
-					this.customEventRegistry[eventName][i](args);
+					try
+					{
+						this.customEventRegistry[eventName][i](args);
+					}
+					catch (ex)
+					{
+						toaster.Error(ex);
+					}
 		}
 	};
 ///////////////////////////////////////////////////////////////
@@ -7455,6 +7646,52 @@ var BILogger = function ()
 	this.debug = logInner;
 }
 var bilog = new BILogger();
+///////////////////////////////////////////////////////////////
+// Object To Html Table ///////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ArrayToHtmlTable(a)
+{
+	var $table = $("<table></table>");
+	var $thead = $("<thead></thead>");
+	var $theadrow = $("<tr></tr>");
+	var $tbody = $("<tbody></tbody>");
+	$thead.append($theadrow);
+	$table.append($thead);
+	$table.append($tbody);
+	var columnSpec = new Object();
+	var columnIdx = 0;
+	for (var i = 0; i < a.length; i++)
+	{
+		for (var key in a[i])
+		{
+			if (typeof columnSpec[key] == "undefined")
+			{
+				$theadrow.append($("<th></th>").text(key));
+				columnSpec[key] = columnIdx++;
+			}
+		}
+	}
+	for (var i = 0; i < a.length; i++)
+	{
+		var newRow = new Object();
+		for (var key in a[i])
+		{
+			var value = a[i][key];
+			var idx = columnSpec[key];
+			newRow[idx] = value;
+		}
+		var $row = $("<tr></tr>");
+		for (var n = 0; n < columnIdx; n++)
+		{
+			if (typeof newRow[n] == "undefined")
+				$row.append("<td></td>");
+			else
+				$row.append($("<td></td>").text(newRow[n]));
+		}
+		$tbody.append($row);
+	}
+	return $table;
+}
 ///////////////////////////////////////////////////////////////
 // Save Images to Local Storage ///////////////////////////////
 ///////////////////////////////////////////////////////////////

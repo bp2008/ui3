@@ -2535,6 +2535,12 @@ div.icon, a.icon
 
 /* Camera Properties / Camera List */
 
+.icon16
+{
+	width: 16px;
+	height: 16px;
+}
+
 #campropdialog
 {
 	min-width: 283px;
@@ -2556,6 +2562,7 @@ div.icon, a.icon
 {
 	display: inline-block;
 	vertical-align: top;
+	font-size: 0px;
 }
 
 .camlist_thumbbox
@@ -2614,7 +2621,14 @@ div.icon, a.icon
 	display: inline-block;
 	vertical-align: middle;
 	width: 160px;
+	text-align: center;
 }
+
+	.camlist_thumb_helper span
+	{
+		line-height: 120px;
+		font-size: 18.6px;
+	}
 
 .camprop_item, .camlist_item
 {
@@ -2650,6 +2664,12 @@ div.icon, a.icon
 .camprop_section
 {
 	padding: 7px 0px;
+}
+
+.camprop_item_info
+{
+	max-width: 320px;
+	margin: 7px auto;
 }
 
 .camprop_item_cb
