@@ -1,0 +1,3 @@
+CHANGE NOTICE
+
+The script and CSS of this library have been significantly modified by the UI2/UI3 projects.

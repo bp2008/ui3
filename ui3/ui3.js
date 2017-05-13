@@ -38,6 +38,7 @@ var cameraListLoader = null;
 var clipLoader = null;
 
 var currentPrimaryTab = "";
+var skipTabLoadClipLoad = false;
 
 var togglableUIFeatures =
 	[
@@ -76,13 +77,14 @@ var togglableUIFeatures =
 // -- TODO: Download
 // -- TODO: Delete
 // -- TODO: Clip properties
-// -- Flagging or downloading more than 1 clip at once requires confirmation.  Deleting always requires confirmation.  Deleting one clip shows a copy of the clip tile in the confirmation dialog, as in UI2.
+// -- Flagging or deleting more than 1 clip at once requires confirmation.  Deleting always requires confirmation.  Deleting one clip shows a copy of the clip tile in the confirmation dialog, as in UI2.
 // TODO: Fullscreen mode for clips and live view using a placeholder button in lower right.  Fullscreen mode should allocate all available space to the video, hiding unnecessary UI elements.  It should also request that the browser enters full-screen mode.
 // TODO: Clip title appears at top of clip player when mouse draws near.
 // TODO: Close button appears at top right of clip player when mouse draws near.
 
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
+// -- MAYBE Including an option to update the clip list automatically (on by default) ... to reduce bandwidth usage ??
 
 // TODO: Automatic clip list refresh.
 // -- Automatic clip list updates will only work if the date filter is cleared, but they will work automatically and without user-interaction.
@@ -93,6 +95,10 @@ var togglableUIFeatures =
 
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
+// TODO: Implement PTZ hotkeys.
+// TODO: Implement clip navigation hotkeys.
+// TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
+// TODO: Use the fileSize string as a size label for "download clip" context menu items.
 
 // TODO: Enable the local_overrides file callouts
 
@@ -391,7 +397,10 @@ $(function ()
 			//$("#layoutbottom").show();
 			$("#recordingsFilterByHeading").text("Filter " + tabDisplayName + " by:");
 		}
-		BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
+		if (skipTabLoadClipLoad)
+			skipTabLoadClipLoad = false;
+		else
+			BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
 		resized();
 	});
 	BI_CustomEvent.AddListener("TabLoaded_live", function () { imageLoader.goLive(); });
@@ -471,6 +480,8 @@ $(function ()
 	sessionManager.Initialize();
 
 	$(window).resize(resized);
+	if (currentPrimaryTab == "alerts" || currentPrimaryTab == "clips")
+		skipTabLoadClipLoad = true; // Prevent one clip load, to keep from loading twice.
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
 });
 function ValidateTabName(tabName)
@@ -944,7 +955,7 @@ function DropdownBoxes()
 				this.items = [];
 				for (var i = 0; i < data.length; i++)
 				{
-					if (data[i].group)
+					if (cameraListLoader.CameraIsGroupOrCycle(data[i]))
 					{
 						this.items.push(new DropdownListItem(
 							{
@@ -1250,9 +1261,9 @@ function PtzButtons()
 {
 	var self = this;
 
-	var ptzControlsEnabled = false; // TODO: Implement PTZ hotkeys.
-	var $hoveredEle = null; // TODO: Implement clip navigation hotkeys.
-	var $activeEle = null; // TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
+	var ptzControlsEnabled = false;
+	var $hoveredEle = null;
+	var $activeEle = null;
 
 	var currentlyLoadedPtzThumbsCamId = "";
 
@@ -2270,7 +2281,7 @@ function PlaybackControls()
 		{
 			var date = GetDateStr(clipData.date);
 			date = date.replace(/\//g, '-').replace(/:/g, '.');
-			var fileName = clipData.camera + " " + date + clipData.path.substr(extensionIdx);
+			var fileName = cameraListLoader.GetCameraName(clipData.camera) + " " + date + clipData.path.substr(extensionIdx);
 
 			$btn.attr("download", fileName);
 		}
@@ -2810,8 +2821,10 @@ function ClipLoader(clipsBodySelector)
 	var HeightOfOneDateTilePx = 27;
 	var asyncThumbnailDownloader = new AsyncThumbnailDownloader();
 	var $clipsbody = $(clipsBodySelector);
+	var $clipListTopDate = $('#clipListTopDate');
 	var clipListCache = new Object();
-	var lastLoadedClipIds = new Array();
+	var clipListIdCache = new Object();
+	var loadedClipIds = new Array();
 	var lastClickedClip = null;
 	var isLoadingAClipList = false;
 	var QueuedClipListLoad = null;
@@ -2823,40 +2836,65 @@ function ClipLoader(clipsBodySelector)
 	var lastLoadedCameraFilter = "index";
 	this.suppressClipListLoad = false;
 
+	// For updating an existing clip list
+	var newestClipDate = 0;
+	var clipListGrew = false;
+	var lastClipListLoadedAtTime = new Date().getTime();
+
+	// For handling multi-select only
+	var selectedClips = [];
+	var selectedClipsMap = new Object();
+	var lastSelectedClipId = null;
+
 	this.LoadClips = function (listName)
 	{
 		if (cameraListLoader.currentlyLoadingCamera)
 			lastLoadedCameraFilter = cameraListLoader.currentlyLoadingCamera.optionValue;
 		loadClipsInternal(listName, lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false);
 	}
-	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad)
+	this.UpdateClipList = function ()
+	{
+		if (isLoadingAClipList)
+			return;
+		if (new Date().getTime() - lastClipListLoadedAtTime < 5000)
+			return;
+		if (newestClipDate == 0)
+			return;
+		if (!cameraListLoader.currentlyLoadingCamera)
+			return;
+		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
+			return;
+		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
+		loadClipsInternal(null, lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true);
+	}
+	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList)
 	{
 		if ((currentPrimaryTab != "clips" && currentPrimaryTab != "alerts") || self.suppressClipListLoad)
 		{
 			QueuedClipListLoad = null;
 			return;
 		}
-		if (!isContinuationOfPreviousLoad)
+		if (typeof (listName) == "undefined" || listName == null)
+			listName = currentPrimaryTab == "clips" ? "cliplist" : "alertlist";
+		if (!isContinuationOfPreviousLoad && !isUpdateOfExistingList)
 		{
 			if (isLoadingAClipList)
 			{
 				QueuedClipListLoad = function ()
 				{
-					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd);
+					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList);
 				};
 				return;
 			}
-			if (typeof (listName) == "undefined" || listName == null)
-				listName = currentPrimaryTab == "clips" ? "cliplist" : "alertlist";
 
 			tileLoader.AppearDisappearCheckEnabled = false;
 			lastClickedClip = null;
 			TotalUniqueClipsLoaded = 0;
 			TotalDateTilesLoaded = 0;
-			lastLoadedClipIds = new Array();
+			loadedClipIds = new Array();
 
 			$clipsbody.empty();
-			$("#clipListTopDate").html("...");
+			$clipListTopDate.html("...");
 			$clipsbody.html('<div class="clipListText">Loading...<br/><br/><span id="clipListDateRange"></span></div>');
 			$.CustomScroll.callMeOnContainerResize();
 
@@ -2865,6 +2903,12 @@ function ClipLoader(clipsBodySelector)
 
 			isLoadingAClipList = true;
 			//return;
+		}
+		if (isUpdateOfExistingList)
+		{
+			if (isLoadingAClipList)
+				return;
+			isLoadingAClipList = true;
 		}
 
 		var allowContinuation = false;
@@ -2887,10 +2931,16 @@ function ClipLoader(clipsBodySelector)
 			var clipTileHeight = getClipTileHeight();
 			if (typeof (response.data) != "undefined")
 			{
-				clipListCache = new Object();
-				lastLoadedClipIds = new Array(response.data.length);
-				var lastClipDate = new Date(0);
-				for (var lastLoadedClipIds_idx = 0, i = 0; i < response.data.length; i++)
+				if (!isUpdateOfExistingList)
+				{
+					newestClipDate = 0;
+					clipListCache = new Object();
+					clipListIdCache = new Object();
+				}
+				var newUpdateClipIds = [];
+				var newUpdateClips = [];
+					var previousClipDate = new Date(0);
+				for (var clipIdx = 0; clipIdx < response.data.length; clipIdx++)
 				{
 					// clip.camera : "shortname"
 					// clip.path : "@0000123.bvr"
@@ -2902,7 +2952,9 @@ function ClipLoader(clipsBodySelector)
 					// clip.filesize : "10sec (3.09M)"
 					// clip.filetype : "bvr H264 New"
 
-					var clip = response.data[i];
+					var clip = response.data[clipIdx];
+					if (newestClipDate < clip.date)
+						newestClipDate = clip.date;
 					var clipData = new Object();
 					clipData.roughLength = CleanUpFileSize(clip.filesize);
 					clipData.isSnapshot = clipData.roughLength == "Snapshot";
@@ -2922,28 +2974,50 @@ function ClipLoader(clipsBodySelector)
 					clipData.clipId = clip.path.replace(/@/g, "").replace(/\..*/g, "");
 					clipData.thumbPath = clip.path;
 
-					lastLoadedClipIds[lastLoadedClipIds_idx++] = clipData.clipId;
-					if (!isSameDay(lastClipDate, clipData.date))
+					if (!isSameDay(previousClipDate, clipData.date))
 					{
-						if (lastClipDate.getTime() == 0)
-							$("#clipListTopDate").attr("defaultStr", GetDateDisplayStr(clipData.date)); // Do not add the first date tile because it is redundant with a date display above the list.
-						else
+						// TODO: (minor importance) Deal with adding new date tiles when isUpdateOfExistingList is true.  Perhaps just fake it and do a full clip list load when the system time changes from one day to the next.
+						if (previousClipDate.getTime() == 0)
+							$clipListTopDate.attr("defaultStr", GetDateDisplayStr(clipData.date)); // Do not add the first date tile because it is redundant with a date display above the list.
+						else if (!isUpdateOfExistingList)
 						{
 							tileLoader.registerOnAppearDisappear({ isDateTile: true, date: clipData.date }, DateTileOnAppear, DateTileOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
 							TotalDateTilesLoaded++;
 						}
 					}
-					lastClipDate = clipData.date;
+					previousClipDate = clipData.date;
 
+					clipListIdCache[clipData.clipId] = clipData;
 					if (!clipListCache[clip.camera])
 						clipListCache[clip.camera] = new Object();
-					if (!clipListCache[clip.camera][clip.path]) // Only register if not already registered
+					var existingClipData = clipListCache[clip.camera][clip.path];
+					if (existingClipData)
 					{
-						tileLoader.registerOnAppearDisappear(clipData, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
+						UpdateExistingClipData(existingClipData, clipData);
+					}
+					else // Only register if not already registered
+					{
+						if (isUpdateOfExistingList)
+						{
+							newUpdateClips.push(clipData);
+							newUpdateClipIds.push(clipData.clipId);
+						}
+						else
+						{
+							loadedClipIds.push(clipData.clipId);
+							tileLoader.registerOnAppearDisappear(clipData, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
+						}
 						TotalUniqueClipsLoaded++;
 						clipListCache[clip.camera][clip.path] = clipData;
 					}
 
+				}
+				if (isUpdateOfExistingList && newUpdateClipIds.length > 0)
+				{
+					loadedClipIds = newUpdateClipIds.concat(loadedClipIds);
+					tileLoader.preserveScrollPosition(clipTileHeight, HeightOfOneDateTilePx, newUpdateClipIds.length);
+					tileLoader.injectNewClips(newUpdateClips, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
+					clipListGrew = true;
 				}
 				if (!imageLoader.currentlyLoadingImage.isLive && self.GetCachedClip(imageLoader.currentlyLoadingImage.id, imageLoader.currentlyLoadingImage.path) == null)
 					imageLoader.goLive();
@@ -2952,12 +3026,11 @@ function ClipLoader(clipsBodySelector)
 					// TODO: If a clip is playing, make it get selected now in the list, but do not interfere with the playback state.
 					// Probably scroll to the clip in the list, too.
 				}
-				// Trim the lastLoadedClipIds array in case we filtered something(s) out, such as snapshots.
-				lastLoadedClipIds.length = lastLoadedClipIds_idx;
 
 				if (QueuedClipListLoad != null)
 				{
 					isLoadingAClipList = false;
+					lastClipListLoadedAtTime = new Date().getTime();
 					QueuedClipListLoad();
 					QueuedClipListLoad = null;
 					return;
@@ -2965,24 +3038,46 @@ function ClipLoader(clipsBodySelector)
 
 				if (allowContinuation && response.data.length >= 1000)
 				{
+					if (isUpdateOfExistingList)
+					{
+						toaster.Info("Automatic " + (listName == "cliplist" ? "clip list" : "alert list") + " update got too many items.  Refreshing clip list now.", 10000);
+						isLoadingAClipList = false;
+						lastClipListLoadedAtTime = new Date().getTime();
+						self.LoadClips();
+						return;
+					}
 					myDateEnd = response.data[response.data.length - 1].date;
 					$("#clipListDateRange").html("&nbsp;Remaining to load:<br/>&nbsp;&nbsp;&nbsp;" + parseInt((myDateEnd - myDateStart) / 86400) + " days");
 					$.CustomScroll.callMeOnContainerResize();
-					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true);
+					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList);
 				}
 			}
 
 			isLoadingAClipList = false;
-			$clipsbody.empty();
+			lastClipListLoadedAtTime = new Date().getTime();
+			if (isUpdateOfExistingList)
+			{
+				if (clipListGrew)
+				{
+					resized();
+					BI_CustomEvent.Invoke("ClipList_Updated", response);
+				}
+			}
+			else
+			{
+				$clipsbody.empty();
 
-			// Force clip list to be the correct height before clip tiles load.
-			$clipsbody.append('<div id="clipListHeightSetter" style="height:' + ((clipTileHeight * TotalUniqueClipsLoaded) + (HeightOfOneDateTilePx * TotalDateTilesLoaded)) + 'px;width:0px;"></div>');
+				// Force clip list to be the correct height before clip tiles load.
+				$clipsbody.append('<div id="clipListHeightSetter" style="height:' + ((clipTileHeight * TotalUniqueClipsLoaded) + (HeightOfOneDateTilePx * TotalDateTilesLoaded)) + 'px;width:0px;"></div>');
 
-			asyncThumbnailDownloader = new AsyncThumbnailDownloader();
-			tileLoader.AppearDisappearCheckEnabled = true;
-			tileLoader.appearDisappearCheck();
+				asyncThumbnailDownloader = new AsyncThumbnailDownloader();
+				tileLoader.AppearDisappearCheckEnabled = true;
+				tileLoader.appearDisappearCheck();
 
-			$.CustomScroll.callMeOnContainerResize();
+				$.CustomScroll.callMeOnContainerResize();
+
+				BI_CustomEvent.Invoke("ClipList_Loaded", response);
+			}
 		}
 			, function (jqXHR, textStatus, errorThrown)
 			{
@@ -2994,12 +3089,13 @@ function ClipLoader(clipsBodySelector)
 				{
 					setTimeout(function ()
 					{
-						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad);
+						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList);
 					}, 1000);
 				}
 				else
 				{
 					isLoadingAClipList = false;
+					lastClipListLoadedAtTime = new Date().getTime();
 					failedClipListLoads = 0;
 				}
 			});
@@ -3007,8 +3103,9 @@ function ClipLoader(clipsBodySelector)
 	this.resizeClipList = function ()
 	{
 		var currentUiSizeIsSmall = useSmallClipTileHeight();
-		if ((lastUiSizeWasSmall && !currentUiSizeIsSmall) || (!lastUiSizeWasSmall && currentUiSizeIsSmall))
+		if ((lastUiSizeWasSmall && !currentUiSizeIsSmall) || (!lastUiSizeWasSmall && currentUiSizeIsSmall) || clipListGrew)
 		{
+			clipListGrew = false;
 			lastUiSizeWasSmall = currentUiSizeIsSmall;
 			var clipTileHeight = getClipTileHeight();
 			tileLoader.resizeClipList(clipTileHeight, HeightOfOneDateTilePx);
@@ -3029,6 +3126,34 @@ function ClipLoader(clipsBodySelector)
 		if (camClips)
 			return camClips[clipPath];
 		return null;
+	}
+	this.GetClipFromId = function (clipId)
+	{
+		return clipListIdCache[clipId];
+	}
+	this.GetClipIdsBetween = function (first, last)
+	{
+		var between = [];
+		var idxFirst = loadedClipIds.indexOf(first);
+		if (idxFirst == -1)
+			return between;
+		var idxLast = loadedClipIds.indexOf(last);
+		if (idxLast == -1)
+			return between;
+		if (idxFirst == idxLast)
+		{
+			between.push(first);
+			return;
+		}
+		if (idxFirst > idxLast)
+		{
+			var tmp = idxLast;
+			idxLast = idxFirst;
+			idxFirst = tmp;
+		}
+		for (var i = idxFirst; i <= idxLast; i++)
+			between.push(loadedClipIds[i]);
+		return between;
 	}
 	var CleanUpFileSize = function (fileSize)
 	{
@@ -3087,7 +3212,28 @@ function ClipLoader(clipsBodySelector)
 			seconds = parseInt(match[1]);
 		return { hours: hours, minutes: minutes, seconds: seconds };
 	}
+	var UpdateExistingClipData = function (oldClipData, newClipData)
+	{
+		if (oldClipData.clipId != newClipData.clipId)
+			return;
 
+		var $clip = $("#c" + oldClipData.clipId);
+
+		if (oldClipData.roughLength != newClipData.roughLength)
+		{
+			oldClipData.roughLength = newClipData.roughLength;
+			if ($clip.length > 0)
+				$clip.find('.clipdur').html(GetClipDurStrFromMs(oldClipData.roughLength));
+		}
+		if (oldClipData.fileSize != newClipData.fileSize)
+		{
+			oldClipData.fileSize = newClipData.fileSize;
+		}
+		if (oldClipData.msec != newClipData.msec)
+		{
+			oldClipData.msec = newClipData.msec;
+		}
+	}
 	var ThumbOnAppear = function (ele)
 	{
 		var path = currentServer.remoteBaseURL + "thumbs/" + ele.thumbPath + currentServer.GetRemoteSessionArg("?");
@@ -3100,7 +3246,27 @@ function ClipLoader(clipsBodySelector)
 	}
 	var ClipOnAppear = function (clipData)
 	{
-		var $clip = $("#c" + clipData.clipId);
+		ClipTileCreate(clipData);
+		ThumbOnAppear($("#t" + clipData.clipId).get(0));
+	}
+	var ClipOnDisappear = function (clipData)
+	{
+		ThumbOnDisappear($("#t" + clipData.clipId).get(0));
+		// We need clip elements to stick around after they've been created
+	}
+	var ClipTileCreateFromId = function (clipId)
+	{
+		var $clip = $("#c" + clipId);
+		if ($clip.length > 0)
+			return;
+		var clipData = self.GetClipFromId(clipId);
+		if (clipData)
+			ClipTileCreate(clipData, $clip);
+	}
+	var ClipTileCreate = function (clipData, $clip)
+	{
+		if (!$clip)
+			$clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
 		{
 			var timeStr = GetTimeStr(clipData.date);
@@ -3114,7 +3280,7 @@ function ClipLoader(clipsBodySelector)
 				+ '<img id="t' + clipData.clipId + '" src="ui3/LoadingImage.png" />'
 				+ '</div>'
 				+ '<div class="clipcolorbar" style="background-color: #' + clipData.colorHex + ';"></div>'
-				+ '<div class="clipdesc"><div class="cliptime">' + timeStr + '</div><div class="clipcam">' + clipData.camera + '</div></div>'
+				+ '<div class="clipdesc"><div class="cliptime">' + timeStr + '</div><div class="clipcam">' + cameraListLoader.GetCameraName(clipData.camera) + '</div></div>'
 				+ '</div>');
 
 			var $img = $("#t" + clipData.clipId).get(0).thumbPath = clipData.thumbPath;
@@ -3129,22 +3295,70 @@ function ClipLoader(clipsBodySelector)
 			if (self.ClipDataIndicatesFlagged(clipData))
 				self.ShowClipFlag(clipData);
 		}
-		ThumbOnAppear($("#t" + clipData.clipId).get(0));
 	}
-	var ClipOnDisappear = function (clipData)
+	var ClipClicked = function (e)
 	{
-		ThumbOnDisappear($("#t" + clipData.clipId).get(0));
-		//$("#c" + clipData.clipId).remove(); // Removing the clip while a thumbnail loading "thread" might be working on it causes the thread to fail.
-	}
-	var ClipClicked = function ()
-	{
-		if (lastClickedClip)
-			$(lastClickedClip).removeClass("selected");
-		lastClickedClip = this;
+		var clipId = this.clipData.clipId;
+		if (e.shiftKey && lastSelectedClipId)
+		{
+			// Multi-select add-range
+			var range = self.GetClipIdsBetween(lastSelectedClipId, this.clipData.clipId);
 
-		$(this).addClass("selected");
+			if (!e.ctrlKey)
+			{
+				var lastSelSave = lastSelectedClipId;
+				self.UnselectAllClips();
+				lastSelectedClipId = lastSelSave;
+			}
 
-		cameraListLoader.LoadClipWithClipData(this.clipData);
+			for (var i = 0; i < range.length; i++)
+			{
+				if (!selectedClipsMap[range[i]])
+				{
+					ClipTileCreateFromId(range[i]);
+					$("#c" + range[i]).addClass("selected");
+					selectedClips.push(range[i]);
+					selectedClipsMap[range[i]] = true;
+				}
+			}
+
+			if (e.ctrlKey)
+				lastSelectedClipId = clipId;
+		}
+		else if (e.ctrlKey)
+		{
+			// Multi-select toggle item
+			lastSelectedClipId = clipId;
+			if (selectedClipsMap[clipId] === true)
+			{
+				var idx = selectedClips.indexOf(clipId);
+				if (idx > -1)
+					selectedClips.splice(idx, 1);
+				selectedClipsMap[clipId] = false;
+				$("#c" + clipId).removeClass("selected");
+			}
+			else
+			{
+				selectedClips.push(clipId);
+				selectedClipsMap[clipId] = true;
+				$("#c" + clipId).addClass("selected");
+			}
+		}
+		else
+		{
+			self.UnselectAllClips();
+			lastClickedClip = this;
+
+			$(this).addClass("selected");
+			cameraListLoader.LoadClipWithClipData(this.clipData);
+
+			// Multi-select start
+			lastSelectedClipId = clipId;
+			selectedClipsMap = new Object();
+			selectedClipsMap[clipId] = true;
+			selectedClips = [];
+			selectedClips.push(clipId);
+		}
 	}
 	this.UnselectAllClips = function ()
 	{
@@ -3153,6 +3367,11 @@ function ClipLoader(clipsBodySelector)
 			$(lastClickedClip).removeClass("selected");
 			lastClickedClip = null;
 		}
+		for (var i = 0; i < selectedClips.length; i++)
+			$("#c" + selectedClips[i]).removeClass("selected");
+		lastSelectedClipId = null;
+		selectedClipsMap = new Object();
+		selectedClips = [];
 	}
 	var DateTileOnAppear = function (dateTileData)
 	{
@@ -3174,12 +3393,12 @@ function ClipLoader(clipsBodySelector)
 		if (dateTileData == null)
 		{
 			currentTopDate = new Date(0);
-			$("#clipListTopDate").html($("#clipListTopDate").attr("defaultStr"));
+			$clipListTopDate.html($clipListTopDate.attr("defaultStr"));
 		}
 		else if (!isSameDay(dateTileData.date, currentTopDate))
 		{
 			currentTopDate = dateTileData.date;
-			$("#clipListTopDate").html(GetDateDisplayStr(dateTileData.date));
+			$clipListTopDate.html(GetDateDisplayStr(dateTileData.date));
 		}
 	}
 	var TileOnMove = function (obj)
@@ -3250,32 +3469,71 @@ function ClipLoader(clipsBodySelector)
 	this.GetClipBelowClip = function ($clip)
 	{
 		var clipIdx = GetClipIndexFromClipId(GetClipIdFromClip($clip));
-		if (clipIdx != -1 && clipIdx + 1 < lastLoadedClipIds.length)
-			return $("#c" + lastLoadedClipIds[clipIdx + 1]);
+		if (clipIdx != -1 && clipIdx + 1 < loadedClipIds.length)
+			return $("#c" + loadedClipIds[clipIdx + 1]);
 		return null;
 	}
 	this.GetClipAboveClip = function ($clip)
 	{
 		var clipIdx = GetClipIndexFromClipId(GetClipIdFromClip($clip));
-		if (clipIdx > 0 && clipIdx - 1 < lastLoadedClipIds.length)
-			return $("#c" + lastLoadedClipIds[clipIdx - 1]);
+		if (clipIdx > 0 && clipIdx - 1 < loadedClipIds.length)
+			return $("#c" + loadedClipIds[clipIdx - 1]);
 		return null;
 	}
 	var GetClipIndexFromClipId = function (clipId)
 	{
-		if (lastLoadedClipIds == null || lastLoadedClipIds.length == 0)
+		if (loadedClipIds == null || loadedClipIds.length == 0)
 			return -1;
-		for (var i = 0; i < lastLoadedClipIds.length; i++)
+		for (var i = 0; i < loadedClipIds.length; i++)
 		{
-			if (lastLoadedClipIds[i] == clipId)
+			if (loadedClipIds[i] == clipId)
 				return i;
 		}
 		return -1;
 	}
 	// End of Helpers
+	var ClipList_Updated = function (response)
+	{
+		if ($clipsbody.scrollTop() > 30)
+		{
+			EndNewDataFlashing();
+			$clipListTopDate.addClass("newData");
+			var ele = $clipListTopDate.get(0);
+			ele.defaultTitle = $clipListTopDate.attr("title");
+			$clipListTopDate.attr("title", "Click to see new items at top");
+			ele.flashInterval = setInterval(function ()
+			{
+				$clipListTopDate.toggleClass("newData");
+			}, 1000);
+		}
+	}
+	this.ScrollToTop = function ()
+	{
+		$clipsbody.scrollTop(0);
+	}
+	var ClipsBodyScroll = function ()
+	{
+		if ($clipsbody.scrollTop() < 30)
+			EndNewDataFlashing();
+	}
+	var EndNewDataFlashing = function ()
+	{
+		var ele = $clipListTopDate.get(0);
+		if (ele.flashInterval)
+		{
+			clearInterval(ele.flashInterval);
+			ele.flashInterval = null;
+			$clipListTopDate.removeClass("newData");
+			$clipListTopDate.attr("title", ele.defaultTitle);
+			$clipListTopDate.off('click', self.ScrollToTop);
+		}
+	}
 	// Some things must be initialized after methods are defined ...
 	lastUiSizeWasSmall = useSmallClipTileHeight();
 	var tileLoader = new ClipListDynamicTileLoader(clipsBodySelector, DateTileOnBecomeCurrent);
+	setInterval(self.UpdateClipList, 6000);
+	BI_CustomEvent.AddListener("ClipList_Updated", ClipList_Updated);
+	$clipsbody.on('scroll', ClipsBodyScroll);
 }
 ///////////////////////////////////////////////////////////////
 // Asynchronous Image Downloading /////////////////////////////
@@ -3373,6 +3631,7 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 	var callbackCurrentDateFunc = callbackCurrentDateFunc;
 	this.AppearDisappearCheckEnabled = true;
 	var nextY = 0;
+	var scrollToAtEnd = -1;
 
 	this.appearDisappearCheck = function ()
 	{
@@ -3447,6 +3706,11 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 	//}
 	this.registerOnAppearDisappear = function (obj, callbackOnAppearFunc, callbackOnDisappearFunc, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx)
 	{
+		prepareClipDataForRegistration(obj, callbackOnAppearFunc, callbackOnDisappearFunc, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx);
+		appearDisappearRegisteredObjects.push(obj);
+	}
+	var prepareClipDataForRegistration = function (obj, callbackOnAppearFunc, callbackOnDisappearFunc, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx)
+	{
 		obj.isAppeared = false;
 		obj.isDateTile = obj.isDateTile;
 		obj.y = nextY;
@@ -3455,7 +3719,6 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 		obj.callbackOnAppearFunc = callbackOnAppearFunc;
 		obj.callbackOnDisappearFunc = callbackOnDisappearFunc;
 		obj.callbackOnMoveFunc = callbackOnMoveFunc;
-		appearDisappearRegisteredObjects.push(obj);
 	}
 	this.unregisterAllOnAppearDisappear = function ()
 	{
@@ -3463,12 +3726,17 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 		appearDisappearRegisteredObjects = new Array();
 		appearedObjects = new Array();
 	}
+	this.injectNewClips = function (newClips, callbackOnAppearFunc, callbackOnDisappearFunc, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx)
+	{
+		for (var i = 0; i < newClips.length; i++)
+			prepareClipDataForRegistration(newClips[i], callbackOnAppearFunc, callbackOnDisappearFunc, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx);
+		appearDisappearRegisteredObjects = newClips.concat(appearDisappearRegisteredObjects);
+	}
 	this.resizeClipList = function (HeightOfOneClipTilePx, HeightOfOneDateTilePx)
 	{
 		nextY = 0;
 		var scrollTop = $clipsbody.scrollTop();
 		var topmostVisibleElement = null;
-		var scrollToAtEnd = -1;
 		for (var i = 0; i < appearDisappearRegisteredObjects.length; i++)
 		{
 			var obj = appearDisappearRegisteredObjects[i];
@@ -3486,7 +3754,31 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 		}
 		if (scrollToAtEnd > -1)
 			$clipsbody.scrollTop(scrollToAtEnd);
+		scrollToAtEnd = -1;
 		self.appearDisappearCheck();
+	}
+	this.preserveScrollPosition = function (HeightOfOneClipTilePx, HeightOfOneDateTilePx, numNewClipTiles)
+	{
+		// Preserves the current scroll position plus the height of a number of new clip tiles, unless the current scroll position is near 0
+		scrollToAtEnd = -1;
+		var tmpY = 0;
+		var scrollTop = $clipsbody.scrollTop();
+		if (scrollTop <= 10)
+			return;
+		var topmostVisibleElement = null;
+		for (var i = 0; i < appearDisappearRegisteredObjects.length; i++)
+		{
+			var obj = appearDisappearRegisteredObjects[i];
+			var myHeight = obj.isDateTile ? HeightOfOneDateTilePx : HeightOfOneClipTilePx;
+			if (scrollToAtEnd == -1 && obj.y + obj.h >= scrollTop)
+			{
+				var offset = (obj.y + obj.h) - scrollTop;
+				var offsetPercent = 1 - (obj.h == 0 ? 0 : (offset / obj.h));
+				scrollToAtEnd = tmpY + (myHeight * offsetPercent) + (numNewClipTiles * HeightOfOneClipTilePx);
+				return;
+			}
+			tmpY += myHeight;
+		}
 	}
 	var compare_y_with_obj = function (a, b)
 	{
@@ -4238,6 +4530,7 @@ function CameraListLoader()
 {
 	var self = this;
 	var lastResponse = null;
+	var cameraIdToCameraMap = new Object();
 	this.currentlyLoadingCamera = null;
 	this.currentlyLoadedCamera = null;
 	this.firstCameraListLoaded = false;
@@ -4262,11 +4555,11 @@ function CameraListLoader()
 				return;
 			}
 			lastResponse = response;
-			dropdownBoxes.listDefs["currentGroup"].rebuildItems(response.data);
+			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
 			var containsGroup = false;
-			for (var i = 0; i < response.data.length; i++)
+			for (var i = 0; i < lastResponse.data.length; i++)
 			{
-				if (response.data[i].group)
+				if (lastResponse.data[i].group)
 				{
 					containsGroup = true;
 					break;
@@ -4282,6 +4575,9 @@ function CameraListLoader()
 					newDataArray.push(lastResponse.data[i]);
 				lastResponse.data = newDataArray;
 			}
+			cameraIdToCameraMap = new Object();
+			for (var i = 0; i < lastResponse.data.length; i++)
+				cameraIdToCameraMap[lastResponse.data[i].optionValue] = lastResponse.data[i];
 			if (!self.firstCameraListLoaded || self.GetCameraWithId(self.currentlyLoadingCamera.optionValue) == null)
 			{
 				if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId) == null)
@@ -4362,7 +4658,7 @@ function CameraListLoader()
 			return;
 		mouseCoordFixer.fix(event);
 		var camData = self.GetCameraUnderMousePointer(event);
-		if (camData != null)
+		if (camData != null && !cameraListLoader.CameraIsCycle(camData))
 		{
 			self.ImgClick_Camera(camData);
 		}
@@ -4393,7 +4689,6 @@ function CameraListLoader()
 		else
 		{
 			// Maximize
-			// TODO: Consider making the instant image change optional
 			if (scaleIn)
 				imageRenderer.DrawCameraThumbAsFullCamera(camData.optionValue);
 			if (fadeIn)
@@ -4474,21 +4769,16 @@ function CameraListLoader()
 	}
 	this.GetCameraWithId = function (cameraId)
 	{
-		var camData = lastResponse.data;
-		for (var i = 0; i < camData.length; i++)
-		{
-			if (cameraId == camData[i].optionValue)
-				return camData[i];
-		}
-		return null;
+		return cameraIdToCameraMap[cameraId];
 	}
 	this.GetCameraName = function (cameraId)
 	{
-		var camData = lastResponse.data;
-		for (var i = 0; i < camData.length; i++)
+		var cam = cameraIdToCameraMap[cameraId];
+		if (cam)
 		{
-			if (cameraId == camData[i].optionValue)
-				return camData[i].optionDisplay;
+			if (self.CameraIsGroupOrCycle(cam))
+				return CleanUpGroupName(cam.optionDisplay);
+			return cam.optionDisplay;
 		}
 		return cameraId;
 	}
@@ -4499,23 +4789,19 @@ function CameraListLoader()
 	}
 	this.LoadClipWithClipData = function (clipData)
 	{
-		var camData = lastResponse.data;
-		for (var i = 0; i < camData.length; i++)
+		var cam = cameraIdToCameraMap[clipData.camera];
+		if (cam)
 		{
-			if (clipData.camera == camData[i].optionValue)
-			{
-				self.currentlyLoadingCamera = camData[i];
-				self.UpdateSelectedClipFields(clipData.path, clipData.msec);
-				playbackControls.SetDownloadClipLink(clipData);
-				if (clipLoader.ClipDataIndicatesFlagged(clipData))
-					$("#clipFlagButton").addClass("flagged");
-				else
-					$("#clipFlagButton").removeClass("flagged");
-				imageLoader.Playback_Play();
-				seekBar.drawSeekbarAtTime(0);
-				seekBar.resetSeekHintImg();
-				break;
-			}
+			self.currentlyLoadingCamera = cam;
+			self.UpdateSelectedClipFields(clipData.path, clipData.msec);
+			playbackControls.SetDownloadClipLink(clipData);
+			if (clipLoader.ClipDataIndicatesFlagged(clipData))
+				$("#clipFlagButton").addClass("flagged");
+			else
+				$("#clipFlagButton").removeClass("flagged");
+			imageLoader.Playback_Play();
+			seekBar.drawSeekbarAtTime(0);
+			seekBar.resetSeekHintImg();
 		}
 	}
 	this.SelectCameraGroup = function (groupId)
@@ -4563,7 +4849,10 @@ function CameraListLoader()
 		if (imageLoader.hasStarted)
 			imageLoader.GetNewImage();
 
-		clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
+		if (skipTabLoadClipLoad)
+			skipTabLoadClipLoad = false;
+		else
+			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
 	}
 	this.UpdateSelectedClipFields = function (clipPath, msec)
 	{
@@ -4607,6 +4896,10 @@ function CameraListLoader()
 	this.CameraIsGroupOrCycle = function (cameraObj)
 	{
 		return cameraObj.group || cameraObj.optionValue.startsWith("@");
+	}
+	this.CameraIsCycle = function (cameraObj)
+	{
+		return cameraObj.optionValue.startsWith("@");
 	}
 	this.CameraIsGroupOrCamera = function (cameraObj)
 	{
@@ -5530,8 +5823,9 @@ function CanvasContextMenu()
 			if (camData != null)
 			{
 				LoadDynamicManualRecordingButtonState(camData);
-				$("#contextMenuCameraName").text(CleanUpGroupName(camData.optionDisplay));
-				$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons in this menu are specific to the camera: " + camData.optionDisplay);
+				var camName = CleanUpGroupName(camData.optionDisplay);
+				$("#contextMenuCameraName").text(camName);
+				$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons below are specific to the camera: " + camName);
 				var $maximize = $("#contextMenuMaximize");
 				var isMaxAlready = (camData.optionValue == imageLoader.currentlyLoadedImage.id && homeGroupObj == null);
 				$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
@@ -5635,11 +5929,11 @@ function CanvasContextMenu()
 		{
 			alias: "cmroot_live", width: 200, items:
 			[
-				{ text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
-				, { type: "splitLine" }
-				, { text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
+				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
 				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
 				, { text: "Open HLS Stream", icon: "#svg_mio_ViewStream", iconClass: "noflip", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
@@ -7043,12 +7337,10 @@ function saveSnapshot(btnSelector)
 {
 	if (typeof btnSelector == "undefined")
 		btnSelector = "#save_snapshot_btn";
-	var camId = imageLoader.currentlyLoadingImage.id;
-	if (camId.startsWith("@") || camId.startsWith("+"))
-		camId = camId.substr(1);
+	var camName = cameraListLoader.GetCameraName(imageLoader.currentlyLoadingImage.id);
 	var date = GetDateStr(new Date(imageLoader.currentImageDateMs), true);
 	date = date.replace(/\//g, '-').replace(/:/g, '.');
-	var fileName = camId + " " + date + ".jpg";
+	var fileName = camName + " " + date + ".jpg";
 	$(btnSelector).attr("download", fileName);
 	$(btnSelector).attr("href", imageLoader.lastSnapshotUrl);
 	setTimeout(function ()
@@ -7784,7 +8076,7 @@ function logout()
 	{
 		ExecJSON({ cmd: "logout" }, function ()
 		{
-			// TODO: Implement this. SendToServerListOnStartup();
+			// TODO: Consider implementing remote server connections.  Here, we would do SendToServerListOnStartup();
 		}, function ()
 			{
 				location.href = currentServer.remoteBaseURL + 'logout.htm' + GetRemoteSessionArg("?");

@@ -33,6 +33,7 @@
 	</script>
 	<script src="ui3/libs-ui3.js?v=%%VERSION%%" type="text/javascript"></script>
 	<link href="ui3/libs-ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="ui3/libs-src/jquery.ui2modal.js?v=%%VERSION%%" type="text/javascript"></script>
 	<script src="ui3/ui3.js?v=%%VERSION%%" type="text/javascript"></script>
 	<link href="ui3/ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
 	<!--<script src="ui3/ui3-local-overrides.js?v=%%VERSION%%" type="text/javascript"></script>
@@ -238,7 +239,7 @@
 					<div class="dropdownBox" name="currentGroup"></div>
 					<div class="standardLeftBarBoxSize" id="dateRange" onclick="dateFilter.OpenDatePicker(this);"><svg class="icon calendarIcon"><use xlink:href="#svg_x5F_Calendar2"></use></svg><span id="dateRangeLabel" class="oneLine">All Recent</span></div>
 				</div>
-				<div id="clipListTopDate" class="datetile" style="position:relative;margin-bottom:0px">...</div>
+				<div id="clipListTopDate" class="datetile" style="position:relative;margin-bottom:0px" title="Click to scroll to the top" onclick="clipLoader.ScrollToTop()">...</div>
 				<!--<div style="height:4px;">Margin-bottom doesn't get counted correctly by the resize algorithm</div>-->
 			</div>
 			<div id="clipsbodyWrapper">

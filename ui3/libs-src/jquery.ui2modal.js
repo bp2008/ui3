@@ -46,6 +46,7 @@
 		self.$overlay.css("background-color", "#000000");
 		self.$overlay.css("opacity", self.settings.overlayOpacity.toString());
 		self.$overlay.css("z-index", ++zIndexAutoIncrement);
+		self.$overlay.on("contextmenu", function () { self.close(); return false; });
 		self.$overlay.click(function () { self.close(); });
 
 		self.$dialog = $(document.createElement('div'));

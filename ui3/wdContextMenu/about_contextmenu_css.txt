@@ -1,3 +1,0 @@
-IMPORTANT
-
-contextmenu.css contains relative paths to .gif files, and these relative paths are modded by UI2 so the css file can be hosted outside of this directory while leaving the .gif files inside this directory.

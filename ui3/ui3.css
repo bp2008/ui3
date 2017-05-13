@@ -1440,6 +1440,16 @@ div.icon, a.icon
 	width: 100%;
 }
 
+#clipListTopDate
+{
+	cursor: pointer;
+}
+
+#clipListTopDate.newData
+{
+	color: #00FF00;
+}
+
 .datetile
 {
 	height: 20px;
@@ -1478,6 +1488,12 @@ div.icon, a.icon
 		background-color: #2196F3;
 		color: #000000;
 	}
+
+		.cliptile.selected:hover
+		{
+			background-color: #59b3f9;
+			color: #000000;
+		}
 
 .sizeMedium .cliptile, .sizeMedium .datetile
 {
