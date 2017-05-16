@@ -28,6 +28,7 @@ var hlsPlayer = null;
 var jpegSuppressionDialog = null;
 var canvasContextMenu = null;
 var calendarContextMenu = null;
+var clipListContextMenu = null;
 var togglableContextMenus = null;
 var cameraConfig = null;
 var imageLoader = null;
@@ -455,6 +456,8 @@ $(function ()
 	canvasContextMenu = new CanvasContextMenu();
 
 	calendarContextMenu = new CalendarContextMenu();
+
+	clipListContextMenu = new ClipListContextMenu();
 
 	cameraConfig = new CameraConfig();
 
@@ -2272,19 +2275,13 @@ function PlaybackControls()
 	}
 	this.SetDownloadClipLink = function (clipData)
 	{
+		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 		var $btn = $("#clipDownloadButton");
-		$btn.attr("href", currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetRemoteSessionArg("?"));
-		var extensionIdx = clipData.path.indexOf(".");
-		if (extensionIdx == -1)
-			$btn.removeAttr("download");
+		$btn.attr("href", clipInfo.href);
+		if (clipInfo.download)
+			$btn.attr("download", clipInfo.download);
 		else
-		{
-			var date = GetDateStr(clipData.date);
-			date = date.replace(/\//g, '-').replace(/:/g, '.');
-			var fileName = cameraListLoader.GetCameraName(clipData.camera) + " " + date + clipData.path.substr(extensionIdx);
-
-			$btn.attr("download", fileName);
-		}
+			$btn.removeAttr("download");
 	}
 	this.GetDownloadClipLink = function ()
 	{
@@ -2825,7 +2822,7 @@ function ClipLoader(clipsBodySelector)
 	var clipListCache = new Object();
 	var clipListIdCache = new Object();
 	var loadedClipIds = new Array();
-	var lastClickedClip = null;
+	var lastOpenedClipEle = null;
 	var isLoadingAClipList = false;
 	var QueuedClipListLoad = null;
 	var failedClipListLoads = 0;
@@ -2888,10 +2885,14 @@ function ClipLoader(clipsBodySelector)
 			}
 
 			tileLoader.AppearDisappearCheckEnabled = false;
-			lastClickedClip = null;
+			self.UnselectAllClips(true);
 			TotalUniqueClipsLoaded = 0;
 			TotalDateTilesLoaded = 0;
 			loadedClipIds = new Array();
+
+			newestClipDate = 0;
+			clipListCache = new Object();
+			clipListIdCache = new Object();
 
 			$clipsbody.empty();
 			$clipListTopDate.html("...");
@@ -2931,15 +2932,9 @@ function ClipLoader(clipsBodySelector)
 			var clipTileHeight = getClipTileHeight();
 			if (typeof (response.data) != "undefined")
 			{
-				if (!isUpdateOfExistingList)
-				{
-					newestClipDate = 0;
-					clipListCache = new Object();
-					clipListIdCache = new Object();
-				}
 				var newUpdateClipIds = [];
 				var newUpdateClips = [];
-					var previousClipDate = new Date(0);
+				var previousClipDate = new Date(0);
 				for (var clipIdx = 0; clipIdx < response.data.length; clipIdx++)
 				{
 					// clip.camera : "shortname"
@@ -3155,6 +3150,29 @@ function ClipLoader(clipsBodySelector)
 			between.push(loadedClipIds[i]);
 		return between;
 	}
+	this.GetDownloadClipInfo = function (clipData)
+	{
+		var retVal = {};
+		retVal.href = currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetRemoteSessionArg("?");
+		var extensionIdx = clipData.path.indexOf(".");
+		if (extensionIdx == -1)
+			retVal.download = null;
+		else
+		{
+			var date = GetDateStr(clipData.date);
+			date = date.replace(/\//g, '-').replace(/:/g, '.');
+			retVal.download = cameraListLoader.GetCameraName(clipData.camera) + " " + date + clipData.path.substr(extensionIdx);
+		}
+		return retVal;
+	}
+	this.IsClipSelected = function (clipId)
+	{
+		return selectedClipsMap[clipId] ? true : false;
+	}
+	this.GetAllSelected = function ()
+	{
+		return selectedClips;
+	}
 	var CleanUpFileSize = function (fileSize)
 	{
 		var indexSpace = fileSize.indexOf(" ");
@@ -3287,10 +3305,9 @@ function ClipLoader(clipsBodySelector)
 
 			$clip = $("#c" + clipData.clipId);
 			$clip.click(ClipClicked);
-			//$clip.hover(ClipTileHoverOver, ClipTileHoverOut);
 			var clipEle = $clip.get(0).clipData = clipData;
 
-			//TODO: registerClipListContextMenu($clip);
+			clipListContextMenu.AttachContextMenu($clip);
 
 			if (self.ClipDataIndicatesFlagged(clipData))
 				self.ShowClipFlag(clipData);
@@ -3346,9 +3363,10 @@ function ClipLoader(clipsBodySelector)
 		}
 		else
 		{
-			self.UnselectAllClips();
-			lastClickedClip = this;
+			self.UnselectAllClips(true);
+			lastOpenedClipEle = this;
 
+			$(this).addClass("opened");
 			$(this).addClass("selected");
 			cameraListLoader.LoadClipWithClipData(this.clipData);
 
@@ -3360,12 +3378,21 @@ function ClipLoader(clipsBodySelector)
 			selectedClips.push(clipId);
 		}
 	}
-	this.UnselectAllClips = function ()
+	this.SelectClipIdNoOpen = function (clipId)
 	{
-		if (lastClickedClip)
+		if (selectedClipsMap[clipId] !== true)
 		{
-			$(lastClickedClip).removeClass("selected");
-			lastClickedClip = null;
+			selectedClips.push(clipId);
+			selectedClipsMap[clipId] = true;
+			$("#c" + clipId).addClass("selected");
+		}
+	}
+	this.UnselectAllClips = function (alsoRemoveOpenedStatus)
+	{
+		if (alsoRemoveOpenedStatus && lastOpenedClipEle)
+		{
+			$(lastOpenedClipEle).removeClass("opened");
+			lastOpenedClipEle = null;
 		}
 		for (var i = 0; i < selectedClips.length; i++)
 			$("#c" + selectedClips[i]).removeClass("selected");
@@ -3410,10 +3437,10 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.FlagCurrentClip = function ()
 	{
-		if (lastClickedClip == null)
+		if (lastOpenedClipEle == null)
 			return;
 		// Find current flag state
-		var clipData = lastClickedClip.clipData;
+		var clipData = lastOpenedClipEle.clipData;
 		var camIsFlagged = (clipData.flags & 2) > 0;
 		var newFlags = camIsFlagged ? clipData.flags ^ 2 : clipData.flags | 2;
 		UpdateClipFlags(clipData.path.replace(/\..*/g, ""), newFlags, function ()
@@ -3428,7 +3455,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.HideClipFlag = function (clipData)
 	{
-		if (lastClickedClip.clipData == clipData)
+		if (lastOpenedClipEle.clipData == clipData)
 			$("#clipFlagButton").removeClass("flagged");
 		var $clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
@@ -3439,7 +3466,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ShowClipFlag = function (clipData)
 	{
-		if (lastClickedClip != null && lastClickedClip.clipData == clipData)
+		if (lastOpenedClipEle != null && lastOpenedClipEle.clipData == clipData)
 			$("#clipFlagButton").addClass("flagged");
 		var $clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
@@ -3450,9 +3477,24 @@ function ClipLoader(clipsBodySelector)
 	{
 		return (clipData.flags & 2) > 0;
 	}
+	this.Multi_Flag = function(allSelectedClipIDs)
+	{
+		// Implement, using a persistent toast message to display status.
+		//for (var i = 0; i < allSelectedClipIDs.length; i++)
+		//{
+		//	var clipData = self.GetClipFromId(allSelectedClipIDs[i]);
+		//	if (clipData)
+		//	{
+		//	}
+		//}
+	}
+	this.Multi_Delete = function (allSelectedClipIDs)
+	{
+		// Implement, using same pattern as Multi_Flag
+	}
 	this.GetCurrentClipEle = function ()
 	{
-		return lastClickedClip;
+		return lastOpenedClipEle;
 	}
 	// Next / Previous Clip Helpers
 	var GetClipIdFromClip = function ($clip)
@@ -5191,18 +5233,24 @@ function ImageLoader()
 	this.Playback_NextClip = function ()
 	{
 		var clip = clipLoader.GetCurrentClipEle();
-		if (clip == null)
+		if (clip == null || clipLoader.GetAllSelected().length > 1)
 			return;
-		var $clip = clipLoader.GetClipAboveClip($(clip));
-		Playback_ClipObj($clip);
+		if (clipLoader.IsClipSelected(clip.id.substr(1)) || clipLoader.GetAllSelected().length == 0)
+		{
+			var $clip = clipLoader.GetClipAboveClip($(clip));
+			Playback_ClipObj($clip);
+		}
 	}
 	this.Playback_PreviousClip = function ()
 	{
 		var clip = clipLoader.GetCurrentClipEle();
-		if (clip == null)
+		if (clip == null || clipLoader.GetAllSelected().length > 1)
 			return;
-		var $clip = clipLoader.GetClipBelowClip($(clip));
-		Playback_ClipObj($clip);
+		if (clipLoader.IsClipSelected(clip.id.substr(1)) || clipLoader.GetAllSelected().length == 0)
+		{
+			var $clip = clipLoader.GetClipBelowClip($(clip));
+			Playback_ClipObj($clip);
+		}
 	}
 	var Playback_ClipObj = function ($clip)
 	{
@@ -6094,6 +6142,113 @@ function CalendarContextMenu()
 			, clickType: "right"
 		};
 	$("#dateRange").contextmenu(menuOptions);
+}
+///////////////////////////////////////////////////////////////
+// Clip list Context Menu /////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipListContextMenu()
+{
+	var self = this;
+	var allSelectedClipIDs = [];
+
+	var onShowMenu = function (menu)
+	{
+		var itemsToEnable = ["flag", "download", "delete"];
+		var itemsToDisable = [];
+		if (clipLoader.GetAllSelected().length > 1)
+			itemsToDisable.push("properties");
+		else
+			itemsToEnable.push("properties");
+		menu.applyrule({ name: "disable_items", disable: true, items: itemsToDisable });
+		menu.applyrule({ name: "enable_items", disable: false, items: itemsToEnable });
+
+	}
+	var onTriggerContextMenu = function (e)
+	{
+		var downloadClipButton = $("#cm_cliplist_download").parents(".b-m-item");
+		if (downloadClipButton.parent().attr("id") != "cmroot_cliplist_downloadcliplink")
+			downloadClipButton.wrap('<a id="cmroot_cliplist_downloadcliplink" style="display:block" href="javascript:void(0)" target="_blank"></a>');
+		var $dl_link = $("#cmroot_cliplist_downloadcliplink");
+
+		var clipId = e.currentTarget.id.substr(1);
+		if (!clipLoader.IsClipSelected(clipId))
+		{
+			clipLoader.UnselectAllClips();
+			clipLoader.SelectClipIdNoOpen(clipId);
+		}
+
+		allSelectedClipIDs = clipLoader.GetAllSelected();
+		if (allSelectedClipIDs.length == 1)
+		{
+			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[0]);
+
+			$("#cm_cliplist_flag").text("Flag");
+			if (clipData.fileSize)
+				$("#cm_cliplist_download").text("Download (" + htmlEncode(clipData.fileSize) + ")");
+			else
+				$("#cm_cliplist_download").text("Download");
+			$("#cm_cliplist_delete").text("Delete");
+
+			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
+			$dl_link.attr("href", clipInfo.href);
+			if (clipInfo.download)
+				$dl_link.attr("download", clipInfo.download);
+			else
+				$dl_link.removeAttr("download");
+		}
+		else if (allSelectedClipIDs.length > 1)
+		{
+			var label = " " + allSelectedClipIDs.length + " " + (currentPrimaryTab == "clips" ? "clips" : "alerts");
+			$("#cm_cliplist_flag").text("Flag" + label);
+			$("#cm_cliplist_download").text("Download" + label);
+			$("#cm_cliplist_delete").text("Delete" + label);
+			$dl_link.attr("href", "javascript:void(0)");
+			$dl_link.removeAttr("download");
+		}
+		return true;
+	}
+	var onContextMenuAction = function ()
+	{
+		switch (this.data.alias)
+		{
+			case "flag":
+				clipLoader.Multi_Flag(allSelectedClipIDs);
+				break;
+			case "download":
+				if (allSelectedClipIDs.length == 1)
+					return true;
+				else
+					clipDownloadDialog.open(allSelectedClipIDs);
+			case "delete":
+				clipLoader.Multi_Delete(allSelectedClipIDs);
+				break;
+			case "properties":
+				toaster.Error(this.data.alias + " is not implemented!");
+				break;
+			default:
+				toaster.Error(this.data.alias + " is not implemented!");
+				break;
+		}
+	}
+	var menuOptions =
+		{
+			alias: "cmroot_cliplist", width: 200, items:
+			[
+				{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
+
+			]
+			, clickType: "right"
+			, onContextMenu: onTriggerContextMenu
+			, onShow: onShowMenu
+		};
+	this.AttachContextMenu = function ($ele)
+	{
+		$ele.contextmenu(menuOptions);
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Generic Enable/Disable Item Context Menu ///////////////////
