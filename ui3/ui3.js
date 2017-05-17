@@ -15,6 +15,8 @@ var systemLog = null;
 var systemConfig = null;
 var cameraProperties = null;
 var cameraListDialog = null;
+var clipProperties = null;
+var clipDownloadDialog = null;
 var statusBars = null;
 var dropdownBoxes = null;
 var imageQualityHelper = null;
@@ -73,44 +75,32 @@ var togglableUIFeatures =
 		]
 	];
 
-// TODO: Context menu for Clip List Items (Requires clip multi-select feature, and ability to delete or flag multiple clips with one API call!)
-// -- TODO: Flag/unflag
-// -- TODO: Download
-// -- TODO: Delete
-// -- TODO: Clip properties
-// -- Flagging or deleting more than 1 clip at once requires confirmation.  Deleting always requires confirmation.  Deleting one clip shows a copy of the clip tile in the confirmation dialog, as in UI2.
 // TODO: Fullscreen mode for clips and live view using a placeholder button in lower right.  Fullscreen mode should allocate all available space to the video, hiding unnecessary UI elements.  It should also request that the browser enters full-screen mode.
 // TODO: Clip title appears at top of clip player when mouse draws near.
-// TODO: Close button appears at top right of clip player when mouse draws near.
+// TODO: Close button (see TODO far below in script) and alternative fullscreen button appears at top right of clip player when mouse draws near.  Perhaps on the upper left, too?
+
+// TODO: Implement PTZ hotkeys.
+// TODO: Implement clip navigation hotkeys.
+
+// TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
+
+// TODO: Enable the local_overrides file callouts
 
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
 // -- MAYBE Including an option to update the clip list automatically (on by default) ... to reduce bandwidth usage ??
 
-// TODO: Automatic clip list refresh.
-// -- Automatic clip list updates will only work if the date filter is cleared, but they will work automatically and without user-interaction.
-// -- Consider making the automatic clip list update only request clips starting with the date of the most recent clip already found, and add new items to the top of the list.  This will almost certainly break layout, but hopefully the UI sizing code I already wrote can be leveraged to re-do the layout efficiently.
-// -- Before automatically loading a new clip list, the current clip should be remembered, as well as its position onscreen, and if possible the clip list scroll/selection state should be restored upon loading the new list.
-// -- Automatic clip list updates should only happen if there has been no user input to the clip list within the last N seconds, to minimize the chance of disruption.
-// -- Auto-scroll to top if the clip list was previously scrolled to top, even if clips are selected.
-
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
-// TODO: Implement PTZ hotkeys.
-// TODO: Implement clip navigation hotkeys.
-// TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
-// TODO: Use the fileSize string as a size label for "download clip" context menu items.
-
-// TODO: Enable the local_overrides file callouts
-
-// CONSIDER: Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
-// CONSIDER: "Your profile has changed" messages could include the previous and new profile names and numbers.
-// CONSIDER: Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
-// CONSIDER: Multiple-server support, like in UI2
+// CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
+// CONSIDER: (+1 Should be pretty easy) "Your profile has changed" messages could include the previous and new profile names and numbers.
+// CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
+// CONSIDER: (-1 Most people would not use it, and forces backwards compatibility) Multiple-server support, like in UI2
 // TODO: Adjust frame rate status bar maximum based on currently active camera or group (defaulting to 10 FPS if none is available)
-// CONSIDER: Artificially limit the jpeg refresh rate if Blue Iris reports the camera has a lower frame rate than we are actually streaming.  This would reduce wasted bandwidth.
-// CONSIDER: Timeline control.  Simplified format at first.  Maybe show the current day, the last 24 hours, or the currently loaded time range.  Selecting a time will scroll the clip list (and begin playback of the most appropriate clip?)
+// CONSIDER: (-1 Likely not useful except on LAN, where bandwidth is abundant) Artificially limit the jpeg refresh rate if Blue Iris reports the camera has a lower frame rate than we are actually streaming.  This would reduce wasted bandwidth.
+// CONSIDER: (-1 Added complexity and space usage, not necessarily useful without multi-clip simultaneous playback) Timeline control.  Simplified format at first.  Maybe show the current day, the last 24 hours, or the currently loaded time range.  Selecting a time will scroll the clip list (and begin playback of the most appropriate clip?)
 // CONSIDER: Double-click in the clip player could perform some action, like play/pause or fullscreen mode.
+// CONSIDER: Single-click in the clip player could clear the current clip selection state, select the active clip, and scroll to it.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -421,6 +411,10 @@ $(function ()
 	cameraProperties = new CameraProperties();
 
 	cameraListDialog = new CameraListDialog();
+
+	clipProperties = new ClipProperties();
+
+	clipDownloadDialog = new ClipDownloadDialog();
 
 	statusBars = new StatusBars();
 	statusBars.setLabel("volume", '<svg class="volumeButton icon"><use xlink:href="#svg_x5F_Volume"></use></svg>');
@@ -2283,14 +2277,6 @@ function PlaybackControls()
 		else
 			$btn.removeAttr("download");
 	}
-	this.GetDownloadClipLink = function ()
-	{
-		return $("#clipDownloadButton").attr("href");
-	}
-	this.GetDownloadClipFileName = function ()
-	{
-		return $("#clipDownloadButton").attr("download");
-	}
 	$layoutbody.on("mouseleave", function (e)
 	{
 		mouseCoordFixer.fix(e);
@@ -2843,6 +2829,8 @@ function ClipLoader(clipsBodySelector)
 	var selectedClipsMap = new Object();
 	var lastSelectedClipId = null;
 
+	var bulkOperationInProgress = false;
+
 	this.LoadClips = function (listName)
 	{
 		if (cameraListLoader.currentlyLoadingCamera)
@@ -2885,6 +2873,8 @@ function ClipLoader(clipsBodySelector)
 			}
 
 			tileLoader.AppearDisappearCheckEnabled = false;
+
+			self.CloseCurrentClip();
 			self.UnselectAllClips(true);
 			TotalUniqueClipsLoaded = 0;
 			TotalDateTilesLoaded = 0;
@@ -2921,6 +2911,8 @@ function ClipLoader(clipsBodySelector)
 			args.enddate = myDateEnd;
 		}
 
+		var isClipList = listName == "cliplist";
+
 		ExecJSON(args, function (response)
 		{
 			if (response.result != "success")
@@ -2951,6 +2943,8 @@ function ClipLoader(clipsBodySelector)
 					if (newestClipDate < clip.date)
 						newestClipDate = clip.date;
 					var clipData = new Object();
+					clipData.rawData = clip;
+					clipData.isClip = isClipList;
 					clipData.roughLength = CleanUpFileSize(clip.filesize);
 					clipData.isSnapshot = clipData.roughLength == "Snapshot";
 					clipData.camera = clip.camera;
@@ -2982,7 +2976,6 @@ function ClipLoader(clipsBodySelector)
 					}
 					previousClipDate = clipData.date;
 
-					clipListIdCache[clipData.clipId] = clipData;
 					if (!clipListCache[clip.camera])
 						clipListCache[clip.camera] = new Object();
 					var existingClipData = clipListCache[clip.camera][clip.path];
@@ -3004,6 +2997,7 @@ function ClipLoader(clipsBodySelector)
 						}
 						TotalUniqueClipsLoaded++;
 						clipListCache[clip.camera][clip.path] = clipData;
+						clipListIdCache[clipData.clipId] = clipData;
 					}
 
 				}
@@ -3020,6 +3014,7 @@ function ClipLoader(clipsBodySelector)
 				{
 					// TODO: If a clip is playing, make it get selected now in the list, but do not interfere with the playback state.
 					// Probably scroll to the clip in the list, too.
+					// Do not do this during automated clip list updates.
 				}
 
 				if (QueuedClipListLoad != null)
@@ -3251,6 +3246,11 @@ function ClipLoader(clipsBodySelector)
 		{
 			oldClipData.msec = newClipData.msec;
 		}
+		if (oldClipData.flags != newClipData.flags)
+		{
+			oldClipData.flags = newClipData.flags;
+			self.RepairClipFlagState(oldClipData);
+		}
 	}
 	var ThumbOnAppear = function (ele)
 	{
@@ -3387,6 +3387,20 @@ function ClipLoader(clipsBodySelector)
 			$("#c" + clipId).addClass("selected");
 		}
 	}
+	this.CloseCurrentClip = function ()
+	{
+		if (lastOpenedClipEle)
+		{
+			if (selectedClips.length == 1 && selectedClipsMap[lastOpenedClipEle.id.substr(1)])
+				self.UnselectAllClips(true);
+			else
+			{
+				$(lastOpenedClipEle).removeClass("opened");
+				lastOpenedClipEle = null;
+			}
+		}
+		imageLoader.goLive();
+	}
 	this.UnselectAllClips = function (alsoRemoveOpenedStatus)
 	{
 		if (alsoRemoveOpenedStatus && lastOpenedClipEle)
@@ -3441,6 +3455,10 @@ function ClipLoader(clipsBodySelector)
 			return;
 		// Find current flag state
 		var clipData = lastOpenedClipEle.clipData;
+		self.ToggleClipFlag(clipData);
+	}
+	this.ToggleClipFlag = function (clipData, onSuccess, onFailure)
+	{
 		var camIsFlagged = (clipData.flags & 2) > 0;
 		var newFlags = camIsFlagged ? clipData.flags ^ 2 : clipData.flags | 2;
 		UpdateClipFlags(clipData.path.replace(/\..*/g, ""), newFlags, function ()
@@ -3451,11 +3469,17 @@ function ClipLoader(clipsBodySelector)
 				self.HideClipFlag(clipData);
 			else
 				self.ShowClipFlag(clipData);
-		});
+			if (onSuccess)
+				onSuccess(clipData);
+		}, function ()
+			{
+				if (onFailure)
+					onFailure(clipData);
+			});
 	}
 	this.HideClipFlag = function (clipData)
 	{
-		if (lastOpenedClipEle.clipData == clipData)
+		if (lastOpenedClipEle && lastOpenedClipEle.clipData == clipData)
 			$("#clipFlagButton").removeClass("flagged");
 		var $clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
@@ -3466,31 +3490,131 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ShowClipFlag = function (clipData)
 	{
-		if (lastOpenedClipEle != null && lastOpenedClipEle.clipData == clipData)
+		if (lastOpenedClipEle && lastOpenedClipEle.clipData == clipData)
 			$("#clipFlagButton").addClass("flagged");
 		var $clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
 			return;
-		$clip.append('<div class="clipFlagWrapper"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>');
+		var $flag = $clip.find(".clipFlagWrapper");
+		if ($flag.length == 0)
+			$clip.append('<div class="clipFlagWrapper"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>');
+	}
+	this.RepairClipFlagState = function (clipData)
+	{
+		if (self.ClipDataIndicatesFlagged(clipData))
+			self.ShowClipFlag(clipData);
+		else
+			self.HideClipFlag(clipData);
 	}
 	this.ClipDataIndicatesFlagged = function (clipData)
 	{
 		return (clipData.flags & 2) > 0;
 	}
-	this.Multi_Flag = function(allSelectedClipIDs)
+	this.Multi_Flag = function (allSelectedClipIDs, flagEnable, idx, myToast)
 	{
-		// Implement, using a persistent toast message to display status.
-		//for (var i = 0; i < allSelectedClipIDs.length; i++)
-		//{
-		//	var clipData = self.GetClipFromId(allSelectedClipIDs[i]);
-		//	if (clipData)
-		//	{
-		//	}
-		//}
+		Multi_Operation("flag", allSelectedClipIDs, { flagEnable: flagEnable }, 0, null);
 	}
 	this.Multi_Delete = function (allSelectedClipIDs)
 	{
-		// Implement, using same pattern as Multi_Flag
+		Multi_Operation("delete", allSelectedClipIDs, null, 0, null);
+	}
+	var Multi_Operation = function (operation, allSelectedClipIDs, args, idx, myToast)
+	{
+		if (!idx)
+			idx = 0;
+
+		if (idx == 0 && bulkOperationInProgress)
+		{
+			toaster.Warning("Another bulk operation is in progress.  Please wait for it to finish before starting another.", 10000);
+			return;
+		}
+
+		if (idx >= allSelectedClipIDs.length)
+		{
+			Multi_Operation_Stop(operation, myToast, false);
+			return;
+		}
+
+		bulkOperationInProgress = true;
+
+		if (myToast)
+		{
+			var $root = $("#multi_" + operation + "_status_toast");
+			if ($root.length > 0)
+			{
+				var $count = $root.find(".multi_operation_count");
+				$count.text(idx + 1);
+				var $wrap = $root.find(".multi_operation_status_wrapper");
+				var $bar = $wrap.find(".multi_operation_status_bar");
+				var progressPercent = idx / allSelectedClipIDs.length;
+				$bar.css("width", (progressPercent * 100) + "%");
+			}
+		}
+		else
+		{
+			myToast = toaster.Info('<div id="multi_' + operation + '_status_toast" class="multi_operation_status_toast">'
+				+ '<div>' + (operation == "flag" ? "Flagging" : "Deleting") + ' ' + (currentPrimaryTab == "clips" ? "clip" : "alert") + ' <span class="multi_operation_count">' + (idx + 1) + '</span> / ' + allSelectedClipIDs.length + '</div>'
+				+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
+				+ '</div>', 60000, true);
+		}
+
+		var clipData = self.GetClipFromId(allSelectedClipIDs[idx]);
+		if (clipData)
+		{
+			if (operation == "flag")
+			{
+				var isFlagged = self.ClipDataIndicatesFlagged(clipData);
+				if ((isFlagged && !args.flagEnable) || (!isFlagged && args.flagEnable))
+				{
+					self.ToggleClipFlag(clipData, function ()
+					{
+						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast);
+					}, function ()
+						{
+							Multi_Operation_Stop(operation, myToast, true);
+						});
+					return;
+				}
+			}
+			else if (operation == "delete")
+			{
+				DeleteAlert(clipData.path, clipData.isClip, function ()
+				{
+					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast);
+				},
+					function ()
+					{
+						Multi_Operation_Stop(operation, myToast, true);
+					});
+				return;
+			}
+		}
+		else
+		{
+			Multi_Operation_Stop(operation, myToast, true);
+			return;
+		}
+		setTimeout(function ()
+		{
+			Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast);
+		}, 0);
+	}
+	var Multi_Operation_Stop = function (operation, myToast, endedEarly)
+	{
+		bulkOperationInProgress = false;
+		if (myToast)
+			myToast.remove();
+		if (endedEarly)
+		{
+			toaster.Error("Bulk " + operation + " operation failed without completing.", 15000);
+		}
+		else
+		{
+			if (operation == "delete")
+			{
+				self.LoadClips();
+			}
+		}
 	}
 	this.GetCurrentClipEle = function ()
 	{
@@ -6031,6 +6155,13 @@ function CanvasContextMenu()
 	}
 	var onTriggerRecordContextMenu = function (e)
 	{
+		if (imageLoader.currentlyLoadingImage.isLive)
+			return false;
+
+		lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(imageLoader.currentlyLoadingImage.id, imageLoader.currentlyLoadingImage.path);
+		var clipData = clipLoader.GetClipFromId(lastRecordContextMenuSelectedClip.clipId);
+		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
+
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").parents(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
 			downloadButton.parent().attr("href", imageLoader.lastSnapshotUrl);
@@ -6040,35 +6171,28 @@ function CanvasContextMenu()
 				+ '" onclick="saveSnapshot(&quot;#cmroot_recordview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_recordview_downloadlink").attr("download", "temp.jpg");
 
-		var downloadClipButton = $("#cmroot_recordview_downloadclipbutton_findme").parents(".b-m-item");
-		if (downloadClipButton.parent().attr("id") == "cmroot_recordview_downloadcliplink")
-			downloadClipButton.parent().attr("href", playbackControls.GetDownloadClipLink());
+		var $dlBtnLabel = $("#cmroot_recordview_downloadclipbutton");
+		var $dlBtn = $dlBtnLabel.parents(".b-m-item");
+		if (clipData.fileSize)
+			$dlBtnLabel.text("Download clip (" + htmlEncode(clipData.fileSize) + ")");
 		else
-			downloadClipButton.wrap('<a id="cmroot_recordview_downloadcliplink" style="display:block" href="'
-				+ playbackControls.GetDownloadClipLink()
-				+ '" target="_blank"></a>');
-		$("#cmroot_recordview_downloadcliplink").attr("download", playbackControls.GetDownloadClipFileName());
+			$dlBtnLabel.text("Download clip");
+		if ($dlBtn.parent().attr("id") != "cmroot_recordview_downloadcliplink")
+			$dlBtn.wrap('<a id="cmroot_recordview_downloadcliplink" style="display:block" href="" target="_blank"></a>');
+		$dlBtn.parent().attr("href", clipInfo.href).attr("download", clipInfo.download);
+		$("#contextMenuClipName").text(clipInfo.download);
 
-		if (!imageLoader.currentlyLoadingImage.isLive)
-		{
-			imageRenderer.CamImgClickStateReset();
-			lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(imageLoader.currentlyLoadingImage.id, imageLoader.currentlyLoadingImage.path);
-			if (lastRecordContextMenuSelectedClip != null)
-			{
-				//console.log(lastRecordContextMenuSelectedClip);
-				// TODO: use this clip information to load the properties.
-			}
-			$("#contextMenuClipName").text(playbackControls.GetDownloadClipFileName());
-			return true;
-		}
-		return false;
+		imageRenderer.CamImgClickStateReset();
+		return true;
 	}
 	var onRecordContextMenuAction = function ()
 	{
 		switch (this.data.alias)
 		{
-			//case "properties":
-			//	break;
+			case "properties":
+				if (lastRecordContextMenuSelectedClip != null)
+					clipProperties.open(lastRecordContextMenuSelectedClip.clipId);
+				break;
 			case "opennewtab":
 				imageLoader.Playback_Pause();
 				window.open(imageLoader.lastSnapshotFullUrl);
@@ -6078,7 +6202,7 @@ function CanvasContextMenu()
 			case "downloadclip":
 				return true;
 			case "closeclip":
-				imageLoader.goLive();
+				clipLoader.CloseCurrentClip(); // TODO: Use this method for the clip close button
 				return;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
@@ -6091,7 +6215,7 @@ function CanvasContextMenu()
 			[
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
-				, { text: '<div id="cmroot_recordview_downloadclipbutton_findme" style="display: none"></div>Download clip', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
+				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
 				, { type: "splitLine" }
@@ -6150,6 +6274,7 @@ function ClipListContextMenu()
 {
 	var self = this;
 	var allSelectedClipIDs = [];
+	var flagEnable = false;
 
 	var onShowMenu = function (menu)
 	{
@@ -6178,11 +6303,23 @@ function ClipListContextMenu()
 		}
 
 		allSelectedClipIDs = clipLoader.GetAllSelected();
+
+		flagEnable = false; // Turn all off, but if one is already off, then turn all on.
+		for (var i = 0; i < allSelectedClipIDs.length; i++)
+		{
+			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
+			if (clipData && !clipLoader.ClipDataIndicatesFlagged(clipData))
+			{
+				flagEnable = true;
+				break;
+			}
+		}
+
 		if (allSelectedClipIDs.length == 1)
 		{
 			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[0]);
 
-			$("#cm_cliplist_flag").text("Flag");
+			$("#cm_cliplist_flag").text(flagEnable ? "Flag" : "Unflag");
 			if (clipData.fileSize)
 				$("#cm_cliplist_download").text("Download (" + htmlEncode(clipData.fileSize) + ")");
 			else
@@ -6199,7 +6336,7 @@ function ClipListContextMenu()
 		else if (allSelectedClipIDs.length > 1)
 		{
 			var label = " " + allSelectedClipIDs.length + " " + (currentPrimaryTab == "clips" ? "clips" : "alerts");
-			$("#cm_cliplist_flag").text("Flag" + label);
+			$("#cm_cliplist_flag").text((flagEnable ? "Flag" : "Unflag") + label);
 			$("#cm_cliplist_download").text("Download" + label);
 			$("#cm_cliplist_delete").text("Delete" + label);
 			$dl_link.attr("href", "javascript:void(0)");
@@ -6212,18 +6349,41 @@ function ClipListContextMenu()
 		switch (this.data.alias)
 		{
 			case "flag":
-				clipLoader.Multi_Flag(allSelectedClipIDs);
+				if (!sessionManager.IsAdministratorSession())
+				{
+					openLoginDialog();
+					return;
+				}
+				if (allSelectedClipIDs.length <= 12)
+					clipLoader.Multi_Flag(allSelectedClipIDs, flagEnable);
+				else
+					AskYesNo("Confirm " + (flagEnable ? "flag" : "unflag") + " of " + allSelectedClipIDs.length + " " + (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s") + "?", function ()
+					{
+						clipLoader.Multi_Flag(allSelectedClipIDs, flagEnable);
+					});
 				break;
 			case "download":
 				if (allSelectedClipIDs.length == 1)
 					return true;
 				else
 					clipDownloadDialog.open(allSelectedClipIDs);
+				break;
 			case "delete":
-				clipLoader.Multi_Delete(allSelectedClipIDs);
+				if (!sessionManager.IsAdministratorSession())
+				{
+					openLoginDialog();
+					return;
+				}
+				AskYesNo("Confirm deletion of " + allSelectedClipIDs.length + " " + (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s") + "?", function ()
+				{
+					clipLoader.Multi_Delete(allSelectedClipIDs);
+				});
 				break;
 			case "properties":
-				toaster.Error(this.data.alias + " is not implemented!");
+				if (allSelectedClipIDs.length >= 1)
+					clipProperties.open(allSelectedClipIDs[0]);
+				else
+					toaster.Warning("No " + (currentPrimaryTab == "clips" ? "clip" : "alert") + " is selected.");
 				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
@@ -6975,24 +7135,183 @@ function CameraProperties()
 	}
 	this.OpenRaw = function (camId)
 	{
-		var camName = cameraListLoader.GetCameraName(camId);
 		cameraConfig.get(camId, function (response)
 		{
-			modal_cameraPropDialog = $('<div id="campropdialog"><div class="campropheader">'
-				+ '<div>' + htmlEncode(camName)
-				+ ' Raw Properties</div>'
-				+ '</div>'
-				+ '<div class="selectable" style="word-wrap: break-word; border:1px solid #000000; background-color: #FFFFFF; color: #000000; margin: 10px; padding: 10px;">'
-				+ JSON.stringify(response)
-				+ '</div>'
-				+ '</div>'
-			).modal({ removeElementOnClose: true, maxWidth: 600, maxHeight: 500 });
+			var cam = cameraListLoader.GetCameraWithId(camId);
+			objectVisualizer.open({ data: cam, config: response.data }, cam.optionDisplay + " Properties (Raw)");
 		}, function ()
 			{
-				toaster.Warning("Unable to load camera properties for " + camName);
+				toaster.Warning("Unable to load camera properties for " + camId);
 			});
 	}
 }
+///////////////////////////////////////////////////////////////
+// Clip Properties Dialog /////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipProperties()
+{
+	var self = this;
+	this.open = function (clipId)
+	{
+		var clipData = clipLoader.GetClipFromId(clipId);
+
+		var camName = cameraListLoader.GetCameraName(clipData.camera);
+
+		$('<div id="campropdialog">'
+			+ '<div class="campropheader">'
+			+ '<div class="camproptitle">' + htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties</div>'
+			+ '</div>'
+			+ '<div id="campropcontent"></div>'
+			+ '</div>'
+		).modal({ removeElementOnClose: true, maxWidth: 500, maxHeight: 510 });
+
+		var $camprop = $("#campropcontent");
+
+		try
+		{
+			var $thumb = $('<img class="clipPropertiesThumb" src="" alt="clip thumbnail"></img>');
+			var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetRemoteSessionArg("?");
+			$thumb.attr('src', thumbPath);
+			$thumb.css("border-color", "#" + clipData.colorHex);
+			$camprop.append($thumb);
+
+			//$camprop.append(GetInfo("Path", clipData.path));
+			$camprop.append(GetInfo("Date", GetDateStr(clipData.date)));
+			if (clipData.isClip)
+				$camprop.append(GetInfo("Real Time", clipData.roughLength).attr("title", "Real Time: Length of real time this clip covers.\nMay be significantly longer than Play Time if created from multiple alerts."));
+			$camprop.append(GetInfo("Play Time", msToTime(clipData.msec)));
+			if (clipData.isClip)
+				$camprop.append(GetInfo("Size", clipData.fileSize));
+			else
+				$camprop.append(GetInfo("Zones", clipData.rawData.zones));
+
+			var $link = $('<a href="javascript:void(0)">Click here to download the clip.</a>');
+			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
+			$link.attr("href", clipInfo.href);
+			if (clipInfo.download)
+			{
+				$link.text(clipInfo.download);
+				$link.attr("download", clipInfo.download);
+			}
+			$camprop.append(GetInfoEleValue("Download", $link));
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
+		if (developerMode)
+			$camprop.append('<div class="camprop_item camprop_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="clipProperties.OpenRaw(&quot;' + clipId + '&quot;)" value="view raw data" /></div>');
+	}
+	var GetInfo = function (label, value)
+	{
+		var $info = $('<div class="camprop_item clipprop_item_info"></div>');
+		$info.text(label + ": " + value);
+		return $info;
+	}
+	var GetInfoEleValue = function (label, ele)
+	{
+		var $info = $('<div class="camprop_item clipprop_item_info"></div>');
+		$info.text(label + ": ").append(ele);
+		return $info;
+	}
+	this.OpenRaw = function (clipId)
+	{
+		var clipData = clipLoader.GetClipFromId(clipId);
+		objectVisualizer.open(clipData, "Clip Properties (raw)");
+	}
+}
+///////////////////////////////////////////////////////////////
+// Clip Download Dialog ///////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipDownloadDialog()
+{
+	var self = this;
+	this.open = function (allSelectedClipIDs)
+	{
+		$('<div id="campropdialog">'
+			+ '<div class="campropheader">'
+			+ '<div class="camproptitle">Download Multiple Clips</div>'
+			+ '</div>'
+			+ '<div id="campropcontent"></div>'
+			+ '</div>'
+		).modal({ removeElementOnClose: true, maxWidth: 500, maxHeight: 500 });
+
+		var $camprop = $("#campropcontent");
+		$camprop.append('<div class="camprop_item clipprop_item_info">Click each link to download the desired clips.</div>');
+		$camprop.append('<div class="camprop_item clipprop_item_info">Each link will disappear after it is clicked, so you can\'t accidentally download duplicates.</div>');
+		for (var i = 0; i < allSelectedClipIDs.length; i++)
+			$camprop.append(GetLink(allSelectedClipIDs[i]));
+	}
+	var GetLink = function (clipId)
+	{
+		var clipData = clipLoader.GetClipFromId(clipId);
+		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
+		var $link = $('<a href=""></a>');
+		$link.attr("href", clipInfo.href);
+		if (clipInfo.download)
+		{
+			$link.text(clipInfo.download);
+			$link.attr("download", clipInfo.download);
+		}
+		else
+			$link.text("Click Here");
+		$link.click(function ()
+		{
+			$link.remove();
+			return true;
+		});
+		return $('<div class="camprop_item clipprop_item_info"></div>').append($link);
+	}
+}
+///////////////////////////////////////////////////////////////
+// Object/JSON Visualize //////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var objectVisualizer = new (function ObjectVisualizer()
+{
+	var self = this;
+	var isLoaded = false;
+	var isLoading = false;
+
+	this.open = function (obj, title)
+	{
+		if (!isLoaded)
+		{
+			if (isLoading)
+				setTimeout(function () { self.open(obj, title); }, 500);
+			else
+			{
+				isLoading = true;
+				$('<style type="text/css">@import url("ui3/libs-src/jsonview/jsonview.min.css?v=' + combined_version + '")</style>').appendTo("head");
+				$.getScript("ui3/libs-src/jsonview/jsonview.min.js?v=" + combined_version)
+					.done(function ()
+					{
+						isLoaded = true;
+						self.open(obj, title);
+					})
+					.fail(function (jqxhr, settings, exception)
+					{
+						isLoaded = isLoading = false;
+						toaster.Error("Unable to load jsonview library.", 5000);
+					});
+			}
+			return;
+		}
+		var $root = $('<div class="ObjectVisualizer"><div class="campropheader"><div class="camproptitle">' + title + '</div></div></div>');
+		var $viewer = $('<div class="selectable" style="word-wrap: break-word; border:1px solid #000000; background-color: #FFFFFF; color: #000000; margin: 10px; padding: 10px;"></div>');
+		$root.append($viewer);
+		if (obj)
+		{
+			if (typeof obj == "object")
+				$viewer.JSONView(obj);
+			else
+				$viewer.find(".selectable").text(obj);
+		}
+		else
+			$viewer.find(".selectable").text("null");
+		$root.modal({ removeElementOnClose: true, maxWidth: 600 });
+	}
+})();
+
 ///////////////////////////////////////////////////////////////
 // Reset Camera ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -7123,6 +7442,8 @@ function UpdateClipFlags(path, flags, cbSuccess, cbFailure)
 	}, function ()
 		{
 			toaster.Warning("Failed to update clip properties because of a connection failure");
+			if (typeof cbFailure == "function")
+				cbFailure();
 		});
 }
 ///////////////////////////////////////////////////////////////
@@ -7797,42 +8118,44 @@ function Toaster()
 			overrideOptions.extendedTimeOut = 60000;
 		}
 
-		toastr[type](message, null, overrideOptions);
+		var myToast = toastr[type](message, null, overrideOptions);
 
 		bilog.info(type + " toast: " + message);
+
+		return myToast;
 	}
 	this.Success = function (message, showTime, closeButton)
 	{
-		showToastInternal('success', message, showTime, closeButton);
+		return showToastInternal('success', message, showTime, closeButton);
 	}
 	this.Info = function (message, showTime, closeButton)
 	{
-		showToastInternal('info', message, showTime, closeButton);
+		return showToastInternal('info', message, showTime, closeButton);
 	}
 	this.Warning = function (message, showTime, closeButton)
 	{
-		showToastInternal('warning', message, showTime, closeButton);
+		return showToastInternal('warning', message, showTime, closeButton);
 	}
 	this.Error = function (message, showTime, closeButton)
 	{
-		showToastInternal('error', message, showTime, closeButton);
+		return showToastInternal('error', message, showTime, closeButton);
 	}
 }
 function showSuccessToast(message, showTime, closeButton)
 {
-	toaster.Success(message, showTime, closeButton);
+	return toaster.Success(message, showTime, closeButton);
 }
 function showInfoToast(message, showTime, closeButton)
 {
-	toaster.Info(message, showTime, closeButton);
+	return toaster.Info(message, showTime, closeButton);
 }
 function showWarningToast(message, showTime, closeButton)
 {
-	toaster.Warning(message, showTime, closeButton);
+	return toaster.Warning(message, showTime, closeButton);
 }
 function showErrorToast(message, showTime, closeButton)
 {
-	toaster.Error(message, showTime, closeButton);
+	return toaster.Error(message, showTime, closeButton);
 }
 ///////////////////////////////////////////////////////////////
 // JSON ///////////////////////////////////////////////////////
@@ -8231,7 +8554,7 @@ function logout()
 	{
 		ExecJSON({ cmd: "logout" }, function ()
 		{
-			// TODO: Consider implementing remote server connections.  Here, we would do SendToServerListOnStartup();
+			// If implementing remote server connections:  Here, we would do SendToServerListOnStartup();
 		}, function ()
 			{
 				location.href = currentServer.remoteBaseURL + 'logout.htm' + GetRemoteSessionArg("?");
@@ -8271,7 +8594,7 @@ function AskYesNo(question, onYes, onNo)
 	$dialog.css("margin", "10px");
 	$dialog.addClass("inlineblock");
 	if (typeof question == "string")
-		$dialog.append("<div>" + question + "</div>");
+		$dialog.append('<div class="questionDialogQuestion">' + question + '</div>');
 	else if (typeof question == "object")
 		$dialog.append(question);
 

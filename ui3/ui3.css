@@ -1445,10 +1445,10 @@ div.icon, a.icon
 	cursor: pointer;
 }
 
-#clipListTopDate.newData
-{
-	color: #00FF00;
-}
+	#clipListTopDate.newData
+	{
+		color: #00FF00;
+	}
 
 .datetile
 {
@@ -2245,6 +2245,11 @@ div.icon, a.icon
 	cursor: -webkit-grabbing !important;
 	cursor: grabbing !important;
 }
+/* Question Dialog */
+.questionDialogQuestion
+{
+	padding: 20px 20px 30px 20px;
+}
 /* Simple text buttons */
 .simpleTextButton
 {
@@ -2549,7 +2554,7 @@ div.icon, a.icon
 	}
 }
 
-/* Camera Properties / Camera List */
+/* Camera Properties / Camera List / Clip Properties */
 
 .icon16
 {
@@ -2793,6 +2798,21 @@ div.icon, a.icon
 	color: #818181;
 	cursor: default;
 }
+
+.clipPropertiesThumb
+{
+	display: block;
+	margin: 0px auto 20px auto;
+	border: 4px ridge #000000;
+	border-radius: 4px;
+	max-height: 240px;
+}
+
+.clipprop_item_info
+{
+	max-width: 430px;
+	margin: 7px auto;
+}
 /* Webkit custom scrollbar for modal dialogs */
 div::-webkit-scrollbar
 {
@@ -2868,4 +2888,23 @@ div::-webkit-resizer
 	scrollbar-highlight-color: #277EAF;
 	scrollbar-3dlight-color: #2A8FCF;
 	scrollbar-darkshadow-color: #2A8FCF;
+}
+/* Persistent toast status */
+.multi_operation_status_wrapper
+{
+	font-size: 0px;
+	position: relative;
+	display: inline-block;
+	width: 200px;
+	height: 20px;
+	border: 1px solid #999999;
+	margin: 3px 0px;
+	background-color: rgba(0,0,0,0.5);
+}
+
+.multi_operation_status_bar
+{
+	width: 0%;
+	height: 100%;
+	background-color: #0097F0;
 }
