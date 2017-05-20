@@ -273,9 +273,8 @@
 		</div>
 	</div>
 	<div id="layoutbody">
-		<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />
-		<canvas id="camimg_canvas">Your browser does not support HTML5 canvas.</canvas>
-		<canvas id="backbuffer_canvas" style="display: none;"></canvas>
+		<div id="camimg_wrapper"></div>
+		<div id="camimg_store"></div>
 		<div id="playbackControls" style="display: none;">
 			<div id="seekBarWrapper">
 				<div class="verticalAlignHelper"></div>
@@ -284,14 +283,14 @@
 			</div>
 			<div id="pcButtonContainer">
 				<div class="verticalAlignHelper"></div>
-				<div class="pcButton" id="pcPause" onclick="imageLoader.Playback_Pause()" title="Pause">
+				<div class="pcButton" id="pcPause" onclick="videoPlayer.Playback_Pause()" title="Pause">
 					<svg class="icon"><use xlink:href="#svg_x5F_Pause"></use></svg>
 				</div>
-				<div class="pcButton" id="pcPlay" onclick="imageLoader.Playback_Play()" style="display: none;" title="Play">
+				<div class="pcButton" id="pcPlay" onclick="videoPlayer.Playback_Play()" style="display: none;" title="Play">
 					<svg class="icon"><use xlink:href="#svg_x5F_Play"></use></svg>
 				</div>
-				<div class="pcButton" onclick="imageLoader.Playback_PreviousClip()" title="Previous Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>
-				<div class="pcButton" onclick="imageLoader.Playback_NextClip()" title="Next Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>
+				<div class="pcButton" onclick="videoPlayer.Playback_PreviousClip()" title="Previous Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>
+				<div class="pcButton" onclick="videoPlayer.Playback_NextClip()" title="Next Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>
 				<div id="playbackProgressText" class="pcText"></div>
 				<a id="clipDownloadButton" class="pcButton rightSide" href="javascript:void(0)" title="Download Clip" target="_blank"><svg class="icon"><use xlink:href="#svg_x5F_Download"></use></svg></a>
 				<div id="clipFlagButton" class="pcButton rightSide" onclick="clipLoader.FlagCurrentClip()" title="Flag/Unflag"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>

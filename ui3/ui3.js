@@ -19,7 +19,7 @@ var clipProperties = null;
 var clipDownloadDialog = null;
 var statusBars = null;
 var dropdownBoxes = null;
-var imageQualityHelper = null;
+var jpegQualityHelper = null;
 var ptzButtons = null;
 var playbackControls = null;
 var seekBar = null;
@@ -33,7 +33,7 @@ var calendarContextMenu = null;
 var clipListContextMenu = null;
 var togglableContextMenus = null;
 var cameraConfig = null;
-var imageLoader = null;
+var videoPlayer = null;
 var imageRenderer = null;
 var sessionManager = null;
 var statusLoader = null;
@@ -71,10 +71,17 @@ var togglableUIFeatures =
 				, action: function (ele) { ptzButtons.PresetSet(ele.getAttribute("presetnum")); }
 				, shouldDisable: function () { return !ptzButtons.isEnabledNow(); }
 			}]
-			, function () { return !imageLoader.currentlyLoadingImage.ptz; }
+			, function () { return !videoPlayer.Loading().image.ptz; }
 		]
 	];
 
+// TODO: Deleting a clip while watching a clip causes the new clip list to be filtered to the watched clip. This is a bug - the clip filter should remain the same as before.
+// TODO: Handle single-deletion failure messages better.
+// TODO: Add browser feature detection.
+// -- Canvas support
+// -- Local Storage support
+// -- PNaCl support?
+// TODO: Use ba-bbq or remove it from the libs-ui3.js file.
 // TODO: Fullscreen mode for clips and live view using a placeholder button in lower right.  Fullscreen mode should allocate all available space to the video, hiding unnecessary UI elements.  It should also request that the browser enters full-screen mode.
 // TODO: Clip title appears at top of clip player when mouse draws near.
 // TODO: Close button (see TODO far below in script) and alternative fullscreen button appears at top right of clip player when mouse draws near.  Perhaps on the upper left, too?
@@ -394,7 +401,7 @@ $(function ()
 			BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
 		resized();
 	});
-	BI_CustomEvent.AddListener("TabLoaded_live", function () { imageLoader.goLive(); });
+	BI_CustomEvent.AddListener("TabLoaded_live", function () { videoPlayer.goLive(); });
 	BI_CustomEvent.AddListener("TabLoaded_clips", function () { clipLoader.LoadClips("cliplist"); });
 	BI_CustomEvent.AddListener("TabLoaded_alerts", function () { clipLoader.LoadClips("alertlist"); });
 
@@ -429,7 +436,7 @@ $(function ()
 
 	dropdownBoxes = new DropdownBoxes();
 
-	imageQualityHelper = new ImageQualityHelper();
+	jpegQualityHelper = new JpegQualityHelper();
 
 	SetupCollapsibleTriggers();
 
@@ -455,7 +462,7 @@ $(function ()
 
 	cameraConfig = new CameraConfig();
 
-	imageLoader = new ImageLoader();
+	videoPlayer = new VideoPlayerController();
 
 	imageRenderer = new ImageRenderer();
 
@@ -945,7 +952,7 @@ function DropdownBoxes()
 		{
 			onItemClick: function (item)
 			{
-				cameraListLoader.SelectCameraGroup(item.id);
+				videoPlayer.SelectCameraGroup(item.id);
 			}
 			, rebuildItems: function (data)
 			{
@@ -1383,7 +1390,7 @@ function PtzButtons()
 	}
 	var onButtonMouseDown = function (btn)
 	{
-		self.SendOrQueuePtzCommand(imageLoader.currentlyLoadingImage.id, btn.ptzcmd, false);
+		self.SendOrQueuePtzCommand(videoPlayer.Loading().image.id, btn.ptzcmd, false);
 		$activeEle = $(btn);
 		$activeEle.css("color", "#FFFFFF");
 	}
@@ -1489,7 +1496,7 @@ function PtzButtons()
 	{
 		var featureEnabled = GetUi3FeatureEnabled("ptzControls");
 		LoadPtzPresetThumbs();
-		if (imageLoader.currentlyLoadingImage.ptz)
+		if (videoPlayer.Loading().image.ptz)
 			ptzControlsEnabled = featureEnabled;
 		else
 		{
@@ -1523,7 +1530,7 @@ function PtzButtons()
 	{
 		if (!ptzControlsEnabled)
 			return;
-		if (!imageLoader.currentlyLoadingImage.ptz)
+		if (!videoPlayer.Loading().image.ptz)
 			return;
 		if (!sessionManager.IsAdministratorSession())
 		{
@@ -1531,7 +1538,7 @@ function PtzButtons()
 			return;
 		}
 		var presetNum = parseInt(presetNumStr);
-		var $question = $('<div style="margin-bottom:20px;width:300px;">' + CleanUpGroupName(cameraListLoader.currentlyLoadingCamera.optionDisplay) + '<br/><br/>Set Preset ' + presetNum
+		var $question = $('<div style="margin-bottom:20px;width:300px;">' + CleanUpGroupName(videoPlayer.Loading().image.id) + '<br/><br/>Set Preset ' + presetNum
 			+ ' now?<br/><br/>Description:<br/></div>');
 		var $descInput = $('<input type="text" />');
 		$question.append($descInput);
@@ -1566,7 +1573,7 @@ function PtzButtons()
 			$desc.text(self.GetPresetDescription(ele.presetnum));
 			thumb.append($desc);
 
-			var imgData = settings.getItem("ui2_preset_" + imageLoader.currentlyLoadingImage.id + "_" + ele.presetnum);
+			var imgData = settings.getItem("ui2_preset_" + videoPlayer.Loading().image.id + "_" + ele.presetnum);
 			if (imgData != null && imgData.length > 0)
 			{
 				var $img = $('<img alt="" />');
@@ -1592,13 +1599,14 @@ function PtzButtons()
 	// Presets //
 	var LoadPtzPresetThumbs = function ()
 	{
-		if (imageLoader.currentlyLoadingImage.ptz && GetUi3FeatureEnabled("ptzControls"))
+		var loading = videoPlayer.Loading().image;
+		if (loading.ptz && GetUi3FeatureEnabled("ptzControls"))
 		{
-			if (currentlyLoadedPtzThumbsCamId != imageLoader.currentlyLoadingImage.id)
+			if (currentlyLoadedPtzThumbsCamId != loading.id)
 			{
 				$ptzPresets.each(function (idx, ele)
 				{
-					var imgData = settings.getItem("ui2_preset_" + imageLoader.currentlyLoadingImage.id + "_" + ele.presetnum);
+					var imgData = settings.getItem("ui2_preset_" + loading.id + "_" + ele.presetnum);
 					if (imgData != null && imgData.length > 0)
 					{
 						$(ele).empty();
@@ -1619,9 +1627,9 @@ function PtzButtons()
 					else
 						$(ele).text(ele.presetnum);
 				});
-				currentlyLoadedPtzThumbsCamId = imageLoader.currentlyLoadingImage.id;
+				currentlyLoadedPtzThumbsCamId = loading.id;
 			}
-			LoadPTZPresetDescriptions(imageLoader.currentlyLoadingImage.id);
+			LoadPTZPresetDescriptions(loading.id);
 		}
 		else
 		{
@@ -1636,23 +1644,23 @@ function PtzButtons()
 	{
 		if (!ptzControlsEnabled)
 			return;
-		if (!imageLoader.currentlyLoadingImage.ptz)
+		if (!videoPlayer.Loading().image.ptz)
 		{
 			toaster.Error("Current camera is not PTZ");
 			return;
 		}
-		self.PTZ_async_noguarantee(imageLoader.currentlyLoadingImage.id, 100 + parseInt(presetNumber));
+		self.PTZ_async_noguarantee(videoPlayer.Loading().image.id, 100 + parseInt(presetNumber));
 	}
 	var PTZ_set_preset = function (presetNumber, description)
 	{
 		if (!ptzControlsEnabled)
 			return;
-		if (!imageLoader.currentlyLoadingImage.ptz)
+		if (!videoPlayer.Loading().image.ptz)
 		{
 			toaster.Error("Current camera is not PTZ");
 			return;
 		}
-		var cameraId = imageLoader.currentlyLoadingImage.id;
+		var cameraId = videoPlayer.Loading().image.id;
 		if (description == null || description == "")
 			description = "Preset " + presetNumber;
 		var args = { cmd: "ptz", camera: cameraId, button: (100 + presetNumber), description: description };
@@ -1673,13 +1681,13 @@ function PtzButtons()
 	{
 		if (currentServer.isLoggingOut)
 			return;
-		if (cameraId != imageLoader.currentlyLoadingImage.id)
+		if (cameraId != videoPlayer.Loading().image.id)
 			return;
 
 		var sizeArg = "&w=160";
-		if (imageLoader.currentlyLoadingImage.aspectratio < 1)
+		if (videoPlayer.Loading().image.aspectratio < 1)
 			sizeArg = "&h=160";
-		var tmpImgSrc = currentServer.remoteBaseURL + "image/" + imageLoader.currentlyLoadingImage.path + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetRemoteSessionArg("&", true);
+		var tmpImgSrc = currentServer.remoteBaseURL + "image/" + videoPlayer.Loading().image.path + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetRemoteSessionArg("&", true);
 		PersistImageFromUrl("ui2_preset_" + cameraId + "_" + presetNumber, tmpImgSrc
 			, function (imgAsDataURL)
 			{
@@ -1695,14 +1703,14 @@ function PtzButtons()
 			return;
 		ExecJSON({ cmd: "ptz", camera: cameraId }, function (response)
 		{
-			if (cameraListLoader.currentlyLoadingCamera.optionValue == cameraId)
+			if (videoPlayer.Loading().image.id == cameraId)
 			{
 				currentPtzData = response.data;
 				currentPtzData.cameraId = cameraId;
 			}
 		}, function ()
 			{
-				if (cameraListLoader.currentlyLoadingCamera.optionValue == cameraId)
+				if (videoPlayer.Loading().image.id == cameraId)
 					toaster.Warning("Unable to load PTZ metadata for camera: " + cameraId);
 			});
 	}
@@ -1712,7 +1720,7 @@ function PtzButtons()
 		if (presetNum < 0 || presetNum > 20)
 			return asAnnotation ? "" : ("Preset " + presetNum);
 		var desc = null;
-		if (currentPtzData && currentPtzData.cameraId == imageLoader.currentlyLoadingImage.id && currentPtzData.presets && currentPtzData.presets.length > presetNum - 1)
+		if (currentPtzData && currentPtzData.cameraId == videoPlayer.Loading().image.id && currentPtzData.presets && currentPtzData.presets.length > presetNum - 1)
 			desc = currentPtzData.presets[presetNum - 1];
 		if (desc == null || desc == "")
 			desc = "Preset " + presetNum;
@@ -2281,14 +2289,14 @@ function PlaybackControls()
 	{
 		mouseCoordFixer.fix(e);
 		CloseSettings();
-		if (imageLoader.currentlyLoadingImage.isLive || pointInsideElement($layoutbody, e.pageX, e.pageY))
+		if (videoPlayer.Loading().image.isLive || pointInsideElement($layoutbody, e.pageX, e.pageY))
 			return;
 		clearHideTimout();
 		self.FadeOut();
 	});
 	$layoutbody.on("mouseenter mousemove touchstart touchmove touchend touchcancel", function (e)
 	{
-		if (imageLoader.currentlyLoadingImage.isLive)
+		if (videoPlayer.Loading().image.isLive)
 			return;
 		mouseCoordFixer.fix(e);
 		self.FadeIn();
@@ -2333,7 +2341,7 @@ function PlaybackControls()
 		$playbackSettings.append($speedBtn);
 		var $qualityBtn = $('<div class="playbackSettingsLine">'
 			+ 'Quality<div class="playbackSettingsFloatRight">'
-			+ imageQualityHelper.GetQualityAbbr()
+			+ jpegQualityHelper.GetQualityAbbr()
 			+ '<div class="playbackSettingsRightArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalRight"></use></svg></div>'
 			+ '</div></div>');
 		$qualityBtn.click(OpenQualityPanel);
@@ -2513,7 +2521,7 @@ function SeekBar()
 
 	this.resized = function ()
 	{
-		self.drawSeekbarAtTime(imageLoader.GetClipPlaybackPosition());
+		self.drawSeekbarAtTime(videoPlayer.GetClipPlaybackPositionMs());
 	}
 	var setSeekHintCanvasVisibility = function (visible)
 	{
@@ -2558,7 +2566,7 @@ function SeekBar()
 		if (!seekHintVisible)
 			return;
 		// Update seek hint text and location
-		var msec = imageLoader.currentlyLoadingImage.msec;
+		var msec = videoPlayer.Loading().image.msec;
 		var barO = bar.offset();
 		var barW = bar.width();
 
@@ -2576,7 +2584,7 @@ function SeekBar()
 			setSeekHintHelperVisibility(false);
 		}
 		else if (!playbackControls.SettingsPanelIsOpen()
-			&& ((!touch && !isDragging && imageLoader.Playback_IsPaused()) || (touch && isDragging)))
+			&& ((!touch && !isDragging && videoPlayer.Playback_IsPaused()) || (touch && isDragging)))
 		{
 			// (Mouse hovering while paused) or (touch dragging): show preview image
 			setSeekHintCanvasVisibility(true);
@@ -2605,22 +2613,22 @@ function SeekBar()
 		if (seekHintInfo.visibleMsec != msec)
 		{
 			seekHintInfo.loadingMsec = msec;
-			if (seekHintInfo.lastSnapshotId != "" && seekHintInfo.lastSnapshotId == imageLoader.staticSnapshotId)
+			if (seekHintInfo.lastSnapshotId != "" && seekHintInfo.lastSnapshotId == videoPlayer.GetStaticSnapshotId())
 				return; // No need to load same snapshot as before
-			seekHintInfo.lastSnapshotId = imageLoader.staticSnapshotId;
-			seekhint_img.attr('src', imageLoader.lastSnapshotUrl.replace(/time=\d+/, "time=" + msec) + "&w=160&q=50");
-			seekhint_canvas.css('height', (160 / imageLoader.currentlyLoadingImage.aspectratio) + 'px');
+			seekHintInfo.lastSnapshotId = videoPlayer.GetStaticSnapshotId();
+			seekhint_img.attr('src', videoPlayer.GetLastSnapshotUrl().replace(/time=\d+/, "time=" + msec) + "&w=160&q=50");
+			seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
 		}
 	}
 	this.resetSeekHintImg = function ()
 	{
 		seekHintInfo.loadingMsec = seekHintInfo.queuedMsec = seekHintInfo.visibleMsec = -1;
-		seekhint_canvas.css('height', (160 / imageLoader.currentlyLoadingImage.aspectratio) + 'px');
+		seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
 		imageRenderer.ClearCanvas("seekhint_canvas");
 	}
 	this.drawSeekbarAtTime = function (timeValue)
 	{
-		var msec = imageLoader.currentlyLoadingImage.msec;
+		var msec = videoPlayer.Loading().image.msec;
 		var currentSeekBarPositionRelative;
 		if (msec <= 1)
 			currentSeekBarPositionRelative = 0;
@@ -2666,7 +2674,7 @@ function SeekBar()
 	}
 	this.dblClick = function ()
 	{
-		imageLoader.Playback_PlayPause();
+		videoPlayer.Playback_PlayPause();
 	}
 	var mouseStillSinceLastClick = function (e)
 	{
@@ -2677,7 +2685,8 @@ function SeekBar()
 		mouseCoordFixer.fix(e);
 		if (isTouchDragging)
 		{
-			$("#camimg_canvas").css("opacity", "1");
+			imageRenderer.ChangeFrameDefaultOpacity(1);
+			imageRenderer.SetFrameOpacity_Default();
 			mouseMoved(e, true);
 		}
 		isTouchDragging = false;
@@ -2700,14 +2709,14 @@ function SeekBar()
 			handle.css("left", x + "px");
 			if (!isTouchDragging || overrideSetPlaybackPosition)
 			{
-				var msec = imageLoader.currentlyLoadingImage.msec;
+				var msec = videoPlayer.Loading().image.msec;
 				if (msec <= 1)
-					imageLoader.SetClipPlaybackPosition(0);
+					videoPlayer.SeekToMs(0);
 				else
 				{
 					var positionRelative = x / barW;
 					var posX = Clamp(parseInt(positionRelative * (msec - 1)), 0, msec - 1);
-					imageLoader.SetClipPlaybackPosition(posX);
+					videoPlayer.SeekToMs(posX);
 				}
 			}
 		}
@@ -2724,7 +2733,10 @@ function SeekBar()
 			isDragging = true;
 			isTouchDragging = touchEvents.isTouchEvent(e);
 			if (isTouchDragging)
-				$("#camimg_canvas").css("opacity", "0.5");
+			{
+				imageRenderer.ChangeFrameDefaultOpacity(0.5);
+				imageRenderer.SetFrameOpacity_Default();
+			}
 			SetBarState(1);
 
 			if (thisTime < lastMouseDown.Time + doubleClickTime && mouseStillSinceLastClick(e))
@@ -2833,8 +2845,8 @@ function ClipLoader(clipsBodySelector)
 
 	this.LoadClips = function (listName)
 	{
-		if (cameraListLoader.currentlyLoadingCamera)
-			lastLoadedCameraFilter = cameraListLoader.currentlyLoadingCamera.optionValue;
+		if (videoPlayer.Loading().cam)
+			lastLoadedCameraFilter = videoPlayer.Loading().cam.optionValue;
 		loadClipsInternal(listName, lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false);
 	}
 	this.UpdateClipList = function ()
@@ -2845,7 +2857,7 @@ function ClipLoader(clipsBodySelector)
 			return;
 		if (newestClipDate == 0)
 			return;
-		if (!cameraListLoader.currentlyLoadingCamera)
+		if (!videoPlayer.Loading().cam)
 			return;
 		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
 			return;
@@ -3008,8 +3020,9 @@ function ClipLoader(clipsBodySelector)
 					tileLoader.injectNewClips(newUpdateClips, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
 					clipListGrew = true;
 				}
-				if (!imageLoader.currentlyLoadingImage.isLive && self.GetCachedClip(imageLoader.currentlyLoadingImage.id, imageLoader.currentlyLoadingImage.path) == null)
-					imageLoader.goLive();
+				var loadingImage = videoPlayer.Loading().image;
+				if (!loadingImage.isLive && self.GetCachedClip(loadingImage.id, loadingImage.path) == null)
+					videoPlayer.goLive();
 				else
 				{
 					// TODO: If a clip is playing, make it get selected now in the list, but do not interfere with the playback state.
@@ -3368,7 +3381,7 @@ function ClipLoader(clipsBodySelector)
 
 			$(this).addClass("opened");
 			$(this).addClass("selected");
-			cameraListLoader.LoadClipWithClipData(this.clipData);
+			videoPlayer.LoadClip(this.clipData);
 
 			// Multi-select start
 			lastSelectedClipId = clipId;
@@ -3399,7 +3412,7 @@ function ClipLoader(clipsBodySelector)
 				lastOpenedClipEle = null;
 			}
 		}
-		imageLoader.goLive();
+		videoPlayer.goLive();
 	}
 	this.UnselectAllClips = function (alsoRemoveOpenedStatus)
 	{
@@ -4697,10 +4710,7 @@ function CameraListLoader()
 	var self = this;
 	var lastResponse = null;
 	var cameraIdToCameraMap = new Object();
-	this.currentlyLoadingCamera = null;
-	this.currentlyLoadedCamera = null;
 	this.firstCameraListLoaded = false;
-	var currentlySelectedHomeGroupId = null;
 	var hasOnlyOneCamera = false;
 	var cameraListUpdateTimeout = null;
 	this.LoadCameraList = function (successCallbackFunc)
@@ -4744,12 +4754,12 @@ function CameraListLoader()
 			cameraIdToCameraMap = new Object();
 			for (var i = 0; i < lastResponse.data.length; i++)
 				cameraIdToCameraMap[lastResponse.data[i].optionValue] = lastResponse.data[i];
-			if (!self.firstCameraListLoaded || self.GetCameraWithId(self.currentlyLoadingCamera.optionValue) == null)
+			if (!self.firstCameraListLoaded || self.GetCameraWithId(videoPlayer.Loading().image.id) == null)
 			{
 				if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId) == null)
-					self.SelectCameraGroup(lastResponse.data[0].optionValue);
+					videoPlayer.SelectCameraGroup(lastResponse.data[0].optionValue);
 				else
-					self.SelectCameraGroup(settings.ui3_defaultCameraGroupId);
+					videoPlayer.SelectCameraGroup(settings.ui3_defaultCameraGroupId);
 			}
 			if (!self.firstCameraListLoaded)
 			{
@@ -4818,83 +4828,9 @@ function CameraListLoader()
 			, rects: []
 		};
 	}
-	this.ImgClick = function (event)
-	{
-		if (!imageLoader.currentlyLoadingImage.isLive || hasOnlyOneCamera)
-			return;
-		mouseCoordFixer.fix(event);
-		var camData = self.GetCameraUnderMousePointer(event);
-		if (camData != null && !cameraListLoader.CameraIsCycle(camData))
-		{
-			self.ImgClick_Camera(camData);
-		}
-	}
-	var viewChangeMode = 4;
-	this.SetViewChangeMode = function (mode)
-	{
-		viewChangeMode = mode;
-	}
-	this.ImgClick_Camera = function (camData)
-	{
-		var fadeIn = viewChangeMode == 2 || viewChangeMode == 4 || viewChangeMode == 5;
-		var scaleIn = viewChangeMode == 1 || viewChangeMode == 3 || viewChangeMode == 4 || viewChangeMode == 5;
-		var fadeOut = viewChangeMode == 2 || viewChangeMode == 3 || viewChangeMode == 4 || viewChangeMode == 5;
-		var scaleOut = viewChangeMode == 1 || viewChangeMode == 5;
-		if (camData.optionValue == imageLoader.currentlyLoadedImage.id)
-		{
-			// Back to Group
-			camData = self.GetGroupCamera(currentlySelectedHomeGroupId);
-			if (scaleOut)
-				imageRenderer.DrawCameraFullCameraAsThumb(imageLoader.currentlyLoadedImage.id, camData.optionValue);
-			if (fadeOut)
-				imageRenderer.DarkenFrameBy(127);
-			self.LoadLiveCamera(camData);
-			if (scaleOut)
-				imageLoader.LoadingImageIsNowLoaded();
-		}
-		else
-		{
-			// Maximize
-			if (scaleIn)
-				imageRenderer.DrawCameraThumbAsFullCamera(camData.optionValue);
-			if (fadeIn)
-				imageRenderer.DarkenFrameBy(127);
-			self.LoadLiveCamera(camData);
-			if (scaleIn)
-				imageLoader.LoadingImageIsNowLoaded();
-		}
-	}
-	this.GetCameraUnderMousePointer = function (event)
-	{
-		// Find out which camera is under the mouse pointer, if any.
-		imageRenderer.SetMousePos(event.pageX, event.pageY);
-
-		var imgPos = $("#camimg_canvas").position();
-		var layoutbodyOffset = $("#layoutbody").offset();
-		var mouseRelX = parseFloat((event.pageX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
-		var mouseRelY = parseFloat((event.pageY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
-
-		var x = imageLoader.currentlyLoadedImage.fullwidth * mouseRelX;
-		var y = imageLoader.currentlyLoadedImage.fullheight * mouseRelY;
-		var camData = self.currentlyLoadedCamera;
-		if (camData)
-		{
-			if (camData.group)
-			{
-				for (var j = 0; j < camData.rects.length; j++)
-				{
-					if (x > camData.rects[j][0] && y > camData.rects[j][1] && x < camData.rects[j][2] && y < camData.rects[j][3])
-						return self.GetCameraWithId(camData.group[j]);
-				}
-			}
-			else
-				return camData;
-		}
-		return null;
-	}
 	this.GetCameraBoundsInCurrentGroupImageScaled = function (cameraId, groupId)
 	{
-		var coordScale = imageLoader.currentlyLoadedImage.actualwidth / imageLoader.currentlyLoadedImage.fullwidth;
+		var coordScale = videoPlayer.Loaded().image.actualwidth / videoPlayer.Loaded().image.fullwidth;
 		var unscaled = self.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
 		// The first line of the array definition must be on the same line as the return statement
 		return [Math.round(unscaled[0] * coordScale)
@@ -4904,7 +4840,7 @@ function CameraListLoader()
 	}
 	this.GetCameraBoundsInCurrentGroupImageUnscaled = function (cameraId, groupId)
 	{
-		var camData = self.currentlyLoadedCamera;
+		var camData = videoPlayer.Loaded().cam;
 		if (camData)
 		{
 			if (!camData.group)
@@ -4948,99 +4884,6 @@ function CameraListLoader()
 		}
 		return cameraId;
 	}
-	this.LoadLiveCamera = function (camData)
-	{
-		self.currentlyLoadingCamera = camData;
-		self.UpdateSelectedLiveCameraFields();
-	}
-	this.LoadClipWithClipData = function (clipData)
-	{
-		var cam = cameraIdToCameraMap[clipData.camera];
-		if (cam)
-		{
-			self.currentlyLoadingCamera = cam;
-			self.UpdateSelectedClipFields(clipData.path, clipData.msec);
-			playbackControls.SetDownloadClipLink(clipData);
-			if (clipLoader.ClipDataIndicatesFlagged(clipData))
-				$("#clipFlagButton").addClass("flagged");
-			else
-				$("#clipFlagButton").removeClass("flagged");
-			imageLoader.Playback_Play();
-			seekBar.drawSeekbarAtTime(0);
-			seekBar.resetSeekHintImg();
-		}
-	}
-	this.SelectCameraGroup = function (groupId)
-	{
-		dropdownBoxes.setLabelText("currentGroup", "...");
-		for (var i = 0; i < lastResponse.data.length; i++)
-		{
-			if (lastResponse.data[i].optionValue == groupId)
-			{
-				if (self.CameraIsGroupOrCycle(lastResponse.data[i]))
-				{
-					settings.ui3_defaultCameraGroupId = currentlySelectedHomeGroupId = groupId;
-					self.currentlyLoadingCamera = lastResponse.data[i];
-					var groupName = CleanUpGroupName(self.currentlyLoadingCamera.optionDisplay);
-					dropdownBoxes.setLabelText("currentGroup", groupName);
-
-					self.UpdateSelectedLiveCameraFields();
-					break;
-				}
-			}
-		}
-	}
-	this.UpdateSelectedLiveCameraFields = function ()
-	{
-		imageRenderer.SetDigitalZoom(0);
-		var cli = imageLoader.currentlyLoadingImage;
-		var clc = self.currentlyLoadingCamera;
-		cli.id = clc.optionValue;
-		cli.fullwidth = cli.actualwidth = clc.width;
-		cli.fullheight = cli.actualheight = clc.height;
-		cli.aspectratio = clc.width / clc.height;
-		cli.path = clc.optionValue;
-		cli.isLive = true;
-		cli.ptz = clc.ptz;
-		cli.audio = clc.audio;
-		cli.isGroup = clc.group ? true : false;
-		imageLoader.lastLiveCameraOrGroupId = clc.optionValue;
-		imageLoader.ResetClipPlaybackFields();
-		playbackControls.Hide();
-		ptzButtons.UpdatePtzControlDisplayState();
-
-		audioPlayer.audioPlay();
-
-		dropdownBoxes.setLabelText("currentGroup", CleanUpGroupName(clc.optionDisplay));
-		if (imageLoader.hasStarted)
-			imageLoader.GetNewImage();
-
-		if (skipTabLoadClipLoad)
-			skipTabLoadClipLoad = false;
-		else
-			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
-	}
-	this.UpdateSelectedClipFields = function (clipPath, msec)
-	{
-		imageRenderer.SetDigitalZoom(0);
-		var cli = imageLoader.currentlyLoadingImage;
-		var clc = self.currentlyLoadingCamera;
-		cli.id = clc.optionValue;
-		cli.fullwidth = cli.actualwidth = clc.width;
-		cli.fullheight = cli.actualheight = clc.height;
-		cli.aspectratio = clc.width / clc.height;
-		cli.path = clipPath;
-		cli.isLive = false;
-		cli.ptz = false;
-		cli.audio = false;
-		cli.msec = parseInt(msec);
-		cli.isGroup = false;
-		imageLoader.ResetClipPlaybackFields();
-		playbackControls.Show();
-		audioPlayer.audioStop();
-		if (imageLoader.hasStarted)
-			imageLoader.GetNewImage();
-	}
 	this.GetGroupCamera = function (groupId)
 	{
 		for (var i = 0; i < lastResponse.data.length; i++)
@@ -5071,16 +4914,9 @@ function CameraListLoader()
 	{
 		return cameraObj.group || !cameraObj.optionValue.startsWith("@");
 	}
-	this.LoadHomeGroup = function (groupId)
+	this.HasOnlyOneCamera = function ()
 	{
-		if (typeof groupId == "undefined")
-			groupId = currentlySelectedHomeGroupId;
-		self.currentlyLoadingCamera = self.GetGroupCamera(groupId);
-		self.UpdateSelectedLiveCameraFields();
-	}
-	this.GetCurrentHomeGroupObj = function ()
-	{
-		return self.GetGroupCamera(currentlySelectedHomeGroupId);
+		return hasOnlyOneCamera;
 	}
 	this.GetLastResponse = function ()
 	{
@@ -5088,110 +4924,596 @@ function CameraListLoader()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Image Loading //////////////////////////////////////////////
+// Video Player Controller ////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ImageLoader()
+function VideoPlayerController()
+{
+	/*
+	This object is intended to be a high level interface for video playback and related operations (such as video surface click handling).
+	*/
+	var self = this;
+	var isInitialized = false;
+
+	var playerModule = null;
+
+	var currentlyLoadingCamera = null;
+	var currentlyLoadedCamera = null;
+	var currentlyLoadingImage = new BICameraData();
+	var currentlyLoadedImage = new BICameraData();
+
+	var lastLiveCameraOrGroupId = "";
+	var currentlySelectedHomeGroupId = null;
+
+	var viewChangeMode = 4;
+
+	this.Initialize = function ()
+	{
+		if (isInitialized)
+			return;
+		isInitialized = true;
+
+		imageRenderer.RegisterCamImgClickHandler();
+		playerModule = new JpegVideoModule();
+		playerModule.OpenLive();
+	}
+
+	// Methods for querying what is currently playing
+	this.Loading = function ()
+	{
+		return { cam: currentlyLoadingCamera, image: currentlyLoadingImage };
+	}
+	this.Loaded = function ()
+	{
+		return { cam: currentlyLoadedCamera, image: currentlyLoadedImage };
+	}
+	this.GetCurrentHomeGroupObj = function ()
+	{
+		return cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId);
+	}
+	this.GetClipPlaybackPositionMs = function ()
+	{
+		if (currentlyLoadingImage.isLive)
+			return 0;
+		return playerModule.GetSeekMs();
+	}
+	this.IsFrameVisible = function ()
+	{
+		if (playerModule)
+			return playerModule.LoadedFrameSinceActivate();
+		return false;
+	}
+	this.GetLastSnapshotUrl = function ()
+	{
+		return playerModule.GetLastSnapshotUrl();
+	}
+	this.GetLastSnapshotFullUrl = function ()
+	{
+		return playerModule.GetLastSnapshotFullUrl();
+	}
+	this.GetStaticSnapshotId = function ()
+	{
+		return playerModule.GetStaticSnapshotId();
+	}
+	this.Playback_IsPaused = function ()
+	{
+		return playerModule.Playback_IsPaused();
+	}
+	this.GetCurrentImageTimeMs = function ()
+	{
+		return videoModule.GetCurrentImageTimeMs();
+	}
+
+	// Methods dealing with mouse clicks.
+	// TODO: Make ImgClick, ImgClick_Camera private
+	this.SetViewChangeMode = function (mode)
+	{
+		viewChangeMode = mode;
+	}
+	this.GetCameraUnderMousePointer = function (event)
+	{
+		// Find out which camera is under the mouse pointer, if any.
+		imageRenderer.SetMousePos(event.pageX, event.pageY);
+
+		var imgPos = $("#camimg_wrapper").position();
+		var layoutbodyOffset = $("#layoutbody").offset();
+		var mouseRelX = parseFloat((event.pageX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
+		var mouseRelY = parseFloat((event.pageY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
+
+		var x = currentlyLoadedImage.fullwidth * mouseRelX;
+		var y = currentlyLoadedImage.fullheight * mouseRelY;
+		var camData = currentlyLoadedCamera;
+		if (camData)
+		{
+			if (camData.group)
+			{
+				for (var j = 0; j < camData.rects.length; j++)
+				{
+					if (x > camData.rects[j][0] && y > camData.rects[j][1] && x < camData.rects[j][2] && y < camData.rects[j][3])
+						return cameraListLoader.GetCameraWithId(camData.group[j]);
+				}
+			}
+			else
+				return camData;
+		}
+		return null;
+	}
+	this.ImgClick = function (event)
+	{
+		if (!currentlyLoadingImage.isLive)
+			return;
+		mouseCoordFixer.fix(event);
+		var camData = self.GetCameraUnderMousePointer(event);
+		if (camData != null && !cameraListLoader.HasOnlyOneCamera() && !cameraListLoader.CameraIsCycle(camData))
+		{
+			self.ImgClick_Camera(camData);
+		}
+	}
+	this.ImgClick_Camera = function (camData)
+	{
+		var fadeIn = viewChangeMode == 2 || viewChangeMode == 4 || viewChangeMode == 5;
+		var scaleIn = viewChangeMode == 1 || viewChangeMode == 3 || viewChangeMode == 4 || viewChangeMode == 5;
+		var fadeOut = viewChangeMode == 2 || viewChangeMode == 3 || viewChangeMode == 4 || viewChangeMode == 5;
+		var scaleOut = viewChangeMode == 1 || viewChangeMode == 5;
+		if (camData.optionValue == currentlyLoadedImage.id)
+		{
+			// Back to Group
+			camData = cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId);
+			if (scaleOut)
+				playerModule.DrawCameraFullCameraAsThumb && playerModule.DrawCameraFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
+			if (fadeOut)
+				imageRenderer.SetFrameOpacity(0.5);
+			self.LoadLiveCamera(camData);
+			if (scaleOut)
+				self.LoadingCameraHasRenderedFirstImage(); // TODO: Verify this is working correctly here
+		}
+		else
+		{
+			// Maximize
+			if (scaleIn)
+				playerModule.DrawCameraThumbAsFullCamera && playerModule.DrawCameraThumbAsFullCamera(camData.optionValue);
+			if (fadeIn)
+				imageRenderer.SetFrameOpacity(0.5);
+			self.LoadLiveCamera(camData);
+			if (scaleIn)
+				self.LoadingCameraHasRenderedFirstImage(); // TODO: Verify this is working correctly here
+		}
+	}
+
+	// Methods for changing what the player is playing
+	this.goLive = function ()
+	{
+		if (currentlyLoadingImage == null || currentlyLoadingImage.isLive)
+			return;
+		var camData = cameraListLoader.GetCameraWithId(lastLiveCameraOrGroupId);
+		if (camData)
+		{
+			clipLoader.suppressClipListLoad = true;
+			self.LoadLiveCamera(camData);
+			clipLoader.suppressClipListLoad = false;
+		}
+		else
+		{
+			self.LoadHomeGroup();
+		}
+	}
+	this.LoadHomeGroup = function (groupId)
+	{
+		if (typeof groupId == "undefined")
+			groupId = currentlySelectedHomeGroupId;
+		self.LoadLiveCamera(cameraListLoader.GetGroupCamera(groupId));
+	}
+	this.SelectCameraGroup = function (groupId)
+	{
+		dropdownBoxes.setLabelText("currentGroup", "...");
+		var camList = cameraListLoader.GetLastResponse();
+		for (var i = 0; i < camList.data.length; i++)
+		{
+			if (camList.data[i].optionValue == groupId)
+			{
+				if (cameraListLoader.CameraIsGroupOrCycle(camList.data[i]))
+				{
+					settings.ui3_defaultCameraGroupId = currentlySelectedHomeGroupId = groupId;
+
+					var groupName = CleanUpGroupName(camList.data[i].optionDisplay);
+					dropdownBoxes.setLabelText("currentGroup", groupName);
+
+					self.LoadLiveCamera(camList.data[i]);
+					break;
+				}
+			}
+		}
+	}
+	this.LoadLiveCamera = function (camData)
+	{
+		imageRenderer.SetDigitalZoom(0);
+		var cli = currentlyLoadingImage;
+		var clc = currentlyLoadingCamera = camData;
+		cli.id = clc.optionValue;
+		cli.fullwidth = cli.actualwidth = clc.width;
+		cli.fullheight = cli.actualheight = clc.height;
+		cli.aspectratio = clc.width / clc.height;
+		cli.path = clc.optionValue;
+		cli.isLive = true;
+		cli.ptz = clc.ptz;
+		cli.audio = clc.audio;
+		cli.msec = -1;
+		cli.isGroup = clc.group ? true : false;
+
+		lastLiveCameraOrGroupId = clc.optionValue;
+
+		audioPlayer.audioPlay();
+
+		playbackControls.Hide();
+		ptzButtons.UpdatePtzControlDisplayState();
+		dropdownBoxes.setLabelText("currentGroup", CleanUpGroupName(clc.optionDisplay));
+
+		if (skipTabLoadClipLoad)
+			skipTabLoadClipLoad = false;
+		else
+			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
+
+		if (playerModule)
+			playerModule.OpenLive();
+	}
+	this.LoadClip = function (clipData)
+	{
+		var cam = cameraListLoader.GetCameraWithId(clipData.camera);
+		if (cam)
+		{
+			imageRenderer.SetDigitalZoom(0);
+			var cli = currentlyLoadingImage;
+			var clc = currentlyLoadingCamera = cam;
+			cli.id = clc.optionValue;
+			cli.fullwidth = cli.actualwidth = clc.width;
+			cli.fullheight = cli.actualheight = clc.height;
+			cli.aspectratio = clc.width / clc.height;
+			cli.path = clipData.path;
+			cli.isLive = false;
+			cli.ptz = false;
+			cli.audio = false;
+			cli.msec = parseInt(clipData.msec);
+			cli.isGroup = false;
+
+			audioPlayer.audioStop();
+
+			playbackControls.Show();
+			playbackControls.SetDownloadClipLink(clipData);
+			if (clipLoader.ClipDataIndicatesFlagged(clipData))
+				$("#clipFlagButton").addClass("flagged");
+			else
+				$("#clipFlagButton").removeClass("flagged");
+			seekBar.drawSeekbarAtTime(0);
+			seekBar.resetSeekHintImg();
+
+			if (playerModule)
+				playerModule.OpenClip();
+		}
+		else
+			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
+	}
+
+	this.SeekToMs = function (pos)
+	{
+		playerModule.SeekToMs(pos);
+	}
+	this.Playback_Pause = function ()
+	{
+		playerModule.Playback_Pause();
+	}
+	this.Playback_Play = function ()
+	{
+		playerModule.Playback_Play();
+	}
+	this.Playback_PlayPause = function ()
+	{
+		playerModule.Playback_PlayPause();
+	}
+	this.Playback_NextClip = function ()
+	{
+		// TODO: Hotkey this to down arrow
+		var clip = clipLoader.GetCurrentClipEle();
+		if (clip != null && clipLoader.GetAllSelected().length <= 1)
+		{
+			if (clipLoader.GetAllSelected().length == 0 || clipLoader.IsClipSelected(clip.id.substr(1)))
+			{
+				var $clip = clipLoader.GetClipAboveClip($(clip));
+				if (Playback_ClipObj($clip))
+					return;
+			}
+		}
+		self.Playback_Pause();
+	}
+	this.Playback_PreviousClip = function ()
+	{
+		// TODO: Hotkey this to up arrow
+		var clip = clipLoader.GetCurrentClipEle();
+		if (clip != null && clipLoader.GetAllSelected().length <= 1)
+		{
+			if (clipLoader.GetAllSelected().length == 0 || clipLoader.IsClipSelected(clip.id.substr(1)))
+			{
+				var $clip = clipLoader.GetClipBelowClip($(clip));
+				if (Playback_ClipObj($clip))
+					return;
+			}
+		}
+		self.Playback_Pause();
+	}
+	var Playback_ClipObj = function ($clip)
+	{
+		if ($clip != null && $clip.length > 0)
+		{
+			var offset = ($("#clipsbody").height() / 2) - ($clip.height() / 2);
+			$("#clipsbody").scrollTop(($("#clipsbody").scrollTop() + $clip.position().top) - offset);
+			$clip.click();
+			return true;
+		}
+		return false;
+	}
+
+	// Callback methods for a player module to inform the VideoPlayerController of state changes.
+	this.LoadingCameraHasRenderedFirstImage = function ()
+	{
+		imageRenderer.SetDigitalZoom(0);
+		currentlyLoadedImage.CopyValuesFrom(currentlyLoadingImage);
+		currentlyLoadedCamera = currentlyLoadingCamera;
+		resized();
+	}
+	this.ImageRendered = function (imgRequestMs)
+	{
+		RefreshFps(imgRequestMs);
+		if (!currentlyLoadedImage.isLive)
+			seekBar.drawSeekbarAtTime(playerModule.GetSeekMs());
+		imageRenderer.SetFrameOpacity_Default();
+	}
+	this.Playback_Ended = function (isLeftBoundary)
+	{
+		// The module may call this repeatedly 
+		if (isLeftBoundary)
+		{
+			if (playbackControls.GetPlayReverse())
+			{
+				if (playbackControls.GetLoopingEnabled())
+					playerModule.SeekToMs(currentlyLoadingImage.msec - 1);
+				else if (playbackControls.GetAutoplay())
+					self.Playback_PreviousClip();
+				else
+					self.Playback_Pause();
+			}
+		}
+		else
+		{
+			if (!playbackControls.GetPlayReverse())
+			{
+				if (playbackControls.GetLoopingEnabled())
+					playerModule.SeekToMs(0);
+				else if (playbackControls.GetAutoplay())
+					self.Playback_NextClip();
+				else
+					self.Playback_Pause();
+			}
+		}
+	}
+	var fpsZeroTimeout = null;
+	var RefreshFps = function (imgRequestMs)
+	{
+		var currentFps = fpsCounter.getFPS(new Date().getTime() - imgRequestMs);
+		statusBars.setProgress("fps", (currentFps / 10), currentFps);
+
+		// This allows the FPS to change to 0 if connectivity is lost or greatly reduced
+		if (fpsZeroTimeout != null)
+			clearTimeout(fpsZeroTimeout);
+		fpsZeroTimeout = setTimeout(ZeroFps, 4000);
+	}
+	var ZeroFps = function ()
+	{
+		statusBars.setProgress("fps", 0, 0);
+	}
+}
+function BICameraData()
 {
 	var self = this;
-	this.hasStarted = false;
+	this.id = "";
+	this.fullwidth = 1280;
+	this.fullheight = 720;
+	this.aspectratio = 1280 / 720;
+	this.actualwidth = 1280;
+	this.actualheight = 720;
+	this.path = "";
+	this.isLive = true;
+	this.ptz = false;
+	this.msec = 10000; // Millisecond duration of clips/alerts.  Ignore this if isLive is set.
+	this.isGroup = false;
+
+	this.CopyValuesFrom = function (other)
+	{
+		self.id = other.id;
+		self.fullwidth = other.fullwidth;
+		self.fullheight = other.fullheight;
+		self.aspectratio = other.aspectratio;
+		self.actualwidth = other.actualwidth;
+		self.actualheight = other.actualheight;
+		self.path = other.path;
+		self.isLive = other.isLive;
+		self.ptz = other.ptz;
+		self.msec = other.msec;
+		self.isGroup = other.isGroup;
+	}
+}
+///////////////////////////////////////////////////////////////
+// Jpeg Video Module //////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function JpegVideoModule()
+{
+	/*
+	A low level video player module which refreshes jpeg images using http.
+	*/
+	var self = this;
+	var isInitialized = false;
+	var isCurrentlyActive = false;
 	var timeLastClipFrame = 0;
-	var clipPlaybackPosition = 0;
-	this.staticSnapshotId = "";
-	this.lastSnapshotUrl = "";
-	this.lastSnapshotFullUrl = "";
-	this.currentImageDateMs = new Date().getTime();
-	this.currentImageLoadedAtMs = new Date().getTime();
+	var repeatedSameImageURLs = 1;
+	var loadedFirstFrame = false;
 	var lastCycleWidth = 0;
 	var lastCycleHeight = 0;
 	var lastRequestedWidth = 0;
 	var currentLoadedImageActualWidth = 1;
-	var fpsZeroTimeout = null;
+
+	var currentImageTimestampMs = new Date().getTime();
+	var currentImageRequestedAtMs = new Date().getTime();
+	var staticSnapshotId = "";
+	var lastSnapshotUrl = "";
+	var lastSnapshotFullUrl = "";
 
 	var playbackPaused = false;
 
-	this.currentlyLoadingImage = new BICameraData();
-	this.currentlyLoadedImage = new BICameraData();
-	this.isFirstCameraImageLoaded = false;
-	var repeatedSameImageURLs = 1;
+	var clipPlaybackPosition = 0;
 
-	this.lastLiveCameraOrGroupId = "";
-
-	this.Start = function ()
+	var Initialize = function ()
 	{
-		self.hasStarted = true;
+		if (isInitialized)
+			return;
+		isInitialized = true;
+		// Do one-time initialization here
+
+		// TODO: Make sure #camimg_canvas and #backbuffer_canvas and #camimg are not referenced outside of this module.
+		$("#camimg_store").append('<canvas id="camimg_canvas"></canvas>');
+		$("#camimg_store").append('<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />');
+		$("#camimg_store").append('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
+
 		imageRenderer.ImgResized(false);
+
 		var camObj = $("#camimg");
 		camObj.load(function ()
 		{
 			ClearImageLoadTimeout();
+			if (!isCurrentlyActive)
+				return;
 			if (!this.complete || typeof this.naturalWidth == "undefined" || this.naturalWidth == 0)
 			{
 				// Failed
 			}
 			else
 			{
-				self.currentlyLoadedImage.actualwidth = this.naturalWidth;
-				self.currentlyLoadedImage.actualheight = this.naturalHeight;
+				var loading = videoPlayer.Loading().image;
+				var loaded = videoPlayer.Loaded().image;
 
-				if (self.currentlyLoadingImage.id != self.currentlyLoadedImage.id || self.currentlyLoadingImage.path != self.currentlyLoadedImage.path)
+				loaded.actualwidth = this.naturalWidth;
+				loaded.actualheight = this.naturalHeight;
+
+				if (!loadedFirstFrame || loading.id != loaded.id || loading.path != loaded.path)
 				{
 					// The loaded image has just changed to a different camera.
-					if (!self.isFirstCameraImageLoaded)
+					if ($("#camimg").attr('loadingimg') == loading.id)
 					{
-						self.isFirstCameraImageLoaded = true;
-						imageRenderer.RegisterCamImgClickHandler();
-					}
-					if ($("#camimg").attr('loadingimg') == self.currentlyLoadingImage.id)
-					{
-						self.LoadingImageIsNowLoaded();
+						loadedFirstFrame = true;
+						videoPlayer.LoadingCameraHasRenderedFirstImage();
 					}
 				}
-			}
-			RefreshFps();
 
-			if (self.currentlyLoadedImage.id.startsWith("@"))
-			{
-				if (lastCycleWidth != this.naturalWidth || lastCycleHeight != this.naturalHeight)
+				videoPlayer.ImageRendered(currentImageRequestedAtMs);
+
+				if (loaded.id.startsWith("@"))
 				{
-					self.currentlyLoadedImage.fullwidth = this.naturalWidth;
-					self.currentlyLoadedImage.fullheight = this.naturalHeight;
-					self.currentlyLoadedImage.aspectratio = self.currentlyLoadedImage.fullwidth / self.currentlyLoadedImage.fullheight;
-					resized();
+					if (lastCycleWidth != this.naturalWidth || lastCycleHeight != this.naturalHeight)
+					{
+						loaded.fullwidth = lastCycleWidth = this.naturalWidth;
+						loaded.fullheight = lastCycleHeight = this.naturalHeight;
+						loaded.aspectratio = loaded.fullwidth / loaded.fullheight;
+						resized();
+					}
 				}
+				else
+					lastCycleWidth = lastCycleHeight = 0;
+
+				currentLoadedImageActualWidth = this.naturalWidth;
+
+				imageRenderer.CopyImageToCanvas("camimg", "camimg_canvas");
 			}
-			else
-				lastCycleWidth = lastCycleHeight = 0;
-
-			currentLoadedImageActualWidth = this.naturalWidth;
-
-			imageRenderer.DrawToCanvas();
-			self.GetNewImage();
+			GetNewImage();
 		});
 		camObj.error(function ()
 		{
 			ClearImageLoadTimeout();
-			setTimeout(self.GetNewImage, 1000);
+			setTimeout(GetNewImage, 1000);
 		});
-		self.GetNewImage();
+		GetNewImage();
 	}
-	this.LoadingImageIsNowLoaded = function ()
+	var Activate = function ()
 	{
-		imageRenderer.SetDigitalZoom(0);
-		self.currentlyLoadedImage.CopyValuesFrom(self.currentlyLoadingImage);
-
-		cameraListLoader.currentlyLoadedCamera = cameraListLoader.currentlyLoadingCamera;
-
-		resized();
+		Initialize();
+		if (isCurrentlyActive)
+			return;
+		isCurrentlyActive = true;
+		// Show yourself
+		imageRenderer.ClearCanvas("camimg_canvas");
+		$("#camimg_canvas").appendTo("#camimg_wrapper");
 	}
-	this.GetNewImage = function ()
+	this.Deactivate = function ()
+	{
+		if (!isCurrentlyActive)
+			return;
+		isCurrentlyActive = false;
+		loadedFirstFrame = false;
+		// Stop what you are doing and hide
+		clipPlaybackPosition = 0;
+		ClearImageLoadTimeout();
+		ClearGetNewImageTimeout();
+		$("#camimg_canvas").appendTo("#camimg_store");
+	}
+	this.LoadedFrameSinceActivate = function ()
+	{
+		return loadedFirstFrame;
+	}
+
+	this.OpenLive = function ()
+	{
+		Activate();
+		GetNewImage();
+	}
+	this.OpenClip = function ()
+	{
+		Activate();
+		clipPlaybackPosition = 0;
+		timeLastClipFrame = new Date().getTime();
+		self.Playback_Pause();
+		self.Playback_Play();
+		GetNewImage();
+	}
+	this.SeekToMs = function (pos)
+	{
+		Activate();
+		clipPlaybackPosition = pos;
+	}
+	this.GetSeekMs = function ()
+	{
+		return clipPlaybackPosition;
+	}
+	this.GetLastSnapshotUrl = function ()
+	{
+		return lastSnapshotUrl;
+	}
+	this.GetLastSnapshotFullUrl = function ()
+	{
+		return lastSnapshotFullUrl;
+	}
+	this.GetStaticSnapshotId = function ()
+	{
+		return staticSnapshotId;
+	}
+	this.GetCurrentImageTimeMs = function ()
+	{
+		return currentImageTimestampMs;
+	}
+	var GetNewImage = function ()
 	{
 		ClearGetNewImageTimeout();
-		if (currentServer.isLoggingOut)
+		if (currentServer.isLoggingOut || !isCurrentlyActive)
 			return;
+		var loading = videoPlayer.Loading().image;
 		sessionManager.ApplyLatestAPISessionIfNecessary();
-		var timeValue = self.currentImageDateMs = self.currentImageLoadedAtMs = new Date().getTime();
+		var timeValue = currentImageTimestampMs = currentImageRequestedAtMs = new Date().getTime();
 		var isLoadingRecordedSnapshot = false;
-		if (!self.currentlyLoadingImage.isLive)
+		if (!loading.isLive)
 		{
 			var timePassed = timeValue - timeLastClipFrame;
 			timeLastClipFrame = timeValue;
@@ -5206,73 +5528,46 @@ function ImageLoader()
 			if (clipPlaybackPosition < 0)
 			{
 				clipPlaybackPosition = 0;
-				if (playbackControls.GetPlayReverse())
-				{
-					if (playbackControls.GetLoopingEnabled())
-						clipPlaybackPosition = self.currentlyLoadingImage.msec - 1;
-					else if (playbackControls.GetAutoplay())
-					{
-						self.Playback_Pause();
-						self.Playback_PreviousClip();
-					}
-					else
-						self.Playback_Pause();
-					if (clipPlaybackPosition < 0)
-						clipPlaybackPosition = 0;
-				}
+				videoPlayer.Playback_Ended(true);
 			}
-			else if (clipPlaybackPosition >= self.currentlyLoadingImage.msec)
+			else if (clipPlaybackPosition >= loading.msec)
 			{
-				clipPlaybackPosition = self.currentlyLoadingImage.msec - 1;
-				if (!playbackControls.GetPlayReverse())
-				{
-					if (playbackControls.GetLoopingEnabled())
-						clipPlaybackPosition = 0;
-					else if (playbackControls.GetAutoplay())
-					{
-						self.Playback_Pause();
-						self.Playback_NextClip();
-					}
-					else
-						self.Playback_Pause();
-					if (clipPlaybackPosition < 0)
-						clipPlaybackPosition = 0;
-				}
+				clipPlaybackPosition = loading.msec - 1;
+				videoPlayer.Playback_Ended(false);
 			}
+
 			timeValue = clipPlaybackPosition;
-			// Update currentImageDateMs so that saved snapshots know the time for file naming
-			var clipData = clipLoader.GetCachedClip(self.currentlyLoadingImage.id, self.currentlyLoadingImage.path);
+			// Update currentImageTimestampMs so that saved snapshots know the time for file naming
+			var clipData = clipLoader.GetCachedClip(loading.id, loading.path);
 			if (clipData != null)
 			{
-				self.currentImageDateMs = clipData.date.getTime() + clipPlaybackPosition;
+				currentImageTimestampMs = clipData.date.getTime() + clipPlaybackPosition;
 				isLoadingRecordedSnapshot = clipData.isSnapshot;
 				if (isLoadingRecordedSnapshot)
-					self.staticSnapshotId = self.currentlyLoadingImage.path;
+					staticSnapshotId = loading.path;
 				else
-					self.staticSnapshotId = "";
+					staticSnapshotId = "";
 			}
 		}
 
 		var widthToRequest = imageRenderer.GetWidthToRequest();
-		$("#camimg").attr('loadingimg', self.currentlyLoadingImage.id);
+		$("#camimg").attr('loadingimg', loading.id);
 
-		var qualityArg = imageQualityHelper.getQualityArg();
+		var qualityArg = jpegQualityHelper.getQualityArg();
 
-		if (self.currentlyLoadingImage.isLive)
-			self.lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + self.currentlyLoadingImage.path + '?time=' + timeValue + currentServer.GetRemoteSessionArg("&", true);
+		if (loading.isLive)
+			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue + currentServer.GetRemoteSessionArg("&", true);
 		else
-			self.lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + self.currentlyLoadingImage.path + '?time=' + timeValue + currentServer.GetRemoteSessionArg("&", true);
-		var imgSrcPath = self.lastSnapshotFullUrl = self.lastSnapshotUrl + "&w=" + widthToRequest + qualityArg;
+			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue + currentServer.GetRemoteSessionArg("&", true);
+		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + "&w=" + widthToRequest + qualityArg;
 
 		if ($("#camimg").attr('src') == imgSrcPath)
 			GetNewImageAfterTimeout();
 		else
 		{
-			if (!self.currentlyLoadingImage.isLive)
-				seekBar.drawSeekbarAtTime(timeValue);
-
+			// TODO: Instead of checking hlsPlayer.IsBlockingJpegRefresh() and jpegSuppressionDialog.IsOpen(), try having those dialogs instruct the videoPlayer to Stop().  This can deactivate the videoModule.  Configure the Activate procedure to clear the image by using imageRenderer's opacity options to hide or severely darken the frame while waiting for video to begin again.
 			if ((isLoadingRecordedSnapshot
-				&& self.currentlyLoadingImage.path == self.currentlyLoadedImage.path
+				&& loading.path == videoPlayer.Loaded().image.path
 				&& !CouldBenefitFromWidthChange(widthToRequest))
 				|| hlsPlayer.IsBlockingJpegRefresh()
 				|| jpegSuppressionDialog.IsOpen()
@@ -5287,34 +5582,11 @@ function ImageLoader()
 			}
 		}
 	}
-	var RefreshFps = function ()
-	{
-		var currentFps = fpsCounter.getFPS(new Date().getTime() - self.currentImageLoadedAtMs);
-		statusBars.setProgress("fps", (currentFps / 10), currentFps);
-
-		// This allows the FPS to change to 0 if connectivity is lost or greatly reduced
-		if (fpsZeroTimeout != null)
-			clearTimeout(fpsZeroTimeout);
-		fpsZeroTimeout = setTimeout(ZeroFps, 4000);
-	}
-	var ZeroFps = function ()
-	{
-		statusBars.setProgress("fps", 0, 0);
-	}
 	var CouldBenefitFromWidthChange = function (newWidth)
 	{
 		return newWidth > lastRequestedWidth && currentLoadedImageActualWidth >= lastRequestedWidth;
 	}
-	this.ResetClipPlaybackFields = function ()
-	{
-		timeLastClipFrame = new Date().getTime();
-		clipPlaybackPosition = 0;
-	}
-	this.SetClipPlaybackPosition = function (pos)
-	{
-		timeLastClipFrame = new Date().getTime();
-		clipPlaybackPosition = pos;
-	}
+
 	this.Playback_IsPaused = function ()
 	{
 		return playbackPaused;
@@ -5336,10 +5608,10 @@ function ImageLoader()
 			playbackPaused = false;
 			$("#pcPlay").hide();
 			$("#pcPause").show();
-			if (clipPlaybackPosition >= self.currentlyLoadingImage.msec - 1 && !playbackControls.GetPlayReverse())
+			if (clipPlaybackPosition >= videoPlayer.Loading().image.msec - 1 && !playbackControls.GetPlayReverse())
 				clipPlaybackPosition = 0;
 			else if (clipPlaybackPosition <= 0 && playbackControls.GetPlayReverse())
-				clipPlaybackPosition = self.currentlyLoadingImage.msec - 1;
+				clipPlaybackPosition = videoPlayer.Loading().image.msec - 1;
 			if (clipPlaybackPosition < 0)
 				clipPlaybackPosition = 0;
 		}
@@ -5349,253 +5621,6 @@ function ImageLoader()
 			$("#pcPlay").show();
 			$("#pcPause").hide();
 		}
-	}
-	this.Playback_Skip = function (amountMs)
-	{
-		clipPlaybackPosition += amountMs;
-	}
-	this.Playback_NextClip = function ()
-	{
-		var clip = clipLoader.GetCurrentClipEle();
-		if (clip == null || clipLoader.GetAllSelected().length > 1)
-			return;
-		if (clipLoader.IsClipSelected(clip.id.substr(1)) || clipLoader.GetAllSelected().length == 0)
-		{
-			var $clip = clipLoader.GetClipAboveClip($(clip));
-			Playback_ClipObj($clip);
-		}
-	}
-	this.Playback_PreviousClip = function ()
-	{
-		var clip = clipLoader.GetCurrentClipEle();
-		if (clip == null || clipLoader.GetAllSelected().length > 1)
-			return;
-		if (clipLoader.IsClipSelected(clip.id.substr(1)) || clipLoader.GetAllSelected().length == 0)
-		{
-			var $clip = clipLoader.GetClipBelowClip($(clip));
-			Playback_ClipObj($clip);
-		}
-	}
-	var Playback_ClipObj = function ($clip)
-	{
-		if ($clip != null && $clip.length > 0)
-		{
-			var offset = ($("#clipsbody").height() / 2) - ($clip.height() / 2);
-			$("#clipsbody").scrollTop(($("#clipsbody").scrollTop() + $clip.position().top) - offset);
-			$clip.click();
-		}
-	}
-	this.GetClipPlaybackPosition = function ()
-	{
-		return clipPlaybackPosition;
-	}
-	this.goLive = function ()
-	{
-		if (self.currentlyLoadingImage == null || self.currentlyLoadingImage.isLive)
-			return;
-		var camData = cameraListLoader.GetCameraWithId(self.lastLiveCameraOrGroupId);
-		if (camData)
-		{
-			clipLoader.suppressClipListLoad = true;
-			cameraListLoader.LoadLiveCamera(camData);
-			clipLoader.suppressClipListLoad = false;
-		}
-		else
-		{
-			cameraListLoader.LoadHomeGroup();
-		}
-	}
-	var imgLoadTimeout = null;
-	var SetImageLoadTimeout = function ()
-	{
-		ClearImageLoadTimeout();
-		imgLoadTimeout = setTimeout(function ()
-		{
-			bilog.debug("Image load timed out");
-			self.GetNewImage();
-		}, 15000);
-	}
-	var ClearImageLoadTimeout = function ()
-	{
-		if (imgLoadTimeout != null)
-		{
-			clearTimeout(imgLoadTimeout);
-			imgLoadTimeout = null;
-		}
-	}
-	var getNewImageTimeout = null;
-	var GetNewImageAfterTimeout = function ()
-	{
-		// <summary>Calls GetNewImage after increasing delay, to reduce CPU usage a bit while idling</summary>
-		getNewImageTimeout = setTimeout(self.GetNewImage, Math.min(500, 25 + 2 * repeatedSameImageURLs++));
-	}
-	var ClearGetNewImageTimeout = function ()
-	{
-		if (getNewImageTimeout != null)
-		{
-			clearTimeout(getNewImageTimeout);
-			getNewImageTimeout = null;
-		}
-	}
-}
-function BICameraData()
-{
-	var self = this;
-	this.id = "";
-	this.fullwidth = 1280;
-	this.fullheight = 720;
-	this.aspectratio = 1280 / 720;
-	this.actualwidth = 1280;
-	this.actualheight = 720;
-	this.path = "";
-	this.isLive = true;
-	this.ptz = false;
-	this.msec = 10000;
-	this.isGroup = false;
-
-	this.CopyValuesFrom = function (other)
-	{
-		self.id = other.id;
-		self.fullwidth = other.fullwidth;
-		self.fullheight = other.fullheight;
-		self.aspectratio = other.aspectratio;
-		self.actualwidth = other.actualwidth;
-		self.actualheight = other.actualheight;
-		self.path = other.path;
-		self.isLive = other.isLive;
-		self.ptz = other.ptz;
-		self.msec = other.msec;
-		self.isGroup = other.isGroup;
-	}
-}
-///////////////////////////////////////////////////////////////
-// Image Quality Helper ///////////////////////////////////////
-///////////////////////////////////////////////////////////////
-function ImageQualityHelper()
-{
-	var self = this;
-	self.getQualityArg = function ()
-	{
-		var currentQualityId = dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().uniqueQualityId;
-		if (currentQualityId == "B") // Standard Definition
-			return "&q=50";
-		else if (currentQualityId == "C") // Low Definition
-			return "&q=20";
-		else // ("A" or other) High Definition
-			return "";
-	}
-	self.ModifyImageDimension = function (imgDimension)
-	{
-		var currentQualityId = dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().uniqueQualityId;
-		if (currentQualityId == "B") // Standard Definition
-			return Math.min(imgDimension, 640);
-		else if (currentQualityId == "C") // Low Definition
-			return Math.min(imgDimension, 320);
-		else // ("A" or other) High Definition
-			return imgDimension;
-	}
-	self.GetQualityAbbr = function ()
-	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().abbr;
-	}
-	self.GetQualityName = function ()
-	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().text;
-	}
-}
-//qualityArg = "&q=" + 20;
-//widthToRequest = parseInt(widthToRequest * 0.5);
-///////////////////////////////////////////////////////////////
-// Image Renderer /////////////////////////////////////////////
-///////////////////////////////////////////////////////////////
-function ImageRenderer()
-{
-	var self = this;
-	var dpiScalingFactor = BI_GetDevicePixelRatio();
-	var zoomHintTimeout = null;
-	var zoomHintIsVisible = false;
-	var digitalZoom = 0;
-	this.SetDigitalZoom = function (newZoom)
-	{
-		digitalZoom = newZoom;
-	}
-	var zoomTable = [0, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 45, 50];
-	var imageIsDragging = false;
-	var imageIsLargerThanAvailableSpace = false;
-	var mouseX = 0;
-	var mouseY = 0;
-	var imgDigitalZoomOffsetX = 0;
-	var imgDigitalZoomOffsetY = 0;
-	var previousImageDraw = {
-		x: -1, y: -1, w: -1, h: -1, z: 10
-	};
-	previousImageDraw.x = -1;
-	previousImageDraw.y = -1;
-	previousImageDraw.w = -1;
-	previousImageDraw.h = -1;
-	previousImageDraw.z = 10;
-
-	var mouseMoveTolerance = 5;
-	var camImgClickState = new Object();
-	camImgClickState.mouseDown = false;
-	camImgClickState.mouseX = 0;
-	camImgClickState.mouseY = 0;
-
-	this.GetWidthToRequest = function ()
-	{
-		// Calculate the size of the image we need
-		var ciLoading = imageLoader.currentlyLoadingImage;
-		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * (zoomTable[digitalZoom]);
-		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * (zoomTable[digitalZoom]);
-		if (imgDrawWidth == 0)
-		{
-			// Image is supposed to scale to fit the screen (first zoom level)
-			imgDrawWidth = $("#layoutbody").width() * dpiScalingFactor;
-			imgDrawHeight = $("#layoutbody").height() * dpiScalingFactor;
-
-			var availableRatio = imgDrawWidth / imgDrawHeight;
-			if (availableRatio < ciLoading.aspectratio)
-				imgDrawHeight = imgDrawWidth / ciLoading.aspectratio;
-			else
-				imgDrawWidth = imgDrawHeight * ciLoading.aspectratio;
-		}
-		if (ciLoading.aspectratio < 1)
-		{
-			imgDrawHeight = imageQualityHelper.ModifyImageDimension(imgDrawHeight);
-			imgDrawWidth = imgDrawHeight * ciLoading.aspectratio;
-		}
-		else
-		{
-			imgDrawWidth = imageQualityHelper.ModifyImageDimension(imgDrawWidth);
-			imgDrawHeight = imgDrawWidth / ciLoading.aspectratio;
-		}
-		// Now we have the size we need.  Determine what argument we will send to Blue Iris
-		return parseInt(Math.round(imgDrawWidth));
-	}
-	this.SetMousePos = function (x, y)
-	{
-		mouseX = x;
-		mouseY = y;
-	}
-	this.GetPreviousImageDrawInfo = function ()
-	{
-		return previousImageDraw;
-	}
-	this.DrawToCanvas = function ()
-	{
-		self.CopyImageToCanvas("camimg", "camimg_canvas");
-	}
-	this.CopyImageToCanvas = function (imgId, canvasId)
-	{
-		var camimg = $("#" + imgId).get(0);
-		var canvas = $("#" + canvasId).get(0);
-		if (canvas.width != camimg.naturalWidth)
-			canvas.width = camimg.naturalWidth;
-		if (canvas.height != camimg.naturalHeight)
-			canvas.height = camimg.naturalHeight;
-
-		var context2d = canvas.getContext("2d");
-		context2d.drawImage(camimg, 0, 0);
 	}
 	this.DrawCameraFullCameraAsThumb = function (cameraId, groupId)
 	{
@@ -5666,20 +5691,214 @@ function ImageRenderer()
 			, thumbBounds[0], thumbBounds[1], thumbBounds[2] - thumbBounds[0], thumbBounds[3] - thumbBounds[1]
 			, 0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
 
+		$("#camimg_wrapper").css("width", backbuffer_canvas.width + "px").css("height", backbuffer_canvas.height + "px");
 		canvas.width = backbuffer_canvas.width;
 		canvas.height = backbuffer_canvas.height;
 		var context2d = canvas.getContext("2d");
 		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
 	}
-	this.DarkenFrameBy = function (amount)
+
+	var imgLoadTimeout = null;
+	var SetImageLoadTimeout = function ()
 	{
-		var canvas = $("#camimg_canvas").get(0);
+		ClearImageLoadTimeout();
+		imgLoadTimeout = setTimeout(function ()
+		{
+			bilog.debug("Image load timed out");
+			GetNewImage();
+		}, 15000);
+	}
+	var ClearImageLoadTimeout = function ()
+	{
+		if (imgLoadTimeout != null)
+		{
+			clearTimeout(imgLoadTimeout);
+			imgLoadTimeout = null;
+		}
+	}
+	var getNewImageTimeout = null;
+	var GetNewImageAfterTimeout = function ()
+	{
+		// <summary>Calls GetNewImage after increasing delay, to reduce CPU usage a bit while idling</summary>
+		getNewImageTimeout = setTimeout(GetNewImage, Math.min(500, 25 + 2 * repeatedSameImageURLs++));
+	}
+	var ClearGetNewImageTimeout = function ()
+	{
+		if (getNewImageTimeout != null)
+		{
+			clearTimeout(getNewImageTimeout);
+			getNewImageTimeout = null;
+		}
+	}
+}
+///////////////////////////////////////////////////////////////
+// Fetch and PNaCl H.264 Video Module /////////////////////////
+///////////////////////////////////////////////////////////////
+function FetchPNaClH264VideoModule()
+{
+	/*
+	A low level video player module which streams H.264 using the fetch API, and decodes/plays it using a PNaCl program.
+	*/
+	var self = this;
+	var isInitialized = false;
+	var isCurrentlyActive = false;
+	var loadedFirstFrame = false;
+	var Initialize = function ()
+	{
+		if (isInitialized)
+			return;
+		isInitialized = true;
+		// Do one-time initialization here
+	}
+	var Activate = function ()
+	{
+		Initialize();
+		if (isCurrentlyActive)
+			return;
+		isCurrentlyActive = true;
+		// Show yourself
+	}
+	this.Deactivate = function ()
+	{
+		if (!isCurrentlyActive)
+			return;
+		isCurrentlyActive = false;
+		loadedFirstFrame = false;
+		// Stop what you are doing and hide
+	}
+	this.LoadedFrameSinceActivate = function ()
+	{
+		return loadedFirstFrame;
+	}
+
+	this.OpenLive = function (cam)
+	{
+		Activate();
+	}
+	this.OpenClip(clipData)
+	{
+		Activate();
+	}
+	this.SeekToMs(pos)
+	{
+		Activate();
+	}
+}
+///////////////////////////////////////////////////////////////
+// Image Renderer                                            //
+// provides rendering and scaling services                   //
+///////////////////////////////////////////////////////////////
+function ImageRenderer()
+{
+	var self = this;
+	var dpiScalingFactor = BI_GetDevicePixelRatio();
+	var zoomHintTimeout = null;
+	var zoomHintIsVisible = false;
+	var digitalZoom = 0;
+	this.SetDigitalZoom = function (newZoom)
+	{
+		digitalZoom = newZoom;
+	}
+	var zoomTable = [0, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 45, 50];
+	var imageIsDragging = false;
+	var imageIsLargerThanAvailableSpace = false;
+	var mouseX = 0;
+	var mouseY = 0;
+	var imgDigitalZoomOffsetX = 0;
+	var imgDigitalZoomOffsetY = 0;
+	var previousImageDraw = {
+		x: -1, y: -1, w: -1, h: -1, z: 10
+	};
+	previousImageDraw.x = -1;
+	previousImageDraw.y = -1;
+	previousImageDraw.w = -1;
+	previousImageDraw.h = -1;
+	previousImageDraw.z = 10;
+
+	var mouseMoveTolerance = 5;
+	var camImgClickState = new Object();
+	camImgClickState.mouseDown = false;
+	camImgClickState.mouseX = 0;
+	camImgClickState.mouseY = 0;
+
+	var frameOpacity = 1;
+	var frameDefaultOpacity = 1;
+
+	this.GetWidthToRequest = function ()
+	{
+		// Calculate the size of the image we need
+		var ciLoading = videoPlayer.Loading().image;
+		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * (zoomTable[digitalZoom]);
+		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * (zoomTable[digitalZoom]);
+		if (imgDrawWidth == 0)
+		{
+			// Image is supposed to scale to fit the screen (first zoom level)
+			imgDrawWidth = $("#layoutbody").width() * dpiScalingFactor;
+			imgDrawHeight = $("#layoutbody").height() * dpiScalingFactor;
+
+			var availableRatio = imgDrawWidth / imgDrawHeight;
+			if (availableRatio < ciLoading.aspectratio)
+				imgDrawHeight = imgDrawWidth / ciLoading.aspectratio;
+			else
+				imgDrawWidth = imgDrawHeight * ciLoading.aspectratio;
+		}
+		if (ciLoading.aspectratio < 1)
+		{
+			imgDrawHeight = jpegQualityHelper.ModifyImageDimension(imgDrawHeight);
+			imgDrawWidth = imgDrawHeight * ciLoading.aspectratio;
+		}
+		else
+		{
+			imgDrawWidth = jpegQualityHelper.ModifyImageDimension(imgDrawWidth);
+			imgDrawHeight = imgDrawWidth / ciLoading.aspectratio;
+		}
+		// Now we have the size we need.  Determine what argument we will send to Blue Iris
+		return parseInt(Math.round(imgDrawWidth));
+	}
+	this.SetMousePos = function (x, y)
+	{
+		mouseX = x;
+		mouseY = y;
+	}
+	this.GetPreviousImageDrawInfo = function ()
+	{
+		return previousImageDraw;
+	}
+	this.CopyImageToCanvas = function (imgId, canvasId)
+	{
+		var imgEle = $("#" + imgId).get(0);
+		var canvas = $("#" + canvasId).get(0);
+		if (canvas.width != imgEle.naturalWidth)
+			canvas.width = imgEle.naturalWidth;
+		if (canvas.height != imgEle.naturalHeight)
+			canvas.height = imgEle.naturalHeight;
+
 		var context2d = canvas.getContext("2d");
-		var imgData = context2d.getImageData(0, 0, canvas.width, canvas.height);
-		var rgba = imgData.data;
-		for (var i = 3; i < rgba.length; i += 4)
-			rgba[i] = amount;
-		context2d.putImageData(imgData, 0, 0);
+		context2d.drawImage(imgEle, 0, 0);
+	}
+	this.ChangeFrameDefaultOpacity = function (opacity)
+	{
+		frameDefaultOpacity = opacity;
+	}
+	this.SetFrameOpacity_Default = function ()
+	{
+		self.SetFrameOpacity(frameDefaultOpacity);
+	}
+	this.SetFrameOpacity = function (opacity)
+	{
+		if (frameOpacity != opacity)
+		{
+			frameOpacity = opacity;
+			$("#camimg_wrapper").css("opacity", opacity);
+		}
+		// TODO: Delete this code.
+		//var canvas = $("#camimg_canvas").get(0);
+		//var context2d = canvas.getContext("2d");
+		//var imgData = context2d.getImageData(0, 0, canvas.width, canvas.height);
+		//var rgba = imgData.data;
+		//for (var i = 3; i < rgba.length; i += 4)
+		//	rgba[i] = amount;
+		//context2d.putImageData(imgData, 0, 0);
 	}
 	this.ClearCanvas = function (canvasId)
 	{
@@ -5695,7 +5914,7 @@ function ImageRenderer()
 		var imgAvailableHeight = $("#layoutbody").height();
 
 		// Calculate new size based on zoom levels
-		var imgForSizing = imageLoader.isFirstCameraImageLoaded ? imageLoader.currentlyLoadedImage : imageLoader.currentlyLoadingImage;
+		var imgForSizing = videoPlayer.IsFrameVisible() ? videoPlayer.Loaded().image : videoPlayer.Loading().image;
 
 		var imgDrawWidth = imgForSizing.fullwidth * (zoomTable[digitalZoom]);
 		var imgDrawHeight = imgForSizing.fullheight * (zoomTable[digitalZoom]);
@@ -5710,7 +5929,7 @@ function ImageRenderer()
 			else
 				imgDrawWidth = imgDrawHeight * imgForSizing.aspectratio;
 		}
-		$("#camimg_canvas").css("width", imgDrawWidth + "px").css("height", imgDrawHeight + "px");
+		$("#camimg_wrapper").css("width", imgDrawWidth + "px").css("height", imgDrawHeight + "px");
 
 		imageIsLargerThanAvailableSpace = imgDrawWidth > imgAvailableWidth || imgDrawHeight > imgAvailableHeight;
 
@@ -5718,7 +5937,7 @@ function ImageRenderer()
 		{
 			// We just experienced a zoom change
 			// Find the mouse position percentage relative to the center of the image at its old size
-			var imgPos = $("#camimg_canvas").position();
+			var imgPos = $("#camimg_wrapper").position();
 			var layoutbodyOffset = $("#layoutbody").offset();
 			var xPos = mouseX;
 			var yPos = mouseY;
@@ -5759,7 +5978,7 @@ function ImageRenderer()
 		var proposedX = (((imgAvailableWidth - imgDrawWidth) / 2) + imgDigitalZoomOffsetX);
 		var proposedY = (((imgAvailableHeight - imgDrawHeight) / 2) + imgDigitalZoomOffsetY);
 
-		$("#camimg_canvas").css("left", proposedX + "px").css("top", proposedY + "px");
+		$("#camimg_wrapper").css("left", proposedX + "px").css("top", proposedY + "px");
 
 		// Store new image position for future calculations
 		previousImageDraw.x = proposedX;
@@ -5830,7 +6049,7 @@ function ImageRenderer()
 	}
 	var SetCamCellCursor = function ()
 	{
-		var outerObjs = $('#layoutbody,#camimg_canvas,#zoomhint');
+		var outerObjs = $('#layoutbody,#camimg_wrapper,#zoomhint');
 		if (imageIsLargerThanAvailableSpace)
 		{
 			if (imageIsDragging)
@@ -5848,7 +6067,8 @@ function ImageRenderer()
 		{
 			outerObjs.removeClass("grabcursor");
 			outerObjs.removeClass("grabbingcursor");
-			var innerObjs = $('#camimg_canvas,#zoomhint');
+			// TODO: Evaluate if the innerObjs cursor set can be skipped. This appears to be the only place the style is set.
+			var innerObjs = $('#camimg_wrapper,#zoomhint');
 			innerObjs.css("cursor", "default");
 		}
 	}
@@ -5888,7 +6108,7 @@ function ImageRenderer()
 					|| Math.abs(camImgClickState.mouseY - e.pageY) <= mouseMoveTolerance)
 				{
 					camImgClickState.mouseDown = false;
-					cameraListLoader.ImgClick(e);
+					videoPlayer.ImgClick(e);
 				}
 			}
 			imageIsDragging = false;
@@ -5945,6 +6165,41 @@ function ImageRenderer()
 	});
 }
 ///////////////////////////////////////////////////////////////
+// Jpeg Quality Helper ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function JpegQualityHelper()
+{
+	var self = this;
+	self.getQualityArg = function ()
+	{
+		var currentQualityId = dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().uniqueQualityId;
+		if (currentQualityId == "B") // Standard Definition
+			return "&q=50";
+		else if (currentQualityId == "C") // Low Definition
+			return "&q=20";
+		else // ("A" or other) High Definition
+			return "";
+	}
+	self.ModifyImageDimension = function (imgDimension)
+	{
+		var currentQualityId = dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().uniqueQualityId;
+		if (currentQualityId == "B") // Standard Definition
+			return Math.min(imgDimension, 640);
+		else if (currentQualityId == "C") // Low Definition
+			return Math.min(imgDimension, 320);
+		else // ("A" or other) High Definition
+			return imgDimension;
+	}
+	self.GetQualityAbbr = function ()
+	{
+		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().abbr;
+	}
+	self.GetQualityName = function ()
+	{
+		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().text;
+	}
+}
+///////////////////////////////////////////////////////////////
 // Video Canvas Context Menu //////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function CanvasContextMenu()
@@ -5978,19 +6233,19 @@ function CanvasContextMenu()
 	{
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").parents(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
-			downloadButton.parent().attr("href", imageLoader.lastSnapshotUrl);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
 		else
 			downloadButton.wrap('<a id="cmroot_liveview_downloadlink" style="display:block" href="'
-				+ imageLoader.lastSnapshotUrl
+				+ videoPlayer.GetLastSnapshotUrl()
 				+ '" onclick="saveSnapshot(&quot;#cmroot_liveview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_liveview_downloadlink").attr("download", "temp.jpg");
-		if (imageLoader.currentlyLoadingImage.isLive)
+		if (videoPlayer.Loading().image.isLive)
 		{
 			imageRenderer.CamImgClickStateReset();
 			var homeGroupObj = null;
-			var camData = cameraListLoader.GetCameraUnderMousePointer(e);
+			var camData = videoPlayer.GetCameraUnderMousePointer(e);
 			if (camData == null)
-				camData = homeGroupObj = cameraListLoader.GetCurrentHomeGroupObj();
+				camData = homeGroupObj = videoPlayer.GetCurrentHomeGroupObj();
 			lastLiveContextMenuSelectedCamera = camData;
 			if (camData != null)
 			{
@@ -5999,7 +6254,7 @@ function CanvasContextMenu()
 				$("#contextMenuCameraName").text(camName);
 				$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons below are specific to the camera: " + camName);
 				var $maximize = $("#contextMenuMaximize");
-				var isMaxAlready = (camData.optionValue == imageLoader.currentlyLoadedImage.id && homeGroupObj == null);
+				var isMaxAlready = (camData.optionValue == videoPlayer.Loaded().image.id && homeGroupObj == null);
 				$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
 				$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
 			}
@@ -6015,7 +6270,7 @@ function CanvasContextMenu()
 				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
 					toaster.Warning("Function is unavailable.");
 				else
-					cameraListLoader.ImgClick_Camera(lastLiveContextMenuSelectedCamera);
+					videoPlayer.ImgClick_Camera(lastLiveContextMenuSelectedCamera);
 				break;
 			case "trigger":
 				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
@@ -6048,11 +6303,11 @@ function CanvasContextMenu()
 					cameraProperties.open(lastLiveContextMenuSelectedCamera.optionValue);
 				break;
 			case "openhls":
-				hlsPlayer.OpenDialog(imageLoader.currentlyLoadingImage.id);
+				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
 				break;
 			case "opennewtab":
 				jpegSuppressionDialog.Open();
-				window.open(imageLoader.lastSnapshotFullUrl);
+				window.open(videoPlayer.GetLastSnapshotFullUrl());
 				break;
 			case "saveas":
 				return true;
@@ -6072,22 +6327,22 @@ function CanvasContextMenu()
 				SetUISize('smaller');
 				break;
 			case "viewChangeMode_Traditional":
-				cameraListLoader.SetViewChangeMode(0);
+				videoPlayer.SetViewChangeMode(0);
 				break;
 			case "viewChangeMode_Scale":
-				cameraListLoader.SetViewChangeMode(1);
+				videoPlayer.SetViewChangeMode(1);
 				break;
 			case "viewChangeMode_Fade":
-				cameraListLoader.SetViewChangeMode(2);
+				videoPlayer.SetViewChangeMode(2);
 				break;
 			case "viewChangeMode_ScaleInFadeOut":
-				cameraListLoader.SetViewChangeMode(3);
+				videoPlayer.SetViewChangeMode(3);
 				break;
 			case "viewChangeMode_FadeScaleInFadeOut":
-				cameraListLoader.SetViewChangeMode(4);
+				videoPlayer.SetViewChangeMode(4);
 				break;
 			case "viewChangeMode_FadeScale":
-				cameraListLoader.SetViewChangeMode(5);
+				videoPlayer.SetViewChangeMode(5);
 				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
@@ -6155,19 +6410,19 @@ function CanvasContextMenu()
 	}
 	var onTriggerRecordContextMenu = function (e)
 	{
-		if (imageLoader.currentlyLoadingImage.isLive)
+		if (videoPlayer.Loading().image.isLive)
 			return false;
 
-		lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(imageLoader.currentlyLoadingImage.id, imageLoader.currentlyLoadingImage.path);
+		lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(videoPlayer.Loading().image.id, videoPlayer.Loading().image.path);
 		var clipData = clipLoader.GetClipFromId(lastRecordContextMenuSelectedClip.clipId);
 		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").parents(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
-			downloadButton.parent().attr("href", imageLoader.lastSnapshotUrl);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
 		else
 			downloadButton.wrap('<a id="cmroot_recordview_downloadlink" style="display:block" href="'
-				+ imageLoader.lastSnapshotUrl
+				+ videoPlayer.GetLastSnapshotUrl()
 				+ '" onclick="saveSnapshot(&quot;#cmroot_recordview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_recordview_downloadlink").attr("download", "temp.jpg");
 
@@ -6194,8 +6449,8 @@ function CanvasContextMenu()
 					clipProperties.open(lastRecordContextMenuSelectedClip.clipId);
 				break;
 			case "opennewtab":
-				imageLoader.Playback_Pause();
-				window.open(imageLoader.lastSnapshotFullUrl);
+				videoPlayer.Playback_Pause();
+				window.open(videoPlayer.GetLastSnapshotFullUrl());
 				break;
 			case "saveas":
 				return true;
@@ -7311,7 +7566,6 @@ var objectVisualizer = new (function ObjectVisualizer()
 		$root.modal({ removeElementOnClose: true, maxWidth: 600 });
 	}
 })();
-
 ///////////////////////////////////////////////////////////////
 // Reset Camera ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -7753,16 +8007,16 @@ function AudioPlayer()
 	this.audioPlay = function ()
 	{
 		// Plays audio for the current live camera if it is not already playing
-		if (!imageLoader)
+		if (!videoPlayer)
 			return;
-		if (!imageLoader.currentlyLoadingImage.audio || self.GetVolume() == 0)
+		if (!videoPlayer.Loading().image.audio || self.GetVolume() == 0)
 		{
 			self.audioStop();
 			return;
 		}
 		if (currentServer.isLoggingOut)
 			return;
-		var newSrc = currentServer.remoteBaseURL + "audio/" + imageLoader.currentlyLoadingImage.id + "/temp.wav" + currentServer.GetRemoteSessionArg("?", true);
+		var newSrc = currentServer.remoteBaseURL + "audio/" + videoPlayer.Loading().image.id + "/temp.wav" + currentServer.GetRemoteSessionArg("?", true);
 		if ($audiosourceobj.attr("src") != newSrc)
 		{
 			$audiosourceobj.attr("src", newSrc);
@@ -7772,7 +8026,7 @@ function AudioPlayer()
 	}
 	this.audioStop = function ()
 	{
-		if (!imageLoader)
+		if (!videoPlayer)
 			return;
 		// Stops audio if it is playing
 		$("#volumeBar").css("color", "#969BA7");
@@ -7813,12 +8067,12 @@ function saveSnapshot(btnSelector)
 {
 	if (typeof btnSelector == "undefined")
 		btnSelector = "#save_snapshot_btn";
-	var camName = cameraListLoader.GetCameraName(imageLoader.currentlyLoadingImage.id);
-	var date = GetDateStr(new Date(imageLoader.currentImageDateMs), true);
+	var camName = cameraListLoader.GetCameraName(videoPlayer.Loading().image.id);
+	var date = GetDateStr(new Date(videoPlayer.GetCurrentImageTimeMs()), true);
 	date = date.replace(/\//g, '-').replace(/:/g, '.');
 	var fileName = camName + " " + date + ".jpg";
 	$(btnSelector).attr("download", fileName);
-	$(btnSelector).attr("href", imageLoader.lastSnapshotUrl);
+	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl());
 	setTimeout(function ()
 	{
 		$(btnSelector).attr("download", "temp.jpg");
@@ -8388,7 +8642,7 @@ function LoadingHelper()
 		loadingFinished = true;
 		$("#loadingmsgwrapper").remove();
 		resized();
-		imageLoader.Start();
+		videoPlayer.Initialize();
 		BI_CustomEvent.Invoke("FinishedLoading");
 	}
 	$(window).load(function ()
