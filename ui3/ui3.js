@@ -5,6 +5,8 @@
 "use strict";
 var developerMode = false;
 
+var pnacl_player_supported = false;
+
 var toaster = new Toaster();
 var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
@@ -75,6 +77,9 @@ var togglableUIFeatures =
 		]
 	];
 
+// TODO: Remove jpeg suppression dialog.
+// TODO: Delay start of h264 streaming until player is fully loaded.
+// TODO: Do not close clip/alert when manually reloading the same UI tab.  Instead, keep clip open and highlight/scroll to it, only closing the clip if it is no longer listed.
 // TODO: Deleting a clip while watching a clip causes the new clip list to be filtered to the watched clip. This is a bug - the clip filter should remain the same as before.
 // TODO: Handle single-deletion failure messages better.
 // TODO: Add browser feature detection.
@@ -96,6 +101,8 @@ var togglableUIFeatures =
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
 // -- MAYBE Including an option to update the clip list automatically (on by default) ... to reduce bandwidth usage ??
+// -- Hardware acceleration option for pnacl_player (off by default, because it significantly slows the stream startup time)
+// -- -- on the embed element, hwaccel value 0 is NO HWVA.  1 is HWVA with fallback.  2 is HWVA only.
 
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
@@ -336,6 +343,9 @@ $(function ()
 		alert(fileSystemErrorMessage);
 		toaster.Error(fileSystemErrorMessage, 60000);
 	}
+
+	pnacl_player_supported = BrowserIsChrome() && navigator.mimeTypes['application/x-pnacl'] !== undefined;
+
 	LoadDefaultSettings();
 
 	currentPrimaryTab = ValidateTabName(settings.ui3_defaultTab);
@@ -4935,6 +4945,8 @@ function VideoPlayerController()
 	var isInitialized = false;
 
 	var playerModule = null;
+	var moduleHolder = {};
+	this.useH264ForLiveView_TempVar = false; // TODO: Remove this variable once H.264 is available for clips.
 
 	var currentlyLoadingCamera = null;
 	var currentlyLoadedCamera = null;
@@ -4946,6 +4958,38 @@ function VideoPlayerController()
 
 	var viewChangeMode = 4;
 
+	this.CurrentPlayerModuleName = function ()
+	{
+		if (playerModule == moduleHolder["jpeg"])
+			return "jpeg";
+		else if (playerModule == moduleHolder["h264"])
+			return "h264";
+		return "unknown";
+	}
+	this.SetPlayerModule = function (moduleName, refreshVideoNow)
+	{
+		if (playerModule != null && playerModule != moduleHolder[moduleName])
+			playerModule.Deactivate();
+
+		if (moduleName == "jpeg")
+		{
+			if (moduleHolder[moduleName] == null)
+				moduleHolder[moduleName] = new JpegVideoModule();
+			playerModule = moduleHolder[moduleName];
+		}
+		else if (moduleName == "h264")
+		{
+			if (moduleHolder[moduleName] == null)
+			{
+				toaster.Info("Loading experimental raw H.264 live video player");
+				moduleHolder[moduleName] = new FetchPNaClH264VideoModule();
+			}
+			playerModule = moduleHolder[moduleName];
+		}
+		if (refreshVideoNow)
+			playerModule.OpenVideo();
+	}
+
 	this.Initialize = function ()
 	{
 		if (isInitialized)
@@ -4953,8 +4997,27 @@ function VideoPlayerController()
 		isInitialized = true;
 
 		imageRenderer.RegisterCamImgClickHandler();
-		playerModule = new JpegVideoModule();
-		playerModule.OpenLive();
+		self.SetPlayerModule("jpeg");
+		playerModule.OpenVideo();
+
+		var visProp = getHiddenProp();
+		if (visProp)
+		{
+			var evtname = visProp.replace(/[H|h]idden/, '') + 'visibilitychange';
+			document.addEventListener(evtname, function ()
+			{
+				// Called when page visibility changes.
+				playerModule.VisibilityChanged(!documentIsHidden());
+				if (documentIsHidden())
+				{
+					console.log("Page hidden");
+				}
+				else
+				{
+					console.log("Page shown");
+				}
+			});
+		}
 	}
 
 	// Methods for querying what is currently playing
@@ -5058,24 +5121,24 @@ function VideoPlayerController()
 		{
 			// Back to Group
 			camData = cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId);
-			if (scaleOut)
-				playerModule.DrawCameraFullCameraAsThumb && playerModule.DrawCameraFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
+			if (scaleOut && playerModule.DrawCameraFullCameraAsThumb)
+				playerModule.DrawCameraFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
 			if (fadeOut)
 				imageRenderer.SetFrameOpacity(0.5);
 			self.LoadLiveCamera(camData);
-			if (scaleOut)
-				self.LoadingCameraHasRenderedFirstImage(); // TODO: Verify this is working correctly here
+			if (scaleOut && playerModule.DrawCameraFullCameraAsThumb)
+				self.CameraOrResolutionChange(); // TODO: Verify this is working correctly here
 		}
 		else
 		{
 			// Maximize
-			if (scaleIn)
-				playerModule.DrawCameraThumbAsFullCamera && playerModule.DrawCameraThumbAsFullCamera(camData.optionValue);
+			if (scaleIn && playerModule.DrawCameraThumbAsFullCamera)
+				playerModule.DrawCameraThumbAsFullCamera(camData.optionValue);
 			if (fadeIn)
 				imageRenderer.SetFrameOpacity(0.5);
 			self.LoadLiveCamera(camData);
-			if (scaleIn)
-				self.LoadingCameraHasRenderedFirstImage(); // TODO: Verify this is working correctly here
+			if (scaleIn && playerModule.DrawCameraThumbAsFullCamera)
+				self.CameraOrResolutionChange(); // TODO: Verify this is working correctly here
 		}
 	}
 
@@ -5129,8 +5192,8 @@ function VideoPlayerController()
 		var cli = currentlyLoadingImage;
 		var clc = currentlyLoadingCamera = camData;
 		cli.id = clc.optionValue;
-		cli.fullwidth = cli.actualwidth = clc.width;
-		cli.fullheight = cli.actualheight = clc.height;
+		cli.maxwidth = cli.fullwidth = cli.actualwidth = clc.width;
+		cli.maxheight = cli.fullheight = cli.actualheight = clc.height;
 		cli.aspectratio = clc.width / clc.height;
 		cli.path = clc.optionValue;
 		cli.isLive = true;
@@ -5153,7 +5216,11 @@ function VideoPlayerController()
 			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
 
 		if (playerModule)
-			playerModule.OpenLive();
+		{
+			if (self.useH264ForLiveView_TempVar)
+				self.SetPlayerModule("h264");
+			playerModule.OpenVideo();
+		}
 	}
 	this.LoadClip = function (clipData)
 	{
@@ -5164,8 +5231,8 @@ function VideoPlayerController()
 			var cli = currentlyLoadingImage;
 			var clc = currentlyLoadingCamera = cam;
 			cli.id = clc.optionValue;
-			cli.fullwidth = cli.actualwidth = clc.width;
-			cli.fullheight = cli.actualheight = clc.height;
+			cli.maxwidth = cli.fullwidth = cli.actualwidth = clc.width;
+			cli.maxheight = cli.fullheight = cli.actualheight = clc.height;
 			cli.aspectratio = clc.width / clc.height;
 			cli.path = clipData.path;
 			cli.isLive = false;
@@ -5186,7 +5253,11 @@ function VideoPlayerController()
 			seekBar.resetSeekHintImg();
 
 			if (playerModule)
-				playerModule.OpenClip();
+			{
+				if (self.useH264ForLiveView_TempVar)
+					self.SetPlayerModule("jpeg");
+				playerModule.OpenVideo();
+			}
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
@@ -5251,7 +5322,7 @@ function VideoPlayerController()
 	}
 
 	// Callback methods for a player module to inform the VideoPlayerController of state changes.
-	this.LoadingCameraHasRenderedFirstImage = function ()
+	this.CameraOrResolutionChange = function ()
 	{
 		imageRenderer.SetDigitalZoom(0);
 		currentlyLoadedImage.CopyValuesFrom(currentlyLoadingImage);
@@ -5313,10 +5384,12 @@ function BICameraData()
 {
 	var self = this;
 	this.id = "";
-	this.fullwidth = 1280;
+	this.fullwidth = 1280; // Native resolution of image; used when calculating with group rects
 	this.fullheight = 720;
 	this.aspectratio = 1280 / 720;
-	this.actualwidth = 1280;
+	this.maxwidth = 1280; // Max image size available from Blue Iris; used as a base for digital zoom
+	this.maxheight = 720;
+	this.actualwidth = 1280; // Actual size of image (when streaming jpeg, this is smaller than maxwidth)
 	this.actualheight = 720;
 	this.path = "";
 	this.isLive = true;
@@ -5330,6 +5403,8 @@ function BICameraData()
 		self.fullwidth = other.fullwidth;
 		self.fullheight = other.fullheight;
 		self.aspectratio = other.aspectratio;
+		self.maxwidth = other.maxwidth;
+		self.maxheight = other.maxheight;
 		self.actualwidth = other.actualwidth;
 		self.actualheight = other.actualheight;
 		self.path = other.path;
@@ -5366,6 +5441,8 @@ function JpegVideoModule()
 
 	var playbackPaused = false;
 
+	var isVisible = !documentIsHidden();
+
 	var clipPlaybackPosition = 0;
 
 	var Initialize = function ()
@@ -5375,7 +5452,6 @@ function JpegVideoModule()
 		isInitialized = true;
 		// Do one-time initialization here
 
-		// TODO: Make sure #camimg_canvas and #backbuffer_canvas and #camimg are not referenced outside of this module.
 		$("#camimg_store").append('<canvas id="camimg_canvas"></canvas>');
 		$("#camimg_store").append('<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />');
 		$("#camimg_store").append('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
@@ -5406,7 +5482,7 @@ function JpegVideoModule()
 					if ($("#camimg").attr('loadingimg') == loading.id)
 					{
 						loadedFirstFrame = true;
-						videoPlayer.LoadingCameraHasRenderedFirstImage();
+						videoPlayer.CameraOrResolutionChange();
 					}
 				}
 
@@ -5416,9 +5492,9 @@ function JpegVideoModule()
 				{
 					if (lastCycleWidth != this.naturalWidth || lastCycleHeight != this.naturalHeight)
 					{
-						loaded.fullwidth = lastCycleWidth = this.naturalWidth;
-						loaded.fullheight = lastCycleHeight = this.naturalHeight;
-						loaded.aspectratio = loaded.fullwidth / loaded.fullheight;
+						loaded.maxwidth = lastCycleWidth = this.naturalWidth;
+						loaded.maxheight = lastCycleHeight = this.naturalHeight;
+						loaded.aspectratio = loaded.maxwidth / loaded.maxheight;
 						resized();
 					}
 				}
@@ -5445,6 +5521,13 @@ function JpegVideoModule()
 			return;
 		isCurrentlyActive = true;
 		// Show yourself
+		// Reset max* = full* because h.264 player modules will have set max* equal to actual*.
+		var loading = videoPlayer.Loading().image;
+		loading.maxwidth = loading.fullwidth;
+		loading.maxheight = loading.fullheight;
+		var loaded = videoPlayer.Loaded().image;
+		loaded.maxwidth = loaded.fullwidth;
+		loaded.maxheight = loaded.fullheight;
 		imageRenderer.ClearCanvas("camimg_canvas");
 		$("#camimg_canvas").appendTo("#camimg_wrapper");
 	}
@@ -5460,17 +5543,16 @@ function JpegVideoModule()
 		ClearGetNewImageTimeout();
 		$("#camimg_canvas").appendTo("#camimg_store");
 	}
+	this.VisibilityChanged = function (visible)
+	{
+		isVisible = visible;
+	}
 	this.LoadedFrameSinceActivate = function ()
 	{
 		return loadedFirstFrame;
 	}
 
-	this.OpenLive = function ()
-	{
-		Activate();
-		GetNewImage();
-	}
-	this.OpenClip = function ()
+	this.OpenVideo = function ()
 	{
 		Activate();
 		clipPlaybackPosition = 0;
@@ -5517,9 +5599,9 @@ function JpegVideoModule()
 		{
 			var timePassed = timeValue - timeLastClipFrame;
 			timeLastClipFrame = timeValue;
-			var speedMultiplier = playbackControls.GetPlaybackSpeed()
+			var speedMultiplier = playbackControls.GetPlaybackSpeed();
 			timePassed *= speedMultiplier;
-			if (playbackPaused || seekBar.IsDragging())
+			if (playbackPaused || seekBar.IsDragging() || !isVisible)
 				timePassed = 0;
 			else if (playbackControls.GetPlayReverse())
 				timePassed *= -1;
@@ -5571,6 +5653,7 @@ function JpegVideoModule()
 				&& !CouldBenefitFromWidthChange(widthToRequest))
 				|| hlsPlayer.IsBlockingJpegRefresh()
 				|| jpegSuppressionDialog.IsOpen()
+				|| !isVisible
 			)
 				GetNewImageAfterTimeout();
 			else
@@ -5742,47 +5825,251 @@ function FetchPNaClH264VideoModule()
 	var self = this;
 	var isInitialized = false;
 	var isCurrentlyActive = false;
-	var loadedFirstFrame = false;
+	var pnacl_player;
+	var fetchStreamer;
+	var isVisible = !documentIsHidden();
+
 	var Initialize = function ()
 	{
 		if (isInitialized)
 			return;
+		console.log("Initializing pnacl_player");
 		isInitialized = true;
 		// Do one-time initialization here
+		$("#camimg_wrapper").append('<div id="pnacl_player_wrapper"></div>');
+		pnacl_player = new Pnacl_Player("#pnacl_player_wrapper", videoPlayer.ImageRendered, videoPlayer.CameraOrResolutionChange);
 	}
 	var Activate = function ()
 	{
 		Initialize();
 		if (isCurrentlyActive)
 			return;
+		console.log("Activating pnacl_player");
 		isCurrentlyActive = true;
 		// Show yourself
+		$("#pnacl_player_wrapper").removeClass("camimg_offscreen");
 	}
 	this.Deactivate = function ()
 	{
+		// TODO: Throttle the rate of Activate/Deactivate so that rapid minimize/maximize can't break the fetch API and leave connections open.
 		if (!isCurrentlyActive)
 			return;
+		console.log("Deactivating pnacl_player");
 		isCurrentlyActive = false;
-		loadedFirstFrame = false;
 		// Stop what you are doing and hide
+		if (fetchStreamer)
+		{
+			fetchStreamer.StopStreaming();
+			fetchStreamer = null;
+		}
+		pnacl_player.Reset();
+		$("#pnacl_player_wrapper").addClass("camimg_offscreen");
+	}
+	this.VisibilityChanged = function (visible)
+	{
+		isVisible = visible;
+		if (isVisible && !isCurrentlyActive)
+			self.OpenVideo();
+		else
+			self.Deactivate();
 	}
 	this.LoadedFrameSinceActivate = function ()
 	{
-		return loadedFirstFrame;
+		return pnacl_player.GetRenderedFrameCount() > 0;
+	}
+	var openVideoTimeout = null;
+	this.OpenVideo = function ()
+	{
+		Activate();
+		if (openVideoTimeout != null)
+			clearTimeout(openVideoTimeout);
+		if (!pnacl_player.IsLoaded())
+		{
+			openVideoTimeout = setTimeout(self.OpenVideo, 5);
+			return;
+		}
+		if (fetchStreamer)
+		{
+			fetchStreamer.StopStreaming();
+			fetchStreamer = null;
+		}
+		pnacl_player.Reset();
+		fetchStreamer = new FetchRawH264Streamer("/h264/" + videoPlayer.Loading().image.id + "/temp.h264" + currentServer.GetRemoteSessionArg("?"), pnacl_player.AcceptFrame,
+			function (e)
+			{
+				console.log("fetch stream ended");
+				console.log(e);
+			});
+	}
+	this.SeekToMs = function (pos)
+	{
+	}
+	this.GetSeekMs = function ()
+	{
+		return 0;
+	}
+	this.GetLastSnapshotUrl = function ()
+	{
+		return "";
+	}
+	this.GetLastSnapshotFullUrl = function ()
+	{
+		return "";
+	}
+	this.GetStaticSnapshotId = function ()
+	{
+		return "";
+	}
+	this.GetCurrentImageTimeMs = function ()
+	{
+		return new Date().getTime();
+	}
+	this.Playback_IsPaused = function ()
+	{
+		return false;
+	}
+	this.Playback_Pause = function ()
+	{
+	}
+	this.Playback_Play = function ()
+	{
+	}
+	this.Playback_PlayPause = function ()
+	{
+	}
+}
+///////////////////////////////////////////////////////////////
+// pnacl_player ///////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
+{
+	var self = this;
+	var $player;
+	var player;
+	var acceptedFrameCount = 0;
+	var renderedFrameCount = 0;
+	var isLoaded = false;
+
+	var moduleDidLoad = function ()
+	{
+		isLoaded = true;
+		console.log("Pnacl_Player Loaded!");
+	}
+	var handleMessage = function (message_event)
+	{
+		if (typeof message_event.data === 'string')
+		{
+			if (message_event.data == "initialized")
+			{
+				console.log(message_event.data);
+			}
+			else if (message_event.data.startsWith("Rendered frame: "))
+			{
+				var dataObj = JSON.parse(message_event.data.substr("Rendered frame: ".length));
+				var loading = videoPlayer.Loading().image;
+				if (loading.actualwidth != dataObj.w || loading.actualheight != dataObj.h || renderedFrameCount == 0)
+				{
+					console.log(message_event.data);
+					loading.actualwidth = dataObj.w;
+					loading.actualheight = dataObj.h;
+					loading.maxwidth = dataObj.w;
+					loading.maxheight = dataObj.h;
+					cameraOrResolutionChange();
+				}
+				frameRendered(new Date().getTime());
+				//console.log(message_event.data);
+				renderedFrameCount++;
+			}
+			else if (message_event.data == "Received frame")
+			{
+				//console.log(message_event.data);
+			}
+			else if (message_event.data.startsWith("Video resized to "))
+			{
+				var parts = message_event.data.substring("Video resized to ".length).split("x");
+				if (parts.length == 2)
+				{
+					var width = parseInt(parts[0]);
+					var height = parseInt(parts[1]);
+
+					//cameraOrResolutionChange();
+				}
+				console.log(message_event.data);
+			}
+			else
+			{
+				console.log(message_event.data);
+			}
+		}
+		else
+		{
+			console.log("Pnacl_Player Message of unhandled type " + (typeof message_event.data));
+			console.log(message_event.data);
+		}
+	}
+	var handleError = function (event)
+	{
+		console.log("Pnacl_Player ERROR: " + player.lastError);
+		console.log(event);
+	}
+	var handleCrash = function (event)
+	{
+		if (common.naclModule.exitStatus == -1)
+			console.log("Pnacl_Player CRASH! Last error: " + player.lastError);
+		else
+			console.log("Pnacl_Player EXITED [" + common.naclModule.exitStatus + "]");
+		console.log(event);
 	}
 
-	this.OpenLive = function (cam)
+	var Initialize = function ()
 	{
-		Activate();
+		var $parent = $(parentSelector);
+		$parent.empty();
+
+		var listenerDiv = $parent.get(0);
+		listenerDiv.addEventListener('load', moduleDidLoad, true);
+		listenerDiv.addEventListener('message', handleMessage, true);
+		listenerDiv.addEventListener('error', handleError, true);
+		listenerDiv.addEventListener('crash', handleCrash, true);
+
+		var $player = $('<embed id="pnacl_player_module" name="pnacl_player_module" width="100%" height="100%" path="pnacl/Release" src="ui3/pnacl/Release/pnacl_player.nmf" type="application/x-pnacl" hwaccel="0" />');
+		$parent.append($player);
+		player = document.getElementById("pnacl_player_module");
+
 	}
-	this.OpenClip(clipData)
+	this.Dispose = function ()
 	{
-		Activate();
+		var listenerDiv = $parent.get(0);
+		listenerDiv.removeEventListener('load', moduleDidLoad, true);
+		listenerDiv.removeEventListener('message', handleMessage, true);
+		listenerDiv.removeEventListener('error', handleError, true);
+		listenerDiv.removeEventListener('crash', handleCrash, true);
+
+		$parent.empty();
 	}
-	this.SeekToMs(pos)
+	this.IsLoaded = function ()
 	{
-		Activate();
+		return isLoaded;
 	}
+	this.GetRenderedFrameCount = function ()
+	{
+		return renderedFrameCount;
+	}
+	this.Reset = function ()
+	{
+		player.postMessage("reset");
+		console.log("this.Reset");
+		acceptedFrameCount = 0;
+		renderedFrameCount = 0;
+	}
+	this.AcceptFrame = function (dataArr)
+	{
+		player.postMessage("f " + (acceptedFrameCount * 200));
+		player.postMessage(dataArr.buffer);
+		acceptedFrameCount++;
+	}
+
+	Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // Image Renderer                                            //
@@ -5828,8 +6115,8 @@ function ImageRenderer()
 	{
 		// Calculate the size of the image we need
 		var ciLoading = videoPlayer.Loading().image;
-		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * (zoomTable[digitalZoom]);
-		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * (zoomTable[digitalZoom]);
+		var imgDrawWidth = ciLoading.maxwidth * dpiScalingFactor * (zoomTable[digitalZoom]);
+		var imgDrawHeight = ciLoading.maxheight * dpiScalingFactor * (zoomTable[digitalZoom]);
 		if (imgDrawWidth == 0)
 		{
 			// Image is supposed to scale to fit the screen (first zoom level)
@@ -5891,14 +6178,6 @@ function ImageRenderer()
 			frameOpacity = opacity;
 			$("#camimg_wrapper").css("opacity", opacity);
 		}
-		// TODO: Delete this code.
-		//var canvas = $("#camimg_canvas").get(0);
-		//var context2d = canvas.getContext("2d");
-		//var imgData = context2d.getImageData(0, 0, canvas.width, canvas.height);
-		//var rgba = imgData.data;
-		//for (var i = 3; i < rgba.length; i += 4)
-		//	rgba[i] = amount;
-		//context2d.putImageData(imgData, 0, 0);
 	}
 	this.ClearCanvas = function (canvasId)
 	{
@@ -5914,10 +6193,9 @@ function ImageRenderer()
 		var imgAvailableHeight = $("#layoutbody").height();
 
 		// Calculate new size based on zoom levels
-		var imgForSizing = videoPlayer.IsFrameVisible() ? videoPlayer.Loaded().image : videoPlayer.Loading().image;
-
-		var imgDrawWidth = imgForSizing.fullwidth * (zoomTable[digitalZoom]);
-		var imgDrawHeight = imgForSizing.fullheight * (zoomTable[digitalZoom]);
+		var imgForSizing = videoPlayer.Loaded().image;
+		var imgDrawWidth = imgForSizing.maxwidth * (zoomTable[digitalZoom]);
+		var imgDrawHeight = imgForSizing.maxheight * (zoomTable[digitalZoom]);
 		if (imgDrawWidth == 0)
 		{
 			imgDrawWidth = imgAvailableWidth;
@@ -6210,13 +6488,17 @@ function CanvasContextMenu()
 
 	var onShowLiveContextMenu = function (menu)
 	{
+		var itemsToDisable = ["cameraname"];
+		if (!pnacl_player_supported)
+			itemsToDisable.push("h264module");
 		if (lastLiveContextMenuSelectedCamera == null || cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
 		{
+			itemsToDisable = itemsToDisable.concat(["trigger", "record", "snapshot", "maximize", "restart", "properties"]);
 			menu.applyrule(
 				{
 					name: "disable_camera_buttons",
 					disable: true,
-					items: ["cameraname", "trigger", "record", "snapshot", "maximize", "restart", "properties"]
+					items: itemsToDisable
 				});
 		}
 		else
@@ -6225,12 +6507,16 @@ function CanvasContextMenu()
 				{
 					name: "disable_cameraname",
 					disable: true,
-					items: ["cameraname"]
+					items: itemsToDisable
 				});
 		}
 	}
 	var onTriggerLiveContextMenu = function (e)
 	{
+		if (pnacl_player_supported)
+			$("#playerModuleEnable").text(videoPlayer.CurrentPlayerModuleName() == "jpeg" ? "Enable" : "Disable");
+		else
+			$("#playerModuleEnable").text("(chrome) ");
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").parents(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
 			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
@@ -6344,6 +6630,20 @@ function CanvasContextMenu()
 			case "viewChangeMode_FadeScale":
 				videoPlayer.SetViewChangeMode(5);
 				break;
+			case "h264module":
+				if (videoPlayer.CurrentPlayerModuleName() == "jpeg")
+				{
+					videoPlayer.useH264ForLiveView_TempVar = true;
+					if (videoPlayer.Loading().image.isLive)
+						videoPlayer.SetPlayerModule("h264", true);
+				}
+				else
+				{
+					videoPlayer.useH264ForLiveView_TempVar = false;
+					if (videoPlayer.Loading().image.isLive)
+						videoPlayer.SetPlayerModule("jpeg", true);
+				}
+				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
 				break;
@@ -6385,6 +6685,7 @@ function CanvasContextMenu()
 						, { text: "FadeScale (5)", icon: "", alias: "viewChangeMode_FadeScale", action: onLiveContextMenuAction }
 					]
 				}
+				, { text: "<span id=\"playerModuleEnable\">Enable</span> h.264 module", icon: "", alias: "h264module", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Trigger Now", icon: "#svg_x5F_Alert1", iconClass: "iconBlue", alias: "trigger", action: onLiveContextMenuAction }
 				, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
@@ -8794,6 +9095,169 @@ function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 	$tmpImg.attr("src", url);
 }
 ///////////////////////////////////////////////////////////////
+// Fetch raw h.264 streaming //////////////////////////////////
+///////////////////////////////////////////////////////////////
+function FetchRawH264Streamer(url, frameCallback, streamEnded)
+{
+	var self = this;
+	var cancel_streaming = false;
+	var is_streaming = false;
+	var reader = null;
+
+	this.StopStreaming = function ()
+	{
+		cancel_streaming = true;
+		if (reader)
+		{
+			reader.cancel("Streaming canceled");
+			reader = null;
+		}
+	}
+	var Start = function ()
+	{
+		console.log("Fetching: " + url);
+		fetch(url)
+			.then(function (res)
+			{
+				if (cancel_streaming)
+					return;
+				reader = res.body.getReader();
+				return pump(reader);
+			})
+			.catch(function (e)
+			{
+				is_streaming = false;
+				streamEnded(e);
+			});
+	}
+
+	function pump()
+	{
+		if (reader == null)
+			return;
+		reader.read().then(function (result)
+		{
+			if (result.done)
+			{
+				is_streaming = false;
+				streamEnded("fetch graceful exit");
+				return;
+			}
+			else if (cancel_streaming)
+			{
+				streamEnded("fetch less graceful exit");
+				return;
+			}
+
+			var buf = result.value;
+
+			for (var i = 0; i < buf.byteLength; i++)
+			{
+				var sentinelLength = GetSentinelLength(buf[i]);
+				if (sentinelLength > 0)
+				{
+					// Found NAL unit sentinel value
+					// i + 1 is the index of the first byte after a sentinel value
+
+					if (NALBuf.length == 0)
+					{
+						// This is the start of the very first NAL unit
+						NALStart = i + 1;
+						AddSentinelValueToNALBuf(sentinelLength);
+					}
+					else
+					{
+						if (NALStart == -1)
+							NALStart = 0;
+						var NALEnd = i - 3;
+						AddToNALBuf(buf, NALStart, NALEnd);
+
+						// Here is a complete NAL Unit
+						var copy = GetNALBufComplete();
+						frameCallback(copy);
+
+						ResetNALBuf();
+						NALStart = i + 1;
+						AddSentinelValueToNALBuf(sentinelLength);
+					}
+				}
+			}
+			if (NALStart == -1)
+			{
+				// No NAL unit started or ended in this buffer
+				AddToNALBuf(buf, 0, buf.length);
+				//console.log("No NAL unit started or ended in this buffer");
+			}
+			else
+			{
+				// A NAL started within this buffer, but did not end
+				//console.log("A NAL started within this buffer, but did not end");
+				AddToNALBuf(buf, NALStart, buf.length);
+				NALStart = -1;
+			}
+
+			return pump();
+		}
+		).catch(function (e)
+		{
+			is_streaming = false;
+			console.log(e);
+			StreamingEnded();
+		});
+	}
+	var nals = 0;
+	var NALStart = -1;
+	var NALBuf = [];
+	var concurrentZeros = 0;
+	var GetSentinelLength = function (byte)
+	{
+		// Returns 4 or 3 upon encountering the 1 in [0,0,0,1] or [0,0,1]
+		if (byte == 0)
+			concurrentZeros++;
+		else
+		{
+			if (byte == 1 && concurrentZeros > 1)
+			{
+				var retVal = concurrentZeros > 2 ? 4 : 3;
+				concurrentZeros = 0;
+				return retVal;
+			}
+			else
+				concurrentZeros = 0;
+		}
+		return 0;
+	}
+	var ResetNALBuf = function ()
+	{
+		NALBuf = [];
+	}
+	var AddSentinelValueToNALBuf = function (sentinelLength)
+	{
+		if (sentinelLength == 3)
+			NALBuf.push(new Uint8Array([0, 0, 1]));
+		else
+			NALBuf.push(new Uint8Array([0, 0, 0, 1]));
+	}
+	var AddToNALBuf = function (buf, idxStart, idxEnd)
+	{
+		NALBuf.push(buf.subarray(idxStart, idxEnd));
+	}
+	var GetNALBufComplete = function ()
+	{
+		var totalSize = 0;
+		for (var i = 0; i < NALBuf.length; i++)
+			totalSize += NALBuf[i].length;
+		var tmpBuf = new Uint8Array(totalSize);
+		var tmpIdx = 0;
+		for (var i = 0; i < NALBuf.length; i++)
+			for (var n = 0; n < NALBuf[i].length; n++)
+				tmpBuf[tmpIdx++] = NALBuf[i][n];
+		return tmpBuf;
+	}
+
+	Start();
+}
+///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function isCanvasSupported()
@@ -8945,7 +9409,7 @@ function CleanUpGroupName(groupName)
 }
 String.prototype.startsWith = function (prefix)
 {
-	return this.indexOf(prefix) === 0;
+	return this.lastIndexOf(prefix, 0) === 0;
 }
 
 String.prototype.endsWith = function (suffix)
@@ -9207,4 +9671,32 @@ function BrowserIsEdge()
 		_browser_is_edge = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
 	return _browser_is_edge == 1;
 
+}
+function BrowserIsChrome()
+{
+	return navigator.appVersion.indexOf(" Chrome/") > -1;
+}
+function getHiddenProp()
+{
+	var prefixes = ['webkit', 'moz', 'ms', 'o'];
+
+	// if 'hidden' is natively supported just return it
+	if ('hidden' in document) return 'hidden';
+
+	// otherwise loop over all the known prefixes until we find one
+	for (var i = 0; i < prefixes.length; i++)
+	{
+		if ((prefixes[i] + 'Hidden') in document)
+			return prefixes[i] + 'Hidden';
+	}
+
+	// otherwise it's not supported
+	return null;
+}
+function documentIsHidden()
+{
+	var prop = getHiddenProp();
+	if (!prop) return false;
+
+	return document[prop];
 }
