@@ -77,6 +77,7 @@ var togglableUIFeatures =
 		]
 	];
 
+// TODO: Operating the PTZ pad should dismiss open context menus.
 // TODO: Remove jpeg suppression dialog.
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Do not close clip/alert when manually reloading the same UI tab.  Instead, keep clip open and highlight/scroll to it, only closing the clip if it is no longer listed.
@@ -228,7 +229,7 @@ function GetLocalStorage()
 	/// </summary>
 	try
 	{
-		if (typeof (Storage) !== "undefined")
+		if (typeof (Storage) !== "undefined" && localStorage)
 			return localStorage; // May throw exception if local storage is disabled by browser settings!
 	}
 	catch (ex)
@@ -256,7 +257,7 @@ function IsNewGeneration(key, gen)
 function GetLocalStorageWrapper()
 {
 	/// <summary>Returns the local storage object or a wrapper suitable for the current Blue Iris server. The result of this should be stored in the settings variable.</summary>
-	if (typeof (Storage) !== "undefined")
+	if (typeof (Storage) !== "undefined" && localStorage)
 	{
 		if (currentServer.isUsingRemoteServer)
 		{
