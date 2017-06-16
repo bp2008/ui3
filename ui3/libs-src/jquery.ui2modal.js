@@ -62,7 +62,7 @@
 		self.$closebtn = $('<div><svg viewbox="0 0 40 40">'
 			+ '<circle fill="white" cx="20" cy="20" r="20"/>'
 			+ '<circle fill="black" cx="20" cy="20" r="17"/>'
-			+ '<path stroke="white" stroke-width="5" d="M 16,11 L 24,29 M 29,11 L 11,29" />'
+			+ '<path stroke="white" stroke-width="5" d="M 12,12 L 28,28 M 28,12 L 12,28" />'
 			+ '</svg></div>');
 		self.$closebtn.addClass("ui2modal_close");
 		self.$closebtn.css("position", "absolute");

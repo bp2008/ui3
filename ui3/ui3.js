@@ -7,6 +7,65 @@ var developerMode = false;
 
 var pnacl_player_supported = false;
 
+///////////////////////////////////////////////////////////////
+// Feature Detect /////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function DoUIFeatureDetection()
+{
+	try
+	{
+		if (!isCanvasSupported())
+			MissingRequiredFeature("HTML5 Canvas");
+		else if (!isLocalStorageEnabled())
+			MissingRequiredFeature("Local Storage");
+		else
+		{
+			pnacl_player_supported = BrowserIsChrome() && navigator.mimeTypes['application/x-pnacl'] !== undefined;
+			// All critical tests pass
+			return;
+		}
+		// A critical test failed
+		location.href = "/jpegpull.htm";
+	}
+	catch (ex)
+	{
+		alert("Unknown error during feature detection. This web browser is likely incompatible.");
+		try
+		{
+			console.log(ex);
+		}
+		catch (ex2)
+		{
+		}
+	}
+}
+function MissingRequiredFeature(featureName)
+{
+	alert("This web interface requires a feature that is unavailable or disabled in your web browser.\n\nMissing feature: " + featureName + "\n\nYou will be redirected to a simpler web interface.");
+}
+function isCanvasSupported()
+{
+	var elem = document.createElement('canvas');
+	return !!(elem.getContext && elem.getContext('2d'));
+}
+function isLocalStorageEnabled()
+{
+	try
+	{
+		var key = "local_storage_test_item";
+		localStorage.setItem(key, key);
+		localStorage.removeItem(key);
+		return true;
+	} catch (e)
+	{
+		return false;
+	}
+}
+
+DoUIFeatureDetection();
+///////////////////////////////////////////////////////////////
+// Globals (most of them) /////////////////////////////////////
+///////////////////////////////////////////////////////////////
 var toaster = new Toaster();
 var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
@@ -23,8 +82,9 @@ var statusBars = null;
 var dropdownBoxes = null;
 var jpegQualityHelper = null;
 var ptzButtons = null;
-var playbackControls = null;
+var playbackHeader = null;
 var seekBar = null;
+var playbackControls = null;
 var clipTimeline = null;
 var hotkeys = null;
 var dateFilter = null;
@@ -75,22 +135,27 @@ var togglableUIFeatures =
 			}]
 			, function () { return !videoPlayer.Loading().image.ptz; }
 		]
+		, ["#playbackHeader", "clipNameLabel", "Clip Name", function (enabled)
+		{
+			if (enabled)
+				$("#clipNameHeading").show();
+			else
+				$("#clipNameHeading").hide();
+		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
 
+// TODO: Ensure that being zoomed in on a modern mobile device doesn't break click coordinate detection.
 // TODO: Operating the PTZ pad should dismiss open context menus.
 // TODO: Remove jpeg suppression dialog.
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Do not close clip/alert when manually reloading the same UI tab.  Instead, keep clip open and highlight/scroll to it, only closing the clip if it is no longer listed.
 // TODO: Deleting a clip while watching a clip causes the new clip list to be filtered to the watched clip. This is a bug - the clip filter should remain the same as before.
 // TODO: Handle single-deletion failure messages better.
-// TODO: Add browser feature detection.
-// -- Canvas support
-// -- Local Storage support
-// -- PNaCl support?
 // TODO: Use ba-bbq or remove it from the libs-ui3.js file.
 // TODO: Fullscreen mode for clips and live view using a placeholder button in lower right.  Fullscreen mode should allocate all available space to the video, hiding unnecessary UI elements.  It should also request that the browser enters full-screen mode.
-// TODO: Clip title appears at top of clip player when mouse draws near.
-// TODO: Close button (see TODO far below in script) and alternative fullscreen button appears at top right of clip player when mouse draws near.  Perhaps on the upper left, too?
+// -- Closing a clip while in fullscreen mode should result in loading the "Live View" tab.
+// -- However auto-changing clips should still work while in fullscreen mode.
+// -- Loading fullscreen mode while on the Alerts or Clips tabs should result in loading the "Live View" tab.
 
 // TODO: Implement PTZ hotkeys.
 // TODO: Implement clip navigation hotkeys.
@@ -104,6 +169,8 @@ var togglableUIFeatures =
 // -- MAYBE Including an option to update the clip list automatically (on by default) ... to reduce bandwidth usage ??
 // -- Hardware acceleration option for pnacl_player (off by default, because it significantly slows the stream startup time)
 // -- -- on the embed element, hwaccel value 0 is NO HWVA.  1 is HWVA with fallback.  2 is HWVA only.
+// -- Long press to open context menus (enabling this should disable longpress to set preset).  Affects some devices, e.g. samsung smart TV remote control
+// -- Idle Timeout (minutes)
 
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
@@ -189,6 +256,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_feature_enabled_ptzControls"
+			, value: "1"
+		}
+		, {
+			key: "ui3_feature_enabled_clipNameLabel"
 			, value: "1"
 		}
 	];
@@ -345,8 +416,6 @@ $(function ()
 		toaster.Error(fileSystemErrorMessage, 60000);
 	}
 
-	pnacl_player_supported = BrowserIsChrome() && navigator.mimeTypes['application/x-pnacl'] !== undefined;
-
 	LoadDefaultSettings();
 
 	currentPrimaryTab = ValidateTabName(settings.ui3_defaultTab);
@@ -451,9 +520,11 @@ $(function ()
 
 	SetupCollapsibleTriggers();
 
-	playbackControls = new PlaybackControls();
-
 	seekBar = new SeekBar();
+
+	playbackHeader = new PlaybackHeader();
+
+	playbackControls = new PlaybackControls();
 
 	clipTimeline = new ClipTimeline();
 
@@ -487,7 +558,21 @@ $(function ()
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
-		togglableContextMenus.push(new ContextMenu_EnableDisableItem(togglableUIFeatures[i][0], togglableUIFeatures[i][1], togglableUIFeatures[i][2], togglableUIFeatures[i][3], togglableUIFeatures[i][4], togglableUIFeatures[i][5]));
+	{
+		var item = togglableUIFeatures[i];
+		if (item.length < 4)
+			continue;
+		if (item.length < 5)
+			item.push(null);
+		if (item.length < 6)
+			item.push(null);
+		if (item.length < 7)
+			item.push(["Enable", "Disable", "Toggle"]);
+		else if (item[6].length != 3)
+			item[6] = ["Enable", "Disable", "Toggle"];
+
+		togglableContextMenus.push(new ContextMenu_EnableDisableItem(item[0], item[1], item[2], item[3], item[4], item[5], item[6]));
+	}
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -623,6 +708,8 @@ function resized()
 	layoutbody.css("height", windowH - topH - botH + "px");
 
 	playbackControls.resized();
+
+	playbackHeader.resized();
 
 	// Size layoutbottom
 	layoutbottom.css("left", leftW + "px");
@@ -2240,6 +2327,7 @@ function PlaybackControls()
 			isVisible = true;
 			self.resized();
 		}
+		playbackHeader.Show();
 	}
 	this.Hide = function ()
 	{
@@ -2252,6 +2340,7 @@ function PlaybackControls()
 			self.resized();
 			seekBar.onHide();
 		}
+		playbackHeader.Hide();
 	}
 	this.FadeIn = function ()
 	{
@@ -2263,6 +2352,7 @@ function PlaybackControls()
 			isVisible = true;
 			self.resized();
 		}
+		playbackHeader.FadeIn();
 	}
 	this.FadeOut = function ()
 	{
@@ -2277,6 +2367,7 @@ function PlaybackControls()
 			self.resized();
 			seekBar.onHide();
 		}
+		playbackHeader.FadeOut();
 	}
 	var clearHideTimout = function ()
 	{
@@ -2487,6 +2578,72 @@ function PlaybackControls()
 		$("#playbackSettingsQualityMark").removeClass("HD SD LD");
 		$("#playbackSettingsQualityMark").addClass(hintText);
 		$("#playbackSettingsQualityMark").text(hintText);
+	}
+}
+///////////////////////////////////////////////////////////////
+// Playback Controls //////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function PlaybackHeader()
+{
+	var self = this;
+	var $layoutbody = $("#layoutbody");
+	var $ph = $("#playbackHeader");
+	var $closeBtnL = $("#closeClipLeft");
+	var $clipNameHeading = $("#clipNameHeading");
+	var isVisible = $ph.is(":visible");
+
+	$closeBtnL.click(function ()
+	{
+		clipLoader.CloseCurrentClip();
+	});
+	this.resized = function ()
+	{
+		$clipNameHeading.css("width", $ph.width() - $closeBtnL.outerWidth(true));
+	}
+	this.Show = function ()
+	{
+		if (!isVisible)
+		{
+			$ph.stop(true, true);
+			$ph.show();
+			isVisible = true;
+			self.resized();
+		}
+	}
+	this.Hide = function ()
+	{
+		if (isVisible)
+		{
+			$ph.stop(true, true);
+			$ph.hide();
+			isVisible = false;
+			self.resized();
+		}
+	}
+	this.FadeIn = function ()
+	{
+		if (!isVisible)
+		{
+			$ph.stop(true, true);
+			$ph.fadeIn(100);
+			isVisible = true;
+			self.resized();
+		}
+	}
+	this.FadeOut = function ()
+	{
+		if (isVisible)
+		{
+			$ph.stop(true, true);
+			$ph.fadeOut(100);
+			isVisible = false;
+			self.resized();
+		}
+	}
+	this.SetClipName = function (clipData)
+	{
+		var name = clipLoader.GetClipDisplayName(clipData);
+		$clipNameHeading.text(name);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -3183,6 +3340,11 @@ function ClipLoader(clipsBodySelector)
 			retVal.download = cameraListLoader.GetCameraName(clipData.camera) + " " + date + clipData.path.substr(extensionIdx);
 		}
 		return retVal;
+	}
+	this.GetClipDisplayName = function (clipData)
+	{
+		var date = GetDateStr(clipData.date);
+		return cameraListLoader.GetCameraName(clipData.camera) + " " + date;
 	}
 	this.IsClipSelected = function (clipId)
 	{
@@ -5244,6 +5406,7 @@ function VideoPlayerController()
 
 			audioPlayer.audioStop();
 
+			playbackHeader.SetClipName(clipData);
 			playbackControls.Show();
 			playbackControls.SetDownloadClipLink(clipData);
 			if (clipLoader.ClipDataIndicatesFlagged(clipData))
@@ -6518,7 +6681,7 @@ function CanvasContextMenu()
 			$("#playerModuleEnable").text(videoPlayer.CurrentPlayerModuleName() == "jpeg" ? "Enable" : "Disable");
 		else
 			$("#playerModuleEnable").text("(chrome) ");
-		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").parents(".b-m-item");
+		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
 			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
 		else
@@ -6719,7 +6882,7 @@ function CanvasContextMenu()
 		var clipData = clipLoader.GetClipFromId(lastRecordContextMenuSelectedClip.clipId);
 		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 
-		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").parents(".b-m-item");
+		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
 			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
 		else
@@ -6729,7 +6892,7 @@ function CanvasContextMenu()
 		$("#cmroot_recordview_downloadlink").attr("download", "temp.jpg");
 
 		var $dlBtnLabel = $("#cmroot_recordview_downloadclipbutton");
-		var $dlBtn = $dlBtnLabel.parents(".b-m-item");
+		var $dlBtn = $dlBtnLabel.closest(".b-m-item");
 		if (clipData.fileSize)
 			$dlBtnLabel.text("Download clip (" + htmlEncode(clipData.fileSize) + ")");
 		else
@@ -6737,7 +6900,9 @@ function CanvasContextMenu()
 		if ($dlBtn.parent().attr("id") != "cmroot_recordview_downloadcliplink")
 			$dlBtn.wrap('<a id="cmroot_recordview_downloadcliplink" style="display:block" href="" target="_blank"></a>');
 		$dlBtn.parent().attr("href", clipInfo.href).attr("download", clipInfo.download);
-		$("#contextMenuClipName").text(clipInfo.download);
+
+		var name = clipLoader.GetClipDisplayName(clipData);
+		$("#contextMenuClipName").text(name).closest(".b-m-item,.b-m-idisable").attr("title", name);
 
 		imageRenderer.CamImgClickStateReset();
 		return true;
@@ -6759,7 +6924,7 @@ function CanvasContextMenu()
 			case "downloadclip":
 				return true;
 			case "closeclip":
-				clipLoader.CloseCurrentClip(); // TODO: Use this method for the clip close button
+				clipLoader.CloseCurrentClip();
 				return;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
@@ -6847,7 +7012,7 @@ function ClipListContextMenu()
 	}
 	var onTriggerContextMenu = function (e)
 	{
-		var downloadClipButton = $("#cm_cliplist_download").parents(".b-m-item");
+		var downloadClipButton = $("#cm_cliplist_download").closest(".b-m-item");
 		if (downloadClipButton.parent().attr("id") != "cmroot_cliplist_downloadcliplink")
 			downloadClipButton.wrap('<a id="cmroot_cliplist_downloadcliplink" style="display:block" href="javascript:void(0)" target="_blank"></a>');
 		var $dl_link = $("#cmroot_cliplist_downloadcliplink");
@@ -6978,7 +7143,7 @@ function SetUi3FeatureEnabled(uniqueSettingsId, enabled)
 {
 	return settings.setItem("ui3_feature_enabled_" + uniqueSettingsId, enabled ? "1" : "0");
 }
-function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onToggle, extraMenuButtons, shouldDisableToggler)
+function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onToggle, extraMenuButtons, shouldDisableToggler, labels)
 {
 	var self = this;
 	var onShowContextMenu = function (menu)
@@ -7003,9 +7168,9 @@ function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onT
 		// Set text for Enable/Disable button
 		var label = $("#cmToggleLabel_" + uniqueSettingsId);
 		if (GetUi3FeatureEnabled(uniqueSettingsId))
-			label.html("Disable");
+			label.html(labels[1]);
 		else
-			label.html("Enable");
+			label.html(labels[0]);
 		// Set text for Extra buttons.
 		if (extraMenuButtons)
 			for (var i = 0; i < extraMenuButtons.length; i++)
@@ -7034,7 +7199,7 @@ function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onT
 				break;
 		}
 	};
-	var menuItemArray = [{ text: '<span id="cmToggleLabel_' + uniqueSettingsId + '">Toggle</span> ' + itemName, icon: "", alias: "toggle", action: onContextMenuAction }];
+	var menuItemArray = [{ text: '<span id="cmToggleLabel_' + uniqueSettingsId + '">' + labels[2] + '</span> ' + itemName + "&nbsp;", icon: "", alias: "toggle", action: onContextMenuAction }];
 	if (extraMenuButtons)
 		for (var i = 0; i < extraMenuButtons.length; i++)
 		{
@@ -8323,7 +8488,7 @@ function AudioPlayer()
 		{
 			$audiosourceobj.attr("src", newSrc);
 			audioobj.load();
-			audioobj.play().catch(function (e) { });
+			audioobj.play()["catch"](function (e) { }); // .catch == ["catch"], but .catch is invalid in IE 8-
 		}
 	}
 	this.audioStop = function ()
@@ -9125,11 +9290,11 @@ function FetchRawH264Streamer(url, frameCallback, streamEnded)
 				reader = res.body.getReader();
 				return pump(reader);
 			})
-			.catch(function (e)
-			{
-				is_streaming = false;
-				streamEnded(e);
-			});
+		["catch"](function (e)
+		{
+			is_streaming = false;
+			streamEnded(e);
+		});
 	}
 
 	function pump()
@@ -9199,7 +9364,7 @@ function FetchRawH264Streamer(url, frameCallback, streamEnded)
 
 			return pump();
 		}
-		).catch(function (e)
+		)["catch"](function (e)
 		{
 			is_streaming = false;
 			console.log(e);

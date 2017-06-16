@@ -32,6 +32,11 @@
 			transform: scaleY(-1);
 		}
 
+		.stroke
+		{
+			stroke: currentColor;
+		}
+
 		.iconBox
 		{
 			display: inline-block;
@@ -73,9 +78,10 @@
 				{
 					var $icon = $(ele);
 					var icon_id = $icon.attr("id");
-					var doInverse = icon_id.indexOf('svg_x5F') == 0;
+					var doInverse = icon_id.indexOf('svg_x5F_') == 0;
+					var doStroke = icon_id.indexOf('svg_stroke_') == 0;
 					$root.append('<div class="iconBox">'
-						+ '<div class="svgWrapper"><svg class="icon' + (doInverse ? ' iconInverse' : '') + '"><use xlink:href="#' + icon_id + '"></use></svg></div>'
+						+ '<div class="svgWrapper"><svg class="icon' + (doInverse ? ' iconInverse' : '') + (doStroke ? ' stroke' : '') + '"><use xlink:href="#' + icon_id + '"></use></svg></div>'
 						+ ' <div class="label">' + icon_id + '</div> '
 						+ '</div>');
 				});

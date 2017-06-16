@@ -39,7 +39,8 @@
 		{
 			if (typeof window.JSON == 'undefined')
 			{
-				alert("Your browser is too old to use the Blue Iris web interface with secure authentication.");
+				$("#login").text("Your browser is too old to use the Blue Iris web interface with secure authentication.\n\nTo proceed with this browser, disable the \"Secure only\" requirement within Blue Iris's web server settings.");
+				$("#login").css("color", "#EEEEEE").css("margin", "8px");
 				return;
 			}
 			if (UrlParameters.Get("autologin") == "0")

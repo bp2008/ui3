@@ -8,9 +8,14 @@ svg.icon
 	pointer-events: none; /* Firefox otherwise fires document.mouseleave when mousing over svg */
 }
 
-.noflip svg.icon
+.noflip svg.icon, svg.noflip
 {
 	transform: scaleY(1);
+}
+
+svg.stroke
+{
+	stroke: currentColor;
 }
 /* Loading */
 .loadinglabel
@@ -1672,10 +1677,12 @@ div.icon, a.icon
 {
 	position: absolute;
 }
+
 #camimg_store
 {
 	display: none;
 }
+
 #camimg
 {
 	display: none;
@@ -2132,6 +2139,94 @@ div.icon, a.icon
 #seekBarHandle.focus
 {
 	opacity: 1;
+}
+/* Playback Header */
+#playbackHeader
+{
+	position: absolute;
+	background-color: rgba(0,0,0,0.5);
+	background: -moz-linear-gradient(top, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 100%); /* FF3.6-15 */
+	background: -webkit-linear-gradient(top, rgba(0,0,0,0.25) 0%,rgba(0,0,0,0) 100%); /* Chrome10-25,Safari5.1-6 */
+	background: linear-gradient(to bottom, rgba(0,0,0,0.25) 0%,rgba(0,0,0,0) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#88000000', endColorstr='#00000000',GradientType=0 ); /* IE6-9 */
+	top: 0px;
+	height: 64px;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: #EEEEEE;
+	width: 100%;
+}
+
+.sizeSmall #playbackHeader
+{
+	height: 42px;
+}
+
+.sizeMedium #playbackHeader
+{
+	height: 54px;
+}
+
+#closeClipLeft
+{
+	display: inline-block;
+	vertical-align: top;
+	margin: 12px 16px;
+	width: 32px;
+	height: 32px;
+	cursor: pointer;
+}
+
+	#closeClipLeft:hover
+	{
+		color: #FFCC00;
+	}
+
+	#closeClipLeft:active
+	{
+		color: #FF8800;
+	}
+
+.sizeSmall #closeClipLeft
+{
+	margin: 4px 8px;
+	width: 24px;
+	height: 24px;
+}
+
+.sizeMedium #closeClipLeft
+{
+	margin: 8px 12px;
+	width: 28px;
+	height: 28px;
+}
+
+#clipNameHeading
+{
+	display: inline-block;
+	vertical-align: top;
+	font-size: 32px;
+	line-height: 56px;
+	text-shadow: 0px 0px 7px rgba(0,0,0,0.5);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding-right: 20px;
+	box-sizing: border-box;
+}
+
+.sizeSmall #clipNameHeading
+{
+	font-size: 24px;
+	line-height: 32px;
+	text-shadow: 0px 0px 5px rgba(0,0,0,0.5);
+}
+
+.sizeMedium #clipNameHeading
+{
+	font-size: 28px;
+	line-height: 44px;
+	text-shadow: 0px 0px 6px rgba(0,0,0,0.5);
 }
 /* About / Login Dialogs */
 .ui2modal
@@ -2924,6 +3019,7 @@ div::-webkit-resizer
 	height: 100%;
 	overflow: hidden;
 }
+
 .camimg_offscreen
 {
 	width: 10px;
