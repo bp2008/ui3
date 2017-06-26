@@ -5226,7 +5226,7 @@ function VideoPlayerController()
 	}
 	this.GetCurrentImageTimeMs = function ()
 	{
-		return videoModule.GetCurrentImageTimeMs();
+		return playerModule.GetCurrentImageTimeMs();
 	}
 
 	// Methods dealing with mouse clicks.
@@ -5811,7 +5811,7 @@ function JpegVideoModule()
 			GetNewImageAfterTimeout();
 		else
 		{
-			// TODO: Instead of checking hlsPlayer.IsBlockingJpegRefresh() and jpegSuppressionDialog.IsOpen(), try having those dialogs instruct the videoPlayer to Stop().  This can deactivate the videoModule.  Configure the Activate procedure to clear the image by using imageRenderer's opacity options to hide or severely darken the frame while waiting for video to begin again.
+			// TODO: Instead of checking hlsPlayer.IsBlockingJpegRefresh() and jpegSuppressionDialog.IsOpen(), try having those dialogs instruct the videoPlayer to Stop().  This can deactivate the playerModule.  Configure the Activate procedure to clear the image by using imageRenderer's opacity options to hide or severely darken the frame while waiting for video to begin again.
 			if ((isLoadingRecordedSnapshot
 				&& loading.path == videoPlayer.Loaded().image.path
 				&& !CouldBenefitFromWidthChange(widthToRequest))
