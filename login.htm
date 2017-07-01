@@ -39,7 +39,7 @@
 		{
 			if (typeof window.JSON == 'undefined')
 			{
-				$("#login").text("Your browser is too old to use the Blue Iris web interface with secure authentication.\n\nTo proceed with this browser, disable the \"Secure only\" requirement within Blue Iris's web server settings.");
+				$("#login").text("Your web browser is too old to use the Blue Iris web interface properly.\n\nTo proceed with this browser, disable the \"Secure only\" requirement within Blue Iris's web server settings.");
 				$("#login").css("color", "#EEEEEE").css("margin", "8px");
 				return;
 			}
@@ -156,7 +156,7 @@
 					}
 					else
 					{
-						HandleError(response.data.reason);
+						HandleError(response.data ? response.data.reason : "Login failed but Blue Iris did not provide a reason.");
 					}
 				},
 					function (jqXHR, textStatus, errorThrown)
@@ -280,8 +280,8 @@
 <body>
 	<div id="login">
 		<h1>%%SYSNAME%%</h1>
-		<input id="txtUn" type="text" class="text" placeholder="Username" />
-		<input id="txtPw" type="password" class="text" placeholder="Password" onkeypress="return pwKeypress(this,event)" />
+		<input id="txtUn" type="text" class="text" placeholder="Username" autocapitalize="off" autocorrect="off" />
+		<input id="txtPw" type="password" class="text" placeholder="Password" onkeypress="return pwKeypress(this,event)" autocapitalize="off" autocorrect="off" />
 		<div class="checkboxWrapper">
 			<input id="cbLoginAutomatically" type="checkbox" class="checkbox" onchange="cbLoginAutomaticallyClicked()" /><label for="cbLoginAutomatically" id="lblLoginAutomatically"><span class="ui"></span>Log in automatically:</label>
 		</div>
