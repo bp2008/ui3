@@ -143,7 +143,6 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
-// TODO: Include session ID in .h264 requests.
 // TODO: Ensure that being zoomed in on a modern mobile device doesn't break click coordinate detection.
 // TODO: Remove jpeg suppression dialog.
 // TODO: Delay start of h264 streaming until player is fully loaded.
@@ -6056,7 +6055,7 @@ function FetchPNaClH264VideoModule()
 			fetchStreamer = null;
 		}
 		pnacl_player.Reset();
-		fetchStreamer = new FetchRawH264Streamer("/h264/" + videoPlayer.Loading().image.id + "/temp.h264" + currentServer.GetRemoteSessionArg("?"), pnacl_player.AcceptFrame,
+		fetchStreamer = new FetchRawH264Streamer("/h264/" + videoPlayer.Loading().image.id + "/temp.h264" + currentServer.GetRemoteSessionArg("?", true), pnacl_player.AcceptFrame,
 			function (e)
 			{
 				console.log("fetch stream ended");
