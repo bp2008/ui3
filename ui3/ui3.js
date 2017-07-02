@@ -8719,8 +8719,12 @@ function FullScreenModeController()
 
 		var transparency = distance / distanceLimit;
 		var opacity = Clamp(1 - transparency, 0, 1);
-		console.log(parseInt(distance) + ": " + opacity);
 		$("#liveFullscreenButton,#liveExitFullscreenButton").css("opacity", opacity);
+	});
+	$("#layoutbody").on("mouseleave", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		$("#liveFullscreenButton,#liveExitFullscreenButton").css("opacity", 0);
 	});
 	$(document).on("webkitfullscreenchange mozfullscreenchange fullscreenchange MSFullscreenChange", function (event)
 	{
