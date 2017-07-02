@@ -143,7 +143,6 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
-// TODO: Ensure that being zoomed in on a modern mobile device doesn't break click coordinate detection.
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Do not close clip/alert when manually reloading the same UI tab.  Instead, keep clip open and highlight/scroll to it, only closing the clip if it is no longer listed.
 // TODO: Deleting a clip while watching a clip causes the new clip list to be filtered to the watched clip. This is a bug - the clip filter should remain the same as before.
@@ -5264,7 +5263,7 @@ function VideoPlayerController()
 	{
 		if (!currentlyLoadingImage.isLive)
 			return;
-		mouseCoordFixer.fix(event);
+		// mouseCoordFixer.fix(event); // Don't call this more than once per event!
 		var camData = self.GetCameraUnderMousePointer(event);
 		if (camData != null && !cameraListLoader.HasOnlyOneCamera() && !cameraListLoader.CameraIsCycle(camData))
 		{
@@ -9834,12 +9833,15 @@ var mouseCoordFixer =
 		}
 		, fix: function (e)
 		{
+			if (e.alreadyMouseCoordFixed)
+				return;
+			e.alreadyMouseCoordFixed = true;
 			if (typeof e.pageX == "undefined")
 			{
 				if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 				{
-					mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX;
-					mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY;
+					mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
+					mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY + $(window).scrollTop();
 				}
 				else
 				{
@@ -9849,8 +9851,8 @@ var mouseCoordFixer =
 			}
 			else
 			{
-				mouseCoordFixer.last.x = e.pageX;
-				mouseCoordFixer.last.y = e.pageY;
+				mouseCoordFixer.last.x = e.pageX = e.pageX + $(window).scrollLeft();
+				mouseCoordFixer.last.y = e.pageY = e.pageY + $(window).scrollTop();
 			}
 		}
 	};
