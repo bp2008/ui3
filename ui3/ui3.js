@@ -8735,6 +8735,13 @@ function FullScreenModeController()
 		resized();
 		self.updateFullScreenButtonState();
 	});
+	$("#liveFullscreenButton,#liveExitFullscreenButton,#clipFullscreenButton,#clipExitFullscreenButton")
+		.on("click", function () { self.toggleFullScreen(); })
+		.on("mousedown touchstart", function ()
+		{
+			// Prevents the button click from causing camera maximize actions.
+			setTimeout(function () { imageRenderer.CamImgClickStateReset(); }, 0);
+		});
 	this.updateFullScreenButtonState = function ()
 	{
 		if (self.isFullScreen())
