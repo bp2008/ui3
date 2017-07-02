@@ -296,12 +296,16 @@
 				<div class="pcButton" onclick="videoPlayer.Playback_PreviousClip()" title="Previous Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>
 				<div class="pcButton" onclick="videoPlayer.Playback_NextClip()" title="Next Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>
 				<div id="playbackProgressText" class="pcText"></div>
+				<div id="clipFullscreenButton" class="pcButton rightSide" title="Full Screen" onclick="fullScreenModeController.toggleFullScreen()"><svg class="icon"><use xlink:href="#svg_mio_Fullscreen"></use></svg></div>
+				<div id="clipExitFullscreenButton" class="pcButton rightSide" title="Exit Full Screen" onclick="fullScreenModeController.toggleFullScreen()" style="display: none;"><svg class="icon"><use xlink:href="#svg_mio_FullscreenExit"></use></svg></div>
 				<a id="clipDownloadButton" class="pcButton rightSide" href="javascript:void(0)" title="Download Clip" target="_blank"><svg class="icon"><use xlink:href="#svg_x5F_Download"></use></svg></a>
 				<div id="clipFlagButton" class="pcButton rightSide" onclick="clipLoader.FlagCurrentClip()" title="Flag/Unflag"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>
 				<div id="playbackSettingsButton" class="pcButton rightSide" onclick="playbackControls.OpenSettingsPanel()"><svg class="icon"><use xlink:href="#svg_x5F_Settings"></use></svg><div id="playbackSettingsQualityMark" class="HD">HD</div></div>
 				<div id="playbackSpeedText" class="pcText rightSide" onclick="playbackControls.OpenSpeedPanel()" title="Playback Speed"></div>
 			</div>
 		</div>
+		<div id="liveFullscreenButton" class="pcButton" title="Full Screen" onclick="fullScreenModeController.toggleFullScreen()"><svg class="icon"><use xlink:href="#svg_mio_Fullscreen"></use></svg></div>
+		<div id="liveExitFullscreenButton" class="pcButton" title="Exit Full Screen" onclick="fullScreenModeController.toggleFullScreen()" style="display: none;"><svg class="icon"><use xlink:href="#svg_mio_FullscreenExit"></use></svg></div>
 	</div>
 	<div id="layoutbottom">
 		<div id="layoutbottomTimeline">

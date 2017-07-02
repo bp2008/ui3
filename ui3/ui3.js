@@ -89,7 +89,7 @@ var clipTimeline = null;
 var hotkeys = null;
 var dateFilter = null;
 var hlsPlayer = null;
-var jpegSuppressionDialog = null;
+var fullScreenModeController = null;
 var canvasContextMenu = null;
 var calendarContextMenu = null;
 var clipListContextMenu = null;
@@ -144,16 +144,11 @@ var togglableUIFeatures =
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
 // TODO: Ensure that being zoomed in on a modern mobile device doesn't break click coordinate detection.
-// TODO: Remove jpeg suppression dialog.
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Do not close clip/alert when manually reloading the same UI tab.  Instead, keep clip open and highlight/scroll to it, only closing the clip if it is no longer listed.
 // TODO: Deleting a clip while watching a clip causes the new clip list to be filtered to the watched clip. This is a bug - the clip filter should remain the same as before.
 // TODO: Handle single-deletion failure messages better.
 // TODO: Use ba-bbq or remove it from the libs-ui3.js file.
-// TODO: Fullscreen mode for clips and live view using a placeholder button in lower right.  Fullscreen mode should allocate all available space to the video, hiding unnecessary UI elements.  It should also request that the browser enters full-screen mode.
-// -- Closing a clip while in fullscreen mode should result in loading the "Live View" tab.
-// -- However auto-changing clips should still work while in fullscreen mode.
-// -- Loading fullscreen mode while on the Alerts or Clips tabs should result in loading the "Live View" tab.
 
 // TODO: Implement PTZ hotkeys.
 // TODO: Implement clip navigation hotkeys.
@@ -183,6 +178,7 @@ var togglableUIFeatures =
 // CONSIDER: (-1 Added complexity and space usage, not necessarily useful without multi-clip simultaneous playback) Timeline control.  Simplified format at first.  Maybe show the current day, the last 24 hours, or the currently loaded time range.  Selecting a time will scroll the clip list (and begin playback of the most appropriate clip?)
 // CONSIDER: Double-click in the clip player could perform some action, like play/pause or fullscreen mode.
 // CONSIDER: Single-click in the clip player could clear the current clip selection state, select the active clip, and scroll to it.
+// CONSIDER: Replace dialog panels with better versions.  More modern.  Draggable.  Maybe resizable.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -534,7 +530,7 @@ $(function ()
 
 	hlsPlayer = new HLSPlayer();
 
-	jpegSuppressionDialog = new JpegSuppressionDialog();
+	fullScreenModeController = new FullScreenModeController();
 
 	canvasContextMenu = new CanvasContextMenu();
 
@@ -646,10 +642,14 @@ function resized()
 	var llrControls = $("#layoutLeftRecordingsControls");
 	var systemnamewrapper = $("#systemnamewrapper");
 
-	var topH = layouttop.height();
-	var botH = layoutbottom.is(":visible") ? layoutbottom.height() : 0;
-	var leftH = windowH - topH;
-	var leftW = layoutleft.width();
+	var topVis = layouttop.is(":visible");
+	var leftVis = layoutleft.is(":visible");
+	var botVis = layoutbottom.is(":visible");
+
+	var topH = topVis ? layouttop.height() : 0;
+	var botH = botVis ? layoutbottom.height() : 0;
+	var leftH = leftVis ? (windowH - topH) : 0;
+	var leftW = leftVis ? layoutleft.width() : 0;
 	var statusH = statusArea.outerHeight(true);
 
 	// Size layouttop
@@ -5319,6 +5319,10 @@ function VideoPlayerController()
 			self.LoadHomeGroup();
 		}
 	}
+	this.isLive = function ()
+	{
+		return currentlyLoadingImage != null && currentlyLoadingImage.isLive;
+	}
 	this.LoadHomeGroup = function (groupId)
 	{
 		if (typeof groupId == "undefined")
@@ -5381,6 +5385,8 @@ function VideoPlayerController()
 				self.SetPlayerModule("h264");
 			playerModule.OpenVideo();
 		}
+
+		fullScreenModeController.updateFullScreenButtonState();
 	}
 	this.LoadClip = function (clipData)
 	{
@@ -5422,6 +5428,8 @@ function VideoPlayerController()
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
+
+		fullScreenModeController.updateFullScreenButtonState();
 	}
 
 	this.SeekToMs = function (pos)
@@ -5808,12 +5816,11 @@ function JpegVideoModule()
 			GetNewImageAfterTimeout();
 		else
 		{
-			// TODO: Instead of checking hlsPlayer.IsBlockingJpegRefresh() and jpegSuppressionDialog.IsOpen(), try having those dialogs instruct the videoPlayer to Stop().  This can deactivate the playerModule.  Configure the Activate procedure to clear the image by using imageRenderer's opacity options to hide or severely darken the frame while waiting for video to begin again.
+			// TODO: Instead of checking hlsPlayer.IsBlockingJpegRefresh(), try having the dialog instruct the videoPlayer to Stop().  This can deactivate the playerModule.  Configure the Activate procedure to clear the image by using imageRenderer's opacity options to hide or severely darken the frame while waiting for video to begin again.
 			if ((isLoadingRecordedSnapshot
 				&& loading.path == videoPlayer.Loaded().image.path
 				&& !CouldBenefitFromWidthChange(widthToRequest))
 				|| hlsPlayer.IsBlockingJpegRefresh()
-				|| jpegSuppressionDialog.IsOpen()
 				|| !isVisible
 			)
 				GetNewImageAfterTimeout();
@@ -6753,7 +6760,6 @@ function CanvasContextMenu()
 				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
 				break;
 			case "opennewtab":
-				jpegSuppressionDialog.Open();
 				window.open(videoPlayer.GetLastSnapshotFullUrl());
 				break;
 			case "saveas":
@@ -8672,7 +8678,6 @@ function HLSPlayer()
 		{
 			case "newtab":
 				self.CloseDialog();
-				jpegSuppressionDialog.Open();
 				window.open(currentServer.remoteBaseURL + "livestream.htm?cam=" + encodeURIComponent(hlsPlayerLastCamId));
 				break;
 			default:
@@ -8695,40 +8700,94 @@ function HLSPlayer()
 	};
 }
 ///////////////////////////////////////////////////////////////
-// Jpeg Refresh Suppression Dialog ////////////////////////////
+// FullScreen Mode ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function JpegSuppressionDialog()
+function FullScreenModeController()
 {
 	var self = this;
-	var dialog = null;
+	var isFullScreen_cached = false;
+	$(document).on("mousemove touchmove", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		var ele = isFullScreen_cached ? $("#liveExitFullscreenButton") : $("#liveFullscreenButton");
+		var distance = getDistanceBetweenPointAndElementCenter(e.pageX, e.pageY, ele);
+		var distanceLimit = ($(window).width() + $(window).height()) / 8;
+		distanceLimit = Math.max(1, distanceLimit);
+		var fullOpacityDistance = distanceLimit / 5;
+		distance -= fullOpacityDistance;
+		distanceLimit -= fullOpacityDistance;
 
-	this.Open = function ()
+		var transparency = distance / distanceLimit;
+		var opacity = Clamp(1 - transparency, 0, 1);
+		console.log(parseInt(distance) + ": " + opacity);
+		$("#liveFullscreenButton,#liveExitFullscreenButton").css("opacity", opacity);
+	});
+	$(document).on("webkitfullscreenchange mozfullscreenchange fullscreenchange MSFullscreenChange", function (event)
 	{
-		self.Close();
-		dialog = $('<div class="jpegSuppressionDialog" onclick="jpegSuppressionDialog.Close();">'
-			+ 'To save bandwidth, video is paused until you close this dialog.'
-			+ '<br/><div style="width:50px;height:50px;display:inline-block;text-align:center;margin:30px 0px 0px 65px;">'
-			+ '<svg class="icon"><use xlink:href="#svg_x5F_Play"></use></svg>'
-			+ '</div></div>').modal(
-			{
-				removeElementOnClose: true
-				, onClosing: function ()
-				{
-					dialog = null;
-				}
-				, maxWidth: 200
-				, maxHeight: 200
-			});
+		if (self.isFullScreen())
+			$("#layoutleft,#layouttop").hide();
+		else
+			$("#layoutleft,#layouttop").show();
+		resized();
+		self.updateFullScreenButtonState();
+	});
+	this.updateFullScreenButtonState = function ()
+	{
+		if (self.isFullScreen())
+		{
+			$("#clipFullscreenButton,#liveFullscreenButton").hide();
+			$("#clipExitFullscreenButton").show();
+
+			if (videoPlayer.isLive())
+				$("#liveExitFullscreenButton").show();
+			else
+				$("#liveExitFullscreenButton").hide();
+		}
+		else
+		{
+			$("#clipFullscreenButton").show();
+			$("#clipExitFullscreenButton,#liveExitFullscreenButton").hide();
+
+			if (videoPlayer.isLive())
+				$("#liveFullscreenButton").show();
+			else
+				$("#liveFullscreenButton").hide();
+		}
+		resized();
 	}
-	this.IsOpen = function ()
+	this.toggleFullScreen = function ()
 	{
-		return dialog != null;
+		if (!self.isFullScreen())
+			requestFullScreen();
+		else
+			exitFullScreen();
 	}
-	this.Close = function ()
+	this.isFullScreen = function ()
 	{
-		if (dialog != null)
-			if (dialog.close())
-				dialog = null;
+		isFullScreen_cached = (document.fullscreenElement || document.mozFullScreenElement || document.webkitFullscreenElement || document.msFullscreenElement) ? true : false;
+		return isFullScreen_cached;
+	}
+	var requestFullScreen = function ()
+	{
+		if (document.documentElement.requestFullscreen)
+			document.documentElement.requestFullscreen();
+		else if (document.documentElement.msRequestFullscreen)
+			document.documentElement.msRequestFullscreen();
+		else if (document.documentElement.mozRequestFullScreen)
+			document.documentElement.mozRequestFullScreen();
+		else if (document.documentElement.webkitRequestFullscreen)
+			document.documentElement.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+	}
+	var exitFullScreen = function ()
+	{
+		if (document.exitFullscreen)
+			document.exitFullscreen();
+		else if (document.msExitFullscreen)
+			document.msExitFullscreen();
+		else if (document.mozCancelFullScreen)
+			document.mozCancelFullScreen();
+		else if (document.webkitExitFullscreen)
+			document.webkitExitFullscreen();
 	}
 }
 //////////////////////////////////////////////////////////////////////
@@ -9468,6 +9527,15 @@ function Clamp(i, min, max)
 		return max;
 	return i;
 }
+function getDistanceBetweenPointAndElementCenter(x, y, $ele)
+{
+	var offset = $ele.offset();
+	var eX = offset.left + ($ele.outerWidth(true) / 2);
+	var eY = offset.top + ($ele.outerHeight(true) / 2);
+	var dX = Math.abs(x - eX);
+	var dY = Math.abs(y - eY);
+	return Math.sqrt((dX * dX) + (dY * dY));
+}
 function AskYesNo(question, onYes, onNo)
 {
 	var $dialog = $('<div></div>');
@@ -9649,39 +9717,6 @@ Date.locale = {
 		month_names_short: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 	}
 };
-function toggleFullScreen()
-{
-	if (!isFullScreen())
-		requestFullScreen();
-	else
-		exitFullScreen();
-}
-function isFullScreen()
-{
-	return document.fullscreenElement || document.mozFullScreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
-}
-function requestFullScreen()
-{
-	if (document.documentElement.requestFullscreen)
-		document.documentElement.requestFullscreen();
-	else if (document.documentElement.msRequestFullscreen)
-		document.documentElement.msRequestFullscreen();
-	else if (document.documentElement.mozRequestFullScreen)
-		document.documentElement.mozRequestFullScreen();
-	else if (document.documentElement.webkitRequestFullscreen)
-		document.documentElement.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
-}
-function exitFullScreen()
-{
-	if (document.exitFullscreen)
-		document.exitFullscreen();
-	else if (document.msExitFullscreen)
-		document.msExitFullscreen();
-	else if (document.mozCancelFullScreen)
-		document.mozCancelFullScreen();
-	else if (document.webkitExitFullscreen)
-		document.webkitExitFullscreen();
-}
 // Performs a deep clone of the specified element, removing all id attributes, data, and event handlers.
 function CloneAndStripIdAttributes($ele)
 {
