@@ -143,9 +143,8 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
-
+// TODO: Include session ID in .h264 requests.
 // TODO: Ensure that being zoomed in on a modern mobile device doesn't break click coordinate detection.
-// TODO: Operating the PTZ pad should dismiss open context menus.
 // TODO: Remove jpeg suppression dialog.
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Do not close clip/alert when manually reloading the same UI tab.  Instead, keep clip open and highlight/scroll to it, only closing the clip if it is no longer listed.
@@ -170,7 +169,9 @@ var togglableUIFeatures =
 // -- Hardware acceleration option for pnacl_player (off by default, because it significantly slows the stream startup time)
 // -- -- on the embed element, hwaccel value 0 is NO HWVA.  1 is HWVA with fallback.  2 is HWVA only.
 // -- Long press to open context menus (enabling this should disable longpress to set preset).  Affects some devices, e.g. samsung smart TV remote control
-// -- Idle Timeout (minutes)
+// -- Idle Timeout (minutes).  Enabled by default, overridable in local overrides script.
+
+// TODO: Improve design of timeout.htm page.
 
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
@@ -1123,6 +1124,8 @@ function DropdownBoxes()
 				switch (item.cmd)
 				{
 					case "ui_settings":
+						if (developerMode)
+							location.reload(true);
 						break;
 					case "about_this_ui":
 						openAboutDialog();
@@ -1538,6 +1541,7 @@ function PtzButtons()
 			{
 				onHoverLeave();
 				onButtonMouseDown(btn);
+				$.hideAllContextMenus();
 				return stopDefault(e);
 			}
 		}
@@ -2529,6 +2533,7 @@ function PlaybackControls()
 		$playbackSettings.on("mouseup", function () { return false; });
 		$playbackSettings.on("mousedown touchstart", function (e)
 		{
+			$.hideAllContextMenus();
 			return stopDefault(e);
 		});
 	}
@@ -2913,6 +2918,7 @@ function SeekBar()
 			lastMouseDown.X = e.pageX;
 			lastMouseDown.Y = e.pageY;
 			mouseMoved(e);
+			$.hideAllContextMenus();
 			return stopDefault(e);
 		}
 		else
@@ -5171,14 +5177,6 @@ function VideoPlayerController()
 			{
 				// Called when page visibility changes.
 				playerModule.VisibilityChanged(!documentIsHidden());
-				if (documentIsHidden())
-				{
-					console.log("Page hidden");
-				}
-				else
-				{
-					console.log("Page shown");
-				}
 			});
 		}
 	}

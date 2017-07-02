@@ -1,5 +1,17 @@
+// ==ClosureCompiler==
+// @output_file_name default.js
+// @compilation_level SIMPLE_OPTIMIZATIONS
+// @language ECMASCRIPT5
+// ==/ClosureCompiler==
+
 (function ($)
 {
+	var allJQContextMenus = [];
+	$.hideAllContextMenus = function ()
+	{
+		for (var i = 0; i < allJQContextMenus.length; i++)
+			allJQContextMenus[i].hideAll();
+	}
 	function returnfalse() { return false; };
 	$.fn.contextmenu = function (option)
 	{
@@ -246,6 +258,12 @@
 		}
 		gTemplet = iTemplet = sTemplet = itemTpl = buildGroup = buildItem = null;
 		addItems = overItem = outItem = null;
+		me.hideAll = function ()
+		{
+			$(document).off('mousedown', hideMenuPane);
+			hideMenuPane();
+		}
+		allJQContextMenus.push(me);
 		//CollectGarbage();
 		return me;
 	}
