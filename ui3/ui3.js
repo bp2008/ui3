@@ -144,8 +144,6 @@ var togglableUIFeatures =
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
 // TODO: Delay start of h264 streaming until player is fully loaded.
-// TODO: Do not close clip/alert when manually reloading the same UI tab.  Instead, keep clip open and highlight/scroll to it, only closing the clip if it is no longer listed.
-// TODO: Deleting a clip while watching a clip causes the new clip list to be filtered to the watched clip. This is a bug - the clip filter should remain the same as before.
 // TODO: Handle single-deletion failure messages better.
 // TODO: Use ba-bbq or remove it from the libs-ui3.js file.
 
@@ -3017,8 +3015,9 @@ function ClipLoader(clipsBodySelector)
 
 	this.LoadClips = function (listName)
 	{
-		if (videoPlayer.Loading().cam)
-			lastLoadedCameraFilter = videoPlayer.Loading().cam.optionValue;
+		var loading = videoPlayer.Loading();
+		if (loading.image && loading.image.isLive)
+			lastLoadedCameraFilter = loading.image.id;
 		loadClipsInternal(listName, lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false);
 	}
 	this.UpdateClipList = function ()
@@ -3058,7 +3057,6 @@ function ClipLoader(clipsBodySelector)
 
 			tileLoader.AppearDisappearCheckEnabled = false;
 
-			self.CloseCurrentClip();
 			self.UnselectAllClips(true);
 			TotalUniqueClipsLoaded = 0;
 			TotalDateTilesLoaded = 0;
@@ -3106,6 +3104,8 @@ function ClipLoader(clipsBodySelector)
 			}
 			failedClipListLoads = 0;
 			var clipTileHeight = getClipTileHeight();
+			var previouslyOpenedClip = null;
+			var loadingImage = videoPlayer.Loading().image;
 			if (typeof (response.data) != "undefined")
 			{
 				var newUpdateClipIds = [];
@@ -3182,6 +3182,8 @@ function ClipLoader(clipsBodySelector)
 						TotalUniqueClipsLoaded++;
 						clipListCache[clip.camera][clip.path] = clipData;
 						clipListIdCache[clipData.clipId] = clipData;
+						if (!isUpdateOfExistingList && previouslyOpenedClip == null && !loadingImage.isLive && loadingImage.path == clip.path)
+							previouslyOpenedClip = clipData;
 					}
 
 				}
@@ -3191,15 +3193,6 @@ function ClipLoader(clipsBodySelector)
 					tileLoader.preserveScrollPosition(clipTileHeight, HeightOfOneDateTilePx, newUpdateClipIds.length);
 					tileLoader.injectNewClips(newUpdateClips, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
 					clipListGrew = true;
-				}
-				var loadingImage = videoPlayer.Loading().image;
-				if (!loadingImage.isLive && self.GetCachedClip(loadingImage.id, loadingImage.path) == null)
-					videoPlayer.goLive();
-				else
-				{
-					// TODO: If a clip is playing, make it get selected now in the list, but do not interfere with the playback state.
-					// Probably scroll to the clip in the list, too.
-					// Do not do this during automated clip list updates.
 				}
 
 				if (QueuedClipListLoad != null)
@@ -3248,6 +3241,18 @@ function ClipLoader(clipsBodySelector)
 				asyncThumbnailDownloader = new AsyncThumbnailDownloader();
 				tileLoader.AppearDisappearCheckEnabled = true;
 				tileLoader.appearDisappearCheck();
+
+				if (!loadingImage.isLive && !isUpdateOfExistingList)
+				{
+					if (previouslyOpenedClip == null)
+						self.CloseCurrentClip();
+					else
+					{
+						// A clip is still playing, and it is in the new list.  Select it and scroll to it.
+						self.SelectClipIdNoOpen(previouslyOpenedClip.clipId);
+						self.ScrollClipList(previouslyOpenedClip.y, clipTileHeight);
+					}
+				}
 
 				$.CustomScroll.callMeOnContainerResize();
 
@@ -3501,7 +3506,25 @@ function ClipLoader(clipsBodySelector)
 
 			if (self.ClipDataIndicatesFlagged(clipData))
 				self.ShowClipFlag(clipData);
+
+			if (selectedClipsMap[clipData.clipId])
+			{
+				if (videoPlayer.Loading().image.path == clipData.path)
+					self.OpenClip($clip.get(0), clipData.clipId, false);
+				else
+					$clip.addClass("selected");
+			}
 		}
+	}
+	this.ScrollToClipObj = function ($clip)
+	{
+		var offset = ($clipsbody.height() / 2) - ($clip.height() / 2);
+		$clipsbody.scrollTop(($clipsbody.scrollTop() + $clip.position().top) - offset);
+	}
+	this.ScrollClipList = function (yPos, clipHeight)
+	{
+		var offset = ($clipsbody.height() / 2) - (clipHeight / 2);
+		$clipsbody.scrollTop(yPos - offset);
 	}
 	var ClipClicked = function (e)
 	{
@@ -3553,20 +3576,25 @@ function ClipLoader(clipsBodySelector)
 		}
 		else
 		{
-			self.UnselectAllClips(true);
-			lastOpenedClipEle = this;
-
-			$(this).addClass("opened");
-			$(this).addClass("selected");
-			videoPlayer.LoadClip(this.clipData);
-
-			// Multi-select start
-			lastSelectedClipId = clipId;
-			selectedClipsMap = new Object();
-			selectedClipsMap[clipId] = true;
-			selectedClips = [];
-			selectedClips.push(clipId);
+			self.OpenClip(this, clipId, true);
 		}
+	}
+	this.OpenClip = function (clipEle, clipId, alsoLoadClip)
+	{
+		self.UnselectAllClips(true);
+		lastOpenedClipEle = clipEle;
+
+		$(clipEle).addClass("opened");
+		$(clipEle).addClass("selected");
+		if (alsoLoadClip)
+			videoPlayer.LoadClip(clipEle.clipData);
+
+		// Multi-select start
+		lastSelectedClipId = clipId;
+		selectedClipsMap = new Object();
+		selectedClipsMap[clipId] = true;
+		selectedClips = [];
+		selectedClips.push(clipId);
 	}
 	this.SelectClipIdNoOpen = function (clipId)
 	{
@@ -5340,9 +5368,6 @@ function VideoPlayerController()
 				{
 					settings.ui3_defaultCameraGroupId = currentlySelectedHomeGroupId = groupId;
 
-					var groupName = CleanUpGroupName(camList.data[i].optionDisplay);
-					dropdownBoxes.setLabelText("currentGroup", groupName);
-
 					self.LoadLiveCamera(camList.data[i]);
 					break;
 				}
@@ -5481,8 +5506,7 @@ function VideoPlayerController()
 	{
 		if ($clip != null && $clip.length > 0)
 		{
-			var offset = ($("#clipsbody").height() / 2) - ($clip.height() / 2);
-			$("#clipsbody").scrollTop(($("#clipsbody").scrollTop() + $clip.position().top) - offset);
+			clipLoader.ScrollToClipObj($clip);
 			$clip.click();
 			return true;
 		}
