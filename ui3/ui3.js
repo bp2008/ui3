@@ -162,8 +162,6 @@ var togglableUIFeatures =
 // -- Long press to open context menus (enabling this should disable longpress to set preset).  Affects some devices, e.g. samsung smart TV remote control
 // -- Idle Timeout (minutes).  Enabled by default, overridable in local overrides script.
 
-// TODO: Improve design of timeout.htm page.
-
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
