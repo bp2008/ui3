@@ -15,9 +15,11 @@ function DoUIFeatureDetection()
 	try
 	{
 		if (!isCanvasSupported())
-			MissingRequiredFeature("HTML5 Canvas");
+			MissingRequiredFeature("HTML5 Canvas"); // Excludes IE 8
 		else if (!isLocalStorageEnabled())
 			MissingRequiredFeature("Local Storage");
+		else if (!isHtml5HistorySupported())
+			MissingRequiredFeature("HTML5 History API"); // Excludes IE 9
 		else
 		{
 			pnacl_player_supported = BrowserIsChrome() && navigator.mimeTypes['application/x-pnacl'] !== undefined;
@@ -56,6 +58,18 @@ function isLocalStorageEnabled()
 		localStorage.setItem(key, key);
 		localStorage.removeItem(key);
 		return true;
+	} catch (e)
+	{
+		return false;
+	}
+}
+function isHtml5HistorySupported()
+{
+	try
+	{
+		if (window.history && typeof window.history.state == "object" && typeof window.history.pushState == "function" && typeof window.history.replaceState == "function")
+			return true;
+		return false;
 	} catch (e)
 	{
 		return false;
@@ -101,6 +115,7 @@ var sessionManager = null;
 var statusLoader = null;
 var cameraListLoader = null;
 var clipLoader = null;
+var ajaxHistoryManager = null;
 
 var currentPrimaryTab = "";
 var skipTabLoadClipLoad = false;
@@ -546,6 +561,8 @@ $(function ()
 	cameraListLoader = new CameraListLoader();
 
 	clipLoader = new ClipLoader("#clipsbody");
+
+	ajaxHistoryManager = new AjaxHistoryManager();
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
@@ -8823,6 +8840,63 @@ function FullScreenModeController()
 	}
 }
 //////////////////////////////////////////////////////////////////////
+// Ajax History //////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+function AjaxHistoryManager()
+{
+	var self = this;
+	var defaultState = { camera: "index", fullscreen: "0" };
+
+	this.GetState = function ()
+	{
+		var state = $.extend(true, {}, defaultState);
+		var camera = UrlHashParameters.Get("camera");
+		var fullscreen = UrlHashParameters.Get("fullscreen");
+		if (camera != "")
+			state.camera = camera;
+		if (fullscreen != "")
+			state.fullscreen = fullscreen == "1" || fullscreen.toLowerCase() == "true";
+		return state;
+	}
+	var LoadState = function ()
+	{
+		console.log("LoadState");
+		var state = GetState();
+		var loading = videoPlayer.Loading();
+		if (loading.cam && loading.cam.optionValue != state.camera)
+		{
+			LoadLiveCamera
+		}
+	}
+	this.PushState = function (state)
+	{
+		//$.bbq.pushState(state);
+	}
+	this.GoBack = function (state)
+	{
+		window.history.back();
+	}
+	var GetHashString = function (state)
+	{
+		var str = "#camera=" + encodeURIComponent(state.camera) + "&fullscreen=" + encodeURIComponent(state.fullscreen);
+		return str;
+	}
+
+	$(window).bind("popstate", LoadState);
+
+	var state = self.GetState();
+	var loading = videoPlayer.Loading();
+	if (loading.cam && loading.cam.optionValue != state.camera)
+		state.camera = loading.cam.optionValue;
+	var stateIsFullScreen = state.fullscreen == "1";
+	var isFullScreenNow = fullScreenModeController.isFullScreen();
+	if (isFullScreenNow && state.fullscreen != "1")
+		state.fullscreen = "1";
+	else if (!isFullScreenNow && state.fullscreen == "1")
+		state.fullscreen = "0";
+	history.replaceState(null, "", location.origin + location.pathname + location.search + GetHashString(state));
+}
+//////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////
 function BI_Hotkeys()
@@ -9774,6 +9848,26 @@ var UrlParameters =
 			{
 				var params = this.parsed_url_params;
 				window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value)
+				{
+					params[key.toLowerCase()] = decodeURIComponent(value);
+				})
+				this.loaded = true;
+			}
+			if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
+				return this.parsed_url_params[key.toLowerCase()];
+			return "";
+		}
+	};
+var UrlHashParameters =
+	{
+		loaded: false,
+		parsed_url_params: {},
+		Get: function (key)
+		{
+			if (!this.loaded)
+			{
+				var params = this.parsed_url_params;
+				window.location.hash.substr(1).replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value)
 				{
 					params[key.toLowerCase()] = decodeURIComponent(value);
 				})
