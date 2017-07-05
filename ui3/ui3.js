@@ -5425,6 +5425,11 @@ function VideoPlayerController()
 			playerModule.OpenVideo();
 		}
 
+		if (cli.isGroup)
+			ajaxHistoryManager.BackToGroup();
+		else
+			ajaxHistoryManager.CameraMaximize(cli.id);
+
 		fullScreenModeController.updateFullScreenButtonState();
 	}
 	this.LoadClip = function (clipData)
@@ -5464,6 +5469,11 @@ function VideoPlayerController()
 					self.SetPlayerModule("jpeg");
 				playerModule.OpenVideo();
 			}
+
+			if (clipData.isClip)
+				ajaxHistoryManager.LoadClip(clipData.path);
+			else
+				ajaxHistoryManager.LoadAlert(clipData.path);
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
@@ -8845,56 +8855,113 @@ function FullScreenModeController()
 function AjaxHistoryManager()
 {
 	var self = this;
-	var defaultState = { camera: "index", fullscreen: "0" };
-
-	this.GetState = function ()
+	var myHistoryDepth = 0;
+	var PopState = function ()
 	{
-		var state = $.extend(true, {}, defaultState);
-		var camera = UrlHashParameters.Get("camera");
-		var fullscreen = UrlHashParameters.Get("fullscreen");
-		if (camera != "")
-			state.camera = camera;
-		if (fullscreen != "")
-			state.fullscreen = fullscreen == "1" || fullscreen.toLowerCase() == "true";
-		return state;
-	}
-	var LoadState = function ()
-	{
-		console.log("LoadState");
-		var state = GetState();
-		var loading = videoPlayer.Loading();
-		if (loading.cam && loading.cam.optionValue != state.camera)
+		console.log("PopState");
+		var clip = UrlHashParameters.Get("clip");
+		if (clip != null)
 		{
-			LoadLiveCamera
+			
+			return;
+		}
+		//var camera = UrlHashParameters.Get("camera");
+		//if (camera == "")
+		//{
+		//	// Back to Group
+		//	videoPlayer.LoadHomeGroup();
+		//}
+		//else
+		//{
+		//	var loading = videoPlayer.Loading();
+		//	if (!loading.cam || loading.cam.optionvalue != camera)
+		//	{
+		//		var camData = cameraListLoader.GetCameraWithId(camera);
+		//		if (camData)
+		//			videoPlayer.LoadLiveCamera(camData);
+		//	}
+		//}
+		if (!videoPlayer.Loading().image.isLive)
+		{
+			videoPlayer.CloseCurrentClip();
+		}
+		else if (!videoPlayer.Loading().image.isGroup)
+		{
+			videoPlayer.LoadHomeGroup();
 		}
 	}
-	this.PushState = function (state)
+	this.CameraMaximize = function (cameraId)
 	{
-		//$.bbq.pushState(state);
+		pushHashState("#camera=" + encodeURIComponent(cameraId));
 	}
-	this.GoBack = function (state)
+	this.BackToGroup = function ()
 	{
-		window.history.back();
+		GoBack();
 	}
-	var GetHashString = function (state)
+	this.LoadClip = function (clipId)
 	{
-		var str = "#camera=" + encodeURIComponent(state.camera) + "&fullscreen=" + encodeURIComponent(state.fullscreen);
-		return str;
+		var newHash = "#clip=" + encodeURIComponent(clipId);
+		if (UrlHashParameters.Get("clip") != "")
+			replaceHashState(newHash);
+		else
+			pushHashState(newHash);
+	}
+	this.LoadAlert = function (alertId)
+	{
+		var newHash = "#alert=" + encodeURIComponent(alertId);
+		if (UrlHashParameters.Get("alert") != "")
+			replaceHashState(newHash);
+		else
+			pushHashState(newHash);
+	}
+	this.CloseClip = function ()
+	{
+		GoBack();
+	}
+	var GoBack = function (state)
+	{
+		if (myHistoryDepth > 0)
+		{
+			myHistoryDepth--;
+			window.history.back();
+		}
+	}
+	var pushHashState = function (hash)
+	{
+		myHistoryDepth++;
+		history.pushState(null, "", location.origin + location.pathname + location.search + hash);
+	}
+	var replaceHashState = function (hash)
+	{
+		history.replaceState(null, "", location.origin + location.pathname + location.search + hash);
 	}
 
-	$(window).bind("popstate", LoadState);
+	$(window).bind("popstate", PopState);
 
-	var state = self.GetState();
-	var loading = videoPlayer.Loading();
-	if (loading.cam && loading.cam.optionValue != state.camera)
-		state.camera = loading.cam.optionValue;
-	var stateIsFullScreen = state.fullscreen == "1";
-	var isFullScreenNow = fullScreenModeController.isFullScreen();
-	if (isFullScreenNow && state.fullscreen != "1")
-		state.fullscreen = "1";
-	else if (!isFullScreenNow && state.fullscreen == "1")
-		state.fullscreen = "0";
-	history.replaceState(null, "", location.origin + location.pathname + location.search + GetHashString(state));
+	// This is the initial page load.  Read any recognized hash arguments.
+	//var state =
+	//	{
+	//		camera: UrlHashParameters.Get("camera")
+	//		, clipId: UrlHashParameters.Get("clip")
+	//		, alertId: UrlHashParameters.Get("alert")
+	//		, fullscreen: UrlHashParameters.Get("fullscreen") == "1"
+	//	};
+
+	//if (state.fullscreen)
+	//	fullScreenModeController.toggleFullScreen();
+
+	// Delete any hash arguments from the URL
+	//if (location.hash && location.hash.length > 1)
+	//	history.replaceState(null, "", location.origin + location.pathname + location.search);
+
+
+	//if (state.camera != "")
+	//	self.CameraMaximize(state.camera);
+
+	//if (state.clipId != "")
+	//	self.LoadClip(state.clipId);
+	//else if (state.alertId != "")
+	//	self.LoadAlert(state.alertId);
 }
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////
@@ -9860,21 +9927,15 @@ var UrlParameters =
 	};
 var UrlHashParameters =
 	{
-		loaded: false,
-		parsed_url_params: {},
 		Get: function (key)
 		{
-			if (!this.loaded)
+			var params = {};
+			window.location.hash.replace(/[?#&]+([^=&]+)=([^&]*)/gi, function (str, key, value)
 			{
-				var params = this.parsed_url_params;
-				window.location.hash.substr(1).replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value)
-				{
-					params[key.toLowerCase()] = decodeURIComponent(value);
-				})
-				this.loaded = true;
-			}
-			if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
-				return this.parsed_url_params[key.toLowerCase()];
+				params[key.toLowerCase()] = decodeURIComponent(value);
+			})
+			if (typeof params[key.toLowerCase()] != 'undefined')
+				return params[key.toLowerCase()];
 			return "";
 		}
 	};
