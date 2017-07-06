@@ -18,8 +18,6 @@ function DoUIFeatureDetection()
 			MissingRequiredFeature("HTML5 Canvas"); // Excludes IE 8
 		else if (!isLocalStorageEnabled())
 			MissingRequiredFeature("Local Storage");
-		else if (!isHtml5HistorySupported())
-			MissingRequiredFeature("HTML5 History API"); // Excludes IE 9
 		else
 		{
 			pnacl_player_supported = BrowserIsChrome() && navigator.mimeTypes['application/x-pnacl'] !== undefined;
@@ -8862,8 +8860,8 @@ function AjaxHistoryManager()
 			return false;
 		return true;
 	}
-
-	buttonOverride = new HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed);
+	if (isHtml5HistorySupported())
+		buttonOverride = new HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed);
 }
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////
