@@ -115,7 +115,6 @@ var sessionManager = null;
 var statusLoader = null;
 var cameraListLoader = null;
 var clipLoader = null;
-var ajaxHistoryManager = null;
 
 var currentPrimaryTab = "";
 var skipTabLoadClipLoad = false;
@@ -160,7 +159,6 @@ var togglableUIFeatures =
 	];
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Handle single-deletion failure messages better.
-// TODO: Use ba-bbq or remove it from the libs-ui3.js file.
 
 // TODO: Implement PTZ hotkeys.
 // TODO: Implement clip navigation hotkeys.
@@ -189,6 +187,7 @@ var togglableUIFeatures =
 // CONSIDER: Double-click in the clip player could perform some action, like play/pause or fullscreen mode.
 // CONSIDER: Single-click in the clip player could clear the current clip selection state, select the active clip, and scroll to it.
 // CONSIDER: Replace dialog panels with better versions.  More modern.  Draggable.  Maybe resizable.
+// CONSIDER: Allow an open clip to remain open even if the clip list no longer contains the clip.  This requires that the clip list is never queried again as long as the clip remains open, but opens the door to linking someone to a specific clip in the future, without forcing them to find the clip in their own clip list.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -561,8 +560,6 @@ $(function ()
 	cameraListLoader = new CameraListLoader();
 
 	clipLoader = new ClipLoader("#clipsbody");
-
-	ajaxHistoryManager = new AjaxHistoryManager();
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
@@ -1585,7 +1582,7 @@ function PtzButtons()
 		if (buttonId != null)
 		{
 			var visibleGraphicContainer = GetVisibleGraphicContainer();
-			return visibleGraphicContainer.graphicObjects[buttonId];
+			return visibleGraphicContainer ? visibleGraphicContainer.graphicObjects[buttonId] : null;
 		}
 		return null;
 	}
@@ -5154,6 +5151,8 @@ function VideoPlayerController()
 	var self = this;
 	var isInitialized = false;
 
+	var ajaxHistoryManager = new AjaxHistoryManager();
+
 	var playerModule = null;
 	var moduleHolder = {};
 	this.useH264ForLiveView_TempVar = false; // TODO: Remove this variable once H.264 is available for clips.
@@ -5425,11 +5424,6 @@ function VideoPlayerController()
 			playerModule.OpenVideo();
 		}
 
-		if (cli.isGroup)
-			ajaxHistoryManager.BackToGroup();
-		else
-			ajaxHistoryManager.CameraMaximize(cli.id);
-
 		fullScreenModeController.updateFullScreenButtonState();
 	}
 	this.LoadClip = function (clipData)
@@ -5469,11 +5463,6 @@ function VideoPlayerController()
 					self.SetPlayerModule("jpeg");
 				playerModule.OpenVideo();
 			}
-
-			if (clipData.isClip)
-				ajaxHistoryManager.LoadClip(clipData.path);
-			else
-				ajaxHistoryManager.LoadAlert(clipData.path);
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
@@ -8854,114 +8843,27 @@ function FullScreenModeController()
 //////////////////////////////////////////////////////////////////////
 function AjaxHistoryManager()
 {
+	// This class manages the back and forward buttons in a custom way.
 	var self = this;
-	var myHistoryDepth = 0;
-	var PopState = function ()
+	var buttonOverride;
+
+	var ForwardButtonPressed = function ()
 	{
-		console.log("PopState");
-		var clip = UrlHashParameters.Get("clip");
-		if (clip != null)
-		{
-			
-			return;
-		}
-		//var camera = UrlHashParameters.Get("camera");
-		//if (camera == "")
-		//{
-		//	// Back to Group
-		//	videoPlayer.LoadHomeGroup();
-		//}
-		//else
-		//{
-		//	var loading = videoPlayer.Loading();
-		//	if (!loading.cam || loading.cam.optionvalue != camera)
-		//	{
-		//		var camData = cameraListLoader.GetCameraWithId(camera);
-		//		if (camData)
-		//			videoPlayer.LoadLiveCamera(camData);
-		//	}
-		//}
-		if (!videoPlayer.Loading().image.isLive)
-		{
-			videoPlayer.CloseCurrentClip();
-		}
-		else if (!videoPlayer.Loading().image.isGroup)
-		{
+		return false;
+	}
+	var BackButtonPressed = function ()
+	{
+		var loading = videoPlayer.Loading();
+		if (!loading.image.isLive)
+			clipLoader.CloseCurrentClip();
+		else if (!loading.image.isGroup)
 			videoPlayer.LoadHomeGroup();
-		}
-	}
-	this.CameraMaximize = function (cameraId)
-	{
-		pushHashState("#camera=" + encodeURIComponent(cameraId));
-	}
-	this.BackToGroup = function ()
-	{
-		GoBack();
-	}
-	this.LoadClip = function (clipId)
-	{
-		var newHash = "#clip=" + encodeURIComponent(clipId);
-		if (UrlHashParameters.Get("clip") != "")
-			replaceHashState(newHash);
 		else
-			pushHashState(newHash);
-	}
-	this.LoadAlert = function (alertId)
-	{
-		var newHash = "#alert=" + encodeURIComponent(alertId);
-		if (UrlHashParameters.Get("alert") != "")
-			replaceHashState(newHash);
-		else
-			pushHashState(newHash);
-	}
-	this.CloseClip = function ()
-	{
-		GoBack();
-	}
-	var GoBack = function (state)
-	{
-		if (myHistoryDepth > 0)
-		{
-			myHistoryDepth--;
-			window.history.back();
-		}
-	}
-	var pushHashState = function (hash)
-	{
-		myHistoryDepth++;
-		history.pushState(null, "", location.origin + location.pathname + location.search + hash);
-	}
-	var replaceHashState = function (hash)
-	{
-		history.replaceState(null, "", location.origin + location.pathname + location.search + hash);
+			return false;
+		return true;
 	}
 
-	$(window).bind("popstate", PopState);
-
-	// This is the initial page load.  Read any recognized hash arguments.
-	//var state =
-	//	{
-	//		camera: UrlHashParameters.Get("camera")
-	//		, clipId: UrlHashParameters.Get("clip")
-	//		, alertId: UrlHashParameters.Get("alert")
-	//		, fullscreen: UrlHashParameters.Get("fullscreen") == "1"
-	//	};
-
-	//if (state.fullscreen)
-	//	fullScreenModeController.toggleFullScreen();
-
-	// Delete any hash arguments from the URL
-	//if (location.hash && location.hash.length > 1)
-	//	history.replaceState(null, "", location.origin + location.pathname + location.search);
-
-
-	//if (state.camera != "")
-	//	self.CameraMaximize(state.camera);
-
-	//if (state.clipId != "")
-	//	self.LoadClip(state.clipId);
-	//else if (state.alertId != "")
-	//	self.LoadAlert(state.alertId);
+	buttonOverride = new HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed);
 }
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////

@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "5";
+		var login_version = "6";
 		var bi_version = "%%VERSION%%";
 	</script>
 	<script type="text/javascript">
@@ -177,7 +177,7 @@
 			var page = UrlParameters.Get("page");
 			if (page == "")
 				page = "/";
-			location.href = page;
+			location.href = page + location.hash;
 		}
 		function cancelAutoLogin()
 		{
