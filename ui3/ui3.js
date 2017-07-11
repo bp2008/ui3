@@ -163,8 +163,6 @@ var togglableUIFeatures =
 
 // TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
 
-// TODO: Enable the local_overrides file callouts
-
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
 // -- MAYBE Including an option to update the clip list automatically (on by default) ... to reduce bandwidth usage ??
@@ -4367,6 +4365,7 @@ function StatusLoader()
 	var ProfileChanged = function ()
 	{
 		// Refresh the clips and camera lists.
+		// TODO: Update this message to show the old and new profile names, not a "Reinitializing shortly" message.
 		toaster.Info("Your profile has changed.<br/>Reinitializing shortly...", 5000);
 		if (profileChangedTimeout != null)
 		{
@@ -4375,7 +4374,6 @@ function StatusLoader()
 		}
 		profileChangedTimeout = setTimeout(function ()
 		{
-			cameraListLoader.firstCameraListLoaded = false;
 			cameraListLoader.LoadCameraList();
 		}, 5000);
 	}
@@ -4925,7 +4923,7 @@ function CameraListLoader()
 	var self = this;
 	var lastResponse = null;
 	var cameraIdToCameraMap = new Object();
-	this.firstCameraListLoaded = false;
+	var firstCameraListLoaded = false;
 	var hasOnlyOneCamera = false;
 	var cameraListUpdateTimeout = null;
 	this.LoadCameraList = function (successCallbackFunc)
@@ -4936,7 +4934,7 @@ function CameraListLoader()
 		{
 			if (typeof (response.data) == "undefined" || response.data.length == 0)
 			{
-				if (self.firstCameraListLoaded)
+				if (firstCameraListLoaded)
 					toaster.Error("Camera list is empty!");
 				else
 				{
@@ -4969,17 +4967,17 @@ function CameraListLoader()
 			cameraIdToCameraMap = new Object();
 			for (var i = 0; i < lastResponse.data.length; i++)
 				cameraIdToCameraMap[lastResponse.data[i].optionValue] = lastResponse.data[i];
-			if (!self.firstCameraListLoaded || self.GetCameraWithId(videoPlayer.Loading().image.id) == null)
+			if (!firstCameraListLoaded || self.GetCameraWithId(videoPlayer.Loading().image.id) == null)
 			{
 				if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId) == null)
 					videoPlayer.SelectCameraGroup(lastResponse.data[0].optionValue);
 				else
 					videoPlayer.SelectCameraGroup(settings.ui3_defaultCameraGroupId);
 			}
-			if (!self.firstCameraListLoaded)
+			if (!firstCameraListLoaded)
 			{
 				loadingHelper.SetLoadedStatus("cameraList");
-				self.firstCameraListLoaded = true;
+				firstCameraListLoaded = true;
 			}
 			try
 			{
@@ -9130,7 +9128,7 @@ function FPSCounter2()
 ///////////////////////////////////////////////////////////////
 var currentServer =
 	{
-		remoteBaseURL: "/"
+		remoteBaseURL: ""
 		, remoteSession: ""
 		, isLoggingOut: false
 		, isUsingRemoteServer: false
