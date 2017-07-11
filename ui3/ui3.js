@@ -155,6 +155,7 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
+// TODO: Add URL parameters for loading a camera, group, or fullscreen mode.
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Handle single-deletion failure messages better.
 
