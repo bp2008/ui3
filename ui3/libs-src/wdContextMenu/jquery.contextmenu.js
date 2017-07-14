@@ -81,7 +81,8 @@
 				{
 					//split line
 					tmp = sTemplet.clone()[0];
-				} else
+				}
+				else
 				{
 					items[i].gidx = gidx;
 					if (items[i].type == "group")
@@ -91,7 +92,8 @@
 						arguments.callee(items[i].alias, items[i].items);
 						items[i].type = "arrow";
 						tmp = buildItem.apply(iTemplet.clone()[0], [items[i]]);
-					} else
+					}
+					else
 					{
 						//normal item
 						items[i].type = "ibody";
