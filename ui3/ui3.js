@@ -155,8 +155,8 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
-// TODO: Touchscreen compatibility.  Should not be necessary to zoom out upon page load in either orientation.
-// TODO: Make PTZ presets work better on touchscreens.  Including the text box to set preset description on a phone.
+// TODO: Touchscreen-compatible sub-context menus (android)
+// TODO: Make PTZ presets work better on touchscreens.  Including the text box to set preset description on a phone. (android)
 // TODO: Login page login button should be disabled and say "Loading..." or "Redirecting" or something when logged in.
 // TODO: Add URL parameters for loading a camera, group, or fullscreen mode.
 // TODO: Delay start of h264 streaming until player is fully loaded.
