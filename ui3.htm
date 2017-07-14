@@ -172,7 +172,7 @@
 						</div>
 					</div>
 					<div id="ptzPresetsBox" class="leftBarBox">
-						<div class="leftBarHeading collapsibleTrigger">PTZ Presets</div>
+						<div class="leftBarHeading collapsibleTrigger" collapsibleid="ptzPresets">PTZ Presets</div>
 						<div id="ptzPresetsContent">
 							<div class="fiveByTwoButtonSet leftBarInnerBox">
 								<div class="squareButton ptzpreset" presetnum="1"></div>
@@ -201,7 +201,7 @@
 						</div>
 					</div>
 					<div id="profileStatusBox" class="leftBarBox">
-						<div class="leftBarHeading collapsibleTrigger">Profile Status</div>
+						<div class="leftBarHeading collapsibleTrigger" collapsibleid="profileStatus">Profile Status</div>
 						<div class="leftBarInnerBox">
 							<div class="oneByTwoSquareButton" id="schedule_lock_button"><div class="squareButtonIcon"><svg class="icon" id="schedule_lock_icon"><use xlink:href="#svg_x5F_RunProfile"></use></svg></div></div>
 							<div class="fourByTwoButtonSet">
@@ -217,15 +217,15 @@
 						</div>
 					</div>
 					<div id="globalScheduleBox" class="leftBarBox">
-						<div class="leftBarHeading collapsibleTrigger">Schedule</div>
+						<div class="leftBarHeading collapsibleTrigger" collapsibleid="schedule">Schedule</div>
 						<div class="dropdownBox" name="schedule"></div>
 					</div>
 					<div class="leftBarBox">
-						<div class="leftBarHeading collapsibleTrigger">Current Group</div>
+						<div class="leftBarHeading collapsibleTrigger" collapsibleid="currentGroup">Current Group</div>
 						<div class="dropdownBox" name="currentGroup"></div>
 					</div>
 					<div class="leftBarBox" style="padding-bottom: 3px;">
-						<div class="leftBarHeading collapsibleTrigger">Streaming Quality</div>
+						<div class="leftBarHeading collapsibleTrigger" collapsibleid="streamingQuality">Streaming Quality</div>
 						<div class="dropdownBox" name="streamingQuality"></div>
 					</div>
 				</div>
@@ -235,9 +235,11 @@
 			<div id="layoutLeftRecordingsControls">
 				<div class="leftBarTopPadding"></div>
 				<div class="leftBarBox">
-					<div class="leftBarHeading" id="recordingsFilterByHeading">Filter by:</div>
-					<div class="dropdownBox" name="currentGroup"></div>
-					<div class="standardLeftBarBoxSize" id="dateRange" onclick="dateFilter.OpenDatePicker(this);"><svg class="icon calendarIcon"><use xlink:href="#svg_x5F_Calendar2"></use></svg><span id="dateRangeLabel" class="oneLine">All Recent</span></div>
+					<div class="leftBarHeading collapsibleTrigger" id="recordingsFilterByHeading" collapsibleid="filterRecordings">Filter by:</div>
+					<div>
+						<div class="dropdownBox" name="currentGroup"></div>
+						<div class="standardLeftBarBoxSize" id="dateRange" onclick="dateFilter.OpenDatePicker(this);"><svg class="icon calendarIcon"><use xlink:href="#svg_x5F_Calendar2"></use></svg><span id="dateRangeLabel" class="oneLine">All Recent</span></div>
+					</div>
 				</div>
 				<div id="clipListTopDate" class="datetile" style="position:relative;margin-bottom:0px" title="Click to scroll to the top" onclick="clipLoader.ScrollToTop()">...</div>
 				<!--<div style="height:4px;">Margin-bottom doesn't get counted correctly by the resize algorithm</div>-->
@@ -253,7 +255,7 @@
 				<div id="stoplightYellow"><svg class="icon"><use xlink:href="#svg_x5F_Stoplight"></use></svg></div>
 				<div id="stoplightGreen"><svg class="icon"><use xlink:href="#svg_x5F_Stoplight"></use></svg></div>
 			</div>
-			<div class="serverStatusLabel">
+			<div class="serverStatusLabel" collapsibleid="serverStatus">
 				Server Status<div class="serverStatusSmallIcon">
 					<div class="statusBar statusTiny" name="cpu"></div>
 					<div class="statusBar statusTiny" name="mem"></div>

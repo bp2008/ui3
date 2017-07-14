@@ -187,6 +187,7 @@ var togglableUIFeatures =
 // CONSIDER: Single-click in the clip player could clear the current clip selection state, select the active clip, and scroll to it.
 // CONSIDER: Replace dialog panels with better versions.  More modern.  Draggable.  Maybe resizable.
 // CONSIDER: Allow an open clip to remain open even if the clip list no longer contains the clip.  This requires that the clip list is never queried again as long as the clip remains open, but opens the door to linking someone to a specific clip in the future, without forcing them to find the clip in their own clip list.
+// CONSIDER: An alternate layout that automatically loads when the UI has significantly more height than width (e.g. portrait view)
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -264,6 +265,34 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_feature_enabled_clipNameLabel"
+			, value: "1"
+		}
+		, {
+			key: "ui3_collapsible_ptzPresets"
+			, value: "1"
+		}
+		, {
+			key: "ui3_collapsible_profileStatus"
+			, value: "1"
+		}
+		, {
+			key: "ui3_collapsible_schedule"
+			, value: "1"
+		}
+		, {
+			key: "ui3_collapsible_currentGroup"
+			, value: "1"
+		}
+		, {
+			key: "ui3_collapsible_streamingQuality"
+			, value: "1"
+		}
+		, {
+			key: "ui3_collapsible_serverStatus"
+			, value: "1"
+		}
+		, {
+			key: "ui3_collapsible_filterRecordings"
 			, value: "1"
 		}
 	];
@@ -599,6 +628,9 @@ function SetupCollapsibleTriggers()
 	$(".collapsibleTrigger,.serverStatusLabel").each(function (idx, ele)
 	{
 		var $ele = $(ele);
+		var collapsibleid = $ele.attr('collapsibleid');
+		if (collapsibleid && collapsibleid.length > 0 && settings["ui3_collapsible_" + collapsibleid] != "1")
+			$ele.next().hide();
 		if ($ele.next().is(":visible"))
 			$ele.removeClass("collapsed");
 		else
@@ -609,11 +641,14 @@ function SetupCollapsibleTriggers()
 				duration: 100
 				, complete: function ()
 				{
-					if ($ele.next().is(":visible"))
+					var vis = $ele.next().is(":visible");
+					if (vis)
 						$ele.removeClass("collapsed");
 					else
 						$ele.addClass("collapsed");
-					if ($ele.hasClass("serverStatusLabel"))
+					if (collapsibleid && collapsibleid.length > 0)
+						settings["ui3_collapsible_" + collapsibleid] = vis ? "1" : "0";
+					if ($ele.hasClass("serverStatusLabel") || $ele.attr("id") == "recordingsFilterByHeading")
 						resized();
 				}
 			});
@@ -5102,13 +5137,16 @@ function CameraListLoader()
 	}
 	this.GetGroupCamera = function (groupId)
 	{
-		for (var i = 0; i < lastResponse.data.length; i++)
+		if (lastResponse && lastResponse.data)
 		{
-			if (self.CameraIsGroupOrCycle(lastResponse.data[i]))
+			for (var i = 0; i < lastResponse.data.length; i++)
 			{
-				if (lastResponse.data[i].optionValue == groupId)
+				if (self.CameraIsGroupOrCycle(lastResponse.data[i]))
 				{
-					return lastResponse.data[i];
+					if (lastResponse.data[i].optionValue == groupId)
+					{
+						return lastResponse.data[i];
+					}
 				}
 			}
 		}
