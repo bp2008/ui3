@@ -176,6 +176,7 @@ a, a:visited
 		position: relative;
 		padding-right: 75px;
 		cursor: pointer;
+		user-select: none;
 	}
 
 		[type="checkbox"]:not(:checked) + label:before,

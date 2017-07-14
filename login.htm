@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "6";
+		var login_version = "7";
 		var bi_version = "%%VERSION%%";
 	</script>
 	<script type="text/javascript">
@@ -28,13 +28,14 @@
 			}
 		};
 	</script>
-	<script src="applet/loginScripts.js?v=5_%%VERSION%%" type="text/javascript"></script>
-	<link href="applet/loginStyles.css?v=5_%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="applet/loginScripts.js?v=7_%%VERSION%%" type="text/javascript"></script>
+	<link href="applet/loginStyles.css?v=7_%%VERSION%%" rel="stylesheet" type="text/css">
 	<script type="text/javascript">
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
 		var existingSession = "";
 		var isStoredDataLoaded = false;
+		var windowUnloading = false;
 		$(function ()
 		{
 			if (typeof window.JSON == 'undefined')
@@ -53,6 +54,7 @@
 			resized();
 			window.onbeforeunload = function ()
 			{
+				windowUnloading = true;
 				cbLoginAutomaticallyClicked();
 				return;
 			}
@@ -148,14 +150,15 @@
 				var myResponse = md5($("#txtUn").val() + ":" + response.session + ":" + $("#txtPw").val());
 				ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
 				{
-					$("#btnLogin").val("Log in");
 					if (response.result == "success")
 					{
+						$("#btnLogin").attr("disabled", "disabled").val("Redirecting...");
 						existingSession = response.session;
 						LeaveLoginPage();
 					}
 					else
 					{
+						$("#btnLogin").val("Log in");
 						HandleError(response.data ? response.data.reason : "Login failed but Blue Iris did not provide a reason.");
 					}
 				},
@@ -191,7 +194,7 @@
 				clearTimeout(autologin_timeout_2);
 				autologin_timeout_2 = null;
 			}
-			$("#btnLogin").val("Log in");
+			$("#btnLogin").val(windowUnloading ? "Redirecting..." : "Log in");
 		}
 		function cbLoginAutomaticallyClicked()
 		{
