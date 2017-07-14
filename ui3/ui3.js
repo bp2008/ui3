@@ -155,6 +155,9 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
+// TODO: Touchscreen compatibility.  Should not be necessary to zoom out upon page load in either orientation.
+// TODO: Make PTZ presets work better on touchscreens.  Including the text box to set preset description on a phone.
+// TODO: Login page login button should be disabled and say "Loading..." or "Redirecting" or something when logged in.
 // TODO: Add URL parameters for loading a camera, group, or fullscreen mode.
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Handle single-deletion failure messages better.
@@ -171,6 +174,7 @@ var togglableUIFeatures =
 // -- -- on the embed element, hwaccel value 0 is NO HWVA.  1 is HWVA with fallback.  2 is HWVA only.
 // -- Long press to open context menus (enabling this should disable longpress to set preset).  Affects some devices, e.g. samsung smart TV remote control
 // -- Idle Timeout (minutes).  Enabled by default, overridable in local overrides script.
+// -- Option for UI size.
 
 // TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
 
