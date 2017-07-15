@@ -14,6 +14,7 @@ function DoUIFeatureDetection()
 {
 	try
 	{
+		requestAnimationFramePolyFill();
 		if (!isCanvasSupported())
 			MissingRequiredFeature("HTML5 Canvas"); // Excludes IE 8
 		else if (!isLocalStorageEnabled())
@@ -69,6 +70,19 @@ function isHtml5HistorySupported()
 			return true;
 		return false;
 	} catch (e)
+	{
+		return false;
+	}
+}
+function requestAnimationFramePolyFill()
+{
+	try
+	{
+		if (typeof requestAnimationFrame != "function")
+			requestAnimationFrame = function (callback) { setTimeout(callback, 33); };
+		return true;
+	}
+	catch (e)
 	{
 		return false;
 	}
@@ -160,10 +174,11 @@ var togglableUIFeatures =
 // TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Handle single-deletion failure messages better.
 
-// TODO: Implement PTZ hotkeys.
-// TODO: Implement clip navigation hotkeys.
+// TODO: Suppress hotkeys while dialogs are open.
 
 // TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
+
+// TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
@@ -185,7 +200,7 @@ var togglableUIFeatures =
 // CONSIDER: (-1 Added complexity and space usage, not necessarily useful without multi-clip simultaneous playback) Timeline control.  Simplified format at first.  Maybe show the current day, the last 24 hours, or the currently loaded time range.  Selecting a time will scroll the clip list (and begin playback of the most appropriate clip?)
 // CONSIDER: Double-click in the clip player could perform some action, like play/pause or fullscreen mode.
 // CONSIDER: Single-click in the clip player could clear the current clip selection state, select the active clip, and scroll to it.
-// CONSIDER: Replace dialog panels with better versions.  More modern.  Draggable.  Maybe resizable.
+// CONSIDER: Replace dialog panels with better versions.  More modern.  Draggable.  Maybe resizable.  Remember to suppress hotkeys while any dialog is open.
 // CONSIDER: Allow an open clip to remain open even if the clip list no longer contains the clip.  This requires that the clip list is never queried again as long as the clip remains open, but opens the door to linking someone to a specific clip in the future, without forcing them to find the clip in their own clip list.
 // CONSIDER: An alternate layout that automatically loads when the UI has significantly more height than width (e.g. portrait view)
 
@@ -240,10 +255,6 @@ var defaultSettings =
 			, value: ""
 		}
 		, {
-			key: "ui3_enableHotkeys"
-			, value: "1"
-		}
-		, {
 			key: "ui3_feature_enabled_volumeBar" // ui3_feature_enabled keys are tied to unique IDs in togglableUIFeatures
 			, value: "1"
 		}
@@ -294,6 +305,372 @@ var defaultSettings =
 		, {
 			key: "ui3_collapsible_filterRecordings"
 			, value: "1"
+		}
+		, {
+			key: "ui3_hotkey_togglefullscreen"
+			, value: "1|0|0|192" // 192: tilde (~`)
+			, hotkey: true
+			, label: "Full Screen Mode"
+			, hint: "Toggles the browser between full screen and windowed mode.  Most browsers also go fullscreen when you press F11, regardless of what you set here."
+			, actionDown: BI_Hotkey_FullScreen
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_playpause"
+			, value: "0|0|0|32" // 32: space
+			, hotkey: true
+			, label: "Play/Pause"
+			, hint: "Plays or pauses the current recording."
+			, actionDown: BI_Hotkey_PlayPause
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_newerClip"
+			, value: "0|0|0|38" // 38: up arrow
+			, hotkey: true
+			, label: "Next Clip"
+			, hint: '<img src="ui2/NextClip.png" style="float:right;height:48px" />'
+			+ "Load the next clip, higher up in the list."
+			, actionDown: BI_Hotkey_NextClip
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_olderClip"
+			, value: "0|0|0|40" // 40: down arrow
+			, hotkey: true
+			, label: "Previous Clip"
+			, hint: "Load the previous clip, lower down in the list."
+			, actionDown: BI_Hotkey_PreviousClip
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_skipAhead"
+			, value: "0|0|0|39" // 39: right arrow
+			, hotkey: true
+			, label: "Skip Ahead:"
+			, hint: "Skips ahead in the current recording by a configurable number of seconds."
+			, actionDown: BI_Hotkey_SkipAhead
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_skipBack"
+			, value: "0|0|0|37" // 37: left arrow
+			, hotkey: true
+			, label: "Skip Back:"
+			, hint: "Skips back in the current recording by a configurable number of seconds."
+			, actionDown: BI_Hotkey_SkipBack
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_skipAmount"
+			, value: 10
+			, inputType: "number"
+			, inputWidth: 40
+			, minValue: 1
+			, maxValue: 9999
+			, label: "Skip Time (seconds)"
+			, hint: "[1-9999] (default: 10) \r\nNumber of seconds to skip forward and back when using hotkeys to skip."
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_digitalZoomIn"
+			, value: "0|0|1|187" // 187: =
+			, hotkey: true
+			, label: "Digital Zoom In"
+			, hint: "This has the same function as rolling a mouse wheel upward."
+			, actionDown: BI_Hotkey_DigitalZoomIn
+			, allowRepeatKey: true
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_digitalZoomOut"
+			, value: "0|0|1|189" // : 189: -
+			, hotkey: true
+			, label: "Digital Zoom Out"
+			, hint: "This has the same function as rolling a mouse wheel downward."
+			, actionDown: BI_Hotkey_DigitalZoomOut
+			, allowRepeatKey: true
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_digitalPanUp"
+			, value: "0|0|1|38" // 38: up arrow
+			, hotkey: true
+			, label: "Digital Pan Up"
+			, hint: "If zoomed in with digital zoom, pans up."
+			, actionDown: BI_Hotkey_DigitalPanUp
+			, actionUp: BI_Hotkey_DigitalPanUp_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_digitalPanDown"
+			, value: "0|0|1|40" // 40: down arrow
+			, hotkey: true
+			, label: "Digital Pan Down"
+			, hint: "If zoomed in with digital zoom, pans down."
+			, actionDown: BI_Hotkey_DigitalPanDown
+			, actionUp: BI_Hotkey_DigitalPanDown_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_digitalPanLeft"
+			, value: "0|0|1|37" // 37: left arrow
+			, hotkey: true
+			, label: "Digital Pan Left"
+			, hint: "If zoomed in with digital zoom, pans left."
+			, actionDown: BI_Hotkey_DigitalPanLeft
+			, actionUp: BI_Hotkey_DigitalPanLeft_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_digitalPanRight"
+			, value: "0|0|1|39" // 39: right arrow
+			, hotkey: true
+			, label: "Digital Pan Right"
+			, hint: "If zoomed in with digital zoom, pans right."
+			, actionDown: BI_Hotkey_DigitalPanRight
+			, actionUp: BI_Hotkey_DigitalPanRight_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzUp"
+			, value: "0|0|0|38" // 38: up arrow
+			, hotkey: true
+			, label: "PTZ Up"
+			, hint: "If the current live camera is PTZ, moves the camera up."
+			, actionDown: BI_Hotkey_PtzUp
+			, actionUp: BI_Hotkey_PtzUp_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzDown"
+			, value: "0|0|0|40" // 40: down arrow
+			, hotkey: true
+			, label: "PTZ Down"
+			, hint: "If the current live camera is PTZ, moves the camera down."
+			, actionDown: BI_Hotkey_PtzDown
+			, actionUp: BI_Hotkey_PtzDown_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzLeft"
+			, value: "0|0|0|37" // 37: left arrow
+			, hotkey: true
+			, label: "PTZ Left"
+			, hint: "If the current live camera is PTZ, moves the camera left."
+			, actionDown: BI_Hotkey_PtzLeft
+			, actionUp: BI_Hotkey_PtzLeft_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzRight"
+			, value: "0|0|0|39" // 39: right arrow
+			, hotkey: true
+			, label: "PTZ Right"
+			, hint: "If the current live camera is PTZ, moves the camera right."
+			, actionDown: BI_Hotkey_PtzRight
+			, actionUp: BI_Hotkey_PtzRight_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzIn"
+			, value: "0|0|0|187" // 187: =
+			, hotkey: true
+			, label: "PTZ Zoom In"
+			, hint: "If the current live camera is PTZ, zooms the camera in."
+			, actionDown: BI_Hotkey_PtzIn
+			, actionUp: BI_Hotkey_PtzIn_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzOut"
+			, value: "0|0|0|189" // 189: -
+			, hotkey: true
+			, label: "PTZ Zoom Out"
+			, hint: "If the current live camera is PTZ, zooms the camera out."
+			, actionDown: BI_Hotkey_PtzOut
+			, actionUp: BI_Hotkey_PtzOut_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset1"
+			, value: "0|0|0|49" // 49: 1
+			, hotkey: true
+			, label: "Load Preset 1:"
+			, hint: "If the current live camera is PTZ, loads preset 1."
+			, actionDown: function () { BI_Hotkey_PtzPreset(1); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset2"
+			, value: "0|0|0|50" // 50: 2
+			, hotkey: true
+			, label: "Load Preset 2:"
+			, hint: "If the current live camera is PTZ, loads preset 2."
+			, actionDown: function () { BI_Hotkey_PtzPreset(2); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset3"
+			, value: "0|0|0|51" // 51: 3
+			, hotkey: true
+			, label: "Load Preset 3:"
+			, hint: "If the current live camera is PTZ, loads preset 3."
+			, actionDown: function () { BI_Hotkey_PtzPreset(3); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset4"
+			, value: "0|0|0|52" // 52: 4
+			, hotkey: true
+			, label: "Load Preset 4:"
+			, hint: "If the current live camera is PTZ, loads preset 4."
+			, actionDown: function () { BI_Hotkey_PtzPreset(4); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset5"
+			, value: "0|0|0|53" // 53: 5
+			, hotkey: true
+			, label: "Load Preset 5:"
+			, hint: "If the current live camera is PTZ, loads preset 5."
+			, actionDown: function () { BI_Hotkey_PtzPreset(5); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset6"
+			, value: "0|0|0|54" // 54: 6
+			, hotkey: true
+			, label: "Load Preset 6:"
+			, hint: "If the current live camera is PTZ, loads preset 6."
+			, actionDown: function () { BI_Hotkey_PtzPreset(6); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset7"
+			, value: "0|0|0|55" // 55: 7
+			, hotkey: true
+			, label: "Load Preset 7:"
+			, hint: "If the current live camera is PTZ, loads preset 7."
+			, actionDown: function () { BI_Hotkey_PtzPreset(7); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset8"
+			, value: "0|0|0|56" // 56: 8
+			, hotkey: true
+			, label: "Load Preset 8:"
+			, hint: "If the current live camera is PTZ, loads preset 8."
+			, actionDown: function () { BI_Hotkey_PtzPreset(8); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset9"
+			, value: "0|0|0|57" // 57: 9
+			, hotkey: true
+			, label: "Load Preset 9:"
+			, hint: "If the current live camera is PTZ, loads preset 9."
+			, actionDown: function () { BI_Hotkey_PtzPreset(9); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset10"
+			, value: "0|0|0|48" // 48: 0
+			, hotkey: true
+			, label: "Load Preset 10:"
+			, hint: "If the current live camera is PTZ, loads preset 10."
+			, actionDown: function () { BI_Hotkey_PtzPreset(10); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset11"
+			, value: "1|0|0|49" // 49: 1
+			, hotkey: true
+			, label: "Load Preset 11:"
+			, hint: "If the current live camera is PTZ, loads preset 11."
+			, actionDown: function () { BI_Hotkey_PtzPreset(11); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset12"
+			, value: "1|0|0|50" // 50: 2
+			, hotkey: true
+			, label: "Load Preset 12:"
+			, hint: "If the current live camera is PTZ, loads preset 12."
+			, actionDown: function () { BI_Hotkey_PtzPreset(12); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset13"
+			, value: "1|0|0|51" // 51: 3
+			, hotkey: true
+			, label: "Load Preset 13:"
+			, hint: "If the current live camera is PTZ, loads preset 13."
+			, actionDown: function () { BI_Hotkey_PtzPreset(13); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset14"
+			, value: "1|0|0|52" // 52: 4
+			, hotkey: true
+			, label: "Load Preset 14:"
+			, hint: "If the current live camera is PTZ, loads preset 14."
+			, actionDown: function () { BI_Hotkey_PtzPreset(14); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset15"
+			, value: "1|0|0|53" // 53: 5
+			, hotkey: true
+			, label: "Load Preset 15:"
+			, hint: "If the current live camera is PTZ, loads preset 15."
+			, actionDown: function () { BI_Hotkey_PtzPreset(15); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset16"
+			, value: "1|0|0|54" // 54: 6
+			, hotkey: true
+			, label: "Load Preset 16:"
+			, hint: "If the current live camera is PTZ, loads preset 16."
+			, actionDown: function () { BI_Hotkey_PtzPreset(16); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset17"
+			, value: "1|0|0|55" // 55: 7
+			, hotkey: true
+			, label: "Load Preset 17:"
+			, hint: "If the current live camera is PTZ, loads preset 17."
+			, actionDown: function () { BI_Hotkey_PtzPreset(17); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset18"
+			, value: "1|0|0|56" // 56: 8
+			, hotkey: true
+			, label: "Load Preset 18:"
+			, hint: "If the current live camera is PTZ, loads preset 18."
+			, actionDown: function () { BI_Hotkey_PtzPreset(18); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset19"
+			, value: "1|0|0|57" // 57: 9
+			, hotkey: true
+			, label: "Load Preset 19:"
+			, hint: "If the current live camera is PTZ, loads preset 19."
+			, actionDown: function () { BI_Hotkey_PtzPreset(19); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_BI_Hotkey_PtzPreset20"
+			, value: "1|0|0|48" // 48: 0
+			, hotkey: true
+			, label: "Load Preset 20:"
+			, hint: "If the current live camera is PTZ, loads preset 20."
+			, actionDown: function () { BI_Hotkey_PtzPreset(20); }
+			, category: "Hotkeys"
 		}
 	];
 
@@ -1636,10 +2013,10 @@ function PtzButtons()
 	}
 
 	// PTZ Control display state //
-	this.UpdatePtzControlDisplayState = function ()
+	this.UpdatePtzControlDisplayState = function (loadThumbsOverride)
 	{
 		var featureEnabled = GetUi3FeatureEnabled("ptzControls");
-		LoadPtzPresetThumbs();
+		LoadPtzPresetThumbs(loadThumbsOverride);
 		if (videoPlayer.Loading().image.ptz)
 			ptzControlsEnabled = featureEnabled;
 		else
@@ -1668,7 +2045,7 @@ function PtzButtons()
 	}
 	this.setEnabled = function (enabled)
 	{
-		self.UpdatePtzControlDisplayState();
+		self.UpdatePtzControlDisplayState(true);
 	}
 	this.PresetSet = function (presetNumStr)
 	{
@@ -1741,12 +2118,12 @@ function PtzButtons()
 		});
 	});
 	// Presets //
-	var LoadPtzPresetThumbs = function ()
+	var LoadPtzPresetThumbs = function (loadThumbsOverride)
 	{
 		var loading = videoPlayer.Loading().image;
 		if (loading.ptz && GetUi3FeatureEnabled("ptzControls"))
 		{
-			if (currentlyLoadedPtzThumbsCamId != loading.id)
+			if (loadThumbsOverride || currentlyLoadedPtzThumbsCamId != loading.id)
 			{
 				$ptzPresets.each(function (idx, ele)
 				{
@@ -1835,7 +2212,7 @@ function PtzButtons()
 		PersistImageFromUrl("ui2_preset_" + cameraId + "_" + presetNumber, tmpImgSrc
 			, function (imgAsDataURL)
 			{
-				LoadPtzPresetThumbs();
+				LoadPtzPresetThumbs(true);
 			}, function (message)
 			{
 				toaster.Error("Failed to save preset image. " + message, 10000);
@@ -5511,6 +5888,15 @@ function VideoPlayerController()
 	{
 		playerModule.SeekToMs(pos);
 	}
+	this.SeekByMs = function (offset)
+	{
+		var newPos = playerModule.GetSeekMs() + offset;
+		if (newPos < 0)
+			newPos = 0;
+		if (newPos > currentlyLoadingImage.msec - 1)
+			newPos = currentlyLoadingImage.msec - 1;
+		playerModule.SeekToMs(newPos);
+	}
 	this.Playback_Pause = function ()
 	{
 		playerModule.Playback_Pause();
@@ -6541,6 +6927,12 @@ function ImageRenderer()
 
 		SetCamCellCursor();
 	}
+	this.DigitalPan = function (dx, dy)
+	{
+		imgDigitalZoomOffsetX += dx;
+		imgDigitalZoomOffsetY += dy;
+		self.ImgResized(true);
+	}
 	this.RegisterCamImgClickHandler = function ()
 	{
 		_registerCamImgClickHandler();
@@ -6562,8 +6954,8 @@ function ImageRenderer()
 		if (isFromKeyboard)
 		{
 			var layoutbodyOffset = $("#layoutbody").offset();
-			xPos = layoutbodyOffset.left + ($("#layoutbody").outerWidth(true));
-			yPos = layoutbodyOffset.top + ($("#layoutbody").outerHeight(true));
+			xPos = layoutbodyOffset.left + ($("#layoutbody").outerWidth(true) / 2);
+			yPos = layoutbodyOffset.top + ($("#layoutbody").outerHeight(true) / 2);
 		}
 		$("#zoomhint").css("left", (xPos - $("#zoomhint").outerWidth(true)) + "px").css("top", (yPos - $("#zoomhint").outerHeight(true)) + "px");
 	}
@@ -8905,35 +9297,139 @@ function AjaxHistoryManager()
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////
+function BI_Hotkey_FullScreen()
+{
+	fullScreenModeController.toggleFullScreen();
+}
+function BI_Hotkey_PlayPause()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		videoPlayer.Playback_PlayPause();
+}
+function BI_Hotkey_NextClip()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		videoPlayer.Playback_NextClip();
+}
+function BI_Hotkey_PreviousClip()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		videoPlayer.Playback_PreviousClip();
+}
+function BI_Hotkey_SkipAhead()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		videoPlayer.SeekByMs(1000 * parseInt(settings.ui3_skipAmount));
+}
+function BI_Hotkey_SkipBack()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		videoPlayer.SeekByMs(-1000 * parseInt(settings.ui3_skipAmount));
+}
+function BI_Hotkey_DigitalZoomIn()
+{
+	imageRenderer.DigitalZoomNow(1, true);
+}
+function BI_Hotkey_DigitalZoomOut()
+{
+	imageRenderer.DigitalZoomNow(-1, true);
+}
+function BI_Hotkey_DigitalPanUp()
+{
+	hotkeys.digitalPanUp_isActive = true;
+	hotkeys.StartDigitalPanning();
+}
+function BI_Hotkey_DigitalPanDown()
+{
+	hotkeys.digitalPanDown_isActive = true;
+	hotkeys.StartDigitalPanning();
+}
+function BI_Hotkey_DigitalPanLeft()
+{
+	hotkeys.digitalPanLeft_isActive = true;
+	hotkeys.StartDigitalPanning();
+}
+function BI_Hotkey_DigitalPanRight()
+{
+	hotkeys.digitalPanRight_isActive = true;
+	hotkeys.StartDigitalPanning();
+}
+function BI_Hotkey_DigitalPanUp_Up()
+{
+	hotkeys.digitalPanUp_isActive = false;
+}
+function BI_Hotkey_DigitalPanDown_Up()
+{
+	hotkeys.digitalPanDown_isActive = false;
+}
+function BI_Hotkey_DigitalPanLeft_Up()
+{
+	hotkeys.digitalPanLeft_isActive = false;
+}
+function BI_Hotkey_DigitalPanRight_Up()
+{
+	hotkeys.digitalPanRight_isActive = false;
+}
+function BI_Hotkey_PtzUp() { BI_PTZ_Action(2); }
+function BI_Hotkey_PtzUp_Up() { BI_PTZ_Action(2, true); }
+function BI_Hotkey_PtzDown() { BI_PTZ_Action(3); }
+function BI_Hotkey_PtzDown_Up() { BI_PTZ_Action(3, true); }
+function BI_Hotkey_PtzLeft() { BI_PTZ_Action(0); }
+function BI_Hotkey_PtzLeft_Up() { BI_PTZ_Action(0, true); }
+function BI_Hotkey_PtzRight() { BI_PTZ_Action(1); }
+function BI_Hotkey_PtzRight_Up() { BI_PTZ_Action(1, true); }
+function BI_Hotkey_PtzIn() { BI_PTZ_Action(5); }
+function BI_Hotkey_PtzIn_Up() { BI_PTZ_Action(5, true); }
+function BI_Hotkey_PtzOut() { BI_PTZ_Action(6); }
+function BI_Hotkey_PtzOut_Up() { BI_PTZ_Action(6, true); }
+function BI_Hotkey_PtzPreset(presetNum)
+{
+	var loading = videoPlayer.Loading();
+	if (loading.image.ptz && loading.image.isLive)
+		ptzButtons.PTZ_async_noguarantee(loading.image.id, 100 + parseInt(presetNum));
+}
+function BI_PTZ_Action(ptzCmd, isStopCommand)
+{
+	var loading = videoPlayer.Loading();
+	if (loading.image.ptz && loading.image.isLive)
+		ptzButtons.SendOrQueuePtzCommand(loading.image.id, ptzCmd, isStopCommand);
+}
 function BI_Hotkeys()
 {
 	var self = this;
+	var charCodeToKeyNameMap;
+
 	var currentlyDownKeys = {};
 	$(document).keydown(function (e)
 	{
+		console.log("DN: " + getKeyName(e.keyCode));
 		var charCode = e.which ? e.which : event.keyCode;
-		if (currentlyDownKeys[charCode])
-			return;
+		var isRepeatKey = currentlyDownKeys[charCode];
 		currentlyDownKeys[charCode] = true;
-		return; // TODO: Implement hotkeys.
 		var retVal = true;
-		if (settings.ui3_enableHotkeys == "1" && $(".ui2modal").length == 0)
+		if ($(".ui2modal").length == 0)
 		{
-			for (var i = 0; i < self.hotkeyDefs.length; i++)
+			for (var i = 0; i < defaultSettings.length; i++)
 			{
-				var s = self.hotkeyDefs[i];
-				if (typeof s.actionDown == "function")
+				var s = defaultSettings[i];
+				if (s.hotkey)
 				{
-					var parts = settings[s.key].split("|");
-					if (parts.length == 5)
+					if (!isRepeatKey || s.allowRepeatKey)
 					{
-						if ((e.ctrlKey ? "1" : "0") == parts[0]
-							&& (e.altKey ? "1" : "0") == parts[1]
-							&& (e.shiftKey ? "1" : "0") == parts[2]
-							&& (charCode == parts[3]))
+						if (typeof s.actionDown == "function")
 						{
-							s.hotkeyAction();
-							retVal = false;
+							var parts = settings[s.key].split("|");
+							if (parts.length >= 4)
+							{
+								if ((e.ctrlKey ? "1" : "0") == parts[0]
+									&& (e.altKey ? "1" : "0") == parts[1]
+									&& (e.shiftKey ? "1" : "0") == parts[2]
+									&& (charCode == parts[3]))
+								{
+									s.actionDown();
+									retVal = false;
+								}
+							}
 						}
 					}
 				}
@@ -8944,24 +9440,24 @@ function BI_Hotkeys()
 	});
 	$(document).keyup(function (e)
 	{
+		console.log("UP: " + getKeyName(e.keyCode));
 		var charCode = e.which ? e.which : event.keyCode;
 		currentlyDownKeys[charCode] = false;
-		return;
 		var retVal = true;
-		if (settings.ui3_enableHotkeys == "1" && $(".ui2modal").length == 0)
+		if ($(".ui2modal").length == 0)
 		{
-			for (var i = 0; i < self.hotkeyDefs.length; i++)
+			for (var i = 0; i < defaultSettings.length; i++)
 			{
-				var s = self.hotkeyDefs[i];
-				if (typeof s.actionUp == "function")
+				var s = defaultSettings[i];
+				if (s.hotkey && typeof s.actionUp == "function")
 				{
 					var parts = settings[s.key].split("|");
-					if (parts.length == 5)
+					if (parts.length >= 4)
 					{
 						var charCode = e.which ? e.which : event.keyCode
 						if (charCode == parts[3])
 						{
-							s.hotkeyUpAction();
+							s.actionUp();
 							retVal = false;
 						}
 					}
@@ -8971,6 +9467,132 @@ function BI_Hotkeys()
 		if (!retVal)
 			return retVal;
 	});
+
+	var lastDigitalPanAction = 0;
+	var isPanning = false;
+	this.digitalPanUp_isActive = false;
+	this.digitalPanDown_isActive = false;
+	this.digitalPanLeft_isActive = false;
+	this.digitalPanRight_isActive = false;
+
+	this.StartDigitalPanning = function ()
+	{
+		if (isPanning)
+			return;
+		isPanning = true;
+		DoDigitalPan();
+	}
+	var DoDigitalPan = function ()
+	{
+		var dx = 0;
+		var dy = 0;
+		var timeNow = new Date().getTime();
+		var timePassed = lastDigitalPanAction == 0 ? 16 : Math.min(1000, timeNow - lastDigitalPanAction);
+		// Pan speed will increase with a larger browser window.
+		var panSpeed = (timePassed / 1000) * (($(window).width() + $(window).height()) / 2);
+		console.log(panSpeed);
+		if (self.digitalPanUp_isActive)
+			dy += panSpeed;
+		if (self.digitalPanDown_isActive)
+			dy -= panSpeed;
+		if (self.digitalPanLeft_isActive)
+			dx += panSpeed;
+		if (self.digitalPanRight_isActive)
+			dx -= panSpeed;
+		if (dx == 0 && dy == 0
+			&& !self.digitalPanUp_isActive
+			&& !self.digitalPaDown_isActive
+			&& !self.digitalPanLeft_isActive
+			&& !self.digitalPanRight_isActive)
+		{
+			EndDigitalPanning();
+			return;
+		}
+		imageRenderer.DigitalPan(dx, dy);
+		requestAnimationFrame(DoDigitalPan);
+	}
+	var EndDigitalPanning = function ()
+	{
+		isPanning = false;
+		lastDigitalPanAction = 0;
+	}
+
+	var getKeyName = function (charCode)
+	{
+		var name = charCodeToKeyNameMap[charCode];
+		if (typeof name == "undefined")
+			name = String.fromCharCode(charCode);
+		return name;
+	}
+	var buildKeyMap = function ()
+	{
+		var m = {};
+		m[8] = "backspace";
+		m[9] = "tab";
+		m[13] = "enter";
+		m[16] = "";
+		m[17] = "";
+		m[18] = "";
+		m[19] = "pause/break";
+		m[20] = "caps lock";
+		m[27] = "escape";
+		m[32] = "space";
+		m[33] = "page up";
+		m[34] = "page down";
+		m[35] = "end";
+		m[36] = "home";
+		m[37] = "left arrow";
+		m[38] = "up arrow";
+		m[39] = "right arrow";
+		m[40] = "down arrow";
+		m[45] = "insert";
+		m[46] = "delete";
+		m[91] = "left window";
+		m[92] = "right window";
+		m[93] = "select key";
+		m[96] = "numpad 0";
+		m[97] = "numpad 1";
+		m[98] = "numpad 2";
+		m[99] = "numpad 3";
+		m[100] = "numpad 4";
+		m[101] = "numpad 5";
+		m[102] = "numpad 6";
+		m[103] = "numpad 7";
+		m[104] = "numpad 8";
+		m[105] = "numpad 9";
+		m[106] = "multiply";
+		m[107] = "add";
+		m[109] = "subtract";
+		m[110] = "decimal point";
+		m[111] = "divide";
+		m[112] = "F1";
+		m[113] = "F2";
+		m[114] = "F3";
+		m[115] = "F4";
+		m[116] = "F5";
+		m[117] = "F6";
+		m[118] = "F7";
+		m[119] = "F8";
+		m[120] = "F9";
+		m[121] = "F10";
+		m[122] = "F11";
+		m[123] = "F12";
+		m[144] = "num lock";
+		m[145] = "scroll lock";
+		m[186] = ";";
+		m[187] = "=";
+		m[188] = ",";
+		m[189] = "-";
+		m[190] = ".";
+		m[191] = "/";
+		m[192] = "tilde (~`)";
+		m[219] = "[";
+		m[220] = "\\";
+		m[221] = "]";
+		m[222] = "apostrophe (')";
+		return m;
+	}
+	charCodeToKeyNameMap = buildKeyMap();
 }
 ///////////////////////////////////////////////////////////////
 // On-screen Toast Messages ///////////////////////////////////
