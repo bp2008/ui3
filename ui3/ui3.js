@@ -3964,14 +3964,17 @@ function ClipLoader(clipsBodySelector)
 				lastSelectedClipId = lastSelSave;
 			}
 
-			for (var i = 0; i < range.length; i++)
+			if (range)
 			{
-				if (!selectedClipsMap[range[i]])
+				for (var i = 0; i < range.length; i++)
 				{
-					ClipTileCreateFromId(range[i]);
-					$("#c" + range[i]).addClass("selected");
-					selectedClips.push(range[i]);
-					selectedClipsMap[range[i]] = true;
+					if (!selectedClipsMap[range[i]])
+					{
+						ClipTileCreateFromId(range[i]);
+						$("#c" + range[i]).addClass("selected");
+						selectedClips.push(range[i]);
+						selectedClipsMap[range[i]] = true;
+					}
 				}
 			}
 
