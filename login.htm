@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "7";
+		var login_version = "8";
 		var bi_version = "%%VERSION%%";
 	</script>
 	<script type="text/javascript">
@@ -28,8 +28,41 @@
 			}
 		};
 	</script>
-	<script src="applet/loginScripts.js?v=7_%%VERSION%%" type="text/javascript"></script>
-	<link href="applet/loginStyles.css?v=7_%%VERSION%%" rel="stylesheet" type="text/css">
+	<style type="text/css">
+		body
+		{
+			font-family: sans-serif;
+			background: #212325;
+		}
+
+		#loginLoading
+		{
+			text-shadow: 0 0 10px rgba(0,0,0,0.3);
+			position: absolute;
+			text-align: center;
+			top: 40%;
+			width: 100%;
+			color: #FFFFFF;
+		}
+
+			#loginLoading h1
+			{
+				margin: 0 0 20px 0;
+				font-size: 32px;
+			}
+
+			#loginLoading div
+			{
+				font-size: 20px;
+			}
+
+		#login
+		{
+			display: none;
+		}
+	</style>
+	<script src="applet/loginScripts.js?v=8_%%VERSION%%" type="text/javascript"></script>
+	<link href="applet/loginStyles.css?v=8_%%VERSION%%" rel="stylesheet" type="text/css">
 	<script type="text/javascript">
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
@@ -38,6 +71,8 @@
 		var windowUnloading = false;
 		$(function ()
 		{
+			$("#loginLoading").hide();
+			$("#login").show();
 			if (typeof window.JSON == 'undefined')
 			{
 				$("#login").text("Your web browser is too old to use the Blue Iris web interface properly.\n\nTo proceed with this browser, disable the \"Secure only\" requirement within Blue Iris's web server settings.");
@@ -281,6 +316,10 @@
 	</script>
 </head>
 <body>
+	<div id="loginLoading">
+		<h1>%%SYSNAME%%</h1>
+		<div>Loading login page...</div>
+	</div>
 	<div id="login">
 		<h1>%%SYSNAME%%</h1>
 		<input id="txtUn" type="text" class="text" placeholder="Username" autocapitalize="off" autocorrect="off" />

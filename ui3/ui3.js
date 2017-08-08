@@ -169,6 +169,7 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
+// TODO: Try pointInsideElement with outerWidth(true) and outerHeight(true).  Use it this way unless it breaks one of the usages.
 // TODO: Make PTZ presets work better on touchscreens.  Including the text box to set preset description on a phone. (android)
 // TODO: Add URL parameters for loading a camera, group, or fullscreen mode.
 // TODO: Delay start of h264 streaming until player is fully loaded.
@@ -4959,7 +4960,7 @@ function DiskUsageGUI()
 		//		total: 150
 		//	};
 		//$dud.append(GetDisk(fakeDisk2));
-		$legend.append(CreateLegendItem('#666666', 'Other files'));
+		$legend.append(CreateLegendItem('#333333', 'Other files'));
 		if (normalStateOccurred || overAllocatedOccurred)
 		{
 			$legend.append(CreateLegendItem('#0097F0', 'Used by recordings'));
@@ -4983,7 +4984,7 @@ function DiskUsageGUI()
 	}
 	var GetDisk = function (disk)
 	{
-		// Make sure we have numeric values for all of these, no strings.
+		// Make sure we have numeric values for all of these, no strings. Units are MiB.
 		disk.allocated = parseInt(disk.allocated);
 		disk.used = parseInt(disk.used);
 		disk.free = parseInt(disk.free);
@@ -4994,16 +4995,17 @@ function DiskUsageGUI()
 		var disk_freeSpace = disk.free;
 		var disk_capacity = disk.total;
 
-		// Extrapolate complete disk usage information from the 4 values provided
+		// Compensate for minor rounding errors.
 		if (disk_capacity - disk.used - disk.free < -5)
 			toaster.Warning("Reported disk info is invalid.  Possibly Blue Iris's clip database is corrupt and needs repaired.", 30000);
 		if (disk_capacity - disk.used - disk.free < 0)
 			disk_capacity = disk.used + disk.free;
-
+		
+		// Extrapolate complete disk usage information from the 4 values provided
+		var bi_free = bi_allocated - bi_used; // Remaining space in allocation.  This may be negative, or may be larger than actual free space.
 		var disk_usedSpace = disk_capacity - disk_freeSpace; // Overall disk used space
 		var other_used = disk_usedSpace - bi_used; // Space used by other files
-		var other_free = disk_capacity - other_used - bi_used; // Free space outside BI's allocation
-		var bi_free = bi_allocated - bi_used; // Remaining space in allocation.  This may be negative, or may be larger than actual free space.
+		var other_free = disk_freeSpace - bi_free; // Free space outside BI's allocation
 		var exceededAllocation = bi_free < 0; // We have more recordings than we're supposed to
 		var overAllocated = bi_free > disk_freeSpace;  // There isn't enough free space for BI to fill its allocation.
 
