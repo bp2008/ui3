@@ -243,10 +243,14 @@
 		}
 		function GetPersistedValue(key)
 		{
+			var value;
 			if (typeof Storage !== "undefined" && localStorage)
-				return localStorage.getItem(key);
+				value = localStorage.getItem(key);
 			else
-				return $.cookie(key);
+				value = $.cookie(key);
+			if (!value)
+				value = "";
+			return value;
 		}
 		function SetPersistedValue(key, value)
 		{

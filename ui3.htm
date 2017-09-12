@@ -33,6 +33,8 @@
 	</script>
 	<script src="ui3/libs-ui3.js?v=%%VERSION%%" type="text/javascript"></script>
 	<link href="ui3/libs-ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="ui3/libs-src/dialog.js?v=%%VERSION%%" type="text/javascript"></script>
+	<link href="ui3/libs-src/dialog.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
 	<script src="ui3/ui3.js?v=%%VERSION%%" type="text/javascript"></script>
 	<link href="ui3/ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
 	<script src="ui3/ui3-local-overrides.js?v=%%VERSION%%" type="text/javascript"></script>
@@ -308,6 +310,12 @@
 		</div>
 		<div id="liveFullscreenButton" class="pcButton" title="Full Screen"><svg class="icon"><use xlink:href="#svg_mio_Fullscreen"></use></svg></div>
 		<div id="liveExitFullscreenButton" class="pcButton" title="Exit Full Screen" style="display: none;"><svg class="icon"><use xlink:href="#svg_mio_FullscreenExit"></use></svg></div>
+		<div id="seekhint" style="display: none">
+			<img id="seekhint_img" src="" />
+			<canvas id="seekhint_canvas">HTML5 canvas not supported</canvas>
+			<div id="seekhint_helper">Pause video to see preview.</div>
+			<div id="seekhint_label"></div>
+		</div>
 	</div>
 	<div id="layoutbottom">
 		<div id="layoutbottomTimeline">
@@ -318,16 +326,9 @@
 		<img src="ui3/LoadingImage.png" />
 		<img src="ui3/noimage.png" />
 	</div>
-	<div id="seekhint" style="display: none">
-		<img id="seekhint_img" src="" />
-		<canvas id="seekhint_canvas">HTML5 canvas not supported</canvas>
-		<div id="seekhint_helper">Pause video to see preview.</div>
-		<div id="seekhint_label"></div>
-	</div>
 	<div id="zoomhint" style="display: none">
 	</div>
 	<div id="loginDialog" style="display: none">
-		<div class="title">Administrator Login</div>
 		<div style="margin-top: 10px;">An administrator session is required to access this feature.  Please log in, then try your action again:</div>
 		<div class="section monospace">User: <input type="text" varname="user" placeholder="Username" /></div>
 		<div class="monospace" style="margin-top: 5px;">Pass: <input type="password" varname="pass" placeholder="Password" onkeypress="return sessionManager.PwKeypress(this,event)" /></div>
@@ -340,9 +341,10 @@
 		<div class="lesserSection"><input type="button" id="btnLogin" value="Log in" onclick="sessionManager.DoAdministratorDialogLogin()" /></div>
 	</div>
 	<div id="aboutDialog" style="display: none">
-		<img class="about_icon" src="/favicon.ico" alt="Blue Iris" />
-		<div class="title">About UI3</div>
-		<div class="section">UI3 version <span id="ui_version_label"></span>, Blue Iris version: <span id="bi_version_label"></span></div>
+		<div>
+			UI3 version <span id="ui_version_label"></span>, Blue Iris version: <span id="bi_version_label"></span>
+			<img class="about_icon" src="/favicon.ico" alt="Blue Iris" />
+		</div>
 		<div class="section">UI3 is a web interface for <a target="_blank" href="http://blueirissoftware.com/">Blue Iris</a></div>
 		<div class="section">
 			UI3 is designed for use with:

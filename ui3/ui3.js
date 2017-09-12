@@ -169,6 +169,9 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
+// TODO: Fix sizing of large dialogs.
+// TODO: Test large dialogs on phones.
+// TODO: Implement JSON "users" command as a status panel like the Log panel.
 // TODO: Try pointInsideElement with outerWidth(true) and outerHeight(true).  Use it this way unless it breaks one of the usages.
 // TODO: Make PTZ presets work better on touchscreens.  Including the text box to set preset description on a phone. (android)
 // TODO: Add URL parameters for loading a camera, group, or fullscreen mode.
@@ -178,6 +181,9 @@ var togglableUIFeatures =
 // TODO: Suppress hotkeys while dialogs are open.
 
 // TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
+// TODO: Throttle rapid camera changes to prevent heavy Blue Iris server load, particularly for H.264 streams.
+
+// TODO: If using the fetch API for streaming in production, make sure that connection open/close operations are throttled.  There is a Chrome bug which makes "fetch" operations get stuck in a "pending" state, tying up one of the connections to the server's hostname.
 
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
@@ -201,7 +207,6 @@ var togglableUIFeatures =
 // CONSIDER: (-1 Added complexity and space usage, not necessarily useful without multi-clip simultaneous playback) Timeline control.  Simplified format at first.  Maybe show the current day, the last 24 hours, or the currently loaded time range.  Selecting a time will scroll the clip list (and begin playback of the most appropriate clip?)
 // CONSIDER: Double-click in the clip player could perform some action, like play/pause or fullscreen mode.
 // CONSIDER: Single-click in the clip player could clear the current clip selection state, select the active clip, and scroll to it.
-// CONSIDER: Replace dialog panels with better versions.  More modern.  Draggable.  Maybe resizable.  Remember to suppress hotkeys while any dialog is open.
 // CONSIDER: Allow an open clip to remain open even if the clip list no longer contains the clip.  This requires that the clip list is never queried again as long as the clip remains open, but opens the door to linking someone to a specific clip in the future, without forcing them to find the clip in their own clip list.
 // CONSIDER: An alternate layout that automatically loads when the UI has significantly more height than width (e.g. portrait view)
 
@@ -3077,6 +3082,7 @@ function PlaybackHeader()
 function SeekBar()
 {
 	var self = this;
+	var $layoutbody = $("#layoutbody");
 	var wrapper = $("#seekBarWrapper");
 	var bar = $("#seekBarMain");
 	var left = $("#seekBarLeft");
@@ -3160,13 +3166,15 @@ function SeekBar()
 			return;
 		// Update seek hint text and location
 		var msec = videoPlayer.Loading().image.msec;
+		var bodyO = $layoutbody.offset();
 		var barO = bar.offset();
 		var barW = bar.width();
 
 		var hintX = Clamp(e.pageX - barO.left, 0, barW);
 		var seekHintW = seekhint.outerWidth();
-		var seekHintL = (hintX + barO.left) - (seekHintW / 2);
-		seekHintL = Clamp(seekHintL, barO.left, (barO.left + barW) - seekHintW);
+		var seekHintL = (hintX + barO.left) - (seekHintW / 2) - bodyO.left;
+		var barMarginL = barO.left - bodyO.left;
+		seekHintL = Clamp(seekHintL, barMarginL, (barMarginL + barW) - seekHintW);
 		seekhint.css("left", seekHintL + "px");
 		var seekHintMs = Clamp(parseInt((hintX / barW) * (msec - 1)), 0, msec);
 		var touch = touchEvents.isTouchEvent(e);
@@ -3176,8 +3184,7 @@ function SeekBar()
 			setSeekHintCanvasVisibility(false);
 			setSeekHintHelperVisibility(false);
 		}
-		else if (!playbackControls.SettingsPanelIsOpen()
-			&& ((!touch && !isDragging && videoPlayer.Playback_IsPaused()) || (touch && isDragging)))
+		else if ((!touch && !isDragging && videoPlayer.Playback_IsPaused()) || (touch && isDragging))
 		{
 			// (Mouse hovering while paused) or (touch dragging): show preview image
 			setSeekHintCanvasVisibility(true);
@@ -3194,10 +3201,10 @@ function SeekBar()
 		else
 		{
 			setSeekHintCanvasVisibility(false);
-			setSeekHintHelperVisibility(!playbackControls.SettingsPanelIsOpen());
+			setSeekHintHelperVisibility(true);
 		}
 		seekhint_label.html(msToTime(seekHintMs, msec < 30000 ? 1 : 0));
-		seekhint.css("top", ((barO.top - 10) - seekhint.outerHeight(true)) + "px");
+		seekhint.css("top", ((barO.top - 10) - seekhint.outerHeight(true) - bodyO.top) + "px");
 		highlight.css("width", hintX + "px");
 	}
 	var loadSeekHintImg = function (msec)
@@ -3288,6 +3295,7 @@ function SeekBar()
 			isDragging = false;
 			if (touchEvents.isTouchEvent(e) || !pointInsideElement(wrapper, e.pageX, e.pageY))
 				SetBarState(0);
+			updateSeekHint(e);
 		}
 	}
 	var mouseMoved = function (e, overrideSetPlaybackPosition)
@@ -4933,7 +4941,7 @@ function DiskUsageGUI()
 	this.open = function (disks)
 	{
 		exceededAllocationOccurred = overAllocatedOccurred = normalStateOccurred = false;
-		var $dud = $('<div id="diskUsageDialog"><div class="title">Disk Usage</div></div>');
+		var $dud = $('<div id="diskUsageDialog"></div>');
 		$dud.append('<div class="diskUsageSeparator"></div>');
 		var $legend = $('<div class="pieLegend"></div>');
 		$dud.append($legend);
@@ -4976,7 +4984,7 @@ function DiskUsageGUI()
 			$legend.append(CreateLegendItem('#FF00FF', 'Overallocated space'));
 		}
 		$legend.append(CreateLegendItem('#66DD66', 'Unallocated free space'));
-		$dud.modal({ removeElementOnClose: true });
+		$dud.dialog({ title: "Disk Usage" });
 	}
 	var CreateLegendItem = function (color, label)
 	{
@@ -5000,7 +5008,7 @@ function DiskUsageGUI()
 			toaster.Warning("Reported disk info is invalid.  Possibly Blue Iris's clip database is corrupt and needs repaired.", 30000);
 		if (disk_capacity - disk.used - disk.free < 0)
 			disk_capacity = disk.used + disk.free;
-		
+
 		// Extrapolate complete disk usage information from the 4 values provided
 		var bi_free = bi_allocated - bi_used; // Remaining space in allocation.  This may be negative, or may be larger than actual free space.
 		var disk_usedSpace = disk_capacity - disk_freeSpace; // Overall disk used space
@@ -7822,7 +7830,7 @@ function CameraListDialog()
 		CloseCameraListDialog();
 		modal_cameralistdialog = $('<div id="cameralistdialog"><div class="cameralisttitle">' + htmlEncode($("#system_name").text()) + ' Camera List <div id="camlist_refresh_btn" class="rotating_refresh_btn noflip spin2s"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div></div>'
 			+ '<div id="cameralistcontent" class="cameralistcontent"></div></div>'
-		).modal({ removeElementOnClose: true, onClosing: DialogClosing });
+		).dialog({ title: htmlEncode($("#system_name").text()) + "Camera List", onClosing: DialogClosing });
 
 		$("#camlist_refresh_btn").click(function () { self.open(); });
 
@@ -7873,7 +7881,7 @@ function CameraListDialog()
 	}
 	this.ShowRawCameraList = function ()
 	{
-		$('<div class="cameralistcontent selectable"></div>').append(ArrayToHtmlTable(cameraListLoader.GetLastResponse().data)).modal({ removeElementOnClose: true });
+		$('<div class="cameralistcontent selectable"></div>').append(ArrayToHtmlTable(cameraListLoader.GetLastResponse().data)).dialog({ title: "Raw Camera List" });
 	}
 	var GetCameraListLabel = function (cam)
 	{
@@ -7971,9 +7979,9 @@ function CameraProperties()
 			+ '</div>'
 			+ '<div id="campropcontent"><div style="text-align: center">Loading...</div></div>'
 			+ '</div>'
-		).modal({
-			removeElementOnClose: true
-			, maxWidth: 500
+		).dialog({
+			title: "Camera Properties"
+			, overlayOpacity: 0.3
 			, onClosing: function ()
 			{
 				if ($("#cameralistcontent").length != 0)
@@ -8359,7 +8367,10 @@ function ClipProperties()
 			+ '</div>'
 			+ '<div id="campropcontent"></div>'
 			+ '</div>'
-		).modal({ removeElementOnClose: true, maxWidth: 500, maxHeight: 510 });
+		).dialog({
+			title: htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties'
+			, overlayOpacity: 0.3
+		});
 
 		var $camprop = $("#campropcontent");
 
@@ -8425,12 +8436,9 @@ function ClipDownloadDialog()
 	this.open = function (allSelectedClipIDs)
 	{
 		$('<div id="campropdialog">'
-			+ '<div class="campropheader">'
-			+ '<div class="camproptitle">Download Multiple Clips</div>'
-			+ '</div>'
 			+ '<div id="campropcontent"></div>'
 			+ '</div>'
-		).modal({ removeElementOnClose: true, maxWidth: 500, maxHeight: 500 });
+		).dialog({ title: "Download Multiple Clips" });
 
 		var $camprop = $("#campropcontent");
 		$camprop.append('<div class="camprop_item clipprop_item_info">Click each link to download the desired clips.</div>');
@@ -8504,7 +8512,7 @@ var objectVisualizer = new (function ObjectVisualizer()
 		}
 		else
 			$viewer.find(".selectable").text("null");
-		$root.modal({ removeElementOnClose: true, maxWidth: 600 });
+		$root.dialog({ title: "Object Visualizer" });
 	}
 })();
 ///////////////////////////////////////////////////////////////
@@ -8732,9 +8740,8 @@ function SystemConfig()
 	var ShowSysConfigDialog = function ()
 	{
 		CloseSysConfigDialog();
-		modal_systemconfigdialog = $('<div id="sysconfigdialog"><div class="sysconfigtitle">' + htmlEncode($("#system_name").text()) + ' System Configuration</div>'
-			+ '<div id="sysconfigcontent"></div></div>'
-		).modal({ removeElementOnClose: true, maxWidth: 400, maxHeight: 350 });
+		modal_systemconfigdialog = $('<div id="sysconfigdialog"><div id="sysconfigcontent"></div></div>'
+		).dialog({ title: "System Configuration" });
 	}
 	var CloseSysConfigDialog = function ()
 	{
@@ -8852,7 +8859,7 @@ function SystemLog()
 			+ ' System Log <div id="systemlog_refresh_btn" class="rotating_refresh_btn noflip" onclick="systemLog.open()"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div>'
 			+ '</div></div>'
 			+ '<div id="systemlogcontent"></div></div>'
-		).modal({ removeElementOnClose: true });
+		).dialog({ title: "System Log" });
 	}
 	var CloseLogDialog = function ()
 	{
@@ -8884,9 +8891,19 @@ function SaveSnapshotInBlueIris(camId)
 ///////////////////////////////////////////////////////////////
 // About Dialog ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var aboutDialog = null;
 function openAboutDialog()
 {
-	$("#aboutDialog").modal({ maxWidth: 550, maxHeight: 600 });
+	closeAboutDialog();
+	aboutDialog = $("#aboutDialog").dialog({ title: "About UI3" });
+}
+function closeAboutDialog()
+{
+	if (aboutDialog != null)
+	{
+		aboutDialog.close();
+		aboutDialog = null;
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Login Dialog ///////////////////////////////////////////////
@@ -8894,6 +8911,7 @@ function openAboutDialog()
 var loginModal = null;
 function openLoginDialog()
 {
+	closeLoginDialog();
 	if (settings.bi_rememberMe == "1")
 	{
 		$('#loginDialog input[type="text"][varname="user"]').val(Base64.decode(settings.bi_username));
@@ -8902,7 +8920,7 @@ function openLoginDialog()
 	}
 	else
 		$("#cbRememberMe").prop("checked", false);
-	loginModal = $("#loginDialog").modal({ maxWidth: 500, maxHeight: 325 });
+	loginModal = $("#loginDialog").dialog({ overlayOpacity: 0.3, title: "Administrator Login" });
 }
 function closeLoginDialog()
 {
@@ -9057,9 +9075,10 @@ function HLSPlayer()
 	{
 		hlsPlayerLastCamId = camId;
 		container = $('<div style="overflow: hidden;"></div>');
-		dialog = container.modal(
+		dialog = container.dialog(
 			{
-				removeElementOnClose: true
+				title: "HLS Stream (" + htmlEncode(cameraListLoader.GetCameraName(camId)) + ")"
+				, overlayOpacity: 0.3
 				, onClosing: function ()
 				{
 					container = null;
@@ -9714,6 +9733,12 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 		},
 		error: function (jqXHR, textStatus, errorThrown)
 		{
+			if (jqXHR && jqXHR.status == 404 && currentServer.remoteBaseURL == "")
+			{
+				currentServer.remoteBaseURL = "/";
+				ExecJSON(args, callbackSuccess, callbackFail, synchronous);
+				return;
+			}
 			BI_CustomEvent.Invoke("ExecJSON_Fail", eventArgs);
 			if (callbackFail)
 				callbackFail(jqXHR, textStatus, errorThrown);
@@ -10277,41 +10302,7 @@ function getDistanceBetweenPointAndElementCenter(x, y, $ele)
 }
 function AskYesNo(question, onYes, onNo)
 {
-	var $dialog = $('<div></div>');
-	$dialog.css("text-align", "center");
-	$dialog.css("margin", "10px");
-	$dialog.addClass("inlineblock");
-	if (typeof question == "string")
-		$dialog.append('<div class="questionDialogQuestion">' + question + '</div>');
-	else if (typeof question == "object")
-		$dialog.append(question);
-
-	var $yesBtn = $('<input type="button" class="simpleTextButton btnGreen" style="font-size:1.5em;" value="Yes" draggable="false" unselectable="on" />');
-	var $noBtn = $('<input type="button" class="simpleTextButton btnRed" style="font-size:1.5em;" value="No" draggable="false" unselectable="on" />');
-	var $yesNoContainer = $("<div></div>");
-	$yesNoContainer.append($yesBtn).append("<span>&nbsp;&nbsp;&nbsp;</span>").append($noBtn);
-	$dialog.append($yesNoContainer);
-
-	var modalDialog = $dialog.modal({ sizeToFitContent: true, shrinkOnBothResizePasses: true });
-
-	$yesBtn.click(function ()
-	{
-		if (typeof onYes == "function")
-			try
-			{
-				onYes();
-			} catch (ex) { toaster.Error(ex); }
-		modalDialog.close();
-	});
-	$noBtn.click(function ()
-	{
-		if (typeof onNo == "function")
-			try
-			{
-				onNo();
-			} catch (ex) { toaster.Error(ex); }
-		modalDialog.close();
-	});
+	SimpleDialog.ConfirmHtml(question, onYes, onNo, toaster.Error);
 }
 String.prototype.padLeft = function (len, c)
 {

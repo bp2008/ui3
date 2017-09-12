@@ -1,0 +1,100 @@
+﻿.dialog_close_icon svg
+{
+	stroke: currentColor;
+	pointer-events: none;
+}
+
+.dialog_overlay
+{
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 0px;
+	left: 0px;
+	background-color: #000000;
+}
+
+.dialog_wrapper
+{
+	position: absolute;
+	border: 1px solid #1870B5;
+	background-color: #393939;
+	color: #cdcdcd;
+	font-size: 10pt;
+	overflow-x: auto;
+	overflow-y: auto;
+	min-width: 160px;
+	min-height: 80px;
+	max-width: 90%;
+	max-height: 90%;
+	box-shadow: 0px 0px 35px 1px rgba(0,0,0,0.15);
+}
+
+.dialog_titlebar
+{
+	position: relative;
+	height: 24px;
+	overflow: hidden;
+	padding-right: 40px;
+	border-bottom: 1px solid #15273f;
+	user-select: none;
+	cursor: default;
+	font-size: 0px;
+	background-color: #272727;
+}
+
+.dialog_title
+{
+	padding: 0px 4px;
+	top: 0px;
+	left: 0px;
+	height: 24px;
+	line-height: 24px;
+	font-size: 16px;
+	user-select: none;
+}
+
+.dialog_close
+{
+	position: absolute;
+	top: 0px;
+	right: 0px;
+	width: 40px;
+	height: 24px;
+	background-color: #272727;
+	color: #cdcdcd;
+	/*border-left: 1px solid #375275;*/
+}
+
+	.dialog_close:hover
+	{
+		background-color: #9b0612;
+		color: #FFFFFF;
+	}
+
+	.dialog_close:active
+	{
+		background-color: #7d040e;
+		color: #FFFFFF;
+	}
+
+.dialog_close_icon
+{
+	width: 12px;
+	height: 12px;
+	margin: 6px auto;
+}
+
+.dialog_content
+{
+	position: relative;
+	padding: 7px 4px 2px 4px;
+	/*max-width: 320px;
+	max-height: 240px;*/
+	overflow: auto;
+}
+
+	.dialog_content a, .dialog_content a:visited
+	{
+		color: #88DDFF;
+	}

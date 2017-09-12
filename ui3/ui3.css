@@ -2229,15 +2229,6 @@ div.icon, a.icon
 	text-shadow: 0px 0px 6px rgba(0,0,0,0.5);
 }
 /* About / Login Dialogs */
-.ui2modal
-{
-	font-size: 16px;
-}
-
-	.ui2modal a, .ui2modal a:visited
-	{
-		color: #88DDFF;
-	}
 
 .monospace
 {
@@ -2258,12 +2249,6 @@ div.icon, a.icon
 	#aboutDialog a
 	{
 		cursor: pointer; /* Somehow necessary for cursor change before panel is clicked */
-	}
-
-	#aboutDialog .title, #loginDialog .title, #diskUsageDialog .title
-	{
-		color: #377EC0;
-		font-size: 32px;
 	}
 
 	#aboutDialog .section, #loginDialog .section
@@ -2350,10 +2335,6 @@ div.icon, a.icon
 	cursor: grabbing !important;
 }
 /* Question Dialog */
-.questionDialogQuestion
-{
-	padding: 20px 20px 30px 20px;
-}
 /* Simple text buttons */
 .simpleTextButton
 {
@@ -2528,11 +2509,6 @@ div.icon, a.icon
 	color: #00FF00;
 }
 
-.diskUsageSeparator
-{
-	height: 10px;
-}
-
 /* System Log / System Config dialogs */
 
 .logicon
@@ -2618,7 +2594,7 @@ div.icon, a.icon
 	text-align: center;
 }
 
-.sysconfigtitle, .cameralisttitle
+.cameralisttitle
 {
 	font-size: 2em;
 	color: #377EC0;
