@@ -169,6 +169,21 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
+// TODO: Preload H.264 module during initial UI load, in supported browser.
+// TODO: H.264 live playback
+//		-Quality controls (streams 0, 1, 2)
+//		-Removal of "Enable h.264 module" context menu item
+//		-Frame rate smoothing
+//		-Download snapshot
+//		-Open snapshot in new tab
+// TODO: H.264 clip/alert playback
+//		-Frame rate smoothing
+//		-Speed manipulation
+//		-Pausing
+//		-Reverse play
+//		-Graceful stream close
+//		-Download snapshot
+//		-Open snapshot in new tab
 // TODO: Fix sizing of large dialogs.
 // TODO: Test large dialogs on phones.
 // TODO: Implement JSON "users" command as a status panel like the Log panel.
@@ -6535,7 +6550,7 @@ function FetchPNaClH264VideoModule()
 			fetchStreamer = null;
 		}
 		pnacl_player.Reset();
-		fetchStreamer = new FetchRawH264Streamer("/h264/" + videoPlayer.Loading().image.id + "/temp.h264" + currentServer.GetRemoteSessionArg("?", true), pnacl_player.AcceptFrame,
+		fetchStreamer = new FetchVideoH264Streamer("/video/" + videoPlayer.Loading().image.id + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=0&stream=0&extend=2", pnacl_player.AcceptFrame,
 			function (e)
 			{
 				console.log("fetch stream ended");
@@ -7828,11 +7843,15 @@ function CameraListDialog()
 	this.open = function ()
 	{
 		CloseCameraListDialog();
-		modal_cameralistdialog = $('<div id="cameralistdialog"><div class="cameralisttitle">' + htmlEncode($("#system_name").text()) + ' Camera List <div id="camlist_refresh_btn" class="rotating_refresh_btn noflip spin2s"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div></div>'
-			+ '<div id="cameralistcontent" class="cameralistcontent"></div></div>'
-		).dialog({ title: htmlEncode($("#system_name").text()) + "Camera List", onClosing: DialogClosing });
+		modal_cameralistdialog = $('<div id="cameralistdialog">'
+			+ '<div id="cameralistcontent" class="cameralistcontent"></div>'
+			+ '</div>'
+		).dialog({
+			title: htmlEncode($("#system_name").text()) + "Camera List"
+			, onClosing: DialogClosing
+			, onRefresh: function () { self.open(); }
+		});
 
-		$("#camlist_refresh_btn").click(function () { self.open(); });
 
 		BI_CustomEvent.AddListener("CameraListLoaded", CameraListLoaded);
 
@@ -7840,7 +7859,6 @@ function CameraListDialog()
 	}
 	var CameraListLoaded = function ()
 	{
-		$("#camlist_refresh_btn").removeClass("spin2s");
 		var $cameralistcontent = $("#cameralistcontent");
 		if ($cameralistcontent.length == 0)
 			return;
@@ -7973,10 +7991,7 @@ function CameraProperties()
 		CloseCameraProperties();
 
 		var camName = cameraListLoader.GetCameraName(camId);
-		modal_cameraPropDialog = $('<div id="campropdialog"><div class="campropheader">'
-			+ '<div class="camproptitle">' + htmlEncode(camName)
-			+ ' Properties <div id="camprop_refresh_btn" class="rotating_refresh_btn noflip spin2s"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div></div>'
-			+ '</div>'
+		modal_cameraPropDialog = $('<div id="campropdialog">'
 			+ '<div id="campropcontent"><div style="text-align: center">Loading...</div></div>'
 			+ '</div>'
 		).dialog({
@@ -7987,14 +8002,10 @@ function CameraProperties()
 				if ($("#cameralistcontent").length != 0)
 					cameraListLoader.LoadCameraList();
 			}
-		});
-		$("#camprop_refresh_btn").click(function ()
-		{
-			self.open(camId);
+			, onRefresh: function () { self.open(camId); }
 		});
 		cameraConfig.get(camId, function (response)
 		{
-			$("#camprop_refresh_btn").removeClass("spin2s");
 			var $camprop = $("#campropcontent");
 			$camprop.empty();
 			if ($camprop.length == 0)
@@ -8362,9 +8373,6 @@ function ClipProperties()
 		var camName = cameraListLoader.GetCameraName(clipData.camera);
 
 		$('<div id="campropdialog">'
-			+ '<div class="campropheader">'
-			+ '<div class="camproptitle">' + htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties</div>'
-			+ '</div>'
 			+ '<div id="campropcontent"></div>'
 			+ '</div>'
 		).dialog({
@@ -8500,7 +8508,7 @@ var objectVisualizer = new (function ObjectVisualizer()
 			}
 			return;
 		}
-		var $root = $('<div class="ObjectVisualizer"><div class="campropheader"><div class="camproptitle">' + title + '</div></div></div>');
+		var $root = $('<div class="ObjectVisualizer"></div>');
 		var $viewer = $('<div class="selectable" style="word-wrap: break-word; border:1px solid #000000; background-color: #FFFFFF; color: #000000; margin: 10px; padding: 10px;"></div>');
 		$root.append($viewer);
 		if (obj)
@@ -8795,7 +8803,6 @@ function SystemLog()
 		if ($syslog.length == 0)
 			return;
 		$syslog.html('<div style="text-align: center; margin-top: 20px;">Loading...</div>');
-		$("#systemlog_refresh_btn").addClass("spin2s");
 		ExecJSON({ cmd: "log" }, function (response)
 		{
 			if (typeof response.result == "undefined")
@@ -8813,7 +8820,6 @@ function SystemLog()
 			var $syslog = $("#systemlogcontent");
 			if ($syslog.length == 0)
 				return;
-			$("#systemlog_refresh_btn").removeClass("spin2s");
 			$syslog.html('<table><thead><tr><th></th><th>#</th><th>Time</th><th>Object</th><th>Message</th></tr></thead><tbody></tbody></table>');
 			var $tbody = $syslog.find("tbody");
 			for (var i = 0; i < response.data.length; i++)
@@ -8854,12 +8860,11 @@ function SystemLog()
 	var ShowLogDialog = function ()
 	{
 		CloseLogDialog();
-		modal_systemlogdialog = $('<div id="systemlogdialog"><div class="syslogheader">'
-			+ '<div class="systemlogtitle">' + $("#system_name").text()
-			+ ' System Log <div id="systemlog_refresh_btn" class="rotating_refresh_btn noflip" onclick="systemLog.open()"><svg class="icon"><use xlink:href="#svg_mio_Refresh"></use></svg></div>'
-			+ '</div></div>'
-			+ '<div id="systemlogcontent"></div></div>'
-		).dialog({ title: "System Log" });
+		modal_systemlogdialog = $('<div id="systemlogdialog"><div id="systemlogcontent"></div></div>'
+		).dialog({
+			title: $("#system_name").text() + " System Log",
+			onRefresh: function () { systemLog.open(); }
+		});
 	}
 	var CloseLogDialog = function ()
 	{
@@ -10188,7 +10193,7 @@ function FetchRawH264Streamer(url, frameCallback, streamEnded)
 		{
 			is_streaming = false;
 			console.log(e);
-			StreamingEnded();
+			streamEnded();
 		});
 	}
 	var nals = 0;
@@ -10242,6 +10247,333 @@ function FetchRawH264Streamer(url, frameCallback, streamEnded)
 	}
 
 	Start();
+}
+///////////////////////////////////////////////////////////////
+// Fetch /video/ h.264 streaming //////////////////////////////
+///////////////////////////////////////////////////////////////
+function FetchVideoH264Streamer(url, frameCallback, streamEnded)
+{
+	var self = this;
+	var cancel_streaming = false;
+	var is_streaming = false;
+	var reader = null;
+
+	// Since at any point we may not have received enough data to finish parsing, we will keep track of parsing progress via a state integer.
+	// State 0: Waiting for first 6 bytes of stream header to be available:
+	//		DWORD 'blue'
+	//		BYTE streams ... 1 for video only, 2 for both audio and video
+	//		BYTE size of header total
+	// State 1: Waiting for entire header to be available, length determined by 6th byte read in state 0
+	// State 2: Waiting for first 5 bytes of block header to be available.
+	//		DWORD 'Blue'
+	//		BYTE type ... 0 = video, 1 = audio, 2 = status
+	// State 3: Waiting for entire block header to be available, length determined by its type.
+	// State 4: Waiting for entire audio or video frame data chunk to be available.
+	var state = 0;
+	var myStream = new GhettoStream();
+	var availableStreams = 0; // 1 for video only, 2 for audio and video
+	var streamHeaderSize = 0;
+	var blockType = -1;
+	var currentVideoFrame = { pos: 0, timeMs: 0, utc: 0, frameSize: 0 };
+	var currentAudioFrame = { frameSize: 0 };
+
+	this.StopStreaming = function ()
+	{
+		myStream = new GhettoStream(); // This is mostly just to release any data stored in the old stream.
+		cancel_streaming = true;
+		if (reader)
+		{
+			reader.cancel("Streaming canceled");
+			reader = null;
+		}
+	}
+	var Start = function ()
+	{
+		console.log("Fetching: " + url);
+		fetch(url)
+			.then(function (res)
+			{
+				if (cancel_streaming)
+					return;
+				reader = res.body.getReader();
+				return pump(reader);
+			})
+		["catch"](function (e)
+		{
+			is_streaming = false;
+			streamEnded(e);
+		});
+	}
+
+	function protocolError(error)
+	{
+		streamEnded("/video/ Protocol Error: " + error);
+	}
+
+	function pump()
+	{
+		if (reader == null)
+			return;
+		reader.read().then(function (result)
+		{
+			if (result.done)
+			{
+				is_streaming = false;
+				streamEnded("fetch graceful exit");
+				return;
+			}
+			else if (cancel_streaming)
+			{
+				streamEnded("fetch less graceful exit");
+				return;
+			}
+
+			myStream.Write(result.value);
+
+			while (true)
+			{
+				if (state == 0) // Read Stream Header Start
+				{
+					var buf = myStream.Read(6);
+					if (buf == null)
+						return pump();
+
+					// First 4 bytes are supposed to be ASCII "blue"
+					if (buf[0] != 98 || buf[1] != 108 || buf[2] != 117 || buf[3] != 101)
+						return protocolError("stream did not start with \"blue\"");
+
+					availableStreams = buf[4];
+					if (availableStreams != 1 && availableStreams != 2)
+						return protocolError("availableStreams (" + availableStreams + ") was supposed to be 1 (video) or 2 (audio+video)");
+
+					streamHeaderSize = buf[5];
+
+					state = 1;
+				}
+				else if (state == 1) // Read Stream Header Remainder
+				{
+					var buf = myStream.Read(streamHeaderSize);
+					if (buf == null)
+						return pump();
+
+					// The rest of the stream header is currently ignored, as the exact format was unspecified.
+					state = 2;
+				}
+				else if (state == 2) // Read Block Header Start
+				{
+					var buf = myStream.Read(5);
+					if (buf == null)
+						return pump();
+
+					// First 4 bytes are supposed to be ASCII "Blue"
+					if (buf[0] != 66 || buf[1] != 108 || buf[2] != 117 || buf[3] != 101)
+						return protocolError("block did not start with \"Blue\"");
+
+					blockType = buf[4];
+
+					state = 3;
+				}
+				else if (state == 3) // Read Block Header Remainder
+				{
+					if (blockType == 0) // Video
+					{
+						var buf = myStream.Read(2 + 4 + 8 + 4);
+						if (buf == null)
+							return pump();
+						var offsetWrapper = { offset: 0 };
+						currentVideoFrame.pos = ReadInt16(buf.buffer, offsetWrapper);
+						currentVideoFrame.timeMs = ReadInt32(buf.buffer, offsetWrapper);
+						currentVideoFrame.utc = ReadUInt64(buf.buffer, offsetWrapper);
+						currentVideoFrame.frameSize = ReadInt32(buf.buffer, offsetWrapper);
+
+						state = 4;
+					}
+					else if (blockType == 1) // Audio
+					{
+						var buf = myStream.Read(4);
+						if (buf == null)
+							return pump();
+
+						currentAudioFrame.frameSize = ReadInt32(buf.buffer, { offset: 0 });
+
+						state = 4;
+					}
+					else if (blockType == 2) // Status
+					{
+						var buf = myStream.Read(1 + 5 + 3 + 2 + 4 + 4 + 4);
+						if (buf == null)
+							return pump();
+
+						var statusBlock = new StatusBlock(buf, { offset: 0 });
+
+						state = 2;
+					}
+					else
+						return protocolError("Unknown block type " + blockType + " at state " + state);
+				}
+				else if (state == 4) // Read AV frame data
+				{
+					if (blockType == 0) // Video
+					{
+						var buf = myStream.Read(currentVideoFrame.frameSize);
+						if (buf == null)
+							return pump();
+
+						frameCallback(buf);
+
+						state = 2;
+					}
+					else if (blockType == 1) // Audio
+					{
+						var buf = myStream.Read(currentAudioFrame.frameSize);
+						if (buf == null)
+							return pump();
+
+						state = 2;
+					}
+					else if (blockType == 2) // Status
+					{
+						return protocolError("Status blockType should not have reached state 4");
+					}
+					else
+						return protocolError("Unknown block type " + blockType + " at state " + state);
+				}
+			}
+		}
+		)["catch"](function (e)
+		{
+			is_streaming = false;
+			console.log(e);
+			streamEnded();
+		});
+	}
+
+	Start();
+}
+function StatusBlock(buf, offsetWrapper)
+{
+	var self = this;
+	this.size = ReadByteFromArray(buf, offsetWrapper);
+
+	this.bRec = ReadByteFromArray(buf, offsetWrapper);
+	this.bMotion = ReadByteFromArray(buf, offsetWrapper);
+	this.bCheckFPS = ReadByteFromArray(buf, offsetWrapper);
+	this.bTriggered = ReadByteFromArray(buf, offsetWrapper);
+	this.bSignalLost = ReadByteFromArray(buf, offsetWrapper);
+
+	this.bPushError = ReadByteFromArray(buf, offsetWrapper);
+	this.bFlashError = ReadByteFromArray(buf, offsetWrapper);
+	this.bForceMovie = ReadByteFromArray(buf, offsetWrapper);
+
+	this.bOther0 = ReadByteFromArray(buf, offsetWrapper);
+	this.bOther1 = ReadByteFromArray(buf, offsetWrapper);
+
+	this.fps = ReadInt32(buf.buffer, offsetWrapper); // in 100ths
+	this.apeak = ReadInt32(buf.buffer, offsetWrapper); // out of 32767
+	this.tpause = ReadInt32(buf.buffer, offsetWrapper);
+}
+///////////////////////////////////////////////////////////////
+// GhettoStream ///////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+// A class which consumes Uint8Array objects and produces Uint8Array objects of whatever size you want by concatenating the inputs as needed.
+function GhettoStream()
+{
+	var self = this;
+	var dataQueue = new Queue();
+	var totalCachedBytes = 0;
+	this.Count = function ()
+	{
+		return totalCachedBytes;
+	}
+	this.Write = function (newArray)
+	{
+		/// <summary>Writes the specified Uint8Array to the stream so it can be read later.</summary>
+		dataQueue.enqueue(newArray);
+		totalCachedBytes += newArray.length;
+	}
+	this.Read = function (byteCount)
+	{
+		/// <summary>Reads the specified number of bytes from the stream, returning null if not enough bytes are available yet.</summary>
+		if (byteCount > totalCachedBytes)
+			return null;
+
+		var readBuf = new Uint8Array(byteCount);
+		var alreadyRead = 0;
+		var remainingToRead = byteCount - alreadyRead;
+
+		while (remainingToRead > 0)
+		{
+			var chunk = dataQueue.peek();
+			if (chunk.length > remainingToRead)
+			{
+				// This chunk will have left-overs.
+				readBuf.set(chunk.subarray(0, remainingToRead), alreadyRead);
+				dataQueue.replaceFront(chunk.subarray(remainingToRead));
+				alreadyRead += remainingToRead;
+			}
+			else
+			{
+				// This entire chunk goes into the output buffer.
+				readBuf.set(chunk, alreadyRead);
+				dataQueue.dequeue();
+				alreadyRead += chunk.length;
+			}
+			remainingToRead = byteCount - alreadyRead;
+		}
+		totalCachedBytes -= readBuf.length;
+		return readBuf;
+	}
+}
+///////////////////////////////////////////////////////////////
+// Binary Reading /////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ReadByte(buf, offsetWrapper)
+{
+	var v = new Uint8Array(buf, offsetWrapper.offset, 1)[0];
+	offsetWrapper.offset += 1;
+	return v;
+}
+function ReadByteFromArray(buf, offsetWrapper)
+{
+	return buf[offsetWrapper.offset++];
+}
+function ReadUInt16(buf, offsetWrapper)
+{
+	var v = new DataView(buf, offsetWrapper.offset, 2).getUint16(0, false);
+	offsetWrapper.offset += 2;
+	return v;
+}
+function ReadInt16(buf, offsetWrapper)
+{
+	var v = new DataView(buf, offsetWrapper.offset, 2).getInt16(0, false);
+	offsetWrapper.offset += 2;
+	return v;
+}
+function ReadUInt32(buf, offsetWrapper)
+{
+	var v = new DataView(buf, offsetWrapper.offset, 4).getUint32(0, false);
+	offsetWrapper.offset += 4;
+	return v;
+}
+function ReadInt32(buf, offsetWrapper)
+{
+	var v = new DataView(buf, offsetWrapper.offset, 4).getInt32(0, false);
+	offsetWrapper.offset += 4;
+	return v;
+}
+function ReadUInt64(buf, offsetWrapper)
+{
+	// This is a hack because JavaScript only has 64 bit doubles with 53 bit int precision.
+	// If a number were to be higher than 2 ^ 53, this method would return the wrong value.
+	var mostSignificant = (ReadUInt32(buf, offsetWrapper) & 0x001FFFFF) * 4294967296;
+	var leastSignificant = ReadUInt32(buf, offsetWrapper);
+	return mostSignificant + leastSignificant;
+}
+function ReadUTF8(buf, offsetWrapper, byteLength)
+{
+	var v = Utf8ArrayToStr(new Uint8Array(buf, offsetWrapper.offset, byteLength));
+	offsetWrapper.offset += byteLength;
+	return v;
 }
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////

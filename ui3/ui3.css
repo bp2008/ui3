@@ -2517,17 +2517,6 @@ div.icon, a.icon
 	height: 24px;
 }
 
-.rotating_refresh_btn
-{
-	margin-left: 10px;
-	width: 24px;
-	height: 24px;
-	cursor: pointer;
-	transform-origin: center;
-	display: inline-block;
-	font-size: 0px;
-}
-
 .logicon
 {
 	display: inline-block;
@@ -2547,18 +2536,6 @@ div.icon, a.icon
 #sysconfigcontent label
 {
 	display: block;
-}
-
-.syslogheader
-{
-	text-align: center;
-}
-
-.systemlogtitle
-{
-	font-size: 2em;
-	color: #377EC0;
-	margin-bottom: 10px;
 }
 
 #systemlogcontent table, .cameralistcontent table
@@ -2591,14 +2568,6 @@ div.icon, a.icon
 
 #systemlogcontent td.centercolumn
 {
-	text-align: center;
-}
-
-.cameralisttitle
-{
-	font-size: 2em;
-	color: #377EC0;
-	margin-bottom: 20px;
 	text-align: center;
 }
 
@@ -2645,18 +2614,6 @@ div.icon, a.icon
 #campropdialog
 {
 	min-width: 283px;
-}
-
-.campropheader
-{
-	text-align: center;
-}
-
-.camproptitle
-{
-	font-size: 2em;
-	color: #377EC0;
-	margin-bottom: 20px;
 }
 
 .camlist_item

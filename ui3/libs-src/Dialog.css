@@ -4,6 +4,12 @@
 	pointer-events: none;
 }
 
+.dialog_refresh_icon svg
+{
+	fill: currentColor;
+	pointer-events: none;
+}
+
 .dialog_overlay
 {
 	position: absolute;
@@ -54,7 +60,8 @@
 	user-select: none;
 }
 
-.dialog_close
+.dialog_close,
+.dialog_refresh
 {
 	position: absolute;
 	top: 0px;
@@ -78,7 +85,24 @@
 		color: #FFFFFF;
 	}
 
-.dialog_close_icon
+.dialog_refresh
+{
+	right: 40px;
+}
+
+	.dialog_refresh:hover
+	{
+		background-color: #158e1d;
+		color: #FFFFFF;
+	}
+
+	.dialog_refresh:active
+	{
+		background-color: #146619;
+		color: #FFFFFF;
+	}
+
+.dialog_close_icon, .dialog_refresh_icon
 {
 	width: 12px;
 	height: 12px;
