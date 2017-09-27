@@ -24,17 +24,22 @@
 {
 	position: absolute;
 	border: 1px solid #1870B5;
-	background-color: #393939;
-	color: #cdcdcd;
+	background-color: #FFFFFF;
+	color: #000000;
 	font-size: 10pt;
-	overflow-x: auto;
-	overflow-y: auto;
+	overflow-x: hidden;
+	overflow-y: hidden;
 	min-width: 160px;
-	min-height: 80px;
-	max-width: 90%;
-	max-height: 90%;
+	min-height: 24px;
+	max-width: 90vw;
 	box-shadow: 0px 0px 35px 1px rgba(0,0,0,0.15);
 }
+
+	.dialog_wrapper.darkTheme
+	{
+		background-color: #393939;
+		color: #cdcdcd;
+	}
 
 .dialog_titlebar
 {
@@ -42,10 +47,15 @@
 	height: 24px;
 	overflow: hidden;
 	padding-right: 40px;
-	border-bottom: 1px solid #15273f;
+	border-bottom: 1px solid #B5D5FF;
 	user-select: none;
 	cursor: default;
 	font-size: 0px;
+}
+
+.dialog_wrapper.darkTheme .dialog_titlebar
+{
+	border-bottom: 1px solid #15273f;
 	background-color: #272727;
 }
 
@@ -68,21 +78,36 @@
 	right: 0px;
 	width: 40px;
 	height: 24px;
-	background-color: #272727;
-	color: #cdcdcd;
-	/*border-left: 1px solid #375275;*/
+	background-color: #FFFFFF;
 }
 
 	.dialog_close:hover
 	{
-		background-color: #9b0612;
+		background-color: #E81123;
 		color: #FFFFFF;
 	}
 
 	.dialog_close:active
 	{
-		background-color: #7d040e;
+		background-color: #F1707A;
 		color: #FFFFFF;
+	}
+
+.dialog_wrapper.darkTheme .dialog_close,
+.dialog_wrapper.darkTheme .dialog_refresh
+{
+	background-color: #272727;
+	color: #cdcdcd;
+}
+
+	.dialog_wrapper.darkTheme .dialog_close:hover
+	{
+		background-color: #9b0612;
+	}
+
+	.dialog_wrapper.darkTheme .dialog_close:active
+	{
+		background-color: #7d040e;
 	}
 
 .dialog_refresh
@@ -90,13 +115,15 @@
 	right: 40px;
 }
 
-	.dialog_refresh:hover
+	.dialog_refresh:hover,
+	.dialog_wrapper.darkTheme .dialog_refresh:hover
 	{
 		background-color: #158e1d;
 		color: #FFFFFF;
 	}
 
-	.dialog_refresh:active
+	.dialog_refresh:active,
+	.dialog_wrapper.darkTheme .dialog_refresh:active
 	{
 		background-color: #146619;
 		color: #FFFFFF;
@@ -112,13 +139,24 @@
 .dialog_content
 {
 	position: relative;
-	padding: 7px 4px 2px 4px;
-	/*max-width: 320px;
-	max-height: 240px;*/
+	padding: 2px 4px;
 	overflow: auto;
+	max-width: 90vw;
+	max-height: 90vh;
 }
 
 	.dialog_content a, .dialog_content a:visited
 	{
 		color: #88DDFF;
 	}
+
+.dialog_wrapper.loading::after
+{
+	content: "";
+	position: absolute;
+	top: 24px;
+	left: 0px;
+	width: 100%;
+	height: 100%;
+	background-color: rgba(0,0,0,0.3);
+}

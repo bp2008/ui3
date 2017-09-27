@@ -2605,6 +2605,11 @@ div.icon, a.icon
 
 /* Camera Properties / Camera List / Clip Properties */
 
+#cameralistdialog
+{
+	max-width: 915px;
+}
+
 .icon16
 {
 	width: 16px;
@@ -2719,6 +2724,21 @@ div.icon, a.icon
 		background-color: #505050;
 	}
 
+	.camprop_section_heading.expanded
+	{
+		background-color: #626262;
+	}
+
+		.camprop_section_heading.expanded:hover
+		{
+			background-color: #6a6a6a;
+		}
+
+		.camprop_section_heading.expanded:active
+		{
+			background-color: #707070;
+		}
+
 .camprop_section
 {
 	padding: 7px 0px;
@@ -2782,6 +2802,7 @@ div.icon, a.icon
 	display: block;
 	font-size: 16px;
 	padding-right: 60px;
+	overflow: hidden;
 }
 
 #campropcontent select

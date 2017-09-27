@@ -5,11 +5,10 @@
 "use strict";
 var developerMode = false;
 
-var pnacl_player_supported = false;
-
 ///////////////////////////////////////////////////////////////
 // Feature Detect /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var pnacl_player_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -169,7 +168,6 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
-// TODO: Preload H.264 module during initial UI load, in supported browser.
 // TODO: H.264 live playback
 //		-Quality controls (streams 0, 1, 2)
 //		-Removal of "Enable h.264 module" context menu item
@@ -184,7 +182,6 @@ var togglableUIFeatures =
 //		-Graceful stream close
 //		-Download snapshot
 //		-Open snapshot in new tab
-// TODO: Fix sizing of large dialogs.
 // TODO: Test large dialogs on phones.
 // TODO: Implement JSON "users" command as a status panel like the Log panel.
 // TODO: Try pointInsideElement with outerWidth(true) and outerHeight(true).  Use it this way unless it breaks one of the usages.
@@ -840,6 +837,8 @@ function GetDummyLocalStorage()
 ///////////////////////////////////////////////////////////////
 $(function ()
 {
+	$DialogDefaults.theme = "dark";
+
 	if (location.protocol == "file:")
 	{
 		var fileSystemErrorMessage = "This interface must be loaded through the Blue Iris web server, and cannot function when loaded directly from your filesystem.";
@@ -976,6 +975,7 @@ $(function ()
 	cameraConfig = new CameraConfig();
 
 	videoPlayer = new VideoPlayerController();
+	videoPlayer.PreLoadPlayerModules();
 
 	imageRenderer = new ImageRenderer();
 
@@ -3135,7 +3135,7 @@ function SeekBar()
 
 	this.resized = function ()
 	{
-		self.drawSeekbarAtTime(videoPlayer.GetClipPlaybackPositionMs());
+		self.drawSeekbarAtPercent(videoPlayer.GetClipPlaybackPositionPercent());
 	}
 	var setSeekHintCanvasVisibility = function (visible)
 	{
@@ -3241,6 +3241,23 @@ function SeekBar()
 		seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
 		imageRenderer.ClearCanvas("seekhint_canvas");
 	}
+	this.drawSeekbarAtPercent = function (percentValue)
+	{
+		var seekbarW = bar.width();
+		var x = percentValue * seekbarW;
+		x = Clamp(x, 0, seekbarW);
+		left.css("width", x + "px");
+		handle.css("left", x + "px");
+		var msec = videoPlayer.Loading().image.msec;
+		var timeValue;
+		if (percentValue >= 1)
+			timeValue = msec;
+		else if (percentValue <= 0)
+			timeValue = 0;
+		else
+			timeValue = (msec - 1) * percentValue;
+		$("#playbackProgressText").html(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
+	}
 	this.drawSeekbarAtTime = function (timeValue)
 	{
 		var msec = videoPlayer.Loading().image.msec;
@@ -3327,12 +3344,11 @@ function SeekBar()
 			{
 				var msec = videoPlayer.Loading().image.msec;
 				if (msec <= 1)
-					videoPlayer.SeekToMs(0);
+					videoPlayer.SeekToPercent(0);
 				else
 				{
 					var positionRelative = x / barW;
-					var posX = Clamp(parseInt(positionRelative * (msec - 1)), 0, msec - 1);
-					videoPlayer.SeekToMs(posX);
+					videoPlayer.SeekToPercent(positionRelative);
 				}
 			}
 		}
@@ -5597,7 +5613,6 @@ function VideoPlayerController()
 
 	var playerModule = null;
 	var moduleHolder = {};
-	this.useH264ForLiveView_TempVar = false; // TODO: Remove this variable once H.264 is available for clips.
 
 	var currentlyLoadingCamera = null;
 	var currentlyLoadedCamera = null;
@@ -5624,21 +5639,27 @@ function VideoPlayerController()
 
 		if (moduleName == "jpeg")
 		{
-			if (moduleHolder[moduleName] == null)
-				moduleHolder[moduleName] = new JpegVideoModule();
 			playerModule = moduleHolder[moduleName];
 		}
 		else if (moduleName == "h264")
 		{
-			if (moduleHolder[moduleName] == null)
-			{
-				toaster.Info("Loading experimental raw H.264 live video player");
-				moduleHolder[moduleName] = new FetchPNaClH264VideoModule();
-			}
 			playerModule = moduleHolder[moduleName];
 		}
 		if (refreshVideoNow)
 			playerModule.OpenVideo();
+	}
+
+	this.PreLoadPlayerModules = function ()
+	{
+		if (moduleHolder["jpeg"] == null)
+			moduleHolder["jpeg"] = new JpegVideoModule();
+		if (moduleHolder["h264"] == null && pnacl_player_supported)
+		{
+			$("#loadingH264").parent().show();
+			var h264Module = moduleHolder["h264"] = new FetchPNaClH264VideoModule();
+			h264Module.Activate();
+			h264Module.Deactivate();
+		}
 	}
 
 	this.Initialize = function ()
@@ -5648,7 +5669,8 @@ function VideoPlayerController()
 		isInitialized = true;
 
 		imageRenderer.RegisterCamImgClickHandler();
-		self.SetPlayerModule("jpeg");
+		self.PreLoadPlayerModules();
+		self.SetPlayerModule(pnacl_player_supported ? "h264" : "jpeg");
 		playerModule.OpenVideo();
 
 		var visProp = getHiddenProp();
@@ -5676,11 +5698,11 @@ function VideoPlayerController()
 	{
 		return cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId);
 	}
-	this.GetClipPlaybackPositionMs = function ()
+	this.GetClipPlaybackPositionPercent = function ()
 	{
 		if (currentlyLoadingImage.isLive)
 			return 0;
-		return playerModule.GetSeekMs();
+		return playerModule.GetSeekPercent();
 	}
 	this.IsFrameVisible = function ()
 	{
@@ -5860,11 +5882,7 @@ function VideoPlayerController()
 			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
 
 		if (playerModule)
-		{
-			if (self.useH264ForLiveView_TempVar)
-				self.SetPlayerModule("h264");
 			playerModule.OpenVideo();
-		}
 
 		fullScreenModeController.updateFullScreenButtonState();
 	}
@@ -5896,15 +5914,11 @@ function VideoPlayerController()
 				$("#clipFlagButton").addClass("flagged");
 			else
 				$("#clipFlagButton").removeClass("flagged");
-			seekBar.drawSeekbarAtTime(0);
+			seekBar.drawSeekbarAtPercent(0);
 			seekBar.resetSeekHintImg();
 
 			if (playerModule)
-			{
-				if (self.useH264ForLiveView_TempVar)
-					self.SetPlayerModule("jpeg");
 				playerModule.OpenVideo();
-			}
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
@@ -5912,18 +5926,19 @@ function VideoPlayerController()
 		fullScreenModeController.updateFullScreenButtonState();
 	}
 
-	this.SeekToMs = function (pos)
+	this.SeekToPercent = function (pos)
 	{
-		playerModule.SeekToMs(pos);
+		playerModule.SeekToPercent(pos);
 	}
 	this.SeekByMs = function (offset)
 	{
-		var newPos = playerModule.GetSeekMs() + offset;
-		if (newPos < 0)
-			newPos = 0;
-		if (newPos > currentlyLoadingImage.msec - 1)
-			newPos = currentlyLoadingImage.msec - 1;
-		playerModule.SeekToMs(newPos);
+		var msLength = currentlyLoadingImage.msec - 1;
+		if (msLength <= 0)
+			return;
+		var currentMs = playerModule.GetSeekPercent() * msLength;
+		var newPos = (currentMs + offset) / msLength;
+		newPos = Clamp(newPos, 0, 1);
+		playerModule.SeekToPercent(newPos);
 	}
 	this.Playback_Pause = function ()
 	{
@@ -5990,7 +6005,7 @@ function VideoPlayerController()
 	{
 		RefreshFps(imgRequestMs);
 		if (!currentlyLoadedImage.isLive)
-			seekBar.drawSeekbarAtTime(playerModule.GetSeekMs());
+			seekBar.drawSeekbarAtPercent(playerModule.GetSeekPercent());
 		imageRenderer.SetFrameOpacity_Default();
 	}
 	this.Playback_Ended = function (isLeftBoundary)
@@ -6001,7 +6016,7 @@ function VideoPlayerController()
 			if (playbackControls.GetPlayReverse())
 			{
 				if (playbackControls.GetLoopingEnabled())
-					playerModule.SeekToMs(currentlyLoadingImage.msec - 1);
+					playerModule.SeekToPercent(1);
 				else if (playbackControls.GetAutoplay())
 					self.Playback_PreviousClip();
 				else
@@ -6013,7 +6028,7 @@ function VideoPlayerController()
 			if (!playbackControls.GetPlayReverse())
 			{
 				if (playbackControls.GetLoopingEnabled())
-					playerModule.SeekToMs(0);
+					playerModule.SeekToPercent(0);
 				else if (playbackControls.GetAutoplay())
 					self.Playback_NextClip();
 				else
@@ -6100,7 +6115,7 @@ function JpegVideoModule()
 
 	var isVisible = !documentIsHidden();
 
-	var clipPlaybackPosition = 0;
+	var clipPlaybackPosition = 0; // milliseconds
 
 	var Initialize = function ()
 	{
@@ -6218,14 +6233,14 @@ function JpegVideoModule()
 		self.Playback_Play();
 		GetNewImage();
 	}
-	this.SeekToMs = function (pos)
+	this.SeekToPercent = function (pos)
 	{
 		Activate();
-		clipPlaybackPosition = pos;
+		clipPlaybackPosition = Clamp(pos, 0, 1) * (videoPlayer.Loading().image.msec - 1);
 	}
-	this.GetSeekMs = function ()
+	this.GetSeekPercent = function ()
 	{
-		return clipPlaybackPosition;
+		return Clamp(clipPlaybackPosition / (videoPlayer.Loading().image.msec - 1), 0, 1);
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
@@ -6484,6 +6499,7 @@ function FetchPNaClH264VideoModule()
 	var pnacl_player;
 	var fetchStreamer;
 	var isVisible = !documentIsHidden();
+	var currentSeekPositionPercent = 0;
 
 	var Initialize = function ()
 	{
@@ -6495,7 +6511,7 @@ function FetchPNaClH264VideoModule()
 		$("#camimg_wrapper").append('<div id="pnacl_player_wrapper"></div>');
 		pnacl_player = new Pnacl_Player("#pnacl_player_wrapper", videoPlayer.ImageRendered, videoPlayer.CameraOrResolutionChange);
 	}
-	var Activate = function ()
+	this.Activate = function ()
 	{
 		Initialize();
 		if (isCurrentlyActive)
@@ -6536,7 +6552,7 @@ function FetchPNaClH264VideoModule()
 	var openVideoTimeout = null;
 	this.OpenVideo = function ()
 	{
-		Activate();
+		self.Activate();
 		if (openVideoTimeout != null)
 			clearTimeout(openVideoTimeout);
 		if (!pnacl_player.IsLoaded())
@@ -6550,19 +6566,31 @@ function FetchPNaClH264VideoModule()
 			fetchStreamer = null;
 		}
 		pnacl_player.Reset();
-		fetchStreamer = new FetchVideoH264Streamer("/video/" + videoPlayer.Loading().image.id + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=0&stream=0&extend=2", pnacl_player.AcceptFrame,
+		var loading = videoPlayer.Loading().image;
+		var videoUrl;
+		if (loading.isLive)
+			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=0&stream=0&extend=2";
+		else
+		{
+			var speed = 100 * playbackControls.GetPlaybackSpeed();
+			if (playbackControls.GetPlayReverse())
+				speed *= -1;
+			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=0&speed=" + speed + "&audio=0&stream=0&extend=2";
+		}
+		fetchStreamer = new FetchVideoH264Streamer(videoUrl, pnacl_player.AcceptFrame,
 			function (e)
 			{
-				console.log("fetch stream ended");
+				console.log("fetch stream ended:");
 				console.log(e);
 			});
 	}
-	this.SeekToMs = function (pos)
+	this.SeekToPercent = function (pos)
 	{
+		currentSeekPositionPercent = pos;
 	}
-	this.GetSeekMs = function ()
+	this.GetSeekPercent = function ()
 	{
-		return 0;
+		return currentSeekPositionPercent;
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
@@ -6609,7 +6637,7 @@ function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
 	var moduleDidLoad = function ()
 	{
 		isLoaded = true;
-		console.log("Pnacl_Player Loaded!");
+		loadingHelper.SetLoadedStatus("h264");
 	}
 	var handleMessage = function (message_event)
 	{
@@ -6619,9 +6647,9 @@ function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
 			{
 				console.log(message_event.data);
 			}
-			else if (message_event.data.startsWith("Rendered frame: "))
+			else if (message_event.data.startsWith("rf ")) // Received Frame
 			{
-				var dataObj = JSON.parse(message_event.data.substr("Rendered frame: ".length));
+				var dataObj = JSON.parse(message_event.data.substr("rf ".length));
 				var loading = videoPlayer.Loading().image;
 				if (loading.actualwidth != dataObj.w || loading.actualheight != dataObj.h || renderedFrameCount == 0)
 				{
@@ -6632,24 +6660,16 @@ function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
 					loading.maxheight = dataObj.h;
 					cameraOrResolutionChange();
 				}
-				frameRendered(new Date().getTime());
+				frameRendered(dataObj.t);
 				//console.log(message_event.data);
 				renderedFrameCount++;
 			}
-			else if (message_event.data == "Received frame")
+			else if (message_event.data.startsWith("vr ")) // Video Resized and the player is about to start painting a frame of this size.
 			{
-				//console.log(message_event.data);
-			}
-			else if (message_event.data.startsWith("Video resized to "))
-			{
-				var parts = message_event.data.substring("Video resized to ".length).split("x");
-				if (parts.length == 2)
-				{
-					var width = parseInt(parts[0]);
-					var height = parseInt(parts[1]);
-
-					//cameraOrResolutionChange();
-				}
+				var dataObj = JSON.parse(message_event.data.substr("rf ".length));
+				var width = dataObj.w;
+				var height = dataObj.h;
+				//cameraOrResolutionChange();
 				console.log(message_event.data);
 			}
 			else
@@ -6718,10 +6738,10 @@ function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
 		acceptedFrameCount = 0;
 		renderedFrameCount = 0;
 	}
-	this.AcceptFrame = function (dataArr)
+	this.AcceptFrame = function (frame)
 	{
-		player.postMessage("f " + (acceptedFrameCount * 200));
-		player.postMessage(dataArr.buffer);
+		player.postMessage("f " + frame.time);
+		player.postMessage(frame.frameData.buffer);
 		acceptedFrameCount++;
 	}
 
@@ -7294,15 +7314,11 @@ function CanvasContextMenu()
 			case "h264module":
 				if (videoPlayer.CurrentPlayerModuleName() == "jpeg")
 				{
-					videoPlayer.useH264ForLiveView_TempVar = true;
-					if (videoPlayer.Loading().image.isLive)
-						videoPlayer.SetPlayerModule("h264", true);
+					videoPlayer.SetPlayerModule("h264", true);
 				}
 				else
 				{
-					videoPlayer.useH264ForLiveView_TempVar = false;
-					if (videoPlayer.Loading().image.isLive)
-						videoPlayer.SetPlayerModule("jpeg", true);
+					videoPlayer.SetPlayerModule("jpeg", true);
 				}
 				break;
 			default:
@@ -7840,6 +7856,7 @@ function CameraListDialog()
 	var self = this;
 	var modal_cameralistdialog = null;
 	var timeBetweenCameraListThumbUpdates = 1000 * 60 * 60 * 24; // 1 day
+	var loadedOnce = false;
 	this.open = function ()
 	{
 		CloseCameraListDialog();
@@ -7849,19 +7866,27 @@ function CameraListDialog()
 		).dialog({
 			title: htmlEncode($("#system_name").text()) + "Camera List"
 			, onClosing: DialogClosing
-			, onRefresh: function () { self.open(); }
+			, onRefresh: function () { self.refresh(); }
 		});
-
 
 		BI_CustomEvent.AddListener("CameraListLoaded", CameraListLoaded);
 
-		cameraListLoader.LoadCameraList();
+		self.refresh();
+	}
+	this.refresh = function ()
+	{
+		if (modal_cameralistdialog)
+		{
+			modal_cameralistdialog.setLoadingState(true);
+			cameraListLoader.LoadCameraList();
+		}
 	}
 	var CameraListLoaded = function ()
 	{
 		var $cameralistcontent = $("#cameralistcontent");
-		if ($cameralistcontent.length == 0)
+		if ($cameralistcontent.length == 0 || modal_cameralistdialog == null)
 			return;
+		modal_cameralistdialog.setLoadingState(false);
 		$cameralistcontent.empty();
 		var lastCameraListResponse = cameraListLoader.GetLastResponse();
 		if (!lastCameraListResponse || !lastCameraListResponse.data || lastCameraListResponse.data.length == 0)
@@ -7886,16 +7911,19 @@ function CameraListDialog()
 			+ (developerMode ? ' <input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.ShowRawCameraList()" value="view raw data" />' : '')
 			+ '</div>');
 		self.UpdateCameraThumbnails();
+		modal_cameralistdialog.contentChanged(!loadedOnce);
+		loadedOnce = true;
 	}
 	var DialogClosing = function ()
 	{
 		BI_CustomEvent.RemoveListener("CameraListLoaded", CameraListLoaded);
+		loadedOnce = false;
+		modal_cameralistdialog = null;
 	}
 	var CloseCameraListDialog = function ()
 	{
 		if (modal_cameralistdialog != null)
 			modal_cameralistdialog.close();
-		$("#cameralistdialog").remove();
 	}
 	this.ShowRawCameraList = function ()
 	{
@@ -7986,6 +8014,7 @@ function CameraProperties()
 {
 	var self = this;
 	var modal_cameraPropDialog = null;
+	var loadedOnce = false;
 	this.open = function (camId)
 	{
 		CloseCameraProperties();
@@ -7999,156 +8028,179 @@ function CameraProperties()
 			, overlayOpacity: 0.3
 			, onClosing: function ()
 			{
-				if ($("#cameralistcontent").length != 0)
-					cameraListLoader.LoadCameraList();
+				loadedOnce = false;
+				modal_cameraPropDialog = null;
+				cameraListDialog.refresh();
 			}
-			, onRefresh: function () { self.open(camId); }
+			, onRefresh: function () { self.refresh(camId); }
 		});
-		cameraConfig.get(camId, function (response)
+
+		self.refresh(camId);
+	}
+	this.refresh = function (camId)
+	{
+		if (modal_cameraPropDialog)
 		{
-			var $camprop = $("#campropcontent");
-			$camprop.empty();
-			if ($camprop.length == 0)
-				return;
-			/* Example Response
+			modal_cameraPropDialog.setLoadingState(true);
+
+			cameraConfig.get(camId, function (response)
 			{
-			  "result": "success",
-			  "session": "...",
-			  "data": {
-				"pause": 0,
-				"push": false,
-				"motion": true,
-				"schedule": false,
-				"ptzcycle": false,
-				"ptzevents": false,
-				"alerts": 0,
-				"output": false,
-				"setmotion": {
-				  "audio_trigger": false,
-				  "audio_sense": 10000,
-				  "usemask": true,
-				  "sense": 8650,
-				  "contrast": 67,
-				  "showmotion": 0,
-				  "shadows": true,
-				  "luminance": false,
-				  "objects": true,
-				  "maketime": 16,
-				  "breaktime": 70
-				},
-				"record": 2
-			  }
-			}
-			*/
-			try
-			{
-				var cam = cameraListLoader.GetCameraWithId(camId);
-				if (cam)
+				if (modal_cameraPropDialog == null)
+					return;
+				modal_cameraPropDialog.setLoadingState(false);
+
+				var $camprop = $("#campropcontent");
+				$camprop.empty();
+				if ($camprop.length == 0)
+					return;
+				/* Example Response
 				{
-					$camprop.append(GetCameraPropertySectionHeading('info', "Information"));
-					var $infoSection = GetCameraPropertySection('info');
-					$infoSection.append(GetInfo("ID", cam.optionValue));
-					$infoSection.append(GetInfo("Name", cam.optionDisplay));
-					$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
-					$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + " @ " + cam.FPS + " FPS"));
-					$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
-					$infoSection.append(GetInfo("PTZ", cam.ptz ? "Yes" : "No"));
-					$camprop.append($infoSection);
+				  "result": "success",
+				  "session": "...",
+				  "data": {
+					"pause": 0,
+					"push": false,
+					"motion": true,
+					"schedule": false,
+					"ptzcycle": false,
+					"ptzevents": false,
+					"alerts": 0,
+					"output": false,
+					"setmotion": {
+					  "audio_trigger": false,
+					  "audio_sense": 10000,
+					  "usemask": true,
+					  "sense": 8650,
+					  "contrast": 67,
+					  "showmotion": 0,
+					  "shadows": true,
+					  "luminance": false,
+					  "objects": true,
+					  "maketime": 16,
+					  "breaktime": 70
+					},
+					"record": 2
+				  }
 				}
-
-				$camprop.append(GetCameraPropertySectionHeading('gs', "General Settings"));
-				var $generalSection = GetCameraPropertySection('gs');
-				$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
-				$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
-				$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
-				$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
-				$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
-				$generalSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Record:")
-					+ '<select mysetting="record|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
-					+ GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
-					+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
-					+ GetHtmlOptionElementMarkup("1", "Continuously", response.data.record.toString())
-					+ GetHtmlOptionElementMarkup("2", "When triggered", response.data.record.toString())
-					+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString())
-					+ '</select>'
-					+ '</div>');
-				$generalSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Alerts:")
-					+ '<select mysetting="alerts|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
-					+ GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
-					+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
-					+ GetHtmlOptionElementMarkup("1", "Any camera in group is triggered", response.data.alerts.toString())
-					+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString())
-					+ '</select>'
-					+ '</div>');
-				$camprop.append($generalSection);
-
-				$camprop.append(GetCameraPropertySectionHeading('mt', "Motion/Trigger"));
-				var $motionSection = GetCameraPropertySection('mt');
-				$motionSection.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
-				$motionSection.append(GetRangeSlider("setmotion.sense|" + camId, "Min. object size: "
-					, response.data.setmotion.sense, 1000, 11000, 50, true, motionSenseScalingMethod
-					, camPropSliderChanged));
-				$motionSection.append(GetRangeSlider("setmotion.contrast|" + camId, "Min. contrast: "
-					, response.data.setmotion.contrast, 12, 84, 1, false, null
-					, camPropSliderChanged));
-				$motionSection.append(GetRangeSlider("setmotion.maketime|" + camId, "Make time: "
-					, response.data.setmotion.maketime, 0, 100, 1, false, timeScalingMethod
-					, camPropSliderChanged));
-				$motionSection.append(GetRangeSlider("setmotion.breaktime|" + camId, "Break time: "
-					, response.data.setmotion.breaktime, 0, 9000, 10, false, timeScalingMethod
-					, camPropSliderChanged));
-				$motionSection.append(GetCamPropCheckbox("setmotion.objects|" + camId, "Object detection", response.data.setmotion.objects, camPropOnOffBtnClick));
-				$motionSection.append(GetCamPropCheckbox("setmotion.usemask|" + camId, "Mask/hotspot", response.data.setmotion.usemask, camPropOnOffBtnClick));
-				$motionSection.append(GetCamPropCheckbox("setmotion.luminance|" + camId, "Black &amp; white", response.data.setmotion.luminance, camPropOnOffBtnClick));
-				$motionSection.append(GetCamPropCheckbox("setmotion.shadows|" + camId, "Cancel shadows", response.data.setmotion.shadows, camPropOnOffBtnClick));
-				$motionSection.append(GetCamPropCheckbox("setmotion.audio_trigger|" + camId, "Audio trigger enabled", response.data.setmotion.audio_trigger, camPropOnOffBtnClick));
-				$motionSection.append(GetRangeSlider("setmotion.audio_sense|" + camId, "Audio Sensitivity: "
-					, response.data.setmotion.audio_sense, 0, 32000, 320, false, percentScalingMethod
-					, camPropSliderChanged));
-				$motionSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Highlight:")
-					+ '<select mysetting="setmotion.showmotion|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
-					+ GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
-					+ GetHtmlOptionElementMarkup("1", "Motion", response.data.setmotion.showmotion.toString())
-					+ GetHtmlOptionElementMarkup("2", "Objects", response.data.setmotion.showmotion.toString())
-					+ GetHtmlOptionElementMarkup("3", "Motion + Objects", response.data.setmotion.showmotion.toString())
-					+ '</select>'
-					+ '</div>');
-				$camprop.append($motionSection);
-
-				$camprop.append(GetCameraPropertySectionHeading('mro', "Manual Recording Options"));
-				var $manrecSection = GetCameraPropertySection('mro');
-				$manrecSection.append('<div class="camprop_item camprop_item_center">'
-					+ GetCameraPropertyButtonMarkup("Trigger", "trigger", "largeBtnYellow", camId)
-					+ GetCameraPropertyButtonMarkup("Snapshot", "snapshot", "largeBtnBlue", camId)
-					+ GetCameraPropertyButtonMarkup("Toggle Recording", "manrec", "largeBtnRed", camId)
-					+ '</div>');
-				$camprop.append($manrecSection);
-
-				$camprop.append(GetCameraPropertySectionHeading('mgmt', "Camera Management"));
-				var $mgmtSection = GetCameraPropertySection('mgmt');
-				$mgmtSection.append('<div class="camprop_item camprop_item_center">'
-					+ GetCameraPropertyButtonMarkup("Pause", "pause", "largeBtnDisabled", camId)
-					+ GetCameraPropertyButtonMarkup("Reset", "reset", "largeBtnBlue", camId)
-					+ GetCameraPropertyButtonMarkup("Disable", "disable", "largeBtnRed", camId)
-					+ '</div>');
-				$camprop.append($mgmtSection);
-
-				if (cam)
+				*/
+				try
 				{
-					SetCameraPropertyManualRecordButtonState(cam.isRecording);
-					SetCameraPropertyEnableButtonState(cam.isEnabled);
+					var cam = cameraListLoader.GetCameraWithId(camId);
+					if (cam)
+					{
+						$camprop.append(GetCameraPropertySectionHeading('info', "Information"));
+						var $infoSection = GetCameraPropertySection('info');
+						$infoSection.append(GetInfo("ID", cam.optionValue));
+						$infoSection.append(GetInfo("Name", cam.optionDisplay));
+						$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
+						$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + " @ " + cam.FPS + " FPS"));
+						$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
+						$infoSection.append(GetInfo("PTZ", cam.ptz ? "Yes" : "No"));
+						$camprop.append($infoSection);
+					}
+
+					$camprop.append(GetCameraPropertySectionHeading('gs', "General Settings"));
+					var $generalSection = GetCameraPropertySection('gs');
+					$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
+					$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
+					$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
+					$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
+					$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
+					$generalSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Record:")
+						+ '<select mysetting="record|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
+						+ GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
+						+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
+						+ GetHtmlOptionElementMarkup("1", "Continuously", response.data.record.toString())
+						+ GetHtmlOptionElementMarkup("2", "When triggered", response.data.record.toString())
+						+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString())
+						+ '</select>'
+						+ '</div>');
+					$generalSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Alerts:")
+						+ '<select mysetting="alerts|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
+						+ GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
+						+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
+						+ GetHtmlOptionElementMarkup("1", "Any camera in group is triggered", response.data.alerts.toString())
+						+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString())
+						+ '</select>'
+						+ '</div>');
+					$camprop.append($generalSection);
+
+					$camprop.append(GetCameraPropertySectionHeading('mt', "Motion/Trigger"));
+					var $motionSection = GetCameraPropertySection('mt');
+					$motionSection.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
+					$motionSection.append(GetRangeSlider("setmotion.sense|" + camId, "Min. object size: "
+						, response.data.setmotion.sense, 1000, 11000, 50, true, motionSenseScalingMethod
+						, camPropSliderChanged));
+					$motionSection.append(GetRangeSlider("setmotion.contrast|" + camId, "Min. contrast: "
+						, response.data.setmotion.contrast, 12, 84, 1, false, null
+						, camPropSliderChanged));
+					$motionSection.append(GetRangeSlider("setmotion.maketime|" + camId, "Make time: "
+						, response.data.setmotion.maketime, 0, 100, 1, false, timeScalingMethod
+						, camPropSliderChanged));
+					$motionSection.append(GetRangeSlider("setmotion.breaktime|" + camId, "Break time: "
+						, response.data.setmotion.breaktime, 0, 9000, 10, false, timeScalingMethod
+						, camPropSliderChanged));
+					$motionSection.append(GetCamPropCheckbox("setmotion.objects|" + camId, "Object detection", response.data.setmotion.objects, camPropOnOffBtnClick));
+					$motionSection.append(GetCamPropCheckbox("setmotion.usemask|" + camId, "Mask/hotspot", response.data.setmotion.usemask, camPropOnOffBtnClick));
+					$motionSection.append(GetCamPropCheckbox("setmotion.luminance|" + camId, "Black &amp; white", response.data.setmotion.luminance, camPropOnOffBtnClick));
+					$motionSection.append(GetCamPropCheckbox("setmotion.shadows|" + camId, "Cancel shadows", response.data.setmotion.shadows, camPropOnOffBtnClick));
+					$motionSection.append(GetCamPropCheckbox("setmotion.audio_trigger|" + camId, "Audio trigger enabled", response.data.setmotion.audio_trigger, camPropOnOffBtnClick));
+					$motionSection.append(GetRangeSlider("setmotion.audio_sense|" + camId, "Audio Sensitivity: "
+						, response.data.setmotion.audio_sense, 0, 32000, 320, false, percentScalingMethod
+						, camPropSliderChanged));
+					$motionSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Highlight:")
+						+ '<select mysetting="setmotion.showmotion|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
+						+ GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
+						+ GetHtmlOptionElementMarkup("1", "Motion", response.data.setmotion.showmotion.toString())
+						+ GetHtmlOptionElementMarkup("2", "Objects", response.data.setmotion.showmotion.toString())
+						+ GetHtmlOptionElementMarkup("3", "Motion + Objects", response.data.setmotion.showmotion.toString())
+						+ '</select>'
+						+ '</div>');
+					$camprop.append($motionSection);
+
+					$camprop.append(GetCameraPropertySectionHeading('mro', "Manual Recording Options"));
+					var $manrecSection = GetCameraPropertySection('mro');
+					$manrecSection.append('<div class="camprop_item camprop_item_center">'
+						+ GetCameraPropertyButtonMarkup("Trigger", "trigger", "largeBtnYellow", camId)
+						+ GetCameraPropertyButtonMarkup("Snapshot", "snapshot", "largeBtnBlue", camId)
+						+ GetCameraPropertyButtonMarkup("Toggle Recording", "manrec", "largeBtnRed", camId)
+						+ '</div>');
+					$camprop.append($manrecSection);
+
+					$camprop.append(GetCameraPropertySectionHeading('mgmt', "Camera Management"));
+					var $mgmtSection = GetCameraPropertySection('mgmt');
+					$mgmtSection.append('<div class="camprop_item camprop_item_center">'
+						+ GetCameraPropertyButtonMarkup("Pause", "pause", "largeBtnDisabled", camId)
+						+ GetCameraPropertyButtonMarkup("Restart", "reset", "largeBtnBlue", camId)
+						+ GetCameraPropertyButtonMarkup("Disable", "disable", "largeBtnRed", camId)
+						+ '</div>');
+					$camprop.append($mgmtSection);
+
+					if (cam)
+					{
+						SetCameraPropertyManualRecordButtonState(cam.isRecording);
+						SetCameraPropertyEnableButtonState(cam.isEnabled);
+					}
 				}
-			}
-			catch (ex)
-			{
-				toaster.Error(ex);
-			}
-			if (developerMode)
-				$camprop.append('<div class="camprop_item camprop_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraProperties.OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
-		}, function ()
-			{
-				CloseCameraProperties();
-			});
+				catch (ex)
+				{
+					toaster.Error(ex);
+				}
+				if (developerMode)
+					$camprop.append('<div class="camprop_item camprop_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraProperties.OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
+
+				modal_cameraPropDialog.contentChanged(!loadedOnce);
+				loadedOnce = true;
+			}, function ()
+				{
+					CloseCameraProperties();
+				});
+		}
+	}
+	var CloseCameraProperties = function ()
+	{
+		if (modal_cameraPropDialog != null)
+			modal_cameraPropDialog.close();
 	}
 	var GetInfo = function (label, value)
 	{
@@ -8160,6 +8212,8 @@ function CameraProperties()
 	{
 		var $heading = $('<div class="camprop_section_heading" mysettingsid="' + id + '">' + html + '</div>');
 		$heading.on('click', CameraPropertiesSectionHeadingClick);
+		if (settings.getItem("ui3_cps_" + id + "_visible") == "1")
+			$heading.addClass("expanded");
 		return $heading;
 	}
 	var GetCameraPropertySection = function (id)
@@ -8178,7 +8232,14 @@ function CameraProperties()
 				duration: 150
 				, always: function ()
 				{
-					settings.setItem("ui3_cps_" + $ele.attr('mysettingsid') + "_visible", $section.is(":visible") ? "1" : "0");
+					if (modal_cameraPropDialog != null)
+						modal_cameraPropDialog.contentChanged(false, true);
+					var expanded = $section.is(":visible");
+					settings.setItem("ui3_cps_" + $ele.attr('mysettingsid') + "_visible", expanded ? "1" : "0");
+					if (expanded)
+						$ele.addClass("expanded");
+					else
+						$ele.removeClass("expanded");
 				}
 			});
 	}
@@ -8259,12 +8320,6 @@ function CameraProperties()
 	var GetCameraPropertyButtonMarkup = function (text, buttonId, colorClass, camId)
 	{
 		return '<input type="button" id="camprop_button_' + buttonId + '" class="largeTextButton ' + colorClass + '" onclick="cameraProperties.camPropButtonClick(&quot;' + camId + '&quot;, &quot;' + buttonId + '&quot;)" value="' + text + '" />';
-	}
-	var CloseCameraProperties = function ()
-	{
-		if (modal_cameraPropDialog != null)
-			modal_cameraPropDialog.close();
-		$("#campropdialog").remove();
 	}
 	var camPropOnOffBtnClick = function (mysetting, buttonStateIsOn)
 	{
@@ -8372,15 +8427,11 @@ function ClipProperties()
 
 		var camName = cameraListLoader.GetCameraName(clipData.camera);
 
-		$('<div id="campropdialog">'
+		var $dlg = $('<div id="campropdialog">'
 			+ '<div id="campropcontent"></div>'
-			+ '</div>'
-		).dialog({
-			title: htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties'
-			, overlayOpacity: 0.3
-		});
+			+ '</div>');
 
-		var $camprop = $("#campropcontent");
+		var $camprop = $dlg.find("#campropcontent");
 
 		try
 		{
@@ -8416,6 +8467,11 @@ function ClipProperties()
 		}
 		if (developerMode)
 			$camprop.append('<div class="camprop_item camprop_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="clipProperties.OpenRaw(&quot;' + clipId + '&quot;)" value="view raw data" /></div>');
+
+		$dlg.dialog({
+			title: htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties'
+			, overlayOpacity: 0.3
+		});
 	}
 	var GetInfo = function (label, value)
 	{
@@ -8443,16 +8499,17 @@ function ClipDownloadDialog()
 	var self = this;
 	this.open = function (allSelectedClipIDs)
 	{
-		$('<div id="campropdialog">'
+		var $dlg = $('<div id="campropdialog">'
 			+ '<div id="campropcontent"></div>'
-			+ '</div>'
-		).dialog({ title: "Download Multiple Clips" });
+			+ '</div>');
 
-		var $camprop = $("#campropcontent");
+		var $camprop = $dlg.find("#campropcontent");
 		$camprop.append('<div class="camprop_item clipprop_item_info">Click each link to download the desired clips.</div>');
 		$camprop.append('<div class="camprop_item clipprop_item_info">Each link will disappear after it is clicked, so you can\'t accidentally download duplicates.</div>');
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
 			$camprop.append(GetLink(allSelectedClipIDs[i]));
+
+		$dlg.dialog({ title: "Download Multiple Clips" });
 	}
 	var GetLink = function (clipId)
 	{
@@ -8713,8 +8770,12 @@ function SystemConfig()
 	var modal_systemconfigdialog = null;
 	this.open = function ()
 	{
-		if ($("#sysconfigdialog").length == 0)
-			ShowSysConfigDialog();
+		CloseSysConfigDialog();
+		modal_systemconfigdialog = $('<div id="sysconfigdialog"><div id="sysconfigcontent"></div></div>')
+			.dialog({
+				title: "System Configuration"
+				, onClosing: function () { modal_systemconfigdialog = null; }
+			});
 		var $sysconfig = $("#sysconfigcontent");
 		if ($sysconfig.length == 0)
 			return;
@@ -8739,23 +8800,19 @@ function SystemConfig()
 			$sysconfig.empty();
 			$sysconfig.append(GetCustomCheckbox('archive', "Clip Web Archival (FTP)", response.data.archive, SetSysConfig));
 			$sysconfig.append(GetCustomCheckbox('schedule', "Global Schedule", response.data.schedule, SetSysConfig));
+
+			if (modal_systemconfigdialog != null)
+				modal_systemconfigdialog.contentChanged(true);
 		}, function ()
 			{
 				toaster.Error('Unable to contact Blue Iris server.', 3000);
 				CloseSysConfigDialog();
 			});
 	}
-	var ShowSysConfigDialog = function ()
-	{
-		CloseSysConfigDialog();
-		modal_systemconfigdialog = $('<div id="sysconfigdialog"><div id="sysconfigcontent"></div></div>'
-		).dialog({ title: "System Configuration" });
-	}
 	var CloseSysConfigDialog = function ()
 	{
 		if (modal_systemconfigdialog != null)
 			modal_systemconfigdialog.close();
-		$("#sysconfigdialog").remove();
 	}
 	var SetSysConfig = function (key, value)
 	{
@@ -8795,16 +8852,31 @@ function SystemLog()
 {
 	var self = this;
 	var modal_systemlogdialog = null;
+	var loadedOnce = false;
 	this.open = function ()
 	{
-		if ($("#systemlogdialog").length == 0)
-			ShowLogDialog();
-		var $syslog = $("#systemlogcontent");
-		if ($syslog.length == 0)
-			return;
-		$syslog.html('<div style="text-align: center; margin-top: 20px;">Loading...</div>');
+		CloseLogDialog();
+		modal_systemlogdialog = $('<div id="systemlogdialog"><div id="systemlogcontent"></div></div>'
+		).dialog({
+			title: $("#system_name").text() + " System Log"
+			, onRefresh: function () { systemLog.refresh(); }
+			, onClosing: function ()
+			{
+				modal_systemlogdialog = null;
+				loadedOnce = false;
+			}
+		});
+		$("#systemlogcontent").html('<div style="text-align: center; margin-top: 20px;">Loading...</div>');
+		self.refresh();
+	}
+	this.refresh = function ()
+	{
+		modal_systemlogdialog.setLoadingState(true);
 		ExecJSON({ cmd: "log" }, function (response)
 		{
+			if (modal_systemlogdialog == null)
+				return;
+			modal_systemlogdialog.setLoadingState(false);
 			if (typeof response.result == "undefined")
 			{
 				CloseLogDialog();
@@ -8831,6 +8903,8 @@ function SystemLog()
 				var count = typeof data.count == "undefined" ? "" : data.count;
 				$tbody.append('<tr><td class="levelcolumn">' + level + '</td><td class="centercolumn" style="font-weight: bold;">' + count + '</td><td>' + dateStr + '</td><td style="font-weight: bold;">' + htmlEncode(data.obj) + '</td><td>' + htmlEncode(data.msg) + '</td></tr>');
 			}
+			modal_systemlogdialog.contentChanged(!loadedOnce);
+			loadedOnce = true;
 		}, function ()
 			{
 				toaster.Error('Unable to contact Blue Iris server.', 3000);
@@ -8857,20 +8931,10 @@ function SystemLog()
 	{
 		return '<div class="logicon" style="color: ' + color + '"><svg class="icon"><use xlink:href="' + iconId + '"></use></svg></div>';
 	}
-	var ShowLogDialog = function ()
-	{
-		CloseLogDialog();
-		modal_systemlogdialog = $('<div id="systemlogdialog"><div id="systemlogcontent"></div></div>'
-		).dialog({
-			title: $("#system_name").text() + " System Log",
-			onRefresh: function () { systemLog.open(); }
-		});
-	}
 	var CloseLogDialog = function ()
 	{
 		if (modal_systemlogdialog != null)
 			modal_systemlogdialog.close();
-		$("#systemlogdialog").remove();
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -9884,11 +9948,13 @@ function LoadingHelper()
 	var loadingFinished = false;
 	var things =
 		[
+			// name, selector, isLoaded
 			["window", "#loadingWebContent", false]
 			, ["cameraList", "#loadingCameraList", false]
 			, ["status", "#loadingServerStatus", false]
 			, ["login", "#loadingLogin", false]
 			, ["svg", "#loadingSVG", false]
+			, ["h264", "#loadingH264", false]
 		];
 
 	this.SetLoadedStatus = function (name)
@@ -10274,8 +10340,8 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 	var availableStreams = 0; // 1 for video only, 2 for audio and video
 	var streamHeaderSize = 0;
 	var blockType = -1;
-	var currentVideoFrame = { pos: 0, timeMs: 0, utc: 0, frameSize: 0 };
-	var currentAudioFrame = { frameSize: 0 };
+	var currentVideoFrame = { pos: 0, time: 0, utc: 0, size: 0 };
+	var currentAudioFrame = { size: 0 };
 
 	this.StopStreaming = function ()
 	{
@@ -10324,6 +10390,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 			}
 			else if (cancel_streaming)
 			{
+				is_streaming = false;
 				streamEnded("fetch less graceful exit");
 				return;
 			}
@@ -10382,9 +10449,9 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 							return pump();
 						var offsetWrapper = { offset: 0 };
 						currentVideoFrame.pos = ReadInt16(buf.buffer, offsetWrapper);
-						currentVideoFrame.timeMs = ReadInt32(buf.buffer, offsetWrapper);
+						currentVideoFrame.time = ReadInt32(buf.buffer, offsetWrapper);
 						currentVideoFrame.utc = ReadUInt64(buf.buffer, offsetWrapper);
-						currentVideoFrame.frameSize = ReadInt32(buf.buffer, offsetWrapper);
+						currentVideoFrame.size = ReadInt32(buf.buffer, offsetWrapper);
 
 						state = 4;
 					}
@@ -10394,7 +10461,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 						if (buf == null)
 							return pump();
 
-						currentAudioFrame.frameSize = ReadInt32(buf.buffer, { offset: 0 });
+						currentAudioFrame.size = ReadInt32(buf.buffer, { offset: 0 });
 
 						state = 4;
 					}
@@ -10408,6 +10475,12 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 						state = 2;
 					}
+					else if (blockType == 4)
+					{
+						is_streaming = false;
+						streamEnded("natural end of stream");
+						return;
+					}
 					else
 						return protocolError("Unknown block type " + blockType + " at state " + state);
 				}
@@ -10415,11 +10488,11 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 				{
 					if (blockType == 0) // Video
 					{
-						var buf = myStream.Read(currentVideoFrame.frameSize);
+						var buf = myStream.Read(currentVideoFrame.size);
 						if (buf == null)
 							return pump();
 
-						frameCallback(buf);
+						frameCallback(new VideoFrame(buf, currentVideoFrame));
 
 						state = 2;
 					}
@@ -10471,6 +10544,15 @@ function StatusBlock(buf, offsetWrapper)
 	this.fps = ReadInt32(buf.buffer, offsetWrapper); // in 100ths
 	this.apeak = ReadInt32(buf.buffer, offsetWrapper); // out of 32767
 	this.tpause = ReadInt32(buf.buffer, offsetWrapper);
+}
+function VideoFrame(buf, metadata)
+{
+	var self = this;
+	this.frameData = buf;
+	this.pos = metadata.pos;
+	this.time = metadata.time;
+	this.utc = metadata.utc;
+	this.size = metadata.size;
 }
 ///////////////////////////////////////////////////////////////
 // GhettoStream ///////////////////////////////////////////////

@@ -3,7 +3,8 @@
  * MIT License - https://opensource.org/licenses/MIT
  */
 /// <reference path="jquery-3.1.1.js" />
-
+"use strict";
+var $DialogDefaults = { theme: "light" };
 (function ($)
 {
 	var idAutoIncrement = 0;
@@ -37,13 +38,14 @@
 		this.settings = $.extend(
 			{
 				// These are the default settings
-				title: "Message",
-				closeOnOverlayClick: false,
-				onClosing: null,
-				overlayOpacity: 0,
-				cssClass: "",
-				reattachContentAfterClose: true,
-				onRefresh: null
+				title: "Message"
+				, closeOnOverlayClick: false
+				, onClosing: null
+				, overlayOpacity: 0
+				, cssClass: ""
+				, reattachContentAfterClose: true
+				, onRefresh: null
+				, theme: $DialogDefaults.theme
 			}, options);
 
 		var open = function ()
@@ -70,6 +72,8 @@
 				self.$dialog = $('<div class="dialog_wrapper"></div>');
 				if (self.settings.cssClass)
 					self.$dialog.addClass(self.settings.cssClass);
+				if (self.settings.theme == "dark")
+					self.$dialog.addClass("darkTheme");
 				self.$dialog.on('mousedown touchstart', focusSelf);
 				{
 					self.$titlebar = $('<div class="dialog_titlebar"></div>');
@@ -127,7 +131,7 @@
 
 			$(window).bind("resize.dialog" + myId + " orientationchange.dialog" + myId + " scroll.dialog" + myId, onResize);
 
-			onResize(self);
+			onResize();
 		}
 		this.bringToTop = function ()
 		{
@@ -156,6 +160,31 @@
 
 			return true;
 		}
+		this.contentChanged = function (reCenter, setFullyOnScreen)
+		{
+			if (reCenter)
+			{
+				self.$dialog.css("left", "0px");
+				self.$dialog.css("top", "0px");
+				positionCentered();
+			}
+			else
+			{
+				var offset = self.$dialog.offset();
+				var coords = keepOnScreen(offset.left, offset.top, setFullyOnScreen);
+				if (offset.left != coords.X)
+					self.$dialog.css("left", coords.X + "px");
+				if (offset.top != coords.Y)
+					self.$dialog.css("top", coords.Y + "px");
+			}
+		}
+		this.setLoadingState = function (loading)
+		{
+			if (loading)
+				self.$dialog.addClass("loading");
+			else
+				self.$dialog.removeClass("loading");
+		}
 		var positionCentered = function ()
 		{
 			var windowW = $(window).width();
@@ -171,27 +200,14 @@
 		{
 			if (!isOpen)
 				return;
-			var windowW = $(window).width();
-			var windowH = $(window).height();
+			var offset = self.$dialog.offset();
 
 			var offset = self.$dialog.offset();
-			var w = self.$dialog.width();
-			var h = self.$dialog.height();
-
-			var topOfWindow = $(window).scrollTop();
-			var leftOfWindow = $(window).scrollLeft();
-			var bottomOfWindow = topOfWindow + windowH;
-			var rightOfWindow = leftOfWindow + windowW;
-
-			if (offset.left + (w / 2) < leftOfWindow)
-				self.$dialog.css("left", leftOfWindow + (w / -2) + "px");
-			else if (offset.left + (w / 2) > rightOfWindow)
-				self.$dialog.css("left", rightOfWindow - (w / 2) + "px");
-
-			if (offset.top < topOfWindow)
-				self.$dialog.css("top", topOfWindow + "px");
-			else if (offset.top > bottomOfWindow - 24)
-				self.$dialog.css("top", bottomOfWindow - 24 + "px");
+			var coords = keepOnScreen(offset.left, offset.top, false);
+			if (offset.left != coords.X)
+				self.$dialog.css("left", coords.X + "px");
+			if (offset.top != coords.Y)
+				self.$dialog.css("top", coords.Y + "px");
 
 			self.$overlay.css('width', $(document).width()).css('height', $(document).height());
 		}
@@ -217,28 +233,9 @@
 				var newX = e.pageX + mouseMem.offsetX;
 				var newY = e.pageY + mouseMem.offsetY;
 
-				var windowW = $(window).width();
-				var windowH = $(window).height();
-				var topOfWindow = $(window).scrollTop();
-				var leftOfWindow = $(window).scrollLeft();
-				var bottomOfWindow = (topOfWindow + windowH);
-				var rightOfWindow = (leftOfWindow + windowW);
-
-				var w = self.$dialog.outerWidth(true);
-				var h = self.$dialog.outerHeight(true);
-
-				if (newX < leftOfWindow)
-					newX = leftOfWindow;
-				else if (newX + w > rightOfWindow)
-					newX = rightOfWindow - w;
-
-				if (newY < topOfWindow)
-					newY = topOfWindow;
-				else if (newY > bottomOfWindow - h)
-					newY = bottomOfWindow - h;
-				// TODO: Make sure the panel can't be dragged beyond the right or bottom edge of the screen.
-				self.$dialog.css("left", newX + "px");
-				self.$dialog.css("top", newY + "px");
+				var coords = keepOnScreen(newX, newY, false);
+				self.$dialog.css("left", coords.X + "px");
+				self.$dialog.css("top", coords.Y + "px");
 			}
 		}
 		var dragEnd = function (e)
@@ -255,6 +252,49 @@
 				self.$dialog.css("left", mouseMem.originalX + "px");
 				self.$dialog.css("top", mouseMem.originalY + "px");
 			}
+		}
+		var keepOnScreen = function (newX, newY, keepFullyOnScreen)
+		{
+			var windowW = $(window).width();
+			var windowH = $(window).height();
+			var topOfWindow = $(window).scrollTop();
+			var leftOfWindow = $(window).scrollLeft();
+			var bottomOfWindow = (topOfWindow + windowH);
+			var rightOfWindow = (leftOfWindow + windowW);
+
+			var w = self.$dialog.outerWidth(true);
+			var h = self.$dialog.outerHeight(true);
+
+			if (keepFullyOnScreen)
+			{
+				if (newX < leftOfWindow)
+					newX = leftOfWindow;
+				else if (newX + w > rightOfWindow)
+					newX = rightOfWindow - w;
+
+				if (newY < topOfWindow)
+					newY = topOfWindow;
+				else if (newY > bottomOfWindow - h)
+					newY = bottomOfWindow - h;
+			}
+			else
+			{
+				var w01 = w * 0.1;
+				var w09 = w * 0.9;
+				if (w >= 100 && w - w09 < 100)
+					w09 = w - 100;
+				if (newX + w09 < leftOfWindow)
+					newX = leftOfWindow - w09;
+				else if (newX + w01 > rightOfWindow)
+					newX = rightOfWindow - w01;
+
+				if (newY < topOfWindow)
+					newY = topOfWindow;
+				else if (newY > bottomOfWindow - 24)
+					newY = bottomOfWindow - 24;
+			}
+
+			return { X: newX, Y: newY };
 		}
 		var mouseCoordFixer =
 			{
