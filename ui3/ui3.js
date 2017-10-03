@@ -6628,7 +6628,6 @@ function FetchPNaClH264VideoModule()
 function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
 {
 	var self = this;
-	var $player;
 	var player;
 	var acceptedFrameCount = 0;
 	var renderedFrameCount = 0;
@@ -6715,6 +6714,7 @@ function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
 	}
 	this.Dispose = function ()
 	{
+		var $parent = $(parentSelector);
 		var listenerDiv = $parent.get(0);
 		listenerDiv.removeEventListener('load', moduleDidLoad, true);
 		listenerDiv.removeEventListener('message', handleMessage, true);
