@@ -129,6 +129,7 @@ var sessionManager = null;
 var statusLoader = null;
 var cameraListLoader = null;
 var clipLoader = null;
+var nerdStats = null;
 
 var currentPrimaryTab = "";
 var skipTabLoadClipLoad = false;
@@ -175,16 +176,16 @@ var togglableUIFeatures =
 //		-Quality controls (streams 0, 1, 2)
 //		-Removal of "Enable h.264 module" context menu item
 //		-Frame rate smoothing
-//		-Download snapshot
-//		-Open snapshot in new tab
+//-Download snapshot
+//-Open snapshot in new tab
 // TODO: H.264 clip/alert playback
 //		-Frame rate smoothing
 //		-Speed manipulation
 //		-Pausing
 //		-Reverse play
 //		-Graceful stream close
-//		-Download snapshot
-//		-Open snapshot in new tab
+//-Download snapshot
+//-Open snapshot in new tab
 // TODO: Test large dialogs on phones.
 // TODO: Implement JSON "users" command as a status panel like the Log panel.
 // TODO: Try pointInsideElement with outerWidth(true) and outerHeight(true).  Use it this way unless it breaks one of the usages.
@@ -990,6 +991,8 @@ $(function ()
 	cameraListLoader = new CameraListLoader();
 
 	clipLoader = new ClipLoader("#clipsbody");
+
+	nerdStats = new UI3NerdStats();
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
@@ -3399,12 +3402,13 @@ function SeekBar()
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		mouseUp(e);
 		if (new Date().getTime() < lastDoubleMouseDownStarted + doubleClickTime && mouseStillSinceLastClick(e))
 		{
+			isTouchDragging = false;
 			lastDoubleMouseDownStarted -= doubleClickTime;
 			self.dblClick();
 		}
+		mouseUp(e);
 	});
 	wrapper.on("mouseenter", function (e)
 	{
@@ -5662,7 +5666,6 @@ function VideoPlayerController()
 			$("#loadingH264").parent().show();
 			var h264Module = moduleHolder["h264"] = new FetchOpenH264VideoModule();
 			h264Module.Activate();
-			h264Module.Deactivate();
 		}
 	}
 
@@ -6005,9 +6008,9 @@ function VideoPlayerController()
 		currentlyLoadedCamera = currentlyLoadingCamera;
 		resized();
 	}
-	this.ImageRendered = function (imgRequestMs)
+	this.ImageRendered = function (lastFrameLoadingTime)
 	{
-		RefreshFps(imgRequestMs);
+		RefreshFps(lastFrameLoadingTime);
 		if (!currentlyLoadedImage.isLive)
 			seekBar.drawSeekbarAtPercent(playerModule.GetSeekPercent());
 		imageRenderer.SetFrameOpacity_Default();
@@ -6043,7 +6046,7 @@ function VideoPlayerController()
 	var fpsZeroTimeout = null;
 	var RefreshFps = function (imgRequestMs)
 	{
-		var currentFps = fpsCounter.getFPS(new Date().getTime() - imgRequestMs);
+		var currentFps = fpsCounter.getFPS();
 		statusBars.setProgress("fps", (currentFps / 10), currentFps);
 
 		// This allows the FPS to change to 0 if connectivity is lost or greatly reduced
@@ -6162,7 +6165,7 @@ function JpegVideoModule()
 					}
 				}
 
-				videoPlayer.ImageRendered(currentImageRequestedAtMs);
+				videoPlayer.ImageRendered(new Date().getTime() - currentImageRequestedAtMs);
 
 				if (loaded.id.startsWith("@"))
 				{
@@ -6180,6 +6183,18 @@ function JpegVideoModule()
 				currentLoadedImageActualWidth = this.naturalWidth;
 
 				imageRenderer.CopyImageToCanvas("camimg", "camimg_canvas");
+
+				if (nerdStats.IsOpen())
+				{
+					nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
+					nerdStats.UpdateStat("Resolution", loaded.actualwidth + "x" + loaded.actualheight);
+					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "%"));
+					nerdStats.UpdateStat("Frame Offset", loading.isLive ? "LIVE" : clipPlaybackPosition + "ms");
+					nerdStats.UpdateStat("Frame Time", loading.isLive ? "LIVE" : "Unavailable");
+					nerdStats.UpdateStat("Frame Size", "Unavailable");
+					nerdStats.UpdateStat("Codecs", "jpeg");
+					nerdStats.UpdateStat("Buffered Frames", "N/A");
+				}
 			}
 			GetNewImage();
 		});
@@ -6501,9 +6516,11 @@ function FetchOpenH264VideoModule()
 	var isInitialized = false;
 	var isCurrentlyActive = false;
 	var openh264_player;
-	var fetchStreamer;
 	var isVisible = !documentIsHidden();
 	var currentSeekPositionPercent = 0;
+	var lastFrameAt = 0;
+	var lastFrameTimestamp = 0;
+	var playbackPaused = false;
 
 	var Initialize = function ()
 	{
@@ -6512,7 +6529,7 @@ function FetchOpenH264VideoModule()
 		console.log("Initializing openh264_player");
 		isInitialized = true;
 		// Do one-time initialization here
-		openh264_player = new OpenH264_Player(videoPlayer.ImageRendered, videoPlayer.CameraOrResolutionChange);
+		openh264_player = new OpenH264_Player(FrameRendered, videoPlayer.CameraOrResolutionChange);
 	}
 	this.Activate = function ()
 	{
@@ -6526,35 +6543,43 @@ function FetchOpenH264VideoModule()
 	}
 	this.Deactivate = function ()
 	{
-		// TODO: Throttle the rate of Activate/Deactivate so that rapid minimize/maximize can't break the fetch API and leave connections open.
 		if (!isCurrentlyActive)
 			return;
 		console.log("Deactivating openh264_player");
 		isCurrentlyActive = false;
 		// Stop what you are doing and hide
-		if (fetchStreamer)
-		{
-			fetchStreamer.StopStreaming();
-			fetchStreamer = null;
-		}
-		openh264_player.Reset();
+		StopStreaming();
 		openh264_player.GetCanvasRef().appendTo("#camimg_store");
+	}
+	var StopStreaming = function ()
+	{
+		safeFetch.CloseStream();
+		openh264_player.Flush();
 	}
 	this.VisibilityChanged = function (visible)
 	{
 		isVisible = visible;
-		if (isVisible && !isCurrentlyActive)
-			self.OpenVideo();
+		if (isVisible && isCurrentlyActive)
+		{
+			if (videoPlayer.Loading().image.isLive)
+				self.OpenVideo();
+			else if (!playbackPaused)
+				self.Playback_Play();
+		}
 		else
-			self.Deactivate();
+		{
+			StopStreaming();
+		}
 	}
 	this.LoadedFrameSinceActivate = function ()
 	{
 		return openh264_player.GetRenderedFrameCount() > 0;
 	}
 	var openVideoTimeout = null;
-	this.OpenVideo = function ()
+	this.OpenVideo = function (offsetPercent)
 	{
+		if (!offsetPercent)
+			offsetPercent = 0;
 		self.Activate();
 		if (openVideoTimeout != null)
 			clearTimeout(openVideoTimeout);
@@ -6563,33 +6588,34 @@ function FetchOpenH264VideoModule()
 			openVideoTimeout = setTimeout(self.OpenVideo, 5);
 			return;
 		}
-		if (fetchStreamer)
-		{
-			fetchStreamer.StopStreaming();
-			fetchStreamer = null;
-		}
-		openh264_player.Reset();
+		StopStreaming();
+		currentSeekPositionPercent = offsetPercent;
+		lastFrameAt = new Date().getTime();
 		var loading = videoPlayer.Loading().image;
 		var videoUrl;
 		if (loading.isLive)
+		{
+			lastFrameTimestamp = 0;
 			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=0&stream=0&extend=2";
+		}
 		else
 		{
+			lastFrameTimestamp = offsetPercent * (loading.msec - 1);
 			var speed = 100 * playbackControls.GetPlaybackSpeed();
 			if (playbackControls.GetPlayReverse())
 				speed *= -1;
-			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=0&speed=" + speed + "&audio=0&stream=0&extend=2";
+			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=0&extend=2";
 		}
-		fetchStreamer = new FetchVideoH264Streamer(videoUrl, openh264_player.AcceptFrame,
+		safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame,
 			function (e)
 			{
-				console.log("fetch stream ended:");
-				console.log(e);
+				console.log("fetch stream ended:", e);
 			});
 	}
 	this.SeekToPercent = function (pos)
 	{
 		currentSeekPositionPercent = pos;
+		self.Playback_Play();
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -6597,11 +6623,15 @@ function FetchOpenH264VideoModule()
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
-		return "";
+		var loading = videoPlayer.Loading().image;
+		if (loading.isLive)
+			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + lastFrameTimestamp + currentServer.GetRemoteSessionArg("&", true);
+		else
+			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + lastFrameTimestamp + currentServer.GetRemoteSessionArg("&", true);
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
-		return "";
+		return self.GetLastSnapshotUrl();
 	}
 	this.GetStaticSnapshotId = function ()
 	{
@@ -6613,16 +6643,46 @@ function FetchOpenH264VideoModule()
 	}
 	this.Playback_IsPaused = function ()
 	{
-		return false;
+		return playbackPaused;
 	}
 	this.Playback_Pause = function ()
 	{
+		playbackPaused = true;
+		StopStreaming();
+		$("#pcPlay").show();
+		$("#pcPause").hide();
 	}
 	this.Playback_Play = function ()
 	{
+		playbackPaused = false;
+		$("#pcPlay").hide();
+		$("#pcPause").show();
+		if (videoPlayer.Loading().image.isLive)
+			currentSeekPositionPercent = 0;
+		else
+		{
+			if (currentSeekPositionPercent >= 1 && !playbackControls.GetPlayReverse())
+				currentSeekPositionPercent = 0;
+			else if (currentSeekPositionPercent <= 0 && playbackControls.GetPlayReverse())
+				currentSeekPositionPercent = 1;
+			currentSeekPositionPercent = Clamp(currentSeekPositionPercent, 0, 1);
+		}
+		self.OpenVideo(currentSeekPositionPercent);
 	}
 	this.Playback_PlayPause = function ()
 	{
+		if (playbackPaused)
+			self.Playback_Play();
+		else
+			self.Playback_Pause();
+	}
+	var FrameRendered = function (frame)
+	{
+		lastFrameTimestamp = frame.timestamp;
+		currentSeekPositionPercent = frame.pos / 10000;
+		var timeNow = new Date().getTime();
+		videoPlayer.ImageRendered(lastFrameAt - timeNow);
+		lastFrameAt = timeNow;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -6669,8 +6729,19 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 		if (canvasH != frame.height)
 			canvas.height = canvasH = frame.height;
 		display.drawNextOuptutPictureGL(frame.width, frame.height, null, new Uint8Array(frame.data));
-		frameRendered(frame.timestamp);
+		frameRendered(frame);
 		renderedFrameCount++;
+		if (nerdStats.IsOpen())
+		{
+			nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
+			nerdStats.UpdateStat("Resolution", frame.width + "x" + frame.height);
+			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(frame.pos / 100) + "%"));
+			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
+			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
+			nerdStats.UpdateStat("Frame Size", formatBytes(frame.size, 2));
+			nerdStats.UpdateStat("Codecs", "h264");
+			nerdStats.UpdateStat("Buffered Frames", acceptedFrameCount - renderedFrameCount);
+		}
 	}
 	var frameError = function (badFrame)
 	{
@@ -6706,17 +6777,14 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 	{
 		return renderedFrameCount;
 	}
-	this.Reset = function ()
+	this.Flush = function ()
 	{
-		// TODO: use stream numbers to ensure that we don't receive decoded frames from a previous stream after Reset is called.
-		//player.postMessage("reset");
-		console.log("this.Reset");
+		decoder.Flush();
 		acceptedFrameCount = 0;
 		renderedFrameCount = 0;
 	}
 	this.AcceptFrame = function (frame)
 	{
-		frame.frameData.buffer
 		decoder.Decode(frame);
 		acceptedFrameCount++;
 	}
@@ -6733,9 +6801,14 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError)
 {
 	var self = this;
+	// Note: I hand-edited openh264_decoder.js to remove {u, v, y} attributes of 
+	// each decoded frame because I don't need them.  I'm not sure how significant 
+	// this optimization is (each removed field was a new Uint8ClampedArray of 
+	// significant size, but maybe data didn't have to be copied to make them).
 	var worker = new Worker("ui3/openh264_decoder.js?v=" + combined_version);
 	var encodedFrameQueue = new Queue();
 	var is_decoding = false;
+	var dropNextDecodedFrame = false;
 
 	this.Decode = function (frame)
 	{
@@ -6749,25 +6822,46 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError)
 			encodedFrameQueue.enqueue(frame);
 			return;
 		}
+		dropNextDecodedFrame = false;
 		is_decoding = true;
 		worker.onmessage = function (ev2)
 		{
-			ev2.data.timestamp = frame.timestamp;
+			ev2.data.timestamp = frame.time;
 			ev2.data.pos = frame.pos;
 			ev2.data.utc = frame.utc;
+			ev2.data.size = frame.size;
 			DecodeDone(ev2.data);
 		};
 		worker.postMessage({ timestamp: frame.time, data: frame.frameData.buffer });
 	}
 	var DecodeDone = function (frame)
 	{
-		if (frame.status == 0)
-			setTimeout(function () { onFrameDecoded(frame) }, 0);
-		else
-			onFrameError(ev2.data);
 		is_decoding = false;
 		if (!encodedFrameQueue.isEmpty())
 			self.Decode(encodedFrameQueue.dequeue());
+		if (dropNextDecodedFrame)
+			return;
+
+		if (frame.status == 0)
+		{
+			try
+			{
+				onFrameDecoded(frame);
+			}
+			catch (ex)
+			{
+				toaster.Warning(ex);
+			}
+		}
+		else
+			onFrameError(ev2.data);
+	}
+	this.Flush = function ()
+	{
+		if (!encodedFrameQueue.isEmpty())
+			encodedFrameQueue = new Queue();
+		if (is_decoding)
+			dropNextDecodedFrame = true;
 	}
 
 	this.Dispose = function ()
@@ -7367,6 +7461,9 @@ function CanvasContextMenu()
 					videoPlayer.SetPlayerModule("jpeg", true);
 				}
 				break;
+			case "statsfornerds":
+				nerdStats.Open();
+				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
 				break;
@@ -7414,6 +7511,8 @@ function CanvasContextMenu()
 				, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
 				, { text: "Snapshot in Blue Iris", icon: "#svg_x5F_Snapshot", iconClass: "iconBlue", alias: "snapshot", tooltip: "Blue Iris will record a snapshot", action: onLiveContextMenuAction }
 				, { text: "Restart Camera", icon: "#svg_x5F_Restart", iconClass: "iconBlue", alias: "restart", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
 			]
@@ -7485,6 +7584,9 @@ function CanvasContextMenu()
 			case "closeclip":
 				clipLoader.CloseCurrentClip();
 				return;
+			case "statsfornerds":
+				nerdStats.Open();
+				return;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
 				break;
@@ -7501,6 +7603,8 @@ function CanvasContextMenu()
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
 				, { type: "splitLine" }
 				, { text: "Close Clip", icon: "#svg_x5F_Error", alias: "closeclip", action: onRecordContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onRecordContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onRecordContextMenuAction }
 			]
@@ -10198,176 +10302,75 @@ function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 	$tmpImg.attr("src", url);
 }
 ///////////////////////////////////////////////////////////////
-// Fetch raw h.264 streaming //////////////////////////////////
-///////////////////////////////////////////////////////////////
-function FetchRawH264Streamer(url, frameCallback, streamEnded)
-{
-	var self = this;
-	var cancel_streaming = false;
-	var is_streaming = false;
-	var reader = null;
-
-	this.StopStreaming = function ()
-	{
-		cancel_streaming = true;
-		if (reader)
-		{
-			reader.cancel("Streaming canceled");
-			reader = null;
-		}
-	}
-	var Start = function ()
-	{
-		console.log("Fetching: " + url);
-		fetch(url)
-			.then(function (res)
-			{
-				if (cancel_streaming)
-					return;
-				reader = res.body.getReader();
-				return pump(reader);
-			})
-		["catch"](function (e)
-		{
-			is_streaming = false;
-			streamEnded(e);
-		});
-	}
-
-	function pump()
-	{
-		if (reader == null)
-			return;
-		reader.read().then(function (result)
-		{
-			if (result.done)
-			{
-				is_streaming = false;
-				streamEnded("fetch graceful exit");
-				return;
-			}
-			else if (cancel_streaming)
-			{
-				streamEnded("fetch less graceful exit");
-				return;
-			}
-
-			var buf = result.value;
-
-			for (var i = 0; i < buf.byteLength; i++)
-			{
-				var sentinelLength = GetSentinelLength(buf[i]);
-				if (sentinelLength > 0)
-				{
-					// Found NAL unit sentinel value
-					// i + 1 is the index of the first byte after a sentinel value
-
-					if (NALBuf.length == 0)
-					{
-						// This is the start of the very first NAL unit
-						NALStart = i + 1;
-						AddSentinelValueToNALBuf(sentinelLength);
-					}
-					else
-					{
-						if (NALStart == -1)
-							NALStart = 0;
-						var NALEnd = i - 3;
-						AddToNALBuf(buf, NALStart, NALEnd);
-
-						// Here is a complete NAL Unit
-						var copy = GetNALBufComplete();
-						frameCallback(copy);
-
-						ResetNALBuf();
-						NALStart = i + 1;
-						AddSentinelValueToNALBuf(sentinelLength);
-					}
-				}
-			}
-			if (NALStart == -1)
-			{
-				// No NAL unit started or ended in this buffer
-				AddToNALBuf(buf, 0, buf.length);
-				//console.log("No NAL unit started or ended in this buffer");
-			}
-			else
-			{
-				// A NAL started within this buffer, but did not end
-				//console.log("A NAL started within this buffer, but did not end");
-				AddToNALBuf(buf, NALStart, buf.length);
-				NALStart = -1;
-			}
-
-			return pump();
-		}
-		)["catch"](function (e)
-		{
-			is_streaming = false;
-			console.log(e);
-			streamEnded();
-		});
-	}
-	var nals = 0;
-	var NALStart = -1;
-	var NALBuf = [];
-	var concurrentZeros = 0;
-	var GetSentinelLength = function (byte)
-	{
-		// Returns 4 or 3 upon encountering the 1 in [0,0,0,1] or [0,0,1]
-		if (byte == 0)
-			concurrentZeros++;
-		else
-		{
-			if (byte == 1 && concurrentZeros > 1)
-			{
-				var retVal = concurrentZeros > 2 ? 4 : 3;
-				concurrentZeros = 0;
-				return retVal;
-			}
-			else
-				concurrentZeros = 0;
-		}
-		return 0;
-	}
-	var ResetNALBuf = function ()
-	{
-		NALBuf = [];
-	}
-	var AddSentinelValueToNALBuf = function (sentinelLength)
-	{
-		if (sentinelLength == 3)
-			NALBuf.push(new Uint8Array([0, 0, 1]));
-		else
-			NALBuf.push(new Uint8Array([0, 0, 0, 1]));
-	}
-	var AddToNALBuf = function (buf, idxStart, idxEnd)
-	{
-		NALBuf.push(buf.subarray(idxStart, idxEnd));
-	}
-	var GetNALBufComplete = function ()
-	{
-		var totalSize = 0;
-		for (var i = 0; i < NALBuf.length; i++)
-			totalSize += NALBuf[i].length;
-		var tmpBuf = new Uint8Array(totalSize);
-		var tmpIdx = 0;
-		for (var i = 0; i < NALBuf.length; i++)
-			for (var n = 0; n < NALBuf[i].length; n++)
-				tmpBuf[tmpIdx++] = NALBuf[i][n];
-		return tmpBuf;
-	}
-
-	Start();
-}
-///////////////////////////////////////////////////////////////
 // Fetch /video/ h.264 streaming //////////////////////////////
 ///////////////////////////////////////////////////////////////
+var safeFetch = new (function ()
+{
+	// TODO: Try forcing the first chunk of data to be downloaded to see if things are more reliable.  (don't cancel before the first pump())
+	// This object makes sure only one fetch connection is open at a time, to keep from overloading Blue Iris.
+	// And to (slightly) reduce the risk of this bug:
+	// (as of 2016/2017) Opening fetch objects too rapidly results in some connections getting stuck in "pending" 
+	// state and access to the server is blocked until the page is refreshed.  This is a Chrome bug, because when I 
+	// proxied all connections through fiddler, the "pending" connection never even made it out of Chrome.
+	var self = this;
+	var streamer;
+	var queuedRequest = null;
+	var stopTimeout = null;
+	var streamEndedCbForActiveFetch = null;
+	this.OpenStream = function (url, frameCallback, streamEnded)
+	{
+		queuedRequest = { url: url, frameCallback: frameCallback, streamEnded: streamEnded, activated: false };
+		if (streamer)
+		{
+			// A fetch stream is currently active.  Try to stop it.
+			streamer.StopStreaming();
+			if (stopTimeout == null)
+				stopTimeout = setTimeout(StopTimedOut, 15000);
+		}
+		else
+			OpenStreamNow();
+	}
+	this.CloseStream = function ()
+	{
+		if (streamer)
+			streamer.StopStreaming();
+	}
+	var OpenStreamNow = function ()
+	{
+		if (queuedRequest.activated)
+			return;
+		if (stopTimeout != null)
+		{
+			clearTimeout(stopTimeout);
+			stopTimeout = null;
+		}
+		queuedRequest.activated = true;
+		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
+		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, StreamEndedWrapper);
+	}
+	var StreamEndedWrapper = function (message)
+	{
+		if (stopTimeout != null)
+		{
+			clearTimeout(stopTimeout);
+			stopTimeout = null;
+		}
+		if (streamEndedCbForActiveFetch)
+			streamEndedCbForActiveFetch(message);
+		streamer = null;
+		if (!queuedRequest.activated)
+			OpenStreamNow();
+	}
+	var StopTimedOut = function ()
+	{
+		stopTimeout = null;
+		toaster.Error('"fetch" streaming could not be stopped due to a Chrome bug. You should reload the page.', 600000, true);
+	}
+})();
 function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 {
 	var self = this;
 	var cancel_streaming = false;
-	var is_streaming = false;
 	var reader = null;
 
 	// Since at any point we may not have received enough data to finish parsing, we will keep track of parsing progress via a state integer.
@@ -10391,35 +10394,41 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 	this.StopStreaming = function ()
 	{
-		myStream = new GhettoStream(); // This is mostly just to release any data stored in the old stream.
 		cancel_streaming = true;
 		if (reader)
 		{
+			myStream = new GhettoStream(); // This is mostly just to release any data stored in the old stream.
 			reader.cancel("Streaming canceled");
 			reader = null;
 		}
 	}
 	var Start = function ()
 	{
-		console.log("Fetching: " + url);
-		fetch(url)
-			.then(function (res)
+		fetch(url).then(function (res)
+		{
+			if (cancel_streaming)
 			{
-				if (cancel_streaming)
-					return;
-				reader = res.body.getReader();
-				return pump(reader);
-			})
+				CallStreamEnded("fetch exit before start");
+				return;
+			}
+			reader = res.body.getReader();
+			return pump(reader);
+		})
 		["catch"](function (e)
 		{
-			is_streaming = false;
-			streamEnded(e);
+			CallStreamEnded(e);
 		});
 	}
-
+	function CallStreamEnded(message)
+	{
+		if (typeof streamEnded == "function")
+			streamEnded(message);
+		streamEnded = null;
+	}
 	function protocolError(error)
 	{
-		streamEnded("/video/ Protocol Error: " + error);
+		self.StopStreaming();
+		CallStreamEnded("/video/ Protocol Error: " + error);
 	}
 
 	function pump()
@@ -10430,14 +10439,13 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 		{
 			if (result.done)
 			{
-				is_streaming = false;
-				streamEnded("fetch graceful exit");
+				CallStreamEnded("fetch graceful exit");
 				return;
 			}
 			else if (cancel_streaming)
 			{
-				is_streaming = false;
-				streamEnded("fetch less graceful exit");
+				self.StopStreaming();
+				CallStreamEnded("fetch less graceful exit");
 				return;
 			}
 
@@ -10496,7 +10504,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 						var offsetWrapper = { offset: 0 };
 						currentVideoFrame.pos = ReadInt16(buf.buffer, offsetWrapper);
 						currentVideoFrame.time = ReadInt32(buf.buffer, offsetWrapper);
-						currentVideoFrame.utc = ReadUInt64(buf.buffer, offsetWrapper);
+						currentVideoFrame.utc = ReadUInt64LE(buf.buffer, offsetWrapper);
 						currentVideoFrame.size = ReadInt32(buf.buffer, offsetWrapper);
 
 						state = 4;
@@ -10523,8 +10531,8 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 					}
 					else if (blockType == 4)
 					{
-						is_streaming = false;
-						streamEnded("natural end of stream");
+						self.StopStreaming();
+						CallStreamEnded("natural end of stream");
 						return;
 					}
 					else
@@ -10561,9 +10569,8 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 		}
 		)["catch"](function (e)
 		{
-			is_streaming = false;
-			console.log(e);
-			streamEnded();
+			self.StopStreaming();
+			CallStreamEnded(e);
 		});
 	}
 
@@ -10683,6 +10690,12 @@ function ReadUInt32(buf, offsetWrapper)
 	offsetWrapper.offset += 4;
 	return v;
 }
+function ReadUInt32LE(buf, offsetWrapper)
+{
+	var v = new DataView(buf, offsetWrapper.offset, 4).getUint32(0, true);
+	offsetWrapper.offset += 4;
+	return v;
+}
 function ReadInt32(buf, offsetWrapper)
 {
 	var v = new DataView(buf, offsetWrapper.offset, 4).getInt32(0, false);
@@ -10697,6 +10710,14 @@ function ReadUInt64(buf, offsetWrapper)
 	var leastSignificant = ReadUInt32(buf, offsetWrapper);
 	return mostSignificant + leastSignificant;
 }
+function ReadUInt64LE(buf, offsetWrapper)
+{
+	// This is a hack because JavaScript only has 64 bit doubles with 53 bit int precision.
+	// If a number were to be higher than 2 ^ 53, this method would return the wrong value.
+	var leastSignificant = ReadUInt32LE(buf, offsetWrapper);
+	var mostSignificant = (ReadUInt32LE(buf, offsetWrapper) & 0x001FFFFF) * 4294967296;
+	return mostSignificant + leastSignificant;
+}
 function ReadUTF8(buf, offsetWrapper, byteLength)
 {
 	var v = Utf8ArrayToStr(new Uint8Array(buf, offsetWrapper.offset, byteLength));
@@ -10704,8 +10725,95 @@ function ReadUTF8(buf, offsetWrapper, byteLength)
 	return v;
 }
 ///////////////////////////////////////////////////////////////
+// Stats For Nerds ////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function UI3NerdStats()
+{
+	var self = this;
+	var dialog = null;
+	var $root;
+	var isFresh = true;
+	var statsRows = [];
+	this.Open = function ()
+	{
+		if (dialog)
+			dialog.close();
+		$root = $('<div class="statsForNerds">Video playback must start before stats are available.</div>');
+		isFresh = true;
+		dialog = $root.dialog(
+			{
+				title: "Stats for nerds"
+				, onClosing: function ()
+				{
+					dialog = null;
+					statsRows = [];
+				}
+			});
+	}
+	this.IsOpen = function ()
+	{
+		return dialog != null;
+	}
+	this.UpdateStat = function (name, value, htmlValue)
+	{
+		if (!dialog)
+			return;
+		if (isFresh)
+		{
+			isFresh = false;
+			$root.empty();
+		}
+		var row = statsRows[name];
+		if (!row)
+		{
+			row = statsRows[name] = new StatsRow(name);
+			$root.append(row.GetEleRef());
+			dialog.contentChanged();
+		}
+		row.SetValue(value, htmlValue);
+	}
+}
+function StatsRow(name)
+{
+	var self = this;
+	var $root = $('<div class="statsRow"></div>');
+	var $name = $('<div class="statsName">' + name + '</div>');
+	var $value = $('<div class="statsValue"></div>');
+	$root.append($name);
+	$root.append($value);
+	var currentValue = null;
+
+	this.SetValue = function (value, htmlValue)
+	{
+		currentValue = value;
+		if (typeof htmlValue == "undefined")
+			htmlValue = htmlEncode(value);
+		$value.html(htmlValue);
+	}
+	this.GetValue = function ()
+	{
+		return currentValue;
+	}
+	this.GetEleRef = function ()
+	{
+		return $root;
+	}
+}
+///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+// Date.now() and performance.now() polyfills
+(function ()
+{
+	window.Date.now = (Date.now || function () { return new Date().getTime(); });
+	if ("performance" in window == false)
+		window.performance = {};
+	if ("now" in window.performance == false)
+	{
+		var start = Date.now();
+		window.performance.now = function () { return Date.now() - start; }
+	}
+})();
 function isCanvasSupported()
 {
 	var elem = document.createElement('canvas');

@@ -2985,3 +2985,37 @@ div::-webkit-resizer
 	height: 100%;
 	background-color: #0097F0;
 }
+/* Stats for nerds */
+.statsForNerds
+{
+	margin-bottom: 6px;
+}
+
+.statsRow
+{
+	width: 310px;
+	height: 14px;
+	line-height: 14px;
+	font-size: 12px;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.statsName
+{
+	display: inline-block;
+	width: 95px;
+	height: 14px;
+	margin-right: 8px;
+	overflow: hidden;
+	text-align: right;
+	text-overflow: ellipsis;
+}
+
+.statsValue
+{
+	display: inline-block;
+	width: 200px;
+	height: 14px;
+	overflow: hidden;
+}
