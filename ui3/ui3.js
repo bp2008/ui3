@@ -853,6 +853,9 @@ $(function ()
 
 	ptzButtons = new PtzButtons();
 
+	if (!h264_playback_supported)
+		loadingHelper.SetLoadedStatus("h264"); // We aren't going to load the player, so clear the loading step.
+
 	$.ajax({
 		url: "ui3/icons.svg?v=" + combined_version,
 		dataType: "html",
