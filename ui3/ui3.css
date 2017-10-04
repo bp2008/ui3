@@ -1688,7 +1688,7 @@ div.icon, a.icon
 	display: none;
 }
 
-#camimg_canvas
+.videoCanvas
 {
 	width: 100%;
 	height: 100%;
@@ -2984,20 +2984,4 @@ div::-webkit-resizer
 	width: 0%;
 	height: 100%;
 	background-color: #0097F0;
-}
-/* pnacl_player */
-#pnacl_player_wrapper
-{
-	width: 100%;
-	height: 100%;
-	overflow: hidden;
-}
-
-.camimg_offscreen
-{
-	width: 10px;
-	height: 0px;
-	position: absolute;
-	top: 0px;
-	left: -50000px;
 }

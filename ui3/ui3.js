@@ -8,7 +8,8 @@ var developerMode = false;
 ///////////////////////////////////////////////////////////////
 // Feature Detect /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-var pnacl_player_supported = false;
+var h264_playback_supported = false;
+var web_workers_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -20,8 +21,10 @@ function DoUIFeatureDetection()
 			MissingRequiredFeature("Local Storage");
 		else
 		{
-			pnacl_player_supported = BrowserIsChrome() && navigator.mimeTypes['application/x-pnacl'] !== undefined;
 			// All critical tests pass
+			// Non-critical tests can run here and store their results in global vars.
+			web_workers_supported = typeof (Worker) !== "undefined";
+			h264_playback_supported = web_workers_supported && BrowserIsChrome();
 			return;
 		}
 		// A critical test failed
@@ -202,8 +205,6 @@ var togglableUIFeatures =
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
 // -- MAYBE Including an option to update the clip list automatically (on by default) ... to reduce bandwidth usage ??
-// -- Hardware acceleration option for pnacl_player (off by default, because it significantly slows the stream startup time)
-// -- -- on the embed element, hwaccel value 0 is NO HWVA.  1 is HWVA with fallback.  2 is HWVA only.
 // -- Long press to open context menus (enabling this should disable longpress to set preset).  Affects some devices, e.g. samsung smart TV remote control
 // -- Idle Timeout (minutes).  Enabled by default, overridable in local overrides script.
 // -- Option for UI size.
@@ -5653,10 +5654,10 @@ function VideoPlayerController()
 	{
 		if (moduleHolder["jpeg"] == null)
 			moduleHolder["jpeg"] = new JpegVideoModule();
-		if (moduleHolder["h264"] == null && pnacl_player_supported)
+		if (moduleHolder["h264"] == null && h264_playback_supported)
 		{
 			$("#loadingH264").parent().show();
-			var h264Module = moduleHolder["h264"] = new FetchPNaClH264VideoModule();
+			var h264Module = moduleHolder["h264"] = new FetchOpenH264VideoModule();
 			h264Module.Activate();
 			h264Module.Deactivate();
 		}
@@ -5670,7 +5671,7 @@ function VideoPlayerController()
 
 		imageRenderer.RegisterCamImgClickHandler();
 		self.PreLoadPlayerModules();
-		self.SetPlayerModule(pnacl_player_supported ? "h264" : "jpeg");
+		self.SetPlayerModule(h264_playback_supported ? "h264" : "jpeg");
 		playerModule.OpenVideo();
 
 		var visProp = getHiddenProp();
@@ -6124,7 +6125,7 @@ function JpegVideoModule()
 		isInitialized = true;
 		// Do one-time initialization here
 
-		$("#camimg_store").append('<canvas id="camimg_canvas"></canvas>');
+		$("#camimg_store").append('<canvas id="camimg_canvas" class="videoCanvas"></canvas>');
 		$("#camimg_store").append('<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />');
 		$("#camimg_store").append('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
 
@@ -6486,17 +6487,17 @@ function JpegVideoModule()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Fetch and PNaCl H.264 Video Module /////////////////////////
+// Fetch and OpenH264 Video Module ////////////////////////////
 ///////////////////////////////////////////////////////////////
-function FetchPNaClH264VideoModule()
+function FetchOpenH264VideoModule()
 {
 	/*
-	A low level video player module which streams H.264 using the fetch API, and decodes/plays it using a PNaCl program.
+	A low level video player module which streams H.264 using the fetch API, and decodes/plays it using JavaScript.
 	*/
 	var self = this;
 	var isInitialized = false;
 	var isCurrentlyActive = false;
-	var pnacl_player;
+	var openh264_player;
 	var fetchStreamer;
 	var isVisible = !documentIsHidden();
 	var currentSeekPositionPercent = 0;
@@ -6505,28 +6506,27 @@ function FetchPNaClH264VideoModule()
 	{
 		if (isInitialized)
 			return;
-		console.log("Initializing pnacl_player");
+		console.log("Initializing openh264_player");
 		isInitialized = true;
 		// Do one-time initialization here
-		$("#camimg_wrapper").append('<div id="pnacl_player_wrapper"></div>');
-		pnacl_player = new Pnacl_Player("#pnacl_player_wrapper", videoPlayer.ImageRendered, videoPlayer.CameraOrResolutionChange);
+		openh264_player = new OpenH264_Player(videoPlayer.ImageRendered, videoPlayer.CameraOrResolutionChange);
 	}
 	this.Activate = function ()
 	{
 		Initialize();
 		if (isCurrentlyActive)
 			return;
-		console.log("Activating pnacl_player");
+		console.log("Activating openh264_player");
 		isCurrentlyActive = true;
 		// Show yourself
-		$("#pnacl_player_wrapper").removeClass("camimg_offscreen");
+		openh264_player.GetCanvasRef().appendTo("#camimg_wrapper");
 	}
 	this.Deactivate = function ()
 	{
 		// TODO: Throttle the rate of Activate/Deactivate so that rapid minimize/maximize can't break the fetch API and leave connections open.
 		if (!isCurrentlyActive)
 			return;
-		console.log("Deactivating pnacl_player");
+		console.log("Deactivating openh264_player");
 		isCurrentlyActive = false;
 		// Stop what you are doing and hide
 		if (fetchStreamer)
@@ -6534,8 +6534,8 @@ function FetchPNaClH264VideoModule()
 			fetchStreamer.StopStreaming();
 			fetchStreamer = null;
 		}
-		pnacl_player.Reset();
-		$("#pnacl_player_wrapper").addClass("camimg_offscreen");
+		openh264_player.Reset();
+		openh264_player.GetCanvasRef().appendTo("#camimg_store");
 	}
 	this.VisibilityChanged = function (visible)
 	{
@@ -6547,7 +6547,7 @@ function FetchPNaClH264VideoModule()
 	}
 	this.LoadedFrameSinceActivate = function ()
 	{
-		return pnacl_player.GetRenderedFrameCount() > 0;
+		return openh264_player.GetRenderedFrameCount() > 0;
 	}
 	var openVideoTimeout = null;
 	this.OpenVideo = function ()
@@ -6555,7 +6555,7 @@ function FetchPNaClH264VideoModule()
 		self.Activate();
 		if (openVideoTimeout != null)
 			clearTimeout(openVideoTimeout);
-		if (!pnacl_player.IsLoaded())
+		if (!openh264_player.IsLoaded())
 		{
 			openVideoTimeout = setTimeout(self.OpenVideo, 5);
 			return;
@@ -6565,7 +6565,7 @@ function FetchPNaClH264VideoModule()
 			fetchStreamer.StopStreaming();
 			fetchStreamer = null;
 		}
-		pnacl_player.Reset();
+		openh264_player.Reset();
 		var loading = videoPlayer.Loading().image;
 		var videoUrl;
 		if (loading.isLive)
@@ -6577,7 +6577,7 @@ function FetchPNaClH264VideoModule()
 				speed *= -1;
 			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=0&speed=" + speed + "&audio=0&stream=0&extend=2";
 		}
-		fetchStreamer = new FetchVideoH264Streamer(videoUrl, pnacl_player.AcceptFrame,
+		fetchStreamer = new FetchVideoH264Streamer(videoUrl, openh264_player.AcceptFrame,
 			function (e)
 			{
 				console.log("fetch stream ended:");
@@ -6623,109 +6623,81 @@ function FetchPNaClH264VideoModule()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// pnacl_player ///////////////////////////////////////////////
+// openh264_player ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
+function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 {
 	var self = this;
-	var player;
+	var $canvas;
+	var canvas;
+	var canvasW = 0;
+	var canvasH = 0;
+	var display;
+	var decoder;
 	var acceptedFrameCount = 0;
 	var renderedFrameCount = 0;
-	var isLoaded = false;
+	var loadState = 0; // 0: Initial, 1: Loading, 2: Ready to accept frames
+	var isValid = true;
 
-	var moduleDidLoad = function ()
+	var onLoad = function ()
 	{
-		isLoaded = true;
+		loadState = 2;
 		loadingHelper.SetLoadedStatus("h264");
 	}
-	var handleMessage = function (message_event)
+	var onLoadFail = function ()
 	{
-		if (typeof message_event.data === 'string')
-		{
-			if (message_event.data == "initialized")
-			{
-				console.log(message_event.data);
-			}
-			else if (message_event.data.startsWith("rf ")) // Received Frame
-			{
-				var dataObj = JSON.parse(message_event.data.substr("rf ".length));
-				var loading = videoPlayer.Loading().image;
-				if (loading.actualwidth != dataObj.w || loading.actualheight != dataObj.h || renderedFrameCount == 0)
-				{
-					console.log(message_event.data);
-					loading.actualwidth = dataObj.w;
-					loading.actualheight = dataObj.h;
-					loading.maxwidth = dataObj.w;
-					loading.maxheight = dataObj.h;
-					cameraOrResolutionChange();
-				}
-				frameRendered(dataObj.t);
-				//console.log(message_event.data);
-				renderedFrameCount++;
-			}
-			else if (message_event.data.startsWith("vr ")) // Video Resized and the player is about to start painting a frame of this size.
-			{
-				var dataObj = JSON.parse(message_event.data.substr("rf ".length));
-				var width = dataObj.w;
-				var height = dataObj.h;
-				//cameraOrResolutionChange();
-				console.log(message_event.data);
-			}
-			else
-			{
-				console.log(message_event.data);
-			}
-		}
-		else
-		{
-			console.log("Pnacl_Player Message of unhandled type " + (typeof message_event.data));
-			console.log(message_event.data);
-		}
+		isValid = false;
+		toaster.Error("Failed to load H.264 player.", 15000);
+		decoder.Dispose();
 	}
-	var handleError = function (event)
+	var frameDecoded = function (frame)
 	{
-		console.log("Pnacl_Player ERROR: " + player.lastError);
-		console.log(event);
+		var loading = videoPlayer.Loading().image;
+		if (loading.actualwidth != frame.width || loading.actualheight != frame.height || renderedFrameCount == 0)
+		{
+			loading.actualwidth = frame.width;
+			loading.actualheight = frame.height;
+			loading.maxwidth = frame.width;
+			loading.maxheight = frame.height;
+			cameraOrResolutionChange();
+		}
+		if (canvasW != frame.width)
+			canvas.width = canvasW = frame.width;
+		if (canvasH != frame.height)
+			canvas.height = canvasH = frame.height;
+		display.drawNextOuptutPictureGL(frame.width, frame.height, null, new Uint8Array(frame.data));
+		frameRendered(frame.timestamp);
+		renderedFrameCount++;
 	}
-	var handleCrash = function (event)
+	var frameError = function (badFrame)
 	{
-		if (common.naclModule.exitStatus == -1)
-			console.log("Pnacl_Player CRASH! Last error: " + player.lastError);
-		else
-			console.log("Pnacl_Player EXITED [" + common.naclModule.exitStatus + "]");
-		console.log(event);
+		console.log("Frame Error: " + badFrame);
 	}
 
 	var Initialize = function ()
 	{
-		var $parent = $(parentSelector);
-		$parent.empty();
+		if (loadState != 0)
+			return;
+		loadState = 1;
 
-		var listenerDiv = $parent.get(0);
-		listenerDiv.addEventListener('load', moduleDidLoad, true);
-		listenerDiv.addEventListener('message', handleMessage, true);
-		listenerDiv.addEventListener('error', handleError, true);
-		listenerDiv.addEventListener('crash', handleCrash, true);
+		decoder = new OpenH264_Decoder(onLoad, onLoadFail, frameDecoded, frameError);
 
-		var $player = $('<embed id="pnacl_player_module" name="pnacl_player_module" width="100%" height="100%" path="pnacl/Release" src="ui3/pnacl/Release/pnacl_player.nmf" type="application/x-pnacl" hwaccel="0" />');
-		$parent.append($player);
-		player = document.getElementById("pnacl_player_module");
-
+		$("#openh264_player_canvas").remove();
+		$canvas = $('<canvas id="openh264_player_canvas" class="videoCanvas" width="100%" height="100%"></canvas>');
+		canvas = $canvas.get(0);
+		display = new WebGLCanvas(canvas);
 	}
 	this.Dispose = function ()
 	{
-		var $parent = $(parentSelector);
-		var listenerDiv = $parent.get(0);
-		listenerDiv.removeEventListener('load', moduleDidLoad, true);
-		listenerDiv.removeEventListener('message', handleMessage, true);
-		listenerDiv.removeEventListener('error', handleError, true);
-		listenerDiv.removeEventListener('crash', handleCrash, true);
-
-		$parent.empty();
+		decoder.Dispose();
 	}
 	this.IsLoaded = function ()
 	{
-		return isLoaded;
+		return loadState == 2;
+	}
+	this.IsValid = function ()
+	{
+		return isValid;
 	}
 	this.GetRenderedFrameCount = function ()
 	{
@@ -6733,20 +6705,91 @@ function Pnacl_Player(parentSelector, frameRendered, cameraOrResolutionChange)
 	}
 	this.Reset = function ()
 	{
-		player.postMessage("reset");
+		// TODO: use stream numbers to ensure that we don't receive decoded frames from a previous stream after Reset is called.
+		//player.postMessage("reset");
 		console.log("this.Reset");
 		acceptedFrameCount = 0;
 		renderedFrameCount = 0;
 	}
 	this.AcceptFrame = function (frame)
 	{
-		player.postMessage("f " + frame.time);
-		player.postMessage(frame.frameData.buffer);
+		frame.frameData.buffer
+		decoder.Decode(frame);
 		acceptedFrameCount++;
+	}
+	this.GetCanvasRef = function ()
+	{
+		return $canvas;
 	}
 
 	Initialize();
 }
+///////////////////////////////////////////////////////////////
+// openh264_decoder ///////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError)
+{
+	var self = this;
+	var worker = new Worker("ui3/openh264_decoder.js?v=" + combined_version);
+	var encodedFrameQueue = new Queue();
+	var is_decoding = false;
+
+	this.Decode = function (frame)
+	{
+		if (!worker)
+		{
+			console.log("OpenH264_Decoder.Decode called after Dispose.");
+			return;
+		}
+		if (is_decoding)
+		{
+			encodedFrameQueue.enqueue(frame);
+			return;
+		}
+		is_decoding = true;
+		worker.onmessage = function (ev2)
+		{
+			ev2.data.timestamp = frame.timestamp;
+			ev2.data.pos = frame.pos;
+			ev2.data.utc = frame.utc;
+			DecodeDone(ev2.data);
+		};
+		worker.postMessage({ timestamp: frame.time, data: frame.frameData.buffer });
+	}
+	var DecodeDone = function (frame)
+	{
+		if (frame.status == 0)
+			setTimeout(function () { onFrameDecoded(frame) }, 0);
+		else
+			onFrameError(ev2.data);
+		is_decoding = false;
+		if (!encodedFrameQueue.isEmpty())
+			self.Decode(encodedFrameQueue.dequeue());
+	}
+
+	this.Dispose = function ()
+	{
+		if (worker)
+			worker.terminate();
+		worker = null;
+	}
+	// Initialize
+	worker.onerror = function (error)
+	{
+		console.log(error);
+	}
+	worker.onmessage = function (ev)
+	{
+		if (ev.data.status == 0)
+			onLoad(ev.data);
+		else
+			onLoadError(ev.data);
+	};
+	worker.postMessage({
+		params: {},
+		packet: null
+	});
+};
 ///////////////////////////////////////////////////////////////
 // Image Renderer                                            //
 // provides rendering and scaling services                   //
@@ -7171,7 +7214,7 @@ function CanvasContextMenu()
 	var onShowLiveContextMenu = function (menu)
 	{
 		var itemsToDisable = ["cameraname"];
-		if (!pnacl_player_supported)
+		if (!h264_playback_supported)
 			itemsToDisable.push("h264module");
 		if (lastLiveContextMenuSelectedCamera == null || cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
 		{
@@ -7195,7 +7238,7 @@ function CanvasContextMenu()
 	}
 	var onTriggerLiveContextMenu = function (e)
 	{
-		if (pnacl_player_supported)
+		if (h264_playback_supported)
 			$("#playerModuleEnable").text(videoPlayer.CurrentPlayerModuleName() == "jpeg" ? "Enable" : "Disable");
 		else
 			$("#playerModuleEnable").text("(chrome) ");
@@ -10918,6 +10961,11 @@ function htmlDecode(value)
 {
 	return $('<div/>').html(value).text();
 }
+jQuery.cachedScript = function (url, options)
+{
+	options = $.extend(options || {}, { dataType: "script", cache: true, url: url });
+	return jQuery.ajax(options);
+};
 function isSameDay(date1, date2)
 {
 	if (date1.getDate() != date2.getDate())
