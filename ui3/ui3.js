@@ -3125,7 +3125,7 @@ function SeekBar()
 
 	seekhint_img.load(function ()
 	{
-		imageRenderer.CopyImageToCanvas("seekhint_img", "seekhint_canvas");
+		CopyImageToCanvas("seekhint_img", "seekhint_canvas");
 		seekHintInfo.loading = false;
 		seekHintInfo.visibleMsec = seekHintInfo.loadingMsec;
 		if (seekHintInfo.queuedMsec != -1)
@@ -3133,7 +3133,7 @@ function SeekBar()
 	});
 	seekhint_img.error(function ()
 	{
-		imageRenderer.ClearCanvas("seekhint_canvas");
+		ClearCanvas("seekhint_canvas");
 		seekHintInfo.loading = false;
 		seekHintInfo.loadingMsec = seekHintInfo.visibleMsec = -1;
 		if (seekHintInfo.queuedMsec != -1)
@@ -3246,7 +3246,7 @@ function SeekBar()
 	{
 		seekHintInfo.loadingMsec = seekHintInfo.queuedMsec = seekHintInfo.visibleMsec = -1;
 		seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
-		imageRenderer.ClearCanvas("seekhint_canvas");
+		ClearCanvas("seekhint_canvas");
 	}
 	this.drawSeekbarAtPercent = function (percentValue)
 	{
@@ -6182,7 +6182,7 @@ function JpegVideoModule()
 
 				currentLoadedImageActualWidth = this.naturalWidth;
 
-				imageRenderer.CopyImageToCanvas("camimg", "camimg_canvas");
+				CopyImageToCanvas("camimg", "camimg_canvas");
 
 				if (nerdStats.IsOpen())
 				{
@@ -6219,7 +6219,7 @@ function JpegVideoModule()
 		var loaded = videoPlayer.Loaded().image;
 		loaded.maxwidth = loaded.fullwidth;
 		loaded.maxheight = loaded.fullheight;
-		imageRenderer.ClearCanvas("camimg_canvas");
+		ClearCanvas("camimg_canvas");
 		$("#camimg_canvas").appendTo("#camimg_wrapper");
 	}
 	this.Deactivate = function ()
@@ -6891,6 +6891,24 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError)
 // Image Renderer                                            //
 // provides rendering and scaling services                   //
 ///////////////////////////////////////////////////////////////
+function CopyImageToCanvas(imgId, canvasId)
+{
+	var imgEle = $("#" + imgId).get(0);
+	var canvas = $("#" + canvasId).get(0);
+	if (canvas.width != imgEle.naturalWidth)
+		canvas.width = imgEle.naturalWidth;
+	if (canvas.height != imgEle.naturalHeight)
+		canvas.height = imgEle.naturalHeight;
+
+	var context2d = canvas.getContext("2d");
+	context2d.drawImage(imgEle, 0, 0);
+}
+function ClearCanvas(canvasId)
+{
+	var canvas = $("#" + canvasId).get(0);
+	var context2d = canvas.getContext("2d");
+	context2d.clearRect(0, 0, canvas.width, canvas.height);
+}
 function ImageRenderer()
 {
 	var self = this;
@@ -6967,18 +6985,6 @@ function ImageRenderer()
 	{
 		return previousImageDraw;
 	}
-	this.CopyImageToCanvas = function (imgId, canvasId)
-	{
-		var imgEle = $("#" + imgId).get(0);
-		var canvas = $("#" + canvasId).get(0);
-		if (canvas.width != imgEle.naturalWidth)
-			canvas.width = imgEle.naturalWidth;
-		if (canvas.height != imgEle.naturalHeight)
-			canvas.height = imgEle.naturalHeight;
-
-		var context2d = canvas.getContext("2d");
-		context2d.drawImage(imgEle, 0, 0);
-	}
 	this.ChangeFrameDefaultOpacity = function (opacity)
 	{
 		frameDefaultOpacity = opacity;
@@ -6994,12 +7000,6 @@ function ImageRenderer()
 			frameOpacity = opacity;
 			$("#camimg_wrapper").css("opacity", opacity);
 		}
-	}
-	this.ClearCanvas = function (canvasId)
-	{
-		var canvas = $("#" + canvasId).get(0);
-		var context2d = canvas.getContext("2d");
-		context2d.clearRect(0, 0, canvas.width, canvas.height);
 	}
 	this.ImgResized = function (isFromKeyboard)
 	{
@@ -10306,12 +10306,14 @@ function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 ///////////////////////////////////////////////////////////////
 var safeFetch = new (function ()
 {
-	// TODO: Try forcing the first chunk of data to be downloaded to see if things are more reliable.  (don't cancel before the first pump())
 	// This object makes sure only one fetch connection is open at a time, to keep from overloading Blue Iris.
 	// And to (slightly) reduce the risk of this bug:
 	// (as of 2016/2017) Opening fetch objects too rapidly results in some connections getting stuck in "pending" 
 	// state and access to the server is blocked until the page is refreshed.  This is a Chrome bug, because when I 
 	// proxied all connections through fiddler, the "pending" connection never even made it out of Chrome.
+	//
+	// I'm tentatively declaring this bug SQUASHED since requiring that the first chunk of data be read from the 
+	// fetch stream before it can be canceled.
 	var self = this;
 	var streamer;
 	var queuedRequest = null;
@@ -10364,7 +10366,7 @@ var safeFetch = new (function ()
 	var StopTimedOut = function ()
 	{
 		stopTimeout = null;
-		toaster.Error('"fetch" streaming could not be stopped due to a Chrome bug. You should reload the page.', 600000, true);
+		toaster.Error('Video streaming connection stuck open! You should reload the page.', 600000, true);
 	}
 })();
 function FetchVideoH264Streamer(url, frameCallback, streamEnded)
@@ -10406,11 +10408,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 	{
 		fetch(url).then(function (res)
 		{
-			if (cancel_streaming)
-			{
-				CallStreamEnded("fetch exit before start");
-				return;
-			}
+			// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
 			reader = res.body.getReader();
 			return pump(reader);
 		})
@@ -10433,19 +10431,21 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 	function pump()
 	{
+		// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
+		// Except if reader is null of course.
 		if (reader == null)
 			return;
 		reader.read().then(function (result)
 		{
 			if (result.done)
 			{
-				CallStreamEnded("fetch graceful exit");
+				CallStreamEnded("fetch graceful exit (type 1)");
 				return;
 			}
 			else if (cancel_streaming)
 			{
 				self.StopStreaming();
-				CallStreamEnded("fetch less graceful exit");
+				CallStreamEnded("fetch graceful exit (type 2)");
 				return;
 			}
 
