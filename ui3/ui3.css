@@ -1164,6 +1164,7 @@ div.icon, a.icon
 	height: 39px;
 	padding-left: 10px;
 	cursor: pointer;
+	overflow: hidden;
 }
 
 	.dropdownBox.disabled
@@ -1202,6 +1203,7 @@ div.icon, a.icon
 	font-size: 16px;
 	line-height: 39px;
 	color: #FFFFFF;
+    white-space: nowrap;
 }
 
 .sizeMedium .dropdownLabel

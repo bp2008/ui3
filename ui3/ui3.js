@@ -10,6 +10,8 @@ var developerMode = false;
 ///////////////////////////////////////////////////////////////
 var h264_playback_supported = false;
 var web_workers_supported = false;
+var fetch_supported = false;
+var readable_stream_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -23,8 +25,10 @@ function DoUIFeatureDetection()
 		{
 			// All critical tests pass
 			// Non-critical tests can run here and store their results in global vars.
-			web_workers_supported = typeof (Worker) !== "undefined";
-			h264_playback_supported = web_workers_supported && BrowserIsChrome();
+			web_workers_supported = typeof Worker !== "undefined";
+			fetch_supported = typeof fetch == "function";
+			readable_stream_supported = typeof ReadableStream == "function";
+			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported;
 			return;
 		}
 		// A critical test failed
@@ -108,7 +112,9 @@ var clipProperties = null;
 var clipDownloadDialog = null;
 var statusBars = null;
 var dropdownBoxes = null;
+var genericQualityHelper = null;
 var jpegQualityHelper = null;
+var h264QualityHelper = null;
 var ptzButtons = null;
 var playbackHeader = null;
 var seekBar = null;
@@ -173,25 +179,27 @@ var togglableUIFeatures =
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
 // TODO: H.264 live playback
-//		-Quality controls (streams 0, 1, 2)
-//		-Removal of "Enable h.264 module" context menu item
+//-Quality controls (streams 0, 1, 2)
+//-Removal of "Enable h.264 module" context menu item
 //		-Frame rate smoothing
 //-Download snapshot
 //-Open snapshot in new tab
 // TODO: H.264 clip/alert playback
 //		-Frame rate smoothing
-//		-Speed manipulation
-//		-Pausing
-//		-Reverse play
-//		-Graceful stream close
+//-Speed manipulation
+//-Pausing
+//-Reverse play
+//-Graceful stream close
 //-Download snapshot
 //-Open snapshot in new tab
+// TODO: Preserve seek position and play/pause state when changing between player modules (and not viewing live video).
+// TODO: Implement "Copy image URL" with https://clipboardjs.com/
+// TODO: Fix bug where incorrect stream length info is shown for clips in H.264 mode until the first frame is downloaded.
 // TODO: Test large dialogs on phones.
 // TODO: Implement JSON "users" command as a status panel like the Log panel.
 // TODO: Try pointInsideElement with outerWidth(true) and outerHeight(true).  Use it this way unless it breaks one of the usages.
 // TODO: Make PTZ presets work better on touchscreens.  Including the text box to set preset description on a phone. (android)
 // TODO: Add URL parameters for loading a camera, group, or fullscreen mode.
-// TODO: Delay start of h264 streaming until player is fully loaded.
 // TODO: Handle single-deletion failure messages better.
 
 // TODO: Suppress hotkeys while dialogs are open.
@@ -243,8 +251,8 @@ var defaultSettings =
 			, value: 0
 		}
 		, {
-			key: "ui3_jpegStreamingQuality"
-			, value: "A"
+			key: "ui3_streamingQuality"
+			, value: "S0"
 		}
 		, {
 			key: "ui3_playback_reverse"
@@ -951,7 +959,11 @@ $(function ()
 
 	dropdownBoxes = new DropdownBoxes();
 
+	genericQualityHelper = new GenericQualityHelper();
+
 	jpegQualityHelper = new JpegQualityHelper();
+
+	h264QualityHelper = new H264QualityHelper();
 
 	SetupCollapsibleTriggers();
 
@@ -1516,23 +1528,24 @@ function DropdownBoxes()
 				}
 			}
 		});
-	this.listDefs["streamingQuality"] = new DropdownListDefinition("streamingQuality",
+	var streamingQualityList = this.listDefs["streamingQuality"] = new DropdownListDefinition("streamingQuality",
 		{
 			selectedIndex: -1
 			, items:
 			[
-				new DropdownListItem({ text: "High Definition", uniqueQualityId: "A", abbr: "HD", shortAbbr: "HD" })
-				, new DropdownListItem({ text: "Standard Definition", uniqueQualityId: "B", abbr: "SD", shortAbbr: "SD" })
-				, new DropdownListItem({ text: "Low Definition", uniqueQualityId: "C", abbr: "Low", shortAbbr: "LD" })
+				new DropdownListItem({ player: "jpeg", text: "Jpeg Best Quality", uniqueQualityId: "A", abbr: "HD", shortAbbr: "HD" })
+				, new DropdownListItem({ player: "jpeg", text: "Jpeg SD (640)", uniqueQualityId: "B", abbr: "SD", shortAbbr: "SD" })
+				, new DropdownListItem({ player: "jpeg", text: "Jpeg Low (320)", uniqueQualityId: "C", abbr: "Low", shortAbbr: "LD" })
 			]
 			, onItemClick: function (item)
 			{
-				settings.ui3_jpegStreamingQuality = item.uniqueQualityId;
+				settings.ui3_streamingQuality = item.uniqueQualityId;
+				videoPlayer.SelectedQualityChanged();
 			}
 			, getDefaultLabel: function ()
 			{
 				for (var i = 0; i < this.items.length; i++)
-					if (settings.ui3_jpegStreamingQuality == this.items[i].uniqueQualityId)
+					if (settings.ui3_streamingQuality == this.items[i].uniqueQualityId)
 						return this.items[i].text;
 				if (this.items.length > 0)
 					return this.items[0].text;
@@ -1549,10 +1562,33 @@ function DropdownBoxes()
 				if (index >= 0 && index < this.items.length)
 				{
 					this.selectedIndex = index;
-					settings.ui3_jpegStreamingQuality = this.items[index].uniqueQualityId;
+					settings.ui3_streamingQuality = this.items[index].uniqueQualityId;
 				}
 			}
 		});
+	if (h264_playback_supported)
+	{
+		streamingQualityList.items.splice(0, 0
+			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 0", uniqueQualityId: "S0", abbr: "H.264 0", shortAbbr: "S0" })
+			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 1", uniqueQualityId: "S1", abbr: "H.264 1", shortAbbr: "S1" })
+			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 2", uniqueQualityId: "S2", abbr: "H.264 2", shortAbbr: "S2" })
+		);
+	}
+	var selectPreferredQuality = function ()
+	{
+		streamingQualityList.selectedIndex = 0;
+		for (var i = 0; i < streamingQualityList.items.length; i++)
+		{
+			if (settings.ui3_streamingQuality == streamingQualityList.items[i].uniqueQualityId)
+			{
+				streamingQualityList.selectedIndex = i;
+				return;
+			}
+		}
+		if (streamingQualityList.items.length > 0)
+			settings.ui3_streamingQuality = streamingQualityList.items[0].uniqueQualityId;
+	}
+	selectPreferredQuality();
 	this.listDefs["mainMenu"] = new DropdownListDefinition("mainMenu",
 		{
 			selectedIndex: -1
@@ -1595,14 +1631,6 @@ function DropdownBoxes()
 				}
 			}
 		});
-	var streamingQualityList = this.listDefs["streamingQuality"];
-	streamingQualityList.selectedIndex = 0;
-	for (var i = 0; i < streamingQualityList.items.length; i++)
-		if (settings.ui3_jpegStreamingQuality == streamingQualityList.items[i].uniqueQualityId)
-		{
-			streamingQualityList.selectedIndex = i;
-			break;
-		}
 
 	$dropdownBoxes.each(function (idx, ele)
 	{
@@ -2894,7 +2922,7 @@ function PlaybackControls()
 		$playbackSettings.append($speedBtn);
 		var $qualityBtn = $('<div class="playbackSettingsLine">'
 			+ 'Quality<div class="playbackSettingsFloatRight">'
-			+ jpegQualityHelper.GetQualityAbbr()
+			+ genericQualityHelper.GetAbbr()
 			+ '<div class="playbackSettingsRightArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalRight"></use></svg></div>'
 			+ '</div></div>');
 		$qualityBtn.click(OpenQualityPanel);
@@ -2923,6 +2951,7 @@ function PlaybackControls()
 				settings.ui3_playback_speed = playSpeed = SpeedOptions[this.listItemIndex];
 				SetPlaySpeedLabel();
 				CloseSettings();
+				videoPlayer.PlaybackSpeedChanged(playSpeed);
 			});
 			$playbackSettings.append($item);
 		}
@@ -2952,6 +2981,7 @@ function PlaybackControls()
 				dropdownBoxes.setLabelText("streamingQuality", qualityListDef.items[this.listItemIndex].text);
 				qualityListDef.selectItemByIndex(this.listItemIndex);
 				CloseSettings();
+				videoPlayer.SelectedQualityChanged();
 			});
 			$playbackSettings.append($item);
 		}
@@ -2993,6 +3023,7 @@ function PlaybackControls()
 	{
 		playReverse = $("#cbReverse").is(":checked");
 		settings.ui3_playback_reverse = playReverse ? "1" : "0";
+		videoPlayer.PlaybackDirectionChanged(playReverse);
 	}
 	this.LoopClicked = function ()
 	{
@@ -3026,7 +3057,7 @@ function PlaybackControls()
 	var SetQualityHint = function (hintText)
 	{
 		if (!hintText)
-			hintText = dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().shortAbbr;
+			hintText = genericQualityHelper.GetShortAbbr();
 		$("#playbackSettingsQualityMark").removeClass("HD SD LD");
 		$("#playbackSettingsQualityMark").addClass(hintText);
 		$("#playbackSettingsQualityMark").text(hintText);
@@ -5666,6 +5697,7 @@ function VideoPlayerController()
 			$("#loadingH264").parent().show();
 			var h264Module = moduleHolder["h264"] = new FetchOpenH264VideoModule();
 			h264Module.Activate();
+			h264Module.Deactivate();
 		}
 	}
 
@@ -5677,7 +5709,7 @@ function VideoPlayerController()
 
 		imageRenderer.RegisterCamImgClickHandler();
 		self.PreLoadPlayerModules();
-		self.SetPlayerModule(h264_playback_supported ? "h264" : "jpeg");
+		self.SetPlayerModule(genericQualityHelper.GetPlayerID());
 		playerModule.OpenVideo();
 
 		var visProp = getHiddenProp();
@@ -5961,7 +5993,6 @@ function VideoPlayerController()
 	}
 	this.Playback_NextClip = function ()
 	{
-		// TODO: Hotkey this to down arrow
 		var clip = clipLoader.GetCurrentClipEle();
 		if (clip != null && clipLoader.GetAllSelected().length <= 1)
 		{
@@ -5976,7 +6007,6 @@ function VideoPlayerController()
 	}
 	this.Playback_PreviousClip = function ()
 	{
-		// TODO: Hotkey this to up arrow
 		var clip = clipLoader.GetCurrentClipEle();
 		if (clip != null && clipLoader.GetAllSelected().length <= 1)
 		{
@@ -5999,7 +6029,26 @@ function VideoPlayerController()
 		}
 		return false;
 	}
-
+	this.PlaybackSpeedChanged = function (playSpeed)
+	{
+		if (typeof playerModule.PlaybackSpeedChanged == "function")
+			playerModule.PlaybackSpeedChanged(playSpeed);
+	}
+	this.SelectedQualityChanged = function ()
+	{
+		var requiredPlayer = genericQualityHelper.GetPlayerID();
+		if (requiredPlayer != self.CurrentPlayerModuleName())
+		{
+			self.SetPlayerModule(requiredPlayer, true);
+		}
+		if (typeof playerModule.SelectedQualityChanged == "function")
+			playerModule.SelectedQualityChanged();
+	}
+	this.PlaybackDirectionChanged = function (playReverse)
+	{
+		if (typeof playerModule.PlaybackDirectionChanged == "function")
+			playerModule.PlaybackDirectionChanged(playReverse);
+	}
 	// Callback methods for a player module to inform the VideoPlayerController of state changes.
 	this.CameraOrResolutionChange = function ()
 	{
@@ -6020,6 +6069,7 @@ function VideoPlayerController()
 		// The module may call this repeatedly 
 		if (isLeftBoundary)
 		{
+			seekBar.drawSeekbarAtPercent(0);
 			if (playbackControls.GetPlayReverse())
 			{
 				if (playbackControls.GetLoopingEnabled())
@@ -6032,6 +6082,7 @@ function VideoPlayerController()
 		}
 		else
 		{
+			seekBar.drawSeekbarAtPercent(1);
 			if (!playbackControls.GetPlayReverse())
 			{
 				if (playbackControls.GetLoopingEnabled())
@@ -6529,7 +6580,7 @@ function FetchOpenH264VideoModule()
 		console.log("Initializing openh264_player");
 		isInitialized = true;
 		// Do one-time initialization here
-		openh264_player = new OpenH264_Player(FrameRendered, videoPlayer.CameraOrResolutionChange);
+		openh264_player = new OpenH264_Player(FrameRendered, videoPlayer.CameraOrResolutionChange, PlaybackReachedNaturalEnd);
 	}
 	this.Activate = function ()
 	{
@@ -6596,7 +6647,7 @@ function FetchOpenH264VideoModule()
 		if (loading.isLive)
 		{
 			lastFrameTimestamp = 0;
-			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=0&stream=0&extend=2";
+			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
 		}
 		else
 		{
@@ -6606,11 +6657,7 @@ function FetchOpenH264VideoModule()
 				speed *= -1;
 			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=0&extend=2";
 		}
-		safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame,
-			function (e)
-			{
-				console.log("fetch stream ended:", e);
-			});
+		safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame, StreamEnded);
 	}
 	this.SeekToPercent = function (pos)
 	{
@@ -6657,6 +6704,32 @@ function FetchOpenH264VideoModule()
 		playbackPaused = false;
 		$("#pcPlay").hide();
 		$("#pcPause").show();
+		ReopenStreamAtCurrentSeekPosition();
+	}
+	this.Playback_PlayPause = function ()
+	{
+		if (playbackPaused)
+			self.Playback_Play();
+		else
+			self.Playback_Pause();
+	}
+	this.PlaybackSpeedChanged = function (playSpeed)
+	{
+		if (!playbackPaused)
+			ReopenStreamAtCurrentSeekPosition();
+	}
+	this.SelectedQualityChanged = function ()
+	{
+		if (!playbackPaused)
+			ReopenStreamAtCurrentSeekPosition();
+	}
+	this.PlaybackDirectionChanged = function (playReverse)
+	{
+		if (!playbackPaused)
+			ReopenStreamAtCurrentSeekPosition();
+	}
+	var ReopenStreamAtCurrentSeekPosition = function ()
+	{
 		if (videoPlayer.Loading().image.isLive)
 			currentSeekPositionPercent = 0;
 		else
@@ -6669,13 +6742,6 @@ function FetchOpenH264VideoModule()
 		}
 		self.OpenVideo(currentSeekPositionPercent);
 	}
-	this.Playback_PlayPause = function ()
-	{
-		if (playbackPaused)
-			self.Playback_Play();
-		else
-			self.Playback_Pause();
-	}
 	var FrameRendered = function (frame)
 	{
 		lastFrameTimestamp = frame.timestamp;
@@ -6684,11 +6750,27 @@ function FetchOpenH264VideoModule()
 		videoPlayer.ImageRendered(lastFrameAt - timeNow);
 		lastFrameAt = timeNow;
 	}
+	var StreamEnded = function (message, videoFinishedStreaming)
+	{
+		console.log("fetch stream ended: ", message);
+		if (videoFinishedStreaming)
+			openh264_player.PreviousFrameIsLastFrame();
+	}
+	var PlaybackReachedNaturalEnd = function (frameCount)
+	{
+		console.log("playback reached natural end of file after " + frameCount + " frames");
+		var reverse = playbackControls.GetPlayReverse();
+		if (reverse)
+			currentSeekPositionPercent = 0;
+		else
+			currentSeekPositionPercent = 1;
+		videoPlayer.Playback_Ended(reverse);
+	}
 }
 ///////////////////////////////////////////////////////////////
 // openh264_player ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function OpenH264_Player(frameRendered, cameraOrResolutionChange)
+function OpenH264_Player(frameRendered, cameraOrResolutionChange, PlaybackReachedNaturalEndCB)
 {
 	var self = this;
 	var $canvas;
@@ -6701,6 +6783,7 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 	var renderedFrameCount = 0;
 	var loadState = 0; // 0: Initial, 1: Loading, 2: Ready to accept frames
 	var isValid = true;
+	var allFramesAccepted = false;
 
 	var onLoad = function ()
 	{
@@ -6742,10 +6825,46 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 			nerdStats.UpdateStat("Codecs", "h264");
 			nerdStats.UpdateStat("Buffered Frames", acceptedFrameCount - renderedFrameCount);
 		}
+		CheckStreamEndCondition();
 	}
+	var CheckStreamEndCondition = function ()
+	{
+		if (allFramesAccepted && renderedFrameCount >= acceptedFrameCount)
+		{
+			if (PlaybackReachedNaturalEndCB)
+				PlaybackReachedNaturalEndCB(renderedFrameCount);
+		}
+	}
+
+	var lastFrameWarning = performance.now() - 60000;
 	var frameError = function (badFrame)
 	{
-		console.log("Frame Error: " + badFrame);
+		console.log("Frame Error", badFrame);
+		var timeNow = performance.now();
+		if (timeNow - lastFrameWarning > 3000)
+		{
+			lastFrameWarning = timeNow;
+			toaster.Warning("Error decoding H.264 frame(s)", 3000);
+		}
+	}
+	var lastCriticalError = performance.now() - 60000;
+	var criticalWorkerError = function (error)
+	{
+		toaster.Error('H.264 decoder error!<br/><br/>' + error.message + '<br/><br/>Check your encoder profiles in Blue Iris Options &gt; Web server &gt; Advanced, and try a lower bit rate.', 15000, true);
+		var timeNow = performance.now();
+		if (timeNow - lastCriticalError < 2000)
+		{
+			toaster.Error('H.264 decoder errors occurred too rapidly.  Decoder will not be restarted automatically.', 600000, true);
+		}
+		else
+		{
+			if (decoder)
+			{
+				decoder.Dispose();
+				decoder = new OpenH264_Decoder(onLoad, onLoadFail, frameDecoded, frameError, criticalWorkerError);
+			}
+		}
+		lastCriticalError = timeNow;
 	}
 
 	var Initialize = function ()
@@ -6754,7 +6873,7 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 			return;
 		loadState = 1;
 
-		decoder = new OpenH264_Decoder(onLoad, onLoadFail, frameDecoded, frameError);
+		decoder = new OpenH264_Decoder(onLoad, onLoadFail, frameDecoded, frameError, criticalWorkerError);
 
 		$("#openh264_player_canvas").remove();
 		$canvas = $('<canvas id="openh264_player_canvas" class="videoCanvas" width="100%" height="100%"></canvas>');
@@ -6782,6 +6901,7 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 		decoder.Flush();
 		acceptedFrameCount = 0;
 		renderedFrameCount = 0;
+		allFramesAccepted = false;
 	}
 	this.AcceptFrame = function (frame)
 	{
@@ -6792,13 +6912,18 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange)
 	{
 		return $canvas;
 	}
+	this.PreviousFrameIsLastFrame = function ()
+	{
+		allFramesAccepted = true;
+		CheckStreamEndCondition();
+	}
 
 	Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // openh264_decoder ///////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError)
+function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError, onCriticalWorkerError)
 {
 	var self = this;
 	// Note: I hand-edited openh264_decoder.js to remove {u, v, y} attributes of 
@@ -6854,7 +6979,7 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError)
 			}
 		}
 		else
-			onFrameError(ev2.data);
+			onFrameError(frame);
 	}
 	this.Flush = function ()
 	{
@@ -6873,7 +6998,8 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError)
 	// Initialize
 	worker.onerror = function (error)
 	{
-		console.log(error);
+		if (onCriticalWorkerError)
+			onCriticalWorkerError(error);
 	}
 	worker.onmessage = function (ev)
 	{
@@ -7265,14 +7391,41 @@ function ImageRenderer()
 	});
 }
 ///////////////////////////////////////////////////////////////
+// Generic Quality Helper /////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function GenericQualityHelper()
+{
+	var self = this;
+	this.GetID = function ()
+	{
+		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().uniqueQualityId;
+	}
+	this.GetShortAbbr = function ()
+	{
+		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().shortAbbr;
+	}
+	this.GetAbbr = function ()
+	{
+		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().abbr;
+	}
+	this.GetName = function ()
+	{
+		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().text;
+	}
+	this.GetPlayerID = function ()
+	{
+		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().player;
+	}
+}
+///////////////////////////////////////////////////////////////
 // Jpeg Quality Helper ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function JpegQualityHelper()
 {
 	var self = this;
-	self.getQualityArg = function ()
+	this.getQualityArg = function ()
 	{
-		var currentQualityId = dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().uniqueQualityId;
+		var currentQualityId = genericQualityHelper.GetID();
 		if (currentQualityId == "B") // Standard Definition
 			return "&q=50";
 		else if (currentQualityId == "C") // Low Definition
@@ -7280,9 +7433,9 @@ function JpegQualityHelper()
 		else // ("A" or other) High Definition
 			return "";
 	}
-	self.ModifyImageDimension = function (imgDimension)
+	this.ModifyImageDimension = function (imgDimension)
 	{
-		var currentQualityId = dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().uniqueQualityId;
+		var currentQualityId = genericQualityHelper.GetID();
 		if (currentQualityId == "B") // Standard Definition
 			return Math.min(imgDimension, 640);
 		else if (currentQualityId == "C") // Low Definition
@@ -7290,13 +7443,22 @@ function JpegQualityHelper()
 		else // ("A" or other) High Definition
 			return imgDimension;
 	}
-	self.GetQualityAbbr = function ()
+}
+///////////////////////////////////////////////////////////////
+// H.264 Quality Helper ///////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function H264QualityHelper()
+{
+	var self = this;
+	this.getQualityArg = function ()
 	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().abbr;
-	}
-	self.GetQualityName = function ()
-	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().text;
+		var currentQualityId = genericQualityHelper.GetID();
+		if (currentQualityId == "S0") // Streaming 0 profile
+			return "0";
+		else if (currentQualityId == "S1") // Streaming 1 profile
+			return "1";
+		else // ("S2" or other) Streaming 2 profile
+			return "2";
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -7311,8 +7473,6 @@ function CanvasContextMenu()
 	var onShowLiveContextMenu = function (menu)
 	{
 		var itemsToDisable = ["cameraname"];
-		if (!h264_playback_supported)
-			itemsToDisable.push("h264module");
 		if (lastLiveContextMenuSelectedCamera == null || cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
 		{
 			itemsToDisable = itemsToDisable.concat(["trigger", "record", "snapshot", "maximize", "restart", "properties"]);
@@ -7451,16 +7611,6 @@ function CanvasContextMenu()
 			case "viewChangeMode_FadeScale":
 				videoPlayer.SetViewChangeMode(5);
 				break;
-			case "h264module":
-				if (videoPlayer.CurrentPlayerModuleName() == "jpeg")
-				{
-					videoPlayer.SetPlayerModule("h264", true);
-				}
-				else
-				{
-					videoPlayer.SetPlayerModule("jpeg", true);
-				}
-				break;
 			case "statsfornerds":
 				nerdStats.Open();
 				break;
@@ -7505,7 +7655,6 @@ function CanvasContextMenu()
 						, { text: "FadeScale (5)", icon: "", alias: "viewChangeMode_FadeScale", action: onLiveContextMenuAction }
 					]
 				}
-				, { text: "<span id=\"playerModuleEnable\">Enable</span> h.264 module", icon: "", alias: "h264module", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Trigger Now", icon: "#svg_x5F_Alert1", iconClass: "iconBlue", alias: "trigger", action: onLiveContextMenuAction }
 				, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
@@ -10334,6 +10483,9 @@ var safeFetch = new (function ()
 	}
 	this.CloseStream = function ()
 	{
+		// Disable any queued request, because the caller is expecting to not receive any frames after calling CloseStream
+		if (queuedRequest)
+			queuedRequest.activated = true;
 		if (streamer)
 			streamer.StopStreaming();
 	}
@@ -10350,7 +10502,7 @@ var safeFetch = new (function ()
 		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
 		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, StreamEndedWrapper);
 	}
-	var StreamEndedWrapper = function (message)
+	var StreamEndedWrapper = function (message, videoFinishedStreaming)
 	{
 		if (stopTimeout != null)
 		{
@@ -10358,7 +10510,7 @@ var safeFetch = new (function ()
 			stopTimeout = null;
 		}
 		if (streamEndedCbForActiveFetch)
-			streamEndedCbForActiveFetch(message);
+			streamEndedCbForActiveFetch(message, videoFinishedStreaming);
 		streamer = null;
 		if (!queuedRequest.activated)
 			OpenStreamNow();
@@ -10417,10 +10569,10 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 			CallStreamEnded(e);
 		});
 	}
-	function CallStreamEnded(message)
+	function CallStreamEnded(message, naturalEndOfStream)
 	{
 		if (typeof streamEnded == "function")
-			streamEnded(message);
+			streamEnded(message, naturalEndOfStream);
 		streamEnded = null;
 	}
 	function protocolError(error)
@@ -10532,7 +10684,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 					else if (blockType == 4)
 					{
 						self.StopStreaming();
-						CallStreamEnded("natural end of stream");
+						CallStreamEnded("natural end of stream", true);
 						return;
 					}
 					else
