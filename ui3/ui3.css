@@ -1203,7 +1203,7 @@ div.icon, a.icon
 	font-size: 16px;
 	line-height: 39px;
 	color: #FFFFFF;
-    white-space: nowrap;
+	white-space: nowrap;
 }
 
 .sizeMedium .dropdownLabel
@@ -1706,6 +1706,30 @@ div.icon, a.icon
 	margin: 0px 5px 5px 0px;
 	font-size: 16px;
 }
+
+#camimg_loading
+{
+	display: none;
+	width: 100%;
+	height: 100%;
+	top: 0px;
+	left: 0px;
+	position: absolute;
+	background-color: rgba(0,0,0,0.5);
+}
+
+#camimg_loading_anim
+{
+	display: none;
+	width: 100px;
+	height: 100px;
+	position: absolute;
+}
+
+	#camimg_loading_anim svg
+	{
+		opacity: 0.5;
+	}
 /* context menu */
 .b-m-mpanel
 {
@@ -1741,6 +1765,21 @@ div.icon, a.icon
 	width: 160px;
 	display: none;
 }
+
+#seekhint_loading
+{
+	width: 160px;
+	height: 20px;
+	top: 0px;
+	left: 0px;
+	position: absolute;
+	background-color: rgba(0,0,0,0.25);
+}
+
+	#seekhint_loading svg
+	{
+		opacity: 0.5;
+	}
 
 #seekhint_helper
 {
@@ -2995,7 +3034,7 @@ div::-webkit-resizer
 
 .statsRow
 {
-	width: 310px;
+	width: 320px;
 	height: 14px;
 	line-height: 14px;
 	font-size: 12px;
@@ -3006,7 +3045,7 @@ div::-webkit-resizer
 .statsName
 {
 	display: inline-block;
-	width: 95px;
+	width: 105px;
 	height: 14px;
 	margin-right: 8px;
 	overflow: hidden;

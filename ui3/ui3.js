@@ -192,6 +192,7 @@ var togglableUIFeatures =
 //-Graceful stream close
 //-Download snapshot
 //-Open snapshot in new tab
+// TODO: H.264 streaming quality changes aren't taking effect properly either for live or recorded video.
 // TODO: Preserve seek position and play/pause state when changing between player modules (and not viewing live video).
 // TODO: Implement "Copy image URL" with https://clipboardjs.com/
 // TODO: Fix bug where incorrect stream length info is shown for clips in H.264 mode until the first frame is downloaded.
@@ -1101,6 +1102,7 @@ function resized()
 	var statusArea = $("#statusArea");
 	var llrControls = $("#layoutLeftRecordingsControls");
 	var systemnamewrapper = $("#systemnamewrapper");
+	var camimg_loading_anim = $("#camimg_loading_anim");
 
 	var topVis = layouttop.is(":visible");
 	var leftVis = layoutleft.is(":visible");
@@ -1162,10 +1164,19 @@ function resized()
 	statusArea.css("width", (leftW - statusArea_margins) + "px");
 
 	// Size layoutbody
-	layoutbody.css("top", topH);
+	layoutbody.css("top", topH + "px");
 	layoutbody.css("left", leftW + "px");
-	layoutbody.css("width", windowW - leftW + "px");
-	layoutbody.css("height", windowH - topH - botH + "px");
+	var bodyW = windowW - leftW;
+	var bodyH = windowH - topH - botH;
+	layoutbody.css("width", bodyW + "px");
+	layoutbody.css("height", bodyH + "px");
+
+	// Size camimg_loading_anim
+	var camimg_loading_anim_Size = Clamp(Math.min(bodyW, bodyH), 10, 100);
+	camimg_loading_anim.css("top", ((bodyH - camimg_loading_anim_Size) / 2) + "px");
+	camimg_loading_anim.css("left", ((bodyW - camimg_loading_anim_Size) / 2) + "px");
+	camimg_loading_anim.css("width", camimg_loading_anim_Size + "px");
+	camimg_loading_anim.css("height", camimg_loading_anim_Size + "px");
 
 	playbackControls.resized();
 
@@ -3143,12 +3154,14 @@ function SeekBar()
 	var seekhint = $("#seekhint");
 	var seekhint_img = $("#seekhint_img");
 	var seekhint_canvas = $("#seekhint_canvas");
+	var seekhint_loading = $("#seekhint_loading");
 	var seekhint_helper = $("#seekhint_helper");
 	var seekhint_label = $("#seekhint_label");
 	var highlight = $("#seekBarHighlight");
 	var seekHintVisible = false;
 	var isDragging = false;
 	var isTouchDragging = false;
+	var didPauseOnDrag = false;
 	var doubleClickTime = 750;
 	var lastMouseDown = { X: -1000, Y: -1000, Time: 0 };
 	var lastDoubleMouseDownStarted = 0;
@@ -3157,6 +3170,7 @@ function SeekBar()
 	seekhint_img.load(function ()
 	{
 		CopyImageToCanvas("seekhint_img", "seekhint_canvas");
+		seekhint_loading.hide();
 		seekHintInfo.loading = false;
 		seekHintInfo.visibleMsec = seekHintInfo.loadingMsec;
 		if (seekHintInfo.queuedMsec != -1)
@@ -3165,6 +3179,7 @@ function SeekBar()
 	seekhint_img.error(function ()
 	{
 		ClearCanvas("seekhint_canvas");
+		seekhint_loading.hide();
 		seekHintInfo.loading = false;
 		seekHintInfo.loadingMsec = seekHintInfo.visibleMsec = -1;
 		if (seekHintInfo.queuedMsec != -1)
@@ -3190,6 +3205,7 @@ function SeekBar()
 			if (seekHintInfo.canvasVisible)
 			{
 				seekhint_canvas.hide();
+				seekhint_loading.hide();
 				seekHintInfo.canvasVisible = false;
 			}
 		}
@@ -3230,26 +3246,15 @@ function SeekBar()
 		seekHintL = Clamp(seekHintL, barMarginL, (barMarginL + barW) - seekHintW);
 		seekhint.css("left", seekHintL + "px");
 		var seekHintMs = Clamp(parseInt((hintX / barW) * (msec - 1)), 0, msec);
-		var touch = touchEvents.isTouchEvent(e);
-		if (!touch && isDragging)
+		if (videoPlayer.Playback_IsPaused())
 		{
-			// Mouse dragging: show time offset only
-			setSeekHintCanvasVisibility(false);
-			setSeekHintHelperVisibility(false);
-		}
-		else if ((!touch && !isDragging && videoPlayer.Playback_IsPaused()) || (touch && isDragging))
-		{
-			// (Mouse hovering while paused) or (touch dragging): show preview image
+			// show preview image
 			setSeekHintCanvasVisibility(true);
 			setSeekHintHelperVisibility(false);
 			if (seekHintInfo.visibleMsec == seekHintInfo.loadingMsec)
 				loadSeekHintImg(seekHintMs);
 			else
 				seekHintInfo.queuedMsec = seekHintMs;
-			if (touch && isDragging)
-			{
-				// touch dragging: dim main image and prevent it from showing
-			}
 		}
 		else
 		{
@@ -3269,8 +3274,11 @@ function SeekBar()
 			if (seekHintInfo.lastSnapshotId != "" && seekHintInfo.lastSnapshotId == videoPlayer.GetStaticSnapshotId())
 				return; // No need to load same snapshot as before
 			seekHintInfo.lastSnapshotId = videoPlayer.GetStaticSnapshotId();
+			var h = (160 / videoPlayer.Loading().image.aspectratio);
+			seekhint_canvas.css('height', h + 'px');
+			seekhint_loading.css('height', h + 'px');
+			seekhint_loading.show();
 			seekhint_img.attr('src', videoPlayer.GetLastSnapshotUrl().replace(/time=\d+/, "time=" + msec) + "&w=160&q=50");
-			seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
 		}
 	}
 	this.resetSeekHintImg = function ()
@@ -3278,6 +3286,7 @@ function SeekBar()
 		seekHintInfo.loadingMsec = seekHintInfo.queuedMsec = seekHintInfo.visibleMsec = -1;
 		seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
 		ClearCanvas("seekhint_canvas");
+		seekhint_loading.hide();
 	}
 	this.drawSeekbarAtPercent = function (percentValue)
 	{
@@ -3353,22 +3362,35 @@ function SeekBar()
 	var mouseUp = function (e)
 	{
 		mouseCoordFixer.fix(e);
-		if (isTouchDragging)
+
+		if (!isDragging)
+			return;
+
+		mouseMoved(e);
+
+		var barO = bar.offset();
+		var barW = bar.width();
+		var x = (e.pageX - barO.left);
+		x = Clamp(x, 0, barW);
+		var msec = videoPlayer.Loading().image.msec;
+		if (msec <= 1)
+			videoPlayer.SeekToPercent(0);
+		else
 		{
-			imageRenderer.ChangeFrameDefaultOpacity(1);
-			imageRenderer.SetFrameOpacity_Default();
-			mouseMoved(e, true);
+			var positionRelative = x / barW;
+			videoPlayer.SeekToPercent(positionRelative);
 		}
+		if (didPauseOnDrag)
+			videoPlayer.Playback_Play();
+		didPauseOnDrag = false;
+
 		isTouchDragging = false;
-		if (isDragging)
-		{
-			isDragging = false;
-			if (touchEvents.isTouchEvent(e) || !pointInsideElement(wrapper, e.pageX, e.pageY))
-				SetBarState(0);
-			updateSeekHint(e);
-		}
+		isDragging = false;
+		if (touchEvents.isTouchEvent(e) || !pointInsideElement(wrapper, e.pageX, e.pageY))
+			SetBarState(0);
+		updateSeekHint(e);
 	}
-	var mouseMoved = function (e, overrideSetPlaybackPosition)
+	var mouseMoved = function (e)
 	{
 		if (isDragging)
 		{
@@ -3378,17 +3400,6 @@ function SeekBar()
 			x = Clamp(x, 0, barW);
 			left.css("width", x + "px");
 			handle.css("left", x + "px");
-			if (!isTouchDragging || overrideSetPlaybackPosition)
-			{
-				var msec = videoPlayer.Loading().image.msec;
-				if (msec <= 1)
-					videoPlayer.SeekToPercent(0);
-				else
-				{
-					var positionRelative = x / barW;
-					videoPlayer.SeekToPercent(positionRelative);
-				}
-			}
 		}
 		updateSeekHint(e);
 	}
@@ -3401,12 +3412,12 @@ function SeekBar()
 		{
 			var thisTime = new Date().getTime();
 			isDragging = true;
+			didPauseOnDrag = !videoPlayer.Playback_IsPaused();
+			videoPlayer.Playback_Pause();
 			isTouchDragging = touchEvents.isTouchEvent(e);
-			if (isTouchDragging)
-			{
-				imageRenderer.ChangeFrameDefaultOpacity(0.5);
-				imageRenderer.SetFrameOpacity_Default();
-			}
+
+			imageRenderer.ShowLoadingOverlay();
+
 			SetBarState(1);
 
 			if (thisTime < lastMouseDown.Time + doubleClickTime && mouseStillSinceLastClick(e))
@@ -3433,13 +3444,12 @@ function SeekBar()
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
+		mouseUp(e);
 		if (new Date().getTime() < lastDoubleMouseDownStarted + doubleClickTime && mouseStillSinceLastClick(e))
 		{
-			isTouchDragging = false;
 			lastDoubleMouseDownStarted -= doubleClickTime;
 			self.dblClick();
 		}
-		mouseUp(e);
 	});
 	wrapper.on("mouseenter", function (e)
 	{
@@ -5661,8 +5671,6 @@ function VideoPlayerController()
 	var lastLiveCameraOrGroupId = "";
 	var currentlySelectedHomeGroupId = null;
 
-	var viewChangeMode = 4;
-
 	this.CurrentPlayerModuleName = function ()
 	{
 		if (playerModule == moduleHolder["jpeg"])
@@ -5685,7 +5693,7 @@ function VideoPlayerController()
 			playerModule = moduleHolder[moduleName];
 		}
 		if (refreshVideoNow)
-			playerModule.OpenVideo();
+			playerModule.OpenVideo(currentlyLoadingImage);
 	}
 
 	this.PreLoadPlayerModules = function ()
@@ -5695,9 +5703,7 @@ function VideoPlayerController()
 		if (moduleHolder["h264"] == null && h264_playback_supported)
 		{
 			$("#loadingH264").parent().show();
-			var h264Module = moduleHolder["h264"] = new FetchOpenH264VideoModule();
-			h264Module.Activate();
-			h264Module.Deactivate();
+			moduleHolder["h264"] = new FetchOpenH264VideoModule();
 		}
 	}
 
@@ -5709,8 +5715,7 @@ function VideoPlayerController()
 
 		imageRenderer.RegisterCamImgClickHandler();
 		self.PreLoadPlayerModules();
-		self.SetPlayerModule(genericQualityHelper.GetPlayerID());
-		playerModule.OpenVideo();
+		self.SetPlayerModule(genericQualityHelper.GetPlayerID(), true);
 
 		var visProp = getHiddenProp();
 		if (visProp)
@@ -5772,10 +5777,6 @@ function VideoPlayerController()
 
 	// Methods dealing with mouse clicks.
 	// TODO: Make ImgClick, ImgClick_Camera private
-	this.SetViewChangeMode = function (mode)
-	{
-		viewChangeMode = mode;
-	}
 	this.GetCameraUnderMousePointer = function (event)
 	{
 		// Find out which camera is under the mouse pointer, if any.
@@ -5817,31 +5818,24 @@ function VideoPlayerController()
 	}
 	this.ImgClick_Camera = function (camData)
 	{
-		var fadeIn = viewChangeMode == 2 || viewChangeMode == 4 || viewChangeMode == 5;
-		var scaleIn = viewChangeMode == 1 || viewChangeMode == 3 || viewChangeMode == 4 || viewChangeMode == 5;
-		var fadeOut = viewChangeMode == 2 || viewChangeMode == 3 || viewChangeMode == 4 || viewChangeMode == 5;
-		var scaleOut = viewChangeMode == 1 || viewChangeMode == 5;
+		var scaleOut = false;
 		if (camData.optionValue == currentlyLoadedImage.id)
 		{
 			// Back to Group
 			camData = cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId);
-			if (scaleOut && playerModule.DrawCameraFullCameraAsThumb)
-				playerModule.DrawCameraFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
-			if (fadeOut)
-				imageRenderer.SetFrameOpacity(0.5);
+			if (scaleOut && playerModule.DrawFullCameraAsThumb)
+				playerModule.DrawFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
 			self.LoadLiveCamera(camData);
-			if (scaleOut && playerModule.DrawCameraFullCameraAsThumb)
+			if (scaleOut && playerModule.DrawFullCameraAsThumb)
 				self.CameraOrResolutionChange(); // TODO: Verify this is working correctly here
 		}
 		else
 		{
 			// Maximize
-			if (scaleIn && playerModule.DrawCameraThumbAsFullCamera)
-				playerModule.DrawCameraThumbAsFullCamera(camData.optionValue);
-			if (fadeIn)
-				imageRenderer.SetFrameOpacity(0.5);
+			if (playerModule.DrawThumbAsFullCamera)
+				playerModule.DrawThumbAsFullCamera(camData.optionValue);
 			self.LoadLiveCamera(camData);
-			if (scaleIn && playerModule.DrawCameraThumbAsFullCamera)
+			if (playerModule.DrawThumbAsFullCamera)
 				self.CameraOrResolutionChange(); // TODO: Verify this is working correctly here
 		}
 	}
@@ -5920,8 +5914,12 @@ function VideoPlayerController()
 		else
 			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
 
+		imageRenderer.ShowLoadingOverlay(true);
 		if (playerModule)
-			playerModule.OpenVideo();
+		{
+			playerModule.Playback_Pause();
+			playerModule.OpenVideo(cli);
+		}
 
 		fullScreenModeController.updateFullScreenButtonState();
 	}
@@ -5956,8 +5954,13 @@ function VideoPlayerController()
 			seekBar.drawSeekbarAtPercent(0);
 			seekBar.resetSeekHintImg();
 
+			imageRenderer.ShowLoadingOverlay(true);
 			if (playerModule)
-				playerModule.OpenVideo();
+			{
+				playerModule.Playback_Pause();
+				playerModule.OpenVideo(cli);
+				playerModule.Playback_Play();
+			}
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
@@ -6057,12 +6060,21 @@ function VideoPlayerController()
 		currentlyLoadedCamera = currentlyLoadingCamera;
 		resized();
 	}
-	this.ImageRendered = function (lastFrameLoadingTime)
+	this.ImageRendered = function (path, width, height, lastFrameLoadingTime)
 	{
+		currentlyLoadingImage.actualwidth = width;
+		currentlyLoadingImage.actualheight = height;
+		if (currentlyLoadedImage.path != path)
+			self.CameraOrResolutionChange();
+
 		RefreshFps(lastFrameLoadingTime);
+
+		if (currentlyLoadingImage.path != path)
+			return;
+
 		if (!currentlyLoadedImage.isLive)
 			seekBar.drawSeekbarAtPercent(playerModule.GetSeekPercent());
-		imageRenderer.SetFrameOpacity_Default();
+		imageRenderer.HideLoadingOverlay();
 	}
 	this.Playback_Ended = function (isLeftBoundary)
 	{
@@ -6175,18 +6187,17 @@ function JpegVideoModule()
 
 	var clipPlaybackPosition = 0; // milliseconds
 
+	var loading = new BICameraData();
+
 	var Initialize = function ()
 	{
 		if (isInitialized)
 			return;
 		isInitialized = true;
 		// Do one-time initialization here
-
 		$("#camimg_store").append('<canvas id="camimg_canvas" class="videoCanvas"></canvas>');
 		$("#camimg_store").append('<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />');
 		$("#camimg_store").append('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
-
-		imageRenderer.ImgResized(false);
 
 		var camObj = $("#camimg");
 		camObj.load(function ()
@@ -6200,36 +6211,29 @@ function JpegVideoModule()
 			}
 			else
 			{
-				var loading = videoPlayer.Loading().image;
+				loadedFirstFrame = true;
+				videoPlayer.ImageRendered(loading.path, this.naturalWidth, this.naturalHeight, new Date().getTime() - currentImageRequestedAtMs);
+
 				var loaded = videoPlayer.Loaded().image;
-
-				loaded.actualwidth = this.naturalWidth;
-				loaded.actualheight = this.naturalHeight;
-
-				if (!loadedFirstFrame || loading.id != loaded.id || loading.path != loaded.path)
-				{
-					// The loaded image has just changed to a different camera.
-					if ($("#camimg").attr('loadingimg') == loading.id)
-					{
-						loadedFirstFrame = true;
-						videoPlayer.CameraOrResolutionChange();
-					}
-				}
-
-				videoPlayer.ImageRendered(new Date().getTime() - currentImageRequestedAtMs);
-
 				if (loaded.id.startsWith("@"))
 				{
+					loaded.maxwidth = this.naturalWidth;
+					loaded.maxheight = this.naturalHeight;
 					if (lastCycleWidth != this.naturalWidth || lastCycleHeight != this.naturalHeight)
 					{
-						loaded.maxwidth = lastCycleWidth = this.naturalWidth;
-						loaded.maxheight = lastCycleHeight = this.naturalHeight;
-						loaded.aspectratio = loaded.maxwidth / loaded.maxheight;
+						// TODO: Thoroughly test cycles and switching streaming methods and see what happens with sizes.
+						lastCycleWidth = this.naturalWidth;
+						lastCycleHeight = this.naturalHeight;
+						loaded.aspectratio = lastCycleWidth / lastCycleHeight;
 						resized();
 					}
 				}
 				else
+				{
+					loaded.maxwidth = loaded.fullwidth;
+					loaded.maxheight = loaded.fullheight;
 					lastCycleWidth = lastCycleHeight = 0;
+				}
 
 				currentLoadedImageActualWidth = this.naturalWidth;
 
@@ -6238,7 +6242,8 @@ function JpegVideoModule()
 				if (nerdStats.IsOpen())
 				{
 					nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
-					nerdStats.UpdateStat("Resolution", loaded.actualwidth + "x" + loaded.actualheight);
+					nerdStats.UpdateStat("Stream Resolution", loaded.actualwidth + "x" + loaded.actualheight);
+					nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
 					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "%"));
 					nerdStats.UpdateStat("Frame Offset", loading.isLive ? "LIVE" : clipPlaybackPosition + "ms");
 					nerdStats.UpdateStat("Frame Time", loading.isLive ? "LIVE" : "Unavailable");
@@ -6254,23 +6259,15 @@ function JpegVideoModule()
 			ClearImageLoadTimeout();
 			setTimeout(GetNewImage, 1000);
 		});
-		GetNewImage();
 	}
 	var Activate = function ()
 	{
-		Initialize();
 		if (isCurrentlyActive)
 			return;
 		isCurrentlyActive = true;
 		// Show yourself
-		// Reset max* = full* because h.264 player modules will have set max* equal to actual*.
-		var loading = videoPlayer.Loading().image;
-		loading.maxwidth = loading.fullwidth;
-		loading.maxheight = loading.fullheight;
-		var loaded = videoPlayer.Loaded().image;
-		loaded.maxwidth = loaded.fullwidth;
-		loaded.maxheight = loaded.fullheight;
 		ClearCanvas("camimg_canvas");
+		imageRenderer.ShowLoadingOverlay(true);
 		$("#camimg_canvas").appendTo("#camimg_wrapper");
 	}
 	this.Deactivate = function ()
@@ -6280,7 +6277,7 @@ function JpegVideoModule()
 		isCurrentlyActive = false;
 		loadedFirstFrame = false;
 		// Stop what you are doing and hide
-		clipPlaybackPosition = 0;
+		//clipPlaybackPosition = 0;
 		ClearImageLoadTimeout();
 		ClearGetNewImageTimeout();
 		$("#camimg_canvas").appendTo("#camimg_store");
@@ -6294,11 +6291,15 @@ function JpegVideoModule()
 		return loadedFirstFrame;
 	}
 
-	this.OpenVideo = function ()
+	this.OpenVideo = function (videoData, offsetPercent)
 	{
+		console.log("jpeg.OpenVideo");
+		loading.CopyValuesFrom(videoData);
+		if (!offsetPercent)
+			offsetPercent = 0;
 		Activate();
-		clipPlaybackPosition = 0;
-		timeLastClipFrame = new Date().getTime();
+		clipPlaybackPosition = offsetPercent * (loading.msec - 1);
+		timeLastClipFrame = Date.now();
 		self.Playback_Pause();
 		self.Playback_Play();
 		GetNewImage();
@@ -6306,11 +6307,11 @@ function JpegVideoModule()
 	this.SeekToPercent = function (pos)
 	{
 		Activate();
-		clipPlaybackPosition = Clamp(pos, 0, 1) * (videoPlayer.Loading().image.msec - 1);
+		clipPlaybackPosition = Clamp(pos, 0, 1) * (loading.msec - 1);
 	}
 	this.GetSeekPercent = function ()
 	{
-		return Clamp(clipPlaybackPosition / (videoPlayer.Loading().image.msec - 1), 0, 1);
+		return Clamp(clipPlaybackPosition / (loading.msec - 1), 0, 1);
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
@@ -6333,7 +6334,6 @@ function JpegVideoModule()
 		ClearGetNewImageTimeout();
 		if (currentServer.isLoggingOut || !isCurrentlyActive)
 			return;
-		var loading = videoPlayer.Loading().image;
 		sessionManager.ApplyLatestAPISessionIfNecessary();
 		var timeValue = currentImageTimestampMs = currentImageRequestedAtMs = new Date().getTime();
 		var isLoadingRecordedSnapshot = false;
@@ -6432,10 +6432,10 @@ function JpegVideoModule()
 			playbackPaused = false;
 			$("#pcPlay").hide();
 			$("#pcPause").show();
-			if (clipPlaybackPosition >= videoPlayer.Loading().image.msec - 1 && !playbackControls.GetPlayReverse())
+			if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
 				clipPlaybackPosition = 0;
 			else if (clipPlaybackPosition <= 0 && playbackControls.GetPlayReverse())
-				clipPlaybackPosition = videoPlayer.Loading().image.msec - 1;
+				clipPlaybackPosition = loading.msec - 1;
 			if (clipPlaybackPosition < 0)
 				clipPlaybackPosition = 0;
 		}
@@ -6446,7 +6446,7 @@ function JpegVideoModule()
 			$("#pcPause").hide();
 		}
 	}
-	this.DrawCameraFullCameraAsThumb = function (cameraId, groupId)
+	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
 		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
 		if (!thumbBounds)
@@ -6494,7 +6494,7 @@ function JpegVideoModule()
 		var context2d = canvas.getContext("2d");
 		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
 	}
-	this.DrawCameraThumbAsFullCamera = function (cameraId)
+	this.DrawThumbAsFullCamera = function (cameraId)
 	{
 		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId);
 		if (!thumbBounds)
@@ -6554,6 +6554,7 @@ function JpegVideoModule()
 			getNewImageTimeout = null;
 		}
 	}
+	Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // Fetch and OpenH264 Video Module ////////////////////////////
@@ -6570,35 +6571,37 @@ function FetchOpenH264VideoModule()
 	var isVisible = !documentIsHidden();
 	var currentSeekPositionPercent = 0;
 	var lastFrameAt = 0;
-	var lastFrameTimestamp = 0;
 	var playbackPaused = false;
+
+	var loading = new BICameraData();
 
 	var Initialize = function ()
 	{
 		if (isInitialized)
 			return;
-		console.log("Initializing openh264_player");
 		isInitialized = true;
 		// Do one-time initialization here
-		openh264_player = new OpenH264_Player(FrameRendered, videoPlayer.CameraOrResolutionChange, PlaybackReachedNaturalEnd);
+		console.log("Initializing openh264_player");
+		openh264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
 	}
-	this.Activate = function ()
+	var Activate = function ()
 	{
-		Initialize();
 		if (isCurrentlyActive)
 			return;
-		console.log("Activating openh264_player");
 		isCurrentlyActive = true;
 		// Show yourself
+		console.log("Activating openh264_player");
 		openh264_player.GetCanvasRef().appendTo("#camimg_wrapper");
+		ClearCanvas("openh264_player_canvas");
+		imageRenderer.ShowLoadingOverlay(true);
 	}
 	this.Deactivate = function ()
 	{
 		if (!isCurrentlyActive)
 			return;
-		console.log("Deactivating openh264_player");
 		isCurrentlyActive = false;
 		// Stop what you are doing and hide
+		console.log("Deactivating openh264_player");
 		StopStreaming();
 		openh264_player.GetCanvasRef().appendTo("#camimg_store");
 	}
@@ -6612,8 +6615,8 @@ function FetchOpenH264VideoModule()
 		isVisible = visible;
 		if (isVisible && isCurrentlyActive)
 		{
-			if (videoPlayer.Loading().image.isLive)
-				self.OpenVideo();
+			if (loading.isLive)
+				self.OpenVideo(loading);
 			else if (!playbackPaused)
 				self.Playback_Play();
 		}
@@ -6627,31 +6630,33 @@ function FetchOpenH264VideoModule()
 		return openh264_player.GetRenderedFrameCount() > 0;
 	}
 	var openVideoTimeout = null;
-	this.OpenVideo = function (offsetPercent)
+	this.OpenVideo = function (videoData, offsetPercent)
 	{
-		if (!offsetPercent)
-			offsetPercent = 0;
-		self.Activate();
+		// Delay if the player has not fully loaded yet.
 		if (openVideoTimeout != null)
 			clearTimeout(openVideoTimeout);
 		if (!openh264_player.IsLoaded())
 		{
-			openVideoTimeout = setTimeout(self.OpenVideo, 5);
+			openVideoTimeout = setTimeout(function ()
+			{
+				self.OpenVideo(videoData, offsetPercent);
+			}, 5);
 			return;
 		}
-		StopStreaming();
+		console.log("h264.OpenVideo");
+		loading.CopyValuesFrom(videoData);
+		if (!offsetPercent)
+			offsetPercent = 0;
+		Activate();
 		currentSeekPositionPercent = offsetPercent;
 		lastFrameAt = new Date().getTime();
-		var loading = videoPlayer.Loading().image;
 		var videoUrl;
 		if (loading.isLive)
 		{
-			lastFrameTimestamp = 0;
 			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
 		}
 		else
 		{
-			lastFrameTimestamp = offsetPercent * (loading.msec - 1);
 			var speed = 100 * playbackControls.GetPlaybackSpeed();
 			if (playbackControls.GetPlayReverse())
 				speed *= -1;
@@ -6662,7 +6667,6 @@ function FetchOpenH264VideoModule()
 	this.SeekToPercent = function (pos)
 	{
 		currentSeekPositionPercent = pos;
-		self.Playback_Play();
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -6670,11 +6674,10 @@ function FetchOpenH264VideoModule()
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
-		var loading = videoPlayer.Loading().image;
 		if (loading.isLive)
-			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + lastFrameTimestamp + currentServer.GetRemoteSessionArg("&", true);
+			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + currentServer.GetRemoteSessionArg("&", true);
 		else
-			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + lastFrameTimestamp + currentServer.GetRemoteSessionArg("&", true);
+			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + parseInt(currentSeekPositionPercent * loading.msec - 1) + currentServer.GetRemoteSessionArg("&", true);
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
@@ -6730,7 +6733,7 @@ function FetchOpenH264VideoModule()
 	}
 	var ReopenStreamAtCurrentSeekPosition = function ()
 	{
-		if (videoPlayer.Loading().image.isLive)
+		if (loading.isLive)
 			currentSeekPositionPercent = 0;
 		else
 		{
@@ -6740,15 +6743,26 @@ function FetchOpenH264VideoModule()
 				currentSeekPositionPercent = 1;
 			currentSeekPositionPercent = Clamp(currentSeekPositionPercent, 0, 1);
 		}
-		self.OpenVideo(currentSeekPositionPercent);
+		self.OpenVideo(loading, currentSeekPositionPercent);
 	}
 	var FrameRendered = function (frame)
 	{
-		lastFrameTimestamp = frame.timestamp;
 		currentSeekPositionPercent = frame.pos / 10000;
 		var timeNow = new Date().getTime();
-		videoPlayer.ImageRendered(lastFrameAt - timeNow);
+		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow);
 		lastFrameAt = timeNow;
+		if (nerdStats.IsOpen())
+		{
+			nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
+			nerdStats.UpdateStat("Stream Resolution", frame.width + "x" + frame.height);
+			nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
+			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(frame.pos / 100) + "%"));
+			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
+			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
+			nerdStats.UpdateStat("Frame Size", formatBytes(frame.size, 2));
+			nerdStats.UpdateStat("Codecs", "h264");
+			nerdStats.UpdateStat("Buffered Frames", openh264_player.GetBufferedFrameCount());
+		}
 	}
 	var StreamEnded = function (message, videoFinishedStreaming)
 	{
@@ -6766,11 +6780,12 @@ function FetchOpenH264VideoModule()
 			currentSeekPositionPercent = 1;
 		videoPlayer.Playback_Ended(reverse);
 	}
+	Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // openh264_player ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function OpenH264_Player(frameRendered, cameraOrResolutionChange, PlaybackReachedNaturalEndCB)
+function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 {
 	var self = this;
 	var $canvas;
@@ -6798,33 +6813,13 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange, PlaybackReache
 	}
 	var frameDecoded = function (frame)
 	{
-		var loading = videoPlayer.Loading().image;
-		if (loading.actualwidth != frame.width || loading.actualheight != frame.height || renderedFrameCount == 0)
-		{
-			loading.actualwidth = frame.width;
-			loading.actualheight = frame.height;
-			loading.maxwidth = frame.width;
-			loading.maxheight = frame.height;
-			cameraOrResolutionChange();
-		}
 		if (canvasW != frame.width)
 			canvas.width = canvasW = frame.width;
 		if (canvasH != frame.height)
 			canvas.height = canvasH = frame.height;
 		display.drawNextOuptutPictureGL(frame.width, frame.height, null, new Uint8Array(frame.data));
-		frameRendered(frame);
 		renderedFrameCount++;
-		if (nerdStats.IsOpen())
-		{
-			nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
-			nerdStats.UpdateStat("Resolution", frame.width + "x" + frame.height);
-			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(frame.pos / 100) + "%"));
-			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
-			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
-			nerdStats.UpdateStat("Frame Size", formatBytes(frame.size, 2));
-			nerdStats.UpdateStat("Codecs", "h264");
-			nerdStats.UpdateStat("Buffered Frames", acceptedFrameCount - renderedFrameCount);
-		}
+		frameRendered(frame);
 		CheckStreamEndCondition();
 	}
 	var CheckStreamEndCondition = function ()
@@ -6895,6 +6890,10 @@ function OpenH264_Player(frameRendered, cameraOrResolutionChange, PlaybackReache
 	this.GetRenderedFrameCount = function ()
 	{
 		return renderedFrameCount;
+	}
+	this.GetBufferedFrameCount = function ()
+	{
+		return acceptedFrameCount - renderedFrameCount;
 	}
 	this.Flush = function ()
 	{
@@ -7033,7 +7032,16 @@ function ClearCanvas(canvasId)
 {
 	var canvas = $("#" + canvasId).get(0);
 	var context2d = canvas.getContext("2d");
-	context2d.clearRect(0, 0, canvas.width, canvas.height);
+	if (context2d != null)
+	{
+		context2d.clearRect(0, 0, canvas.width, canvas.height);
+	}
+	else
+	{
+		var contextGl = canvas.getContext("webgl");
+		if (contextGl != null)
+			contextGl.clear(contextGl.COLOR_BUFFER_BIT);
+	}
 }
 function ImageRenderer()
 {
@@ -7068,8 +7076,8 @@ function ImageRenderer()
 	camImgClickState.mouseX = 0;
 	camImgClickState.mouseY = 0;
 
-	var frameOpacity = 1;
-	var frameDefaultOpacity = 1;
+	var loadingOverlayHidden = true;
+	var loadingAnimHidden = true;
 
 	this.GetWidthToRequest = function ()
 	{
@@ -7111,20 +7119,47 @@ function ImageRenderer()
 	{
 		return previousImageDraw;
 	}
-	this.ChangeFrameDefaultOpacity = function (opacity)
+	this.HideLoadingOverlay = function ()
 	{
-		frameDefaultOpacity = opacity;
-	}
-	this.SetFrameOpacity_Default = function ()
-	{
-		self.SetFrameOpacity(frameDefaultOpacity);
-	}
-	this.SetFrameOpacity = function (opacity)
-	{
-		if (frameOpacity != opacity)
+		if (!loadingOverlayHidden)
 		{
-			frameOpacity = opacity;
-			$("#camimg_wrapper").css("opacity", opacity);
+			loadingOverlayHidden = true;
+			$("#camimg_loading").hide();
+		}
+		if (!loadingAnimHidden)
+		{
+			loadingAnimHidden = true;
+			$("#camimg_loading_anim").hide();
+		}
+	}
+	this.HideLoadingAnimation = function ()
+	{
+		if (!loadingAnimHidden)
+		{
+			loadingAnimHidden = true;
+			$("#camimg_loading_anim").hide();
+		}
+	}
+
+	this.ShowLoadingOverlay = function (showAnimation)
+	{
+		if (loadingOverlayHidden)
+		{
+			loadingOverlayHidden = false;
+			$("#camimg_loading").show();
+		}
+		if (showAnimation)
+			self.ShowLoadingAnimation();
+		else
+			self.HideLoadingAnimation();
+	}
+
+	this.ShowLoadingAnimation = function ()
+	{
+		if (loadingAnimHidden)
+		{
+			loadingAnimHidden = false;
+			$("#camimg_loading_anim").show();
 		}
 	}
 	this.ImgResized = function (isFromKeyboard)
@@ -7136,8 +7171,8 @@ function ImageRenderer()
 
 		// Calculate new size based on zoom levels
 		var imgForSizing = videoPlayer.Loaded().image;
-		var imgDrawWidth = imgForSizing.maxwidth * (zoomTable[digitalZoom]);
-		var imgDrawHeight = imgForSizing.maxheight * (zoomTable[digitalZoom]);
+		var imgDrawWidth = imgForSizing.fullwidth * (zoomTable[digitalZoom]);
+		var imgDrawHeight = imgForSizing.fullheight * (zoomTable[digitalZoom]);
 		if (imgDrawWidth == 0)
 		{
 			imgDrawWidth = imgAvailableWidth;
@@ -7593,24 +7628,6 @@ function CanvasContextMenu()
 			case "sizeSmaller":
 				SetUISize('smaller');
 				break;
-			case "viewChangeMode_Traditional":
-				videoPlayer.SetViewChangeMode(0);
-				break;
-			case "viewChangeMode_Scale":
-				videoPlayer.SetViewChangeMode(1);
-				break;
-			case "viewChangeMode_Fade":
-				videoPlayer.SetViewChangeMode(2);
-				break;
-			case "viewChangeMode_ScaleInFadeOut":
-				videoPlayer.SetViewChangeMode(3);
-				break;
-			case "viewChangeMode_FadeScaleInFadeOut":
-				videoPlayer.SetViewChangeMode(4);
-				break;
-			case "viewChangeMode_FadeScale":
-				videoPlayer.SetViewChangeMode(5);
-				break;
 			case "statsfornerds":
 				nerdStats.Open();
 				break;
@@ -7642,17 +7659,6 @@ function CanvasContextMenu()
 						, { text: "Medium", icon: "", alias: "sizeMedium", action: onLiveContextMenuAction }
 						, { text: "Small", icon: "", alias: "sizeSmall", action: onLiveContextMenuAction }
 						, { text: "Smaller", icon: "", alias: "sizeSmaller", action: onLiveContextMenuAction }
-					]
-				}
-				, {
-					text: "View Change Mode", icon: "", alias: "viewChangeMode", type: "group", width: 180, items:
-					[
-						{ text: "Traditional (0)", icon: "", alias: "viewChangeMode_Traditional", action: onLiveContextMenuAction }
-						, { text: "Scale (1)", icon: "", alias: "viewChangeMode_Scale", action: onLiveContextMenuAction }
-						, { text: "Fade (2)", icon: "", alias: "viewChangeMode_Fade", action: onLiveContextMenuAction }
-						, { text: "Scale/Fade (3)", icon: "", alias: "viewChangeMode_ScaleInFadeOut", action: onLiveContextMenuAction }
-						, { text: "FadeScale/Fade (4)", icon: "", alias: "viewChangeMode_FadeScaleInFadeOut", action: onLiveContextMenuAction }
-						, { text: "FadeScale (5)", icon: "", alias: "viewChangeMode_FadeScale", action: onLiveContextMenuAction }
 					]
 				}
 				, { type: "splitLine" }

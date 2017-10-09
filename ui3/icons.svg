@@ -314,4 +314,9 @@
 	<circle stroke-width="3" fill-opacity="0" cx="20" cy="20" r="18.5"/>
 	<path stroke-width="5" d="M 12,12 L 28,28 M 28,12 L 12,28" />
 </symbol>
+<symbol id="svg_loading_circle" width="100px" height="100px" viewBox="0 0 100 100">
+	<circle cx="50" cy="50" fill="none" stroke="#dddddd" stroke-width="10" r="35" stroke-dasharray="164.93361431346415 56.97787143782138" transform="rotate(258 50 50)">
+		<animateTransform attributeName="transform" type="rotate" calcMode="linear" values="0 50 50;360 50 50" keyTimes="0;1" dur="1s" begin="0s" repeatCount="indefinite"></animateTransform>
+	</circle>
+</symbol>
 </svg>

@@ -287,6 +287,7 @@
 	<div id="layoutbody">
 		<div id="camimg_wrapper"></div>
 		<div id="camimg_store"></div>
+		<div id="camimg_loading"><div id="camimg_loading_anim"><svg class="icon noflip"><use xlink:href="#svg_loading_circle"></use></svg></div></div>
 		<div id="playbackHeader" style="display: none;">
 			<div id="closeClipLeft" title="Close clip"><svg class="icon noflip stroke"><use xlink:href="#svg_stroke_closeBtn"></use></svg></div>
 			<div id="clipNameHeading"></div>
@@ -316,11 +317,12 @@
 				<div id="playbackSpeedText" class="pcText rightSide" onclick="playbackControls.OpenSpeedPanel()" title="Playback Speed"></div>
 			</div>
 		</div>
-		<div id="liveFullscreenButton" class="pcButton" title="Full Screen"><svg class="icon"><use xlink:href="#svg_mio_Fullscreen"></use></svg></div>
-		<div id="liveExitFullscreenButton" class="pcButton" title="Exit Full Screen" style="display: none;"><svg class="icon"><use xlink:href="#svg_mio_FullscreenExit"></use></svg></div>
+		<div id="liveFullscreenButton" class="pcButton" title="Full Screen"><svg class="icon noflip"><use xlink:href="#svg_mio_Fullscreen"></use></svg></div>
+		<div id="liveExitFullscreenButton" class="pcButton" title="Exit Full Screen" style="display: none;"><svg class="icon noflip"><use xlink:href="#svg_mio_FullscreenExit"></use></svg></div>
 		<div id="seekhint" style="display: none">
 			<img id="seekhint_img" src="" />
 			<canvas id="seekhint_canvas">HTML5 canvas not supported</canvas>
+			<div id="seekhint_loading"><svg class="icon noflip"><use xlink:href="#svg_loading_circle"></use></svg></div>
 			<div id="seekhint_helper">Pause video to see preview.</div>
 			<div id="seekhint_label"></div>
 		</div>
