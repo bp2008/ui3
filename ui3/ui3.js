@@ -192,7 +192,9 @@ var togglableUIFeatures =
 //-Graceful stream close
 //-Download snapshot
 //-Open snapshot in new tab
-// TODO: H.264 streaming quality changes aren't taking effect properly either for live or recorded video.
+// TODO: Try to make the clip player click event hot area include black space around #camimg_wrapper without actually including the playbackHeader and playbackControls areas in that.
+// TODO: Implement proper loading of snapshots while seeking a paused video in H.264 mode.  Currently it is something of a hack where you can seek while paused and it will load one H.264 frame, but you can't pause while loading the first H.264 frame and expect the frame to finish loading.
+// TODO: Put the seek hink thumbnail in the full video player while actively dragging the seek bar.
 // TODO: Preserve seek position and play/pause state when changing between player modules (and not viewing live video).
 // TODO: Implement "Copy image URL" with https://clipboardjs.com/
 // TODO: Fix bug where incorrect stream length info is shown for clips in H.264 mode until the first frame is downloaded.
@@ -208,30 +210,17 @@ var togglableUIFeatures =
 // TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
 // TODO: Throttle rapid camera changes to prevent heavy Blue Iris server load, particularly for H.264 streams.
 
-// TODO: If using the fetch API for streaming in production, make sure that connection open/close operations are throttled.  There is a Chrome bug which makes "fetch" operations get stuck in a "pending" state, tying up one of the connections to the server's hostname.
-
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
 // TODO: UI Settings
 // -- Including an option to forget saved credentials.
-// -- MAYBE Including an option to update the clip list automatically (on by default) ... to reduce bandwidth usage ??
 // -- Long press to open context menus (enabling this should disable longpress to set preset).  Affects some devices, e.g. samsung smart TV remote control
 // -- Idle Timeout (minutes).  Enabled by default, overridable in local overrides script.
 // -- Option for UI size.
 
-// TODO: Redesign the video player to be more of a plug-in module so the user can switch between jpeg and H.264 streaming, or MAYBE even the ActiveX control.  This is tricky as I still want the download snapshot and Open in new tab functions to work regardless of video streaming method.  I probably won't start this until Blue Iris has H.264/WebSocket streaming capability.
-
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
-// CONSIDER: (+1 Should be pretty easy) "Your profile has changed" messages could include the previous and new profile names and numbers.
 // CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
-// CONSIDER: (-1 Most people would not use it, and forces backwards compatibility) Multiple-server support, like in UI2
-// TODO: Adjust frame rate status bar maximum based on currently active camera or group (defaulting to 10 FPS if none is available)
-// CONSIDER: (-1 Likely not useful except on LAN, where bandwidth is abundant) Artificially limit the jpeg refresh rate if Blue Iris reports the camera has a lower frame rate than we are actually streaming.  This would reduce wasted bandwidth.
-// CONSIDER: (-1 Added complexity and space usage, not necessarily useful without multi-clip simultaneous playback) Timeline control.  Simplified format at first.  Maybe show the current day, the last 24 hours, or the currently loaded time range.  Selecting a time will scroll the clip list (and begin playback of the most appropriate clip?)
-// CONSIDER: Double-click in the clip player could perform some action, like play/pause or fullscreen mode.
-// CONSIDER: Single-click in the clip player could clear the current clip selection state, select the active clip, and scroll to it.
-// CONSIDER: Allow an open clip to remain open even if the clip list no longer contains the clip.  This requires that the clip list is never queried again as long as the clip remains open, but opens the door to linking someone to a specific clip in the future, without forcing them to find the clip in their own clip list.
-// CONSIDER: An alternate layout that automatically loads when the UI has significantly more height than width (e.g. portrait view)
+// TODO: Single-click in the clip player does play/pause.  Double-click enters fullscreen mode.  Single-click action only occurs after double-click timer expires unfulfilled.  See YouTube player behavior.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -3162,9 +3151,6 @@ function SeekBar()
 	var isDragging = false;
 	var isTouchDragging = false;
 	var didPauseOnDrag = false;
-	var doubleClickTime = 750;
-	var lastMouseDown = { X: -1000, Y: -1000, Time: 0 };
-	var lastDoubleMouseDownStarted = 0;
 	var seekHintInfo = { canvasVisible: false, helperVisible: false, visibleMsec: -1, queuedMsec: -1, loadingMsec: -1, lastSnapshotId: "" }
 
 	seekhint_img.load(function ()
@@ -3351,14 +3337,6 @@ function SeekBar()
 			highlight.css("width", "0px");
 		}
 	}
-	this.dblClick = function ()
-	{
-		videoPlayer.Playback_PlayPause();
-	}
-	var mouseStillSinceLastClick = function (e)
-	{
-		return Math.abs(e.pageX - lastMouseDown.X) < 20 && Math.abs(e.pageY - lastMouseDown.Y) < 20;
-	}
 	var mouseUp = function (e)
 	{
 		mouseCoordFixer.fix(e);
@@ -3410,7 +3388,6 @@ function SeekBar()
 			return;
 		if (e.which != 3)
 		{
-			var thisTime = new Date().getTime();
 			isDragging = true;
 			didPauseOnDrag = !videoPlayer.Playback_IsPaused();
 			videoPlayer.Playback_Pause();
@@ -3420,11 +3397,6 @@ function SeekBar()
 
 			SetBarState(1);
 
-			if (thisTime < lastMouseDown.Time + doubleClickTime && mouseStillSinceLastClick(e))
-				lastDoubleMouseDownStarted = lastMouseDown.Time;
-			lastMouseDown.Time = thisTime;
-			lastMouseDown.X = e.pageX;
-			lastMouseDown.Y = e.pageY;
 			mouseMoved(e);
 			$.hideAllContextMenus();
 			return stopDefault(e);
@@ -3445,11 +3417,6 @@ function SeekBar()
 		if (touchEvents.Gate(e))
 			return;
 		mouseUp(e);
-		if (new Date().getTime() < lastDoubleMouseDownStarted + doubleClickTime && mouseStillSinceLastClick(e))
-		{
-			lastDoubleMouseDownStarted -= doubleClickTime;
-			self.dblClick();
-		}
 	});
 	wrapper.on("mouseenter", function (e)
 	{
@@ -4726,11 +4693,11 @@ function StatusLoader()
 	});
 	statusBars.addOnProgressChangedListener("fps", function (fps)
 	{
-		if (fps > 0.2)
+		if (fps > 0.5)
 			statusBars.setColor("fps", "default");
-		else if (fps > 0.1)
+		else if (fps > 0.25)
 			statusBars.setColor("fps", "#CCAA00");
-		else if (fps > 0.05)
+		else if (fps > 0.1)
 			statusBars.setColor("fps", "#CC3300");
 		else
 			statusBars.setColor("fps", "#CC0000");
@@ -4866,14 +4833,14 @@ function StatusLoader()
 		if (oldStatus && oldStatus.data && newStatus && newStatus.data)
 		{
 			if (oldStatus.data.profile != newStatus.data.profile)
-				ProfileChanged();
+				ProfileChanged(oldStatus.data.profile, newStatus.data.profile);
 		}
 	}
-	var ProfileChanged = function ()
+	var ProfileChanged = function (oldProfileNum, newProfileNum)
 	{
 		// Refresh the clips and camera lists.
-		// TODO: Update this message to show the old and new profile names, not a "Reinitializing shortly" message.
-		toaster.Info("Your profile has changed.<br/>Reinitializing shortly...", 5000);
+		toaster.Info("Your profile has changed from &quot;<b>" + self.GetProfileName(oldProfileNum)
+			+ "</b>&quot; to &quot;<b>" + self.GetProfileName(newProfileNum) + "</b>&quot;", 5000);
 		if (profileChangedTimeout != null)
 		{
 			clearTimeout(profileChangedTimeout);
@@ -4923,7 +4890,7 @@ function StatusLoader()
 				toaster.Error("unexpected <b>lock</b> value from Blue Iris status");
 		}
 		if (currentProfileNames)
-			for (var i = 0; i < 8; i++)
+			for (var i = 0; i < currentProfileNames.length; i++)
 			{
 				var tooltipText = currentProfileNames[i];
 				if (i == 0 && tooltipText == "Inactive")
@@ -4935,6 +4902,13 @@ function StatusLoader()
 	{
 		currentProfileNames = newProfileNames;
 		UpdateProfileStatus();
+	}
+	this.GetProfileName = function (profileNum)
+	{
+		profileNum = parseInt(profileNum);
+		if (currentProfileNames && profileNum >= 0 && profileNum < currentProfileNames.length)
+			return currentProfileNames[profileNum];
+		return "Profile " + profileNum;
 	}
 	var UpdateScheduleStatus = function ()
 	{
@@ -5352,7 +5326,7 @@ function SessionManager()
 			if (!wasJustCheckingSessionStatus)
 				toaster.Info("Logged in as " + htmlEncode(user) + "<br/>(Limited User)<br/><br/>Server \"" + lastResponse.data["system name"] + "\"<br/>Blue Iris version " + lastResponse.data.version);
 		}
-		if (lastResponse.data && lastResponse.data.profiles && lastResponse.data.profiles.length == 8)
+		if (lastResponse.data && lastResponse.data.profiles && lastResponse.data.profiles.length > 0)
 			statusLoader.SetCurrentProfileNames(lastResponse.data.profiles);
 		if (lastResponse && lastResponse.data && lastResponse.data.schedules)
 			dropdownBoxes.listDefs["schedule"].rebuildItems();
@@ -5671,6 +5645,8 @@ function VideoPlayerController()
 	var lastLiveCameraOrGroupId = "";
 	var currentlySelectedHomeGroupId = null;
 
+	var doubleClickHelper = null;
+
 	this.CurrentPlayerModuleName = function ()
 	{
 		if (playerModule == moduleHolder["jpeg"])
@@ -5727,6 +5703,29 @@ function VideoPlayerController()
 				playerModule.VisibilityChanged(!documentIsHidden());
 			});
 		}
+
+		doubleClickHelper = new DoubleClickHelper($("#camimg_wrapper")
+			, function (e, confirmed)
+			{
+				if (!currentlyLoadingImage.isLive)
+				{
+					if (confirmed)
+						self.Playback_PlayPause();
+					else
+					{
+						// TODO: Show temporary graphic on screen indicating play or pause.
+						// But consider showing it only after confirmation if that is too distracting or unintuitive.
+					}
+				}
+			}
+			, function (e)
+			{
+				if (!currentlyLoadingImage.isLive)
+				{
+					fullScreenModeController.toggleFullScreen();
+					// TODO: Instantly hide temporary graphic indicating play or pause, if it was applied from an unconfirmed single click.
+				}
+			});
 	}
 
 	// Methods for querying what is currently playing
@@ -5970,7 +5969,8 @@ function VideoPlayerController()
 
 	this.SeekToPercent = function (pos)
 	{
-		playerModule.SeekToPercent(pos);
+		//playerModule.SeekToPercent(pos);
+		playerModule.OpenVideo(currentlyLoadingImage, pos);
 	}
 	this.SeekByMs = function (offset)
 	{
@@ -6110,7 +6110,8 @@ function VideoPlayerController()
 	var RefreshFps = function (imgRequestMs)
 	{
 		var currentFps = fpsCounter.getFPS();
-		statusBars.setProgress("fps", (currentFps / 10), currentFps);
+		var maxFps = currentlyLoadingCamera.FPS || 10;
+		statusBars.setProgress("fps", (currentFps / maxFps), currentFps);
 
 		// This allows the FPS to change to 0 if connectivity is lost or greatly reduced
 		if (fpsZeroTimeout != null)
@@ -6660,7 +6661,7 @@ function FetchOpenH264VideoModule()
 			var speed = 100 * playbackControls.GetPlaybackSpeed();
 			if (playbackControls.GetPlayReverse())
 				speed *= -1;
-			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=0&extend=2";
+			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
 		}
 		safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame, StreamEnded);
 	}
@@ -6723,8 +6724,7 @@ function FetchOpenH264VideoModule()
 	}
 	this.SelectedQualityChanged = function ()
 	{
-		if (!playbackPaused)
-			ReopenStreamAtCurrentSeekPosition();
+		ReopenStreamAtCurrentSeekPosition();
 	}
 	this.PlaybackDirectionChanged = function (playReverse)
 	{
@@ -6762,6 +6762,10 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Frame Size", formatBytes(frame.size, 2));
 			nerdStats.UpdateStat("Codecs", "h264");
 			nerdStats.UpdateStat("Buffered Frames", openh264_player.GetBufferedFrameCount());
+		}
+		if (playbackPaused && !loading.isLive)
+		{
+			StopStreaming();
 		}
 	}
 	var StreamEnded = function (message, videoFinishedStreaming)
@@ -10955,6 +10959,97 @@ function StatsRow(name)
 	this.GetEleRef = function ()
 	{
 		return $root;
+	}
+}
+///////////////////////////////////////////////////////////////
+// Double Click Helper ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function DoubleClickHelper($ele, cbOnSingleClick, cbOnDoubleClick, doubleClickTimeMS)
+{
+	var self = this;
+	if (!$ele || $ele.length < 1)
+		return;
+
+	if (typeof cbOnSingleClick != "function")
+		cbOnSingleClick = function () { };
+	if (typeof cbOnDoubleClick != "function")
+		cbOnDoubleClick = function () { };
+	if (!doubleClickTimeMS || doubleClickTimeMS < 0)
+		doubleClickTimeMS = 300;
+
+	var lastMouseDown1 = { X: -1000, Y: -1000, Time: performance.now() - 600000 };
+	var lastMouseDown2 = $.extend({}, lastMouseDown1);
+	var lastMouseUp1 = $.extend({}, lastMouseDown1);
+	var lastMouseUp2 = $.extend({}, lastMouseDown1);
+
+	var singleClickTimeout = null;
+	var singleClickFunction = null;
+
+	$ele.on("mousedown touchstart", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		if (touchEvents.Gate(e))
+			return;
+		if (e.which == 3)
+			return;
+		lastMouseDown2.X = lastMouseDown1.X;
+		lastMouseDown2.Y = lastMouseDown1.Y;
+		lastMouseDown2.Time = lastMouseDown1.Time;
+		lastMouseDown1.X = e.pageX;
+		lastMouseDown1.Y = e.pageY;
+		lastMouseDown1.Time = performance.now();
+	});
+	$(document).on("mouseup mouseleave touchend touchcancel", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		if (touchEvents.Gate(e))
+			return;
+		if (e.which == 3)
+			return;
+		lastMouseUp2.X = lastMouseUp1.X;
+		lastMouseUp2.Y = lastMouseUp1.Y;
+		lastMouseUp2.Time = lastMouseUp1.Time;
+		lastMouseUp1.X = e.pageX;
+		lastMouseUp1.Y = e.pageY;
+		lastMouseUp1.Time = performance.now();
+		if (!positionsAreWithin20PX(lastMouseUp1, lastMouseDown1))
+			return; // It doesn't count as a click if the mouse moved too far between down and up.
+		// A single click has occurred.
+		cbOnSingleClick(e, false);
+		if (lastMouseUp1.Time - lastMouseUp2.Time < doubleClickTimeMS
+			&& lastMouseUp1.Time - lastMouseDown2.Time < doubleClickTimeMS
+			&& lastMouseUp2.Time - lastMouseDown2.Time < doubleClickTimeMS
+			&& positionsAreWithin20PX(lastMouseUp2, lastMouseDown2)
+			&& positionsAreWithin20PX(lastMouseDown1, lastMouseDown2)
+			&& singleClickTimeout)
+		{
+			clearTimeout(singleClickTimeout);
+			singleClickTimeout = null;
+			cbOnDoubleClick(e);
+		}
+		else
+		{
+			if (singleClickTimeout)
+			{
+				// If we get here, a second single click has occurred while another is still unconfirmed.
+				// In this case, the previously unconfirmed click gets confirmed early.
+				// A typical way this could happen is if the mouse moved between clicks.
+				clearTimeout(singleClickTimeout);
+				if (singleClickFunction)
+					singleClickFunction();
+			}
+			singleClickFunction = function ()
+			{
+				singleClickTimeout = null;
+				singleClickFunction = null;
+				cbOnSingleClick(e, true);
+			};
+			singleClickTimeout = setTimeout(singleClickFunction, doubleClickTimeMS);
+		}
+	});
+	var positionsAreWithin20PX = function (positionA, positionB)
+	{
+		return Math.abs(positionA.X - positionB.X) < 20 && Math.abs(positionA.Y - positionB.Y) < 20;
 	}
 }
 ///////////////////////////////////////////////////////////////
