@@ -189,7 +189,7 @@
 <symbol id="svg_x5F_Pause" viewBox="-12 -12 24 24">
 	<path d="M12-12H3v24h9V-12z M-3,12h-9v-24h9V12z"/>
 </symbol>
-<symbol id="svg_x5F_Play" viewBox="-10.393 -12 20.786 24">
+<symbol id="svg_x5F_Play" viewBox="-12.2 -12 20.786 24">
 	<polygon points="-10.393,12 10.393,0 -10.393,-12 	"/>
 </symbol>
 <symbol id="svg_x5F_Restart" viewBox="-12 -12 24 24">
@@ -314,9 +314,17 @@
 	<circle stroke-width="3" fill-opacity="0" cx="20" cy="20" r="18.5"/>
 	<path stroke-width="5" d="M 12,12 L 28,28 M 28,12 L 12,28" />
 </symbol>
-<symbol id="svg_loading_circle" width="100px" height="100px" viewBox="0 0 100 100">
-	<circle cx="50" cy="50" fill="none" stroke="#dddddd" stroke-width="10" r="35" stroke-dasharray="164.93361431346415 56.97787143782138" transform="rotate(258 50 50)">
+<symbol id="svg_stroke_loading_circle" width="100px" height="100px" viewBox="0 0 100 100">
+	<circle cx="50" cy="50" fill="none" stroke-width="10" r="35" stroke-dasharray="164.93361431346415 56.97787143782138" transform="rotate(258 50 50)">
 		<animateTransform attributeName="transform" type="rotate" calcMode="linear" values="0 50 50;360 50 50" keyTimes="0;1" dur="1s" begin="0s" repeatCount="indefinite"></animateTransform>
 	</circle>
+</symbol>
+<symbol id="svg_mio_deviceInfo" viewBox="1 1 22 22">
+	<path d="M0 0h24v24H0z" fill="none"/>
+	<path d="M13 7h-2v2h2V7zm0 4h-2v6h2v-6zm4-9.99L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/>
+</symbol>
+<symbol id="svg_mio_copy" viewBox="1 1 22 22">
+	<path d="M0 0h24v24H0z" fill="none"/>
+	<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
 </symbol>
 </svg>

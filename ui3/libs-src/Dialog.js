@@ -338,39 +338,54 @@ var SimpleDialog = new function ()
 	{
 		return $('<div></div>').html(message).modalDialog();
 	}
-	this.confirmText = this.ConfirmText = function (question, onYes, onNo)
+	this.confirmText = this.ConfirmText = function (question, onYes, onNo, options)
 	{
-		return Confirm($('<div></div>').text(question), onYes, onNo);
+		return Confirm($('<div></div>').text(question), onYes, onNo, GetConfirmOptions(options));
 	}
-	this.confirmHtml = this.ConfirmHtml = function (question, onYes, onNo)
+	this.confirmHtml = this.ConfirmHtml = function (question, onYes, onNo, options)
 	{
-		return Confirm($('<div></div>').html(question), onYes, onNo);
+		return Confirm($('<div></div>').html(question), onYes, onNo, GetConfirmOptions(options));
 	}
-	var Confirm = function (questionEle, onYes, onNo, errorHandler)
+	var GetConfirmOptions = function (options)
 	{
-		if (!errorHandler && console)
-			errorHandler = console.log;
-		if (!errorHandler)
-			errorHandler = function (ex) { };
+		return $.extend(
+			{
+				// These are the default settings for a basic confirm box
+				title: "Confirm"
+				, onError: null
+				, yesText: "Yes"
+				, noText: "No"
+			}, options);
+	}
+	var Confirm = function (questionEle, onYes, onNo, options)
+	{
+		if (!options.onError && console)
+			options.onError = console.log;
+		if (!options.onError)
+			options.onError = function (ex) { };
 		var $dlg = $('<div></div>');
 		$dlg.append(questionEle);
 
 		var $yes = $('<input type="button" value="Yes" style="margin-right:15px;" />');
 		var $no = $('<input type="button" value="No" />');
+		if (options.yesText)
+			$yes.val(options.yesText);
+		if (options.noText)
+			$no.val(options.noText);
 		$dlg.append($('<div style="margin: 20px 0px 10px 0px; text-align: center;"></div>').append($yes).append($no));
 
-		var dlg = $dlg.modalDialog({ title: "Confirm" });
+		var dlg = $dlg.modalDialog({ title: options.title });
 		$yes.click(function ()
 		{
 			dlg.close();
-			if (onYes)
-				try { onYes(); } catch (ex) { errorHandler(ex); }
+			if (typeof onYes == "function")
+				try { onYes(); } catch (ex) { options.onError(ex); }
 		});
 		$no.click(function ()
 		{
 			dlg.close();
-			if (onNo)
-				try { onNo(); } catch (ex) { errorHandler(ex); }
+			if (typeof onNo == "function")
+				try { onNo(); } catch (ex) { options.onError(ex); }
 		});
 		return dlg;
 	}

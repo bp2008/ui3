@@ -33,8 +33,6 @@
 	</script>
 	<script src="ui3/libs-ui3.js?v=%%VERSION%%" type="text/javascript"></script>
 	<link href="ui3/libs-ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
-	<script src="ui3/libs-src/dialog.js?v=%%VERSION%%" type="text/javascript"></script>
-	<link href="ui3/libs-src/dialog.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
 	<script src="ui3/ui3.js?v=%%VERSION%%" type="text/javascript"></script>
 	<link href="ui3/ui3.css?v=%%VERSION%%" rel="stylesheet" type="text/css">
 	<script src="ui3/ui3-local-overrides.js?v=%%VERSION%%" type="text/javascript"></script>
@@ -287,7 +285,10 @@
 	<div id="layoutbody">
 		<div id="camimg_wrapper"></div>
 		<div id="camimg_store"></div>
-		<div id="camimg_loading"><div id="camimg_loading_anim"><svg class="icon noflip"><use xlink:href="#svg_loading_circle"></use></svg></div></div>
+		<div id="camimg_loading"><div id="camimg_loading_anim"><svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg></div></div>
+		<div id="camimg_centerIconBackground"><svg class="icon"><use xlink:href="#svg_x5F_PTZbackground"></use></svg></div>
+		<div id="camimg_playIcon"><svg class="icon"><use xlink:href="#svg_x5F_Play"></use></svg></div>
+		<div id="camimg_pauseIcon"><svg class="icon"><use xlink:href="#svg_x5F_Pause"></use></svg></div>
 		<div id="playbackHeader" style="display: none;">
 			<div id="closeClipLeft" title="Close clip"><svg class="icon noflip stroke"><use xlink:href="#svg_stroke_closeBtn"></use></svg></div>
 			<div id="clipNameHeading"></div>
@@ -322,7 +323,7 @@
 		<div id="seekhint" style="display: none">
 			<img id="seekhint_img" src="" />
 			<canvas id="seekhint_canvas">HTML5 canvas not supported</canvas>
-			<div id="seekhint_loading"><svg class="icon noflip"><use xlink:href="#svg_loading_circle"></use></svg></div>
+			<div id="seekhint_loading"><svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg></div>
 			<div id="seekhint_helper">Pause video to see preview.</div>
 			<div id="seekhint_label"></div>
 		</div>

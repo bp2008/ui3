@@ -101,10 +101,10 @@ DoUIFeatureDetection();
 var toaster = new Toaster();
 var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
+var clipboardHelper;
 var uiSizeHelper = null;
 var audioPlayer = null;
 var diskUsageGUI = null;
-var systemLog = null;
 var systemConfig = null;
 var cameraProperties = null;
 var cameraListDialog = null;
@@ -192,23 +192,10 @@ var togglableUIFeatures =
 //-Graceful stream close
 //-Download snapshot
 //-Open snapshot in new tab
-// TODO: Try to make the clip player click event hot area include black space around #camimg_wrapper without actually including the playbackHeader and playbackControls areas in that.
-// TODO: Implement proper loading of snapshots while seeking a paused video in H.264 mode.  Currently it is something of a hack where you can seek while paused and it will load one H.264 frame, but you can't pause while loading the first H.264 frame and expect the frame to finish loading.
-// TODO: Put the seek hink thumbnail in the full video player while actively dragging the seek bar.
 // TODO: Preserve seek position and play/pause state when changing between player modules (and not viewing live video).
-// TODO: Implement "Copy image URL" with https://clipboardjs.com/
-// TODO: Fix bug where incorrect stream length info is shown for clips in H.264 mode until the first frame is downloaded.
-// TODO: Test large dialogs on phones.
-// TODO: Implement JSON "users" command as a status panel like the Log panel.
-// TODO: Try pointInsideElement with outerWidth(true) and outerHeight(true).  Use it this way unless it breaks one of the usages.
-// TODO: Make PTZ presets work better on touchscreens.  Including the text box to set preset description on a phone. (android)
-// TODO: Add URL parameters for loading a camera, group, or fullscreen mode.
-// TODO: Handle single-deletion failure messages better.
 
-// TODO: Suppress hotkeys while dialogs are open.
-
-// TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load.
-// TODO: Throttle rapid camera changes to prevent heavy Blue Iris server load, particularly for H.264 streams.
+// TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load with H.264 streams.  Already done for Jpeg streams.
+// TODO: Throttle rapid camera changes to prevent heavy Blue Iris server load with H.264 streams.  Already done for Jpeg streams.
 
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
@@ -221,6 +208,7 @@ var togglableUIFeatures =
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
 // CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
 // TODO: Single-click in the clip player does play/pause.  Double-click enters fullscreen mode.  Single-click action only occurs after double-click timer expires unfulfilled.  See YouTube player behavior.
+// CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -325,8 +313,8 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_hotkey_togglefullscreen"
-			, value: "1|0|0|192" // 192: tilde (~`)
+			key: "ui3_hotkey_togglefullscreen2"
+			, value: "0|0|0|192" // 192: tilde (~`)
 			, hotkey: true
 			, label: "Full Screen Mode"
 			, hint: "Toggles the browser between full screen and windowed mode.  Most browsers also go fullscreen when you press F11, regardless of what you set here."
@@ -704,7 +692,7 @@ function OverrideDefaultSetting(key, value, IncludeInOptionsWindow, AlwaysReload
 			defaultSettings[i].AlwaysReload = AlwaysReload;
 			defaultSettings[i].Generation = Generation;
 			if (!IncludeInOptionsWindow)
-				defaultSettings[i].preLabel = null;
+				defaultSettings[i].label = null;
 			break;
 		}
 }
@@ -846,6 +834,8 @@ $(function ()
 		toaster.Error(fileSystemErrorMessage, 60000);
 	}
 
+	HandlePreLoadUrlParameters();
+
 	LoadDefaultSettings();
 
 	currentPrimaryTab = ValidateTabName(settings.ui3_defaultTab);
@@ -918,13 +908,13 @@ $(function ()
 	BI_CustomEvent.AddListener("TabLoaded_clips", function () { clipLoader.LoadClips("cliplist"); });
 	BI_CustomEvent.AddListener("TabLoaded_alerts", function () { clipLoader.LoadClips("alertlist"); });
 
+	clipboardHelper = new ClipboardHelper();
+
 	uiSizeHelper = new UiSizeHelper();
 
 	audioPlayer = new AudioPlayer();
 
 	diskUsageGUI = new DiskUsageGUI();
-
-	systemLog = new SystemLog();
 
 	systemConfig = new SystemConfig();
 
@@ -1064,6 +1054,36 @@ function SetupCollapsibleTriggers()
 			$ele.prepend('<svg class="icon collapsibleTriggerIcon"><use xlink:href="#svg_x5F_PTZcardinalDown"></use></svg>');
 	});
 }
+///////////////////////////////////////////////////////////////
+// Incoming URL Parameters ////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function HandlePreLoadUrlParameters()
+{
+	// Parameter "tab"
+	var tab = UrlParameters.Get("tab");
+	if (tab != '')
+		OverrideDefaultSetting("ui3_defaultTab", tab, true, true, 0);
+
+	// Parameter "group"
+	var group = UrlParameters.Get("group");
+	if (group != '')
+		OverrideDefaultSetting("ui3_defaultCameraGroupId", group, true, true, 0);
+
+	// Parameter "cam"
+	var cam = UrlParameters.Get("cam");
+	if (cam != '')
+	{
+		BI_CustomEvent.AddListener("FinishedLoading", function ()
+		{
+			var camData = cameraListLoader.GetCameraWithId(cam);
+			if (camData != null)
+				videoPlayer.ImgClick_Camera(camData);
+		});
+	}
+}
+///////////////////////////////////////////////////////////////
+// UI Resize //////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
 function SetUISize(size)
 {
 	uiSizeHelper.autoSize = size == "auto";
@@ -1072,9 +1092,6 @@ function SetUISize(size)
 	resized();
 	//setTimeout(resized);
 }
-///////////////////////////////////////////////////////////////
-// UI Resize //////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////
 function resized()
 {
 	var windowW = $(window).width();
@@ -1092,6 +1109,8 @@ function resized()
 	var llrControls = $("#layoutLeftRecordingsControls");
 	var systemnamewrapper = $("#systemnamewrapper");
 	var camimg_loading_anim = $("#camimg_loading_anim");
+	var videoCenter_Icons = $("#camimg_playIcon,#camimg_pauseIcon");
+	var videoCenter_Bg = $("#camimg_centerIconBackground");
 
 	var topVis = layouttop.is(":visible");
 	var leftVis = layoutleft.is(":visible");
@@ -1161,11 +1180,25 @@ function resized()
 	layoutbody.css("height", bodyH + "px");
 
 	// Size camimg_loading_anim
-	var camimg_loading_anim_Size = Clamp(Math.min(bodyW, bodyH), 10, 100);
+	var camimg_loading_anim_Size = Clamp(Math.min(bodyW, bodyH), 10, 120);
 	camimg_loading_anim.css("top", ((bodyH - camimg_loading_anim_Size) / 2) + "px");
 	camimg_loading_anim.css("left", ((bodyW - camimg_loading_anim_Size) / 2) + "px");
 	camimg_loading_anim.css("width", camimg_loading_anim_Size + "px");
 	camimg_loading_anim.css("height", camimg_loading_anim_Size + "px");
+
+	// Size videoCenter_Bg
+	var videoCenter_Bg_Size = Clamp(Math.min(bodyW, bodyH), 10, 72);
+	videoCenter_Bg.css("top", ((bodyH - videoCenter_Bg_Size) / 2) + "px");
+	videoCenter_Bg.css("left", ((bodyW - videoCenter_Bg_Size) / 2) + "px");
+	videoCenter_Bg.css("width", videoCenter_Bg_Size + "px");
+	videoCenter_Bg.css("height", videoCenter_Bg_Size + "px");
+
+	// Size videoCenter_Icons
+	var videoCenter_Icon_Size = Clamp(Math.min(bodyW, bodyH), 10, 40);
+	videoCenter_Icons.css("top", ((bodyH - videoCenter_Icon_Size) / 2) + "px");
+	videoCenter_Icons.css("left", ((bodyW - videoCenter_Icon_Size) / 2) + "px");
+	videoCenter_Icons.css("width", videoCenter_Icon_Size + "px");
+	videoCenter_Icons.css("height", videoCenter_Icon_Size + "px");
 
 	playbackControls.resized();
 
@@ -1597,9 +1630,11 @@ function DropdownBoxes()
 				new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger" })
 				, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
 				, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
-				, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger" })
+				, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
+				, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
+				, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
 			]
 			, onItemClick: function (item)
@@ -1615,6 +1650,12 @@ function DropdownBoxes()
 						break;
 					case "system_log":
 						systemLog.open();
+						break;
+					case "user_list":
+						userList.open();
+						break;
+					case "device_list":
+						deviceList.open();
 						break;
 					case "system_configuration":
 						systemConfig.open();
@@ -1803,7 +1844,7 @@ function DropdownBoxes()
 			closeDropdownLists();
 		});
 		if (item.icon && item.icon != "")
-			$item.prepend('<div class="mainMenuIcon"><svg class="icon"><use xlink:href="' + item.icon + '"></use></svg></div>');
+			$item.prepend('<div class="mainMenuIcon"><svg class="icon' + (item.icon.indexOf('_x5F_') == -1 ? " noflip" : "") + '"><use xlink:href="' + item.icon + '"></use></svg></div>');
 		$ddl.append($item);
 	}
 	$(document).mouseup(function (e)
@@ -2115,15 +2156,14 @@ function PtzButtons()
 			return;
 		}
 		var presetNum = parseInt(presetNumStr);
-		var $question = $('<div style="margin-bottom:20px;width:300px;">' + CleanUpGroupName(videoPlayer.Loading().image.id) + '<br/><br/>Set Preset ' + presetNum
-			+ ' now?<br/><br/>Description:<br/></div>');
 		var $descInput = $('<input type="text" />');
-		$question.append($descInput);
 		$descInput.val(self.GetPresetDescription(presetNum));
+		var $question = $('<div style="margin:7px 3px 20px 3px;text-align:center;">Enter a description:<br><br></div>');
+		$question.append($descInput);
 		AskYesNo($question, function ()
 		{
 			PTZ_set_preset(presetNum, $descInput.val());
-		});
+		}, null, toaster.Error, "Set Preset " + presetNum, "Cancel", videoPlayer.Loading().cam.optionDisplay);
 	}
 	// Enable preset buttons //
 	$ptzPresets.each(function (idx, ele)
@@ -3155,6 +3195,8 @@ function SeekBar()
 
 	seekhint_img.load(function ()
 	{
+		if (isDragging)
+			jpegPreviewModule.RenderImage("seekhint_img");
 		CopyImageToCanvas("seekhint_img", "seekhint_canvas");
 		seekhint_loading.hide();
 		seekHintInfo.loading = false;
@@ -3231,11 +3273,12 @@ function SeekBar()
 		var barMarginL = barO.left - bodyO.left;
 		seekHintL = Clamp(seekHintL, barMarginL, (barMarginL + barW) - seekHintW);
 		seekhint.css("left", seekHintL + "px");
-		var seekHintMs = Clamp(parseInt((hintX / barW) * (msec - 1)), 0, msec);
+		var positionRelative = (hintX / barW);
+		var seekHintMs = Clamp(parseInt(positionRelative * (msec - 1)), 0, msec);
 		if (videoPlayer.Playback_IsPaused())
 		{
 			// show preview image
-			setSeekHintCanvasVisibility(true);
+			setSeekHintCanvasVisibility(!isDragging);
 			setSeekHintHelperVisibility(false);
 			if (seekHintInfo.visibleMsec == seekHintInfo.loadingMsec)
 				loadSeekHintImg(seekHintMs);
@@ -3253,6 +3296,8 @@ function SeekBar()
 	}
 	var loadSeekHintImg = function (msec)
 	{
+		if (isDragging)
+			videoOverlayHelper.ShowLoadingOverlay(true, true);
 		seekHintInfo.queuedMsec = -1;
 		if (seekHintInfo.visibleMsec != msec)
 		{
@@ -3263,7 +3308,8 @@ function SeekBar()
 			var h = (160 / videoPlayer.Loading().image.aspectratio);
 			seekhint_canvas.css('height', h + 'px');
 			seekhint_loading.css('height', h + 'px');
-			seekhint_loading.show();
+			if (seekHintInfo.canvasVisible)
+				seekhint_loading.show();
 			seekhint_img.attr('src', videoPlayer.GetLastSnapshotUrl().replace(/time=\d+/, "time=" + msec) + "&w=160&q=50");
 		}
 	}
@@ -3393,7 +3439,7 @@ function SeekBar()
 			videoPlayer.Playback_Pause();
 			isTouchDragging = touchEvents.isTouchEvent(e);
 
-			imageRenderer.ShowLoadingOverlay();
+			videoOverlayHelper.ShowLoadingOverlay();
 
 			SetBarState(1);
 
@@ -3437,17 +3483,17 @@ function SeekBar()
 function TouchEventHelper()
 {
 	var self = this;
-	var mouseEventsBlockedUntil = 0;
+	var mouseEventsBlockedUntil = -60000;
 	this.Gate = function (e)
 	{
 		// Returns true if the event handler should be prevented due to being a non-touch event after recent touch events
 		if (self.isTouchEvent(e))
 		{
-			mouseEventsBlockedUntil = new Date().getTime() + 1000;
+			mouseEventsBlockedUntil = performance.now() + 1000;
 			return false;
 		}
 		else
-			return mouseEventsBlockedUntil > new Date().getTime();
+			return mouseEventsBlockedUntil > performance.now();
 	}
 	this.isTouchEvent = function (e)
 	{
@@ -4282,8 +4328,9 @@ function ClipLoader(clipsBodySelector)
 				{
 					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast);
 				},
-					function ()
+					function (message)
 					{
+						toaster.Warning(message, 10000);
 						Multi_Operation_Stop(operation, myToast, true);
 					});
 				return;
@@ -5527,6 +5574,8 @@ function CameraListLoader()
 	{
 		var coordScale = videoPlayer.Loaded().image.actualwidth / videoPlayer.Loaded().image.fullwidth;
 		var unscaled = self.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
+		if (unscaled == null)
+			return null;
 		// The first line of the array definition must be on the same line as the return statement
 		return [Math.round(unscaled[0] * coordScale)
 			, Math.round(unscaled[1] * coordScale)
@@ -5703,8 +5752,7 @@ function VideoPlayerController()
 				playerModule.VisibilityChanged(!documentIsHidden());
 			});
 		}
-
-		doubleClickHelper = new DoubleClickHelper($("#camimg_wrapper")
+		doubleClickHelper = new DoubleClickHelper($("#layoutbody"), $("#playbackHeader,#playbackControls")
 			, function (e, confirmed)
 			{
 				if (!currentlyLoadingImage.isLive)
@@ -5713,8 +5761,10 @@ function VideoPlayerController()
 						self.Playback_PlayPause();
 					else
 					{
-						// TODO: Show temporary graphic on screen indicating play or pause.
-						// But consider showing it only after confirmation if that is too distracting or unintuitive.
+						if (self.Playback_IsPaused())
+							videoOverlayHelper.ShowTemporaryPlayIcon();
+						else
+							videoOverlayHelper.ShowTemporaryPauseIcon();
 					}
 				}
 			}
@@ -5722,8 +5772,8 @@ function VideoPlayerController()
 			{
 				if (!currentlyLoadingImage.isLive)
 				{
+					videoOverlayHelper.HideTemporaryIcons();
 					fullScreenModeController.toggleFullScreen();
-					// TODO: Instantly hide temporary graphic indicating play or pause, if it was applied from an unconfirmed single click.
 				}
 			});
 	}
@@ -5913,12 +5963,9 @@ function VideoPlayerController()
 		else
 			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
 
-		imageRenderer.ShowLoadingOverlay(true);
+		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (playerModule)
-		{
-			playerModule.Playback_Pause();
 			playerModule.OpenVideo(cli);
-		}
 
 		fullScreenModeController.updateFullScreenButtonState();
 	}
@@ -5953,13 +6000,9 @@ function VideoPlayerController()
 			seekBar.drawSeekbarAtPercent(0);
 			seekBar.resetSeekHintImg();
 
-			imageRenderer.ShowLoadingOverlay(true);
+			videoOverlayHelper.ShowLoadingOverlay(true);
 			if (playerModule)
-			{
-				playerModule.Playback_Pause();
 				playerModule.OpenVideo(cli);
-				playerModule.Playback_Play();
-			}
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
@@ -5969,8 +6012,7 @@ function VideoPlayerController()
 
 	this.SeekToPercent = function (pos)
 	{
-		//playerModule.SeekToPercent(pos);
-		playerModule.OpenVideo(currentlyLoadingImage, pos);
+		playerModule.OpenVideo(currentlyLoadingImage, pos, playerModule.Playback_IsPaused());
 	}
 	this.SeekByMs = function (offset)
 	{
@@ -5980,7 +6022,7 @@ function VideoPlayerController()
 		var currentMs = playerModule.GetSeekPercent() * msLength;
 		var newPos = (currentMs + offset) / msLength;
 		newPos = Clamp(newPos, 0, 1);
-		playerModule.SeekToPercent(newPos);
+		self.SeekToPercent(newPos);
 	}
 	this.Playback_Pause = function ()
 	{
@@ -5992,7 +6034,10 @@ function VideoPlayerController()
 	}
 	this.Playback_PlayPause = function ()
 	{
-		playerModule.Playback_PlayPause();
+		if (playerModule.Playback_IsPaused())
+			playerModule.Playback_Play();
+		else
+			playerModule.Playback_Pause();
 	}
 	this.Playback_NextClip = function ()
 	{
@@ -6062,6 +6107,7 @@ function VideoPlayerController()
 	}
 	this.ImageRendered = function (path, width, height, lastFrameLoadingTime)
 	{
+		jpegPreviewModule.Hide();
 		currentlyLoadingImage.actualwidth = width;
 		currentlyLoadingImage.actualheight = height;
 		if (currentlyLoadedImage.path != path)
@@ -6074,18 +6120,19 @@ function VideoPlayerController()
 
 		if (!currentlyLoadedImage.isLive)
 			seekBar.drawSeekbarAtPercent(playerModule.GetSeekPercent());
-		imageRenderer.HideLoadingOverlay();
+		videoOverlayHelper.HideLoadingOverlay();
 	}
 	this.Playback_Ended = function (isLeftBoundary)
 	{
 		// The module may call this repeatedly 
+		videoOverlayHelper.HideLoadingOverlay();
 		if (isLeftBoundary)
 		{
 			seekBar.drawSeekbarAtPercent(0);
 			if (playbackControls.GetPlayReverse())
 			{
 				if (playbackControls.GetLoopingEnabled())
-					playerModule.SeekToPercent(1);
+					self.SeekToPercent(1);
 				else if (playbackControls.GetAutoplay())
 					self.Playback_PreviousClip();
 				else
@@ -6098,7 +6145,7 @@ function VideoPlayerController()
 			if (!playbackControls.GetPlayReverse())
 			{
 				if (playbackControls.GetLoopingEnabled())
-					playerModule.SeekToPercent(0);
+					self.SeekToPercent(0);
 				else if (playbackControls.GetAutoplay())
 					self.Playback_NextClip();
 				else
@@ -6157,6 +6204,46 @@ function BICameraData()
 		self.isGroup = other.isGroup;
 	}
 }
+///////////////////////////////////////////////////////////////
+// Jpeg Preview Module ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var jpegPreviewModule = new (function JpegPreviewModule()
+{
+	/// <summary>Manages showing and hiding a canvas as necessary to render seek previews in the full video area.</summary>
+	var self = this;
+	var isActivated = false;
+	var isInitialized = false;
+	var isVisible = false;
+
+	var Initialize = function ()
+	{
+		if (isInitialized)
+			return;
+		isInitialized = true;
+		$("#camimg_store").append('<canvas id="camimg_preview" class="videoCanvas"></canvas>');
+	}
+	var Show = function ()
+	{
+		if (isVisible)
+			return;
+		isVisible = true;
+		$("#camimg_preview").appendTo("#camimg_wrapper");
+	}
+	this.Hide = function ()
+	{
+		if (!isVisible)
+			return;
+		isVisible = false;
+		$("#camimg_preview").appendTo("#camimg_store");
+	}
+	this.RenderImage = function (imgId)
+	{
+		Initialize();
+		CopyImageToCanvas(imgId, "camimg_preview");
+		Show();
+		videoOverlayHelper.HideLoadingOverlay();
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // Jpeg Video Module //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -6268,7 +6355,7 @@ function JpegVideoModule()
 		isCurrentlyActive = true;
 		// Show yourself
 		ClearCanvas("camimg_canvas");
-		imageRenderer.ShowLoadingOverlay(true);
+		videoOverlayHelper.ShowLoadingOverlay(true);
 		$("#camimg_canvas").appendTo("#camimg_wrapper");
 	}
 	this.Deactivate = function ()
@@ -6292,23 +6379,39 @@ function JpegVideoModule()
 		return loadedFirstFrame;
 	}
 
-	this.OpenVideo = function (videoData, offsetPercent)
+	var openVideoTimeout = null;
+	var lastOpenVideoCallAt = -60000;
+	var timeBetweenOpenVideoCalls = 200;
+	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
+		if (openVideoTimeout != null)
+			clearTimeout(openVideoTimeout);
+
+		var perfNow = performance.now();
+		if (perfNow - lastOpenVideoCallAt < timeBetweenOpenVideoCalls)
+		{
+			openVideoTimeout = setTimeout(function ()
+			{
+				self.OpenVideo(videoData, offsetPercent, startPaused);
+			}, lastOpenVideoCallAt + timeBetweenOpenVideoCalls);
+			return;
+		}
+		lastOpenVideoCallAt = perfNow;
 		console.log("jpeg.OpenVideo");
 		loading.CopyValuesFrom(videoData);
 		if (!offsetPercent)
 			offsetPercent = 0;
+		if (loading.isLive)
+			startPaused = false;
 		Activate();
-		clipPlaybackPosition = offsetPercent * (loading.msec - 1);
+		clipPlaybackPosition = Clamp(offsetPercent, 0, 1) * (loading.msec - 1);
 		timeLastClipFrame = Date.now();
-		self.Playback_Pause();
-		self.Playback_Play();
+		if (startPaused)
+			self.Playback_Pause();
+		else
+			self.Playback_Play();
+		videoOverlayHelper.ShowLoadingOverlay(true);
 		GetNewImage();
-	}
-	this.SeekToPercent = function (pos)
-	{
-		Activate();
-		clipPlaybackPosition = Clamp(pos, 0, 1) * (loading.msec - 1);
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -6418,34 +6521,23 @@ function JpegVideoModule()
 	}
 	this.Playback_Pause = function ()
 	{
-		if (!playbackPaused)
-			self.Playback_PlayPause();
+		playbackPaused = true;
+		$("#pcPlay").show();
+		$("#pcPause").hide();
 	}
 	this.Playback_Play = function ()
 	{
-		if (playbackPaused)
-			self.Playback_PlayPause();
-	}
-	this.Playback_PlayPause = function ()
-	{
-		if (playbackPaused)
-		{
-			playbackPaused = false;
-			$("#pcPlay").hide();
-			$("#pcPause").show();
-			if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
-				clipPlaybackPosition = 0;
-			else if (clipPlaybackPosition <= 0 && playbackControls.GetPlayReverse())
-				clipPlaybackPosition = loading.msec - 1;
-			if (clipPlaybackPosition < 0)
-				clipPlaybackPosition = 0;
-		}
-		else
-		{
-			playbackPaused = true;
-			$("#pcPlay").show();
-			$("#pcPause").hide();
-		}
+		playbackPaused = false;
+		$("#pcPlay").hide();
+		$("#pcPause").show();
+		if (loading.isLive)
+			return;
+		if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
+			clipPlaybackPosition = 0;
+		else if (clipPlaybackPosition <= 0 && playbackControls.GetPlayReverse())
+			clipPlaybackPosition = loading.msec - 1;
+		if (clipPlaybackPosition < 0)
+			clipPlaybackPosition = 0;
 	}
 	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
@@ -6594,7 +6686,7 @@ function FetchOpenH264VideoModule()
 		console.log("Activating openh264_player");
 		openh264_player.GetCanvasRef().appendTo("#camimg_wrapper");
 		ClearCanvas("openh264_player_canvas");
-		imageRenderer.ShowLoadingOverlay(true);
+		videoOverlayHelper.ShowLoadingOverlay(true);
 	}
 	this.Deactivate = function ()
 	{
@@ -6631,7 +6723,7 @@ function FetchOpenH264VideoModule()
 		return openh264_player.GetRenderedFrameCount() > 0;
 	}
 	var openVideoTimeout = null;
-	this.OpenVideo = function (videoData, offsetPercent)
+	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
 		// Delay if the player has not fully loaded yet.
 		if (openVideoTimeout != null)
@@ -6640,7 +6732,7 @@ function FetchOpenH264VideoModule()
 		{
 			openVideoTimeout = setTimeout(function ()
 			{
-				self.OpenVideo(videoData, offsetPercent);
+				self.OpenVideo(videoData, offsetPercent, startPaused);
 			}, 5);
 			return;
 		}
@@ -6648,9 +6740,11 @@ function FetchOpenH264VideoModule()
 		loading.CopyValuesFrom(videoData);
 		if (!offsetPercent)
 			offsetPercent = 0;
+		if (loading.isLive)
+			startPaused = false;
 		Activate();
-		currentSeekPositionPercent = offsetPercent;
-		lastFrameAt = new Date().getTime();
+		currentSeekPositionPercent = Clamp(offsetPercent, 0, 1);
+		lastFrameAt = performance.now();
 		var videoUrl;
 		if (loading.isLive)
 		{
@@ -6663,11 +6757,19 @@ function FetchOpenH264VideoModule()
 				speed *= -1;
 			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
 		}
-		safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame, StreamEnded);
-	}
-	this.SeekToPercent = function (pos)
-	{
-		currentSeekPositionPercent = pos;
+		videoOverlayHelper.ShowLoadingOverlay(true);
+		if (startPaused)
+		{
+			self.Playback_Pause(); // If opening the stream while paused, the stream will stop after one frame.
+			safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame, StreamEnded);
+		}
+		else
+		{
+			playbackPaused = false;
+			$("#pcPlay").hide();
+			$("#pcPause").show();
+			safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame, StreamEnded);
+		}
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -6699,23 +6801,18 @@ function FetchOpenH264VideoModule()
 	this.Playback_Pause = function ()
 	{
 		playbackPaused = true;
-		StopStreaming();
 		$("#pcPlay").show();
 		$("#pcPause").hide();
+		if (!loading.isLive)
+			StopStreaming();
 	}
 	this.Playback_Play = function ()
 	{
 		playbackPaused = false;
 		$("#pcPlay").hide();
 		$("#pcPause").show();
-		ReopenStreamAtCurrentSeekPosition();
-	}
-	this.Playback_PlayPause = function ()
-	{
-		if (playbackPaused)
-			self.Playback_Play();
-		else
-			self.Playback_Pause();
+		if (!loading.isLive)
+			ReopenStreamAtCurrentSeekPosition();
 	}
 	this.PlaybackSpeedChanged = function (playSpeed)
 	{
@@ -6743,12 +6840,12 @@ function FetchOpenH264VideoModule()
 				currentSeekPositionPercent = 1;
 			currentSeekPositionPercent = Clamp(currentSeekPositionPercent, 0, 1);
 		}
-		self.OpenVideo(loading, currentSeekPositionPercent);
+		self.OpenVideo(loading, currentSeekPositionPercent, playbackPaused);
 	}
 	var FrameRendered = function (frame)
 	{
 		currentSeekPositionPercent = frame.pos / 10000;
-		var timeNow = new Date().getTime();
+		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow);
 		lastFrameAt = timeNow;
 		if (nerdStats.IsOpen())
@@ -7080,9 +7177,6 @@ function ImageRenderer()
 	camImgClickState.mouseX = 0;
 	camImgClickState.mouseY = 0;
 
-	var loadingOverlayHidden = true;
-	var loadingAnimHidden = true;
-
 	this.GetWidthToRequest = function ()
 	{
 		// Calculate the size of the image we need
@@ -7122,49 +7216,6 @@ function ImageRenderer()
 	this.GetPreviousImageDrawInfo = function ()
 	{
 		return previousImageDraw;
-	}
-	this.HideLoadingOverlay = function ()
-	{
-		if (!loadingOverlayHidden)
-		{
-			loadingOverlayHidden = true;
-			$("#camimg_loading").hide();
-		}
-		if (!loadingAnimHidden)
-		{
-			loadingAnimHidden = true;
-			$("#camimg_loading_anim").hide();
-		}
-	}
-	this.HideLoadingAnimation = function ()
-	{
-		if (!loadingAnimHidden)
-		{
-			loadingAnimHidden = true;
-			$("#camimg_loading_anim").hide();
-		}
-	}
-
-	this.ShowLoadingOverlay = function (showAnimation)
-	{
-		if (loadingOverlayHidden)
-		{
-			loadingOverlayHidden = false;
-			$("#camimg_loading").show();
-		}
-		if (showAnimation)
-			self.ShowLoadingAnimation();
-		else
-			self.HideLoadingAnimation();
-	}
-
-	this.ShowLoadingAnimation = function ()
-	{
-		if (loadingAnimHidden)
-		{
-			loadingAnimHidden = false;
-			$("#camimg_loading_anim").show();
-		}
 	}
 	this.ImgResized = function (isFromKeyboard)
 	{
@@ -7430,6 +7481,78 @@ function ImageRenderer()
 	});
 }
 ///////////////////////////////////////////////////////////////
+// VideoCenter Icons and Video Loading/Buffering Overlay //////
+///////////////////////////////////////////////////////////////
+var videoOverlayHelper = new (function ()
+{
+	var self = this;
+	var loadingOverlayHidden = true;
+	var loadingAnimHidden = true;
+	var overlayIsLessIntense = false;
+
+	this.HideLoadingOverlay = function ()
+	{
+		if (!loadingOverlayHidden)
+		{
+			loadingOverlayHidden = true;
+			$("#camimg_loading").hide();
+		}
+		self.HideLoadingAnimation();
+	}
+	this.HideLoadingAnimation = function ()
+	{
+		if (!loadingAnimHidden)
+		{
+			loadingAnimHidden = true;
+			$("#camimg_loading_anim").hide();
+		}
+	}
+	this.ShowLoadingOverlay = function (showAnimation, lessIntenseOverlay)
+	{
+		if (loadingOverlayHidden)
+		{
+			loadingOverlayHidden = false;
+			$("#camimg_loading").show();
+		}
+		if (lessIntenseOverlay && !overlayIsLessIntense)
+			$("#camimg_loading").addClass("lessIntense");
+		else if (!lessIntenseOverlay && overlayIsLessIntense)
+			$("#camimg_loading").removeClass("lessIntense");
+		if (showAnimation)
+			self.ShowLoadingAnimation();
+		else
+			self.HideLoadingAnimation();
+	}
+	this.ShowLoadingAnimation = function ()
+	{
+		if (loadingAnimHidden)
+		{
+			loadingAnimHidden = false;
+			$("#camimg_loading_anim").show();
+		}
+	}
+	this.ShowTemporaryPlayIcon = function (duration)
+	{
+		self.HideTemporaryIcons();
+		fadeIcons($("#camimg_playIcon,#camimg_centerIconBackground"), duration);
+	}
+	this.ShowTemporaryPauseIcon = function ()
+	{
+		self.HideTemporaryIcons();
+		fadeIcons($("#camimg_pauseIcon,#camimg_centerIconBackground"));
+	}
+	var fadeIcons = function ($icons, duration)
+	{
+		if (!duration)
+			duration = 1000;
+		$icons.show().fadeOut(duration);
+	}
+	this.HideTemporaryIcons = function ()
+	{
+		$("#camimg_playIcon,#camimg_pauseIcon,#camimg_centerIconBackground").stop(true, true);
+	}
+})();
+///////////////////////////////////////////////////////////////
 // Generic Quality Helper /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function GenericQualityHelper()
@@ -7615,6 +7738,9 @@ function CanvasContextMenu()
 			case "opennewtab":
 				window.open(videoPlayer.GetLastSnapshotFullUrl());
 				break;
+			case "copyimageaddress":
+				clipboardHelper.CopyText(location.origin + videoPlayer.GetLastSnapshotUrl());
+				break;
 			case "saveas":
 				return true;
 			case "sizeAuto":
@@ -7640,7 +7766,7 @@ function CanvasContextMenu()
 				break;
 		}
 	}
-	var onCancelContextMenu = function ()
+	var onCancelLiveContextMenu = function ()
 	{
 	}
 	var optionLive =
@@ -7650,6 +7776,7 @@ function CanvasContextMenu()
 				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
 				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
 				, { text: "Open HLS Stream", icon: "#svg_mio_ViewStream", iconClass: "noflip", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
+				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
 				, { type: "splitLine" }
@@ -7676,7 +7803,7 @@ function CanvasContextMenu()
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
 			]
 			, onContextMenu: onTriggerLiveContextMenu
-			, onCancelContextMenu: onCancelContextMenu
+			, onCancelContextMenu: onCancelLiveContextMenu
 			, onShow: onShowLiveContextMenu
 			, clickType: "right"
 		};
@@ -7746,6 +7873,9 @@ function CanvasContextMenu()
 			case "statsfornerds":
 				nerdStats.Open();
 				return;
+			case "copyimageaddress":
+				clipboardHelper.CopyText(location.origin + videoPlayer.GetLastSnapshotUrl());
+				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
 				break;
@@ -7758,6 +7888,7 @@ function CanvasContextMenu()
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
+				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
 				, { type: "splitLine" }
@@ -8173,7 +8304,7 @@ function CameraListDialog()
 			+ '<div id="cameralistcontent" class="cameralistcontent"></div>'
 			+ '</div>'
 		).dialog({
-			title: htmlEncode($("#system_name").text()) + "Camera List"
+			title: "Camera List"
 			, onClosing: DialogClosing
 			, onRefresh: function () { self.refresh(); }
 		});
@@ -9033,10 +9164,11 @@ function DeleteAlert(path, isClip, cbSuccess, cbFailure)
 	{
 		if (typeof response.result != "undefined" && response.result == "fail")
 		{
+			var msg = "Failed to delete " + clipOrAlert + ".<br/>" + (sessionManager.IsAdministratorSession() ? ("The " + clipOrAlert + " may be still recording.") : ("You need administrator permission to delete " + clipOrAlert + "s."));
 			if (typeof cbFailure == "function")
-				cbFailure();
+				cbFailure(msg);
 			else
-				toaster.Warning("Failed to delete " + clipOrAlert + ".<br/>" + (sessionManager.IsAdministratorSession() ? ("The " + clipOrAlert + " may be still recording.") : ("You need administrator permission to delete " + clipOrAlert + "s.")), 5000);
+				toaster.Warning(msg, 10000);
 			if (!sessionManager.IsAdministratorSession())
 				openLoginDialog();
 			return;
@@ -9050,10 +9182,11 @@ function DeleteAlert(path, isClip, cbSuccess, cbFailure)
 		}
 	}, function ()
 		{
+			var msg = 'Unable to contact Blue Iris server.';
 			if (typeof cbFailure == "function")
-				cbFailure();
+				cbFailure(msg);
 			else
-				toaster.Error('Unable to contact Blue Iris server.', 3000);
+				toaster.Error(msg, 3000);
 		});
 }
 ///////////////////////////////////////////////////////////////
@@ -9155,97 +9288,170 @@ function SystemConfig()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// System Log /////////////////////////////////////////////////
+// List Dialog ////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function SystemLog()
+function ListDialog(options_arg)
 {
 	var self = this;
-	var modal_systemlogdialog = null;
+	var modal_dialog = null;
 	var loadedOnce = false;
+	var $content;
+
+	var settings = $.extend({
+		title: "Unnamed List Dialog"
+		, json_command: ""
+		, headers: []
+		, get_row: function (data) { return ""; }
+	}, options_arg);
+
 	this.open = function ()
 	{
-		CloseLogDialog();
-		modal_systemlogdialog = $('<div id="systemlogdialog"><div id="systemlogcontent"></div></div>'
-		).dialog({
-			title: $("#system_name").text() + " System Log"
-			, onRefresh: function () { systemLog.refresh(); }
+		CloseListDialog();
+		var $dlg = $('<div class="listDialog"></div>');
+		$content = $('<div class="listDialogContent"><div style="text-align: center; margin-top: 20px;">Loading...</div></div>');
+		$dlg.append($content);
+		modal_dialog = $dlg.dialog({
+			title: settings.title
+			, onRefresh: function () { refreshListDialog(); }
 			, onClosing: function ()
 			{
-				modal_systemlogdialog = null;
+				modal_dialog = null;
 				loadedOnce = false;
 			}
 		});
-		$("#systemlogcontent").html('<div style="text-align: center; margin-top: 20px;">Loading...</div>');
-		self.refresh();
+		refreshListDialog();
 	}
-	this.refresh = function ()
+	var refreshListDialog = function ()
 	{
-		modal_systemlogdialog.setLoadingState(true);
-		ExecJSON({ cmd: "log" }, function (response)
+		modal_dialog.setLoadingState(true);
+		ExecJSON({ cmd: settings.json_command }, function (response)
 		{
-			if (modal_systemlogdialog == null)
+			if (modal_dialog == null)
 				return;
-			modal_systemlogdialog.setLoadingState(false);
+			modal_dialog.setLoadingState(false);
 			if (typeof response.result == "undefined")
 			{
-				CloseLogDialog();
-				toaster.Error("Unexpected response when requesting system log from server.");
+				CloseListDialog();
+				toaster.Error("Unexpected response when requesting " + settings.title + " from server.");
 				return;
 			}
 			if (response.result == "fail")
 			{
-				CloseLogDialog();
+				CloseListDialog();
 				openLoginDialog();
 				return;
 			}
-			var $syslog = $("#systemlogcontent");
-			if ($syslog.length == 0)
+			if (!$content || $content.length == 0)
 				return;
-			$syslog.html('<table><thead><tr><th></th><th>#</th><th>Time</th><th>Object</th><th>Message</th></tr></thead><tbody></tbody></table>');
-			var $tbody = $syslog.find("tbody");
-			for (var i = 0; i < response.data.length; i++)
+			var sb = [];
+			sb.push('<table><thead><tr>');
+			for (var i = 0; i < settings.headers.length; i++)
 			{
-				var data = response.data[i];
-				var date = new Date(data.date * 1000)
-				var dateStr = GetDateStr(date);
-				var level = GetLevelImageMarkup(data.level);
-				var count = typeof data.count == "undefined" ? "" : data.count;
-				$tbody.append('<tr><td class="levelcolumn">' + level + '</td><td class="centercolumn" style="font-weight: bold;">' + count + '</td><td>' + dateStr + '</td><td style="font-weight: bold;">' + htmlEncode(data.obj) + '</td><td>' + htmlEncode(data.msg) + '</td></tr>');
+				sb.push('<th>');
+				sb.push(settings.headers[i]);
+				sb.push('</th>');
 			}
-			modal_systemlogdialog.contentChanged(!loadedOnce);
+			sb.push('</tr></thead><tbody></tbody></table>');
+			$content.html(sb.join(""));
+			var $tbody = $content.find("tbody");
+			for (var i = 0; i < response.data.length; i++)
+				$tbody.append(settings.get_row(response.data[i]));
+			modal_dialog.contentChanged(!loadedOnce);
 			loadedOnce = true;
 		}, function ()
 			{
 				toaster.Error('Unable to contact Blue Iris server.', 3000);
-				CloseLogDialog();
+				CloseListDialog();
 			});
 	}
-	var GetLevelImageMarkup = function (level)
+	var CloseListDialog = function ()
 	{
-		if (level == 0)
-			return GetLogIcon("#svg_x5F_Info", "#0088FF");
-		if (level == 1)
-			return GetLogIcon("#svg_x5F_Warning", "#FFFF00");
-		if (level == 2)
-			return GetLogIcon("#svg_x5F_Error", "#FF0000");
-		if (level == 3)
-			return GetLogIcon("#svg_x5F_Alert1", "#FF0000");
-		if (level == 4)
-			return GetLogIcon("#svg_x5F_OK", "#00FF00");
-		if (level == 10)
-			return GetLogIcon("#svg_x5F_User", "#FFFFFF");
-		return '<span title="Log level ' + level + ' is unknown">' + level + '</span>';
-	}
-	var GetLogIcon = function (iconId, color)
-	{
-		return '<div class="logicon" style="color: ' + color + '"><svg class="icon"><use xlink:href="' + iconId + '"></use></svg></div>';
-	}
-	var CloseLogDialog = function ()
-	{
-		if (modal_systemlogdialog != null)
-			modal_systemlogdialog.close();
+		if (modal_dialog != null)
+			modal_dialog.close();
 	}
 }
+function GetLevelImageMarkup(level)
+{
+	if (level == 0)
+		return GetSysLogIcon("#svg_x5F_Info", "#0088FF");
+	if (level == 1)
+		return GetSysLogIcon("#svg_x5F_Warning", "#FFFF00");
+	if (level == 2)
+		return GetSysLogIcon("#svg_x5F_Error", "#FF0000");
+	if (level == 3)
+		return GetSysLogIcon("#svg_x5F_Alert1", "#FF0000");
+	if (level == 4)
+		return GetSysLogIcon("#svg_x5F_OK", "#00FF00");
+	if (level == 10)
+		return GetSysLogIcon("#svg_x5F_User", "#FFFFFF");
+	return '<span title="Log level ' + level + ' is unknown">' + level + '</span>';
+}
+function GetSysLogIcon(iconId, color)
+{
+	return '<div class="logicon" style="color: ' + color + '"><svg class="icon"><use xlink:href="' + iconId + '"></use></svg></div>';
+}
+///////////////////////////////////////////////////////////////
+// System Log /////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var systemLog = new ListDialog({
+	title: "System Log"
+	, json_command: "log"
+	, headers: ["", "#", "Time", "Object", "Message"]
+	, get_row: function (data)
+	{
+		var date = new Date(data.date * 1000)
+		var dateStr = GetDateStr(date);
+		var level = GetLevelImageMarkup(data.level);
+		var count = typeof data.count == "undefined" ? "" : parseInt(data.count);
+		return '<tr><td class="levelcolumn">' + level + '</td><td class="centercolumn" style="font-weight: bold;">' + count + '</td><td>' + dateStr + '</td><td style="font-weight: bold;">' + htmlEncode(data.obj) + '</td><td>' + htmlEncode(data.msg) + '</td></tr>';
+	}
+});
+///////////////////////////////////////////////////////////////
+// User List //////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var userList = new ListDialog({
+	title: "User List"
+	, json_command: "users"
+	, headers: ["Online", "#", "Last Connected", "User", "Object", "Message"]
+	, get_row: function (data)
+	{
+		var date = new Date(data.date * 1000)
+		var dateStr = data.date == 0 ? "never" : GetDateStr(date);
+		var level = GetLevelImageMarkup(data.level);
+		var count = typeof data.count == "undefined" ? "" : parseInt(data.count);
+		return '<tr>'
+			+ '<td>' + (data.isOnline ? "Online" : "") + '</td>'
+			+ '<td class="centercolumn" style="font-weight: bold;">' + count + '</td>'
+			+ '<td>' + dateStr + '</td>'
+			+ '<td>' + htmlEncode(data.obj) + '</td>'
+			+ '<td style="font-weight: bold;">' + htmlEncode(data.object) + '</td>'
+			+ '<td>' + htmlEncode(data.msg) + '</td>'
+			+ '</tr>';
+	}
+});
+///////////////////////////////////////////////////////////////
+// Devices List ///////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var deviceList = new ListDialog({
+	title: "Device List"
+	, json_command: "devices"
+	, headers: ["#", "Last Connected", "Name", "Type", "Inside", "Push"]
+	, get_row: function (data)
+	{
+		var date = new Date(data.date * 1000)
+		var dateStr = data.date == 0 ? "never" : GetDateStr(date);
+		var level = GetLevelImageMarkup(data.level);
+		var count = typeof data.count == "undefined" ? "" : parseInt(data.count);
+		return '<tr>'
+			+ '<td class="centercolumn" style="font-weight: bold;">' + count + '</td>'
+			+ '<td>' + dateStr + '</td>'
+			+ '<td title="ID: ' + htmlEncode(data.id) + '">' + data.name + '</td>'
+			+ '<td>' + data.type + '</td>'
+			+ '<td>' + data.inside + '</td>'
+			+ '<td>' + (data.push == 0 ? "" : "Enabled") + '</td>'
+			+ '</tr>';
+	}
+});
 ///////////////////////////////////////////////////////////////
 // Save Snapshot in Blue Iris /////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -9605,7 +9811,7 @@ function FullScreenModeController()
 	});
 	$("#liveFullscreenButton,#liveExitFullscreenButton,#clipFullscreenButton,#clipExitFullscreenButton")
 		.on("click", function () { self.toggleFullScreen(); })
-		.on("mousedown touchstart", function ()
+		.on("mousedown touchstart", function (e)
 		{
 			// Prevents the button click from causing camera maximize actions.
 			setTimeout(function () { imageRenderer.CamImgClickStateReset(); }, 0);
@@ -9706,7 +9912,13 @@ function BI_Hotkey_FullScreen()
 function BI_Hotkey_PlayPause()
 {
 	if (!videoPlayer.Loading().image.isLive)
+	{
+		if (videoPlayer.Playback_IsPaused())
+			videoOverlayHelper.ShowTemporaryPlayIcon();
+		else
+			videoOverlayHelper.ShowTemporaryPauseIcon();
 		videoPlayer.Playback_PlayPause();
+	}
 }
 function BI_Hotkey_NextClip()
 {
@@ -9804,12 +10016,11 @@ function BI_Hotkeys()
 	var currentlyDownKeys = {};
 	$(document).keydown(function (e)
 	{
-		console.log("DN: " + getKeyName(e.keyCode));
 		var charCode = e.which ? e.which : event.keyCode;
 		var isRepeatKey = currentlyDownKeys[charCode];
 		currentlyDownKeys[charCode] = true;
 		var retVal = true;
-		if ($(".ui2modal").length == 0)
+		if ($(".dialog_wrapper").length == 0)
 		{
 			for (var i = 0; i < defaultSettings.length; i++)
 			{
@@ -9842,11 +10053,10 @@ function BI_Hotkeys()
 	});
 	$(document).keyup(function (e)
 	{
-		console.log("UP: " + getKeyName(e.keyCode));
 		var charCode = e.which ? e.which : event.keyCode;
 		currentlyDownKeys[charCode] = false;
 		var retVal = true;
-		if ($(".ui2modal").length == 0)
+		if ($(".dialog_wrapper").length == 0)
 		{
 			for (var i = 0; i < defaultSettings.length; i++)
 			{
@@ -10001,20 +10211,21 @@ function BI_Hotkeys()
 ///////////////////////////////////////////////////////////////
 function Toaster()
 {
-	toastr.options = {
-		"closeButton": false,
-		"debug": false,
-		"positionClass": "toast-bottom-right",
-		"onclick": null,
-		"showDuration": "300",
-		"hideDuration": "1000",
-		"timeOut": "3000",
-		"extendedTimeOut": "3000",
-		"showEasing": "swing",
-		"hideEasing": "linear",
-		"showMethod": "fadeIn",
-		"hideMethod": "fadeOut"
-	}
+	if (toastr)
+		toastr.options = {
+			"closeButton": false,
+			"debug": false,
+			"positionClass": "toast-bottom-right",
+			"onclick": null,
+			"showDuration": "300",
+			"hideDuration": "1000",
+			"timeOut": "3000",
+			"extendedTimeOut": "3000",
+			"showEasing": "swing",
+			"hideEasing": "linear",
+			"showMethod": "fadeIn",
+			"hideMethod": "fadeOut"
+		}
 	var showToastInternal = function (type, message, showTime, closeButton)
 	{
 		if (typeof message == "object" && typeof message.stack == "string")
@@ -10615,6 +10826,11 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 			while (true)
 			{
+				if (cancel_streaming)
+				{
+					self.StopStreaming();
+					CallStreamEnded("fetch graceful exit (type 3)");
+				}
 				if (state == 0) // Read Stream Header Start
 				{
 					var buf = myStream.Read(6);
@@ -10964,8 +11180,14 @@ function StatsRow(name)
 ///////////////////////////////////////////////////////////////
 // Double Click Helper ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function DoubleClickHelper($ele, cbOnSingleClick, cbOnDoubleClick, doubleClickTimeMS)
+function DoubleClickHelper($ele, $exclude, cbOnSingleClick, cbOnDoubleClick, doubleClickTimeMS)
 {
+	/// <summary>Handles double-click events in a consistent way between touch and non-touch devices.</summary>
+	/// <param name="$ele">jQuery object containing elements to listen for clicks on.</param>
+	/// <param name="$exclude">jQuery object containing elements to ignore clicks on (maybe these are nested inside [$ele]). May be null.</param>
+	/// <param name="cbOnSingleClick">Callback function that is called when a single click occurs.  The first argument is the event object, and the second argument is a boolean indicating whether the single click is confirmed (If false, it may be part of a future double-click.  If true, it is to be treated as a standalone single-click.).</param>
+	/// <param name="cbOnDoubleClick">Callback function that is called when a double click occurs.  The first argument is the event object.</param>
+	/// <param name="doubleClickTimeMS">(Optional; default: 300) Maximum milliseconds between clicks to consider two clicks a double-click.</param>
 	var self = this;
 	if (!$ele || $ele.length < 1)
 		return;
@@ -10977,13 +11199,35 @@ function DoubleClickHelper($ele, cbOnSingleClick, cbOnDoubleClick, doubleClickTi
 	if (!doubleClickTimeMS || doubleClickTimeMS < 0)
 		doubleClickTimeMS = 300;
 
-	var lastMouseDown1 = { X: -1000, Y: -1000, Time: performance.now() - 600000 };
+	var lastMouseDown1 = { X: -1000, Y: -1000, Time: performance.now() - 600000, Excluded: false };
 	var lastMouseDown2 = $.extend({}, lastMouseDown1);
 	var lastMouseUp1 = $.extend({}, lastMouseDown1);
 	var lastMouseUp2 = $.extend({}, lastMouseDown1);
 
+	var lastEvent = 0; // Workaround for problem in Chrome where some mouse events are missed a moment after fullscreen change.
+
 	var singleClickTimeout = null;
 	var singleClickFunction = null;
+
+	var exclude = false;
+	var clearExclusion = function ()
+	{
+		exclude = false;
+	}
+
+	if ($exclude)
+	{
+		$exclude.on("mousedown touchstart", function (e)
+		{
+			exclude = true;
+			setTimeout(clearExclusion, 0);
+		});
+		$exclude.on("mouseup touchend touchcancel", function (e)
+		{
+			exclude = true;
+			setTimeout(clearExclusion, 0);
+		});
+	}
 
 	$ele.on("mousedown touchstart", function (e)
 	{
@@ -10992,42 +11236,42 @@ function DoubleClickHelper($ele, cbOnSingleClick, cbOnDoubleClick, doubleClickTi
 			return;
 		if (e.which == 3)
 			return;
-		lastMouseDown2.X = lastMouseDown1.X;
-		lastMouseDown2.Y = lastMouseDown1.Y;
-		lastMouseDown2.Time = lastMouseDown1.Time;
-		lastMouseDown1.X = e.pageX;
-		lastMouseDown1.Y = e.pageY;
-		lastMouseDown1.Time = performance.now();
+		if (lastEvent == 1)
+			RecordMouseEvent(2, e); // Inject mouse event that the browser likely missed.
+		RecordMouseEvent(1, e);
 	});
-	$(document).on("mouseup mouseleave touchend touchcancel", function (e)
+	$ele.on("mouseup touchend touchcancel", function (e)
 	{
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
 		if (e.which == 3)
 			return;
-		lastMouseUp2.X = lastMouseUp1.X;
-		lastMouseUp2.Y = lastMouseUp1.Y;
-		lastMouseUp2.Time = lastMouseUp1.Time;
-		lastMouseUp1.X = e.pageX;
-		lastMouseUp1.Y = e.pageY;
-		lastMouseUp1.Time = performance.now();
+		var fakeMouseDown = lastEvent == 2;
+		if (fakeMouseDown)
+			RecordMouseEvent(1, e); // Inject mouse event that the browser likely missed.
+		RecordMouseEvent(2, e);
 		if (!positionsAreWithin20PX(lastMouseUp1, lastMouseDown1))
 			return; // It doesn't count as a click if the mouse moved too far between down and up.
+		if (lastMouseDown1.Excluded || lastMouseUp1.Excluded)
+			return;
 		// A single click has occurred.
-		cbOnSingleClick(e, false);
+		if (!fakeMouseDown)
+			cbOnSingleClick(e, false);
 		if (lastMouseUp1.Time - lastMouseUp2.Time < doubleClickTimeMS
 			&& lastMouseUp1.Time - lastMouseDown2.Time < doubleClickTimeMS
 			&& lastMouseUp2.Time - lastMouseDown2.Time < doubleClickTimeMS
 			&& positionsAreWithin20PX(lastMouseUp2, lastMouseDown2)
 			&& positionsAreWithin20PX(lastMouseDown1, lastMouseDown2)
+			&& !lastMouseDown2.Excluded
+			&& !lastMouseUp2.Excluded
 			&& singleClickTimeout)
 		{
 			clearTimeout(singleClickTimeout);
 			singleClickTimeout = null;
 			cbOnDoubleClick(e);
 		}
-		else
+		else if (!fakeMouseDown)
 		{
 			if (singleClickTimeout)
 			{
@@ -11047,9 +11291,56 @@ function DoubleClickHelper($ele, cbOnSingleClick, cbOnDoubleClick, doubleClickTi
 			singleClickTimeout = setTimeout(singleClickFunction, doubleClickTimeMS);
 		}
 	});
+	var RecordMouseEvent = function (eventNum, e)
+	{
+		var src, dst;
+		if (eventNum == 1)
+		{
+			src = lastMouseDown1;
+			dst = lastMouseDown2;
+		}
+		else if (eventNum == 2)
+		{
+			src = lastMouseUp1;
+			dst = lastMouseUp2;
+		}
+		else
+			return;
+		dst.X = src.X;
+		dst.Y = src.Y;
+		dst.Time = src.Time;
+		dst.Excluded = exclude;
+		src.X = e.pageX;
+		src.Y = e.pageY;
+		src.Time = performance.now();
+		src.Excluded = exclude;
+		lastEvent = eventNum;
+	}
 	var positionsAreWithin20PX = function (positionA, positionB)
 	{
 		return Math.abs(positionA.X - positionB.X) < 20 && Math.abs(positionA.Y - positionB.Y) < 20;
+	}
+}
+///////////////////////////////////////////////////////////////
+// Clipboard Helper ///////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipboardHelper()
+{
+	var self = this;
+	var textToCopy = "";
+
+	var $ele = $('<div class="clipboardHelper" style="display:none;"></div>');
+	$('body').append($ele);
+
+	var clipboard = new Clipboard($ele.get(0), { text: function (trigger) { return textToCopy; } });
+
+	self.CopyText = function (text)
+	{
+		if (text == null)
+			textToCopy = "";
+		else
+			textToCopy = text;
+		$ele.click();
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -11121,9 +11412,15 @@ function getDistanceBetweenPointAndElementCenter(x, y, $ele)
 	var dY = Math.abs(y - eY);
 	return Math.sqrt((dX * dX) + (dY * dY));
 }
-function AskYesNo(question, onYes, onNo)
+function AskYesNo(question, onYes, onNo, onError, yesText, noText, title)
 {
-	SimpleDialog.ConfirmHtml(question, onYes, onNo, toaster.Error);
+	SimpleDialog.ConfirmHtml(question, onYes, onNo,
+		{
+			title: title
+			, onError: onError
+			, yesText: yesText
+			, noText: noText
+		});
 }
 String.prototype.padLeft = function (len, c)
 {
@@ -11150,8 +11447,8 @@ function pointInsideElement($ele, pX, pY)
 	if ($ele.length == 0)
 		return false;
 	var o = $ele.offset();
-	var w = $ele.width();
-	var h = $ele.height();
+	var w = $ele.outerWidth(true);
+	var h = $ele.outerHeight(true);
 	return pX >= o.left && pX < o.left + w && pY >= o.top && pY < o.top + h;
 }
 function BlueIrisColorToCssColor(biColor)
@@ -11201,9 +11498,12 @@ String.prototype.endsWith = function (suffix)
 function msToTime(totalMs, includeMs)
 {
 	var ms = totalMs % 1000;
-	var s = parseInt((totalMs / 1000)) % 60;
-	var m = parseInt((totalMs / 60000)) % 60;
-	var h = parseInt((totalMs / 3600000));
+	var totalS = totalMs / 1000;
+	var totalM = totalS / 60;
+	var totalH = totalM / 60;
+	var s = totalS.toFixed(0) % 60;
+	var m = totalM.toFixed(0) % 60;
+	var h = totalH.toFixed(0);
 
 	var retVal;
 	if (h != 0)

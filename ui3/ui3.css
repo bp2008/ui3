@@ -1718,9 +1718,15 @@ div.icon, a.icon
 	background-color: rgba(0,0,0,0.5);
 }
 
-#camimg_loading_anim
+	#camimg_loading.lessIntense
+	{
+		background-color: rgba(0,0,0,0.1);
+	}
+
+#camimg_loading_anim, #camimg_playIcon, #camimg_pauseIcon, #camimg_centerIconBackground
 {
 	display: none;
+	color: #dddddd;
 	width: 100px;
 	height: 100px;
 	position: absolute;
@@ -1730,6 +1736,24 @@ div.icon, a.icon
 	{
 		opacity: 0.5;
 	}
+
+#camimg_playIcon, #camimg_pauseIcon
+{
+	width: 40px;
+	height: 40px;
+}
+
+#camimg_centerIconBackground
+{
+	color: rgba(0,0,0,0.667);
+}
+
+#camimg_preview
+{
+	position: absolute;
+	left: 0px;
+	top: 0px;
+}
 /* context menu */
 .b-m-mpanel
 {
@@ -2569,7 +2593,7 @@ div.icon, a.icon
 	overflow-x: hidden;
 }
 
-#systemlogdialog, #sysconfigdialog
+.listDialog, #sysconfigdialog
 {
 	padding: 10px;
 }
@@ -2579,16 +2603,21 @@ div.icon, a.icon
 	display: block;
 }
 
-#systemlogcontent table, .cameralistcontent table
+.listDialogContent table, .cameralistcontent table
 {
 	border-collapse: collapse;
 	width: 100%;
 }
 
-#systemlogcontent td, .cameralistcontent td, #systemlogcontent th, .cameralistcontent th
+.listDialogContent td, .cameralistcontent td, .listDialogContent th, .cameralistcontent th
 {
 	border-bottom: 1px solid #555555;
-	padding: 2px 4px;
+	padding: 2px 8px;
+}
+
+.listDialogContent th
+{
+	padding: 2px 15px;
 }
 
 .cameralistcontent td
@@ -2597,17 +2626,17 @@ div.icon, a.icon
 	word-wrap: break-word;
 }
 
-#systemlogcontent img
+.listDialogContent img
 {
 	vertical-align: middle;
 }
 
-#systemlogcontent td.levelcolumn
+.listDialogContent td.levelcolumn
 {
 	width: 24px;
 }
 
-#systemlogcontent td.centercolumn
+.listDialogContent td.centercolumn
 {
 	text-align: center;
 }
