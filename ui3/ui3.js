@@ -207,7 +207,6 @@ var togglableUIFeatures =
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
 // CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
-// TODO: Single-click in the clip player does play/pause.  Double-click enters fullscreen mode.  Single-click action only occurs after double-click timer expires unfulfilled.  See YouTube player behavior.
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 
 ///////////////////////////////////////////////////////////////
@@ -2925,16 +2924,16 @@ function PlaybackControls()
 		if (!pointInsideElement($pc, e.pageX, e.pageY) && !pointInsideElement($playbackSettings, e.pageX, e.pageY))
 			hideTimeout = setTimeout(function () { self.FadeOut(); }, 3000);
 	});
-	$(document).mouseup(function ()
+	$(document).mouseup(function (e)
 	{
-		CloseSettings();
+		if (!self.MouseInSettingsPanel(e))
+			CloseSettings();
 	});
 	this.OpenSettingsPanel = function ()
 	{
 		if (new Date().getTime() - 33 <= settingsClosedAt)
 			return;
 		RebuildSettingsPanelEmpty();
-		$playbackSettings.addClass("qualityPanel");
 		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
 			+ '<input id="cbAutoplay" type="checkbox" onclick="playbackControls.AutoplayClicked()" '
 			+ (autoplay ? ' checked="checked"' : '')
@@ -3001,6 +3000,7 @@ function PlaybackControls()
 	var OpenQualityPanel = function ()
 	{
 		RebuildSettingsPanelEmpty();
+		$playbackSettings.addClass("qualityPanel");
 		var $backBtn = $('<div class="playbackSettingsLine playbackSettingsHeading">'
 			+ '<div class="playbackSettingsLeftArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div> '
 			+ 'Quality</div>');
@@ -3047,12 +3047,6 @@ function PlaybackControls()
 		$playbackSettings = $('<div class="playbackSettings"></div>');
 		$playbackSettings.css("bottom", (pcHeight + 12) + "px");
 		$playbackSettings.css("max-height", (availableHeight - 44) + "px");
-		$playbackSettings.on("mouseup", function () { return false; });
-		$playbackSettings.on("mousedown touchstart", function (e)
-		{
-			$.hideAllContextMenus();
-			return stopDefault(e);
-		});
 	}
 	this.AutoplayClicked = function ()
 	{
@@ -5696,6 +5690,13 @@ function VideoPlayerController()
 
 	var doubleClickHelper = null;
 
+	this.suppressDoubleClickHelper = function ()
+	{
+		/// <summary>Call this from mouse or touch events that conflict with the VideoPlayer's double-click helper, and past events will no longer count toward new clicks.</summary>
+		if (doubleClickHelper)
+			doubleClickHelper.Invalidate();
+	}
+
 	this.CurrentPlayerModuleName = function ()
 	{
 		if (playerModule == moduleHolder["jpeg"])
@@ -5753,7 +5754,8 @@ function VideoPlayerController()
 			});
 		}
 		doubleClickHelper = new DoubleClickHelper($("#layoutbody"), $("#playbackHeader,#playbackControls")
-			, function (e, confirmed)
+			, function (e) { return playbackControls.MouseInSettingsPanel(e); } // exclude click if returns true
+			, function (e, confirmed) // Single Click
 			{
 				if (!currentlyLoadingImage.isLive)
 				{
@@ -5768,7 +5770,7 @@ function VideoPlayerController()
 					}
 				}
 			}
-			, function (e)
+			, function (e) // Double Click
 			{
 				if (!currentlyLoadingImage.isLive)
 				{
@@ -6156,7 +6158,7 @@ function VideoPlayerController()
 	var fpsZeroTimeout = null;
 	var RefreshFps = function (imgRequestMs)
 	{
-		var currentFps = fpsCounter.getFPS();
+		var currentFps = fpsCounter.getFPS(imgRequestMs);
 		var maxFps = currentlyLoadingCamera.FPS || 10;
 		statusBars.setProgress("fps", (currentFps / maxFps), currentFps);
 
@@ -6337,7 +6339,8 @@ function JpegVideoModule()
 					nerdStats.UpdateStat("Frame Time", loading.isLive ? "LIVE" : "Unavailable");
 					nerdStats.UpdateStat("Frame Size", "Unavailable");
 					nerdStats.UpdateStat("Codecs", "jpeg");
-					nerdStats.UpdateStat("Buffered Frames", "N/A");
+					nerdStats.UpdateStat("Network Delay", "N/A");
+					nerdStats.UpdateStat("Decoder Delay", "N/A");
 				}
 			}
 			GetNewImage();
@@ -6665,8 +6668,10 @@ function FetchOpenH264VideoModule()
 	var currentSeekPositionPercent = 0;
 	var lastFrameAt = 0;
 	var playbackPaused = false;
+	var perfMonInterval;
 
 	var loading = new BICameraData();
+
 
 	var Initialize = function ()
 	{
@@ -6702,6 +6707,7 @@ function FetchOpenH264VideoModule()
 	{
 		safeFetch.CloseStream();
 		openh264_player.Flush();
+		MeasurePerformance();
 	}
 	this.VisibilityChanged = function (visible)
 	{
@@ -6768,6 +6774,8 @@ function FetchOpenH264VideoModule()
 			playbackPaused = false;
 			$("#pcPlay").hide();
 			$("#pcPause").show();
+			// Calling StopStream before opening the new stream will drop any buffered frames in the decoder, allowing the new stream to begin playback immediately.
+			StopStreaming();
 			safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame, StreamEnded);
 		}
 	}
@@ -6858,7 +6866,7 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
 			nerdStats.UpdateStat("Frame Size", formatBytes(frame.size, 2));
 			nerdStats.UpdateStat("Codecs", "h264");
-			nerdStats.UpdateStat("Buffered Frames", openh264_player.GetBufferedFrameCount());
+			writeDelayStats();
 		}
 		if (playbackPaused && !loading.isLive)
 		{
@@ -6881,7 +6889,56 @@ function FetchOpenH264VideoModule()
 			currentSeekPositionPercent = 1;
 		videoPlayer.Playback_Ended(reverse);
 	}
+	var writeDelayStats = function (onlyIfExists)
+	{
+		if (nerdStats.IsOpen())
+		{
+			var netDelay = openh264_player.GetNetworkDelay().toFixed().padLeft(4, '0') + "ms";
+			var decoderDelay = openh264_player.GetBufferedTime().toFixed().padLeft(4, '0') + "ms (" + openh264_player.GetBufferedFrameCount() + " frames)";
+			if (onlyIfExists)
+			{
+				nerdStats.UpdateStatIfExists("Network Delay", netDelay);
+				nerdStats.UpdateStatIfExists("Decoder Delay", decoderDelay);
+			}
+			else
+			{
+				nerdStats.UpdateStat("Network Delay", netDelay);
+				nerdStats.UpdateStat("Decoder Delay", decoderDelay);
+			}
+		}
+	}
+	var perf_warning_net = null;
+	var perf_warning_cpu = null;
+	var MeasurePerformance = function ()
+	{
+		if (!openh264_player)
+			return;
+		writeDelayStats(true);
+		if (perf_warning_net)
+		{
+			perf_warning_net.remove();
+			perf_warning_net = null;
+		}
+		if (perf_warning_cpu)
+		{
+			perf_warning_cpu.remove();
+			perf_warning_cpu = null;
+		}
+		var bufferedTime = openh264_player.GetBufferedTime();
+		var netDelay = openh264_player.GetNetworkDelay();
+		if (netDelay + bufferedTime > 60000)
+		{
+			toaster.Warning("Video delay has exceeded 60 seconds. The stream is being automatically reinitialized.");
+			ReopenStreamAtCurrentSeekPosition();
+			return;
+		}
+		if (netDelay > 3000)
+			perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime.  Consider changing the streaming quality.', 10000);
+		if (bufferedTime > 3000)
+			perf_warning_cpu = toaster.Warning('Your CPU is not fast enough to handle this stream in realtime.  Consider changing the streaming quality.', 10000);
+	}
 	Initialize();
+	perfMonInterval = setInterval(MeasurePerformance, 10000);
 }
 ///////////////////////////////////////////////////////////////
 // openh264_player ////////////////////////////////////////////
@@ -6895,8 +6952,15 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var canvasH = 0;
 	var display;
 	var decoder;
-	var acceptedFrameCount = 0;
-	var renderedFrameCount = 0;
+	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
+	var renderedFrameCount = 0; // Number of frames rendered.
+	var timestampFirstAcceptedFrame = 0; // Frame timestamp (ms) of the first frame to be submitted to the decoder.
+	var timestampFirstRenderedFrame = 0; // Frame timestamp (ms) of the first frame to be rendered.
+	var timestampLastAcceptedFrame = 0; // Frame timestamp (ms) of the last frame to be submitted to the decoder.
+	var timestampLastRenderedFrame = 0; // Frame timestamp (ms) of the last frame to be rendered.
+	var firstFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the first frame was received from the network.
+	var lastFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the last frame was received from the network.
+	var lastFrameRenderTime = 0; // Milliseconds it took to render the last frame.
 	var loadState = 0; // 0: Initial, 1: Loading, 2: Ready to accept frames
 	var isValid = true;
 	var allFramesAccepted = false;
@@ -6918,8 +6982,13 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			canvas.width = canvasW = frame.width;
 		if (canvasH != frame.height)
 			canvas.height = canvasH = frame.height;
+		var drawStart = performance.now();
 		display.drawNextOuptutPictureGL(frame.width, frame.height, null, new Uint8Array(frame.data));
+		lastFrameRenderTime = performance.now() - drawStart;
 		renderedFrameCount++;
+		if (timestampFirstRenderedFrame == -1)
+			timestampFirstRenderedFrame = frame.timestamp;
+		timestampLastRenderedFrame = frame.timestamp;
 		frameRendered(frame);
 		CheckStreamEndCondition();
 	}
@@ -6994,19 +7063,65 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.GetBufferedFrameCount = function ()
 	{
+		/// <summary>
+		/// Returns the number of buffered video frames that have not yet been rendered. 
+		/// If the system has sufficient computational power, this number should remain close to 0.
+		/// </summary>
 		return acceptedFrameCount - renderedFrameCount;
+	}
+	this.GetNetworkDelay = function ()
+	{
+		/// <summary>
+		/// Returns the approximate number of milliseconds of video delay caused by insufficient network speed.
+		/// If the system has sufficient network bandwidth, this number should remain close to 0.
+		/// One or two frames worth of delay is nothing to worry about.
+		/// </summary>
+		if (timestampFirstAcceptedFrame == -1)
+			return 0;
+		var realTimePassed = performance.now() - firstFrameReceivedAt;
+		var streamTimePassed = timestampLastAcceptedFrame - timestampFirstAcceptedFrame;
+		var delay = realTimePassed - streamTimePassed;
+		if (delay < 0)
+			delay = 0;
+		return delay;
+	}
+	this.GetBufferedTime = function ()
+	{
+		/// <summary>
+		/// Returns the number of milliseconds of buffered video frames, calculated as 
+		/// timestampLastAcceptedFrame - timestampLastRenderedFrame.
+		/// If the system has sufficient computational power, this number should remain close to 0.
+		/// </summary>
+		return timestampLastAcceptedFrame - timestampLastRenderedFrame;
+	}
+	this.GetLastFrameRenderTime = function ()
+	{
+		return lastFrameRenderTime;
 	}
 	this.Flush = function ()
 	{
 		decoder.Flush();
 		acceptedFrameCount = 0;
 		renderedFrameCount = 0;
+		timestampFirstAcceptedFrame = -1;
+		timestampFirstRenderedFrame = -1;
+		timestampLastAcceptedFrame = -1;
+		timestampLastRenderedFrame = -1;
+		firstFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the first frame was received from the network.
+		lastFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the last frame was received from the network.
 		allFramesAccepted = false;
 	}
 	this.AcceptFrame = function (frame)
 	{
 		decoder.Decode(frame);
 		acceptedFrameCount++;
+		timestampLastAcceptedFrame = frame.time;
+		lastFrameReceivedAt = performance.now();
+		if (timestampFirstAcceptedFrame == -1)
+		{
+			timestampFirstAcceptedFrame = frame.time;
+			firstFrameReceivedAt = lastFrameReceivedAt;
+		}
 	}
 	this.GetCanvasRef = function ()
 	{
@@ -7821,6 +7936,8 @@ function CanvasContextMenu()
 	{
 		if (videoPlayer.Loading().image.isLive)
 			return false;
+
+		videoPlayer.suppressDoubleClickHelper();
 
 		lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(videoPlayer.Loading().image.id, videoPlayer.Loading().image.path);
 		var clipData = clipLoader.GetClipFromId(lastRecordContextMenuSelectedClip.clipId);
@@ -10020,7 +10137,7 @@ function BI_Hotkeys()
 		var isRepeatKey = currentlyDownKeys[charCode];
 		currentlyDownKeys[charCode] = true;
 		var retVal = true;
-		if ($(".dialog_wrapper").length == 0)
+		if ($(".dialog_overlay").length == 0)
 		{
 			for (var i = 0; i < defaultSettings.length; i++)
 			{
@@ -10056,7 +10173,7 @@ function BI_Hotkeys()
 		var charCode = e.which ? e.which : event.keyCode;
 		currentlyDownKeys[charCode] = false;
 		var retVal = true;
-		if ($(".dialog_wrapper").length == 0)
+		if ($(".dialog_overlay").length == 0)
 		{
 			for (var i = 0; i < defaultSettings.length; i++)
 			{
@@ -11134,6 +11251,7 @@ function UI3NerdStats()
 	}
 	this.UpdateStat = function (name, value, htmlValue)
 	{
+		/// <summary>Adds or updates the value with the specified name.</summary>
 		if (!dialog)
 			return;
 		if (isFresh)
@@ -11149,6 +11267,20 @@ function UI3NerdStats()
 			dialog.contentChanged();
 		}
 		row.SetValue(value, htmlValue);
+	}
+	this.UpdateStatIfExists = function (name, value, htmlValue)
+	{
+		/// <summary>Updates the value with the specified name only if the name has already been added by a call to UpdateStat.</summary>
+		if (!dialog)
+			return;
+		if (isFresh)
+		{
+			isFresh = false;
+			$root.empty();
+		}
+		var row = statsRows[name];
+		if (row)
+			row.SetValue(value, htmlValue);
 	}
 }
 function StatsRow(name)
@@ -11180,7 +11312,7 @@ function StatsRow(name)
 ///////////////////////////////////////////////////////////////
 // Double Click Helper ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function DoubleClickHelper($ele, $exclude, cbOnSingleClick, cbOnDoubleClick, doubleClickTimeMS)
+function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDoubleClick, doubleClickTimeMS)
 {
 	/// <summary>Handles double-click events in a consistent way between touch and non-touch devices.</summary>
 	/// <param name="$ele">jQuery object containing elements to listen for clicks on.</param>
@@ -11192,6 +11324,8 @@ function DoubleClickHelper($ele, $exclude, cbOnSingleClick, cbOnDoubleClick, dou
 	if (!$ele || $ele.length < 1)
 		return;
 
+	if (typeof excludeFunc != "function")
+		excludeFunc = function () { };
 	if (typeof cbOnSingleClick != "function")
 		cbOnSingleClick = function () { };
 	if (typeof cbOnDoubleClick != "function")
@@ -11236,6 +11370,7 @@ function DoubleClickHelper($ele, $exclude, cbOnSingleClick, cbOnDoubleClick, dou
 			return;
 		if (e.which == 3)
 			return;
+		handleExcludeFunc(e);
 		if (lastEvent == 1)
 			RecordMouseEvent(2, e); // Inject mouse event that the browser likely missed.
 		RecordMouseEvent(1, e);
@@ -11247,6 +11382,7 @@ function DoubleClickHelper($ele, $exclude, cbOnSingleClick, cbOnDoubleClick, dou
 			return;
 		if (e.which == 3)
 			return;
+		handleExcludeFunc(e);
 		var fakeMouseDown = lastEvent == 2;
 		if (fakeMouseDown)
 			RecordMouseEvent(1, e); // Inject mouse event that the browser likely missed.
@@ -11319,6 +11455,20 @@ function DoubleClickHelper($ele, $exclude, cbOnSingleClick, cbOnDoubleClick, dou
 	var positionsAreWithin20PX = function (positionA, positionB)
 	{
 		return Math.abs(positionA.X - positionB.X) < 20 && Math.abs(positionA.Y - positionB.Y) < 20;
+	}
+	var handleExcludeFunc = function (e)
+	{
+		console.log(excludeFunc(e) ? "exclude" : "no exclude")
+		if (excludeFunc(e))
+		{
+			exclude = true;
+			setTimeout(clearExclusion, 0);
+		}
+	}
+	this.Invalidate = function ()
+	{
+		/// <summary>Sets the Excluded flag on all logged mouse events, causing them to not count toward clicks or double clicks.</summary>
+		lastMouseUp1.Excluded = lastMouseUp2.Excluded = lastMouseDown1.Excluded = lastMouseDown2.Excluded = true;
 	}
 }
 ///////////////////////////////////////////////////////////////
