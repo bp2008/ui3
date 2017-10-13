@@ -205,6 +205,8 @@ var togglableUIFeatures =
 // -- Idle Timeout (minutes).  Enabled by default, overridable in local overrides script.
 // -- Option for UI size.
 
+// TODO: Move audio volume to the top of the live view control bar and have PTZ controls be collapsable in the same box as PTZ presets.
+
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
 // CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
@@ -11273,11 +11275,6 @@ function UI3NerdStats()
 		/// <summary>Updates the value with the specified name only if the name has already been added by a call to UpdateStat.</summary>
 		if (!dialog)
 			return;
-		if (isFresh)
-		{
-			isFresh = false;
-			$root.empty();
-		}
 		var row = statsRows[name];
 		if (row)
 			row.SetValue(value, htmlValue);
@@ -11458,7 +11455,6 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 	}
 	var handleExcludeFunc = function (e)
 	{
-		console.log(excludeFunc(e) ? "exclude" : "no exclude")
 		if (excludeFunc(e))
 		{
 			exclude = true;
