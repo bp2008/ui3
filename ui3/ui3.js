@@ -210,6 +210,7 @@ var togglableUIFeatures =
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.
 // CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
+// TODO: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -6880,10 +6881,18 @@ function FetchOpenH264VideoModule()
 		console.log("fetch stream ended: ", message);
 		if (videoFinishedStreaming)
 			openh264_player.PreviousFrameIsLastFrame();
+		else if (loading.isLive && safeFetch.IsActive())
+		{
+			StopStreaming();
+			toaster.Warning("The live stream was lost. Attempting to reconnect...", 5000);
+			ReopenStreamAtCurrentSeekPosition();
+		}
 	}
 	var PlaybackReachedNaturalEnd = function (frameCount)
 	{
 		console.log("playback reached natural end of file after " + frameCount + " frames");
+		if (loading.isLive)
+			return;
 		var reverse = playbackControls.GetPlayReverse();
 		if (reverse)
 			currentSeekPositionPercent = 0;
@@ -10829,6 +10838,10 @@ var safeFetch = new (function ()
 		if (streamer)
 			streamer.StopStreaming();
 	}
+	this.IsActive = function ()
+	{
+		return streamer ? true : false;
+	}
 	var OpenStreamNow = function ()
 	{
 		if (queuedRequest.activated)
@@ -10849,11 +10862,10 @@ var safeFetch = new (function ()
 			clearTimeout(stopTimeout);
 			stopTimeout = null;
 		}
+		streamer = null;
 		if (streamEndedCbForActiveFetch)
 			streamEndedCbForActiveFetch(message, videoFinishedStreaming);
-		streamer = null;
-		if (!queuedRequest.activated)
-			OpenStreamNow();
+		OpenStreamNow();
 	}
 	var StopTimedOut = function ()
 	{
