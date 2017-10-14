@@ -192,7 +192,7 @@ var togglableUIFeatures =
 //-Graceful stream close
 //-Download snapshot
 //-Open snapshot in new tab
-// TODO: Preserve seek position and play/pause state when changing between player modules (and not viewing live video).
+// TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
 
 // TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load with H.264 streams.  Already done for Jpeg streams.
 // TODO: Throttle rapid camera changes to prevent heavy Blue Iris server load with H.264 streams.  Already done for Jpeg streams.
@@ -5710,8 +5710,16 @@ function VideoPlayerController()
 	}
 	this.SetPlayerModule = function (moduleName, refreshVideoNow)
 	{
-		if (playerModule != null && playerModule != moduleHolder[moduleName])
+		var position = 0;
+		var paused = false;
+		if (playerModule != null)
+		{
+			if (playerModule == moduleHolder[moduleName])
+				return;
+			position = playerModule.GetSeekPercent();
+			paused = playerModule.Playback_IsPaused();
 			playerModule.Deactivate();
+		}
 
 		if (moduleName == "jpeg")
 		{
@@ -5722,7 +5730,7 @@ function VideoPlayerController()
 			playerModule = moduleHolder[moduleName];
 		}
 		if (refreshVideoNow)
-			playerModule.OpenVideo(currentlyLoadingImage);
+			playerModule.OpenVideo(currentlyLoadingImage, position, paused);
 	}
 
 	this.PreLoadPlayerModules = function ()
