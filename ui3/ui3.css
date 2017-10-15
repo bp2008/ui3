@@ -1981,9 +1981,7 @@ div.icon, a.icon
 
 	.playbackSettingsCheckboxWrapper label, .customCheckboxWrapper label
 	{
-		min-height: 42px;
-		padding: 0px 10px;
-		line-height: 42px;
+		padding: 13px 10px;
 		overflow: hidden;
 	}
 
@@ -2106,17 +2104,17 @@ div.icon, a.icon
 	padding: 0px 1px;
 }
 
-#playbackSettingsQualityMark.HD
+#playbackSettingsQualityMark.HD, #playbackSettingsQualityMark.S0
 {
 	background-color: #004882;
 }
 
-#playbackSettingsQualityMark.SD
+#playbackSettingsQualityMark.SD, #playbackSettingsQualityMark.S1
 {
 	background-color: #884400;
 }
 
-#playbackSettingsQualityMark.LD
+#playbackSettingsQualityMark.LD, #playbackSettingsQualityMark.S2
 {
 	background-color: #880000;
 }
@@ -2588,20 +2586,20 @@ div.icon, a.icon
 	font-size: 0px;
 }
 
-#sysconfigdialog, #uiSettingsPanel
+#sysconfigdialog.dialog_content, #uiSettingsPanel.dialog_content
 {
-	overflow-x: hidden;
+	padding: 0px;
 }
 
-.listDialog, #sysconfigdialog, #uiSettingsPanel
+.listDialog, #sysconfigcontent, #uiSettingsPanelContent
 {
 	padding: 10px;
 }
 
-#sysconfigcontent label
-{
-	display: block;
-}
+	#sysconfigcontent label
+	{
+		display: block;
+	}
 
 .listDialogContent table, .cameralistcontent table
 {
@@ -2763,6 +2761,11 @@ div.icon, a.icon
 		font-size: 18.6px;
 	}
 
+.dialogOptionsPanel .customCheckboxSpacer
+{
+	display: none;
+}
+
 .dialogOption_item, .camlist_item
 {
 	margin: 7px;
@@ -2774,9 +2777,10 @@ div.icon, a.icon
 	margin: 7px 0px;
 }
 
-.dialogOption_item_info
+.dialogOption_item_info, .dialogOption_item_cb, .dialogOption_item_ddl
 {
-	margin: 7px auto;
+	margin: 0px auto;
+	padding: 4px 0px;
 }
 
 #campropcontent .dialogOption_item_info
@@ -2784,22 +2788,9 @@ div.icon, a.icon
 	max-width: 320px;
 }
 
-.dialogOption_item_cb
-{
-	margin: 0px auto;
-	overflow-x: hidden;
-}
-
 #campropcontent .dialogOption_item_cb
 {
 	max-width: 340px;
-}
-
-.dialogOption_item_ddl
-{
-	margin: 7px auto;
-	position: relative;
-	overflow-x: hidden;
 }
 
 #campropcontent .dialogOption_item_ddl
@@ -2830,27 +2821,23 @@ div.icon, a.icon
 {
 	font-size: 16px;
 	vertical-align: top;
-	line-height: 28px;
-	text-align: right;
-	padding: 0px 10px;
-	display: inline-block;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	padding: 4px 10px;
 }
 
 .dialogOptionsPanel .customCheckboxWrapper label
 {
 	display: block;
 	font-size: 16px;
-	padding-right: 60px;
+	padding-right: 80px;
 }
 
-.dialogOptionsPanel select
+.dialogOptionsPanel select, .dialogOptionsPanel input[type="number"], .dialogOptionsPanel input[type="text"]
 {
+	box-sizing: border-box;
 	height: 28px;
-	position: absolute;
-	right: 10px;
+	line-height: 28px;
+	margin: 0px 10px;
+	float: right;
 }
 
 .largeTextButton
@@ -3101,9 +3088,10 @@ div::-webkit-resizer
 	padding: 7px 0px;
 }
 /* Settings Dialog */
-#uiSettingsPanel
+#uiSettingsPanelContent
 {
-	min-width: 283px;
+	min-width: 245px;
+	max-width: 375px;
 }
 
 .categoryLinks
@@ -3129,3 +3117,23 @@ div::-webkit-resizer
 		{
 			color: #8dc1f1;
 		}
+
+#uiSettingsPanel input[type="number"]
+{
+	width: 80px;
+}
+
+#uiSettingsPanel input[type="text"]
+{
+	width: 169px;
+}
+
+.uiSettingsRow
+{
+	margin: 1px 0px;
+}
+
+	.uiSettingsRow.everyOther
+	{
+		background-color: rgba(255,255,255,0.1);
+	}

@@ -137,6 +137,7 @@ var statusLoader = null;
 var cameraListLoader = null;
 var clipLoader = null;
 var nerdStats = null;
+var sessionTimeout = null;
 
 var currentPrimaryTab = "";
 var skipTabLoadClipLoad = false;
@@ -200,11 +201,7 @@ var togglableUIFeatures =
 
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
-// TODO: UI Settings
-// -- Including an option to forget saved credentials.
-// -- Long press to open context menus (enabling this should disable longpress to set preset).  Affects some devices, e.g. samsung smart TV remote control
-// -- Idle Timeout (minutes).  Enabled by default, overridable in local overrides script.
-// -- Option for UI size.
+// Add an option to forget saved credentials to the UI Settings dialog.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
 // CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
@@ -315,19 +312,12 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_contextMenus_longPress"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: "Context menus open by long press on all systems"
-			, category: "General Settings"
-		}
-		, {
 			key: "ui3_timeout"
 			, value: 10
 			, inputType: "number"
 			, minValue: 0
 			, maxValue: 525600
-			, label: "The UI will close itself after this many minutes of inactivity. 0 to disable."
+			, label: "The UI will close itself after this many minutes of inactivity. (0 to disable)"
 			, category: "General Settings"
 		}
 		, {
@@ -338,6 +328,14 @@ var defaultSettings =
 			, label: "Preferred UI Scale"
 			, onChange: OnChange_ui3_preferred_ui_scale
 			, category: "General Settings"
+		}
+		, {
+			key: "ui3_contextMenus_longPress"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: "Context Menu Compatibility Mode<br><a href=\"javascript:Learn_More_About_Context_Menu_Compatibility_Mode()\">(learn more)</a>"
+			, category: "General Settings"
+			, onChange: OnChange_ui3_contextMenus_longPress
 		}
 		, {
 			key: "ui3_hotkey_togglefullscreen2"
@@ -1014,6 +1012,8 @@ $(function ()
 	clipLoader = new ClipLoader("#clipsbody");
 
 	nerdStats = new UI3NerdStats();
+
+	sessionTimeout = new SessionTimeout();
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
@@ -2209,7 +2209,8 @@ function PtzButtons()
 		{
 			self.PTZ_goto_preset(ele.presetnum);
 		});
-		$ele.longpress(function (e) { self.PresetSet($ele.attr("presetnum")); });
+		if (settings.ui3_contextMenus_longPress != "1")
+			$ele.longpress(function (e) { self.PresetSet($ele.attr("presetnum")); });
 		$ele.mouseenter(function (e)
 		{
 			if (!ptzControlsEnabled)
@@ -3127,7 +3128,7 @@ function PlaybackControls()
 	{
 		if (!hintText)
 			hintText = genericQualityHelper.GetShortAbbr();
-		$("#playbackSettingsQualityMark").removeClass("HD SD LD");
+		$("#playbackSettingsQualityMark").removeClass("HD SD LD S0 S1 S2");
 		$("#playbackSettingsQualityMark").addClass(hintText);
 		$("#playbackSettingsQualityMark").text(hintText);
 	}
@@ -6057,6 +6058,7 @@ function VideoPlayerController()
 
 	this.SeekToPercent = function (pos)
 	{
+		seekBar.drawSeekbarAtPercent(pos);
 		playerModule.OpenVideo(currentlyLoadingImage, pos, playerModule.Playback_IsPaused());
 	}
 	this.SeekByMs = function (offset)
@@ -6962,7 +6964,7 @@ function FetchOpenH264VideoModule()
 	var perf_warning_cpu = null;
 	var MeasurePerformance = function ()
 	{
-		if (!openh264_player)
+		if (!openh264_player || !isCurrentlyActive)
 			return;
 		writeDelayStats(true);
 		if (perf_warning_net)
@@ -7945,7 +7947,7 @@ function CanvasContextMenu()
 			, onContextMenu: onTriggerLiveContextMenu
 			, onCancelContextMenu: onCancelLiveContextMenu
 			, onShow: onShowLiveContextMenu
-			, clickType: "right"
+			, clickType: GetPreferredContextMenuTrigger()
 		};
 	$("#layoutbody").contextmenu(optionLive);
 	var onShowRecordContextMenu = function (menu)
@@ -8042,7 +8044,7 @@ function CanvasContextMenu()
 			]
 			, onContextMenu: onTriggerRecordContextMenu
 			, onShow: onShowRecordContextMenu
-			, clickType: "right"
+			, clickType: GetPreferredContextMenuTrigger()
 		};
 	$("#layoutbody").contextmenu(optionRecord);
 }
@@ -8080,7 +8082,7 @@ function CalendarContextMenu()
 				, { text: "Clear Filter", icon: "", alias: "clear", action: onContextMenuAction }
 
 			]
-			, clickType: "right"
+			, clickType: GetPreferredContextMenuTrigger()
 		};
 	$("#dateRange").contextmenu(menuOptions);
 }
@@ -8218,7 +8220,7 @@ function ClipListContextMenu()
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
 
 			]
-			, clickType: "right"
+			, clickType: GetPreferredContextMenuTrigger()
 			, onContextMenu: onTriggerContextMenu
 			, onShow: onShowMenu
 		};
@@ -8308,7 +8310,7 @@ function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onT
 			, items: menuItemArray
 			, onContextMenu: onTriggerContextMenu
 			, onShow: onShowContextMenu
-			, clickType: "right"
+			, clickType: GetPreferredContextMenuTrigger()
 		};
 	$(selector).contextmenu(menuOptions);
 	if (onToggle)
@@ -8690,22 +8692,22 @@ function CameraProperties()
 					$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
-					$generalSection.append('<div class="dialogOption_item dialogOption_item_ddl">' + GetDialogOptionLabel("Record:")
+					$generalSection.append('<div class="dialogOption_item dialogOption_item_ddl">'
 						+ '<select mysetting="record|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 						+ GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
 						+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
 						+ GetHtmlOptionElementMarkup("1", "Continuously", response.data.record.toString())
 						+ GetHtmlOptionElementMarkup("2", "When triggered", response.data.record.toString())
 						+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString())
-						+ '</select>'
+						+ '</select>' + GetDialogOptionLabel("Record:")
 						+ '</div>');
-					$generalSection.append('<div class="dialogOption_item dialogOption_item_ddl">' + GetDialogOptionLabel("Alerts:")
+					$generalSection.append('<div class="dialogOption_item dialogOption_item_ddl">'
 						+ '<select mysetting="alerts|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 						+ GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
 						+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
 						+ GetHtmlOptionElementMarkup("1", "Any camera in group is triggered", response.data.alerts.toString())
 						+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString())
-						+ '</select>'
+						+ '</select>' + GetDialogOptionLabel("Alerts:")
 						+ '</div>');
 					$camprop.append($generalSection);
 
@@ -8733,13 +8735,13 @@ function CameraProperties()
 					$motionSection.append(GetRangeSlider("setmotion.audio_sense|" + camId, "Audio Sensitivity: "
 						, response.data.setmotion.audio_sense, 0, 32000, 320, false, percentScalingMethod
 						, camPropSliderChanged));
-					$motionSection.append('<div class="dialogOption_item dialogOption_item_ddl">' + GetDialogOptionLabel("Highlight:")
+					$motionSection.append('<div class="dialogOption_item dialogOption_item_ddl">'
 						+ '<select mysetting="setmotion.showmotion|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 						+ GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
 						+ GetHtmlOptionElementMarkup("1", "Motion", response.data.setmotion.showmotion.toString())
 						+ GetHtmlOptionElementMarkup("2", "Objects", response.data.setmotion.showmotion.toString())
 						+ GetHtmlOptionElementMarkup("3", "Motion + Objects", response.data.setmotion.showmotion.toString())
-						+ '</select>'
+						+ '</select>' + GetDialogOptionLabel("Highlight:")
 						+ '</div>');
 					$camprop.append($motionSection);
 
@@ -9668,7 +9670,9 @@ function AudioPlayer()
 		{
 			$audiosourceobj.attr("src", newSrc);
 			audioobj.load();
-			audioobj.play()["catch"](function (e) { }); // .catch == ["catch"], but .catch is invalid in IE 8-
+			var playPromise = audioobj.play();
+			if (playPromise)
+				playPromise["catch"](function (e) { }); // .catch == ["catch"], but .catch is invalid in IE 8-
 		}
 	}
 	this.audioStop = function ()
@@ -9869,7 +9873,7 @@ function HLSPlayer()
 			[
 				{ text: "Open stream in New Tab", icon: "", alias: "newtab", action: onHlsContextMenuAction }
 			]
-			, clickType: "right"
+			, clickType: GetPreferredContextMenuTrigger()
 		};
 
 	var registerHlsContextMenu = function ($ele)
@@ -10121,8 +10125,34 @@ function BI_Hotkeys()
 	$(document).keydown(function (e)
 	{
 		var charCode = e.which ? e.which : event.keyCode;
+		var hotkeysBeingRepeated = currentlyDownKeys[charCode];
+		if (hotkeysBeingRepeated)
+		{
+			for (var i = 0; i < hotkeysBeingRepeated.length; i++)
+			{
+				var s = hotkeysBeingRepeated[i];
+				if (s.allowRepeatKey)
+				{
+					var val = settings[s.key];
+					if (!val)
+						continue;
+					var parts = val.split("|");
+					if (parts.length >= 4)
+					{
+						if ((e.ctrlKey ? "1" : "0") == parts[0]
+							&& (e.altKey ? "1" : "0") == parts[1]
+							&& (e.shiftKey ? "1" : "0") == parts[2]
+							&& (charCode == parts[3]))
+						{
+							s.actionDown();
+						}
+					}
+				}
+			}
+			return false;
+		}
 		var isRepeatKey = currentlyDownKeys[charCode];
-		currentlyDownKeys[charCode] = true;
+		currentlyDownKeys[charCode] = [];
 		var retVal = true;
 		if ($(".dialog_overlay").length == 0)
 		{
@@ -10131,21 +10161,22 @@ function BI_Hotkeys()
 				var s = defaultSettings[i];
 				if (s.hotkey)
 				{
-					if (!isRepeatKey || s.allowRepeatKey)
+					if (typeof s.actionDown == "function")
 					{
-						if (typeof s.actionDown == "function")
+						var val = settings[s.key];
+						if (!val)
+							continue;
+						var parts = val.split("|");
+						if (parts.length >= 4)
 						{
-							var parts = settings[s.key].split("|");
-							if (parts.length >= 4)
+							if ((e.ctrlKey ? "1" : "0") == parts[0]
+								&& (e.altKey ? "1" : "0") == parts[1]
+								&& (e.shiftKey ? "1" : "0") == parts[2]
+								&& (charCode == parts[3]))
 							{
-								if ((e.ctrlKey ? "1" : "0") == parts[0]
-									&& (e.altKey ? "1" : "0") == parts[1]
-									&& (e.shiftKey ? "1" : "0") == parts[2]
-									&& (charCode == parts[3]))
-								{
-									s.actionDown();
-									retVal = false;
-								}
+								currentlyDownKeys[charCode].push(s);
+								s.actionDown();
+								retVal = false;
 							}
 						}
 					}
@@ -10158,25 +10189,18 @@ function BI_Hotkeys()
 	$(document).keyup(function (e)
 	{
 		var charCode = e.which ? e.which : event.keyCode;
+		var hotkeysBeingReleased = currentlyDownKeys[charCode];
 		currentlyDownKeys[charCode] = false;
 		var retVal = true;
-		if ($(".dialog_overlay").length == 0)
+		if (hotkeysBeingReleased)
 		{
-			for (var i = 0; i < defaultSettings.length; i++)
+			for (var i = 0; i < hotkeysBeingReleased.length; i++)
 			{
-				var s = defaultSettings[i];
-				if (s.hotkey && typeof s.actionUp == "function")
+				var s = hotkeysBeingReleased[i];
+				if (typeof s.actionUp == "function")
 				{
-					var parts = settings[s.key].split("|");
-					if (parts.length >= 4)
-					{
-						var charCode = e.which ? e.which : event.keyCode
-						if (charCode == parts[3])
-						{
-							s.actionUp();
-							retVal = false;
-						}
-					}
+					s.actionUp();
+					retVal = false;
 				}
 			}
 		}
@@ -10206,7 +10230,6 @@ function BI_Hotkeys()
 		var timePassed = lastDigitalPanAction == 0 ? 16 : Math.min(1000, timeNow - lastDigitalPanAction);
 		// Pan speed will increase with a larger browser window.
 		var panSpeed = (timePassed / 1000) * (($(window).width() + $(window).height()) / 2);
-		console.log(panSpeed);
 		if (self.digitalPanUp_isActive)
 			dy += panSpeed;
 		if (self.digitalPanDown_isActive)
@@ -10233,7 +10256,7 @@ function BI_Hotkeys()
 		lastDigitalPanAction = 0;
 	}
 
-	var getKeyName = function (charCode)
+	this.getKeyName = function (charCode)
 	{
 		var name = charCodeToKeyNameMap[charCode];
 		if (typeof name == "undefined")
@@ -10330,7 +10353,7 @@ function Toaster()
 			"showMethod": "fadeIn",
 			"hideMethod": "fadeOut"
 		}
-	var showToastInternal = function (type, message, showTime, closeButton)
+	var showToastInternal = function (type, message, showTime, closeButton, onClick)
 	{
 		if (typeof message == "object" && typeof message.stack == "string")
 			message = message.stack;
@@ -10346,27 +10369,30 @@ function Toaster()
 			overrideOptions.extendedTimeOut = 60000;
 		}
 
+		if (typeof onClick == "function")
+			overrideOptions.onclick = onClick;
+
 		var myToast = toastr[type](message, null, overrideOptions);
 
 		bilog.info(type + " toast: " + message);
 
 		return myToast;
 	}
-	this.Success = function (message, showTime, closeButton)
+	this.Success = function (message, showTime, closeButton, onClick)
 	{
-		return showToastInternal('success', message, showTime, closeButton);
+		return showToastInternal('success', message, showTime, closeButton, onClick);
 	}
-	this.Info = function (message, showTime, closeButton)
+	this.Info = function (message, showTime, closeButton, onClick)
 	{
-		return showToastInternal('info', message, showTime, closeButton);
+		return showToastInternal('info', message, showTime, closeButton, onClick);
 	}
-	this.Warning = function (message, showTime, closeButton)
+	this.Warning = function (message, showTime, closeButton, onClick)
 	{
-		return showToastInternal('warning', message, showTime, closeButton);
+		return showToastInternal('warning', message, showTime, closeButton, onClick);
 	}
-	this.Error = function (message, showTime, closeButton)
+	this.Error = function (message, showTime, closeButton, onClick)
 	{
-		return showToastInternal('error', message, showTime, closeButton);
+		return showToastInternal('error', message, showTime, closeButton, onClick);
 	}
 }
 function showSuccessToast(message, showTime, closeButton)
@@ -10563,6 +10589,53 @@ var BI_CustomEvent =
 					}
 		}
 	};
+///////////////////////////////////////////////////////////////
+// Session Timeout ////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function SessionTimeout()
+{
+	var self = this;
+	var idleTimer = null;
+	var timerStarted = performance.now();
+
+	var idleLogoff = function ()
+	{
+		if (settings.ui3_timeout > 0)
+		{
+			currentServer.isLoggingOut = true;
+			location.href = 'timeout.htm?path=' + encodeURIComponent(location.pathname + location.search);
+		}
+	}
+
+	var resetTimer = function ()
+	{
+		if (idleTimer != null)
+			clearTimeout(idleTimer);
+		if (settings.ui3_timeout > 0)
+		{
+			timerStarted = performance.now();
+			idleTimer = setTimeout(idleLogoff, getTimeoutMs());
+		}
+	}
+
+	var getTimeoutMs = function ()
+	{
+		return settings.ui3_timeout * 60 * 1000;
+	}
+	this.GetMsUntilTimeout = function ()
+	{
+		/// <summary>Returns the number of milliseconds until idle timeout occurs, or the string "Idle timeout is not enabled".</summary>
+		if (settings.ui3_timeout > 0)
+		{
+			var waited = performance.now() - timerStarted;
+			return getTimeoutMs() - waited;
+		}
+		return "Idle timeout is not enabled";
+	}
+
+	$(document.body).bind('mousemove keydown click', resetTimer);
+	resetTimer();
+}
 ///////////////////////////////////////////////////////////////
 // Loading Helper /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -11486,6 +11559,7 @@ function UISettingsPanel()
 	var initialized = false;
 	var modal_dialog = null;
 	var $dlg = $();
+	var $content = $();
 	var inputs = {};
 
 	var Initialize = function ()
@@ -11515,6 +11589,8 @@ function UISettingsPanel()
 		Initialize();
 		CloseDialog();
 		$dlg = $('<div id="uiSettingsPanel" class="dialogOptionsPanel"></div>');
+		$content = $('<div id="uiSettingsPanelContent"></div>');
+		$dlg.append($content);
 		modal_dialog = $dlg.dialog({
 			title: "UI Settings"
 			, overlayOpacity: 0.3
@@ -11529,13 +11605,35 @@ function UISettingsPanel()
 	{
 		var cat = new CollapsibleSection("uiSettings_category_" + index, category, modal_dialog);
 
+		var rowIdx = 0;
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
 			var s = defaultSettings[i];
 			if (s.label && s.category == category)
 			{
 				var $row = $('<div class="uiSettingsRow"></div>');
-				if (s.inputType == "checkbox")
+				if (rowIdx++ % 2 == 1)
+					$row.addClass('everyOther');
+				if (s.hotkey)
+				{
+					var $input = $('<input type="text" />');
+					AddKeydownEventToElement(HandleHotkeyChange, s, $input);
+					var val = settings[s.key];
+					if (!val)
+						val = "";
+					var parts = val.split("|");
+					if (parts.length < 4)
+						$input.val("unset");
+					else
+						$input.val((parts[0] == "1" ? "CTRL + " : "")
+							+ (parts[1] == "1" ? "ALT + " : "")
+							+ (parts[2] == "1" ? "SHIFT + " : "")
+							+ hotkeys.getKeyName(parts[3]));
+					$row.addClass('dialogOption_item dialogOption_item_info');
+					$row.append($input);
+					$row.append(GetDialogOptionLabel(s.label));
+				}
+				else if (s.inputType == "checkbox")
 				{
 					$row.append(GetCustomCheckbox(s, s.label, settings[s.key] == "1", CheckboxChanged));
 				}
@@ -11547,33 +11645,74 @@ function UISettingsPanel()
 						sb.push(GetHtmlOptionElementMarkup(s.options[n], s.options[n], settings[s.key]));
 					sb.push('</select>');
 					var $select = $(sb.join(''));
-					AddChangeEventToSelectElement($select, s);
+					AddChangeEventToElement(SelectChanged, s, $select);
 					$row.addClass('dialogOption_item dialogOption_item_ddl');
-					$row.append(GetDialogOptionLabel(s.label));
 					$row.append($select);
+					$row.append(GetDialogOptionLabel(s.label));
+				}
+				else if (s.inputType == "number")
+				{
+					var $input = $('<input type="number" />');
+					$input.val(settings[s.key]);
+					AddChangeEventToElement(NumberChanged, s, $input);
+					$row.addClass('dialogOption_item dialogOption_item_info');
+					$row.append($input);
+					$row.append(GetDialogOptionLabel(s.label));
 				}
 				cat.$section.append($row);
 			}
 		}
 
-		$dlg.append(cat.$heading);
-		$dlg.append(cat.$section);
+		$content.append(cat.$heading);
+		$content.append(cat.$section);
 	}
-	var CheckboxChanged = function (s, checked)
+	var CheckboxChanged = function (defaultSetting, checked)
 	{
-		settings[s.key] = checked ? "1" : "0";
+		settings[defaultSetting.key] = checked ? "1" : "0";
+		CallOnChangeCallback(defaultSetting);
 	}
-	var SelectChanged = function (s, $select)
+	var SelectChanged = function (e, s, $select)
 	{
 		var selectedValue = $select.val();
 		if (s.options.indexOf(selectedValue) != -1)
 			settings[s.key] = selectedValue;
 		CallOnChangeCallback(s);
 	}
-	var AddChangeEventToSelectElement = function ($select, defaultSetting)
+	var NumberChanged = function (e, defaultSetting, $input)
 	{
-		/// <summary>Adds a change event to the select element.  Doing this in a separate function forces the creation of a new scope and that ensures the arguments to SelectChanged stay correct.</summary>
-		$select.on('change', function () { SelectChanged(defaultSetting, $select); });
+		settings[defaultSetting.key] = parseFloat($input.val());
+		CallOnChangeCallback(defaultSetting);
+	}
+	var HandleHotkeyChange = function (e, defaultSetting, $input)
+	{
+		var charCode = e.which ? e.which : event.keyCode;
+
+		var modifiers = "";
+		if (e.ctrlKey)
+			modifiers += "CTRL + ";
+		if (e.altKey)
+			modifiers += "ALT + ";
+		if (e.shiftKey)
+			modifiers += "SHIFT + ";
+
+		var keyName = hotkeys.getKeyName(charCode);
+
+		$input.val(modifiers + keyName);
+
+		var hotkeyValue = (e.ctrlKey ? "1" : "0") + "|" + (e.altKey ? "1" : "0") + "|" + (e.shiftKey ? "1" : "0") + "|" + charCode + "|" + keyName;
+		settings.setItem(defaultSetting.key, hotkeyValue);
+
+		return false;
+	}
+	var AddChangeEventToElement = function (eventHandler, defaultSetting, $input)
+	{
+		/// <summary>Adds a change event handler to the input element.  Doing this in a separate function forces the creation of a new scope and that ensures the arguments to the event handler stay correct.</summary>
+		$input.on('change', function (e) { return eventHandler(e, defaultSetting, $input); });
+	}
+	var AddKeydownEventToElement = function (eventHandler, defaultSetting, $input)
+	{
+		/// <summary>Adds a keydown event handler to the input element.</summary>
+		$input.on('keydown', function (e) { return eventHandler(e, defaultSetting, $input); });
 	}
 	var CallOnChangeCallback = function (s)
 	{
@@ -11601,6 +11740,32 @@ function UISettingsPanel()
 function OnChange_ui3_preferred_ui_scale(newValue)
 {
 	uiSizeHelper.SetUISizeByName(newValue);
+}
+var ui3_contextMenus_longPress_toast = null;
+function OnChange_ui3_contextMenus_longPress(newValue)
+{
+	if (ui3_contextMenus_longPress_toast)
+		ui3_contextMenus_longPress_toast.remove();
+	ui3_contextMenus_longPress_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
+		, function ()
+		{
+			location.reload();
+		});
+}
+function Learn_More_About_Context_Menu_Compatibility_Mode()
+{
+	$('<div style="padding:10px;font-size: 1.2em;">'
+		+ 'Many useful functions in this interface are accessed by context menus (a.k.a. "Right-click menus").<br><br>'
+		+ 'Context menus are normally opened by right clicking.  On most touchscreen devices, instead you must press and hold.<br><br>'
+		+ 'However on some devices it is impossible to open context menus the normal way.  If this applies to you,'
+		+ ' enable \"Context Menu Compatibility Mode\".  This will change how context menus'
+		+ ' are triggered so they should open when the left mouse button is held down for a moment.'
+		+ '</div>')
+		.modalDialog({ title: "Context Menu Compatibility Mode" });
+}
+function GetPreferredContextMenuTrigger()
+{
+	return settings.ui3_contextMenus_longPress == "1" ? "longpress" : "right";
 }
 ///////////////////////////////////////////////////////////////
 // Collapsible Section for Dialogs ////////////////////////////
@@ -11814,9 +11979,9 @@ function msToTime(totalMs, includeMs)
 	var totalS = totalMs / 1000;
 	var totalM = totalS / 60;
 	var totalH = totalM / 60;
-	var s = totalS.toFixed(0) % 60;
-	var m = totalM.toFixed(0) % 60;
-	var h = totalH.toFixed(0);
+	var s = Math.floor(totalS) % 60;
+	var m = Math.floor(totalM) % 60;
+	var h = Math.floor(totalH);
 
 	var retVal;
 	if (h != 0)

@@ -85,7 +85,7 @@
 		[type="checkbox"]:checked + label .ui:after
 		{
 			right: -18px;
-			top: 9px;
+			top: -4px;
 			content: "yes";
 			color: #6ea8dd;
 		}
