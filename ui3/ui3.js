@@ -103,6 +103,7 @@ var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
 var clipboardHelper;
 var uiSizeHelper = null;
+var uiSettingsPanel = null;
 var audioPlayer = null;
 var diskUsageGUI = null;
 var systemConfig = null;
@@ -214,6 +215,7 @@ var togglableUIFeatures =
 // Settings ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var settings = null;
+var settingsCategoryList = ["General Settings", "Hotkeys"];
 var defaultSettings =
 	[
 		{
@@ -311,6 +313,31 @@ var defaultSettings =
 		, {
 			key: "ui3_collapsible_filterRecordings"
 			, value: "1"
+		}
+		, {
+			key: "ui3_contextMenus_longPress"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: "Context menus open by long press on all systems"
+			, category: "General Settings"
+		}
+		, {
+			key: "ui3_timeout"
+			, value: 10
+			, inputType: "number"
+			, minValue: 0
+			, maxValue: 525600
+			, label: "The UI will close itself after this many minutes of inactivity. 0 to disable."
+			, category: "General Settings"
+		}
+		, {
+			key: "ui3_preferred_ui_scale"
+			, value: "Auto"
+			, inputType: "select"
+			, options: ["Auto", "Large", "Medium", "Small", "Smaller"]
+			, label: "Preferred UI Scale"
+			, onChange: OnChange_ui3_preferred_ui_scale
+			, category: "General Settings"
 		}
 		, {
 			key: "ui3_hotkey_togglefullscreen2"
@@ -912,6 +939,8 @@ $(function ()
 
 	uiSizeHelper = new UiSizeHelper();
 
+	uiSettingsPanel = new UISettingsPanel();
+
 	audioPlayer = new AudioPlayer();
 
 	diskUsageGUI = new DiskUsageGUI();
@@ -1084,14 +1113,6 @@ function HandlePreLoadUrlParameters()
 ///////////////////////////////////////////////////////////////
 // UI Resize //////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function SetUISize(size)
-{
-	uiSizeHelper.autoSize = size == "auto";
-	if (!uiSizeHelper.autoSize)
-		uiSizeHelper.SetSize(size);
-	resized();
-	//setTimeout(resized);
-}
 function resized()
 {
 	var windowW = $(window).width();
@@ -1230,23 +1251,23 @@ function UiSizeHelper()
 	var mediumMinW = 540;// 450 515 900;
 	var smallMinW = 350;//680;
 	var currentSize = "large";
-	this.autoSize = true;
+	var autoSize = true;
 
 	this.SetMostAppropriateSize = function (availableWidth, availableHeight)
 	{
-		if (self.autoSize)
+		if (autoSize)
 		{
 			if (availableWidth < smallMinW)
-				self.SetSize("smaller");
+				SetSize("smaller");
 			else if (availableHeight < mediumMinH || availableWidth < mediumMinW)
-				self.SetSize("small");
+				SetSize("small");
 			else if (availableHeight < largeMinH || availableWidth < largeMinW)
-				self.SetSize("medium");
+				SetSize("medium");
 			else
-				self.SetSize("large");
+				SetSize("large");
 		}
 	}
-	this.SetSize = function (size)
+	var SetSize = function (size)
 	{
 		if (currentSize == size)
 			return;
@@ -1266,6 +1287,18 @@ function UiSizeHelper()
 	{
 		return currentSize;
 	}
+	this.SetUISizeByName = function (size)
+	{
+		if (size)
+			size = size.toLowerCase();
+		autoSize = size == "auto";
+		if (!autoSize)
+			SetSize(size);
+		resized();
+		//setTimeout(resized);
+	}
+
+	setTimeout(function () { self.SetUISizeByName(settings.ui3_preferred_ui_scale); }, 0);
 }
 ///////////////////////////////////////////////////////////////
 // Progress bar / Scrub bar / Status bar //////////////////////
@@ -1642,8 +1675,7 @@ function DropdownBoxes()
 				switch (item.cmd)
 				{
 					case "ui_settings":
-						if (developerMode)
-							location.reload(true);
+						uiSettingsPanel.open();
 						break;
 					case "about_this_ui":
 						openAboutDialog();
@@ -7875,21 +7907,6 @@ function CanvasContextMenu()
 				break;
 			case "saveas":
 				return true;
-			case "sizeAuto":
-				SetUISize('auto');
-				break;
-			case "sizeLarge":
-				SetUISize('large');
-				break;
-			case "sizeMedium":
-				SetUISize('medium');
-				break;
-			case "sizeSmall":
-				SetUISize('small');
-				break;
-			case "sizeSmaller":
-				SetUISize('smaller');
-				break;
 			case "statsfornerds":
 				nerdStats.Open();
 				break;
@@ -7913,17 +7930,6 @@ function CanvasContextMenu()
 				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
-				, { type: "splitLine" }
-				, {
-					text: "UI Size (Temporary)", icon: "", alias: "uiSize", type: "group", width: 180, items:
-					[
-						{ text: "Auto", icon: "", alias: "sizeAuto", action: onLiveContextMenuAction }
-						, { text: "Large", icon: "", alias: "sizeLarge", action: onLiveContextMenuAction }
-						, { text: "Medium", icon: "", alias: "sizeMedium", action: onLiveContextMenuAction }
-						, { text: "Small", icon: "", alias: "sizeSmall", action: onLiveContextMenuAction }
-						, { text: "Smaller", icon: "", alias: "sizeSmaller", action: onLiveContextMenuAction }
-					]
-				}
 				, { type: "splitLine" }
 				, { text: "Trigger Now", icon: "#svg_x5F_Alert1", iconClass: "iconBlue", alias: "trigger", action: onLiveContextMenuAction }
 				, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
@@ -8595,7 +8601,7 @@ function CameraProperties()
 
 		var camName = cameraListLoader.GetCameraName(camId);
 		modal_cameraPropDialog = $('<div id="campropdialog">'
-			+ '<div id="campropcontent"><div style="text-align: center">Loading...</div></div>'
+			+ '<div id="campropcontent" class="dialogOptionsPanel"><div style="text-align: center">Loading...</div></div>'
 			+ '</div>'
 		).dialog({
 			title: "Camera Properties"
@@ -8662,8 +8668,9 @@ function CameraProperties()
 					var cam = cameraListLoader.GetCameraWithId(camId);
 					if (cam)
 					{
-						$camprop.append(GetCameraPropertySectionHeading('info', "Information"));
-						var $infoSection = GetCameraPropertySection('info');
+						var collapsible = new CollapsibleSection("info", "Information", modal_cameraPropDialog);
+						$camprop.append(collapsible.$heading);
+						var $infoSection = collapsible.$section;
 						$infoSection.append(GetInfo("ID", cam.optionValue));
 						$infoSection.append(GetInfo("Name", cam.optionDisplay));
 						$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
@@ -8673,14 +8680,15 @@ function CameraProperties()
 						$camprop.append($infoSection);
 					}
 
-					$camprop.append(GetCameraPropertySectionHeading('gs', "General Settings"));
-					var $generalSection = GetCameraPropertySection('gs');
+					var collapsible = new CollapsibleSection('gs', "General Settings", modal_cameraPropDialog);
+					$camprop.append(collapsible.$heading);
+					var $generalSection = collapsible.$section;
 					$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
-					$generalSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Record:")
+					$generalSection.append('<div class="dialogOption_item dialogOption_item_ddl">' + GetDialogOptionLabel("Record:")
 						+ '<select mysetting="record|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 						+ GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
 						+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
@@ -8689,7 +8697,7 @@ function CameraProperties()
 						+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString())
 						+ '</select>'
 						+ '</div>');
-					$generalSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Alerts:")
+					$generalSection.append('<div class="dialogOption_item dialogOption_item_ddl">' + GetDialogOptionLabel("Alerts:")
 						+ '<select mysetting="alerts|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 						+ GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
 						+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
@@ -8699,8 +8707,9 @@ function CameraProperties()
 						+ '</div>');
 					$camprop.append($generalSection);
 
-					$camprop.append(GetCameraPropertySectionHeading('mt', "Motion/Trigger"));
-					var $motionSection = GetCameraPropertySection('mt');
+					var collapsible = new CollapsibleSection('mt', "Motion/Trigger", modal_cameraPropDialog);
+					$camprop.append(collapsible.$heading);
+					var $motionSection = collapsible.$section;
 					$motionSection.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
 					$motionSection.append(GetRangeSlider("setmotion.sense|" + camId, "Min. object size: "
 						, response.data.setmotion.sense, 1000, 11000, 50, true, motionSenseScalingMethod
@@ -8722,7 +8731,7 @@ function CameraProperties()
 					$motionSection.append(GetRangeSlider("setmotion.audio_sense|" + camId, "Audio Sensitivity: "
 						, response.data.setmotion.audio_sense, 0, 32000, 320, false, percentScalingMethod
 						, camPropSliderChanged));
-					$motionSection.append('<div class="camprop_item camprop_item_ddl">' + GetCameraPropertyLabel("Highlight:")
+					$motionSection.append('<div class="dialogOption_item dialogOption_item_ddl">' + GetDialogOptionLabel("Highlight:")
 						+ '<select mysetting="setmotion.showmotion|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
 						+ GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
 						+ GetHtmlOptionElementMarkup("1", "Motion", response.data.setmotion.showmotion.toString())
@@ -8732,18 +8741,20 @@ function CameraProperties()
 						+ '</div>');
 					$camprop.append($motionSection);
 
-					$camprop.append(GetCameraPropertySectionHeading('mro', "Manual Recording Options"));
-					var $manrecSection = GetCameraPropertySection('mro');
-					$manrecSection.append('<div class="camprop_item camprop_item_center">'
+					var collapsible = new CollapsibleSection('mro', "Manual Recording Options", modal_cameraPropDialog);
+					$camprop.append(collapsible.$heading);
+					var $manrecSection = collapsible.$section;
+					$manrecSection.append('<div class="dialogOption_item dialogOption_item_center">'
 						+ GetCameraPropertyButtonMarkup("Trigger", "trigger", "largeBtnYellow", camId)
 						+ GetCameraPropertyButtonMarkup("Snapshot", "snapshot", "largeBtnBlue", camId)
 						+ GetCameraPropertyButtonMarkup("Toggle Recording", "manrec", "largeBtnRed", camId)
 						+ '</div>');
 					$camprop.append($manrecSection);
 
-					$camprop.append(GetCameraPropertySectionHeading('mgmt', "Camera Management"));
-					var $mgmtSection = GetCameraPropertySection('mgmt');
-					$mgmtSection.append('<div class="camprop_item camprop_item_center">'
+					var collapsible = new CollapsibleSection('mgmt', "Camera Management", modal_cameraPropDialog);
+					$camprop.append(collapsible.$heading);
+					var $mgmtSection = collapsible.$section;
+					$mgmtSection.append('<div class="dialogOption_item dialogOption_item_center">'
 						+ GetCameraPropertyButtonMarkup("Pause", "pause", "largeBtnDisabled", camId)
 						+ GetCameraPropertyButtonMarkup("Restart", "reset", "largeBtnBlue", camId)
 						+ GetCameraPropertyButtonMarkup("Disable", "disable", "largeBtnRed", camId)
@@ -8761,7 +8772,7 @@ function CameraProperties()
 					toaster.Error(ex);
 				}
 				if (developerMode)
-					$camprop.append('<div class="camprop_item camprop_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraProperties.OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
+					$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraProperties.OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
 
 				modal_cameraPropDialog.contentChanged(!loadedOnce);
 				loadedOnce = true;
@@ -8778,48 +8789,13 @@ function CameraProperties()
 	}
 	var GetInfo = function (label, value)
 	{
-		var $info = $('<div class="camprop_item camprop_item_info"></div>');
+		var $info = $('<div class="dialogOption_item dialogOption_item_info"></div>');
 		$info.text(label + ": " + value);
 		return $info;
 	}
-	var GetCameraPropertySectionHeading = function (id, html)
-	{
-		var $heading = $('<div class="camprop_section_heading" mysettingsid="' + id + '">' + html + '</div>');
-		$heading.on('click', CameraPropertiesSectionHeadingClick);
-		if (settings.getItem("ui3_cps_" + id + "_visible") == "1")
-			$heading.addClass("expanded");
-		return $heading;
-	}
-	var GetCameraPropertySection = function (id)
-	{
-		var $section = $('<div class="camprop_section"></div>');
-		if (settings.getItem("ui3_cps_" + id + "_visible") == "0")
-			$section.hide();
-		return $section;
-	}
-	var CameraPropertiesSectionHeadingClick = function ()
-	{
-		var $ele = $(this);
-		var $section = $ele.next('.camprop_section');
-		$section.slideToggle(
-			{
-				duration: 150
-				, always: function ()
-				{
-					if (modal_cameraPropDialog != null)
-						modal_cameraPropDialog.contentChanged(false, true);
-					var expanded = $section.is(":visible");
-					settings.setItem("ui3_cps_" + $ele.attr('mysettingsid') + "_visible", expanded ? "1" : "0");
-					if (expanded)
-						$ele.addClass("expanded");
-					else
-						$ele.removeClass("expanded");
-				}
-			});
-	}
 	var GetCamPropCheckbox = function (tag, label, checked, onChange)
 	{
-		var $parent = $('<div class="camprop_item camprop_item_cb"></div>');
+		var $parent = $('<div class="dialogOption_item dialogOption_item_cb"></div>');
 		$parent.append(GetCustomCheckbox(tag, label, checked, onChange));
 		return $parent;
 	}
@@ -8831,7 +8807,7 @@ function CameraProperties()
 		if (!scalingMethod)
 			scalingMethod = function (v) { return v; };
 
-		var $parent = $('<div class="camprop_item camprop_item_range"></div>');
+		var $parent = $('<div class="dialogOption_item dialogOption_item_range"></div>');
 		$parent.append('<span>' + label + '</span>');
 
 		var $valLabel = $('<span></span>');
@@ -8882,14 +8858,6 @@ function CameraProperties()
 	var motionSenseScalingMethod = function (value, min, max)
 	{
 		return parseInt(value / 10);
-	}
-	var GetCameraPropertyLabel = function (text)
-	{
-		return '<div class="camprop_label" title="' + text + '">' + text + '</div>';
-	}
-	var GetHtmlOptionElementMarkup = function (value, name, selectedValue)
-	{
-		return '<option value="' + value + '"' + (selectedValue == value ? ' selected="selected"' : '') + '>' + name + '</option>';
 	}
 	var GetCameraPropertyButtonMarkup = function (text, buttonId, colorClass, camId)
 	{
@@ -9040,7 +9008,7 @@ function ClipProperties()
 			toaster.Error(ex);
 		}
 		if (developerMode)
-			$camprop.append('<div class="camprop_item camprop_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="clipProperties.OpenRaw(&quot;' + clipId + '&quot;)" value="view raw data" /></div>');
+			$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="clipProperties.OpenRaw(&quot;' + clipId + '&quot;)" value="view raw data" /></div>');
 
 		$dlg.dialog({
 			title: htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties'
@@ -9049,13 +9017,13 @@ function ClipProperties()
 	}
 	var GetInfo = function (label, value)
 	{
-		var $info = $('<div class="camprop_item clipprop_item_info"></div>');
+		var $info = $('<div class="dialogOption_item clipprop_item_info"></div>');
 		$info.text(label + ": " + value);
 		return $info;
 	}
 	var GetInfoEleValue = function (label, ele)
 	{
-		var $info = $('<div class="camprop_item clipprop_item_info"></div>');
+		var $info = $('<div class="dialogOption_item clipprop_item_info"></div>');
 		$info.text(label + ": ").append(ele);
 		return $info;
 	}
@@ -9078,8 +9046,8 @@ function ClipDownloadDialog()
 			+ '</div>');
 
 		var $camprop = $dlg.find("#campropcontent");
-		$camprop.append('<div class="camprop_item clipprop_item_info">Click each link to download the desired clips.</div>');
-		$camprop.append('<div class="camprop_item clipprop_item_info">Each link will disappear after it is clicked, so you can\'t accidentally download duplicates.</div>');
+		$camprop.append('<div class="dialogOption_item clipprop_item_info">Click each link to download the desired clips.</div>');
+		$camprop.append('<div class="dialogOption_item clipprop_item_info">Each link will disappear after it is clicked, so you can\'t accidentally download duplicates.</div>');
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
 			$camprop.append(GetLink(allSelectedClipIDs[i]));
 
@@ -9103,7 +9071,7 @@ function ClipDownloadDialog()
 			$link.remove();
 			return true;
 		});
-		return $('<div class="camprop_item clipprop_item_info"></div>').append($link);
+		return $('<div class="dialogOption_item clipprop_item_info"></div>').append($link);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -11508,6 +11476,177 @@ function ClipboardHelper()
 	}
 }
 ///////////////////////////////////////////////////////////////
+// UI Settings ////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function UISettingsPanel()
+{
+	var self = this;
+	var initialized = false;
+	var modal_dialog = null;
+	var $dlg = $();
+	var inputs = {};
+
+	var Initialize = function ()
+	{
+		if (initialized)
+			return;
+		initialized = true;
+
+		for (var i = 0; i < defaultSettings.length; i++)
+		{
+			var s = defaultSettings[i];
+			if (s.label)
+			{
+				if (typeof s.category == "undefined")
+					s.category = "Uncategorized";
+				if (settingsCategoryList.indexOf(s.category) == -1)
+				{
+					toaster.Warning("Category " + s.category + " did not exist in the category list!");
+					settingsCategoryList.push(s.category);
+				}
+			}
+		}
+	}
+
+	this.open = function ()
+	{
+		Initialize();
+		CloseDialog();
+		$dlg = $('<div id="uiSettingsPanel" class="dialogOptionsPanel"></div>');
+		modal_dialog = $dlg.dialog({
+			title: "UI Settings"
+			, overlayOpacity: 0.3
+		});
+
+		for (var i = 0; i < settingsCategoryList.length; i++)
+			LoadCategory(i, settingsCategoryList[i]);
+
+		modal_dialog.contentChanged(true);
+	}
+	var LoadCategory = function (index, category)
+	{
+		var cat = new CollapsibleSection("uiSettings_category_" + index, category, modal_dialog);
+
+		for (var i = 0; i < defaultSettings.length; i++)
+		{
+			var s = defaultSettings[i];
+			if (s.label && s.category == category)
+			{
+				var $row = $('<div class="uiSettingsRow"></div>');
+				if (s.inputType == "checkbox")
+				{
+					$row.append(GetCustomCheckbox(s, s.label, settings[s.key] == "1", CheckboxChanged));
+				}
+				else if (s.inputType == "select")
+				{
+					var sb = [];
+					sb.push('<select>');
+					for (var n = 0; n < s.options.length; n++)
+						sb.push(GetHtmlOptionElementMarkup(s.options[n], s.options[n], settings[s.key]));
+					sb.push('</select>');
+					var $select = $(sb.join(''));
+					AddChangeEventToSelectElement($select, s);
+					$row.addClass('dialogOption_item dialogOption_item_ddl');
+					$row.append(GetDialogOptionLabel(s.label));
+					$row.append($select);
+				}
+				cat.$section.append($row);
+			}
+		}
+
+		$dlg.append(cat.$heading);
+		$dlg.append(cat.$section);
+	}
+	var CheckboxChanged = function (s, checked)
+	{
+		settings[s.key] = checked ? "1" : "0";
+	}
+	var SelectChanged = function (s, $select)
+	{
+		var selectedValue = $select.val();
+		if (s.options.indexOf(selectedValue) != -1)
+			settings[s.key] = selectedValue;
+		CallOnChangeCallback(s);
+	}
+	var AddChangeEventToSelectElement = function ($select, defaultSetting)
+	{
+		/// <summary>Adds a change event to the select element.  Doing this in a separate function forces the creation of a new scope and that ensures the arguments to SelectChanged stay correct.</summary>
+		$select.on('change', function () { SelectChanged(defaultSetting, $select); });
+	}
+	var CallOnChangeCallback = function (s)
+	{
+		if (s && typeof s.onChange == "function")
+		{
+			try
+			{
+				s.onChange(settings[s.key]);
+			}
+			catch (ex)
+			{
+				toaster.Error(ex);
+			}
+		}
+	}
+	var CloseDialog = function ()
+	{
+		if (modal_dialog != null)
+		{
+			modal_dialog.close();
+			modal_dialog = null;
+		}
+	}
+}
+function OnChange_ui3_preferred_ui_scale(newValue)
+{
+	uiSizeHelper.SetUISizeByName(newValue);
+}
+///////////////////////////////////////////////////////////////
+// Collapsible Section for Dialogs ////////////////////////////
+///////////////////////////////////////////////////////////////
+function CollapsibleSection(id, htmlTitle, dialogToNotify)
+{
+	var self = this;
+
+	var GetSectionHeading = function ()
+	{
+		var $heading = $('<div class="collapsible_section_heading">' + htmlTitle + '</div>');
+		$heading.on('click', SectionHeadingClick);
+		if (settings.getItem("ui3_cps_" + id + "_visible") == "1")
+			$heading.addClass("expanded");
+		return $heading;
+	}
+	var GetSection = function ()
+	{
+		var $section = $('<div class="collapsible_section"></div>');
+		if (settings.getItem("ui3_cps_" + id + "_visible") == "0")
+			$section.hide();
+		return $section;
+	}
+	var SectionHeadingClick = function ()
+	{
+		var $ele = $(this);
+		var $section = $ele.next('.collapsible_section');
+		$section.slideToggle(
+			{
+				duration: 150
+				, always: function ()
+				{
+					if (dialogToNotify != null)
+						dialogToNotify.contentChanged(false, true);
+					var expanded = $section.is(":visible");
+					settings.setItem("ui3_cps_" + id + "_visible", expanded ? "1" : "0");
+					if (expanded)
+						$ele.addClass("expanded");
+					else
+						$ele.removeClass("expanded");
+				}
+			});
+	}
+
+	this.$heading = GetSectionHeading();
+	this.$section = GetSection();
+}
+///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 // Date.now() and performance.now() polyfills
@@ -11558,6 +11697,14 @@ function logoutOldSession(oldSession)
 	// An alternative would be to have Ken include the user name in the session data, so we could avoid creating unnecessary new sessions in the first place.  Then maybe it would be safe to turn this feature on.
 	//if (oldSession != null && oldSession != $.cookie("session"))
 	//	ExecJSON({ cmd: "logout", session: oldSession });
+}
+function GetDialogOptionLabel(text)
+{
+	return '<div class="dialogOption_label" title="' + text + '">' + text + '</div>';
+}
+function GetHtmlOptionElementMarkup(value, name, selectedValue)
+{
+	return '<option value="' + value + '"' + (selectedValue == value ? ' selected="selected"' : '') + '>' + name + '</option>';
 }
 function Clamp(i, min, max)
 {

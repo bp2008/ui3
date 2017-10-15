@@ -811,7 +811,6 @@ div.icon, a.icon
 /* Date Filters */
 #dateRange
 {
-	box-sizing: 190px;
 	margin-top: 9px;
 	padding: 6px 7px 6px 10px;
 	font-size: 16px;
@@ -1982,9 +1981,10 @@ div.icon, a.icon
 
 	.playbackSettingsCheckboxWrapper label, .customCheckboxWrapper label
 	{
-		height: 42px;
+		min-height: 42px;
 		padding: 0px 10px;
 		line-height: 42px;
+		overflow: hidden;
 	}
 
 	.playbackSettingsCheckboxWrapper label
@@ -2588,12 +2588,12 @@ div.icon, a.icon
 	font-size: 0px;
 }
 
-#sysconfigdialog
+#sysconfigdialog, #uiSettingsPanel
 {
 	overflow-x: hidden;
 }
 
-.listDialog, #sysconfigdialog
+.listDialog, #sysconfigdialog, #uiSettingsPanel
 {
 	padding: 10px;
 }
@@ -2763,79 +2763,51 @@ div.icon, a.icon
 		font-size: 18.6px;
 	}
 
-.camprop_item, .camlist_item
+.dialogOption_item, .camlist_item
 {
 	margin: 7px;
 }
 
-.camprop_item_center, .camlist_item_center
+.dialogOption_item_center, .camlist_item_center
 {
 	text-align: center;
 	margin: 7px 0px;
 }
 
-.camprop_section_heading
+.dialogOption_item_info
 {
-	text-align: center;
-	font-size: 18.6px;
-	margin-top: 8px;
-	padding: 7px 0px;
-	cursor: pointer;
-	background-color: #424242;
-}
-
-	.camprop_section_heading:hover
-	{
-		background-color: #4a4a4a;
-	}
-
-	.camprop_section_heading:active
-	{
-		background-color: #505050;
-	}
-
-	.camprop_section_heading.expanded
-	{
-		background-color: #626262;
-	}
-
-		.camprop_section_heading.expanded:hover
-		{
-			background-color: #6a6a6a;
-		}
-
-		.camprop_section_heading.expanded:active
-		{
-			background-color: #707070;
-		}
-
-.camprop_section
-{
-	padding: 7px 0px;
-}
-
-.camprop_item_info
-{
-	max-width: 320px;
 	margin: 7px auto;
 }
 
-.camprop_item_cb
+#campropcontent .dialogOption_item_info
 {
-	max-width: 340px;
+	max-width: 320px;
+}
+
+.dialogOption_item_cb
+{
 	margin: 0px auto;
 	overflow-x: hidden;
 }
 
-.camprop_item_ddl
+#campropcontent .dialogOption_item_cb
 {
 	max-width: 340px;
+}
+
+.dialogOption_item_ddl
+{
 	margin: 7px auto;
 	position: relative;
 	overflow-x: hidden;
 }
 
-.camprop_item_range
+#campropcontent .dialogOption_item_ddl
+{
+	max-width: 340px;
+}
+
+.dialogOption_item_range
 {
 	max-width: 320px;
 	margin: 0px auto;
@@ -2843,18 +2815,18 @@ div.icon, a.icon
 	position: relative;
 }
 
-	.camprop_item_range:hover
+	.dialogOption_item_range:hover
 	{
 		background-color: rgba(255,255,255,0.1);
 	}
 
-	.camprop_item_range input
+	.dialogOption_item_range input
 	{
 		width: 315px;
 		display: block;
 	}
 
-.camprop_label
+.dialogOption_label
 {
 	font-size: 16px;
 	vertical-align: top;
@@ -2867,15 +2839,14 @@ div.icon, a.icon
 	text-overflow: ellipsis;
 }
 
-#campropcontent .customCheckboxWrapper label
+.dialogOptionsPanel .customCheckboxWrapper label
 {
 	display: block;
 	font-size: 16px;
 	padding-right: 60px;
-	overflow: hidden;
 }
 
-#campropcontent select
+.dialogOptionsPanel select
 {
 	height: 28px;
 	position: absolute;
@@ -3089,3 +3060,72 @@ div::-webkit-resizer
 	height: 14px;
 	overflow: hidden;
 }
+/* Collapsible sections for dialogs */
+.collapsible_section_heading
+{
+	text-align: center;
+	font-size: 18.6px;
+	margin-top: 8px;
+	padding: 7px 0px;
+	cursor: pointer;
+	background-color: #424242;
+}
+
+	.collapsible_section_heading:hover
+	{
+		background-color: #4a4a4a;
+	}
+
+	.collapsible_section_heading:active
+	{
+		background-color: #505050;
+	}
+
+	.collapsible_section_heading.expanded
+	{
+		background-color: #626262;
+	}
+
+		.collapsible_section_heading.expanded:hover
+		{
+			background-color: #6a6a6a;
+		}
+
+		.collapsible_section_heading.expanded:active
+		{
+			background-color: #707070;
+		}
+
+.collapsible_section
+{
+	padding: 7px 0px;
+}
+/* Settings Dialog */
+#uiSettingsPanel
+{
+	min-width: 283px;
+}
+
+.categoryLinks
+{
+	margin: 0px 0px 6px 12px;
+	color: #276AA6;
+	font-size: 1.5em;
+}
+
+	.categoryLinks a
+	{
+		color: #377EC0;
+		font-weight: bold;
+		text-decoration: none;
+	}
+
+		.categoryLinks a:hover
+		{
+			color: #4d9ce4;
+		}
+
+		.categoryLinks a:active
+		{
+			color: #8dc1f1;
+		}
