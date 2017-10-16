@@ -9924,7 +9924,11 @@ function FullScreenModeController()
 		.on("mousedown touchstart", function (e)
 		{
 			// Prevents the button click from causing camera maximize actions.
-			setTimeout(function () { imageRenderer.CamImgClickStateReset(); }, 0);
+			// Do not use touchEvents.Gate(e) here, otherwise events sneak through on touchscreens.
+			// stopPropagation prevents the event from reaching imageRenderer.
+			e.stopPropagation();
+			// And state reset clears the state in case the event got there before we stopped propagation.
+			imageRenderer.CamImgClickStateReset();
 		});
 	this.updateFullScreenButtonState = function ()
 	{
