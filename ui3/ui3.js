@@ -202,7 +202,6 @@ var togglableUIFeatures =
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
-// CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 // TODO: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 
@@ -224,6 +223,10 @@ var defaultSettings =
 		, {
 			key: "ui3_audioVolume"
 			, value: 0
+		}
+		, {
+			key: "ui3_audioMute"
+			, value: "1"
 		}
 		, {
 			key: "ui3_streamingQuality"
@@ -957,10 +960,19 @@ $(function ()
 	statusBars.addOnProgressChangedListener("volume", function (newVolume)
 	{
 		newVolume = Clamp(parseFloat(newVolume), 0, 1);
-		settings.ui3_audioVolume = newVolume;
+		if (!audioPlayer.SuppressAudioVolumeSave())
+		{
+			settings.ui3_audioMute = "0";
+			settings.ui3_audioVolume = newVolume;
+		}
 		audioPlayer.SetVolume(newVolume);
 	});
-	statusBars.setProgress("volume", parseFloat(settings.ui3_audioVolume), "");
+	statusBars.addLabelClickHandler("volume", function ()
+	{
+		settings.ui3_audioMute = (settings.ui3_audioMute == "1" ? "0" : "1");
+		audioPlayer.SetAudioVolumeFromSettings();
+	});
+	audioPlayer.SetAudioVolumeFromSettings();
 
 	dropdownBoxes = new DropdownBoxes();
 
@@ -1357,11 +1369,12 @@ function StatusBars()
 			for (var i = 0; i < statusEles.length; i++)
 				statusEles[i].$label && statusEles[i].$label.html(labelHtml);
 	};
-	this.getLabelObjs = function (name, labelHtml)
+	this.getLabelObjs = function (name)
 	{
 		var statusEles = statusElements[name];
 		if (statusEles)
 			return $(statusEles);
+		return $();
 	};
 	this.addDragHandle = function (name)
 	{
@@ -1385,6 +1398,14 @@ function StatusBars()
 			if (statusEles.length > 0) // Add the listener only to the first element, so in case of multiple elements with the same name, we only create one callback.
 				ProgressBar.addOnProgressChangedListener(statusEles[0].$pb, onProgressChanged);
 	};
+	this.addLabelClickHandler = function (name, onLabelClick)
+	{
+		var $labels = self.getLabelObjs(name);
+		$labels.each(function (idx, ele)
+		{
+			$(ele).children('.statusBarLabel').on('click', onLabelClick);
+		});
+	}
 	this.setEnabled = function (name, enabled)
 	{
 		var statusEles = statusElements[name];
@@ -8583,7 +8604,7 @@ function CameraProperties()
 
 		var camName = cameraListLoader.GetCameraName(camId);
 		modal_cameraPropDialog = $('<div id="campropdialog">'
-			+ '<div id="campropcontent" class="dialogOptionsPanel"><div style="text-align: center">Loading...</div></div>'
+			+ '<div id="campropcontent" class="dialogOptionPanel"><div style="text-align: center">Loading...</div></div>'
 			+ '</div>'
 		).dialog({
 			title: "Camera Properties"
@@ -9606,15 +9627,27 @@ function AudioPlayer()
 	var self = this;
 	var $audiosourceobj = $("#audiosourceobj");
 	var audioobj = $("#audioobj").get(0);
-	var muteStopTimeout = null;
+	var audioStopTimeout = null;
+	var suppressAudioVolumeSave = false;
 
+	this.SuppressAudioVolumeSave = function ()
+	{
+		return suppressAudioVolumeSave;
+	}
+	this.SetAudioVolumeFromSettings = function ()
+	{
+		var effectiveVolume = settings.ui3_audioMute == "1" ? 0 : parseFloat(settings.ui3_audioVolume);
+		suppressAudioVolumeSave = true;
+		setTimeout(function () { suppressAudioVolumeSave = false; }, 0);
+		statusBars.setProgress("volume", effectiveVolume, "");
+	}
 	this.SetVolume = function (newVolume)
 	{
 		newVolume = Clamp(newVolume, 0, 1);
 		clearMuteStopTimeout();
 		audioobj.volume = newVolume;
 		if (newVolume == 0)
-			muteStopTimeout = setTimeout(function () { self.audioStop(); }, 1000);
+			audioStopTimeout = setTimeout(function () { self.audioStop(); }, 1000);
 		else
 			self.audioPlay();
 	}
@@ -9625,10 +9658,10 @@ function AudioPlayer()
 
 	var clearMuteStopTimeout = function ()
 	{
-		if (muteStopTimeout != null)
+		if (audioStopTimeout != null)
 		{
-			clearTimeout(muteStopTimeout);
-			muteStopTimeout = null;
+			clearTimeout(audioStopTimeout);
+			audioStopTimeout = null;
 		}
 	}
 	this.audioPlay = function ()
@@ -10578,7 +10611,7 @@ function SessionTimeout()
 
 	var idleLogoff = function ()
 	{
-		if (settings.ui3_timeout > 0)
+		if (getTimeoutMs() > 0)
 		{
 			currentServer.isLoggingOut = true;
 			location.href = 'timeout.htm?path=' + encodeURIComponent(location.pathname + location.search);
@@ -10589,7 +10622,7 @@ function SessionTimeout()
 	{
 		if (idleTimer != null)
 			clearTimeout(idleTimer);
-		if (settings.ui3_timeout > 0)
+		if (getTimeoutMs() > 0)
 		{
 			timerStarted = performance.now();
 			idleTimer = setTimeout(idleLogoff, getTimeoutMs());
@@ -10598,12 +10631,12 @@ function SessionTimeout()
 
 	var getTimeoutMs = function ()
 	{
-		return settings.ui3_timeout * 60 * 1000;
+		return parseFloat(settings.ui3_timeout) * 60 * 1000;
 	}
 	this.GetMsUntilTimeout = function ()
 	{
 		/// <summary>Returns the number of milliseconds until idle timeout occurs, or the string "Idle timeout is not enabled".</summary>
-		if (settings.ui3_timeout > 0)
+		if (getTimeoutMs() > 0)
 		{
 			var waited = performance.now() - timerStarted;
 			return getTimeoutMs() - waited;
@@ -11566,7 +11599,7 @@ function UISettingsPanel()
 	{
 		Initialize();
 		CloseDialog();
-		$dlg = $('<div id="uiSettingsPanel" class="dialogOptionsPanel"></div>');
+		$dlg = $('<div id="uiSettingsPanel" class="dialogOptionPanel"></div>');
 		$content = $('<div id="uiSettingsPanelContent"></div>');
 		$dlg.append($content);
 		modal_dialog = $dlg.dialog({

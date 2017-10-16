@@ -2761,7 +2761,7 @@ div.icon, a.icon
 		font-size: 18.6px;
 	}
 
-.dialogOptionsPanel .customCheckboxSpacer
+.dialogOptionPanel .customCheckboxSpacer
 {
 	display: none;
 }
@@ -2828,14 +2828,14 @@ div.icon, a.icon
 	padding: 4px 10px;
 }
 
-.dialogOptionsPanel .customCheckboxWrapper label
+.dialogOptionPanel .customCheckboxWrapper label
 {
 	display: block;
 	font-size: 16px;
 	padding-right: 80px;
 }
 
-.dialogOptionsPanel select, .dialogOptionsPanel input[type="number"], .dialogOptionsPanel input[type="text"], #uiSettingsPanel input[type="button"]
+.dialogOptionPanel select, .dialogOptionPanel input[type="number"], .dialogOptionPanel input[type="text"], #uiSettingsPanel input[type="button"]
 {
 	box-sizing: border-box;
 	height: 28px;
