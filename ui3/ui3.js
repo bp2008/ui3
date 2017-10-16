@@ -180,27 +180,20 @@ var togglableUIFeatures =
 				$("#clipNameHeading").hide();
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
-// TODO: H.264 live playback
-//-Quality controls (streams 0, 1, 2)
-//-Removal of "Enable h.264 module" context menu item
-//		-Frame rate smoothing
-//-Download snapshot
-//-Open snapshot in new tab
-// TODO: H.264 clip/alert playback
-//		-Frame rate smoothing
-//-Speed manipulation
-//-Pausing
-//-Reverse play
-//-Graceful stream close
-//-Download snapshot
-//-Open snapshot in new tab
+
+// TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
+
+// TODO: The HLS player needs to actually stop playback (Live video only, HLS player is unavailable during clip playback).  Currently it only works for jpeg streaming because it was easy to inject a pause into that pipeline.
+
 // TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
 
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
+
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
-// TODO: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
+// CONSIDER: H.264 playback pipeline should honor the frame timestamps.  This would make playback a little smoother on an inconsistent network connection -- most notably one that hangs for a while and then receives a burst of delayed frames.
+// CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
