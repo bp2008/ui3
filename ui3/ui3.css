@@ -2586,14 +2586,14 @@ div.icon, a.icon
 	font-size: 0px;
 }
 
-#sysconfigdialog.dialog_content, #uiSettingsPanel.dialog_content
+#sysconfigdialog.dialog_content
 {
 	padding: 0px;
 }
 
-.listDialog, #sysconfigcontent, #uiSettingsPanelContent
+.listDialogContent, #sysconfigcontent
 {
-	padding: 10px;
+	margin: 10px;
 }
 
 	#sysconfigcontent label
@@ -2601,22 +2601,22 @@ div.icon, a.icon
 		display: block;
 	}
 
-.listDialogContent table, .cameralistcontent table
-{
-	border-collapse: collapse;
-	width: 100%;
-}
+	.listDialogContent table, .cameralistcontent table
+	{
+		border-collapse: collapse;
+		width: 100%;
+	}
 
-.listDialogContent td, .cameralistcontent td, .listDialogContent th, .cameralistcontent th
-{
-	border-bottom: 1px solid #555555;
-	padding: 2px 8px;
-}
+	.listDialogContent td, .cameralistcontent td, .listDialogContent th, .cameralistcontent th
+	{
+		border-bottom: 1px solid #555555;
+		padding: 2px 8px;
+	}
 
-.listDialogContent th
-{
-	padding: 2px 15px;
-}
+	.listDialogContent th
+	{
+		padding: 2px 15px;
+	}
 
 .cameralistcontent td
 {
@@ -2780,7 +2780,11 @@ div.icon, a.icon
 .dialogOption_item_info, .dialogOption_item_cb, .dialogOption_item_ddl
 {
 	margin: 0px auto;
-	padding: 4px 0px;
+}
+
+.dialogOption_item_info, .dialogOption_item_ddl
+{
+	padding: 6px 0px;
 }
 
 #campropcontent .dialogOption_item_info
@@ -2831,7 +2835,7 @@ div.icon, a.icon
 	padding-right: 80px;
 }
 
-.dialogOptionsPanel select, .dialogOptionsPanel input[type="number"], .dialogOptionsPanel input[type="text"]
+.dialogOptionsPanel select, .dialogOptionsPanel input[type="number"], .dialogOptionsPanel input[type="text"], #uiSettingsPanel input[type="button"]
 {
 	box-sizing: border-box;
 	height: 28px;
@@ -2921,70 +2925,32 @@ div.icon, a.icon
 /* Webkit custom scrollbar for modal dialogs */
 div::-webkit-scrollbar
 {
-	width: 16px;
-	height: 16px;
-}
-
-div::-webkit-scrollbar-button
-{
-	background-color: #2A8FCF;
-	background-color: #2A2F6F;
-}
-
-	div::-webkit-scrollbar-button:vertical:increment
-	{
-		background-repeat: no-repeat;
-		background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QwGEBU7GHe7zAAAAMdJREFUOMtj9C48/J+BAsDEQCEYeANYYIzXLx4wvHt0kuH//394NTAyMjEIyZkziEoooBrw6eU1hvsn5zL8/fMdrwHMLJwMLOy8cAPgXpDR9mCQM45mYGJhx+1fFnYGOeNoBhltD8wwYGdhYlA2i2WQN47FaggTCzuDvHEsg7JZLAM7CxP2QMRlCC7NKGGAbggDAwPDw7OLGRgYGHBqxmoAsiGMjMwMDAwMDEqmUVg14zQAZoi6RTTEC4yMhNMB1lDHo3EY5QUA9ZEjbI9V7zcAAAAASUVORK5CYII=);
-		background-position: 0px 1px;
-	}
-
-	div::-webkit-scrollbar-button:vertical:decrement
-	{
-		background-repeat: no-repeat;
-		background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3QwGEBMvVPfINwAAAK9JREFUOMvl07EKglAUxvG/F6HNTXS02tyrh+gNgqaeoGe62DO4txmOjgaKL3Hhdm+bBF41cAk66+H7Dd/heMfr3bJgBAvnxwFjLcZOV+SPLZQ2PB83ADa7EytffA8obagLSVNKAKx9sd2fnYg/FTZaAfSQCxFzYQCjFU0pqQuJ0sYNjIXnkB7oqpy2zJzhT6QtM7oqH3YQRCnrwwVrzeTZPE8QROkQCOOEME7+8RfeEIhl6Kub8VIAAAAASUVORK5CYII=);
-		background-position: 0px 0px;
-	}
-
-div::-webkit-scrollbar-track
-{
-	background-color: #2A8FCF;
-}
-
-div::-webkit-scrollbar-track-piece
-{
-	background-color: #2A2F6F;
+	width: 12px;
+	height: 12px;
 }
 
 div::-webkit-scrollbar-thumb
 {
-	height: 50px;
-	background-color: #377EC0;
+	background: #5e5e5e;
+	border-left: 0px solid #393939;
 }
 
 	div::-webkit-scrollbar-thumb:hover
 	{
-		height: 50px;
-		background-color: #2F66B8;
+		background: #6c6c6c;
 	}
 
 	div::-webkit-scrollbar-thumb:active
 	{
-		height: 50px;
-		background-color: #204090;
-		box-shadow: inset 0 0 10px #186280;
+		background: #7a7a7a;
 	}
 
-div::-webkit-scrollbar-corner
+div::-webkit-scrollbar-track
 {
-	background-color: #173E5F;
-}
-
-div::-webkit-resizer
-{
-	background-color: #277EAF;
+	background: #393939;
 }
 /* For IE */
-.ui2modal
+/*.dialog_content
 {
 	scrollbar-face-color: #277EAF;
 	scrollbar-arrow-color: #000000;
@@ -2993,7 +2959,7 @@ div::-webkit-resizer
 	scrollbar-highlight-color: #277EAF;
 	scrollbar-3dlight-color: #2A8FCF;
 	scrollbar-darkshadow-color: #2A8FCF;
-}
+}*/
 /* Persistent toast status */
 .multi_operation_status_wrapper
 {
@@ -3056,6 +3022,7 @@ div::-webkit-resizer
 	padding: 7px 0px;
 	cursor: pointer;
 	background-color: #424242;
+	color: #808080;
 }
 
 	.collapsible_section_heading:hover
@@ -3071,6 +3038,7 @@ div::-webkit-resizer
 	.collapsible_section_heading.expanded
 	{
 		background-color: #626262;
+		color: #cdcdcd;
 	}
 
 		.collapsible_section_heading.expanded:hover
@@ -3090,7 +3058,7 @@ div::-webkit-resizer
 /* Settings Dialog */
 #uiSettingsPanelContent
 {
-	min-width: 245px;
+	min-width: 286px;
 	max-width: 375px;
 }
 
@@ -3137,3 +3105,13 @@ div::-webkit-resizer
 	{
 		background-color: rgba(255,255,255,0.1);
 	}
+
+/*#uiSettingsPanel input[type="button"]
+{
+	background-color: #C03737;
+	color: #FFFFFF;
+    border: 0px solid transparent;
+	padding-left: 12px;
+	padding-right: 12px;
+	cursor: pointer;
+}*/

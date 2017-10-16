@@ -201,8 +201,6 @@ var togglableUIFeatures =
 
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
-// Add an option to forget saved credentials to the UI Settings dialog.
-
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
 // CONSIDER: (+1 Should be pretty easy) Clicking the speaker icon should toggle volume between 0 and its last otherwise-set position.
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
@@ -5316,26 +5314,6 @@ function SessionManager()
 			{
 				loadingHelper.SetErrorStatus("login", 'Unable to contact Blue Iris server to check session status.');
 			});
-
-		//if (settings.bi_rememberMe == "1")
-		//{
-		//	var user = Base64.decode(settings.bi_username);
-		//	var pass = Base64.decode(settings.bi_password);
-
-		//	if (user != "" || pass != "")
-		//	{
-		//		LoginWithCredentials(user, pass, function (response, errorMessage)
-		//		{
-		//			// The login failed
-		//			toaster.Error(errorMessage, 3000);
-		//			Init_LearnSessionStatus();
-		//		});
-		//	}
-		//	else
-		//		Init_LearnSessionStatus();
-		//}
-		//else
-		//	Init_LearnSessionStatus();
 	}
 	var LoginWithCredentials = function (user, pass, onFail)
 	{
@@ -11606,6 +11584,11 @@ function UISettingsPanel()
 		var cat = new CollapsibleSection("uiSettings_category_" + index, category, modal_dialog);
 
 		var rowIdx = 0;
+		if (category == "General Settings")
+		{
+			if (settings.bi_rememberMe == "1")
+				rowIdx = Add_ForgetSavedCredentialsButton(cat, rowIdx);
+		}
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
 			var s = defaultSettings[i];
@@ -11665,6 +11648,25 @@ function UISettingsPanel()
 
 		$content.append(cat.$heading);
 		$content.append(cat.$section);
+	}
+	var Add_ForgetSavedCredentialsButton = function (cat, rowIdx)
+	{
+		var $row = $('<div id="forgetSavedCredentialsRow" class="uiSettingsRow dialogOption_item dialogOption_item_info"></div>');
+		var $input = $('<input type="button" value="Forget Now" />');
+		$input.on('click', function ()
+		{
+			$("#forgetSavedCredentialsRow").remove();
+			settings.bi_rememberMe = "0";
+			settings.bi_username = "";
+			settings.bi_password = "";
+			toaster.Info("Saved credentials have been forgotten.", 5000);
+		});
+		$row.append($input);
+		$row.append(GetDialogOptionLabel("Forget Saved Credentials"));
+		if (rowIdx++ % 2 == 1)
+			$row.addClass('everyOther');
+		cat.$section.append($row);
+		return rowIdx;
 	}
 	var CheckboxChanged = function (defaultSetting, checked)
 	{
