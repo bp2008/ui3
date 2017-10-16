@@ -196,9 +196,6 @@ var togglableUIFeatures =
 //-Open snapshot in new tab
 // TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
 
-// TODO: Throttle rapid clip changes to prevent heavy Blue Iris server load with H.264 streams.  Already done for Jpeg streams.
-// TODO: Throttle rapid camera changes to prevent heavy Blue Iris server load with H.264 streams.  Already done for Jpeg streams.
-
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
@@ -6428,19 +6425,20 @@ function JpegVideoModule()
 
 	var openVideoTimeout = null;
 	var lastOpenVideoCallAt = -60000;
-	var timeBetweenOpenVideoCalls = 200;
+	var timeBetweenOpenVideoCalls = 300;
 	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
 		if (openVideoTimeout != null)
 			clearTimeout(openVideoTimeout);
 
 		var perfNow = performance.now();
-		if (perfNow - lastOpenVideoCallAt < timeBetweenOpenVideoCalls)
+		var waited = perfNow - lastOpenVideoCallAt;
+		if (waited < timeBetweenOpenVideoCalls)
 		{
 			openVideoTimeout = setTimeout(function ()
 			{
 				self.OpenVideo(videoData, offsetPercent, startPaused);
-			}, lastOpenVideoCallAt + timeBetweenOpenVideoCalls);
+			}, timeBetweenOpenVideoCalls - waited);
 			return;
 		}
 		lastOpenVideoCallAt = perfNow;
