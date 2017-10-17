@@ -1708,7 +1708,7 @@ div.icon, a.icon
 	font-size: 16px;
 }
 
-#camimg_loading
+.camimg_loading
 {
 	display: none;
 	width: 100%;
@@ -1719,12 +1719,12 @@ div.icon, a.icon
 	background-color: rgba(0,0,0,0.5);
 }
 
-	#camimg_loading.lessIntense
+	.camimg_loading.lessIntense
 	{
 		background-color: rgba(0,0,0,0.1);
 	}
 
-#camimg_loading_anim, #camimg_playIcon, #camimg_pauseIcon, #camimg_centerIconBackground
+.camimg_loading_anim, #camimg_playIcon, #camimg_pauseIcon, #camimg_centerIconBackground
 {
 	display: none;
 	color: #dddddd;
@@ -1733,10 +1733,15 @@ div.icon, a.icon
 	position: absolute;
 }
 
-	#camimg_loading_anim svg
+	.camimg_loading_anim svg
 	{
 		opacity: 0.5;
 	}
+
+#camimg_false_loading_anim
+{
+	display: block;
+}
 
 #camimg_playIcon, #camimg_pauseIcon
 {

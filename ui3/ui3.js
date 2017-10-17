@@ -329,12 +329,20 @@ var defaultSettings =
 			, category: "General Settings"
 		}
 		, {
+			key: "ui3_doubleClick_behavior"
+			, value: "Recordings"
+			, inputType: "select"
+			, options: ["None", "Live View", "Recordings", "Both"]
+			, label: 'Double-Click to Fullscreen<br><a href="javascript:Learn_More_About_Double_Click_to_Fullscreen()">(learn more)</a>'
+			, category: "General Settings"
+		}
+		, {
 			key: "ui3_contextMenus_longPress"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: "Context Menu Compatibility Mode<br><a href=\"javascript:Learn_More_About_Context_Menu_Compatibility_Mode()\">(learn more)</a>"
-			, category: "General Settings"
+			, label: 'Context Menu Compatibility Mode<br><a href="javascript:Learn_More_About_Context_Menu_Compatibility_Mode()">(learn more)</a>'
 			, onChange: OnChange_ui3_contextMenus_longPress
+			, category: "General Settings"
 		}
 		, {
 			key: "ui3_hotkey_togglefullscreen2"
@@ -1137,7 +1145,7 @@ function resized()
 	var statusArea = $("#statusArea");
 	var llrControls = $("#layoutLeftRecordingsControls");
 	var systemnamewrapper = $("#systemnamewrapper");
-	var camimg_loading_anim = $("#camimg_loading_anim");
+	var camimg_loading_anim = $("#camimg_loading_anim,#camimg_false_loading_anim");
 	var videoCenter_Icons = $("#camimg_playIcon,#camimg_pauseIcon");
 	var videoCenter_Bg = $("#camimg_centerIconBackground");
 
@@ -5725,13 +5733,18 @@ function VideoPlayerController()
 	var lastLiveCameraOrGroupId = "";
 	var currentlySelectedHomeGroupId = null;
 
-	var doubleClickHelper = null;
+	var mouseHelper = null;
 
-	this.suppressDoubleClickHelper = function ()
+	this.suppressMouseHelper = function ()
 	{
-		/// <summary>Call this from mouse or touch events that conflict with the VideoPlayer's double-click helper, and past events will no longer count toward new clicks.</summary>
-		if (doubleClickHelper)
-			doubleClickHelper.Invalidate();
+		/// <summary>Call this from mouse or touch events that conflict with the VideoPlayer's double-click helper, and past events will no longer count toward new clicks or drags.</summary>
+		if (mouseHelper)
+			mouseHelper.Invalidate();
+	}
+
+	this.getDoubleClickTime = function ()
+	{
+		return mouseHelper.getDoubleClickTime();
 	}
 
 	this.CurrentPlayerModuleName = function ()
@@ -5793,7 +5806,6 @@ function VideoPlayerController()
 			return;
 		isInitialized = true;
 
-		imageRenderer.RegisterCamImgClickHandler();
 		self.PreLoadPlayerModules();
 		self.SetPlayerModule(genericQualityHelper.GetPlayerID(), true);
 
@@ -5807,16 +5819,31 @@ function VideoPlayerController()
 				playerModule.VisibilityChanged(!documentIsHidden());
 			});
 		}
-		doubleClickHelper = new DoubleClickHelper($("#layoutbody"), $("#playbackHeader,#playbackControls")
+		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint"), $("#playbackHeader,#playbackControls")
 			, function (e) { return playbackControls.MouseInSettingsPanel(e); } // exclude click if returns true
 			, function (e, confirmed) // Single Click
 			{
-				if (!currentlyLoadingImage.isLive)
+				videoOverlayHelper.HideFalseLoadingOverlay();
+				if (currentlyLoadingImage.isLive)
 				{
-					if (confirmed)
-						self.Playback_PlayPause();
-					else
+					// Live View
+					if (IsDoubleClickFullscreenEnabled())
 					{
+						if (confirmed)
+							ImgClick(e);
+						else
+							DoThingIfImgClickEligible(e, videoOverlayHelper.ShowFalseLoadingOverlay);
+					}
+					else if (!confirmed)
+						ImgClick(e);
+				}
+				else
+				{
+					// Recording
+					var dblClickEnabled = IsDoubleClickFullscreenEnabled();
+					if ((confirmed && dblClickEnabled) || (!confirmed && !dblClickEnabled))
+					{
+						self.Playback_PlayPause();
 						if (self.Playback_IsPaused())
 							videoOverlayHelper.ShowTemporaryPlayIcon();
 						else
@@ -5826,14 +5853,33 @@ function VideoPlayerController()
 			}
 			, function (e) // Double Click
 			{
-				if (!currentlyLoadingImage.isLive)
+				if (!IsDoubleClickFullscreenEnabled())
+					return;
+				videoOverlayHelper.HideFalseLoadingOverlay();
+				if (currentlyLoadingImage.isLive)
+				{
+					fullScreenModeController.toggleFullScreen();
+				}
+				else
 				{
 					videoOverlayHelper.HideTemporaryIcons();
 					fullScreenModeController.toggleFullScreen();
 				}
-			});
+			}
+			, imageRenderer.CamImgDragStart
+			, imageRenderer.CamImgDragMove
+			, imageRenderer.CamImgDragEnd
+		);
 	}
-
+	var IsDoubleClickFullscreenEnabled = function ()
+	{
+		if (settings.ui3_doubleClick_behavior == "Both")
+			return true;
+		if (currentlyLoadingImage.isLive)
+			return settings.ui3_doubleClick_behavior == "Live View"
+		else
+			return settings.ui3_doubleClick_behavior == "Recordings"
+	}
 	// Methods for querying what is currently playing
 	this.Loading = function ()
 	{
@@ -5881,7 +5927,6 @@ function VideoPlayerController()
 	}
 
 	// Methods dealing with mouse clicks.
-	// TODO: Make ImgClick, ImgClick_Camera private
 	this.GetCameraUnderMousePointer = function (event)
 	{
 		// Find out which camera is under the mouse pointer, if any.
@@ -5910,17 +5955,23 @@ function VideoPlayerController()
 		}
 		return null;
 	}
-	this.ImgClick = function (event)
+	var DoThingIfImgClickEligible = function (event, thing)
 	{
+		/// <summary>A silly method that does all the validation and clicked-camera identification from the ImgClick function, then calls a callback method.</summary>
 		if (!currentlyLoadingImage.isLive)
 			return;
 		// mouseCoordFixer.fix(event); // Don't call this more than once per event!
 		var camData = self.GetCameraUnderMousePointer(event);
 		if (camData != null && !cameraListLoader.HasOnlyOneCamera() && !cameraListLoader.CameraIsCycle(camData))
 		{
-			self.ImgClick_Camera(camData);
+			thing(camData);
 		}
 	}
+	var ImgClick = function (event)
+	{
+		DoThingIfImgClickEligible(event, self.ImgClick_Camera);
+	}
+	// CONSIDER: Make ImgClick_Camera private
 	this.ImgClick_Camera = function (camData)
 	{
 		var scaleOut = false;
@@ -7349,12 +7400,6 @@ function ImageRenderer()
 	previousImageDraw.h = -1;
 	previousImageDraw.z = 10;
 
-	var mouseMoveTolerance = 5;
-	var camImgClickState = new Object();
-	camImgClickState.mouseDown = false;
-	camImgClickState.mouseX = 0;
-	camImgClickState.mouseY = 0;
-
 	this.GetWidthToRequest = function ()
 	{
 		// Calculate the size of the image we need
@@ -7515,20 +7560,6 @@ function ImageRenderer()
 		imgDigitalZoomOffsetY += dy;
 		self.ImgResized(true);
 	}
-	this.RegisterCamImgClickHandler = function ()
-	{
-		_registerCamImgClickHandler();
-	}
-	var _registerCamImgClickHandler = function ()
-	{
-		$('#layoutbody').mousedown(function (e)
-		{
-			mouseCoordFixer.fix(e);
-			camImgClickState.mouseDown = true;
-			camImgClickState.mouseX = e.pageX;
-			camImgClickState.mouseY = e.pageY;
-		});
-	}
 	var RepositionZoomHint = function (isFromKeyboard)
 	{
 		var xPos = mouseX;
@@ -7566,80 +7597,20 @@ function ImageRenderer()
 			innerObjs.css("cursor", "default");
 		}
 	}
-	this.CamImgClickStateReset = function ()
+	this.CamImgDragStart = function (e)
 	{
-		camImgClickState.mouseDown = false;
-	}
-	// Initialization script for ImageRenderer -- called on document ready
-	$('#layoutbody').mousewheel(function (e, delta, deltaX, deltaY)
-	{
-		mouseCoordFixer.fix(e);
-		if (playbackControls.MouseInSettingsPanel(e))
-			return;
-		e.preventDefault();
-		self.DigitalZoomNow(deltaY, false);
-	});
-	$('#layoutbody,#zoomhint').mousedown(function (e)
-	{
-		mouseCoordFixer.fix(e);
-		if (e.which == 1)
-		{
-			mouseX = e.pageX;
-			mouseY = e.pageY;
-			imageIsDragging = true;
-			SetCamCellCursor();
-			e.preventDefault();
-		}
-	});
-	$(document).mouseup(function (e)
-	{
-		mouseCoordFixer.fix(e);
-		if (e.which == 1)
-		{
-			if (camImgClickState.mouseDown)
-			{
-				if (Math.abs(camImgClickState.mouseX - e.pageX) <= mouseMoveTolerance
-					|| Math.abs(camImgClickState.mouseY - e.pageY) <= mouseMoveTolerance)
-				{
-					camImgClickState.mouseDown = false;
-					videoPlayer.ImgClick(e);
-				}
-			}
-			imageIsDragging = false;
-			SetCamCellCursor();
-
-			mouseX = e.pageX;
-			mouseY = e.pageY;
-		}
-	});
-	$('#layoutbody').mouseleave(function (e)
-	{
-		mouseCoordFixer.fix(e);
-		camImgClickState.mouseDown = false;
 		mouseX = e.pageX;
 		mouseY = e.pageY;
-	});
-	$(document).mouseleave(function (e)
-	{
-		mouseCoordFixer.fix(e);
-		camImgClickState.mouseDown = false;
-		imageIsDragging = false;
+		imageIsDragging = true;
 		SetCamCellCursor();
-	});
-	$(document).on("mousemove touchmove", function (e)
+		// TODO: Remove this comment if no mousing/clicking bugs noticed for a while, otherwise try this: e.preventDefault();
+		e.preventDefault();
+	}
+	this.CamImgDragMove = function (e, mouseIsDown, dragHasMoved)
 	{
-		mouseCoordFixer.fix(e);
+		if (mouseIsDown && !dragHasMoved)
+			return;
 
-		if (camImgClickState.mouseDown)
-		{
-			if ((Math.abs(camImgClickState.mouseX - e.pageX) > mouseMoveTolerance
-				|| Math.abs(camImgClickState.mouseY - e.pageY) > mouseMoveTolerance))
-			{
-				camImgClickState.mouseDown = false;
-			}
-			else
-				return;
-		}
 		var requiresImgResize = false;
 		if (imageIsDragging && imageIsLargerThanAvailableSpace)
 		{
@@ -7656,6 +7627,23 @@ function ImageRenderer()
 
 		if (zoomHintIsVisible)
 			RepositionZoomHint(false);
+	}
+	this.CamImgDragEnd = function (e)
+	{
+		imageIsDragging = false;
+		SetCamCellCursor();
+
+		mouseX = e.pageX;
+		mouseY = e.pageY;
+	}
+	// Initialization script for ImageRenderer -- called on document ready
+	$('#layoutbody').mousewheel(function (e, delta, deltaX, deltaY)
+	{
+		mouseCoordFixer.fix(e);
+		if (playbackControls.MouseInSettingsPanel(e))
+			return;
+		e.preventDefault();
+		self.DigitalZoomNow(deltaY, false);
 	});
 }
 ///////////////////////////////////////////////////////////////
@@ -7666,6 +7654,7 @@ var videoOverlayHelper = new (function ()
 	var self = this;
 	var loadingOverlayHidden = true;
 	var loadingAnimHidden = true;
+	var falseLoadingOverlayHidden = true;
 	var overlayIsLessIntense = false;
 
 	this.HideLoadingOverlay = function ()
@@ -7707,6 +7696,22 @@ var videoOverlayHelper = new (function ()
 		{
 			loadingAnimHidden = false;
 			$("#camimg_loading_anim").show();
+		}
+	}
+	this.HideFalseLoadingOverlay = function ()
+	{
+		if (!falseLoadingOverlayHidden)
+		{
+			falseLoadingOverlayHidden = true;
+			$("#camimg_false_loading").hide();
+		}
+	}
+	this.ShowFalseLoadingOverlay = function ()
+	{
+		if (falseLoadingOverlayHidden)
+		{
+			falseLoadingOverlayHidden = false;
+			$("#camimg_false_loading").show();
 		}
 	}
 	this.ShowTemporaryPlayIcon = function (duration)
@@ -7835,6 +7840,11 @@ function CanvasContextMenu()
 	}
 	var onTriggerLiveContextMenu = function (e)
 	{
+		if (!videoPlayer.Loading().image.isLive)
+			return false;
+
+		videoPlayer.suppressMouseHelper();
+
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
 			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
@@ -7843,28 +7853,24 @@ function CanvasContextMenu()
 				+ videoPlayer.GetLastSnapshotUrl()
 				+ '" onclick="saveSnapshot(&quot;#cmroot_liveview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_liveview_downloadlink").attr("download", "temp.jpg");
-		if (videoPlayer.Loading().image.isLive)
+
+		var homeGroupObj = null;
+		var camData = videoPlayer.GetCameraUnderMousePointer(e);
+		if (camData == null)
+			camData = homeGroupObj = videoPlayer.GetCurrentHomeGroupObj();
+		lastLiveContextMenuSelectedCamera = camData;
+		if (camData != null)
 		{
-			imageRenderer.CamImgClickStateReset();
-			var homeGroupObj = null;
-			var camData = videoPlayer.GetCameraUnderMousePointer(e);
-			if (camData == null)
-				camData = homeGroupObj = videoPlayer.GetCurrentHomeGroupObj();
-			lastLiveContextMenuSelectedCamera = camData;
-			if (camData != null)
-			{
-				LoadDynamicManualRecordingButtonState(camData);
-				var camName = CleanUpGroupName(camData.optionDisplay);
-				$("#contextMenuCameraName").text(camName);
-				$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons below are specific to the camera: " + camName);
-				var $maximize = $("#contextMenuMaximize");
-				var isMaxAlready = (camData.optionValue == videoPlayer.Loaded().image.id && homeGroupObj == null);
-				$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
-				$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
-			}
-			return true;
+			LoadDynamicManualRecordingButtonState(camData);
+			var camName = CleanUpGroupName(camData.optionDisplay);
+			$("#contextMenuCameraName").text(camName);
+			$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons below are specific to the camera: " + camName);
+			var $maximize = $("#contextMenuMaximize");
+			var isMaxAlready = (camData.optionValue == videoPlayer.Loaded().image.id && homeGroupObj == null);
+			$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
+			$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
 		}
-		return false;
+		return true;
 	}
 	var onLiveContextMenuAction = function ()
 	{
@@ -7970,7 +7976,7 @@ function CanvasContextMenu()
 		if (videoPlayer.Loading().image.isLive)
 			return false;
 
-		videoPlayer.suppressDoubleClickHelper();
+		videoPlayer.suppressMouseHelper();
 
 		lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(videoPlayer.Loading().image.id, videoPlayer.Loading().image.path);
 		var clipData = clipLoader.GetClipFromId(lastRecordContextMenuSelectedClip.clipId);
@@ -7998,7 +8004,6 @@ function CanvasContextMenu()
 		var name = clipLoader.GetClipDisplayName(clipData);
 		$("#contextMenuClipName").text(name).closest(".b-m-item,.b-m-idisable").attr("title", name);
 
-		imageRenderer.CamImgClickStateReset();
 		return true;
 	}
 	var onRecordContextMenuAction = function ()
@@ -9945,10 +9950,10 @@ function FullScreenModeController()
 		{
 			// Prevents the button click from causing camera maximize actions.
 			// Do not use touchEvents.Gate(e) here, otherwise events sneak through on touchscreens.
-			// stopPropagation prevents the event from reaching imageRenderer.
+			// stopPropagation prevents the event from reaching videoPlayer.
 			e.stopPropagation();
-			// And state reset clears the state in case the event got there before we stopped propagation.
-			imageRenderer.CamImgClickStateReset();
+			// And [suppressMouseHelper] clears the state in case the event got there before we stopped propagation.
+			videoPlayer.suppressMouseHelper();
 		});
 	this.updateFullScreenButtonState = function ()
 	{
@@ -11473,9 +11478,9 @@ function StatsRow(name)
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Double Click Helper ////////////////////////////////////////
+// Mouse Event Helper / Double Click Helper ///////////////////
 ///////////////////////////////////////////////////////////////
-function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDoubleClick, doubleClickTimeMS)
+function MouseEventHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDoubleClick, cbDragStart, cbDragMove, cbDragEnd, doubleClickTimeMS, mouseMoveTolerance)
 {
 	/// <summary>Handles double-click events in a consistent way between touch and non-touch devices.</summary>
 	/// <param name="$ele">jQuery object containing elements to listen for clicks on.</param>
@@ -11493,8 +11498,14 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 		cbOnSingleClick = function () { };
 	if (typeof cbOnDoubleClick != "function")
 		cbOnDoubleClick = function () { };
+	if (typeof cbDragStart != "function")
+		cbDragStart = function () { };
+
 	if (!doubleClickTimeMS || doubleClickTimeMS < 0)
 		doubleClickTimeMS = 300;
+
+	if (!mouseMoveTolerance || mouseMoveTolerance < 0)
+		mouseMoveTolerance = 5;
 
 	var lastMouseDown1 = { X: -1000, Y: -1000, Time: performance.now() - 600000, Excluded: false };
 	var lastMouseDown2 = $.extend({}, lastMouseDown1);
@@ -11505,6 +11516,7 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 
 	var singleClickTimeout = null;
 	var singleClickFunction = null;
+
 
 	var exclude = false;
 	var clearExclusion = function ()
@@ -11537,6 +11549,7 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 		if (lastEvent == 1)
 			RecordMouseEvent(2, e); // Inject mouse event that the browser likely missed.
 		RecordMouseEvent(1, e);
+		cbDragStart(e);
 	});
 	$ele.on("mouseup touchend touchcancel", function (e)
 	{
@@ -11550,7 +11563,7 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 		if (fakeMouseDown)
 			RecordMouseEvent(1, e); // Inject mouse event that the browser likely missed.
 		RecordMouseEvent(2, e);
-		if (!positionsAreWithin20PX(lastMouseUp1, lastMouseDown1))
+		if (!positionsAreWithinTolerance(lastMouseUp1, lastMouseDown1))
 			return; // It doesn't count as a click if the mouse moved too far between down and up.
 		if (lastMouseDown1.Excluded || lastMouseUp1.Excluded)
 			return;
@@ -11560,8 +11573,8 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 		if (lastMouseUp1.Time - lastMouseUp2.Time < doubleClickTimeMS
 			&& lastMouseUp1.Time - lastMouseDown2.Time < doubleClickTimeMS
 			&& lastMouseUp2.Time - lastMouseDown2.Time < doubleClickTimeMS
-			&& positionsAreWithin20PX(lastMouseUp2, lastMouseDown2)
-			&& positionsAreWithin20PX(lastMouseDown1, lastMouseDown2)
+			&& positionsAreWithinTolerance(lastMouseUp2, lastMouseDown2)
+			&& positionsAreWithinTolerance(lastMouseDown1, lastMouseDown2)
 			&& !lastMouseDown2.Excluded
 			&& !lastMouseUp2.Excluded
 			&& singleClickTimeout)
@@ -11590,6 +11603,34 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 			singleClickTimeout = setTimeout(singleClickFunction, doubleClickTimeMS);
 		}
 	});
+	$(document).on("mousemove touchmove", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		// Determine if this move event starts a drag.
+		// When a drag starts, the MouseDown event becomes excluded from further consideration by this helper.
+		if (lastMouseDown1.Time > lastMouseUp1.Time)
+		{
+			// The mouse button is down.
+			if (!lastMouseDown1.Excluded)
+			{
+				// Has the curser moved far enough to start drag?
+				if (!positionsAreWithinTolerance(lastMouseDown1, { X: e.pageX, Y: e.pageY }))
+				{
+					lastMouseDown1.Excluded = true; // Cursor has moved far enough to start a drag.
+				}
+			}
+			cbDragMove(e, true, lastMouseDown1.Excluded);
+		}
+		else
+		{
+			cbDragMove(e, false, lastMouseDown1.Excluded);
+		}
+	});
+	$(document).on("mouseup mouseleave", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		cbDragEnd(e);
+	});
 	var RecordMouseEvent = function (eventNum, e)
 	{
 		var src, dst;
@@ -11615,9 +11656,9 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 		src.Excluded = exclude;
 		lastEvent = eventNum;
 	}
-	var positionsAreWithin20PX = function (positionA, positionB)
+	var positionsAreWithinTolerance = function (positionA, positionB)
 	{
-		return Math.abs(positionA.X - positionB.X) < 20 && Math.abs(positionA.Y - positionB.Y) < 20;
+		return Math.abs(positionA.X - positionB.X) <= mouseMoveTolerance && Math.abs(positionA.Y - positionB.Y) <= mouseMoveTolerance;
 	}
 	var handleExcludeFunc = function (e)
 	{
@@ -11631,6 +11672,10 @@ function DoubleClickHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDou
 	{
 		/// <summary>Sets the Excluded flag on all logged mouse events, causing them to not count toward clicks or double clicks.</summary>
 		lastMouseUp1.Excluded = lastMouseUp2.Excluded = lastMouseDown1.Excluded = lastMouseDown2.Excluded = true;
+	}
+	this.getDoubleClickTime = function ()
+	{
+		return doubleClickTimeMS;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -11883,14 +11928,32 @@ function OnChange_ui3_contextMenus_longPress(newValue)
 }
 function Learn_More_About_Context_Menu_Compatibility_Mode()
 {
-	$('<div style="padding:10px;font-size: 1.2em;">'
+	$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
 		+ 'Many useful functions in this interface are accessed by context menus (a.k.a. "Right-click menus").<br><br>'
 		+ 'Context menus are normally opened by right clicking.  On most touchscreen devices, instead you must press and hold.<br><br>'
 		+ 'However on some devices it is impossible to open context menus the normal way.  If this applies to you,'
-		+ ' enable \"Context Menu Compatibility Mode\".  This will change how context menus'
+		+ ' enable "Context Menu Compatibility Mode".  This will change how context menus'
 		+ ' are triggered so they should open when the left mouse button is held down for a moment.'
 		+ '</div>')
 		.modalDialog({ title: "Context Menu Compatibility Mode" });
+}
+function Learn_More_About_Double_Click_to_Fullscreen()
+{
+	$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
+		+ 'This setting controls whether or not double-clicking the video area triggers fullscreen mode.<br><br>'
+		+ 'When double-clicking is enabled, single-click actions on the same area will be delayed by ' + videoPlayer.getDoubleClickTime()
+		+ ' milliseconds.  This is to allow the browser time to determine if you intended a single-click or a double-click.<br><br>'
+		+ 'In live view, single-clicking a camera selects the camera.'
+		+ (settings.ui3_doubleClick_behavior == "Both" || settings.ui3_doubleClick_behavior == "Live View"
+			? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
+			: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
+		+ '<br><br>'
+		+ 'When a recording is open, single-clicking the video invokes Play/Pause.'
+		+ (settings.ui3_doubleClick_behavior == "Both" || settings.ui3_doubleClick_behavior == "Recordings"
+			? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
+			: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
+		+ '</div>')
+		.modalDialog({ title: "Double-Click to Fullscreen" });
 }
 function GetPreferredContextMenuTrigger()
 {
@@ -11996,7 +12059,7 @@ function logoutOldSession(oldSession)
 }
 function GetDialogOptionLabel(text)
 {
-	return '<div class="dialogOption_label" title="' + text + '">' + text + '</div>';
+	return '<div class="dialogOption_label">' + text + '</div>';
 }
 function GetHtmlOptionElementMarkup(value, name, selectedValue)
 {
