@@ -193,8 +193,16 @@ var $DialogDefaults = { theme: "light" };
 			var w = self.$dialog.width();
 			var h = self.$dialog.height();
 
-			self.$dialog.css("left", $(window).scrollLeft() + ((windowW - w) / 2) + "px");
-			self.$dialog.css("top", $(window).scrollTop() + ((windowH - h) / 2) + "px");
+			var left = $(window).scrollLeft() + ((windowW - w) / 2);
+			if (left < 0)
+				left = 0;
+
+			var top = $(window).scrollTop() + ((windowH - h) / 2);
+			if (top < 0)
+				top = 0;
+
+			self.$dialog.css("left", left + "px");
+			self.$dialog.css("top", top + "px");
 		}
 		var onResize = function ()
 		{

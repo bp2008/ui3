@@ -182,8 +182,7 @@ var togglableUIFeatures =
 	];
 
 // TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
-
-// TODO: The HLS player needs to actually stop playback (Live video only, HLS player is unavailable during clip playback).  Currently it only works for jpeg streaming because it was easy to inject a pause into that pipeline.
+//       -- I've found bugs related to the cycles and reported them.  Awaiting fixes.
 
 // TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
 
@@ -194,6 +193,15 @@ var togglableUIFeatures =
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 // CONSIDER: H.264 playback pipeline should honor the frame timestamps.  This would make playback a little smoother on an inconsistent network connection -- most notably one that hangs for a while and then receives a burst of delayed frames.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
+// CONSIDER: Show a limited version of the playback controls when live video is playing on the Alerts and Clips tabs.
+//           -- This can show "LIVE" where the Play/Pause, Next, and Previous buttons are.
+//           -- This could maybe show the real-world time (digital clock). Taken from the H.264 stream when available?
+//           -- There should typically be room for some stream status (e.g. "delayed xx seconds (learn more)").
+//           -- This would have a volume control, once audio is implemented for recording playback.
+//           -- This would have the fullscreen button.
+//           -- The Quality button could stay.  Perhaps make the options button immediately load the Quality panel if the current video is live.
+//           -- This would either hide the progress bar or leave it present but disabled; I'm not sure what would look better.
+//           -- Maybe include a "stop" button.  While stopped, live view would be dark overlayed and show a play button in the center.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -3802,6 +3810,10 @@ function ClipLoader(clipsBodySelector)
 				// Force clip list to be the correct height before clip tiles load.
 				$clipsbody.append('<div id="clipListHeightSetter" style="height:' + ((clipTileHeight * TotalUniqueClipsLoaded) + (HeightOfOneDateTilePx * TotalDateTilesLoaded)) + 'px;width:0px;"></div>');
 
+				if (!response.data || response.data.length == 0)
+				{
+					$clipsbody.append('<div class="clipListText">No recordings were found in the specified time range.</div>');
+				}
 				asyncThumbnailDownloader = new AsyncThumbnailDownloader();
 				tileLoader.AppearDisappearCheckEnabled = true;
 				tileLoader.appearDisappearCheck();
@@ -5728,7 +5740,12 @@ function VideoPlayerController()
 			return "jpeg";
 		else if (playerModule == moduleHolder["h264"])
 			return "h264";
-		return "unknown";
+		return "none";
+	}
+	this.DeactivatePlayer = function ()
+	{
+		if (playerModule)
+			playerModule.Deactivate();
 	}
 	this.SetPlayerModule = function (moduleName, refreshVideoNow)
 	{
@@ -5754,7 +5771,11 @@ function VideoPlayerController()
 		if (refreshVideoNow)
 			playerModule.OpenVideo(currentlyLoadingImage, position, paused);
 	}
-
+	this.RefreshVideoStream = function ()
+	{
+		if (playerModule)
+			playerModule.OpenVideo(currentlyLoadingImage, playerModule.GetSeekPercent(), playerModule.Playback_IsPaused());
+	}
 	this.PreLoadPlayerModules = function ()
 	{
 		if (moduleHolder["jpeg"] == null)
@@ -6123,10 +6144,15 @@ function VideoPlayerController()
 		var requiredPlayer = genericQualityHelper.GetPlayerID();
 		if (requiredPlayer != self.CurrentPlayerModuleName())
 		{
+			// playerModule must change, no need to notify the new one of the quality change.
 			self.SetPlayerModule(requiredPlayer, true);
 		}
-		if (typeof playerModule.SelectedQualityChanged == "function")
-			playerModule.SelectedQualityChanged();
+		else
+		{
+			// playerModule remains the same, so we should notify it of the quality change.
+			if (typeof playerModule.SelectedQualityChanged == "function")
+				playerModule.SelectedQualityChanged();
+		}
 	}
 	this.PlaybackDirectionChanged = function (playReverse)
 	{
@@ -6144,10 +6170,12 @@ function VideoPlayerController()
 	this.ImageRendered = function (path, width, height, lastFrameLoadingTime)
 	{
 		jpegPreviewModule.Hide();
-		currentlyLoadingImage.actualwidth = width;
-		currentlyLoadingImage.actualheight = height;
 		if (currentlyLoadedImage.path != path)
 			self.CameraOrResolutionChange();
+
+		// actualwidth and actualheight must be set after [CameraOrResolutionChange]
+		currentlyLoadedImage.actualwidth = width;
+		currentlyLoadedImage.actualheight = height;
 
 		RefreshFps(lastFrameLoadingTime);
 
@@ -6336,7 +6364,8 @@ function JpegVideoModule()
 			else
 			{
 				loadedFirstFrame = true;
-				videoPlayer.ImageRendered(loading.path, this.naturalWidth, this.naturalHeight, new Date().getTime() - currentImageRequestedAtMs);
+				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
+				videoPlayer.ImageRendered(loading.path, this.naturalWidth, this.naturalHeight, msLoadingTime);
 
 				var loaded = videoPlayer.Loaded().image;
 				if (loaded.id.startsWith("@"))
@@ -6365,16 +6394,15 @@ function JpegVideoModule()
 
 				if (nerdStats.IsOpen())
 				{
+					nerdStats.BeginUpdate();
 					nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
 					nerdStats.UpdateStat("Stream Resolution", loaded.actualwidth + "x" + loaded.actualheight);
 					nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
 					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "%"));
-					nerdStats.UpdateStat("Frame Offset", loading.isLive ? "LIVE" : clipPlaybackPosition + "ms");
-					nerdStats.UpdateStat("Frame Time", loading.isLive ? "LIVE" : "Unavailable");
-					nerdStats.UpdateStat("Frame Size", "Unavailable");
+					nerdStats.UpdateStat("Frame Offset", loading.isLive ? "LIVE" : Math.floor(clipPlaybackPosition) + "ms");
 					nerdStats.UpdateStat("Codecs", "jpeg");
-					nerdStats.UpdateStat("Network Delay", "N/A");
-					nerdStats.UpdateStat("Decoder Delay", "N/A");
+					nerdStats.UpdateStat("Network Delay", msLoadingTime.toFixed(0) + "ms");
+					nerdStats.EndUpdate();
 				}
 			}
 			GetNewImage();
@@ -6531,11 +6559,9 @@ function JpegVideoModule()
 			GetNewImageAfterTimeout();
 		else
 		{
-			// TODO: Instead of checking hlsPlayer.IsBlockingJpegRefresh(), try having the dialog instruct the videoPlayer to Stop().  This can deactivate the playerModule.  Configure the Activate procedure to clear the image by using imageRenderer's opacity options to hide or severely darken the frame while waiting for video to begin again.
 			if ((isLoadingRecordedSnapshot
 				&& loading.path == videoPlayer.Loaded().image.path
 				&& !CouldBenefitFromWidthChange(widthToRequest))
-				|| hlsPlayer.IsBlockingJpegRefresh()
 				|| !isVisible
 			)
 				GetNewImageAfterTimeout();
@@ -6893,15 +6919,17 @@ function FetchOpenH264VideoModule()
 		lastFrameAt = timeNow;
 		if (nerdStats.IsOpen())
 		{
+			nerdStats.BeginUpdate();
 			nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
 			nerdStats.UpdateStat("Stream Resolution", frame.width + "x" + frame.height);
 			nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
-			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(frame.pos / 100) + "%"));
+			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
 			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
 			nerdStats.UpdateStat("Frame Size", formatBytes(frame.size, 2));
 			nerdStats.UpdateStat("Codecs", "h264");
 			writeDelayStats();
+			nerdStats.EndUpdate();
 		}
 		if (playbackPaused && !loading.isLive)
 		{
@@ -6932,22 +6960,14 @@ function FetchOpenH264VideoModule()
 			currentSeekPositionPercent = 1;
 		videoPlayer.Playback_Ended(reverse);
 	}
-	var writeDelayStats = function (onlyIfExists)
+	var writeDelayStats = function ()
 	{
 		if (nerdStats.IsOpen())
 		{
 			var netDelay = openh264_player.GetNetworkDelay().toFixed().padLeft(4, '0') + "ms";
 			var decoderDelay = openh264_player.GetBufferedTime().toFixed().padLeft(4, '0') + "ms (" + openh264_player.GetBufferedFrameCount() + " frames)";
-			if (onlyIfExists)
-			{
-				nerdStats.UpdateStatIfExists("Network Delay", netDelay);
-				nerdStats.UpdateStatIfExists("Decoder Delay", decoderDelay);
-			}
-			else
-			{
-				nerdStats.UpdateStat("Network Delay", netDelay);
-				nerdStats.UpdateStat("Decoder Delay", decoderDelay);
-			}
+			nerdStats.UpdateStat("Network Delay", netDelay);
+			nerdStats.UpdateStat("Decoder Delay", decoderDelay);
 		}
 	}
 	var perf_warning_net = null;
@@ -6956,7 +6976,7 @@ function FetchOpenH264VideoModule()
 	{
 		if (!openh264_player || !isCurrentlyActive)
 			return;
-		writeDelayStats(true);
+		writeDelayStats();
 		if (perf_warning_net)
 		{
 			perf_warning_net.remove();
@@ -7815,10 +7835,6 @@ function CanvasContextMenu()
 	}
 	var onTriggerLiveContextMenu = function (e)
 	{
-		if (h264_playback_supported)
-			$("#playerModuleEnable").text(videoPlayer.CurrentPlayerModuleName() == "jpeg" ? "Enable" : "Disable");
-		else
-			$("#playerModuleEnable").text("(chrome) ");
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
 			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
@@ -9768,10 +9784,10 @@ function HLSPlayer()
 	this.OpenDialog = function (camId)
 	{
 		hlsPlayerLastCamId = camId;
-		container = $('<div style="overflow: hidden;"></div>');
+		container = $('<div style="overflow: hidden;padding:0px;"></div>');
 		dialog = container.dialog(
 			{
-				title: "HLS Stream (" + htmlEncode(cameraListLoader.GetCameraName(camId)) + ")"
+				title: "HTTP Live Stream (HLS) - " + htmlEncode(cameraListLoader.GetCameraName(camId))
 				, overlayOpacity: 0.3
 				, onClosing: function ()
 				{
@@ -9780,8 +9796,10 @@ function HLSPlayer()
 					if (playerObj != null)
 						playerObj.stop();
 					playerObj = null;
+					videoPlayer.RefreshVideoStream();
 				}
 			});
+		videoPlayer.DeactivatePlayer();
 		if (!initFinished)
 		{
 			container.append('<div style="width:50px;height:50px;margin:20px" class="spin2s">'
@@ -9820,6 +9838,8 @@ function HLSPlayer()
 
 			registerHlsContextMenu($("#hlsPlayer"));
 			registerHlsContextMenu($("#hlsPlayer video"));
+
+			dialog.contentChanged(true);
 		}
 	}
 	var onHlsError = function (obj)
@@ -9842,7 +9862,7 @@ function HLSPlayer()
 		}
 		toaster.Error("Video player reports error: " + description);
 	}
-	this.IsBlockingJpegRefresh = function ()
+	this.IsOpen = function ()
 	{
 		return dialog != null;
 	}
@@ -11296,14 +11316,29 @@ function UI3NerdStats()
 	var self = this;
 	var dialog = null;
 	var $root;
-	var isFresh = true;
+	var isInitialized = false;
+	var isUpdating = false;
+	var hideOnEndUpdate = {};
 	var statsRows = [];
+	this.orderedStatNames =
+		[
+			"Viewport"
+			, "Stream Resolution"
+			, "Native Resolution"
+			, "Seek Position"
+			, "Frame Offset"
+			, "Frame Time"
+			, "Frame Size"
+			, "Codecs"
+			, "Network Delay"
+			, "Decoder Delay"
+		];
 	this.Open = function ()
 	{
 		if (dialog)
 			dialog.close();
+		isInitialized = false;
 		$root = $('<div class="statsForNerds">Video playback must start before stats are available.</div>');
-		isFresh = true;
 		dialog = $root.dialog(
 			{
 				title: "Stats for nerds"
@@ -11314,37 +11349,83 @@ function UI3NerdStats()
 				}
 			});
 	}
+	var Initialize = function ()
+	{
+		if (isInitialized || !dialog)
+			return;
+		isInitialized = true;
+
+		$root.empty();
+		for (var i = 0; i < self.orderedStatNames.length; i++)
+			CreateStat(self.orderedStatNames[i]);
+	}
 	this.IsOpen = function ()
 	{
 		return dialog != null;
+	}
+	var CreateStat = function (name)
+	{
+		/// <summary>Creates a row for the specified statistic if it does not already exist.</summary>
+		if (!dialog)
+			return;
+		var row = statsRows[name];
+		if (!row)
+		{
+			row = statsRows[name] = new StatsRow(name);
+			$root.append(row.GetEleRef());
+			dialog.contentChanged(false, true);
+		}
+	}
+	this.BeginUpdate = function ()
+	{
+		/// <summary>Marks all rows to be hidden during [EndUpdate] unless their values are set during the update.</summary>
+		if (isUpdating)
+			return;
+		Initialize();
+		isUpdating = true;
+		hideOnEndUpdate = {};
+		for (var i = 0; i < self.orderedStatNames.length; i++)
+			hideOnEndUpdate[self.orderedStatNames[i]] = true;
+	}
+	this.EndUpdate = function ()
+	{
+		/// <summary>Hides all rows that were not updated since [BeginUpdate] was called.</summary>
+		if (!isUpdating)
+			return;
+		Initialize();
+		isUpdating = false;
+		for (var i = 0; i < self.orderedStatNames.length; i++)
+			if (hideOnEndUpdate[self.orderedStatNames[i]])
+				statsRows[self.orderedStatNames[i]].Hide();
+
+		dialog.contentChanged(false, true);
 	}
 	this.UpdateStat = function (name, value, htmlValue)
 	{
 		/// <summary>Adds or updates the value with the specified name.</summary>
 		if (!dialog)
 			return;
-		if (isFresh)
-		{
-			isFresh = false;
-			$root.empty();
-		}
+		Initialize();
 		var row = statsRows[name];
 		if (!row)
 		{
-			row = statsRows[name] = new StatsRow(name);
-			$root.append(row.GetEleRef());
-			dialog.contentChanged();
+			self.orderedStatNames.push(name);
+			CreateStat(name);
+			row = statsRows[name];
 		}
+		if (isUpdating)
+			hideOnEndUpdate[name] = false;
 		row.SetValue(value, htmlValue);
 	}
-	this.UpdateStatIfExists = function (name, value, htmlValue)
+	this.HideStat = function (name)
 	{
-		/// <summary>Updates the value with the specified name only if the name has already been added by a call to UpdateStat.</summary>
+		/// <summary>Immediately hides the specified row.  Designed to be called outside of an organized update.</summary>
 		if (!dialog)
 			return;
+		Initialize();
 		var row = statsRows[name];
 		if (row)
-			row.SetValue(value, htmlValue);
+			row.Hide();
 	}
 }
 function StatsRow(name)
@@ -11355,10 +11436,17 @@ function StatsRow(name)
 	var $value = $('<div class="statsValue"></div>');
 	$root.append($name);
 	$root.append($value);
+	$root.hide();
 	var currentValue = null;
+	var hidden = true;
 
 	this.SetValue = function (value, htmlValue)
 	{
+		if (hidden)
+		{
+			hidden = false;
+			$root.show();
+		}
 		currentValue = value;
 		if (typeof htmlValue == "undefined")
 			htmlValue = htmlEncode(value);
@@ -11371,6 +11459,17 @@ function StatsRow(name)
 	this.GetEleRef = function ()
 	{
 		return $root;
+	}
+	this.Hide = function ()
+	{
+		if (hidden)
+			return;
+		hidden = true;
+		$root.hide();
+	}
+	this.Hidden = function ()
+	{
+		return hidden;
 	}
 }
 ///////////////////////////////////////////////////////////////
