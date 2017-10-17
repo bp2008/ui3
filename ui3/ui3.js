@@ -5840,14 +5840,17 @@ function VideoPlayerController()
 				else
 				{
 					// Recording
-					var dblClickEnabled = IsDoubleClickFullscreenEnabled();
-					if ((confirmed && dblClickEnabled) || (!confirmed && !dblClickEnabled))
+					if (!confirmed)
 					{
-						self.Playback_PlayPause();
 						if (self.Playback_IsPaused())
 							videoOverlayHelper.ShowTemporaryPlayIcon();
 						else
 							videoOverlayHelper.ShowTemporaryPauseIcon();
+					}
+					var dblClickEnabled = IsDoubleClickFullscreenEnabled();
+					if ((confirmed && dblClickEnabled) || (!confirmed && !dblClickEnabled))
+					{
+						self.Playback_PlayPause();
 					}
 				}
 			}
@@ -8621,6 +8624,7 @@ function CameraProperties()
 		).dialog({
 			title: "Camera Properties"
 			, overlayOpacity: 0.3
+			, closeOnOverlayClick: true
 			, onClosing: function ()
 			{
 				loadedOnce = false;
@@ -9028,6 +9032,7 @@ function ClipProperties()
 		$dlg.dialog({
 			title: htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties'
 			, overlayOpacity: 0.3
+			, closeOnOverlayClick: true
 		});
 	}
 	var GetInfo = function (label, value)
@@ -9621,7 +9626,12 @@ function openLoginDialog()
 	}
 	else
 		$("#cbRememberMe").prop("checked", false);
-	loginModal = $("#loginDialog").dialog({ overlayOpacity: 0.3, title: "Administrator Login" });
+	loginModal = $("#loginDialog").dialog(
+		{
+			overlayOpacity: 0.3
+			, closeOnOverlayClick: true
+			, title: "Administrator Login"
+		});
 }
 function closeLoginDialog()
 {
@@ -9794,6 +9804,7 @@ function HLSPlayer()
 			{
 				title: "HTTP Live Stream (HLS) - " + htmlEncode(cameraListLoader.GetCameraName(camId))
 				, overlayOpacity: 0.3
+				, closeOnOverlayClick: true
 				, onClosing: function ()
 				{
 					container = null;
@@ -11744,6 +11755,7 @@ function UISettingsPanel()
 		modal_dialog = $dlg.dialog({
 			title: "UI Settings"
 			, overlayOpacity: 0.3
+			, closeOnOverlayClick: true
 		});
 
 		for (var i = 0; i < settingsCategoryList.length; i++)
