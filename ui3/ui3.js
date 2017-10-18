@@ -6984,7 +6984,7 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
 			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			nerdStats.UpdateStat("Codecs", "h264");
-			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed(1) + "ms", true);
+			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
 			writeDelayStats();
 			nerdStats.EndUpdate();
 
@@ -7025,7 +7025,7 @@ function FetchOpenH264VideoModule()
 			var netDelay = openh264_player.GetNetworkDelay().toFloat();
 			var decoderDelay = openh264_player.GetBufferedTime().toFloat();
 			nerdStats.UpdateStat("Network Delay", netDelay, netDelay.toFixed().padLeft(4, '0') + "ms", true);
-			nerdStats.UpdateStat("Decoder Delay", decoderDelay, decoderDelay.toFixed().padLeft(4, '0') + "ms", true);
+			nerdStats.UpdateStat("Player Delay", decoderDelay, decoderDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Delayed Frames", openh264_player.GetBufferedFrameCount(), openh264_player.GetBufferedFrameCount(), true);
 			lastNerdStatsUpdate = performance.now();
 		}
@@ -7077,17 +7077,29 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var display;
 	var decoder;
 	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
+	var decodedFrameCount = 0; // Number of frames rendered.
 	var renderedFrameCount = 0; // Number of frames rendered.
-	var timestampFirstAcceptedFrame = 0; // Frame timestamp (ms) of the first frame to be submitted to the decoder.
-	var timestampFirstRenderedFrame = 0; // Frame timestamp (ms) of the first frame to be rendered.
-	var timestampLastAcceptedFrame = 0; // Frame timestamp (ms) of the last frame to be submitted to the decoder.
-	var timestampLastRenderedFrame = 0; // Frame timestamp (ms) of the last frame to be rendered.
+	var timestampFirstAcceptedFrame = -1; // Frame timestamp (ms) of the first frame to be submitted to the decoder.
+	var timestampFirstDecodedFrame = -1; // Frame timestamp (ms) of the first frame to be decoded.
+	var timestampFirstRenderedFrame = -1; // Frame timestamp (ms) of the first frame to be rendered.
+	var timestampLastAcceptedFrame = -1; // Frame timestamp (ms) of the last frame to be submitted to the decoder.
+	var timestampLastDecodedFrame = -1; // Frame timestamp (ms) of the last frame to be decoded.
+	var timestampLastRenderedFrame = -1; // Frame timestamp (ms) of the last frame to be rendered.
 	var firstFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the first frame was received from the network.
 	var lastFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the last frame was received from the network.
+	var firstFrameDecodedAt = performance.now(); // The performance.now() reading at the moment the first frame was finished decoding.
+	var lastFrameDecodedAt = performance.now(); // The performance.now() reading at the moment the last frame was finished decoding.
+	var firstFrameRenderedAt = performance.now(); // The performance.now() reading at the moment the first frame was finished rendering.
+	var lastFrameRenderedAt = performance.now(); // The performance.now() reading at the moment the last frame was finished rendering.
 	var lastFrameRenderTime = 0; // Milliseconds it took to render the last frame.
+	var averageRenderTime = new RollingAverage();
+	var renderFrameQueue = new Queue();
+	var averageDecodeTime = new RollingAverage();
+	var playbackClockOffset = 0;
 	var loadState = 0; // 0: Initial, 1: Loading, 2: Ready to accept frames
 	var isValid = true;
 	var allFramesAccepted = false;
+	var maxQueuedRenders = 2; // Low values are better for memory usage and low latency playback.
 
 	var onLoad = function ()
 	{
@@ -7102,17 +7114,69 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	var frameDecoded = function (frame)
 	{
+		var timeNow = performance.now();
+		decodedFrameCount++;
+		timestampLastDecodedFrame = frame.timestamp;
+		lastFrameDecodedAt = timeNow;
+		if (timestampFirstDecodedFrame == -1)
+		{
+			timestampFirstDecodedFrame = frame.timestamp;
+			firstFrameDecodedAt = timeNow;
+		}
+		if (renderedFrameCount == 0)
+			renderFrame(frame); // The rendering of the first frame shall mark the start of the playback clock.
+		else
+		{
+			var playbackClock = (timeNow - firstFrameRenderedAt) + playbackClockOffset;
+			var startRenderingAt = (timestampLastDecodedFrame - timestampFirstDecodedFrame) - averageRenderTime.Get();
+			var timeToWait = startRenderingAt - playbackClock;
+			//console.log("RF " + renderedFrameCount + ", PClock " + playbackClock.toFixed() + ", Render at " + startRenderingAt.toFixed() + ", Wait for " + timeToWait);
+			if (timeToWait > 0)
+			{
+				renderFrameQueue.enqueue(new QueuedDecodedFrame(frame, renderFrame, timeToWait));
+				if (renderFrameQueue.getLength() > maxQueuedRenders)
+				{
+					// Rendering is falling behind (highly unlikely, as rendering is one of the faster parts of this pipeline)
+					// We should be able to keep delay to a minimum by rendering the next queued frame early and offsetting the playback clock.
+					var qdf = renderFrameQueue.dequeue();
+					var msEarly = qdf.renderEarly();
+					//console.log("Offsetting playback clock by " + msEarly);
+					playbackClockOffset += msEarly;
+				}
+			}
+			else
+			{
+				if (timeToWait < 0)
+				{
+					// Rendering is getting ahead.  A lazy way to correct for this is to simply offset the playback clock.
+					//console.log("Offsetting playback clock by " + timeToWait);
+					playbackClockOffset += timeToWait;
+				}
+				renderFrame(frame);
+			}
+		}
+	}
+	var renderFrame = function (frame, wasQueued)
+	{
+		if (wasQueued)
+			renderFrameQueue.dequeue();
 		if (canvasW != frame.width)
 			canvas.width = canvasW = frame.width;
 		if (canvasH != frame.height)
 			canvas.height = canvasH = frame.height;
 		var drawStart = performance.now();
 		display.drawNextOuptutPictureGL(frame.width, frame.height, null, new Uint8Array(frame.data));
-		lastFrameRenderTime = performance.now() - drawStart;
+		var drawEnd = performance.now();
+		lastFrameRenderTime = drawEnd - drawStart;
+		averageRenderTime.Add(lastFrameRenderTime);
 		renderedFrameCount++;
-		if (timestampFirstRenderedFrame == -1)
-			timestampFirstRenderedFrame = frame.timestamp;
 		timestampLastRenderedFrame = frame.timestamp;
+		lastFrameRenderedAt = drawEnd;
+		if (timestampFirstRenderedFrame == -1)
+		{
+			timestampFirstRenderedFrame = frame.timestamp;
+			firstFrameRenderedAt = drawEnd;
+		}
 		frameRendered(frame);
 		CheckStreamEndCondition();
 	}
@@ -7203,6 +7267,12 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		if (timestampFirstAcceptedFrame == -1)
 			return 0;
 		var realTimePassed = performance.now() - firstFrameReceivedAt;
+		// CONSIDER: Blue Iris does not increase frame timestamps at a rate equivalent to real time while encoding a reduced-speed video.
+		// I know it is overcompensating wildly, but I'm using playSpeed as a multiplier here to ensure we don't show erroneous network delay messages in the UI.
+		// The network would have to be performing exceptionally poorly to show high network delay while playing at a reduced speed.
+		var playSpeed = playbackControls.GetPlaybackSpeed();
+		if (playSpeed < 1)
+			realTimePassed *= playSpeed;
 		var streamTimePassed = timestampLastAcceptedFrame - timestampFirstAcceptedFrame;
 		var delay = realTimePassed - streamTimePassed;
 		if (delay < 0)
@@ -7226,13 +7296,24 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		decoder.Flush();
 		acceptedFrameCount = 0;
+		decodedFrameCount = 0;
 		renderedFrameCount = 0;
 		timestampFirstAcceptedFrame = -1;
+		timestampFirstDecodedFrame = -1;
 		timestampFirstRenderedFrame = -1;
 		timestampLastAcceptedFrame = -1;
+		timestampLastDecodedFrame = -1;
 		timestampLastRenderedFrame = -1;
-		firstFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the first frame was received from the network.
-		lastFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the last frame was received from the network.
+		firstFrameReceivedAt = performance.now();
+		lastFrameReceivedAt = performance.now();
+		firstFrameDecodedAt = performance.now();
+		lastFrameDecodedAt = performance.now();
+		firstFrameRenderedAt = performance.now();
+		lastFrameRenderedAt = performance.now();
+		playbackClockOffset = 0;
+		while (!renderFrameQueue.isEmpty())
+			renderFrameQueue.dequeue().dropFrame();
+		// CONSIDER: consider constructing new averageRenderTime and averageDecodeTime here.
 		allFramesAccepted = false;
 	}
 	this.AcceptFrame = function (frame)
@@ -7245,6 +7326,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		{
 			timestampFirstAcceptedFrame = frame.time;
 			firstFrameReceivedAt = lastFrameReceivedAt;
+			firstFrameRenderedAt = lastFrameReceivedAt; // This value is faked so the timing starts more reasonably.
 		}
 	}
 	this.GetCanvasRef = function ()
@@ -7258,6 +7340,44 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 
 	Initialize();
+}
+function QueuedDecodedFrame(frame, renderFunc, timeToWait)
+{
+	/// <summary>  
+	/// Queues a frame for rendering.  This template/class is very specialized.
+	/// New instances must immediately go into the renderFrameQueue.    
+	/// If the instance is dequeued early, the renderEarly or dropFrame function must be called.
+	/// </summary>
+	var timeoutStartedAt = performance.now();
+	var timeout = setTimeout(function () { timeout = null; renderFunc(frame, true); }, timeToWait);
+	this.renderEarly = function ()
+	{
+		/// <summary>Renders the frame now if it hasn't been rendered yet. The caller becomes responsible for dequeuing this frame.</summary>
+		if (timeout)
+		{
+			clearTimeout(timeout);
+			timeout = null;
+			var msEarly = (timeoutStartedAt + timeToWait) - performance.now();
+			renderFunc(frame, false);
+			return msEarly;
+		}
+		return 0;
+	}
+	this.dropFrame = function ()
+	{
+		/// <summary>Drops the frame now if it hasn't been rendered yet. The caller becomes responsible for dequeuing this frame.</summary>
+		if (timeout)
+		{
+			clearTimeout(timeout);
+			timeout = null;
+			return (timeoutStartedAt + timeToWait) - performance.now();
+		}
+		return 0;
+	}
+	this.hasRendered = function ()
+	{
+		return timeout == null;
+	}
 }
 ///////////////////////////////////////////////////////////////
 // openh264_decoder ///////////////////////////////////////////
@@ -10570,7 +10690,7 @@ function FPSCounter2()
 			ticksum -= ticklist[tickindex];  /* subtract value falling off */
 			ticksum += newtick;              /* add new value */
 			ticklist[tickindex] = newtick;   /* save new value so it can be subtracted later */
-			if (++tickindex == MAXSAMPLES)    /* inc buffer index */
+			if (++tickindex == MAXSAMPLES)   /* inc buffer index */
 				tickindex = 0;
 		}
 		/* return average */
@@ -10579,6 +10699,35 @@ function FPSCounter2()
 	this.getFPS = function (newtick)
 	{
 		return (1000 / CalcAverageTick(newtick)).toFloat(1);
+	}
+}
+///////////////////////////////////////////////////////////////
+// Efficient Rolling Average Calculator ///////////////////////
+///////////////////////////////////////////////////////////////
+function RollingAverage(MAXSAMPLES)
+{
+	/// <summary>Calculates rolling averages.</summary>
+	if (!MAXSAMPLES)
+		MAXSAMPLES = 10;
+	var tickindex = 0;
+	var ticksum = 0;
+	var ticklist = [];
+	for (var i = 0; i < MAXSAMPLES; i++)
+		ticklist.push(0);
+	this.Add = function (newValue)
+	{
+		if (newValue !== null)
+		{
+			ticksum -= ticklist[tickindex];  // subtract value falling off
+			ticksum += newValue;              // add new value
+			ticklist[tickindex] = newValue;   // save new value so it can be subtracted later
+			if (++tickindex == MAXSAMPLES)   // inc buffer index
+				tickindex = 0;
+		}
+	}
+	this.Get = function ()
+	{
+		return (ticksum / MAXSAMPLES);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -11353,7 +11502,7 @@ function UI3NerdStats()
 			, "Codecs"
 			, "Inter-Frame Time"
 			, "Network Delay"
-			, "Decoder Delay"
+			, "Player Delay"
 			, "Delayed Frames"
 		];
 	this.Open = function ()
