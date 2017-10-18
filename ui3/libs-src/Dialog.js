@@ -340,7 +340,7 @@ var SimpleDialog = new function ()
 	var self = this;
 	this.text = this.Text = function (message)
 	{
-		return $('<div></div>').text(message).modalDialog();
+		return $('<div style="white-space: pre-wrap;"></div>').text(message).modalDialog();
 	}
 	this.html = this.Html = function (message)
 	{

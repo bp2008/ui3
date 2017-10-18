@@ -2995,8 +2995,9 @@ div::-webkit-scrollbar-track
 .statsRow
 {
 	width: 320px;
-	height: 14px;
-	line-height: 14px;
+	height: 16px;
+	line-height: 16px;
+	margin-top: 1px;
 	font-size: 12px;
 	overflow: hidden;
 	white-space: nowrap;
@@ -3006,7 +3007,7 @@ div::-webkit-scrollbar-track
 {
 	display: inline-block;
 	width: 105px;
-	height: 14px;
+	height: 16px;
 	margin-right: 8px;
 	overflow: hidden;
 	text-align: right;
@@ -3017,8 +3018,31 @@ div::-webkit-scrollbar-track
 {
 	display: inline-block;
 	width: 200px;
-	height: 14px;
+	height: 16px;
 	overflow: hidden;
+}
+
+.statsGraphValue
+{
+	display: inline-block;
+	width: 132px;
+	margin-right: 3px;
+	height: 16px;
+	display: none;
+	vertical-align: top;
+}
+
+.statsHtmlValue
+{
+	display: inline-block;
+	height: 16px;
+	vertical-align: top;
+}
+
+.simpleGraph
+{
+	width: 100%;
+	height: 100%;
 }
 /* Collapsible sections for dialogs */
 .collapsible_section_heading

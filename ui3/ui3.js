@@ -2534,6 +2534,7 @@ function PtzButtons()
 ///////////////////////////////////////////////////////////////
 function ClipTimeline()
 {
+	var self = this;
 	var $canvas = $("#canvas_clipTimeline");
 	var canvas = $canvas.get(0);
 	var dpiScale = BI_GetDevicePixelRatio();
@@ -2541,7 +2542,6 @@ function ClipTimeline()
 	var currentSelectedRelativePosition = -1;
 	var currentGhostRelativePosition = -1;
 	var currentSoftGhostRelativePosition = -1;
-	var self = this;
 	$canvas.on("mousedown touchstart", function (e)
 	{
 		mouseCoordFixer.fix(e);
@@ -6455,7 +6455,7 @@ function JpegVideoModule()
 					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "%"));
 					nerdStats.UpdateStat("Frame Offset", loading.isLive ? "LIVE" : Math.floor(clipPlaybackPosition) + "ms");
 					nerdStats.UpdateStat("Codecs", "jpeg");
-					nerdStats.UpdateStat("Network Delay", msLoadingTime.toFixed(0) + "ms");
+					nerdStats.UpdateStat("Network Delay", msLoadingTime, msLoadingTime + "ms", true);
 					nerdStats.EndUpdate();
 				}
 			}
@@ -6784,6 +6784,7 @@ function FetchOpenH264VideoModule()
 	var lastFrameAt = 0;
 	var playbackPaused = false;
 	var perfMonInterval;
+	var lastNerdStatsUpdate = performance.now();
 
 	var loading = new BICameraData();
 
@@ -6970,6 +6971,7 @@ function FetchOpenH264VideoModule()
 		currentSeekPositionPercent = frame.pos / 10000;
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow);
+		var interFrame = timeNow - lastFrameAt;
 		lastFrameAt = timeNow;
 		if (nerdStats.IsOpen())
 		{
@@ -6980,10 +6982,12 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
 			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
-			nerdStats.UpdateStat("Frame Size", formatBytes(frame.size, 2));
+			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			nerdStats.UpdateStat("Codecs", "h264");
+			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed(1) + "ms", true);
 			writeDelayStats();
 			nerdStats.EndUpdate();
+
 		}
 		if (playbackPaused && !loading.isLive)
 		{
@@ -7018,10 +7022,12 @@ function FetchOpenH264VideoModule()
 	{
 		if (nerdStats.IsOpen())
 		{
-			var netDelay = openh264_player.GetNetworkDelay().toFixed().padLeft(4, '0') + "ms";
-			var decoderDelay = openh264_player.GetBufferedTime().toFixed().padLeft(4, '0') + "ms (" + openh264_player.GetBufferedFrameCount() + " frames)";
-			nerdStats.UpdateStat("Network Delay", netDelay);
-			nerdStats.UpdateStat("Decoder Delay", decoderDelay);
+			var netDelay = openh264_player.GetNetworkDelay().toFloat();
+			var decoderDelay = openh264_player.GetBufferedTime().toFloat();
+			nerdStats.UpdateStat("Network Delay", netDelay, netDelay.toFixed().padLeft(4, '0') + "ms", true);
+			nerdStats.UpdateStat("Decoder Delay", decoderDelay, decoderDelay.toFixed().padLeft(4, '0') + "ms", true);
+			nerdStats.UpdateStat("Delayed Frames", openh264_player.GetBufferedFrameCount(), openh264_player.GetBufferedFrameCount(), true);
+			lastNerdStatsUpdate = performance.now();
 		}
 	}
 	var perf_warning_net = null;
@@ -7030,7 +7036,8 @@ function FetchOpenH264VideoModule()
 	{
 		if (!openh264_player || !isCurrentlyActive)
 			return;
-		writeDelayStats();
+		if (performance.now() - lastNerdStatsUpdate > 1000)
+			writeDelayStats();
 		if (perf_warning_net)
 		{
 			perf_warning_net.remove();
@@ -7606,8 +7613,6 @@ function ImageRenderer()
 		mouseY = e.pageY;
 		imageIsDragging = true;
 		SetCamCellCursor();
-		// TODO: Remove this comment if no mousing/clicking bugs noticed for a while, otherwise try this: e.preventDefault();
-		e.preventDefault();
 	}
 	this.CamImgDragMove = function (e, mouseIsDown, dragHasMoved)
 	{
@@ -10526,10 +10531,10 @@ function FPSCounter1()
 			frameTimes = new LinkedListNode(now);
 			if (lastFrameLoadingTime <= 0)
 				lastFrameLoadingTime = 10000;
-			var newFps = (1000.0 / lastFrameLoadingTime).toFixed(1);
+			var newFps = 1000.0 / lastFrameLoadingTime;
 			if (newFps > 2)
 				newFps = 2;
-			return newFps;
+			return newFps.toFloat(1);
 		}
 		// Count live nodes
 		var iterator = frameTimes;
@@ -10573,7 +10578,7 @@ function FPSCounter2()
 	}
 	this.getFPS = function (newtick)
 	{
-		return (1000 / CalcAverageTick(newtick)).toFixed(1);
+		return (1000 / CalcAverageTick(newtick)).toFloat(1);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -11346,8 +11351,10 @@ function UI3NerdStats()
 			, "Frame Time"
 			, "Frame Size"
 			, "Codecs"
+			, "Inter-Frame Time"
 			, "Network Delay"
 			, "Decoder Delay"
+			, "Delayed Frames"
 		];
 	this.Open = function ()
 	{
@@ -11410,13 +11417,17 @@ function UI3NerdStats()
 			return;
 		Initialize();
 		isUpdating = false;
+		var hidSome = false;
 		for (var i = 0; i < self.orderedStatNames.length; i++)
 			if (hideOnEndUpdate[self.orderedStatNames[i]])
-				statsRows[self.orderedStatNames[i]].Hide();
-
-		dialog.contentChanged(false, true);
+			{
+				if (statsRows[self.orderedStatNames[i]].Hide())
+					hidSome = true;
+			}
+		if (hidSome)
+			dialog.contentChanged(false, true);
 	}
-	this.UpdateStat = function (name, value, htmlValue)
+	this.UpdateStat = function (name, value, htmlValue, onGraph)
 	{
 		/// <summary>Adds or updates the value with the specified name.</summary>
 		if (!dialog)
@@ -11431,7 +11442,7 @@ function UI3NerdStats()
 		}
 		if (isUpdating)
 			hideOnEndUpdate[name] = false;
-		row.SetValue(value, htmlValue);
+		row.SetValue(value, htmlValue, onGraph);
 	}
 	this.HideStat = function (name)
 	{
@@ -11450,13 +11461,17 @@ function StatsRow(name)
 	var $root = $('<div class="statsRow"></div>');
 	var $name = $('<div class="statsName">' + name + '</div>');
 	var $value = $('<div class="statsValue"></div>');
+	var $graphValue = $('<div class="statsGraphValue"></div>');
+	var $htmlValue = $('<div class="statsHtmlValue"></div>');
+	$value.append($graphValue).append($htmlValue);
 	$root.append($name);
 	$root.append($value);
 	$root.hide();
 	var currentValue = null;
 	var hidden = true;
+	var graph = null;
 
-	this.SetValue = function (value, htmlValue)
+	this.SetValue = function (value, htmlValue, addToGraph)
 	{
 		if (hidden)
 		{
@@ -11464,9 +11479,21 @@ function StatsRow(name)
 			$root.show();
 		}
 		currentValue = value;
+		if (addToGraph && isNaN(value))
+			return;
 		if (typeof htmlValue == "undefined")
 			htmlValue = htmlEncode(value);
-		$value.html(htmlValue);
+		if (addToGraph)
+		{
+			CreateGraph();
+			graph.AddValue(value, true);
+			$htmlValue.html(htmlValue);
+		}
+		else
+		{
+			DestroyGraph();
+			$htmlValue.html(htmlValue);
+		}
 	}
 	this.GetValue = function ()
 	{
@@ -11479,13 +11506,125 @@ function StatsRow(name)
 	this.Hide = function ()
 	{
 		if (hidden)
-			return;
+			return false;
 		hidden = true;
+		console.log("Hid " + name);
 		$root.hide();
+		return true;
 	}
 	this.Hidden = function ()
 	{
 		return hidden;
+	}
+	var CreateGraph = function ()
+	{
+		if (graph)
+			return;
+		graph = new SimpleGraph();
+		$graphValue.append(graph.Get$Canvas());
+		$graphValue.css("display", "inline-block");
+	}
+	var DestroyGraph = function ()
+	{
+		if (!graph)
+			return;
+		$graphValue.empty();
+		$graphValue.hide();
+		graph = null;
+	}
+}
+///////////////////////////////////////////////////////////////
+// Simple Graph ///////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function SimpleGraph()
+{
+	var self = this;
+	var $canvas = $('<canvas class="simpleGraph"></canvas>');
+	var canvas = $canvas.get(0);
+	var dpiScale = 1;//BI_GetDevicePixelRatio();
+	var dataIndex = 0;
+	var buffer = null;
+	var previousMaximum;
+
+	this.Get$Canvas = function ()
+	{
+		return $canvas;
+	}
+	this.AddValue = function (value, drawNow)
+	{
+		if (!buffer)
+			Refresh();
+		if (dataIndex >= buffer.length)
+			dataIndex = 0;
+		buffer[dataIndex] = value;
+		dataIndex++;
+		if (drawNow)
+			Draw();
+	}
+	var Refresh = function ()
+	{
+		dpiScale = 1;//BI_GetDevicePixelRatio();
+		var h = Math.ceil($canvas.height() * dpiScale);
+		if (canvas.height != h)
+			canvas.height = h;
+		var w = Math.ceil($canvas.width() * dpiScale);
+		if (canvas.width != w || !buffer)
+		{
+			canvas.width = w;
+			var ctx = canvas.getContext("2d");
+			ctx.translate(0.5, 0);
+			ctx.imageSmoothingEnabled = false;
+			var newBuffer = new Array(canvas.width);
+			// Consider: Handle buffer resizes, preserving as much recent data as possible.
+			//if (buffer)
+			//{
+			//	for (var i = 0, l = Math.min(buffer.length, newBuffer.length); i < l; i++)
+			//		newBuffer[i] = buffer[i];
+			//}
+			dataIndex = 0;
+			buffer = newBuffer;
+		}
+		Draw();
+	};
+	var Draw = function ()
+	{
+		var w = canvas.width;
+		if (buffer.length != w)
+		{
+			setTimeout(Refresh, 1);
+			return;
+		}
+		var h = canvas.height;
+		var ctx = canvas.getContext("2d");
+
+		ctx.fillStyle = "#222222";
+		ctx.fillRect(0, 0, w, h);
+		ctx.lineWidth = 1;
+		//var min = 9007199254740991;
+		var max = 0;
+		for (var i = 0; i < w; i++)
+		{
+			if (buffer[i] > max)
+				max = buffer[i];
+		}
+		ctx.strokeStyle = "#aaaaaa";
+		ctx.beginPath();
+		for (var i = 0; i < w; i++)
+		{
+			var v = buffer[i];
+			if (v <= 0)
+				continue;
+			var percentH = 1 - (v / max);
+			var scaledH = percentH * h;
+			ctx.moveTo(i, h);
+			ctx.lineTo(i, scaledH);
+		}
+		ctx.stroke();
+		ctx.strokeStyle = "#0097F0";
+		ctx.beginPath();
+		ctx.moveTo(dataIndex, 0);
+		ctx.lineTo(dataIndex, h);
+		ctx.stroke();
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -12111,6 +12250,10 @@ String.prototype.padLeft = function (len, c)
 		str = (c || "&nbsp;") + str;
 	return str;
 };
+Number.prototype.padLeft = function (len, c)
+{
+	return this.toString().padLeft(len, c);
+};
 function makeUnselectable($target)
 {
 	$target
@@ -12176,6 +12319,14 @@ String.prototype.startsWith = function (prefix)
 String.prototype.endsWith = function (suffix)
 {
 	return this.match(suffix + "$") == suffix;
+};
+String.prototype.toFloat = function (digits)
+{
+	return parseFloat(this.toFixed(digits));
+};
+Number.prototype.toFloat = function (digits)
+{
+	return parseFloat(this.toFixed(digits));
 };
 function msToTime(totalMs, includeMs)
 {
@@ -12363,10 +12514,10 @@ function formatBytes(bytes, decimals)
 	if (negative)
 		bytes = -bytes;
 	var k = 1024,
-		dm = decimals || 2,
+		dm = typeof decimals != "undefined" ? decimals : 2,
 		sizes = ['B', 'K', 'M', 'G', 'T', 'PB', 'EB', 'ZB', 'YB'],
 		i = Math.floor(Math.log(bytes) / Math.log(k));
-	return (negative ? '-' : '') + parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + sizes[i];
+	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + sizes[i];
 }
 var mouseCoordFixer =
 	{
