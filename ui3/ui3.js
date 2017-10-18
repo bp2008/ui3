@@ -191,7 +191,6 @@ var togglableUIFeatures =
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
 
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
-// CONSIDER: H.264 playback pipeline should honor the frame timestamps.  This would make playback a little smoother on an inconsistent network connection -- most notably one that hangs for a while and then receives a burst of delayed frames.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Show a limited version of the playback controls when live video is playing on the Alerts and Clips tabs.
 //           -- This can show "LIVE" where the Play/Pause, Next, and Previous buttons are.
