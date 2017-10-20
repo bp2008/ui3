@@ -3011,7 +3011,7 @@ div::-webkit-scrollbar-track
 	margin-right: 8px;
 	overflow: hidden;
 	text-align: right;
-	text-overflow: ellipsis;
+	text-overflow: clip;
 }
 
 .statsValue

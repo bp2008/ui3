@@ -6333,13 +6333,35 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 	var isActivated = false;
 	var isInitialized = false;
 	var isVisible = false;
-
+	var $myImgEle = null;
 	var Initialize = function ()
 	{
 		if (isInitialized)
 			return;
 		isInitialized = true;
 		$("#camimg_store").append('<canvas id="camimg_preview" class="videoCanvas"></canvas>');
+		$myImgEle = $('<img crossOrigin="Anonymous" id="jpegPreview_img" src="" alt="" style="display: none;" />');
+		$myImgEle.load(function ()
+		{
+			var img = $myImgEle.get(0);
+			if (!img.complete || typeof img.naturalWidth == "undefined" || img.naturalWidth == 0)
+			{
+				// Failed
+				toaster.Error("Unable to decode jpeg image.");
+			}
+			else
+			{
+				// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
+				videoPlayer.ImageRendered(img.myPath, this.naturalWidth, this.naturalHeight, performance.now() - img.startTime);
+				// Rendering the image shows the jpegPreviewModule again.
+				self.RenderImage(img.id);
+			}
+		});
+		$myImgEle.error(function ()
+		{
+			toaster.Error("Bad jpeg image received.");
+		});
+		$("#camimg_store").append($myImgEle);
 	}
 	var Show = function ()
 	{
@@ -6361,6 +6383,14 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 		CopyImageToCanvas(imgId, "camimg_preview");
 		Show();
 		videoOverlayHelper.HideLoadingOverlay();
+	}
+	this.RenderDataURI = function (startTime, path, dataUri)
+	{
+		Initialize();
+		var img = $("#jpegPreview_img").get(0);
+		img.startTime = startTime;
+		img.myPath = path;
+		img.src = dataUri;
 	}
 })();
 ///////////////////////////////////////////////////////////////
@@ -6619,7 +6649,11 @@ function JpegVideoModule()
 				&& !CouldBenefitFromWidthChange(widthToRequest))
 				|| !isVisible
 			)
+			{
+				if (isLoadingRecordedSnapshot)
+					videoOverlayHelper.HideLoadingOverlay();
 				GetNewImageAfterTimeout();
+			}
 			else
 			{
 				lastRequestedWidth = widthToRequest;
@@ -6786,6 +6820,8 @@ function FetchOpenH264VideoModule()
 	var playbackPaused = false;
 	var perfMonInterval;
 	var lastNerdStatsUpdate = performance.now();
+	var isLoadingRecordedSnapshot = false;
+	var endSnapshotDisplayTimeout = null;
 
 	var loading = new BICameraData();
 
@@ -6822,9 +6858,10 @@ function FetchOpenH264VideoModule()
 	}
 	var StopStreaming = function ()
 	{
+		clearTimeout(endSnapshotDisplayTimeout);
 		safeFetch.CloseStream();
 		openh264_player.Flush();
-		MeasurePerformance();
+		setTimeout(MeasurePerformance, 0);
 	}
 	this.VisibilityChanged = function (visible)
 	{
@@ -6868,6 +6905,8 @@ function FetchOpenH264VideoModule()
 		Activate();
 		currentSeekPositionPercent = Clamp(offsetPercent, 0, 1);
 		lastFrameAt = performance.now();
+		isLoadingRecordedSnapshot = false;
+		clearTimeout(endSnapshotDisplayTimeout);
 		var videoUrl;
 		if (loading.isLive)
 		{
@@ -6878,13 +6917,17 @@ function FetchOpenH264VideoModule()
 			var speed = 100 * playbackControls.GetPlaybackSpeed();
 			if (playbackControls.GetPlayReverse())
 				speed *= -1;
+			if (startPaused)
+				speed = 0;
+			var clipData = clipLoader.GetCachedClip(loading.id, loading.path);
+			isLoadingRecordedSnapshot = clipData != null && clipData.isSnapshot;
 			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
 		}
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (startPaused)
 		{
 			self.Playback_Pause(); // If opening the stream while paused, the stream will stop after one frame.
-			safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame, StreamEnded);
+			safeFetch.OpenStream(videoUrl, acceptFrame, StreamEnded);
 		}
 		else
 		{
@@ -6893,8 +6936,25 @@ function FetchOpenH264VideoModule()
 			$("#pcPause").show();
 			// Calling StopStream before opening the new stream will drop any buffered frames in the decoder, allowing the new stream to begin playback immediately.
 			StopStreaming();
-			safeFetch.OpenStream(videoUrl, openh264_player.AcceptFrame, StreamEnded);
+			safeFetch.OpenStream(videoUrl, acceptFrame, StreamEnded);
 		}
+	}
+	var acceptFrame = function (frame)
+	{
+		if (frame.jpeg)
+		{
+			if (isLoadingRecordedSnapshot && !playbackPaused)
+			{
+				clearTimeout(endSnapshotDisplayTimeout);
+				endSnapshotDisplayTimeout = setTimeout(function ()
+				{
+					PlaybackReachedNaturalEnd(1);
+				}, loading.msec);
+			}
+			jpegPreviewModule.RenderDataURI(frame.startTime, loading.path, frame.jpeg);
+		}
+		else
+			openh264_player.AcceptFrame(frame);
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -6985,7 +7045,9 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
 			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			nerdStats.UpdateStat("Codecs", "h264");
+			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
+			nerdStats.UpdateStat("Frame Timing Error", interFrameError, interFrameError.toFixed() + "ms", true);
 			writeDelayStats();
 			nerdStats.EndUpdate();
 
@@ -6995,16 +7057,21 @@ function FetchOpenH264VideoModule()
 			StopStreaming();
 		}
 	}
-	var StreamEnded = function (message, videoFinishedStreaming)
+	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
 	{
 		console.log("fetch stream ended: ", message);
+		if (wasJpeg)
+			return;
 		if (videoFinishedStreaming)
 			openh264_player.PreviousFrameIsLastFrame();
-		else if (loading.isLive && safeFetch.IsActive())
+		else
 		{
-			StopStreaming();
-			toaster.Warning("The live stream was lost. Attempting to reconnect...", 5000);
-			ReopenStreamAtCurrentSeekPosition();
+			if (!wasAppTriggered && !safeFetch.IsActive())
+			{
+				StopStreaming();
+				toaster.Warning("The video stream was lost. Attempting to reconnect...", 5000);
+				ReopenStreamAtCurrentSeekPosition();
+			}
 		}
 	}
 	var PlaybackReachedNaturalEnd = function (frameCount)
@@ -7035,7 +7102,7 @@ function FetchOpenH264VideoModule()
 	var perf_warning_cpu = null;
 	var MeasurePerformance = function ()
 	{
-		if (!openh264_player || !isCurrentlyActive)
+		if (!openh264_player || !isCurrentlyActive || !safeFetch.IsActive() || isLoadingRecordedSnapshot)
 			return;
 		if (performance.now() - lastNerdStatsUpdate > 1000)
 			writeDelayStats();
@@ -7057,7 +7124,7 @@ function FetchOpenH264VideoModule()
 			ReopenStreamAtCurrentSeekPosition();
 			return;
 		}
-		if (netDelay > 3000)
+		if (netDelay > 2000) // Blue Iris appears to drop frames when it detects the network buffer getting too large, so this needs to be fairly low.
 			perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime.  Consider changing the streaming quality.', 10000);
 		if (bufferedTime > 3000)
 			perf_warning_cpu = toaster.Warning('Your CPU is not fast enough to handle this stream in realtime.  Consider changing the streaming quality.', 10000);
@@ -7079,7 +7146,8 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var decoder;
 	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
 	var decodedFrameCount = 0; // Number of frames rendered.
-	var renderedFrameCount = 0; // Number of frames rendered.
+	var finishedFrameCount = 0; // Number of frames rendered or dropped.
+	var netDelayCalc = new NetDelayCalc();
 	var timestampFirstAcceptedFrame = -1; // Frame timestamp (ms) of the first frame to be submitted to the decoder.
 	var timestampFirstDecodedFrame = -1; // Frame timestamp (ms) of the first frame to be decoded.
 	var timestampFirstRenderedFrame = -1; // Frame timestamp (ms) of the first frame to be rendered.
@@ -7094,13 +7162,12 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var lastFrameRenderedAt = performance.now(); // The performance.now() reading at the moment the last frame was finished rendering.
 	var lastFrameRenderTime = 0; // Milliseconds it took to render the last frame.
 	var averageRenderTime = new RollingAverage();
-	var renderFrameQueue = new Queue();
 	var averageDecodeTime = new RollingAverage();
 	var playbackClockOffset = 0;
 	var loadState = 0; // 0: Initial, 1: Loading, 2: Ready to accept frames
 	var isValid = true;
 	var allFramesAccepted = false;
-	var maxQueuedRenders = 2; // Low values are better for memory usage and low latency playback.
+	var renderScheduler = null;
 
 	var onLoad = function ()
 	{
@@ -7124,43 +7191,10 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			timestampFirstDecodedFrame = frame.timestamp;
 			firstFrameDecodedAt = timeNow;
 		}
-		if (renderedFrameCount == 0)
-			renderFrame(frame); // The rendering of the first frame shall mark the start of the playback clock.
-		else
-		{
-			var playbackClock = (timeNow - firstFrameRenderedAt) + playbackClockOffset;
-			var startRenderingAt = (timestampLastDecodedFrame - timestampFirstDecodedFrame) - averageRenderTime.Get();
-			var timeToWait = startRenderingAt - playbackClock;
-			//console.log("RF " + renderedFrameCount + ", PClock " + playbackClock.toFixed() + ", Render at " + startRenderingAt.toFixed() + ", Wait for " + timeToWait);
-			if (timeToWait > 0)
-			{
-				renderFrameQueue.enqueue(new QueuedDecodedFrame(frame, renderFrame, timeToWait));
-				if (renderFrameQueue.getLength() > maxQueuedRenders)
-				{
-					// Rendering is falling behind (highly unlikely, as rendering is one of the faster parts of this pipeline)
-					// We should be able to keep delay to a minimum by rendering the next queued frame early and offsetting the playback clock.
-					var qdf = renderFrameQueue.dequeue();
-					var msEarly = qdf.renderEarly();
-					//console.log("Offsetting playback clock by " + msEarly);
-					playbackClockOffset += msEarly;
-				}
-			}
-			else
-			{
-				if (timeToWait < 0)
-				{
-					// Rendering is getting ahead.  A lazy way to correct for this is to simply offset the playback clock.
-					//console.log("Offsetting playback clock by " + timeToWait);
-					playbackClockOffset += timeToWait;
-				}
-				renderFrame(frame);
-			}
-		}
+		renderScheduler.AddFrame(frame, averageRenderTime);
 	}
-	var renderFrame = function (frame, wasQueued)
+	var renderFrame = function (frame)
 	{
-		if (wasQueued)
-			renderFrameQueue.dequeue();
 		if (canvasW != frame.width)
 			canvas.width = canvasW = frame.width;
 		if (canvasH != frame.height)
@@ -7170,7 +7204,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		var drawEnd = performance.now();
 		lastFrameRenderTime = drawEnd - drawStart;
 		averageRenderTime.Add(lastFrameRenderTime);
-		renderedFrameCount++;
+		finishedFrameCount++;
 		timestampLastRenderedFrame = frame.timestamp;
 		lastFrameRenderedAt = drawEnd;
 		if (timestampFirstRenderedFrame == -1)
@@ -7181,12 +7215,17 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		frameRendered(frame);
 		CheckStreamEndCondition();
 	}
+	var dropFrame = function (frame)
+	{
+		finishedFrameCount++;
+		CheckStreamEndCondition();
+	}
 	var CheckStreamEndCondition = function ()
 	{
-		if (allFramesAccepted && renderedFrameCount >= acceptedFrameCount)
+		if (allFramesAccepted && (finishedFrameCount) >= acceptedFrameCount)
 		{
 			if (PlaybackReachedNaturalEndCB)
-				PlaybackReachedNaturalEndCB(renderedFrameCount);
+				PlaybackReachedNaturalEndCB(finishedFrameCount);
 		}
 	}
 
@@ -7227,6 +7266,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			return;
 		loadState = 1;
 
+		renderScheduler = new RenderScheduler(renderFrame, dropFrame);
 		decoder = new OpenH264_Decoder(onLoad, onLoadFail, frameDecoded, frameError, criticalWorkerError);
 
 		$("#openh264_player_canvas").remove();
@@ -7248,7 +7288,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.GetRenderedFrameCount = function ()
 	{
-		return renderedFrameCount;
+		return finishedFrameCount;
 	}
 	this.GetBufferedFrameCount = function ()
 	{
@@ -7256,7 +7296,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		/// Returns the number of buffered video frames that have not yet been rendered. 
 		/// If the system has sufficient computational power, this number should remain close to 0.
 		/// </summary>
-		return acceptedFrameCount - renderedFrameCount;
+		return acceptedFrameCount - finishedFrameCount;
 	}
 	this.GetNetworkDelay = function ()
 	{
@@ -7265,20 +7305,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		/// If the system has sufficient network bandwidth, this number should remain close to 0.
 		/// One or two frames worth of delay is nothing to worry about.
 		/// </summary>
-		if (timestampFirstAcceptedFrame == -1)
-			return 0;
-		var realTimePassed = performance.now() - firstFrameReceivedAt;
-		// CONSIDER: Blue Iris does not increase frame timestamps at a rate equivalent to real time while encoding a reduced-speed video.
-		// I know it is overcompensating wildly, but I'm using playSpeed as a multiplier here to ensure we don't show erroneous network delay messages in the UI.
-		// The network would have to be performing exceptionally poorly to show high network delay while playing at a reduced speed.
-		var playSpeed = playbackControls.GetPlaybackSpeed();
-		if (playSpeed < 1)
-			realTimePassed *= playSpeed;
-		var streamTimePassed = timestampLastAcceptedFrame - timestampFirstAcceptedFrame;
-		var delay = realTimePassed - streamTimePassed;
-		if (delay < 0)
-			delay = 0;
-		return delay;
+		return netDelayCalc.Calc();
 	}
 	this.GetBufferedTime = function ()
 	{
@@ -7296,31 +7323,32 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	this.Flush = function ()
 	{
 		decoder.Flush();
+		// CONSIDER: consider constructing new averageRenderTime and averageDecodeTime here.
+		renderScheduler.Reset(averageRenderTime);
 		acceptedFrameCount = 0;
 		decodedFrameCount = 0;
-		renderedFrameCount = 0;
+		finishedFrameCount = 0;
+		netDelayCalc.Reset();
 		timestampFirstAcceptedFrame = -1;
 		timestampFirstDecodedFrame = -1;
 		timestampFirstRenderedFrame = -1;
 		timestampLastAcceptedFrame = -1;
 		timestampLastDecodedFrame = -1;
 		timestampLastRenderedFrame = -1;
-		firstFrameReceivedAt = performance.now();
-		lastFrameReceivedAt = performance.now();
-		firstFrameDecodedAt = performance.now();
-		lastFrameDecodedAt = performance.now();
-		firstFrameRenderedAt = performance.now();
-		lastFrameRenderedAt = performance.now();
+		var timeNow = performance.now();
+		firstFrameReceivedAt = timeNow;
+		lastFrameReceivedAt = timeNow;
+		firstFrameDecodedAt = timeNow;
+		lastFrameDecodedAt = timeNow;
+		firstFrameRenderedAt = timeNow;
+		lastFrameRenderedAt = timeNow;
 		playbackClockOffset = 0;
-		while (!renderFrameQueue.isEmpty())
-			renderFrameQueue.dequeue().dropFrame();
-		// CONSIDER: consider constructing new averageRenderTime and averageDecodeTime here.
 		allFramesAccepted = false;
 	}
 	this.AcceptFrame = function (frame)
 	{
-		decoder.Decode(frame);
 		acceptedFrameCount++;
+		decoder.Decode(frame);
 		timestampLastAcceptedFrame = frame.time;
 		lastFrameReceivedAt = performance.now();
 		if (timestampFirstAcceptedFrame == -1)
@@ -7329,6 +7357,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			firstFrameReceivedAt = lastFrameReceivedAt;
 			firstFrameRenderedAt = lastFrameReceivedAt; // This value is faked so the timing starts more reasonably.
 		}
+		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 	}
 	this.GetCanvasRef = function ()
 	{
@@ -7342,42 +7371,95 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 
 	Initialize();
 }
-function QueuedDecodedFrame(frame, renderFunc, timeToWait)
+function RenderScheduler(renderFunc, dropFunc, averageRenderTime)
 {
-	/// <summary>  
-	/// Queues a frame for rendering.  This template/class is very specialized.
-	/// New instances must immediately go into the renderFrameQueue.    
-	/// If the instance is dequeued early, the renderEarly or dropFrame function must be called.
-	/// </summary>
-	var timeoutStartedAt = performance.now();
-	var timeout = setTimeout(function () { timeout = null; renderFunc(frame, true); }, timeToWait);
-	this.renderEarly = function ()
+	/// <summary>Manages the playback clock and keeps frames rendering as closely as possible to their intended timestamps.</summary>
+	var self = this;
+	var frameQueue = [];
+	var timeout = null;
+	var maxQueuedFrames = 2; // Do not set this negative, but 0 is okay.
+	var playbackClockStart = performance.now();
+	var playbackClockOffset = 0;
+	var numFramesAccepted = 0;
+	var lastFrameTS = 0;
+	this.AddFrame = function (frame)
 	{
-		/// <summary>Renders the frame now if it hasn't been rendered yet. The caller becomes responsible for dequeuing this frame.</summary>
-		if (timeout)
+		if (numFramesAccepted == 0)
+			playbackClockStart = performance.now();
+		numFramesAccepted++;
+		frame.expectedInterframe = (frame.timestamp - lastFrameTS);
+		lastFrameTS = frame.timestamp;
+		frameQueue.push(frame);
+		// Sort the frame queue by timestamp, as this can improve playback if frames come in out-of-order.
+		frameQueue.sort(function (a, b) { return a.timestamp - b.timestamp; });
+
+		if (frameQueue.length > maxQueuedFrames)
 		{
-			clearTimeout(timeout);
-			timeout = null;
-			var msEarly = (timeoutStartedAt + timeToWait) - performance.now();
-			renderFunc(frame, false);
-			return msEarly;
+			// Frame queue is overfull.
+			// Adjust the playback clock to match the oldest queued frame.
+			// When we MaintainSchedule later, this will cause at least one frame to be rendered immediately.
+			var timeRemaining = GetTimeUntilRenderOldest();
+			if (timeRemaining > 0)
+				OffsetPlaybackClock(timeRemaining); // Jump the clock ahead because we are getting too many frames queued.
 		}
-		return 0;
+		MaintainSchedule();
 	}
-	this.dropFrame = function ()
+	var MaintainSchedule = function ()
 	{
-		/// <summary>Drops the frame now if it hasn't been rendered yet. The caller becomes responsible for dequeuing this frame.</summary>
-		if (timeout)
+		/// <summary>Renders or queues a frame, if any are available. This method will call itself if necessary after rendering until the frame queue is empty.</summary>
+		clearTimeout(timeout);
+		if (frameQueue.length > 0)
 		{
-			clearTimeout(timeout);
-			timeout = null;
-			return (timeoutStartedAt + timeToWait) - performance.now();
+			var clock = ReadPlaybackClock();
+			var timeToWait = GetTimeUntilRenderOldest();
+			if (timeToWait <= 0)
+			{
+				if (timeToWait < 0)
+					OffsetPlaybackClock(timeToWait); // Roll the clock back because frames are coming in late.
+				renderFunc(DequeueOldest());
+				MaintainSchedule();
+			}
+			else
+			{
+				timeout = setTimeout(function ()
+				{
+					renderFunc(DequeueOldest());
+					MaintainSchedule();
+				}, timeToWait);
+			}
 		}
-		return 0;
 	}
-	this.hasRendered = function ()
+	var OffsetPlaybackClock = function (offset)
 	{
-		return timeout == null;
+		playbackClockOffset += offset;
+	}
+	var GetTimeUntilRenderOldest = function ()
+	{
+		return (PeekOldest().timestamp - ReadPlaybackClock()) - averageRenderTime.Get();
+	}
+	var ReadPlaybackClock = function ()
+	{
+		return (performance.now() - playbackClockStart) + playbackClockOffset;
+	}
+	var PeekOldest = function ()
+	{
+		/// <summary>Returns a reference to the first item in the queue. Do not call if the queue is empty.</summary>
+		return frameQueue[0];
+	}
+	var DequeueOldest = function ()
+	{
+		/// <summary>Removes and returns a reference to the first item in the queue. Do not call if the queue is empty.</summary>
+		return frameQueue.splice(0, 1)[0];
+	}
+	this.Reset = function (newAverageRenderTime)
+	{
+		averageRenderTime = newAverageRenderTime;
+		clearTimeout(timeout);
+		numFramesAccepted = 0;
+		playbackClockOffset = 0;
+		playbackClockStart = performance.now();
+		while (frameQueue.length > 0)
+			dropFunc(DequeueOldest());
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -7473,6 +7555,96 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError, onC
 		packet: null
 	});
 };
+///////////////////////////////////////////////////////////////
+// Network Delay Calculator - An Imperfect Science ////////////
+///////////////////////////////////////////////////////////////
+function NetDelayCalc()
+{
+	var self = this;
+
+	var frameCounter = 0;
+	var baseFrameTime = 0;
+	var lastFrameTime = 0;
+	var baseRealTime = -1;
+	var lastRealTime = -1;
+	var firstRealTime = -1;
+	var adjustBaseline = true;
+	var avgTimestampDiff = new RollingAverage(30);
+
+	this.Reset = function ()
+	{
+		frameCounter = 0;
+		baseFrameTime = 0;
+		lastFrameTime = 0;
+		baseRealTime = -1;
+		lastRealTime = -1;
+		firstRealTime = -1;
+		adjustBaseline = true;
+		avgTimestampDiff = new RollingAverage(30);
+	}
+	this.Frame = function (frameTime, realTime)
+	{
+		frameCounter++;
+		if (frameTime != 0)
+			avgTimestampDiff.Add(frameTime - lastFrameTime);
+		lastFrameTime = frameTime;
+		lastRealTime = realTime;
+		if (baseRealTime == -1)
+		{
+			baseFrameTime = frameTime;
+			baseRealTime = realTime;
+			firstRealTime = realTime;
+		}
+		else if (adjustBaseline)
+		{
+			// Keep adjusting the baseline over the first 1 second.
+			// The timing of the first few frames is a bit unstable sometimes and can result in reporting 
+			// of several hundred ms of network lag that doesn't really exist.
+			if (realTime - firstRealTime >= 2000)
+			{
+				adjustBaseline = false;
+			}
+			else
+			{
+				var delay = CalcSimple(lastFrameTime, lastRealTime, baseFrameTime, baseRealTime);
+				if (delay > 0)
+				{
+					baseFrameTime = frameTime;
+					baseRealTime = realTime;
+				}
+			}
+		}
+	}
+	this.Calc = function ()
+	{
+		if (baseRealTime == -1)
+			return 0;
+		var realTimePassed = performance.now() - baseRealTime;
+		// CONSIDER: Blue Iris does not increase frame timestamps at a rate equivalent to real time while encoding a reduced-speed video.
+		// I know it is overcompensating wildly, but I'm using playSpeed as a multiplier here to ensure we don't show erroneous network delay messages in the UI.
+		// The network would have to be performing exceptionally poorly to show high network delay while playing at a reduced speed.
+		if (!videoPlayer.Loading().image.isLive)
+		{
+			var playSpeed = playbackControls.GetPlaybackSpeed();
+			if (playSpeed < 1)
+				realTimePassed *= playSpeed;
+		}
+		var streamTimePassed = lastFrameTime - baseFrameTime;
+		var delay = realTimePassed - streamTimePassed;
+		var avgTsDiff = avgTimestampDiff.Get();
+		delay -= avgTsDiff;
+		if (delay < 0)
+			delay = 0;
+		//console.log("delay " + delay + " = clock " + realTimePassed + " - timestamp " + streamTimePassed + " - interFrame " + avgTsDiff);
+		return delay;
+	}
+	var CalcSimple = function (ft, rt, b_ft, b_rt)
+	{
+		var realTimePassed = rt - b_rt;
+		var streamTimePassed = ft - b_ft;
+		return realTimePassed - streamTimePassed;
+	}
+}
 ///////////////////////////////////////////////////////////////
 // Image Renderer                                            //
 // provides rendering and scaling services                   //
@@ -11101,7 +11273,7 @@ var safeFetch = new (function ()
 		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
 		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, StreamEndedWrapper);
 	}
-	var StreamEndedWrapper = function (message, videoFinishedStreaming)
+	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
 	{
 		if (stopTimeout != null)
 		{
@@ -11110,7 +11282,7 @@ var safeFetch = new (function ()
 		}
 		streamer = null;
 		if (streamEndedCbForActiveFetch)
-			streamEndedCbForActiveFetch(message, videoFinishedStreaming);
+			streamEndedCbForActiveFetch(message, wasJpeg, wasAppTriggered, videoFinishedStreaming);
 		OpenStreamNow();
 	}
 	var StopTimedOut = function ()
@@ -11123,6 +11295,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 {
 	var self = this;
 	var cancel_streaming = false;
+	var stopCalledByApp = false;
 	var reader = null;
 
 	// Since at any point we may not have received enough data to finish parsing, we will keep track of parsing progress via a state integer.
@@ -11146,6 +11319,11 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 	this.StopStreaming = function ()
 	{
+		stopCalledByApp = true;
+		stopStreaming_Internal();
+	}
+	var stopStreaming_Internal = function ()
+	{
 		cancel_streaming = true;
 		if (reader)
 		{
@@ -11156,26 +11334,45 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 	}
 	var Start = function ()
 	{
+		var startTime = performance.now();
 		fetch(url).then(function (res)
 		{
-			// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
-			reader = res.body.getReader();
-			return pump(reader);
+			if (res.headers.get("Content-Type") == "image/jpeg")
+			{
+				var blobPromise = res.blob();
+				blobPromise.then(function (jpegBlob)
+				{
+					var jpegObjectURL = URL.createObjectURL(jpegBlob);
+					frameCallback({ startTime: startTime, jpeg: jpegObjectURL })
+					CallStreamEnded("fetch graceful exit (jpeg)", true, true);
+				})
+				["catch"](function (e)
+				{
+					CallStreamEnded(e);
+				});
+				return blobPromise;
+			}
+			else
+			{
+				// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
+				reader = res.body.getReader();
+				return pump(reader);
+			}
 		})
 		["catch"](function (e)
 		{
 			CallStreamEnded(e);
 		});
 	}
-	function CallStreamEnded(message, naturalEndOfStream)
+	function CallStreamEnded(message, naturalEndOfStream, wasJpeg)
 	{
 		if (typeof streamEnded == "function")
-			streamEnded(message, naturalEndOfStream);
+			streamEnded(message, wasJpeg, stopCalledByApp, naturalEndOfStream);
 		streamEnded = null;
 	}
 	function protocolError(error)
 	{
-		self.StopStreaming();
+		stopStreaming_Internal();
 		CallStreamEnded("/video/ Protocol Error: " + error);
 	}
 
@@ -11194,7 +11391,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 			}
 			else if (cancel_streaming)
 			{
-				self.StopStreaming();
+				stopStreaming_Internal();
 				CallStreamEnded("fetch graceful exit (type 2)");
 				return;
 			}
@@ -11205,7 +11402,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 			{
 				if (cancel_streaming)
 				{
-					self.StopStreaming();
+					stopStreaming_Internal();
 					CallStreamEnded("fetch graceful exit (type 3)");
 				}
 				if (state == 0) // Read Stream Header Start
@@ -11286,7 +11483,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 					}
 					else if (blockType == 4)
 					{
-						self.StopStreaming();
+						stopStreaming_Internal();
 						CallStreamEnded("natural end of stream", true);
 						return;
 					}
@@ -11324,7 +11521,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 		}
 		)["catch"](function (e)
 		{
-			self.StopStreaming();
+			stopStreaming_Internal();
 			CallStreamEnded(e);
 		});
 	}
@@ -11502,6 +11699,7 @@ function UI3NerdStats()
 			, "Frame Size"
 			, "Codecs"
 			, "Inter-Frame Time"
+			, "Frame Timing Error"
 			, "Network Delay"
 			, "Player Delay"
 			, "Delayed Frames"
