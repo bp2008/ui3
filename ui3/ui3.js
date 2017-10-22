@@ -188,8 +188,6 @@ var togglableUIFeatures =
 
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
-// TODO: Do something like "best of the first 5 frames" when finding a frame to base network delay on.  The second frame is often quite delayed compared to the first one, oddly enough.
-
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
 
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
