@@ -1851,15 +1851,30 @@ div.icon, a.icon
 		pointer-events: auto;
 	}
 
+	#playbackControls.live
+	{
+		height: 48px;
+	}
+
 .sizeMedium #playbackControls
 {
 	height: 53px;
 }
 
+	.sizeMedium #playbackControls.live
+	{
+		height: 37px;
+	}
+
 .sizeSmall #playbackControls
 {
 	height: 42px;
 }
+
+	.sizeSmall #playbackControls.live
+	{
+		height: 30px;
+	}
 
 #pcButtonContainer
 {
@@ -2910,25 +2925,6 @@ div.icon, a.icon
 	max-width: 430px;
 	margin: 7px auto;
 }
-
-#liveFullscreenButton, #liveExitFullscreenButton
-{
-	position: absolute;
-	bottom: 6px;
-	right: 8px;
-	opacity: 0;
-	background-color: rgba(0,0,0,0.33);
-}
-
-	#liveFullscreenButton:hover, #liveExitFullscreenButton:hover
-	{
-		background-color: rgba(255,255,255,0.125);
-	}
-
-	#liveFullscreenButton:active, #liveExitFullscreenButton:active
-	{
-		background-color: rgba(255,255,255,0.25);
-	}
 /* Webkit custom scrollbar for modal dialogs */
 div::-webkit-scrollbar
 {

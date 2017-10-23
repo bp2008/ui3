@@ -188,19 +188,13 @@ var togglableUIFeatures =
 
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
+// TODO: Move the volume control into the playback controls and change UI scaling sizes to match.
+
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
 
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
-// CONSIDER: Show a limited version of the playback controls when live video is playing on the Alerts and Clips tabs.
-//           -- This can show "LIVE" where the Play/Pause, Next, and Previous buttons are.
-//           -- This could maybe show the real-world time (digital clock). Taken from the H.264 stream when available?
-//           -- There should typically be room for some stream status (e.g. "delayed xx seconds (learn more)").
-//           -- This would have a volume control, once audio is implemented for recording playback.
-//           -- This would have the fullscreen button.
-//           -- The Quality button could stay.  Perhaps make the options button immediately load the Quality panel if the current video is live.
-//           -- This would either hide the progress bar or leave it present but disabled; I'm not sure what would look better.
-//           -- Maybe include a "stop" button.  While stopped, live view would be dark overlayed and show a play button in the center.
+// CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -2864,6 +2858,8 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 function PlaybackControls()
 {
 	var self = this;
+	this.hideTimeMs_Live = 1500;
+	this.hideTimeMs_Recordings = 3000;
 	var $layoutbody = $("#layoutbody");
 	var $pc = $("#playbackControls");
 	var $playbackSettings = $();
@@ -2905,7 +2901,18 @@ function PlaybackControls()
 			isVisible = true;
 			self.resized();
 		}
-		playbackHeader.Show();
+		if (videoPlayer.Loading().image.isLive)
+		{
+			playbackHeader.Hide();
+			$("#seekBarWrapper").hide();
+			$("#pcButtonContainer .hideWhenLive").hide();
+		}
+		else
+		{
+			playbackHeader.Show();
+			$("#seekBarWrapper").show();
+			$("#pcButtonContainer .hideWhenLive").show();
+		}
 	}
 	this.Hide = function ()
 	{
@@ -2930,7 +2937,10 @@ function PlaybackControls()
 			isVisible = true;
 			self.resized();
 		}
-		playbackHeader.FadeIn();
+		if (videoPlayer.Loading().image.isLive)
+			playbackHeader.Hide();
+		else
+			playbackHeader.FadeIn();
 	}
 	this.FadeOut = function ()
 	{
@@ -2955,6 +2965,38 @@ function PlaybackControls()
 			hideTimeout = null;
 		}
 	}
+	this.Live = function ()
+	{
+		self.Show();
+		$pc.addClass("live");
+		$("#playbackProgressText").text("Loading...");
+		self.setPlayPauseButtonState();
+	}
+	this.Recording = function ()
+	{
+		self.Show();
+		$pc.removeClass("live");
+		$("#playbackProgressText").text("Loading...");
+		self.setPlayPauseButtonState();
+	}
+	this.setPlayPauseButtonState = function (paused)
+	{
+		if (videoPlayer.Loading().image.isLive)
+		{
+			$("#pcPlay").hide();
+			$("#pcPause").hide();
+		}
+		else if (paused)
+		{
+			$("#pcPlay").show();
+			$("#pcPause").hide();
+		}
+		else
+		{
+			$("#pcPlay").hide();
+			$("#pcPause").show();
+		}
+	}
 	this.SetDownloadClipLink = function (clipData)
 	{
 		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
@@ -2969,20 +3011,18 @@ function PlaybackControls()
 	{
 		mouseCoordFixer.fix(e);
 		CloseSettings();
-		if (videoPlayer.Loading().image.isLive || pointInsideElement($layoutbody, e.pageX, e.pageY))
+		if (pointInsideElement($layoutbody, e.pageX, e.pageY))
 			return;
 		clearHideTimout();
 		self.FadeOut();
 	});
-	$layoutbody.on("mouseenter mousemove touchstart touchmove touchend touchcancel", function (e)
+	$layoutbody.on("mouseenter mousemove mousedown mouseup touchstart touchmove touchend touchcancel", function (e)
 	{
-		if (videoPlayer.Loading().image.isLive)
-			return;
 		mouseCoordFixer.fix(e);
 		self.FadeIn();
 		clearHideTimout();
 		if (!pointInsideElement($pc, e.pageX, e.pageY) && !pointInsideElement($playbackSettings, e.pageX, e.pageY))
-			hideTimeout = setTimeout(function () { self.FadeOut(); }, 3000);
+			hideTimeout = setTimeout(function () { self.FadeOut(); }, videoPlayer.Loading().image.isLive ? self.hideTimeMs_Live : self.hideTimeMs_Recordings);
 	});
 	$(document).mouseup(function (e)
 	{
@@ -2993,6 +3033,8 @@ function PlaybackControls()
 	{
 		if (new Date().getTime() - 33 <= settingsClosedAt)
 			return;
+		if (videoPlayer.Loading().image.isLive)
+			return OpenQualityPanel();
 		RebuildSettingsPanelEmpty();
 		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
 			+ '<input id="cbAutoplay" type="checkbox" onclick="playbackControls.AutoplayClicked()" '
@@ -3061,10 +3103,12 @@ function PlaybackControls()
 	{
 		RebuildSettingsPanelEmpty();
 		$playbackSettings.addClass("qualityPanel");
+		var live = videoPlayer.Loading().image.isLive;
 		var $backBtn = $('<div class="playbackSettingsLine playbackSettingsHeading">'
-			+ '<div class="playbackSettingsLeftArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div> '
-			+ 'Quality</div>');
-		$backBtn.click(self.OpenSettingsPanel);
+			+ (live ? '' : '<div class="playbackSettingsLeftArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div> ')
+			+ (live ? 'Streaming ' : '') + 'Quality</div>');
+		if (!live)
+			$backBtn.click(self.OpenSettingsPanel);
 		$playbackSettings.append($backBtn);
 
 		var qualityListDef = dropdownBoxes.listDefs["streamingQuality"];
@@ -3389,7 +3433,8 @@ function SeekBar()
 			timeValue = 0;
 		else
 			timeValue = (msec - 1) * percentValue;
-		$("#playbackProgressText").html(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
+		if (!videoPlayer.Loading().image.isLive)
+			$("#playbackProgressText").html(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
 	}
 	this.drawSeekbarAtTime = function (timeValue)
 	{
@@ -3406,7 +3451,8 @@ function SeekBar()
 		handle.css("left", x + "px");
 		if (timeValue == msec - 1)
 			timeValue = msec;
-		$("#playbackProgressText").html(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
+		if (!videoPlayer.Loading().image.isLive)
+			$("#playbackProgressText").html(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
 	}
 	this.IsDragging = function ()
 	{
@@ -5818,7 +5864,7 @@ function VideoPlayerController()
 				playerModule.VisibilityChanged(!documentIsHidden());
 			});
 		}
-		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint"), $("#playbackHeader,#playbackControls")
+		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint"), $("#playbackHeader,#playbackControls,#playbackControls .pcButton")
 			, function (e) { return playbackControls.MouseInSettingsPanel(e); } // exclude click if returns true
 			, function (e, confirmed) // Single Click
 			{
@@ -6063,7 +6109,7 @@ function VideoPlayerController()
 
 		audioPlayer.audioPlay();
 
-		playbackControls.Hide();
+		playbackControls.Live();
 		ptzButtons.UpdatePtzControlDisplayState();
 		dropdownBoxes.setLabelText("currentGroup", CleanUpGroupName(clc.optionDisplay));
 
@@ -6100,7 +6146,7 @@ function VideoPlayerController()
 			audioPlayer.audioStop();
 
 			playbackHeader.SetClipName(clipData);
-			playbackControls.Show();
+			playbackControls.Recording();
 			playbackControls.SetDownloadClipLink(clipData);
 			if (clipLoader.ClipDataIndicatesFlagged(clipData))
 				$("#clipFlagButton").addClass("flagged");
@@ -6220,7 +6266,7 @@ function VideoPlayerController()
 		currentlyLoadedCamera = currentlyLoadingCamera;
 		resized();
 	}
-	this.ImageRendered = function (path, width, height, lastFrameLoadingTime)
+	this.ImageRendered = function (path, width, height, lastFrameLoadingTime, lastFrameDate)
 	{
 		jpegPreviewModule.Hide();
 		if (currentlyLoadedImage.path != path)
@@ -6231,6 +6277,9 @@ function VideoPlayerController()
 		currentlyLoadedImage.actualheight = height;
 
 		RefreshFps(lastFrameLoadingTime);
+
+		if (currentlyLoadingImage.isLive && lastFrameDate)
+			$("#playbackProgressText").text("LIVE: " + GetDateStr(lastFrameDate));
 
 		if (currentlyLoadingImage.path != path)
 			return;
@@ -6350,7 +6399,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 			else
 			{
 				// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
-				videoPlayer.ImageRendered(img.myPath, this.naturalWidth, this.naturalHeight, performance.now() - img.startTime);
+				videoPlayer.ImageRendered(img.myPath, this.naturalWidth, this.naturalHeight, performance.now() - img.startTime, false);
 				// Rendering the image shows the jpegPreviewModule again.
 				self.RenderImage(img.id);
 			}
@@ -6448,7 +6497,7 @@ function JpegVideoModule()
 			{
 				loadedFirstFrame = true;
 				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
-				videoPlayer.ImageRendered(loading.path, this.naturalWidth, this.naturalHeight, msLoadingTime);
+				videoPlayer.ImageRendered(loading.path, this.naturalWidth, this.naturalHeight, msLoadingTime, new Date(currentImageRequestedAtMs));
 
 				var loaded = videoPlayer.Loaded().image;
 				if (loaded.id.startsWith("@"))
@@ -6673,14 +6722,12 @@ function JpegVideoModule()
 	this.Playback_Pause = function ()
 	{
 		playbackPaused = true;
-		$("#pcPlay").show();
-		$("#pcPause").hide();
+		playbackControls.setPlayPauseButtonState(playbackPaused);
 	}
 	this.Playback_Play = function ()
 	{
 		playbackPaused = false;
-		$("#pcPlay").hide();
-		$("#pcPause").show();
+		playbackControls.setPlayPauseButtonState(playbackPaused);
 		if (loading.isLive)
 			return;
 		if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
@@ -6930,8 +6977,7 @@ function FetchOpenH264VideoModule()
 		else
 		{
 			playbackPaused = false;
-			$("#pcPlay").hide();
-			$("#pcPause").show();
+			playbackControls.setPlayPauseButtonState(playbackPaused);
 			// Calling StopStream before opening the new stream will drop any buffered frames in the decoder, allowing the new stream to begin playback immediately.
 			StopStreaming();
 			safeFetch.OpenStream(videoUrl, acceptFrame, StreamEnded);
@@ -6984,16 +7030,14 @@ function FetchOpenH264VideoModule()
 	this.Playback_Pause = function ()
 	{
 		playbackPaused = true;
-		$("#pcPlay").show();
-		$("#pcPause").hide();
+		playbackControls.setPlayPauseButtonState(playbackPaused);
 		if (!loading.isLive)
 			StopStreaming();
 	}
 	this.Playback_Play = function ()
 	{
 		playbackPaused = false;
-		$("#pcPlay").hide();
-		$("#pcPause").show();
+		playbackControls.setPlayPauseButtonState(playbackPaused);
 		if (!loading.isLive)
 			ReopenStreamAtCurrentSeekPosition();
 	}
@@ -7029,7 +7073,7 @@ function FetchOpenH264VideoModule()
 	{
 		currentSeekPositionPercent = frame.pos / 10000;
 		var timeNow = performance.now();
-		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow);
+		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
 		var interFrame = timeNow - lastFrameAt;
 		lastFrameAt = timeNow;
 		if (nerdStats.IsOpen())
@@ -10222,26 +10266,6 @@ function FullScreenModeController()
 {
 	var self = this;
 	var isFullScreen_cached = false;
-	$(document).on("mousemove touchmove", function (e)
-	{
-		mouseCoordFixer.fix(e);
-		var ele = isFullScreen_cached ? $("#liveExitFullscreenButton") : $("#liveFullscreenButton");
-		var distance = getDistanceBetweenPointAndElementCenter(e.pageX, e.pageY, ele);
-		var distanceLimit = ($(window).width() + $(window).height()) / 8;
-		distanceLimit = Math.max(1, distanceLimit);
-		var fullOpacityDistance = distanceLimit / 5;
-		distance -= fullOpacityDistance;
-		distanceLimit -= fullOpacityDistance;
-
-		var transparency = distance / distanceLimit;
-		var opacity = Clamp(1 - transparency, 0, 1);
-		$("#liveFullscreenButton,#liveExitFullscreenButton").css("opacity", opacity);
-	});
-	$("#layoutbody").on("mouseleave", function (e)
-	{
-		mouseCoordFixer.fix(e);
-		$("#liveFullscreenButton,#liveExitFullscreenButton").css("opacity", 0);
-	});
 	$(document).on("webkitfullscreenchange mozfullscreenchange fullscreenchange MSFullscreenChange", function (event)
 	{
 		if (self.isFullScreen())
@@ -10251,7 +10275,7 @@ function FullScreenModeController()
 		resized();
 		self.updateFullScreenButtonState();
 	});
-	$("#liveFullscreenButton,#liveExitFullscreenButton,#clipFullscreenButton,#clipExitFullscreenButton")
+	$("#clipFullscreenButton,#clipExitFullscreenButton")
 		.on("click", function () { self.toggleFullScreen(); })
 		.on("mousedown touchstart", function (e)
 		{
@@ -10266,23 +10290,13 @@ function FullScreenModeController()
 	{
 		if (self.isFullScreen())
 		{
-			$("#clipFullscreenButton,#liveFullscreenButton").hide();
+			$("#clipFullscreenButton").hide();
 			$("#clipExitFullscreenButton").show();
-
-			if (videoPlayer.isLive())
-				$("#liveExitFullscreenButton").show();
-			else
-				$("#liveExitFullscreenButton").hide();
 		}
 		else
 		{
 			$("#clipFullscreenButton").show();
-			$("#clipExitFullscreenButton,#liveExitFullscreenButton").hide();
-
-			if (videoPlayer.isLive())
-				$("#liveFullscreenButton").show();
-			else
-				$("#liveFullscreenButton").hide();
+			$("#clipExitFullscreenButton").hide();
 		}
 		resized();
 	}
@@ -12024,11 +12038,15 @@ function MouseEventHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDoub
 	{
 		$exclude.on("mousedown touchstart", function (e)
 		{
+			if (videoPlayer.Loading().image.isLive && !$(this).hasClass("pcButton")) // Dirty hack
+				return;
 			exclude = true;
 			setTimeout(clearExclusion, 0);
 		});
 		$exclude.on("mouseup touchend touchcancel", function (e)
 		{
+			if (videoPlayer.Loading().image.isLive) // Dirty hack
+				return;
 			exclude = true;
 			setTimeout(clearExclusion, 0);
 		});

@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "8";
+		var login_version = "9";
 		var bi_version = "%%VERSION%%";
 	</script>
 	<script type="text/javascript">
@@ -37,6 +37,7 @@
 
 		#loginLoading
 		{
+			display: none;
 			text-shadow: 0 0 10px rgba(0,0,0,0.3);
 			position: absolute;
 			text-align: center;
@@ -61,8 +62,40 @@
 			display: none;
 		}
 	</style>
-	<script src="applet/loginScripts.js?v=8_%%VERSION%%" type="text/javascript"></script>
-	<link href="applet/loginStyles.css?v=8_%%VERSION%%" rel="stylesheet" type="text/css">
+</head>
+<body>
+	<div id="loginLoading">
+		<h1>%%SYSNAME%%</h1>
+		<div>Loading login page...</div>
+	</div>
+	<div id="login">
+		<h1>%%SYSNAME%%</h1>
+		<input id="txtUn" type="text" class="text" placeholder="Username" autocapitalize="off" autocorrect="off" />
+		<input id="txtPw" type="password" class="text" placeholder="Password" onkeypress="return pwKeypress(this,event)" autocapitalize="off" autocorrect="off" />
+		<div class="checkboxWrapper">
+			<input id="cbLoginAutomatically" type="checkbox" class="checkbox" onchange="cbLoginAutomaticallyClicked()" /><label for="cbLoginAutomatically" id="lblLoginAutomatically"><span class="ui"></span>Log in automatically:</label>
+		</div>
+		<div id="status_wrapper_upper"></div>
+		<input id="btnLogin" type="button" class="btn" value="Log in" onclick="login()" />
+		<div id="status_wrapper_lower"><div id="status"></div></div>
+	</div>
+	<script type="text/javascript">
+		var loadingOpacity = 0;
+		function IncreaseLoadingOpacity()
+		{
+			loadingOpacity += 0.05;
+			if (loadingOpacity > 1)
+				loadingOpacity = 1;
+			var ele = document.getElementById('loginLoading');
+			ele.style.display = "block";
+			ele.style.opacity = loadingOpacity;
+			if (loadingOpacity < 1)
+				showLoadingMessageTimeout = setTimeout(IncreaseLoadingOpacity, 33);
+		}
+		var showLoadingMessageTimeout = setTimeout(IncreaseLoadingOpacity, 67);
+	</script>
+	<script src="applet/loginScripts.js?v=9_%%VERSION%%" type="text/javascript"></script>
+	<link href="applet/loginStyles.css?v=9_%%VERSION%%" rel="stylesheet" type="text/css">
 	<script type="text/javascript">
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
@@ -71,18 +104,19 @@
 		var windowUnloading = false;
 		$(function ()
 		{
+			if (UrlParameters.Get("autologin") == "0")
+			{
+				SetPersistedValue("bi_override_disable_auto_login_once", "1");
+				location.href = location.href.replace(/autologin=0&?/gi, '');
+				return;
+			}
+			clearTimeout(showLoadingMessageTimeout);
 			$("#loginLoading").hide();
 			$("#login").show();
 			if (typeof window.JSON == 'undefined')
 			{
 				$("#login").text("Your web browser is too old to use the Blue Iris web interface properly.\n\nTo proceed with this browser, disable the \"Secure only\" requirement within Blue Iris's web server settings.");
 				$("#login").css("color", "#EEEEEE").css("margin", "8px");
-				return;
-			}
-			if (UrlParameters.Get("autologin") == "0")
-			{
-				SetPersistedValue("bi_override_disable_auto_login_once", "1");
-				location.href = location.href.replace(/autologin=0&?/gi, '');
 				return;
 			}
 			$(window).resize(resized);
@@ -318,22 +352,5 @@
 			resized();
 		}
 	</script>
-</head>
-<body>
-	<div id="loginLoading">
-		<h1>%%SYSNAME%%</h1>
-		<div>Loading login page...</div>
-	</div>
-	<div id="login">
-		<h1>%%SYSNAME%%</h1>
-		<input id="txtUn" type="text" class="text" placeholder="Username" autocapitalize="off" autocorrect="off" />
-		<input id="txtPw" type="password" class="text" placeholder="Password" onkeypress="return pwKeypress(this,event)" autocapitalize="off" autocorrect="off" />
-		<div class="checkboxWrapper">
-			<input id="cbLoginAutomatically" type="checkbox" class="checkbox" onchange="cbLoginAutomaticallyClicked()" /><label for="cbLoginAutomatically" id="lblLoginAutomatically"><span class="ui"></span>Log in automatically:</label>
-		</div>
-		<div id="status_wrapper_upper"></div>
-		<input id="btnLogin" type="button" class="btn" value="Log in" onclick="login()" />
-		<div id="status_wrapper_lower"><div id="status"></div></div>
-	</div>
 </body>
 </html>
