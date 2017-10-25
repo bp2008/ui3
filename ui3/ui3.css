@@ -2140,6 +2140,17 @@ div.icon, a.icon
 {
 	background-color: #880000;
 }
+#pcVolume svg
+{
+	display: none;
+}
+#pcVolume.off svg.off,
+#pcVolume.mute svg.mute,
+#pcVolume.down svg.down,
+#pcVolume.up svg.up
+{
+	display: block;
+}
 /* Seek Bar */
 #seekBarWrapper
 {

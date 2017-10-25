@@ -183,10 +183,9 @@ var togglableUIFeatures =
 
 // TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
 //       -- I've found bugs related to the cycles and reported them.  Awaiting fixes.
-
 // TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
-
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
+// TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
 
 // TODO: Move the volume control into the playback controls and change UI scaling sizes to match.
 
@@ -2767,7 +2766,7 @@ function DateFilter(dateRangeLabelSelector)
 	{
 		if (suppressDatePickerCallbacks)
 			return;
-		var startOfDay = new Date(noonDateObj.getFullYear(), noonDateObj.getMonth(), noonDateObj.getDate());
+		var startOfDay = GetReverseServerDate(new Date(noonDateObj.getFullYear(), noonDateObj.getMonth(), noonDateObj.getDate()));
 		if ($dateRangeLabel.hasClass("oneLine"))
 		{
 			$dateRangeLabel.removeClass("oneLine");
@@ -3394,8 +3393,6 @@ function SeekBar()
 	}
 	var loadSeekHintImg = function (msec)
 	{
-		if (isDragging)
-			videoOverlayHelper.ShowLoadingOverlay(true, true);
 		seekHintInfo.queuedMsec = -1;
 		if (seekHintInfo.visibleMsec != msec)
 		{
@@ -3408,6 +3405,8 @@ function SeekBar()
 			seekhint_loading.css('height', h + 'px');
 			if (seekHintInfo.canvasVisible)
 				seekhint_loading.show();
+			if (isDragging)
+				videoOverlayHelper.ShowLoadingOverlay(true, true);
 			seekhint_img.attr('src', videoPlayer.GetLastSnapshotUrl().replace(/time=\d+/, "time=" + msec) + "&w=160&q=50");
 		}
 	}
@@ -3498,14 +3497,12 @@ function SeekBar()
 		x = Clamp(x, 0, barW);
 		var msec = videoPlayer.Loading().image.msec;
 		if (msec <= 1)
-			videoPlayer.SeekToPercent(0);
+			videoPlayer.SeekToPercent(0, didPauseOnDrag);
 		else
 		{
 			var positionRelative = x / barW;
-			videoPlayer.SeekToPercent(positionRelative);
+			videoPlayer.SeekToPercent(positionRelative, didPauseOnDrag);
 		}
-		if (didPauseOnDrag)
-			videoPlayer.Playback_Play();
 		didPauseOnDrag = false;
 
 		isTouchDragging = false;
@@ -3660,13 +3657,15 @@ function ClipLoader(clipsBodySelector)
 		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
 		loadClipsInternal(null, lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true);
 	}
-	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList)
+	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate)
 	{
 		if ((currentPrimaryTab != "clips" && currentPrimaryTab != "alerts") || self.suppressClipListLoad)
 		{
 			QueuedClipListLoad = null;
 			return;
 		}
+		if (!previousClipDate)
+			previousClipDate = new Date(0);
 		if (typeof (listName) == "undefined" || listName == null)
 			listName = currentPrimaryTab == "clips" ? "cliplist" : "alertlist";
 		if (!isContinuationOfPreviousLoad && !isUpdateOfExistingList)
@@ -3675,7 +3674,7 @@ function ClipLoader(clipsBodySelector)
 			{
 				QueuedClipListLoad = function ()
 				{
-					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList);
+					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate);
 				};
 				return;
 			}
@@ -3735,7 +3734,6 @@ function ClipLoader(clipsBodySelector)
 			{
 				var newUpdateClipIds = [];
 				var newUpdateClips = [];
-				var previousClipDate = new Date(0);
 				for (var clipIdx = 0; clipIdx < response.data.length; clipIdx++)
 				{
 					// clip.camera : "shortname"
@@ -3760,6 +3758,7 @@ function ClipLoader(clipsBodySelector)
 					clipData.path = clip.path;
 					clipData.flags = clip.flags;
 					clipData.date = new Date(clip.date * 1000);
+					clipData.displayDate = GetServerDate(clipData.date);
 					clipData.colorHex = BlueIrisColorToCssColor(clip.color);
 					clipData.fileSize = GetFileSize(clip.filesize);
 					if (clipData.isSnapshot)
@@ -3772,14 +3771,14 @@ function ClipLoader(clipsBodySelector)
 					clipData.clipId = clip.path.replace(/@/g, "").replace(/\..*/g, "");
 					clipData.thumbPath = clip.path;
 
-					if (!isSameDay(previousClipDate, clipData.date))
+					if (!isSameDay(previousClipDate, clipData.displayDate))
 					{
 						// TODO: (minor importance) Deal with adding new date tiles when isUpdateOfExistingList is true.  Perhaps just fake it and do a full clip list load when the system time changes from one day to the next.
 						if (previousClipDate.getTime() == 0)
-							$clipListTopDate.attr("defaultStr", GetDateDisplayStr(clipData.date)); // Do not add the first date tile because it is redundant with a date display above the list.
+							$clipListTopDate.attr("defaultStr", GetDateDisplayStr(clipData.displayDate)); // Do not add the first date tile because it is redundant with a date display above the list.
 						else if (!isUpdateOfExistingList)
 						{
-							tileLoader.registerOnAppearDisappear({ isDateTile: true, date: clipData.date }, DateTileOnAppear, DateTileOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
+							tileLoader.registerOnAppearDisappear({ isDateTile: true, date: clipData.displayDate }, DateTileOnAppear, DateTileOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
 							TotalDateTilesLoaded++;
 						}
 					}
@@ -3842,7 +3841,7 @@ function ClipLoader(clipsBodySelector)
 					myDateEnd = response.data[response.data.length - 1].date;
 					$("#clipListDateRange").html("&nbsp;Remaining to load:<br/>&nbsp;&nbsp;&nbsp;" + parseInt((myDateEnd - myDateStart) / 86400) + " days");
 					$.CustomScroll.callMeOnContainerResize();
-					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList);
+					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate);
 				}
 			}
 
@@ -3863,7 +3862,7 @@ function ClipLoader(clipsBodySelector)
 				// Force clip list to be the correct height before clip tiles load.
 				$clipsbody.append('<div id="clipListHeightSetter" style="height:' + ((clipTileHeight * TotalUniqueClipsLoaded) + (HeightOfOneDateTilePx * TotalDateTilesLoaded)) + 'px;width:0px;"></div>');
 
-				if (!response.data || response.data.length == 0)
+				if (TotalUniqueClipsLoaded == 0)
 				{
 					$clipsbody.append('<div class="clipListText">No recordings were found in the specified time range.</div>');
 				}
@@ -3891,14 +3890,14 @@ function ClipLoader(clipsBodySelector)
 			, function (jqXHR, textStatus, errorThrown)
 			{
 				$clipsbody.html('<div class="clipListText">Failed to load!</div>');
-				var tryAgain = ++failedClipListLoads < 5
+				var tryAgain = !isContinuationOfPreviousLoad && ++failedClipListLoads < 5
 				toaster.Error("Failed to load " + (listName == "cliplist" ? "clip list" : "alert list") + ".<br/>Will " + (tryAgain ? "" : "NOT ") + "try again.<br/>" + textStatus + "<br/>" + errorThrown, 5000);
 
 				if (tryAgain)
 				{
 					setTimeout(function ()
 					{
-						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList);
+						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate);
 					}, 1000);
 				}
 				else
@@ -3973,7 +3972,7 @@ function ClipLoader(clipsBodySelector)
 			retVal.download = null;
 		else
 		{
-			var date = GetDateStr(clipData.date);
+			var date = GetDateStr(clipData.displayDate);
 			date = date.replace(/\//g, '-').replace(/:/g, '.');
 			retVal.download = cameraListLoader.GetCameraName(clipData.camera) + " " + date + clipData.path.substr(extensionIdx);
 		}
@@ -3981,7 +3980,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.GetClipDisplayName = function (clipData)
 	{
-		var date = GetDateStr(clipData.date);
+		var date = GetDateStr(clipData.displayDate);
 		return cameraListLoader.GetCameraName(clipData.camera) + " " + date;
 	}
 	this.IsClipSelected = function (clipId)
@@ -4111,7 +4110,7 @@ function ClipLoader(clipsBodySelector)
 			$clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
 		{
-			var timeStr = GetTimeStr(clipData.date);
+			var timeStr = GetTimeStr(clipData.displayDate);
 			var clipDur = GetClipDurStrFromMs(clipData.roughLength);
 			var clipDurTitle = clipDur == 'S' ? ' title="Snapshot"' : '';
 			$("#clipsbody").append('<div id="c' + clipData.clipId + '" class="cliptile" style="top:' + clipData.y + 'px">'
@@ -4807,6 +4806,7 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 ///////////////////////////////////////////////////////////////
 // Status Update //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var serverTimeZoneOffsetMs = 0;
 function StatusLoader()
 {
 	var self = this;
@@ -4957,6 +4957,7 @@ function StatusLoader()
 
 				UpdateProfileStatus();
 				UpdateScheduleStatus();
+				serverTimeZoneOffsetMs = parseInt(parseFloat(response.data.tzone) * -60000);
 			}
 			loadingHelper.SetLoadedStatus("status");
 
@@ -6165,10 +6166,10 @@ function VideoPlayerController()
 		fullScreenModeController.updateFullScreenButtonState();
 	}
 
-	this.SeekToPercent = function (pos)
+	this.SeekToPercent = function (pos, play)
 	{
 		seekBar.drawSeekbarAtPercent(pos);
-		playerModule.OpenVideo(currentlyLoadingImage, pos, playerModule.Playback_IsPaused());
+		playerModule.OpenVideo(currentlyLoadingImage, pos, !play);
 	}
 	this.SeekByMs = function (offset)
 	{
@@ -6279,7 +6280,7 @@ function VideoPlayerController()
 		RefreshFps(lastFrameLoadingTime);
 
 		if (currentlyLoadingImage.isLive && lastFrameDate)
-			$("#playbackProgressText").text("LIVE: " + GetDateStr(lastFrameDate));
+			$("#playbackProgressText").text("LIVE: " + GetDateStr(GetServerDate(lastFrameDate)));
 
 		if (currentlyLoadingImage.path != path)
 			return;
@@ -6387,7 +6388,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 			return;
 		isInitialized = true;
 		$("#camimg_store").append('<canvas id="camimg_preview" class="videoCanvas"></canvas>');
-		$myImgEle = $('<img crossOrigin="Anonymous" id="jpegPreview_img" src="" alt="" style="display: none;" />');
+		$myImgEle = $('<img crossOrigin="Anonymous" id="jpegPreview_img" alt="" style="display: none;" />');
 		$myImgEle.load(function ()
 		{
 			var img = $myImgEle.get(0);
@@ -6406,7 +6407,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 		});
 		$myImgEle.error(function ()
 		{
-			toaster.Error("Bad jpeg image received.");
+			console.log('Bad image assigned to #jpegPreview_img.');
 		});
 		$("#camimg_store").append($myImgEle);
 	}
@@ -6867,6 +6868,7 @@ function FetchOpenH264VideoModule()
 	var lastNerdStatsUpdate = performance.now();
 	var isLoadingRecordedSnapshot = false;
 	var endSnapshotDisplayTimeout = null;
+	var currentImageDateMs = GetServerDate(new Date()).getTime();
 
 	var loading = new BICameraData();
 
@@ -6950,6 +6952,7 @@ function FetchOpenH264VideoModule()
 		Activate();
 		currentSeekPositionPercent = Clamp(offsetPercent, 0, 1);
 		lastFrameAt = performance.now();
+		currentImageDateMs = Date.now();
 		isLoadingRecordedSnapshot = false;
 		clearTimeout(endSnapshotDisplayTimeout);
 		var videoUrl;
@@ -6965,8 +6968,15 @@ function FetchOpenH264VideoModule()
 			if (startPaused)
 				speed = 0;
 			var clipData = clipLoader.GetCachedClip(loading.id, loading.path);
-			isLoadingRecordedSnapshot = clipData != null && clipData.isSnapshot;
-			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
+			if (clipData)
+			{
+				isLoadingRecordedSnapshot = clipData.isSnapshot;
+				currentImageDateMs = clipData.date.getTime();
+			}
+			var widthAndQualityArg = "";
+			if (speed == 0)
+				widthAndQualityArg = "&w=" + imageRenderer.GetWidthToRequest() + "&q=50";
+			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2" + widthAndQualityArg;
 		}
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (startPaused)
@@ -7021,7 +7031,7 @@ function FetchOpenH264VideoModule()
 	}
 	this.GetCurrentImageTimeMs = function ()
 	{
-		return new Date().getTime();
+		return currentImageDateMs;
 	}
 	this.Playback_IsPaused = function ()
 	{
@@ -7071,6 +7081,7 @@ function FetchOpenH264VideoModule()
 	}
 	var FrameRendered = function (frame)
 	{
+		currentImageDateMs = frame.utc;
 		currentSeekPositionPercent = frame.pos / 10000;
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
@@ -7084,7 +7095,7 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
 			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
 			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
-			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc), true));
+			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
 			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			nerdStats.UpdateStat("Codecs", "h264");
 			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
@@ -9343,7 +9354,7 @@ function ClipProperties()
 			$camprop.append($thumb);
 
 			//$camprop.append(GetInfo("Path", clipData.path));
-			$camprop.append(GetInfo("Date", GetDateStr(clipData.date)));
+			$camprop.append(GetInfo("Date", GetDateStr(clipData.displayDate)));
 			if (clipData.isClip)
 				$camprop.append(GetInfo("Real Time", clipData.roughLength).attr("title", "Real Time: Length of real time this clip covers.\nMay be significantly longer than Play Time if created from multiple alerts."));
 			$camprop.append(GetInfo("Play Time", msToTime(clipData.msec)));
@@ -9861,7 +9872,7 @@ var systemLog = new ListDialog({
 	, headers: ["", "#", "Time", "Object", "Message"]
 	, get_row: function (data)
 	{
-		var date = new Date(data.date * 1000)
+		var date = GetServerDate(new Date(data.date * 1000));
 		var dateStr = GetDateStr(date);
 		var level = GetLevelImageMarkup(data.level);
 		var count = typeof data.count == "undefined" ? "" : parseInt(data.count);
@@ -9877,7 +9888,7 @@ var userList = new ListDialog({
 	, headers: ["Online", "#", "Last Connected", "User", "Object", "Message"]
 	, get_row: function (data)
 	{
-		var date = new Date(data.date * 1000)
+		var date = GetServerDate(new Date(data.date * 1000));
 		var dateStr = data.date == 0 ? "never" : GetDateStr(date);
 		var level = GetLevelImageMarkup(data.level);
 		var count = typeof data.count == "undefined" ? "" : parseInt(data.count);
@@ -9900,7 +9911,7 @@ var deviceList = new ListDialog({
 	, headers: ["#", "Last Connected", "Name", "Type", "Inside", "Push"]
 	, get_row: function (data)
 	{
-		var date = new Date(data.date * 1000)
+		var date = GetServerDate(new Date(data.date * 1000));
 		var dateStr = data.date == 0 ? "never" : GetDateStr(date);
 		var level = GetLevelImageMarkup(data.level);
 		var count = typeof data.count == "undefined" ? "" : parseInt(data.count);
@@ -10092,7 +10103,7 @@ function saveSnapshot(btnSelector)
 	if (typeof btnSelector == "undefined")
 		btnSelector = "#save_snapshot_btn";
 	var camName = cameraListLoader.GetCameraName(videoPlayer.Loading().image.id);
-	var date = GetDateStr(new Date(videoPlayer.GetCurrentImageTimeMs()), true);
+	var date = GetDateStr(new Date(videoPlayer.GetCurrentImageTimeMs() + GetServerTimeOffset()), true);
 	date = date.replace(/\//g, '-').replace(/:/g, '.');
 	var fileName = camName + " " + date + ".jpg";
 	$(btnSelector).attr("download", fileName);
@@ -11354,6 +11365,11 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 				var blobPromise = res.blob();
 				blobPromise.then(function (jpegBlob)
 				{
+					if (parseInt(res.headers.get("Content-Length")) != jpegBlob.size)
+					{
+						CallStreamEnded("fetch graceful exit (jpeg incomplete)", true, true);
+						return;
+					}
 					var jpegObjectURL = URL.createObjectURL(jpegBlob);
 					frameCallback({ startTime: startTime, jpeg: jpegObjectURL })
 					CallStreamEnded("fetch graceful exit (jpeg)", true, true);
@@ -12967,4 +12983,32 @@ function documentIsHidden()
 	if (!prop) return false;
 
 	return document[prop];
+}
+function GetServerDate(date)
+{
+	/// <summary>
+	/// Given a date in local time, returns a new date with the time adjusted so that it reads as if the browser shared a time zone with the server.
+	/// </summary>
+	return new Date(date.getTime() + GetServerTimeOffset());
+}
+function GetReverseServerDate(date)
+{
+	/// <summary>
+	/// For use when GetServerDate() caused the date to be offset in the wrong direction for the desired effect.
+	/// Due to complex time zone handling, sometimes you need to subtract the time zone offset instead of add it.  This method does that.
+	/// </summary>
+	return new Date(date.getTime() - GetServerTimeOffset());
+}
+function GetServerTimeOffset()
+{
+	/// <summary>
+	/// Returns the difference in milliseconds between this browser's time zone and the server's time zone such that this code would print the date and time that it currently is on the server:
+	///
+	/// var utcMs = new Date().getTime();
+	/// var serverTime = new Date(utcMs + GetServerTimeOffset());
+	/// console.log(serverTime.toString());
+	/// </summary>
+	var localOffsetMs = new Date().getTimezoneOffset() * 60000;
+	var serverOffsetMs = serverTimeZoneOffsetMs;
+	return localOffsetMs - serverOffsetMs;
 }

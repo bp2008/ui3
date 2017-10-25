@@ -312,6 +312,12 @@
 				</div>
 				<div class="pcButton hideWhenLive" onclick="videoPlayer.Playback_PreviousClip()" title="Previous Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>
 				<div class="pcButton hideWhenLive" onclick="videoPlayer.Playback_NextClip()" title="Next Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>
+				<div id="pcVolume" class="pcButton up" onclick="videoPlayer.VolumeClick()" title="Volume">
+					<svg class="icon noflip off"><use xlink:href="#svg_mio_volumeOff"></use></svg>
+					<svg class="icon noflip mute"><use xlink:href="#svg_mio_volumeMute"></use></svg>
+					<svg class="icon noflip down"><use xlink:href="#svg_mio_volumeDown"></use></svg>
+					<svg class="icon noflip up"><use xlink:href="#svg_mio_volumeUp"></use></svg>
+				</div>
 				<div id="playbackProgressText" class="pcText"></div>
 				<div id="clipFullscreenButton" class="pcButton rightSide" title="Full Screen"><svg class="icon"><use xlink:href="#svg_mio_Fullscreen"></use></svg></div>
 				<div id="clipExitFullscreenButton" class="pcButton rightSide" title="Exit Full Screen" style="display: none;"><svg class="icon"><use xlink:href="#svg_mio_FullscreenExit"></use></svg></div>
