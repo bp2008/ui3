@@ -191,7 +191,6 @@ var togglableUIFeatures =
 // TODO: Test a single-camera system (limited user account with 1-camera group).  Clicking the camera should not interrupt streaming.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
-// CONSIDER: In Stats for nerds, add a Bit Rate graph.  Maybe remove Frame Size at this time.
 
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
@@ -6554,7 +6553,7 @@ function JpegVideoModule()
 					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "%"));
 					nerdStats.UpdateStat("Frame Offset", loading.isLive ? "LIVE" : Math.floor(clipPlaybackPosition) + "ms");
 					nerdStats.UpdateStat("Codecs", "jpeg");
-					nerdStats.UpdateStat("Network Delay", msLoadingTime, msLoadingTime + "ms", true);
+					nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, msLoadingTime + "ms", true);
 					nerdStats.EndUpdate();
 				}
 			}
@@ -6879,6 +6878,7 @@ function FetchOpenH264VideoModule()
 	var self = this;
 	var isInitialized = false;
 	var isCurrentlyActive = false;
+	var lastActivatedAt = 0;
 	var openh264_player;
 	var isVisible = !documentIsHidden();
 	var currentSeekPositionPercent = 0;
@@ -6907,6 +6907,7 @@ function FetchOpenH264VideoModule()
 		if (isCurrentlyActive)
 			return;
 		isCurrentlyActive = true;
+		lastActivatedAt = performance.now();
 		// Show yourself
 		console.log("Activating openh264_player");
 		openh264_player.GetCanvasRef().appendTo("#camimg_wrapper");
@@ -7116,8 +7117,10 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
 			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
-			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			nerdStats.UpdateStat("Codecs", "h264");
+			var bitRate = bitRateCalc.GetBPS() * 8;
+			nerdStats.UpdateStat("Bit Rate", bitRate, formatBitsPerSecond(bitRate, 1), true);
+			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
 			nerdStats.UpdateStat("Frame Timing Error", interFrameError, interFrameError.toFixed() + "ms", true);
@@ -7175,9 +7178,10 @@ function FetchOpenH264VideoModule()
 	var perf_warning_cpu = null;
 	var MeasurePerformance = function ()
 	{
-		if (!openh264_player || !isCurrentlyActive || !safeFetch.IsActive() || isLoadingRecordedSnapshot)
+		var perfNow = performance.now();
+		if (!openh264_player || !isCurrentlyActive || !safeFetch.IsActive() || isLoadingRecordedSnapshot || perfNow - lastActivatedAt < 1000)
 			return;
-		if (performance.now() - lastNerdStatsUpdate > 1000)
+		if (perfNow - lastNerdStatsUpdate > 3000 && perfNow - lastActivatedAt > 3000)
 			writeDelayStats();
 		if (perf_warning_net)
 		{
@@ -10963,6 +10967,49 @@ function FPSCounter2()
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Bit rate calculator ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var bitRateCalc = new BitRateCalculator();
+function BitRateCalculator()
+{
+	var self = this;
+	var first = null;
+	var last = null;
+	this.averageOverMs = 1000;
+	var sum = 0;
+	this.AddDataPoint = function (bytes)
+	{
+		cleanup();
+		sum += bytes;
+		if (last == null)
+			first = last = new BitRateDataPoint(bytes);
+		else
+			last = last.next = new BitRateDataPoint(bytes);
+	}
+	this.GetBPS = function ()
+	{
+		cleanup();
+		return sum;
+	}
+	var cleanup = function ()
+	{
+		var now = performance.now();
+		while (first != null && now - first.time > self.averageOverMs)
+		{
+			sum -= first.bytes;
+			first = first.next;
+		}
+		if (first == null)
+			last = null;
+	}
+}
+function BitRateDataPoint(bytes)
+{
+	this.bytes = bytes;
+	this.time = performance.now();
+	this.next = null;
+}
+///////////////////////////////////////////////////////////////
 // Efficient Rolling Average Calculator ///////////////////////
 ///////////////////////////////////////////////////////////////
 function RollingAverage(MAXSAMPLES)
@@ -11489,6 +11536,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 				return;
 			}
 
+			bitRateCalc.AddDataPoint(result.value.length);
 			myStream.Write(result.value);
 
 			while (true)
@@ -11789,8 +11837,10 @@ function UI3NerdStats()
 			, "Seek Position"
 			, "Frame Offset"
 			, "Frame Time"
-			, "Frame Size"
 			, "Codecs"
+			, "Jpeg Loading Time"
+			, "Bit Rate"
+			, "Frame Size"
 			, "Inter-Frame Time"
 			, "Frame Timing Error"
 			, "Network Delay"
@@ -12980,6 +13030,19 @@ function formatBytes(bytes, decimals)
 		sizes = ['B', 'K', 'M', 'G', 'T', 'PB', 'EB', 'ZB', 'YB'],
 		i = Math.floor(Math.log(bytes) / Math.log(k));
 	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + sizes[i];
+}
+function formatBitsPerSecond(bits)
+{
+	if (bits == 0) return '0 bps';
+	var negative = bits < 0;
+	if (negative)
+		bits = -bits;
+	var k = 1000,
+		dm = typeof decimals != "undefined" ? decimals : 2,
+		sizes = ['bps', 'Kbps', 'Mbps', 'Gbps', 'Tbps', 'Pbps', 'Ebps', 'Zbps', 'Ybps'],
+		decimals = [0, 0, 1, 2, 2, 2, 2, 2, 2],
+		i = Math.floor(Math.log(bits) / Math.log(k));
+	return (negative ? '-' : '') + (bits / Math.pow(k, i)).toFloat(decimals[i]) + ' ' + sizes[i];
 }
 var mouseCoordFixer =
 	{
