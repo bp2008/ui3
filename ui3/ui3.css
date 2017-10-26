@@ -404,16 +404,19 @@ div.icon, a.icon
 .leftBarHeading
 {
 	font-size: 16px;
+	height: 18px;
 }
 
 .sizeMedium .leftBarHeading
 {
 	font-size: 14px;
+	height: 16px;
 }
 
 .sizeSmall .leftBarHeading
 {
 	font-size: 12px;
+	height: 14px;
 }
 
 
@@ -1081,17 +1084,17 @@ div.icon, a.icon
 .statusBarDragHandle
 {
 	position: absolute;
-	top: -2px;
+	top: -16.6666%;
 	width: 16px;
-	height: 16px;
+	height: 133.3333%;
 	background-color: transparent;
 }
 
 .statusBarDragHandleInner
 {
-	margin-left: 6px;
-	width: 4px;
-	height: 16px;
+	margin-left: 37.5%;
+	width: 25%;
+	height: 100%;
 	background-color: #969BA7;
 }
 
@@ -1110,34 +1113,82 @@ div.icon, a.icon
 /* Volume Bar */
 #volumeBar
 {
+	display: inline-block;
+	vertical-align: top;
+	padding: 8px;
 }
 
-	#volumeBar.disabled
-	{
-		opacity: 0.333;
-	}
+.sizeMedium #volumeBar
+{
+	padding: 6px;
+}
 
-	#volumeBar .statusBarLabel
-	{
-		font-size: 0px;
-		width: 16px;
-		height: 16px;
-		margin-right: 6px;
-	}
+.sizeSmall #volumeBar
+{
+	padding: 4px;
+}
 
-	#volumeBar .progressBarOuter
-	{
-		width: 165px;
-	}
+#volumeBar.disabled
+{
+	opacity: 0.333;
+}
+
+#volumeBar .statusBarLabel
+{
+	font-size: 0px;
+	width: 26px;
+	height: 26px;
+	margin-right: 10px;
+}
+
+.sizeMedium #volumeBar .statusBarLabel
+{
+	width: 21px;
+	height: 21px;
+	margin-right: 8px;
+}
+
+.sizeSmall #volumeBar .statusBarLabel
+{
+	width: 16px;
+	height: 16px;
+	margin-right: 6px;
+}
+
+#volumeBar .progressBarOuter
+{
+	width: 50px;
+	height: 16px;
+	margin: 4px 0px;
+}
 
 .sizeMedium #volumeBar .progressBarOuter
 {
-	width: 130px;
+	width: 35px;
+	height: 14px;
+	margin: 3px 0px;
 }
 
 .sizeSmall #volumeBar .progressBarOuter
 {
-	width: 100px;
+	width: 20px;
+	height: 12px;
+	margin: 2px 0px;
+}
+
+#volumeBar .statusBarDragHandle
+{
+	width: 24px;
+}
+
+.sizeMedium #volumeBar .statusBarDragHandle
+{
+	width: 20px;
+}
+
+.sizeSmall #volumeBar .statusBarDragHandle
+{
+	width: 16px;
 }
 
 #volumeBar .statusBarAmount
@@ -1147,6 +1198,8 @@ div.icon, a.icon
 
 #volumeBar .statusBar
 {
+	display: inline-block;
+	vertical-align: middle;
 	padding-bottom: 0px;
 }
 
@@ -1155,6 +1208,25 @@ div.icon, a.icon
 	width: 16px;
 	height: 16px;
 }
+
+#pcVolume
+{
+	width: 100%;
+	height: 100%;
+}
+
+	#pcVolume svg
+	{
+		display: none;
+	}
+
+	#pcVolume.off svg.off,
+	#pcVolume.mute svg.mute,
+	#pcVolume.down svg.down,
+	#pcVolume.up svg.up
+	{
+		display: block;
+	}
 /* Dropdown Boxes */
 .dropdownBox
 {
@@ -1838,7 +1910,6 @@ div.icon, a.icon
 	background: linear-gradient(to bottom, rgba(0,0,0,0) 0%,rgba(0,0,0,0.75) 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
 	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#00000000', endColorstr='#bf000000',GradientType=0 ); /* IE6-9 */
 	bottom: 0px;
-	height: 64px;
 	width: 100%;
 	padding: 0px 8px;
 	overflow: hidden;
@@ -1851,52 +1922,28 @@ div.icon, a.icon
 		pointer-events: auto;
 	}
 
-	#playbackControls.live
-	{
-		height: 48px;
-	}
-
-.sizeMedium #playbackControls
-{
-	height: 53px;
-}
-
-	.sizeMedium #playbackControls.live
-	{
-		height: 37px;
-	}
-
-.sizeSmall #playbackControls
-{
-	height: 42px;
-}
-
-	.sizeSmall #playbackControls.live
-	{
-		height: 30px;
-	}
-
 #pcButtonContainer
 {
 	width: 100%;
-	height: 42px;
+	margin-bottom: 6px;
 	overflow: hidden;
+	white-space: normal;
 }
 
 .sizeMedium #pcButtonContainer
 {
-	height: 33px;
+	margin-bottom: 4px;
 }
 
 .sizeSmall #pcButtonContainer
 {
-	height: 24px;
+	margin-bottom: 2px;
 }
 
 .pcText
 {
 	display: inline-block;
-	vertical-align: middle;
+	vertical-align: top;
 	color: #E8E8E8;
 	font-size: 16px;
 	line-height: 42px;
@@ -2139,17 +2186,6 @@ div.icon, a.icon
 #playbackSettingsQualityMark.LD, #playbackSettingsQualityMark.S2
 {
 	background-color: #880000;
-}
-#pcVolume svg
-{
-	display: none;
-}
-#pcVolume.off svg.off,
-#pcVolume.mute svg.mute,
-#pcVolume.down svg.down,
-#pcVolume.up svg.up
-{
-	display: block;
 }
 /* Seek Bar */
 #seekBarWrapper

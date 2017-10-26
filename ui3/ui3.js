@@ -146,7 +146,7 @@ var togglableUIFeatures =
 	[
 		// The uniqueId is also used in the name of a setting which remembers the enabled state.
 		// If you add a new togglabe UI feature here, also add the corresponding default setting value.
-		// [selector, uniqueId, displayName, onToggle, extraMenuButtons]
+		// [selector, uniqueId, displayName, onToggle, extraMenuButtons, shouldDisableToggler, labels]
 		["#volumeBar", "volumeBar", "Volume Controls", function (enabled)
 		{
 			statusBars.setEnabled("volume", enabled);
@@ -187,9 +187,11 @@ var togglableUIFeatures =
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
 
-// TODO: Move the volume control into the playback controls and change UI scaling sizes to match.
+// TODO: Show a warning to users who have more than one camera available but no group stream.
+// TODO: Test a single-camera system (limited user account with 1-camera group).  Clicking the camera should not interrupt streaming.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
+// CONSIDER: In Stats for nerds, add a Bit Rate graph.  Maybe remove Frame Size at this time.
 
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
@@ -953,7 +955,7 @@ $(function ()
 	clipDownloadDialog = new ClipDownloadDialog();
 
 	statusBars = new StatusBars();
-	statusBars.setLabel("volume", '<svg class="volumeButton icon"><use xlink:href="#svg_x5F_Volume"></use></svg>');
+	statusBars.setLabel("volume", $("#pcVolume"));
 	statusBars.addDragHandle("volume");
 	statusBars.addOnProgressChangedListener("volume", function (newVolume)
 	{
@@ -1253,8 +1255,8 @@ function resized()
 function UiSizeHelper()
 {
 	var self = this;
-	var largeMinH = 1075;
-	var mediumMinH = 815;
+	var largeMinH = 1042; // 1075
+	var mediumMinH = 786; // 815
 	var largeMinW = 670;// 550 575 1160;
 	var mediumMinW = 540;// 450 515 900;
 	var smallMinW = 350;//680;
@@ -1360,12 +1362,12 @@ function StatusBars()
 			for (var i = 0; i < statusEles.length; i++)
 				ProgressBar.setColor(statusEles[i].$pb, progressColor, progressBackgroundColor);
 	};
-	this.setLabel = function (name, labelHtml)
+	this.setLabel = function (name, label)
 	{
 		var statusEles = statusElements[name];
 		if (statusEles)
 			for (var i = 0; i < statusEles.length; i++)
-				statusEles[i].$label && statusEles[i].$label.html(labelHtml);
+				statusEles[i].$label && statusEles[i].$label.append(label);
 	};
 	this.getLabelObjs = function (name)
 	{
@@ -2863,6 +2865,7 @@ function PlaybackControls()
 	var $pc = $("#playbackControls");
 	var $playbackSettings = $();
 	var buttonContainer = $("#pcButtonContainer");
+	var $progressText = $("#playbackProgressText");
 	var hideTimeout = null;
 	var isVisible = $pc.is(":visible");
 	var settingsClosedAt = 0;
@@ -2888,7 +2891,12 @@ function PlaybackControls()
 	{
 		var paddingSize = $pc.innerWidth() - $pc.width();
 		$pc.css("width", ($pc.parent().width() - paddingSize) + "px");
+
 		seekBar.resized();
+	}
+	this.SetProgressText = function (text)
+	{
+		$progressText.text(text);
 	}
 	this.Show = function ()
 	{
@@ -2968,14 +2976,14 @@ function PlaybackControls()
 	{
 		self.Show();
 		$pc.addClass("live");
-		$("#playbackProgressText").text("Loading...");
+		self.SetProgressText("Loading...");
 		self.setPlayPauseButtonState();
 	}
 	this.Recording = function ()
 	{
 		self.Show();
 		$pc.removeClass("live");
-		$("#playbackProgressText").text("Loading...");
+		self.SetProgressText("Loading...");
 		self.setPlayPauseButtonState();
 	}
 	this.setPlayPauseButtonState = function (paused)
@@ -3433,7 +3441,7 @@ function SeekBar()
 		else
 			timeValue = (msec - 1) * percentValue;
 		if (!videoPlayer.Loading().image.isLive)
-			$("#playbackProgressText").html(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
+			playbackControls.SetProgressText(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
 	}
 	this.drawSeekbarAtTime = function (timeValue)
 	{
@@ -3451,7 +3459,7 @@ function SeekBar()
 		if (timeValue == msec - 1)
 			timeValue = msec;
 		if (!videoPlayer.Loading().image.isLive)
-			$("#playbackProgressText").html(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
+			playbackControls.SetProgressText(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
 	}
 	this.IsDragging = function ()
 	{
@@ -5865,7 +5873,9 @@ function VideoPlayerController()
 				playerModule.VisibilityChanged(!documentIsHidden());
 			});
 		}
-		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint"), $("#playbackHeader,#playbackControls,#playbackControls .pcButton")
+		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint")
+			, $("#playbackHeader,#playbackControls") // Excluded while viewing recordings
+			, $("#playbackControls .pcButton,#volumeBar") // Excluded while viewing live
 			, function (e) { return playbackControls.MouseInSettingsPanel(e); } // exclude click if returns true
 			, function (e, confirmed) // Single Click
 			{
@@ -6280,7 +6290,17 @@ function VideoPlayerController()
 		RefreshFps(lastFrameLoadingTime);
 
 		if (currentlyLoadingImage.isLive && lastFrameDate)
-			$("#playbackProgressText").text("LIVE: " + GetDateStr(GetServerDate(lastFrameDate)));
+		{
+			var str = "";
+			var w = $("#layoutbody").width();
+			if (w < 240)
+				str = "LIVE";
+			else if (w < 325)
+				str = "LIVE: " + GetTimeStr(GetServerDate(lastFrameDate))
+			else
+				str = "LIVE: " + GetDateStr(GetServerDate(lastFrameDate))
+			playbackControls.SetProgressText(str);
+		}
 
 		if (currentlyLoadingImage.path != path)
 			return;
@@ -10019,6 +10039,7 @@ function AudioPlayer()
 		newVolume = Clamp(newVolume, 0, 1);
 		clearMuteStopTimeout();
 		audioobj.volume = newVolume;
+		volumeIconHelper.setIconForVolume(newVolume);
 		if (newVolume == 0)
 			audioStopTimeout = setTimeout(function () { self.audioStop(); }, 1000);
 		else
@@ -10039,6 +10060,7 @@ function AudioPlayer()
 	}
 	this.audioPlay = function ()
 	{
+		volumeIconHelper.setEnabled(false);
 		// Plays audio for the current live camera if it is not already playing
 		if (!videoPlayer)
 			return;
@@ -10049,6 +10071,7 @@ function AudioPlayer()
 		}
 		if (currentServer.isLoggingOut)
 			return;
+		volumeIconHelper.setEnabled(true);
 		var newSrc = currentServer.remoteBaseURL + "audio/" + videoPlayer.Loading().image.id + "/temp.wav" + currentServer.GetRemoteSessionArg("?", true);
 		if ($audiosourceobj.attr("src") != newSrc)
 		{
@@ -10061,6 +10084,7 @@ function AudioPlayer()
 	}
 	this.audioStop = function ()
 	{
+		volumeIconHelper.setEnabled(false);
 		if (!videoPlayer)
 			return;
 		// Stops audio if it is playing
@@ -10080,7 +10104,8 @@ function AudioPlayer()
 
 	$(audioobj).on('abort error stalled suspend', function (e)
 	{
-		$("#volumeBar").css("color", "#F00000");
+		volumeIconHelper.setEnabled(false);
+		$("#volumeBar").removeClass("up down mute off").addClass("off").css("color", "#F00000");
 	});
 	$(audioobj).on('waiting', function (e)
 	{
@@ -10088,6 +10113,7 @@ function AudioPlayer()
 	});
 	$(audioobj).on('play playing', function (e)
 	{
+		volumeIconHelper.setEnabled(true);
 		$("#volumeBar").css("color", "#00F000");
 	});
 	$(audioobj).on('emptied ended pause', function (e)
@@ -10095,6 +10121,45 @@ function AudioPlayer()
 		$("#volumeBar").css("color", "#969BA7");
 	});
 }
+///////////////////////////////////////////////////////////////
+// Volume Icon Helper /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var volumeIconHelper = new (function ()
+{
+	var self = this;
+	var isEnabled = false;
+	var iconName = "off";
+	this.setEnabled = function (enabled)
+	{
+		isEnabled = enabled;
+		ApplyIcon();
+	}
+	this.setIconForVolume = function (volume)
+	{
+		if (volume > 0.5)
+			self.setIcon("up");
+		else if (volume > 0)
+			self.setIcon("down");
+		else
+			self.setIcon("mute");
+	}
+	this.setIcon = function (newIconName)
+	{
+		if (newIconName != "up" && newIconName != "down" && newIconName != "mute" && newIconName != "off")
+			newIconName = "mute";
+		iconName = newIconName;
+		ApplyIcon();
+	}
+	var ApplyIcon = function ()
+	{
+		var $icon = $("#pcVolume").removeClass("up down mute off");
+		if (isEnabled)
+			$icon.addClass(iconName);
+		else
+			$icon.addClass("off");
+	}
+	ApplyIcon();
+})();
 ///////////////////////////////////////////////////////////////
 // Save Snapshot Button ///////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -12006,7 +12071,7 @@ function SimpleGraph()
 ///////////////////////////////////////////////////////////////
 // Mouse Event Helper / Double Click Helper ///////////////////
 ///////////////////////////////////////////////////////////////
-function MouseEventHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDoubleClick, cbDragStart, cbDragMove, cbDragEnd, doubleClickTimeMS, mouseMoveTolerance)
+function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, cbOnSingleClick, cbOnDoubleClick, cbDragStart, cbDragMove, cbDragEnd, doubleClickTimeMS, mouseMoveTolerance)
 {
 	/// <summary>Handles double-click events in a consistent way between touch and non-touch devices.</summary>
 	/// <param name="$ele">jQuery object containing elements to listen for clicks on.</param>
@@ -12050,18 +12115,35 @@ function MouseEventHelper($ele, $exclude, excludeFunc, cbOnSingleClick, cbOnDoub
 		exclude = false;
 	}
 
-	if ($exclude)
+	if ($excludeRecordings)
 	{
-		$exclude.on("mousedown touchstart", function (e)
+		$excludeRecordings.on("mousedown touchstart", function (e)
 		{
-			if (videoPlayer.Loading().image.isLive && !$(this).hasClass("pcButton")) // Dirty hack
+			if (videoPlayer.Loading().image.isLive)
 				return;
 			exclude = true;
 			setTimeout(clearExclusion, 0);
 		});
-		$exclude.on("mouseup touchend touchcancel", function (e)
+		$excludeRecordings.on("mouseup touchend touchcancel", function (e)
 		{
-			if (videoPlayer.Loading().image.isLive) // Dirty hack
+			if (videoPlayer.Loading().image.isLive)
+				return;
+			exclude = true;
+			setTimeout(clearExclusion, 0);
+		});
+	}
+	if ($excludeLive)
+	{
+		$excludeLive.on("mousedown touchstart", function (e)
+		{
+			if (!videoPlayer.Loading().image.isLive)
+				return;
+			exclude = true;
+			setTimeout(clearExclusion, 0);
+		});
+		$excludeLive.on("mouseup touchend touchcancel", function (e)
+		{
+			if (!videoPlayer.Loading().image.isLive)
 				return;
 			exclude = true;
 			setTimeout(clearExclusion, 0);
@@ -12760,7 +12842,7 @@ function GetDateStr(date, includeMilliseconds)
 }
 function GetDateDisplayStr(date)
 {
-	var sameDay = isSameDay(date, new Date());
+	var sameDay = isSameDay(date, GetServerDate(new Date()));
 	return (sameDay ? "Today, " : "") + date.getMonthName() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear());
 }
 Date.prototype.getMonthName = function (lang)
