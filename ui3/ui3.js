@@ -202,6 +202,8 @@ var togglableUIFeatures =
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
+// CONSIDER: The video streaming loop is recursive and in theory this would lead to a stack overflow eventually.  Consider using a setTimeout(..., 0) every 100 or something pump calls to clear the call stack and in theory avoid a stack overflow.
+// CONSIDER: Prevent "The video stream was lost. Attempting to reconnect..." from occurring too rapidly e.g. in the event of a stream parsing error (do not reconnect if 5 occurrences in 10 second interval measured using a class similar to the FPS counter?)
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -7125,8 +7127,10 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
 			nerdStats.UpdateStat("Codecs", "h264");
-			var bitRate = bitRateCalc.GetBPS() * 8;
-			nerdStats.UpdateStat("Bit Rate", bitRate, formatBitsPerSecond(bitRate, 1), true);
+			var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
+			var bitRate_Audio = bitRateCalc_Audio.GetBPS() * 8;
+			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
+			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
 			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
@@ -10976,7 +10980,8 @@ function FPSCounter2()
 ///////////////////////////////////////////////////////////////
 // Bit rate calculator ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-var bitRateCalc = new BitRateCalculator();
+var bitRateCalc_Video = new BitRateCalculator();
+var bitRateCalc_Audio = new BitRateCalculator();
 function BitRateCalculator()
 {
 	var self = this;
@@ -11458,6 +11463,9 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 	var blockType = -1;
 	var currentVideoFrame = { pos: 0, time: 0, utc: 0, size: 0 };
 	var currentAudioFrame = { size: 0 };
+	var statusBlockSize = 0;
+	var bitmapHeader = null;
+	var audioHeader = null;
 
 	this.StopStreaming = function ()
 	{
@@ -11543,7 +11551,6 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 				return;
 			}
 
-			bitRateCalc.AddDataPoint(result.value.length);
 			myStream.Write(result.value);
 
 			while (true)
@@ -11577,7 +11584,19 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 					if (buf == null)
 						return pump();
 
-					// The rest of the stream header is currently ignored, as the exact format was unspecified.
+					// Read BITMAPINFOHEADER structure
+					var offsetWrapper = { offset: 0 };
+					var bitmapHeaderSize = ReadUInt32LE(buf.buffer, offsetWrapper) - 4;
+					if (bitmapHeaderSize > 0)
+						bitmapHeader = new BITMAPINFOHEADER(ReadSubArray(buf, offsetWrapper, bitmapHeaderSize));
+
+					if (offsetWrapper.offset < streamHeaderSize)
+					{
+						// Audio stream was provided.
+						// Assuming the remainder of the header is WAVEFORMATEX structure
+						audioHeader = new WAVEFORMATEX(ReadSubArray(buf, offsetWrapper, streamHeaderSize - offsetWrapper.offset));
+					}
+
 					state = 2;
 				}
 				else if (state == 2) // Read Block Header Start
@@ -11598,14 +11617,16 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 				{
 					if (blockType == 0) // Video
 					{
-						var buf = myStream.Read(2 + 4 + 8 + 4);
+						var buf = myStream.Read(18); // 2 + 4 + 8 + 4
 						if (buf == null)
 							return pump();
 						var offsetWrapper = { offset: 0 };
-						currentVideoFrame.pos = ReadInt16(buf.buffer, offsetWrapper);
-						currentVideoFrame.time = ReadInt32(buf.buffer, offsetWrapper);
+						currentVideoFrame.pos = ReadUInt16(buf.buffer, offsetWrapper);
+						currentVideoFrame.time = ReadUInt32(buf.buffer, offsetWrapper);
 						currentVideoFrame.utc = ReadUInt64LE(buf.buffer, offsetWrapper);
-						currentVideoFrame.size = ReadInt32(buf.buffer, offsetWrapper);
+						currentVideoFrame.size = ReadUInt32(buf.buffer, offsetWrapper);
+						if (currentVideoFrame.size > 10000000)
+							return protocolError("Video frame size of " + currentVideoFrame.size + " was rejected.");
 
 						state = 4;
 					}
@@ -11616,18 +11637,23 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 							return pump();
 
 						currentAudioFrame.size = ReadInt32(buf.buffer, { offset: 0 });
+						if (currentAudioFrame.size > 2000000)
+							return protocolError("Audio frame size of " + currentAudioFrame.size + " was rejected.");
 
 						state = 4;
 					}
 					else if (blockType == 2) // Status
 					{
-						var buf = myStream.Read(1 + 5 + 3 + 2 + 4 + 4 + 4);
+						var buf = myStream.Read(1);
 						if (buf == null)
 							return pump();
 
-						var statusBlock = new StatusBlock(buf, { offset: 0 });
+						statusBlockSize = buf[0];
 
-						state = 2;
+						if (statusBlockSize < 6)
+							return protocolError("Status block size was invalid (" + statusBlockSize + ")!");
+
+						state = 4;
 					}
 					else if (blockType == 4)
 					{
@@ -11646,21 +11672,31 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 						if (buf == null)
 							return pump();
 
+						bitRateCalc_Video.AddDataPoint(currentVideoFrame.size);
+
 						frameCallback(new VideoFrame(buf, currentVideoFrame));
 
 						state = 2;
 					}
 					else if (blockType == 1) // Audio
 					{
-						var buf = myStream.Read(currentAudioFrame.frameSize);
+						var buf = myStream.Read(currentAudioFrame.size);
 						if (buf == null)
 							return pump();
+
+						bitRateCalc_Audio.AddDataPoint(currentAudioFrame.size);
 
 						state = 2;
 					}
 					else if (blockType == 2) // Status
 					{
-						return protocolError("Status blockType should not have reached state 4");
+						var buf = myStream.Read(statusBlockSize - 6); // We already read the first 6 bytes ['B', 'L', 'U', 'E', 2, statusBlockSize]
+						if (buf == null)
+							return pump();
+
+						var statusBlock = new StatusBlock(buf);
+
+						state = 2;
 					}
 					else
 						return protocolError("Unknown block type " + blockType + " at state " + state);
@@ -11676,11 +11712,9 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 	Start();
 }
-function StatusBlock(buf, offsetWrapper)
+function StatusBlock(buf)
 {
-	var self = this;
-	this.size = ReadByteFromArray(buf, offsetWrapper);
-
+	var offsetWrapper = { offset: 0 };
 	this.bRec = ReadByteFromArray(buf, offsetWrapper);
 	this.bMotion = ReadByteFromArray(buf, offsetWrapper);
 	this.bCheckFPS = ReadByteFromArray(buf, offsetWrapper);
@@ -11697,6 +11731,44 @@ function StatusBlock(buf, offsetWrapper)
 	this.fps = ReadInt32(buf.buffer, offsetWrapper); // in 100ths
 	this.apeak = ReadInt32(buf.buffer, offsetWrapper); // out of 32767
 	this.tpause = ReadInt32(buf.buffer, offsetWrapper);
+}
+function BITMAPINFOHEADER(buf)
+{
+	var offsetWrapper = { offset: 0 };
+	this.biWidth = ReadUInt32LE(buf.buffer, offsetWrapper); // Width in pixels
+	this.biHeight = ReadUInt32LE(buf.buffer, offsetWrapper); // Height in pixels
+	this.biPlanes = ReadUInt16LE(buf.buffer, offsetWrapper); // Number of planes (always 1)
+	this.biBitCount = ReadUInt16LE(buf.buffer, offsetWrapper); // Bits Per Pixel
+	this.biCompression = ReadUInt32LE(buf.buffer, offsetWrapper); // ['J','P','E','G'] or ['M','J','P','G'] (this can be ignored)
+	this.biSizeImage = ReadUInt32LE(buf.buffer, offsetWrapper); // Image size in bytes
+	this.biXPelsPerMeter = ReadUInt32LE(buf.buffer, offsetWrapper);
+	this.biYPelsPerMeter = ReadUInt32LE(buf.buffer, offsetWrapper);
+	this.biClrUsed = ReadUInt32LE(buf.buffer, offsetWrapper);
+	this.biClrImportant = ReadUInt32LE(buf.buffer, offsetWrapper);
+}
+function WAVEFORMATEX(buf)
+{
+	/// <summary>This is only loosely based on the WAVEFORMATEX structure.</summary>
+	this.raw = buf;
+	var offsetWrapper = { offset: 0 };
+	if (buf.length >= 14)
+	{
+		this.valid = true;
+		this.wFormatTag = ReadUInt16LE(buf.buffer, offsetWrapper);
+		this.nChannels = ReadUInt16LE(buf.buffer, offsetWrapper);
+		this.nSamplesPerSec = ReadUInt32LE(buf.buffer, offsetWrapper);
+		this.nAvgBytesPerSec = ReadUInt32LE(buf.buffer, offsetWrapper);
+		this.nBlockAlign = ReadUInt16LE(buf.buffer, offsetWrapper);
+		this.wBitsPerSample = 0;
+		this.cbSize = 0;
+		if (buf.length >= 18)
+		{
+			this.wBitsPerSample = ReadUInt16LE(buf.buffer, offsetWrapper);
+			this.cbSize = ReadUInt16LE(buf.buffer, offsetWrapper);
+		}
+	}
+	else
+		this.valid = false;
 }
 function VideoFrame(buf, metadata)
 {
@@ -11778,9 +11850,21 @@ function ReadUInt16(buf, offsetWrapper)
 	offsetWrapper.offset += 2;
 	return v;
 }
+function ReadUInt16LE(buf, offsetWrapper)
+{
+	var v = new DataView(buf, offsetWrapper.offset, 2).getUint16(0, true);
+	offsetWrapper.offset += 2;
+	return v;
+}
 function ReadInt16(buf, offsetWrapper)
 {
 	var v = new DataView(buf, offsetWrapper.offset, 2).getInt16(0, false);
+	offsetWrapper.offset += 2;
+	return v;
+}
+function ReadInt16LE(buf, offsetWrapper)
+{
+	var v = new DataView(buf, offsetWrapper.offset, 2).getInt16(0, true);
 	offsetWrapper.offset += 2;
 	return v;
 }
@@ -11799,6 +11883,12 @@ function ReadUInt32LE(buf, offsetWrapper)
 function ReadInt32(buf, offsetWrapper)
 {
 	var v = new DataView(buf, offsetWrapper.offset, 4).getInt32(0, false);
+	offsetWrapper.offset += 4;
+	return v;
+}
+function ReadInt32LE(buf, offsetWrapper)
+{
+	var v = new DataView(buf, offsetWrapper.offset, 4).getInt32(0, true);
 	offsetWrapper.offset += 4;
 	return v;
 }
@@ -11824,6 +11914,12 @@ function ReadUTF8(buf, offsetWrapper, byteLength)
 	offsetWrapper.offset += byteLength;
 	return v;
 }
+function ReadSubArray(buf, offsetWrapper, byteLength)
+{
+	var readBuf = new Uint8Array(byteLength);
+	readBuf.set(buf.subarray(offsetWrapper.offset, offsetWrapper.offset += byteLength));
+	return readBuf;
+}
 ///////////////////////////////////////////////////////////////
 // Stats For Nerds ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -11846,8 +11942,9 @@ function UI3NerdStats()
 			, "Frame Time"
 			, "Codecs"
 			, "Jpeg Loading Time"
-			, "Bit Rate"
 			, "Frame Size"
+			, "Video Bit Rate"
+			, "Audio Bit Rate"
 			, "Inter-Frame Time"
 			, "Frame Timing Error"
 			, "Network Delay"
