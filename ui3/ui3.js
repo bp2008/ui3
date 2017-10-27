@@ -11586,7 +11586,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 					// Read BITMAPINFOHEADER structure
 					var offsetWrapper = { offset: 0 };
-					var bitmapHeaderSize = ReadUInt32LE(buf.buffer, offsetWrapper) - 4;
+					var bitmapHeaderSize = ReadUInt32LE(buf, offsetWrapper) - 4;
 					if (bitmapHeaderSize > 0)
 						bitmapHeader = new BITMAPINFOHEADER(ReadSubArray(buf, offsetWrapper, bitmapHeaderSize));
 
@@ -11621,10 +11621,10 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 						if (buf == null)
 							return pump();
 						var offsetWrapper = { offset: 0 };
-						currentVideoFrame.pos = ReadUInt16(buf.buffer, offsetWrapper);
-						currentVideoFrame.time = ReadUInt32(buf.buffer, offsetWrapper);
-						currentVideoFrame.utc = ReadUInt64LE(buf.buffer, offsetWrapper);
-						currentVideoFrame.size = ReadUInt32(buf.buffer, offsetWrapper);
+						currentVideoFrame.pos = ReadUInt16(buf, offsetWrapper);
+						currentVideoFrame.time = ReadUInt32(buf, offsetWrapper);
+						currentVideoFrame.utc = ReadUInt64LE(buf, offsetWrapper);
+						currentVideoFrame.size = ReadUInt32(buf, offsetWrapper);
 						if (currentVideoFrame.size > 10000000)
 							return protocolError("Video frame size of " + currentVideoFrame.size + " was rejected.");
 
@@ -11636,7 +11636,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 						if (buf == null)
 							return pump();
 
-						currentAudioFrame.size = ReadInt32(buf.buffer, { offset: 0 });
+						currentAudioFrame.size = ReadInt32(buf, { offset: 0 });
 						if (currentAudioFrame.size > 2000000)
 							return protocolError("Audio frame size of " + currentAudioFrame.size + " was rejected.");
 
@@ -11715,36 +11715,36 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 function StatusBlock(buf)
 {
 	var offsetWrapper = { offset: 0 };
-	this.bRec = ReadByteFromArray(buf, offsetWrapper);
-	this.bMotion = ReadByteFromArray(buf, offsetWrapper);
-	this.bCheckFPS = ReadByteFromArray(buf, offsetWrapper);
-	this.bTriggered = ReadByteFromArray(buf, offsetWrapper);
-	this.bSignalLost = ReadByteFromArray(buf, offsetWrapper);
+	this.bRec = ReadByte(buf, offsetWrapper);
+	this.bMotion = ReadByte(buf, offsetWrapper);
+	this.bCheckFPS = ReadByte(buf, offsetWrapper);
+	this.bTriggered = ReadByte(buf, offsetWrapper);
+	this.bSignalLost = ReadByte(buf, offsetWrapper);
 
-	this.bPushError = ReadByteFromArray(buf, offsetWrapper);
-	this.bFlashError = ReadByteFromArray(buf, offsetWrapper);
-	this.bForceMovie = ReadByteFromArray(buf, offsetWrapper);
+	this.bPushError = ReadByte(buf, offsetWrapper);
+	this.bFlashError = ReadByte(buf, offsetWrapper);
+	this.bForceMovie = ReadByte(buf, offsetWrapper);
 
-	this.bOther0 = ReadByteFromArray(buf, offsetWrapper);
-	this.bOther1 = ReadByteFromArray(buf, offsetWrapper);
+	this.bOther0 = ReadByte(buf, offsetWrapper);
+	this.bOther1 = ReadByte(buf, offsetWrapper);
 
-	this.fps = ReadInt32(buf.buffer, offsetWrapper); // in 100ths
-	this.apeak = ReadInt32(buf.buffer, offsetWrapper); // out of 32767
-	this.tpause = ReadInt32(buf.buffer, offsetWrapper);
+	this.fps = ReadInt32(buf, offsetWrapper); // in 100ths
+	this.apeak = ReadInt32(buf, offsetWrapper); // out of 32767
+	this.tpause = ReadInt32(buf, offsetWrapper);
 }
 function BITMAPINFOHEADER(buf)
 {
 	var offsetWrapper = { offset: 0 };
-	this.biWidth = ReadUInt32LE(buf.buffer, offsetWrapper); // Width in pixels
-	this.biHeight = ReadUInt32LE(buf.buffer, offsetWrapper); // Height in pixels
-	this.biPlanes = ReadUInt16LE(buf.buffer, offsetWrapper); // Number of planes (always 1)
-	this.biBitCount = ReadUInt16LE(buf.buffer, offsetWrapper); // Bits Per Pixel
-	this.biCompression = ReadUInt32LE(buf.buffer, offsetWrapper); // ['J','P','E','G'] or ['M','J','P','G'] (this can be ignored)
-	this.biSizeImage = ReadUInt32LE(buf.buffer, offsetWrapper); // Image size in bytes
-	this.biXPelsPerMeter = ReadUInt32LE(buf.buffer, offsetWrapper);
-	this.biYPelsPerMeter = ReadUInt32LE(buf.buffer, offsetWrapper);
-	this.biClrUsed = ReadUInt32LE(buf.buffer, offsetWrapper);
-	this.biClrImportant = ReadUInt32LE(buf.buffer, offsetWrapper);
+	this.biWidth = ReadUInt32LE(buf, offsetWrapper); // Width in pixels
+	this.biHeight = ReadUInt32LE(buf, offsetWrapper); // Height in pixels
+	this.biPlanes = ReadUInt16LE(buf, offsetWrapper); // Number of planes (always 1)
+	this.biBitCount = ReadUInt16LE(buf, offsetWrapper); // Bits Per Pixel
+	this.biCompression = ReadUInt32LE(buf, offsetWrapper); // ['J','P','E','G'] or ['M','J','P','G'] (this can be ignored)
+	this.biSizeImage = ReadUInt32LE(buf, offsetWrapper); // Image size in bytes
+	this.biXPelsPerMeter = ReadUInt32LE(buf, offsetWrapper);
+	this.biYPelsPerMeter = ReadUInt32LE(buf, offsetWrapper);
+	this.biClrUsed = ReadUInt32LE(buf, offsetWrapper);
+	this.biClrImportant = ReadUInt32LE(buf, offsetWrapper);
 }
 function WAVEFORMATEX(buf)
 {
@@ -11754,17 +11754,17 @@ function WAVEFORMATEX(buf)
 	if (buf.length >= 14)
 	{
 		this.valid = true;
-		this.wFormatTag = ReadUInt16LE(buf.buffer, offsetWrapper);
-		this.nChannels = ReadUInt16LE(buf.buffer, offsetWrapper);
-		this.nSamplesPerSec = ReadUInt32LE(buf.buffer, offsetWrapper);
-		this.nAvgBytesPerSec = ReadUInt32LE(buf.buffer, offsetWrapper);
-		this.nBlockAlign = ReadUInt16LE(buf.buffer, offsetWrapper);
+		this.wFormatTag = ReadUInt16LE(buf, offsetWrapper);
+		this.nChannels = ReadUInt16LE(buf, offsetWrapper);
+		this.nSamplesPerSec = ReadUInt32LE(buf, offsetWrapper);
+		this.nAvgBytesPerSec = ReadUInt32LE(buf, offsetWrapper);
+		this.nBlockAlign = ReadUInt16LE(buf, offsetWrapper);
 		this.wBitsPerSample = 0;
 		this.cbSize = 0;
 		if (buf.length >= 18)
 		{
-			this.wBitsPerSample = ReadUInt16LE(buf.buffer, offsetWrapper);
-			this.cbSize = ReadUInt16LE(buf.buffer, offsetWrapper);
+			this.wBitsPerSample = ReadUInt16LE(buf, offsetWrapper);
+			this.cbSize = ReadUInt16LE(buf, offsetWrapper);
 		}
 	}
 	else
@@ -11836,59 +11836,53 @@ function GhettoStream()
 ///////////////////////////////////////////////////////////////
 function ReadByte(buf, offsetWrapper)
 {
-	var v = new Uint8Array(buf, offsetWrapper.offset, 1)[0];
-	offsetWrapper.offset += 1;
-	return v;
-}
-function ReadByteFromArray(buf, offsetWrapper)
-{
 	return buf[offsetWrapper.offset++];
 }
 function ReadUInt16(buf, offsetWrapper)
 {
-	var v = new DataView(buf, offsetWrapper.offset, 2).getUint16(0, false);
+	var v = new DataView(buf.buffer, offsetWrapper.offset, 2).getUint16(0, false);
 	offsetWrapper.offset += 2;
 	return v;
 }
 function ReadUInt16LE(buf, offsetWrapper)
 {
-	var v = new DataView(buf, offsetWrapper.offset, 2).getUint16(0, true);
+	var v = new DataView(buf.buffer, offsetWrapper.offset, 2).getUint16(0, true);
 	offsetWrapper.offset += 2;
 	return v;
 }
 function ReadInt16(buf, offsetWrapper)
 {
-	var v = new DataView(buf, offsetWrapper.offset, 2).getInt16(0, false);
+	var v = new DataView(buf.buffer, offsetWrapper.offset, 2).getInt16(0, false);
 	offsetWrapper.offset += 2;
 	return v;
 }
 function ReadInt16LE(buf, offsetWrapper)
 {
-	var v = new DataView(buf, offsetWrapper.offset, 2).getInt16(0, true);
+	var v = new DataView(buf.buffer, offsetWrapper.offset, 2).getInt16(0, true);
 	offsetWrapper.offset += 2;
 	return v;
 }
 function ReadUInt32(buf, offsetWrapper)
 {
-	var v = new DataView(buf, offsetWrapper.offset, 4).getUint32(0, false);
+	var v = new DataView(buf.buffer, offsetWrapper.offset, 4).getUint32(0, false);
 	offsetWrapper.offset += 4;
 	return v;
 }
 function ReadUInt32LE(buf, offsetWrapper)
 {
-	var v = new DataView(buf, offsetWrapper.offset, 4).getUint32(0, true);
+	var v = new DataView(buf.buffer, offsetWrapper.offset, 4).getUint32(0, true);
 	offsetWrapper.offset += 4;
 	return v;
 }
 function ReadInt32(buf, offsetWrapper)
 {
-	var v = new DataView(buf, offsetWrapper.offset, 4).getInt32(0, false);
+	var v = new DataView(buf.buffer, offsetWrapper.offset, 4).getInt32(0, false);
 	offsetWrapper.offset += 4;
 	return v;
 }
 function ReadInt32LE(buf, offsetWrapper)
 {
-	var v = new DataView(buf, offsetWrapper.offset, 4).getInt32(0, true);
+	var v = new DataView(buf.buffer, offsetWrapper.offset, 4).getInt32(0, true);
 	offsetWrapper.offset += 4;
 	return v;
 }
@@ -11908,12 +11902,12 @@ function ReadUInt64LE(buf, offsetWrapper)
 	var mostSignificant = (ReadUInt32LE(buf, offsetWrapper) & 0x001FFFFF) * 4294967296;
 	return mostSignificant + leastSignificant;
 }
-function ReadUTF8(buf, offsetWrapper, byteLength)
-{
-	var v = Utf8ArrayToStr(new Uint8Array(buf, offsetWrapper.offset, byteLength));
-	offsetWrapper.offset += byteLength;
-	return v;
-}
+//function ReadUTF8(buf, offsetWrapper, byteLength)
+//{
+//	var v = Utf8ArrayToStr(new Uint8Array(buf, offsetWrapper.offset, byteLength));
+//	offsetWrapper.offset += byteLength;
+//	return v;
+//}
 function ReadSubArray(buf, offsetWrapper, byteLength)
 {
 	var readBuf = new Uint8Array(byteLength);
