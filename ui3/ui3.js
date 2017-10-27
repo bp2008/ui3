@@ -186,9 +186,16 @@ var togglableUIFeatures =
 // TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
+// TODO: Implement audio playback using data from the /video/ stream.
+// 		-- Split Video and Audio stream bit rates into different graphs.
+//      -- Add a tooltip to the volume control that indicates it does not work while streaming jpegs.  Or hide the volume control outright.
 
 // TODO: Show a warning to users who have more than one camera available but no group stream.
 // TODO: Test a single-camera system (limited user account with 1-camera group).  Clicking the camera should not interrupt streaming.
+// TODO: It should not take a full click to hide a context menu.  A simple mousedown or touchstart should do it!
+// TODO: The (touch) gesture that shows the playback controls should not be able to activate click actions on the playback controls.  I'm not sure what the best way to handle this is.  Perhaps a flag set on mousedown/touchstart that is unset with a 0ms timeout after mouseup/touchend/touchcancel/etc.
+// CONSIDER: An input event within the bounds of the live playback controls that also show the live playback controls should not count toward MouseHelper clicks or double-clicks.
+// TODO: Nerdstats writes caused by MeasurePerformance should include null/0 inputs for the unrelated values to keep their graphs in sync and indicate a moment of no rendering.  Non-graphed inputs should be updated accordingly too.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
 
