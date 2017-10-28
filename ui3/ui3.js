@@ -187,8 +187,13 @@ var togglableUIFeatures =
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
 // TODO: Implement audio playback using data from the /video/ stream.
-// 		-- Split Video and Audio stream bit rates into different graphs.
-//      -- Add a tooltip to the volume control that indicates it does not work while streaming jpegs.  Or hide the volume control outright.
+// -- Split Video and Audio stream bit rates into different graphs.
+//		-- Add a tooltip to the volume control that indicates it does not work while streaming jpegs.  Or hide the volume control outright.
+// TODO: Add BaseAudioContext.createBufferSource() to feature detection and disable audio when it is not available.
+// TODO: Delete the old live wav audio player.
+// TODO: Audio should not be requested from the /video stream when audio is disabled.
+// TODO: Ensure that audio works correctly for clips and alerts.
+// TODO: Stop/Flush/Reset the PcmAudioPlayer when closing a stream.  Should be the same time as flushing the video decoder.
 
 // TODO: Show a warning to users who have more than one camera available but no group stream.
 // TODO: Test a single-camera system (limited user account with 1-camera group).  Clicking the camera should not interrupt streaming.
@@ -203,7 +208,8 @@ var togglableUIFeatures =
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
 // CONSIDER: The video streaming loop is recursive and in theory this would lead to a stack overflow eventually.  Consider using a setTimeout(..., 0) every 100 or something pump calls to clear the call stack and in theory avoid a stack overflow.
-// CONSIDER: Prevent "The video stream was lost. Attempting to reconnect..." from occurring too rapidly e.g. in the event of a stream parsing error (do not reconnect if 5 occurrences in 10 second interval measured using a class similar to the FPS counter?)
+
+// TODO: Remove debugging console.log calls in PcmAudioPlayer.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -6898,6 +6904,9 @@ function FetchOpenH264VideoModule()
 	var isLoadingRecordedSnapshot = false;
 	var endSnapshotDisplayTimeout = null;
 	var currentImageDateMs = GetServerDate(new Date()).getTime();
+	var failLimiter = new FailLimiter(5, 20000);
+	var willNotReconnectToast = null;
+	var failureRecoveryTimeout = null;
 
 	var loading = new BICameraData();
 
@@ -6935,6 +6944,7 @@ function FetchOpenH264VideoModule()
 	}
 	var StopStreaming = function ()
 	{
+		clearTimeout(failureRecoveryTimeout);
 		clearTimeout(endSnapshotDisplayTimeout);
 		safeFetch.CloseStream();
 		openh264_player.Flush();
@@ -6984,11 +6994,12 @@ function FetchOpenH264VideoModule()
 		lastFrameAt = performance.now();
 		currentImageDateMs = Date.now();
 		isLoadingRecordedSnapshot = false;
+		clearTimeout(failureRecoveryTimeout);
 		clearTimeout(endSnapshotDisplayTimeout);
 		var videoUrl;
 		if (loading.isLive)
 		{
-			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
+			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=1&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
 		}
 		else
 		{
@@ -7009,6 +7020,11 @@ function FetchOpenH264VideoModule()
 			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2" + widthAndQualityArg;
 		}
 		videoOverlayHelper.ShowLoadingOverlay(true);
+		if (willNotReconnectToast)
+		{
+			willNotReconnectToast.remove();
+			willNotReconnectToast = null;
+		}
 		if (startPaused)
 		{
 			self.Playback_Pause(); // If opening the stream while paused, the stream will stop after one frame.
@@ -7025,20 +7041,35 @@ function FetchOpenH264VideoModule()
 	}
 	var acceptFrame = function (frame)
 	{
-		if (frame.jpeg)
+		if (frame.isVideo)
 		{
-			if (isLoadingRecordedSnapshot && !playbackPaused)
+			if (frame.jpeg)
 			{
-				clearTimeout(endSnapshotDisplayTimeout);
-				endSnapshotDisplayTimeout = setTimeout(function ()
+				if (isLoadingRecordedSnapshot && !playbackPaused)
 				{
-					PlaybackReachedNaturalEnd(1);
-				}, loading.msec);
+					clearTimeout(endSnapshotDisplayTimeout);
+					endSnapshotDisplayTimeout = setTimeout(function ()
+					{
+						PlaybackReachedNaturalEnd(1);
+					}, loading.msec);
+				}
+				jpegPreviewModule.RenderDataURI(frame.startTime, loading.path, frame.jpeg);
 			}
-			jpegPreviewModule.RenderDataURI(frame.startTime, loading.path, frame.jpeg);
+			else
+				openh264_player.AcceptFrame(frame);
 		}
-		else
-			openh264_player.AcceptFrame(frame);
+		else if (frame.isAudio)
+		{
+			// The only supported format is mu-law encoding with one audio channel.
+			if (frame.format.wFormatTag == 7 && frame.format.wBitsPerSample == 16 && frame.format.nChannels == 1)
+			{
+				// 7 is mu-law, mu-law is 8 bits per sample but decodes to 16 bits per sample normally, hence the 16 above.
+				var pcm16Bit = muLawDecoder.DecodeUint8ArrayToFloat32Array(frame.frameData);
+				pcmPlayer.AcceptBuffer(pcm16Bit, frame.format.nChannels, frame.format.nSamplesPerSec);
+			}
+			else
+				console.log("Unsupported audio frame format", frame.format);
+		}
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -7131,6 +7162,8 @@ function FetchOpenH264VideoModule()
 			var bitRate_Audio = bitRateCalc_Audio.GetBPS() * 8;
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
+			var bufferSize = pcmPlayer.GetBufferedMs();
+			nerdStats.UpdateStat("Audio Buffer", bufferSize, bufferSize.toFixed(0) + "ms", true);
 			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
@@ -7156,8 +7189,16 @@ function FetchOpenH264VideoModule()
 			if (!wasAppTriggered && !safeFetch.IsActive())
 			{
 				StopStreaming();
-				toaster.Warning("The video stream was lost. Attempting to reconnect...", 5000);
-				ReopenStreamAtCurrentSeekPosition();
+				if (failLimiter.Fail())
+				{
+					willNotReconnectToast = toaster.Error("The video stream was lost.  Due to rapid failures, automatic reconnection will not occur.", 99999999);
+				}
+				else
+				{
+					toaster.Warning("The video stream was lost. Attempting to reconnect...", 5000);
+					clearTimeout(failureRecoveryTimeout);
+					failureRecoveryTimeout = setTimeout(ReopenStreamAtCurrentSeekPosition, 2000);
+				}
 			}
 		}
 	}
@@ -10028,8 +10069,194 @@ function closeLoginDialog()
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Audio Decoder: mu-law //////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var muLawDecoder = new MuLawDecoder();
+function MuLawDecoder()
+{
+	var self = this;
+	var decHelper = [-32124, -31100, -30076, -29052, -28028, -27004, -25980, -24956,
+	-23932, -22908, -21884, -20860, -19836, -18812, -17788, -16764,
+	-15996, -15484, -14972, -14460, -13948, -13436, -12924, -12412,
+	-11900, -11388, -10876, -10364, -9852, -9340, -8828, -8316,
+	-7932, -7676, -7420, -7164, -6908, -6652, -6396, -6140,
+	-5884, -5628, -5372, -5116, -4860, -4604, -4348, -4092,
+	-3900, -3772, -3644, -3516, -3388, -3260, -3132, -3004,
+	-2876, -2748, -2620, -2492, -2364, -2236, -2108, -1980,
+	-1884, -1820, -1756, -1692, -1628, -1564, -1500, -1436,
+	-1372, -1308, -1244, -1180, -1116, -1052, -988, -924,
+	-876, -844, -812, -780, -748, -716, -684, -652,
+	-620, -588, -556, -524, -492, -460, -428, -396,
+	-372, -356, -340, -324, -308, -292, -276, -260,
+	-244, -228, -212, -196, -180, -164, -148, -132,
+	-120, -112, -104, -96, -88, -80, -72, -64,
+	-56, -48, -40, -32, -24, -16, -8, -1,
+		32124, 31100, 30076, 29052, 28028, 27004, 25980, 24956,
+		23932, 22908, 21884, 20860, 19836, 18812, 17788, 16764,
+		15996, 15484, 14972, 14460, 13948, 13436, 12924, 12412,
+		11900, 11388, 10876, 10364, 9852, 9340, 8828, 8316,
+		7932, 7676, 7420, 7164, 6908, 6652, 6396, 6140,
+		5884, 5628, 5372, 5116, 4860, 4604, 4348, 4092,
+		3900, 3772, 3644, 3516, 3388, 3260, 3132, 3004,
+		2876, 2748, 2620, 2492, 2364, 2236, 2108, 1980,
+		1884, 1820, 1756, 1692, 1628, 1564, 1500, 1436,
+		1372, 1308, 1244, 1180, 1116, 1052, 988, 924,
+		876, 844, 812, 780, 748, 716, 684, 652,
+		620, 588, 556, 524, 492, 460, 428, 396,
+		372, 356, 340, 324, 308, 292, 276, 260,
+		244, 228, 212, 196, 180, 164, 148, 132,
+		120, 112, 104, 96, 88, 80, 72, 64,
+		56, 48, 40, 32, 24, 16, 8, 0
+	];
+	this.DecodeUint8ArrayToInt16Array = function (encoded)
+	{
+		var decoded = new Int16Array(encoded.length);
+		for (var i = 0; i < encoded.length; i++)
+			decoded[i] = decHelper[encoded[i]];
+		return decoded;
+	}
+	this.DecodeUint8ArrayToFloat32Array = function (encoded)
+	{
+		var decoded = new Float32Array(encoded.length);
+		for (var i = 0; i < encoded.length; i++)
+			decoded[i] = decHelper[encoded[i]] / 32768;
+		return decoded;
+	}
+}
+// TODO: Remove this, as it is probably not needed.
+///////////////////////////////////////////////////////////////
+// PCM16 to Wav Encoder ///////////////////////////////////////
+///////////////////////////////////////////////////////////////
+//function Pcm16ToWav(pcm16, channels, sampleRate)
+//{
+//	/// <summary>Encodes a Int16Array of raw PCM as a complete wav and returns the result in an ArrayBuffer.</summary>
+//	var header = new ArrayBuffer(44);
+//	var data = pcm16.buffer;
+
+//	var d = new DataView(header);
+
+//	d.setUint8(0, 'R'.charCodeAt(0));
+//	d.setUint8(1, 'I'.charCodeAt(0));
+//	d.setUint8(2, 'F'.charCodeAt(0));
+//	d.setUint8(3, 'F'.charCodeAt(0));
+
+//	d.setUint32(4, data.byteLength / 2 + 44, true);
+
+//	d.setUint8(8, 'W'.charCodeAt(0));
+//	d.setUint8(9, 'A'.charCodeAt(0));
+//	d.setUint8(10, 'V'.charCodeAt(0));
+//	d.setUint8(11, 'E'.charCodeAt(0));
+//	d.setUint8(12, 'f'.charCodeAt(0));
+//	d.setUint8(13, 'm'.charCodeAt(0));
+//	d.setUint8(14, 't'.charCodeAt(0));
+//	d.setUint8(15, ' '.charCodeAt(0));
+
+//	d.setUint32(16, 16, true);
+//	d.setUint16(20, 1, true);
+//	d.setUint16(22, numberOfChannels, true);
+//	d.setUint32(24, sampleRate, true);
+//	d.setUint32(28, sampleRate * 1 * 2);
+//	d.setUint16(32, numberOfChannels * 2);
+//	d.setUint16(34, 16, true);
+
+//	d.setUint8(36, 'd'.charCodeAt(0));
+//	d.setUint8(37, 'a'.charCodeAt(0));
+//	d.setUint8(38, 't'.charCodeAt(0));
+//	d.setUint8(39, 'a'.charCodeAt(0));
+//	d.setUint32(40, data.byteLength, true);
+
+//	return ConcatenateArrayBuffers(header, data);
+//}
+///////////////////////////////////////////////////////////////
+// Audio Filter (silences crackle at frame boundaries) ////////
+///////////////////////////////////////////////////////////////
+function AudioEdgeFilter(buffer)
+{
+	var tmp = new Float32Array(1);
+
+	buffer.copyFromChannel(tmp, 0, 0);
+
+	let wasPositive = (tmp[0] > 0);
+
+	for (let i = 0; i < buffer.length; i += 1)
+	{
+		buffer.copyFromChannel(tmp, 0, i);
+
+		if ((wasPositive && tmp[0] < 0) || (!wasPositive && tmp[0] > 0))
+			break;
+
+		tmp[0] = 0;
+		buffer.copyToChannel(tmp, 0, i);
+	}
+
+	buffer.copyFromChannel(tmp, 0, buffer.length - 1);
+
+	wasPositive = (tmp[0] > 0);
+
+	for (let i = buffer.length - 1; i > 0; i -= 1)
+	{
+		buffer.copyFromChannel(tmp, 0, i);
+
+		if ((wasPositive && tmp[0] < 0) || (!wasPositive && tmp[0] > 0))
+			break;
+
+		tmp[0] = 0;
+		buffer.copyToChannel(tmp, 0, i);
+	}
+
+	return buffer;
+}
+///////////////////////////////////////////////////////////////
 // Audio Playback /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var pcmPlayer = new PcmAudioPlayer();
+function PcmAudioPlayer()
+{
+	var self = this;
+	var context = new AudioContext();
+	var nextTime = 0; // This is the playback time in seconds at which we run out (or ran out) of audio.
+	this.AcceptBuffer = function (audio32, channels, sampleRate)
+	{
+		/// <summary>Queues a Float32Array of raw audio data (range -1.0 to 1.0) for playback.</summary>
+		var buffer = context.createBuffer(channels, audio32.length, sampleRate);
+		buffer.copyToChannel(audio32, 0);
+
+		var bufferSource = context.createBufferSource();
+		bufferSource.buffer = AudioEdgeFilter(buffer);
+		bufferSource.connect(context.destination);
+
+		var currentTime = context.currentTime;
+		if (nextTime == 0)
+			nextTime = currentTime + 0.2; // Add the initial audio delay in seconds.
+
+		var duration = bufferSource.buffer.duration;
+		var offset = currentTime - nextTime;
+		if (offset > 0)
+		{
+			// This frame is late. Play it immediately.
+			nextTime = currentTime;
+			console.log("Audio frame is LATE by", offset);
+			offset = 0;
+		}
+		else if (offset < -0.7)
+		{
+			// We have received so many frames that we are queued at least 700ms ahead. Drop this frame.
+			console.log("Audio buffer is overfull at " + currentTime.toFixed(6) + " with " + offset.toFixed(6) + " milliseconds queued. Dropping audio frame to keep delay from growing too high.");
+			return;
+		}
+
+		bufferSource.start(nextTime);
+		//bufferSource.stop(nextTime + duration);
+		nextTime += duration;
+	}
+	this.GetBufferedMs = function ()
+	{
+		var buffered = nextTime - context.currentTime;
+		if (buffered < 0)
+			return 0;
+		return buffered * 1000;
+	}
+}
 function AudioPlayer()
 {
 	var self = this;
@@ -10914,17 +11141,17 @@ var fpsCounter = new FPSCounter1();
 function FPSCounter1()
 {
 	// Counts the exact number of frames that arrived within the last 1000 ms.
-	var frameTimes = null;
+	var queue = new Queue();
 	this.getFPS = function (lastFrameLoadingTime)
 	{
-		var now = new Date().getTime();
+		var now = performance.now();
 		// Trim times older than 1 second
-		while (frameTimes != null && now - frameTimes.value > 1000)
-			frameTimes = frameTimes.next;
-		if (frameTimes == null)
+		while (!queue.isEmpty() && now - queue.peek() > 1000)
+			queue.dequeue();
+		queue.enqueue(now);
+		if (queue.getLength == 1)
 		{
-			// No history. Add current time and return predicted FPS based on last frame loading time.
-			frameTimes = new LinkedListNode(now);
+			// No history. Return predicted FPS based on last frame loading time.
 			if (lastFrameLoadingTime <= 0)
 				lastFrameLoadingTime = 10000;
 			var newFps = 1000.0 / lastFrameLoadingTime;
@@ -10932,23 +11159,8 @@ function FPSCounter1()
 				newFps = 2;
 			return newFps.toFloat(1);
 		}
-		// Count live nodes
-		var iterator = frameTimes;
-		var count = 1; // 1 for the head of our linked list
-		while (iterator.next != null)
-		{
-			iterator = iterator.next;
-			count++;
-		}
-		iterator.next = new LinkedListNode(now);
-		count++;
-		return count;
+		return queue.getLength();
 	}
-}
-function LinkedListNode(value)
-{
-	this.value = value;
-	this.next = null;
 }
 function FPSCounter2()
 {
@@ -10985,18 +11197,14 @@ var bitRateCalc_Audio = new BitRateCalculator();
 function BitRateCalculator()
 {
 	var self = this;
-	var first = null;
-	var last = null;
+	var queue = new Queue();
 	this.averageOverMs = 1000;
 	var sum = 0;
 	this.AddDataPoint = function (bytes)
 	{
 		cleanup();
 		sum += bytes;
-		if (last == null)
-			first = last = new BitRateDataPoint(bytes);
-		else
-			last = last.next = new BitRateDataPoint(bytes);
+		queue.enqueue(new BitRateDataPoint(bytes));
 	}
 	this.GetBPS = function ()
 	{
@@ -11006,20 +11214,14 @@ function BitRateCalculator()
 	var cleanup = function ()
 	{
 		var now = performance.now();
-		while (first != null && now - first.time > self.averageOverMs)
-		{
-			sum -= first.bytes;
-			first = first.next;
-		}
-		if (first == null)
-			last = null;
+		while (!queue.isEmpty() && now - queue.peek().time > self.averageOverMs)
+			sum -= queue.dequeue().bytes;
 	}
 }
 function BitRateDataPoint(bytes)
 {
 	this.bytes = bytes;
 	this.time = performance.now();
-	this.next = null;
 }
 ///////////////////////////////////////////////////////////////
 // Efficient Rolling Average Calculator ///////////////////////
@@ -11048,6 +11250,33 @@ function RollingAverage(MAXSAMPLES)
 	this.Get = function ()
 	{
 		return (ticksum / MAXSAMPLES);
+	}
+}
+///////////////////////////////////////////////////////////////
+// Failure Limiter ////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function FailLimiter(maxFailsInTimePeriod, timePeriodMs)
+{
+	var self = this;
+	var queue = new Queue();
+	var sum = 0;
+
+	this.Fail = function ()
+	{
+		queue.enqueue(performance.now());
+		return self.IsLimiting();
+	}
+	this.IsLimiting = function ()
+	{
+		cleanup();
+		return queue.getLength() > maxFailsInTimePeriod;
+	}
+
+	var cleanup = function ()
+	{
+		var now = performance.now();
+		while (!queue.isEmpty() && now - queue.peek() > timePeriodMs)
+			queue.dequeue();
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -11498,7 +11727,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 						return;
 					}
 					var jpegObjectURL = URL.createObjectURL(jpegBlob);
-					frameCallback({ startTime: startTime, jpeg: jpegObjectURL })
+					frameCallback({ startTime: startTime, jpeg: jpegObjectURL, isVideo: true })
 					CallStreamEnded("fetch graceful exit (jpeg)", true, true);
 				})
 				["catch"](function (e)
@@ -11686,6 +11915,8 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 						bitRateCalc_Audio.AddDataPoint(currentAudioFrame.size);
 
+						frameCallback(new AudioFrame(buf, audioHeader));
+
 						state = 2;
 					}
 					else if (blockType == 2) // Status
@@ -11772,12 +12003,18 @@ function WAVEFORMATEX(buf)
 }
 function VideoFrame(buf, metadata)
 {
-	var self = this;
+	this.isVideo = true;
 	this.frameData = buf;
 	this.pos = metadata.pos;
 	this.time = metadata.time;
 	this.utc = metadata.utc;
 	this.size = metadata.size;
+}
+function AudioFrame(buf, formatHeader)
+{
+	this.isAudio = true;
+	this.frameData = buf;
+	this.format = formatHeader;
 }
 ///////////////////////////////////////////////////////////////
 // GhettoStream ///////////////////////////////////////////////
@@ -11936,9 +12173,10 @@ function UI3NerdStats()
 			, "Frame Time"
 			, "Codecs"
 			, "Jpeg Loading Time"
-			, "Frame Size"
 			, "Video Bit Rate"
 			, "Audio Bit Rate"
+			, "Audio Buffer"
+			, "Frame Size"
 			, "Inter-Frame Time"
 			, "Frame Timing Error"
 			, "Network Delay"
@@ -13254,4 +13492,12 @@ function GetServerTimeOffset()
 	var localOffsetMs = new Date().getTimezoneOffset() * 60000;
 	var serverOffsetMs = serverTimeZoneOffsetMs;
 	return localOffsetMs - serverOffsetMs;
+}
+// TODO: Remove this, as it is probably not needed.
+function ConcatenateArrayBuffers(a, b)
+{
+	var c = new Uint8Array(a.byteLength + b.byteLength);
+	c.set(new Uint8Array(a), 0);
+	c.set(new Uint8Array(b), a.byteLength);
+	return c.buffer;
 }
