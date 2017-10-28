@@ -12,6 +12,8 @@ var h264_playback_supported = false;
 var web_workers_supported = false;
 var fetch_supported = false;
 var readable_stream_supported = false;
+var web_audio_supported = false;
+var web_audio_buffer_source_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -29,6 +31,24 @@ function DoUIFeatureDetection()
 			fetch_supported = typeof fetch == "function";
 			readable_stream_supported = typeof ReadableStream == "function";
 			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported;
+			var AudioContext = window.AudioContext || window.webkitAudioContext;
+			if (AudioContext)
+			{
+				try
+				{
+					var context = new AudioContext();
+
+					if (typeof context.createGain == "function")
+					{
+						web_audio_supported = true;
+
+						if (typeof context.createBuffer == "function" && typeof context.createBufferSource == "function")
+							web_audio_buffer_source_supported = true;
+					}
+				}
+				catch (ex) { }
+			}
+
 			return;
 		}
 		// A critical test failed
@@ -104,7 +124,7 @@ var touchEvents = new TouchEventHelper();
 var clipboardHelper;
 var uiSizeHelper = null;
 var uiSettingsPanel = null;
-var audioPlayer = null;
+var pcmPlayer = null;
 var diskUsageGUI = null;
 var systemConfig = null;
 var cameraProperties = null;
@@ -186,14 +206,6 @@ var togglableUIFeatures =
 // TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
-// TODO: Implement audio playback using data from the /video/ stream.
-// -- Split Video and Audio stream bit rates into different graphs.
-//		-- Add a tooltip to the volume control that indicates it does not work while streaming jpegs.  Or hide the volume control outright.
-// TODO: Add BaseAudioContext.createBufferSource() to feature detection and disable audio when it is not available.
-// TODO: Delete the old live wav audio player.
-// TODO: Audio should not be requested from the /video stream when audio is disabled.
-// TODO: Ensure that audio works correctly for clips and alerts.
-// TODO: Stop/Flush/Reset the PcmAudioPlayer when closing a stream.  Should be the same time as flushing the video decoder.
 
 // TODO: Show a warning to users who have more than one camera available but no group stream.
 // TODO: Test a single-camera system (limited user account with 1-camera group).  Clicking the camera should not interrupt streaming.
@@ -210,6 +222,8 @@ var togglableUIFeatures =
 // CONSIDER: The video streaming loop is recursive and in theory this would lead to a stack overflow eventually.  Consider using a setTimeout(..., 0) every 100 or something pump calls to clear the call stack and in theory avoid a stack overflow.
 
 // TODO: Remove debugging console.log calls in PcmAudioPlayer.
+
+// TODO: Fix bug where image dragging can start on a button in the playback controls in live mode, or anywhere on the playback controls in recording mode.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -954,7 +968,7 @@ $(function ()
 
 	uiSettingsPanel = new UISettingsPanel();
 
-	audioPlayer = new AudioPlayer();
+	pcmPlayer = new PcmAudioPlayer();
 
 	diskUsageGUI = new DiskUsageGUI();
 
@@ -974,19 +988,19 @@ $(function ()
 	statusBars.addOnProgressChangedListener("volume", function (newVolume)
 	{
 		newVolume = Clamp(parseFloat(newVolume), 0, 1);
-		if (!audioPlayer.SuppressAudioVolumeSave())
+		if (!pcmPlayer.SuppressAudioVolumeSave())
 		{
 			settings.ui3_audioMute = "0";
 			settings.ui3_audioVolume = newVolume;
 		}
-		audioPlayer.SetVolume(newVolume);
+		pcmPlayer.SetVolume(newVolume);
 	});
 	statusBars.addLabelClickHandler("volume", function ()
 	{
 		settings.ui3_audioMute = (settings.ui3_audioMute == "1" ? "0" : "1");
-		audioPlayer.SetAudioVolumeFromSettings();
+		pcmPlayer.SetAudioVolumeFromSettings();
 	});
-	audioPlayer.SetAudioVolumeFromSettings();
+	pcmPlayer.SetAudioVolumeFromSettings();
 
 	dropdownBoxes = new DropdownBoxes();
 
@@ -2901,10 +2915,19 @@ function PlaybackControls()
 	};
 	SetPlaySpeedLabel();
 
+	if (!web_audio_supported || !web_audio_buffer_source_supported)
+		$("#volumeBar").addClass("audioPermanentlyUnavailable");
+
 	this.resized = function ()
 	{
 		var paddingSize = $pc.innerWidth() - $pc.width();
-		$pc.css("width", ($pc.parent().width() - paddingSize) + "px");
+		var width = $pc.parent().width() - paddingSize;
+		$pc.css("width", width + "px");
+
+		if (width > 475)
+			$("#volumeBar").addClass("wide");
+		else
+			$("#volumeBar").removeClass("wide");
 
 		seekBar.resized();
 	}
@@ -3779,6 +3802,7 @@ function ClipLoader(clipsBodySelector)
 					clipData.camera = clip.camera;
 					clipData.path = clip.path;
 					clipData.flags = clip.flags;
+					clipData.audio = (clip.flags & b0000_0001) > 0;
 					clipData.date = new Date(clip.date * 1000);
 					clipData.displayDate = GetServerDate(clipData.date);
 					clipData.colorHex = BlueIrisColorToCssColor(clip.color);
@@ -6132,8 +6156,6 @@ function VideoPlayerController()
 
 		lastLiveCameraOrGroupId = clc.optionValue;
 
-		audioPlayer.audioPlay();
-
 		playbackControls.Live();
 		ptzButtons.UpdatePtzControlDisplayState();
 		dropdownBoxes.setLabelText("currentGroup", CleanUpGroupName(clc.optionDisplay));
@@ -6164,11 +6186,9 @@ function VideoPlayerController()
 			cli.path = clipData.path;
 			cli.isLive = false;
 			cli.ptz = false;
-			cli.audio = false;
+			cli.audio = clipData.audio || (!clipData.isClip && cli.audio); // Alerts never have the audio flag set.
 			cli.msec = parseInt(clipData.msec);
 			cli.isGroup = false;
-
-			audioPlayer.audioStop();
 
 			playbackHeader.SetClipName(clipData);
 			playbackControls.Recording();
@@ -6204,6 +6224,11 @@ function VideoPlayerController()
 		var newPos = (currentMs + offset) / msLength;
 		newPos = Clamp(newPos, 0, 1);
 		self.SeekToPercent(newPos);
+	}
+	this.AudioToggleNotify = function (audioEnabled)
+	{
+		if (playerModule && typeof playerModule.AudioToggleNotify == "function")
+			playerModule.AudioToggleNotify(audioEnabled);
 	}
 	this.Playback_Pause = function ()
 	{
@@ -6387,6 +6412,7 @@ function BICameraData()
 	this.ptz = false;
 	this.msec = 10000; // Millisecond duration of clips/alerts.  Ignore this if isLive is set.
 	this.isGroup = false;
+	this.audio = false;
 
 	this.CopyValuesFrom = function (other)
 	{
@@ -6403,6 +6429,7 @@ function BICameraData()
 		self.ptz = other.ptz;
 		self.msec = other.msec;
 		self.isGroup = other.isGroup;
+		self.audio = other.audio;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -6907,6 +6934,9 @@ function FetchOpenH264VideoModule()
 	var failLimiter = new FailLimiter(5, 20000);
 	var willNotReconnectToast = null;
 	var failureRecoveryTimeout = null;
+	var didRequestAudio = false;
+	var canRequestAudio = false;
+	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
 
 	var loading = new BICameraData();
 
@@ -6928,6 +6958,7 @@ function FetchOpenH264VideoModule()
 		lastActivatedAt = performance.now();
 		// Show yourself
 		console.log("Activating openh264_player");
+		$("#volumeBar").removeClass("audioTemporarilyUnavailable");
 		openh264_player.GetCanvasRef().appendTo("#camimg_wrapper");
 		ClearCanvas("openh264_player_canvas");
 		videoOverlayHelper.ShowLoadingOverlay(true);
@@ -6939,6 +6970,7 @@ function FetchOpenH264VideoModule()
 		isCurrentlyActive = false;
 		// Stop what you are doing and hide
 		console.log("Deactivating openh264_player");
+		$("#volumeBar").addClass("audioTemporarilyUnavailable");
 		StopStreaming();
 		openh264_player.GetCanvasRef().appendTo("#camimg_store");
 	}
@@ -6948,6 +6980,9 @@ function FetchOpenH264VideoModule()
 		clearTimeout(endSnapshotDisplayTimeout);
 		safeFetch.CloseStream();
 		openh264_player.Flush();
+		pcmPlayer.Reset();
+		if (!safeFetch.IsActive())
+			volumeIconHelper.setColorIdle();
 		setTimeout(MeasurePerformance, 0);
 	}
 	this.VisibilityChanged = function (visible)
@@ -6996,10 +7031,14 @@ function FetchOpenH264VideoModule()
 		isLoadingRecordedSnapshot = false;
 		clearTimeout(failureRecoveryTimeout);
 		clearTimeout(endSnapshotDisplayTimeout);
+		streamHasAudio = 0;
+		didRequestAudio = pcmPlayer.AudioEnabled();
+		canRequestAudio = true;
+		var audioArg = "&audio=" + (didRequestAudio ? "1" : "0");
 		var videoUrl;
 		if (loading.isLive)
 		{
-			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + "&audio=1&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
+			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + audioArg + "&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
 		}
 		else
 		{
@@ -7017,8 +7056,20 @@ function FetchOpenH264VideoModule()
 			var widthAndQualityArg = "";
 			if (speed == 0)
 				widthAndQualityArg = "&w=" + imageRenderer.GetWidthToRequest() + "&q=50";
-			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + "&audio=0&stream=" + h264QualityHelper.getQualityArg() + "&extend=2" + widthAndQualityArg;
+			if (speed != 100)
+			{
+				canRequestAudio = false; // We won't receive audio if speed isn't exactly 100
+				didRequestAudio = false;
+				audioArg = "";
+			}
+			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getQualityArg() + "&extend=2" + widthAndQualityArg;
 		}
+		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
+		volumeIconHelper.setEnabled(loading.audio);
+		if (didRequestAudio && loading.audio)
+			volumeIconHelper.setColorLoading();
+		else
+			volumeIconHelper.setColorIdle();
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (willNotReconnectToast)
 		{
@@ -7039,8 +7090,15 @@ function FetchOpenH264VideoModule()
 			safeFetch.OpenStream(videoUrl, acceptFrame, StreamEnded);
 		}
 	}
-	var acceptFrame = function (frame)
+	var acceptFrame = function (frame, streams)
 	{
+		if (streamHasAudio == 0 && didRequestAudio && streams != 2)
+		{
+			// We requested audio, but the stream says it doesn't contain any.
+			canRequestAudio = false;
+			volumeIconHelper.setEnabled(false);
+		}
+		streamHasAudio = streams == 2 ? 1 : -1;
 		if (frame.isVideo)
 		{
 			if (frame.jpeg)
@@ -7126,6 +7184,21 @@ function FetchOpenH264VideoModule()
 		if (!playbackPaused)
 			ReopenStreamAtCurrentSeekPosition();
 	}
+	this.AudioToggleNotify = function (audioEnabled)
+	{
+		if (!safeFetch.IsActive())
+			return;
+		if (audioEnabled)
+		{
+			if (canRequestAudio && !didRequestAudio)
+				ReopenStreamAtCurrentSeekPosition(); // We want audio. We didn't request it yet, so we should do it now.
+		}
+		else
+		{
+			if (didRequestAudio && streamHasAudio != -1)
+				ReopenStreamAtCurrentSeekPosition(); // We don't want audio, but we requested it and may be receiving it.
+		}
+	}
 	var ReopenStreamAtCurrentSeekPosition = function ()
 	{
 		if (loading.isLive)
@@ -7180,6 +7253,8 @@ function FetchOpenH264VideoModule()
 	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
 	{
 		console.log("fetch stream ended: ", message);
+		if (!safeFetch.IsActive())
+			volumeIconHelper.setColorIdle();
 		if (wasJpeg)
 			return;
 		if (videoFinishedStreaming)
@@ -7205,6 +7280,8 @@ function FetchOpenH264VideoModule()
 	var PlaybackReachedNaturalEnd = function (frameCount)
 	{
 		console.log("playback reached natural end of file after " + frameCount + " frames");
+		if (!safeFetch.IsActive())
+			volumeIconHelper.setColorIdle();
 		if (loading.isLive)
 			return;
 		var reverse = playbackControls.GetPlayReverse();
@@ -10165,21 +10242,54 @@ function AudioEdgeFilter(buffer)
 ///////////////////////////////////////////////////////////////
 // Audio Playback /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-var pcmPlayer = new PcmAudioPlayer();
 function PcmAudioPlayer()
 {
 	var self = this;
+	var supported = web_audio_supported && web_audio_buffer_source_supported;
+	var AudioContext;
+	if (supported)
+		AudioContext = window.AudioContext || window.webkitAudioContext;
+	else
+		AudioContext = FakeAudioContext_Dummy;
+
 	var context = new AudioContext();
+	context.suspend();
+	var volumeController = context.createGain();
 	var nextTime = 0; // This is the playback time in seconds at which we run out (or ran out) of audio.
+	var audioStopTimeout = null;
+	var suppressAudioVolumeSave = false;
+	var suspended = true;
+	var pendingBufferQueue = new Queue();
+	//context.onstatechange = function ()
+	//{
+	//	switch (context.state)
+	//	{
+	//		case "suspended":
+	//			break;
+	//		case "running":
+	//			break;
+	//		case "closed":
+	//			volumeIconHelper.setColorIdle();
+	//			break;
+	//	}
+	//};
 	this.AcceptBuffer = function (audio32, channels, sampleRate)
 	{
 		/// <summary>Queues a Float32Array of raw audio data (range -1.0 to 1.0) for playback.</summary>
+		if (!supported)
+			return;
+		if (suspended)
+		{
+			suspended = false;
+			context.resume();
+		}
 		var buffer = context.createBuffer(channels, audio32.length, sampleRate);
 		buffer.copyToChannel(audio32, 0);
 
 		var bufferSource = context.createBufferSource();
 		bufferSource.buffer = AudioEdgeFilter(buffer);
-		bufferSource.connect(context.destination);
+		bufferSource.connect(volumeController);
+		volumeController.connect(context.destination);
 
 		var currentTime = context.currentTime;
 		if (nextTime == 0)
@@ -10200,33 +10310,38 @@ function PcmAudioPlayer()
 			console.log("Audio buffer is overfull at " + currentTime.toFixed(6) + " with " + offset.toFixed(6) + " milliseconds queued. Dropping audio frame to keep delay from growing too high.");
 			return;
 		}
+		pendingBufferQueue.enqueue(bufferSource);
+		bufferSource.onended = DequeueBufferSource;
+		volumeIconHelper.setEnabled(true);
+		volumeIconHelper.setColorPlaying();
 
 		bufferSource.start(nextTime);
 		//bufferSource.stop(nextTime + duration);
 		nextTime += duration;
 	}
+	var DequeueBufferSource = function ()
+	{
+		pendingBufferQueue.dequeue();
+		if (pendingBufferQueue.isEmpty())
+			volumeIconHelper.setColorLoading();
+	}
 	this.GetBufferedMs = function ()
 	{
+		if (!supported)
+			return 0;
 		var buffered = nextTime - context.currentTime;
 		if (buffered < 0)
 			return 0;
 		return buffered * 1000;
 	}
-}
-function AudioPlayer()
-{
-	var self = this;
-	var $audiosourceobj = $("#audiosourceobj");
-	var audioobj = $("#audioobj").get(0);
-	var audioStopTimeout = null;
-	var suppressAudioVolumeSave = false;
-
 	this.SuppressAudioVolumeSave = function ()
 	{
 		return suppressAudioVolumeSave;
 	}
 	this.SetAudioVolumeFromSettings = function ()
 	{
+		if (!supported)
+			return;
 		var effectiveVolume = settings.ui3_audioMute == "1" ? 0 : parseFloat(settings.ui3_audioVolume);
 		suppressAudioVolumeSave = true;
 		setTimeout(function () { suppressAudioVolumeSave = false; }, 0);
@@ -10234,20 +10349,23 @@ function AudioPlayer()
 	}
 	this.SetVolume = function (newVolume)
 	{
-		newVolume = Clamp(newVolume, 0, 1);
+		if (!supported)
+			return;
 		clearMuteStopTimeout();
-		audioobj.volume = newVolume;
+		newVolume = Clamp(newVolume, 0, 1);
+		volumeController.gain.value = newVolume * newVolume;
 		volumeIconHelper.setIconForVolume(newVolume);
 		if (newVolume == 0)
-			audioStopTimeout = setTimeout(function () { self.audioStop(); }, 1000);
+			audioStopTimeout = setTimeout(toggleAudioPlayback, 1000);
 		else
-			self.audioPlay();
+			toggleAudioPlayback();
 	}
 	this.GetVolume = function ()
 	{
-		return Clamp(audioobj.volume, 0, 1);
+		if (!supported)
+			return 0;
+		return Clamp(Math.sqrt(volumeController.gain.value), 0, 1);
 	}
-
 	var clearMuteStopTimeout = function ()
 	{
 		if (audioStopTimeout != null)
@@ -10256,68 +10374,48 @@ function AudioPlayer()
 			audioStopTimeout = null;
 		}
 	}
-	this.audioPlay = function ()
+	var toggleAudioPlayback = function ()
 	{
-		volumeIconHelper.setEnabled(false);
-		// Plays audio for the current live camera if it is not already playing
-		if (!videoPlayer)
+		if (!supported)
 			return;
-		if (!videoPlayer.Loading().image.audio || self.GetVolume() == 0)
+		clearMuteStopTimeout();
+		if (videoPlayer)
+			videoPlayer.AudioToggleNotify(self.AudioEnabled());
+	}
+	this.AudioEnabled = function ()
+	{
+		return self.GetVolume() > 0;
+	}
+	this.Reset = function ()
+	{
+		if (!supported)
+			return;
+		if (!suspended)
 		{
-			self.audioStop();
-			return;
+			suspended = true;
+			context.suspend();
+			nextTime = 0;
 		}
-		if (currentServer.isLoggingOut)
-			return;
-		volumeIconHelper.setEnabled(true);
-		var newSrc = currentServer.remoteBaseURL + "audio/" + videoPlayer.Loading().image.id + "/temp.wav" + currentServer.GetRemoteSessionArg("?", true);
-		if ($audiosourceobj.attr("src") != newSrc)
+		while (!pendingBufferQueue.isEmpty())
 		{
-			$audiosourceobj.attr("src", newSrc);
-			audioobj.load();
-			var playPromise = audioobj.play();
-			if (playPromise)
-				playPromise["catch"](function (e) { }); // .catch == ["catch"], but .catch is invalid in IE 8-
+			var buffer = pendingBufferQueue.dequeue();
+			buffer.onended = function () { }
+			buffer.stop();
 		}
 	}
-	this.audioStop = function ()
-	{
-		volumeIconHelper.setEnabled(false);
-		if (!videoPlayer)
-			return;
-		// Stops audio if it is playing
-		$("#volumeBar").css("color", "#969BA7");
-		if ($audiosourceobj.attr("src") != "")
-		{
-			$audiosourceobj.attr("src", "");
-			try
-			{
-				audioobj.load();
-			}
-			catch (ex)
-			{
-			}
-		}
-	}
-
-	$(audioobj).on('abort error stalled suspend', function (e)
-	{
-		volumeIconHelper.setEnabled(false);
-		$("#volumeBar").removeClass("up down mute off").addClass("off").css("color", "#F00000");
-	});
-	$(audioobj).on('waiting', function (e)
-	{
-		$("#volumeBar").css("color", "#F0F000");
-	});
-	$(audioobj).on('play playing', function (e)
-	{
-		volumeIconHelper.setEnabled(true);
-		$("#volumeBar").css("color", "#00F000");
-	});
-	$(audioobj).on('emptied ended pause', function (e)
-	{
-		$("#volumeBar").css("color", "#969BA7");
-	});
+}
+function FakeAudioContext_Dummy()
+{
+	/// <summary>This object provides a fake implementation to prevent script errors when a real implementation is unavailable.</summary>
+	this.isFakeAudioContext = true;
+	this.createGain = function () { }
+	this.onstatechange = null;
+	this.createBuffer = function () { }
+	this.createBufferSource = function () { }
+	this.destination = null;
+	this.currentTime = 0;
+	this.suspend = function () { }
+	this.resume = function () { }
 }
 ///////////////////////////////////////////////////////////////
 // Volume Icon Helper /////////////////////////////////////////
@@ -10327,10 +10425,27 @@ var volumeIconHelper = new (function ()
 	var self = this;
 	var isEnabled = false;
 	var iconName = "off";
+
+	this.setColorError = function () { setColor("#F00000"); }
+	this.setColorLoading = function () { setColor("#F0F000"); }
+	this.setColorPlaying = function () { setColor("#00F000"); }
+	this.setColorIdle = function () { setColor("#969BA7"); }
+	var setColor = function (color)
+	{
+		$("#volumeBar").css("color", color);
+	}
+
 	this.setEnabled = function (enabled)
 	{
+		var changed = (isEnabled && !enabled) || (!isEnabled && enabled);
 		isEnabled = enabled;
-		ApplyIcon();
+		if (enabled)
+			$("#volumeBar").attr("title", "");
+		else
+			$("#volumeBar").attr("title", "Audio is not available from the current stream");
+
+		if (changed)
+			ApplyIcon();
 	}
 	this.setIconForVolume = function (volume)
 	{
@@ -10345,8 +10460,11 @@ var volumeIconHelper = new (function ()
 	{
 		if (newIconName != "up" && newIconName != "down" && newIconName != "mute" && newIconName != "off")
 			newIconName = "mute";
-		iconName = newIconName;
-		ApplyIcon();
+		if (iconName != newIconName)
+		{
+			iconName = newIconName;
+			ApplyIcon();
+		}
 	}
 	var ApplyIcon = function ()
 	{
@@ -11683,7 +11801,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 						return;
 					}
 					var jpegObjectURL = URL.createObjectURL(jpegBlob);
-					frameCallback({ startTime: startTime, jpeg: jpegObjectURL, isVideo: true })
+					frameCallback({ startTime: startTime, jpeg: jpegObjectURL, isVideo: true }, 1)
 					CallStreamEnded("fetch graceful exit (jpeg)", true, true);
 				})
 				["catch"](function (e)
@@ -11859,7 +11977,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 						bitRateCalc_Video.AddDataPoint(currentVideoFrame.size);
 
-						frameCallback(new VideoFrame(buf, currentVideoFrame));
+						frameCallback(new VideoFrame(buf, currentVideoFrame), availableStreams);
 
 						state = 2;
 					}
@@ -11871,7 +11989,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 						bitRateCalc_Audio.AddDataPoint(currentAudioFrame.size);
 
-						frameCallback(new AudioFrame(buf, audioHeader));
+						frameCallback(new AudioFrame(buf, audioHeader), availableStreams);
 
 						state = 2;
 					}
@@ -12960,6 +13078,17 @@ function CollapsibleSection(id, htmlTitle, dialogToNotify)
 	this.$heading = GetSectionHeading();
 	this.$section = GetSection();
 }
+///////////////////////////////////////////////////////////////
+// Binary Constants ///////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var b0000_0001 = 1;
+var b0000_0010 = 2;
+var b0000_0100 = 4;
+var b0000_1000 = 8;
+var b0001_0000 = 16;
+var b0010_0000 = 32;
+var b0100_0000 = 64;
+var b1000_0000 = 128;
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////

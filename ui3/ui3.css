@@ -1116,6 +1116,7 @@ div.icon, a.icon
 	display: inline-block;
 	vertical-align: top;
 	padding: 8px;
+	color: #969BA7;
 }
 
 .sizeMedium #volumeBar
@@ -1131,6 +1132,11 @@ div.icon, a.icon
 #volumeBar.disabled
 {
 	opacity: 0.333;
+}
+#volumeBar.audioTemporarilyUnavailable,
+#volumeBar.audioPermanentlyUnavailable
+{
+	display: none;
 }
 
 #volumeBar .statusBarLabel
@@ -1174,6 +1180,10 @@ div.icon, a.icon
 	width: 20px;
 	height: 12px;
 	margin: 2px 0px;
+}
+#volumeBar.wide .progressBarOuter
+{
+	width: 70px;
 }
 
 #volumeBar .statusBarDragHandle
