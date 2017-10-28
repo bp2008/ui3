@@ -220,6 +220,8 @@ var togglableUIFeatures =
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
 // CONSIDER: The video streaming loop is recursive and in theory this would lead to a stack overflow eventually.  Consider using a setTimeout(..., 0) every 100 or something pump calls to clear the call stack and in theory avoid a stack overflow.
+// CONSIDER: Consider having a dialog that shows which optional features were not detected, linked from the About dialog.
+// CONSIDER: Consider a "help" dialog in the main menu.  This should probably be an external file that gets loaded on demand.
 
 // TODO: Remove debugging console.log calls in PcmAudioPlayer.
 
