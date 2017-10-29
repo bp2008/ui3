@@ -3798,7 +3798,7 @@ function ClipLoader(clipsBodySelector)
 			if (response.result != "success")
 			{
 				// TODO: Revert this error message to a simple "Failed to load." once session data indicates whether recording-viewing permission is granted.
-				$clipsbody.html('<div class="clipListText">Failed to load.<br/><br/>This user account may not have permission to view recordings.</div>');
+				$clipsbody.html('<div class="clipListText">This user account does not have permission to view recordings.</div>');
 				return;
 			}
 			failedClipListLoads = 0;
