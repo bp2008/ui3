@@ -208,8 +208,6 @@ var togglableUIFeatures =
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
 // TODO: Once session data indicates whether recording-viewing permission is granted, revert the "Failed to load." message.  When permission is unavailable, hide the Alerts and Clips tabs, and set Live View tab as the default.
 
-// TODO: Show a warning to users who have more than one camera available but no group stream.
-// TODO: Test a single-camera system (limited user account with 1-camera group).  Clicking the camera should not interrupt streaming.
 // TODO: It should not take a full click to hide a context menu.  A simple mousedown or touchstart should do it!
 // TODO: The (touch) gesture that shows the playback controls should not be able to activate click actions on the playback controls.  I'm not sure what the best way to handle this is.  Perhaps a flag set on mousedown/touchstart that is unset with a 0ms timeout after mouseup/touchend/touchcancel/etc.
 // CONSIDER: An input event within the bounds of the live playback controls that also show the live playback controls should not count toward MouseHelper clicks or double-clicks.
