@@ -212,7 +212,6 @@ var togglableUIFeatures =
 // TODO: It should not take a full click to hide a context menu.  A simple mousedown or touchstart should do it!
 // TODO: The (touch) gesture that shows the playback controls should not be able to activate click actions on the playback controls.  I'm not sure what the best way to handle this is.  Perhaps a flag set on mousedown/touchstart that is unset with a 0ms timeout after mouseup/touchend/touchcancel/etc.
 // CONSIDER: An input event within the bounds of the live playback controls that also show the live playback controls should not count toward MouseHelper clicks or double-clicks.
-// TODO: Nerdstats writes caused by MeasurePerformance should include null/0 inputs for the unrelated values to keep their graphs in sync and indicate a moment of no rendering.  Non-graphed inputs should be updated accordingly too.
 
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
 
@@ -6939,6 +6938,7 @@ function FetchOpenH264VideoModule()
 	var didRequestAudio = false;
 	var canRequestAudio = false;
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
+	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, utc: Date().now(), expectedInterframe: 100 };
 
 	var loading = new BICameraData();
 
@@ -7217,36 +7217,20 @@ function FetchOpenH264VideoModule()
 	}
 	var FrameRendered = function (frame)
 	{
+		lastFrameMetadata.width = frame.width;
+		lastFrameMetadata.height = frame.height;
+		lastFrameMetadata.pos = frame.pos;
+		lastFrameMetadata.timestamp = frame.timestamp;
+		lastFrameMetadata.utc = frame.utc;
+		lastFrameMetadata.size = frame.size;
+		lastFrameMetadata.expectedInterframe = frame.expectedInterframe;
+
 		currentImageDateMs = frame.utc;
 		currentSeekPositionPercent = frame.pos / 10000;
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
-		var interFrame = timeNow - lastFrameAt;
 		lastFrameAt = timeNow;
-		if (nerdStats.IsOpen())
-		{
-			nerdStats.BeginUpdate();
-			nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
-			nerdStats.UpdateStat("Stream Resolution", frame.width + "x" + frame.height);
-			nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
-			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
-			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
-			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
-			nerdStats.UpdateStat("Codecs", "h264");
-			var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
-			var bitRate_Audio = bitRateCalc_Audio.GetBPS() * 8;
-			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
-			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
-			var bufferSize = pcmPlayer.GetBufferedMs();
-			nerdStats.UpdateStat("Audio Buffer", bufferSize, bufferSize.toFixed(0) + "ms", true);
-			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
-			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
-			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
-			nerdStats.UpdateStat("Frame Timing Error", interFrameError, interFrameError.toFixed() + "ms", true);
-			writeDelayStats();
-			nerdStats.EndUpdate();
-
-		}
+		writeNerdStats(frame, timeNow);
 		if (playbackPaused && !loading.isLive)
 		{
 			StopStreaming();
@@ -7293,16 +7277,38 @@ function FetchOpenH264VideoModule()
 			currentSeekPositionPercent = 1;
 		videoPlayer.Playback_Ended(reverse);
 	}
-	var writeDelayStats = function ()
+	var writeNerdStats = function (frame, perfNow)
 	{
+		if (!perfNow)
+			perfNow = performance.now();
 		if (nerdStats.IsOpen())
 		{
+			var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
+			var bitRate_Audio = bitRateCalc_Audio.GetBPS() * 8;
+			var bufferSize = pcmPlayer.GetBufferedMs();
+			var interFrame = perfNow - lastFrameAt;
+			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
 			var netDelay = openh264_player.GetNetworkDelay().toFloat();
 			var decoderDelay = openh264_player.GetBufferedTime().toFloat();
+			nerdStats.BeginUpdate();
+			nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
+			nerdStats.UpdateStat("Stream Resolution", frame.width + "x" + frame.height);
+			nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
+			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
+			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
+			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
+			nerdStats.UpdateStat("Codecs", "h264");
+			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
+			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
+			nerdStats.UpdateStat("Audio Buffer", bufferSize, bufferSize.toFixed(0) + "ms", true);
+			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
+			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
+			nerdStats.UpdateStat("Frame Timing Error", interFrameError, interFrameError.toFixed() + "ms", true);
 			nerdStats.UpdateStat("Network Delay", netDelay, netDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Player Delay", decoderDelay, decoderDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Delayed Frames", openh264_player.GetBufferedFrameCount(), openh264_player.GetBufferedFrameCount(), true);
 			lastNerdStatsUpdate = performance.now();
+			nerdStats.EndUpdate();
 		}
 	}
 	var perf_warning_net = null;
@@ -7313,7 +7319,7 @@ function FetchOpenH264VideoModule()
 		if (!openh264_player || !isCurrentlyActive || !safeFetch.IsActive() || isLoadingRecordedSnapshot || perfNow - lastActivatedAt < 1000)
 			return;
 		if (perfNow - lastNerdStatsUpdate > 3000 && perfNow - lastActivatedAt > 3000)
-			writeDelayStats();
+			writeNerdStats(lastFrameMetadata, perfNow);
 		if (perf_warning_net)
 		{
 			perf_warning_net.remove();
