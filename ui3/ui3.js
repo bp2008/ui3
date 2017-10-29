@@ -201,6 +201,10 @@ var togglableUIFeatures =
 		}, null, null, ["Show", "Hide", "Toggle"]]
 	];
 
+///////////////////////////////////////////////////////////////
+// Notes that require BI changes //////////////////////////////
+///////////////////////////////////////////////////////////////
+
 // TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
 //       -- I've found bugs related to the cycles and reported them.  Awaiting fixes.
 // TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
@@ -208,22 +212,26 @@ var togglableUIFeatures =
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
 // TODO: Once session data indicates whether recording-viewing permission is granted, revert the "Failed to load." message.  When permission is unavailable, hide the Alerts and Clips tabs, and set Live View tab as the default.
 
+///////////////////////////////////////////////////////////////
+// High priority notes ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
 // TODO: The (touch) gesture that shows the playback controls should not be able to activate click actions on the playback controls.  I'm not sure what the best way to handle this is.  Perhaps a flag set on mousedown/touchstart that is unset with a 0ms timeout after mouseup/touchend/touchcancel/etc.
 // CONSIDER: An input event within the bounds of the live playback controls that also show the live playback controls should not count toward MouseHelper clicks or double-clicks.
-
 // CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
+// CONSIDER: The video streaming loop is recursive and in theory this would lead to a stack overflow eventually.  Consider using a setTimeout(..., 0) every 100 or something pump calls to clear the call stack and in theory avoid a stack overflow.
+// CONSIDER: Consider having a dialog that shows which optional features were not detected, linked from the About dialog.
+// TODO: Remove debugging console.log calls in PcmAudioPlayer.
+// TODO: Add a button to UI settings that resets all settings to defaults.
+
+///////////////////////////////////////////////////////////////
+// Low priority notes /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
 
 // CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
-// CONSIDER: The video streaming loop is recursive and in theory this would lead to a stack overflow eventually.  Consider using a setTimeout(..., 0) every 100 or something pump calls to clear the call stack and in theory avoid a stack overflow.
-// CONSIDER: Consider having a dialog that shows which optional features were not detected, linked from the About dialog.
 // CONSIDER: Consider a "help" dialog in the main menu.  This should probably be an external file that gets loaded on demand.
-
-// TODO: Remove debugging console.log calls in PcmAudioPlayer.
-
-// TODO: Fix bug where image dragging can start on a button in the playback controls in live mode, or anywhere on the playback controls in recording mode.
-// TODO: Add a button to UI settings that resets all settings to defaults.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -5974,8 +5982,8 @@ function VideoPlayerController()
 			});
 		}
 		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint")
-			, $("#playbackHeader,#playbackControls") // Excluded while viewing recordings
-			, $("#playbackControls .pcButton,#volumeBar") // Excluded while viewing live
+			, $("#playbackHeader,#playbackControls") // Excludes clicks while viewing recordings
+			, $("#playbackControls .pcButton,#volumeBar,#closeClipLeft") // Excludes clicks while viewing live and excludes dragging always
 			, function (e) { return playbackControls.MouseInSettingsPanel(e); } // exclude click if returns true
 			, function (e, confirmed) // Single Click
 			{
@@ -12604,10 +12612,16 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 {
 	/// <summary>Handles double-click events in a consistent way between touch and non-touch devices.</summary>
 	/// <param name="$ele">jQuery object containing elements to listen for clicks on.</param>
-	/// <param name="$exclude">jQuery object containing elements to ignore clicks on (maybe these are nested inside [$ele]). May be null.</param>
+	/// <param name="$excludeRecordings">jQuery object containing elements to ignore clicks on while viewing a recording (maybe these are nested inside [$ele]). May be null.</param>
+	/// <param name="$excludeLive">jQuery object containing elements to ignore clicks on while viewing live video (maybe these are nested inside [$ele]). Also, cbOnDragStart will not be called when the drag starts in one of these elements regardless of playback mode.  May be null.</param>
+	/// <param name="excludeFunc">Called by all mouse/touch down/up events; if this returns true, the event is excluded from consideration for clicks and drag starts.</param>
 	/// <param name="cbOnSingleClick">Callback function that is called when a single click occurs.  The first argument is the event object, and the second argument is a boolean indicating whether the single click is confirmed (If false, it may be part of a future double-click.  If true, it is to be treated as a standalone single-click.).</param>
 	/// <param name="cbOnDoubleClick">Callback function that is called when a double click occurs.  The first argument is the event object.</param>
+	/// <param name="cbDragStart">Called when dragging begins, which happens after a non-excluded mouse/touch down event followed by cursor movement exceeding mouseMoveTolerance.</param>
+	/// <param name="cbDragMove">Called when the cursor moves while a button is down.</param>
+	/// <param name="cbDragEnd">Called when dragging ends, which is on any mouse or touch up event whether the drag start callback was called or not.</param>
 	/// <param name="doubleClickTimeMS">(Optional; default: 300) Maximum milliseconds between clicks to consider two clicks a double-click.</param>
+	/// <param name="mouseMoveTolerance">(Optional; default: 5) Maximum number of pixels the mouse can move before it is considered a drag instead of a click.</param>
 	var self = this;
 	if (!$ele || $ele.length < 1)
 		return;
@@ -12639,9 +12653,11 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 
 
 	var exclude = false;
+	var excludeDragStart = false;
 	var clearExclusion = function ()
 	{
 		exclude = false;
+		excludeDragStart = false;
 	}
 
 	if ($excludeRecordings)
@@ -12665,16 +12681,16 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	{
 		$excludeLive.on("mousedown touchstart", function (e)
 		{
-			if (!videoPlayer.Loading().image.isLive)
-				return;
-			exclude = true;
+			if (videoPlayer.Loading().image.isLive)
+				exclude = true;
+			excludeDragStart = true;
 			setTimeout(clearExclusion, 0);
 		});
 		$excludeLive.on("mouseup touchend touchcancel", function (e)
 		{
-			if (!videoPlayer.Loading().image.isLive)
-				return;
-			exclude = true;
+			if (videoPlayer.Loading().image.isLive)
+				exclude = true;
+			excludeDragStart = true;
 			setTimeout(clearExclusion, 0);
 		});
 	}
@@ -12688,9 +12704,10 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			return;
 		handleExcludeFunc(e);
 		if (lastEvent == 1)
-			RecordMouseEvent(2, e); // Inject mouse event that the browser likely missed.
+			RecordMouseEvent(2, e); // Inject mouse up event that the browser likely missed.
 		RecordMouseEvent(1, e);
-		cbDragStart(e);
+		if (!excludeDragStart)
+			cbDragStart(e);
 	});
 	$ele.on("mouseup touchend touchcancel", function (e)
 	{
@@ -12702,7 +12719,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		handleExcludeFunc(e);
 		var fakeMouseDown = lastEvent == 2;
 		if (fakeMouseDown)
-			RecordMouseEvent(1, e); // Inject mouse event that the browser likely missed.
+			RecordMouseEvent(1, e); // Inject mouse down event that the browser likely missed.
 		RecordMouseEvent(2, e);
 		if (!positionsAreWithinTolerance(lastMouseUp1, lastMouseDown1))
 			return; // It doesn't count as a click if the mouse moved too far between down and up.
@@ -12767,20 +12784,20 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			cbDragMove(e, false, lastMouseDown1.Excluded);
 		}
 	});
-	$(document).on("mouseup mouseleave", function (e)
+	$(document).on("mouseup mouseleave touchend touchcancel", function (e)
 	{
 		mouseCoordFixer.fix(e);
 		cbDragEnd(e);
 	});
-	var RecordMouseEvent = function (eventNum, e)
+	var RecordMouseEvent = function (eventType, e)
 	{
 		var src, dst;
-		if (eventNum == 1)
+		if (eventType == 1)
 		{
 			src = lastMouseDown1;
 			dst = lastMouseDown2;
 		}
-		else if (eventNum == 2)
+		else if (eventType == 2)
 		{
 			src = lastMouseUp1;
 			dst = lastMouseUp2;
@@ -12795,7 +12812,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		src.Y = e.pageY;
 		src.Time = performance.now();
 		src.Excluded = exclude;
-		lastEvent = eventNum;
+		lastEvent = eventType;
 	}
 	var positionsAreWithinTolerance = function (positionA, positionB)
 	{
@@ -12806,6 +12823,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		if (excludeFunc(e))
 		{
 			exclude = true;
+			excludeDragStart = true;
 			setTimeout(clearExclusion, 0);
 		}
 	}
