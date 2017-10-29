@@ -26,6 +26,16 @@
 		var gTemplet = $("<div/>").addClass("b-m-mpanel").attr("unselectable", "on").css("display", "none");
 		var iTemplet = $("<div/>").addClass("b-m-item").attr("unselectable", "on");
 		var sTemplet = $("<div/>").addClass("b-m-split");
+		var suppressCloseByDocClick = false;
+		function preventCloseByDocClick()
+		{
+			suppressCloseByDocClick = true;
+			setTimeout(allowCloseByDocClick, 0);
+		}
+		function allowCloseByDocClick()
+		{
+			suppressCloseByDocClick = false;
+		}
 		//build group item, which has sub items
 		var buildGroup = function (obj)
 		{
@@ -37,7 +47,7 @@
 				this.disable = obj.disable;
 				this.className = "b-m-idisable";
 			}
-			$(this).width(obj.width)/*.click(returnfalse)*/.mousedown(returnfalse).appendTo($("body"));
+			$(this).width(obj.width)/*.click(returnfalse)*/.on('mousedown touchstart', preventCloseByDocClick).appendTo($("body"));
 			obj = null;
 			return this;
 		};
@@ -200,7 +210,11 @@
 		{
 			target = menutarget;
 			showMenuGroup.call(groups[option.alias], { left: e.pageX, top: e.pageY }, 0);
-			$(document).one('mousedown', hideMenuPane);
+			$(document).one('mousedown touchstart', function ()
+			{
+				if (!suppressCloseByDocClick)
+					hideMenuPane(e);
+			});
 		}
 		var $root = $("#" + option.alias);
 		var root = null;
@@ -262,7 +276,7 @@
 		addItems = overItem = outItem = null;
 		me.hideAll = function ()
 		{
-			$(document).off('mousedown', hideMenuPane);
+			$(document).off('mousedown touchstart', hideMenuPane);
 			hideMenuPane();
 		}
 		allJQContextMenus.push(me);
