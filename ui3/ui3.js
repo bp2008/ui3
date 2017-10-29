@@ -206,6 +206,7 @@ var togglableUIFeatures =
 // TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
+// TODO: Once session data indicates whether recording-viewing permission is granted, revert the "Failed to load." message.  When permission is unavailable, hide the Alerts and Clips tabs, and set Live View tab as the default.
 
 // TODO: Show a warning to users who have more than one camera available but no group stream.
 // TODO: Test a single-camera system (limited user account with 1-camera group).  Clicking the camera should not interrupt streaming.
@@ -225,6 +226,8 @@ var togglableUIFeatures =
 // TODO: Remove debugging console.log calls in PcmAudioPlayer.
 
 // TODO: Fix bug where image dragging can start on a button in the playback controls in live mode, or anywhere on the playback controls in recording mode.
+
+// TODO: Show strings from session.data.streams in tooltips for the "Streaming 0"/etc options.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -3769,7 +3772,8 @@ function ClipLoader(clipsBodySelector)
 		{
 			if (response.result != "success")
 			{
-				$clipsbody.html('<div class="clipListText">Failed to load!</div>');
+				// TODO: Revert this error message to a simple "Failed to load." once session data indicates whether recording-viewing permission is granted.
+				$clipsbody.html('<div class="clipListText">Failed to load.<br/><br/>This user account may not have permission to view recordings.</div>');
 				return;
 			}
 			failedClipListLoads = 0;
@@ -5396,7 +5400,7 @@ function SessionManager()
 							if (user.toLowerCase() != sessionUser.toLowerCase())
 							{
 								var pass = Base64.decode(settings.bi_password);
-								LoginWithCredentials(user, pass, function (failResponse, errorMessage)
+								LogInWithCredentials(user, pass, function (failResponse, errorMessage)
 								{
 									// The login failed
 									toaster.Error(errorMessage, 3000);
@@ -5439,7 +5443,7 @@ function SessionManager()
 				loadingHelper.SetErrorStatus("login", 'Unable to contact Blue Iris server to check session status.');
 			});
 	}
-	var LoginWithCredentials = function (user, pass, onFail)
+	var LogInWithCredentials = function (user, pass, onFail)
 	{
 		var oldSession = currentServer.isUsingRemoteServer ? "" : $.cookie("session");
 		var args = { cmd: "login" };
@@ -5512,6 +5516,16 @@ function SessionManager()
 
 		statusLoader.LoadStatus();
 		cameraListLoader.LoadCameraList();
+
+		if (lastResponse.data.streamtimelimit)
+		{
+			toaster.Info('This user account has time limits enabled.<br/><ul>'
+				+ '<li>Video streams may be interrupted periodically.</li>'
+				+ '<li>Your session may expire after some time, even if you are not idle.</li>'
+				+ '<li>You may have to wait some minutes between sessions.</li>'
+				+ '<li>You may have a daily limit of viewing time.</li>'
+				+ '<ul>', 60000, true);
+		}
 	}
 	this.ApplyLatestAPISessionIfNecessary = function ()
 	{
@@ -5543,7 +5557,7 @@ function SessionManager()
 	this.DoAdministratorDialogLogin = function ()
 	{
 		self.AdminLoginRememberMeChanged();
-		LoginWithCredentials($('#loginDialog input[type="text"][varname="user"]').val(), $('#loginDialog input[type="password"][varname="pass"]').val(),
+		LogInWithCredentials($('#loginDialog input[type="text"][varname="user"]').val(), $('#loginDialog input[type="password"][varname="pass"]').val(),
 			function (response, errorMessage)
 			{
 				// The login failed
@@ -11099,7 +11113,7 @@ function Toaster()
 			"showDuration": "300",
 			"hideDuration": "1000",
 			"timeOut": "3000",
-			"extendedTimeOut": "3000",
+			"extendedTimeOut": "10000",
 			"showEasing": "swing",
 			"hideEasing": "linear",
 			"showMethod": "fadeIn",
