@@ -357,14 +357,14 @@ var defaultSettings =
 			, value: "Recordings"
 			, inputType: "select"
 			, options: ["None", "Live View", "Recordings", "Both"]
-			, label: 'Double-Click to Fullscreen<br><a href="javascript:Learn_More_About_Double_Click_to_Fullscreen()">(learn more)</a>'
+			, label: 'Double-Click to Fullscreen<br><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a>'
 			, category: "General Settings"
 		}
 		, {
 			key: "ui3_contextMenus_longPress"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'Context Menu Compatibility Mode<br><a href="javascript:Learn_More_About_Context_Menu_Compatibility_Mode()">(learn more)</a>'
+			, label: 'Context Menu Compatibility Mode<br><a href="javascript:UIHelp.LearnMore(\'Context Menu Compatibility Mode\')">(learn more)</a>'
 			, onChange: OnChange_ui3_contextMenus_longPress
 			, category: "General Settings"
 		}
@@ -5648,15 +5648,16 @@ function CameraListLoader()
 			}
 			lastResponse = response;
 			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
-			var containsGroup = false;
+			var numGroups = 0;
+			var numCameras = 0;
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
 				if (lastResponse.data[i].group)
-				{
-					containsGroup = true;
-					break;
-				}
+					numGroups++;
+				else
+					numCameras++;
 			}
+			var containsGroup = numGroups > 0;
 			hasOnlyOneCamera = !containsGroup;
 			if (!containsGroup)
 			{
@@ -5666,6 +5667,12 @@ function CameraListLoader()
 				for (var i = 0; i < lastResponse.data.length; i++)
 					newDataArray.push(lastResponse.data[i]);
 				lastResponse.data = newDataArray;
+
+				if (!firstCameraListLoaded && numCameras > 1)
+				{
+					toaster.Warning('Webcasting is not enabled for your camera groups. You will only be able to view one camera.<br><br>'
+						+ 'Click here to learn more.', 60000, true, function () { UIHelp.LearnMore('Camera Group Webcasting'); });
+				}
 			}
 			cameraIdToCameraMap = new Object();
 			for (var i = 0; i < lastResponse.data.length; i++)
@@ -13049,38 +13056,71 @@ function OnChange_ui3_contextMenus_longPress(newValue)
 			location.reload();
 		});
 }
-function Learn_More_About_Context_Menu_Compatibility_Mode()
-{
-	$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
-		+ 'Many useful functions in this interface are accessed by context menus (a.k.a. "Right-click menus").<br><br>'
-		+ 'Context menus are normally opened by right clicking.  On most touchscreen devices, instead you must press and hold.<br><br>'
-		+ 'However on some devices it is impossible to open context menus the normal way.  If this applies to you,'
-		+ ' enable "Context Menu Compatibility Mode".  This will change how context menus'
-		+ ' are triggered so they should open when the left mouse button is held down for a moment.'
-		+ '</div>')
-		.modalDialog({ title: "Context Menu Compatibility Mode" });
-}
-function Learn_More_About_Double_Click_to_Fullscreen()
-{
-	$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
-		+ 'This setting controls whether or not double-clicking the video area triggers fullscreen mode.<br><br>'
-		+ 'When double-clicking is enabled, single-click actions on the same area will be delayed by ' + videoPlayer.getDoubleClickTime()
-		+ ' milliseconds.  This is to allow the browser time to determine if you intended a single-click or a double-click.<br><br>'
-		+ 'In live view, single-clicking a camera selects the camera.'
-		+ (settings.ui3_doubleClick_behavior == "Both" || settings.ui3_doubleClick_behavior == "Live View"
-			? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
-			: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
-		+ '<br><br>'
-		+ 'When a recording is open, single-clicking the video invokes Play/Pause.'
-		+ (settings.ui3_doubleClick_behavior == "Both" || settings.ui3_doubleClick_behavior == "Recordings"
-			? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
-			: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
-		+ '</div>')
-		.modalDialog({ title: "Double-Click to Fullscreen" });
-}
 function GetPreferredContextMenuTrigger()
 {
 	return settings.ui3_contextMenus_longPress == "1" ? "longpress" : "right";
+}
+///////////////////////////////////////////////////////////////
+// UI Help ////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var UIHelp = new UIHelpTool();
+function UIHelpTool()
+{
+	var self = this;
+	this.LearnMore = function (topic)
+	{
+		switch (topic)
+		{
+			case 'Double-Click to Fullscreen':
+				Double_Click_to_Fullscreen();
+				break;
+			case 'Context Menu Compatibility Mode':
+				Context_Menu_Compatibility_Mode();
+				break;
+			case 'Camera Group Webcasting':
+				Camera_Group_Webcasting();
+				break;
+		}
+	}
+	var Context_Menu_Compatibility_Mode = function ()
+	{
+		$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
+			+ 'Many useful functions in this interface are accessed by context menus (a.k.a. "Right-click menus").<br><br>'
+			+ 'Context menus are normally opened by right clicking.  On most touchscreen devices, instead you must press and hold.<br><br>'
+			+ 'However on some devices it is impossible to open context menus the normal way.  If this applies to you,'
+			+ ' enable "Context Menu Compatibility Mode".  This will change how context menus'
+			+ ' are triggered so they should open when the left mouse button is held down for a moment.'
+			+ '</div>')
+			.modalDialog({ title: "Context Menu Compatibility Mode" });
+	}
+	var Double_Click_to_Fullscreen = function ()
+	{
+		$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
+			+ 'This setting controls whether or not double-clicking the video area triggers fullscreen mode.<br><br>'
+			+ 'When double-clicking is enabled, single-click actions on the same area will be delayed by ' + videoPlayer.getDoubleClickTime()
+			+ ' milliseconds.  This is to allow the browser time to determine if you intended a single-click or a double-click.<br><br>'
+			+ 'In live view, single-clicking a camera selects the camera.'
+			+ (settings.ui3_doubleClick_behavior == "Both" || settings.ui3_doubleClick_behavior == "Live View"
+				? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
+				: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
+			+ '<br><br>'
+			+ 'When a recording is open, single-clicking the video invokes Play/Pause.'
+			+ (settings.ui3_doubleClick_behavior == "Both" || settings.ui3_doubleClick_behavior == "Recordings"
+				? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
+				: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
+			+ '</div>')
+			.modalDialog({ title: "Double-Click to Fullscreen" });
+	}
+	var Camera_Group_Webcasting = function ()
+	{
+		var $root = $('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
+			+ 'Enable webcasting for your groups in Blue Iris using the Group controls in the lower-left corner:<br><br>'
+			+ '</div>');
+		var $img = $('<img src="ui3/help/img/GroupProperties.png" style="width:400px; height:320px;" />');
+		$root.append($img);
+		$img.lightbox();
+		$root.modalDialog({ title: 'Camera Group Webcasting' });
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Collapsible Section for Dialogs ////////////////////////////
