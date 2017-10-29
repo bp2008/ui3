@@ -28,24 +28,7 @@
 				$overlay.css("cursor", "zoom-out")
 					.click(toggle);
 				$("body").append($overlay);
-				$bigImg = $('<img style="position:absolute;top:0px;left:0px;maxwidth:100vw;max-height:100vh;" />');
-				$bigImg.load(function ()
-				{
-					var windowW = $(window).width();
-					var windowH = $(window).height();
-					var w = $bigImg.width();
-					var h = $bigImg.height();
-
-					var left = $(window).scrollLeft() + ((windowW - w) / 2);
-					if (left < 0)
-						left = 0;
-
-					var top = $(window).scrollTop() + ((windowH - h) / 2);
-					if (top < 0)
-						top = 0;
-
-					$bigImg.css("left", left + "px").css("top", top + "px");
-				});
+				$bigImg = $('<img style="position:absolute;top:50%;left:50%;max-width:100vw;max-height:100vh;transform:translate(-50%,-50%)" />');
 				$bigImg.attr('src', $img.attr('src'));
 				$overlay.append($bigImg);
 				$overlay.fadeIn(200);

@@ -2557,13 +2557,13 @@ div.icon, a.icon
 
 .btnGreen
 {
-	background-color: #B9B9B9;
+	background-color: #9DC49D;
 	color: black;
 }
 
 	.btnGreen:hover
 	{
-		background-color: #9DC49D;
+		background-color: #74dd74;
 	}
 
 	.btnGreen:active

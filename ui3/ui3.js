@@ -226,6 +226,7 @@ var togglableUIFeatures =
 // TODO: Remove debugging console.log calls in PcmAudioPlayer.
 
 // TODO: Fix bug where image dragging can start on a button in the playback controls in live mode, or anywhere on the playback controls in recording mode.
+// TODO: Add a button to UI settings that resets all settings to defaults.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -281,6 +282,10 @@ var defaultSettings =
 		, {
 			key: "bi_password"
 			, value: ""
+		}
+		, {
+			key: "ui3_webcasting_disabled_dontShowAgain"
+			, value: "0"
 		}
 		, {
 			key: "ui3_feature_enabled_volumeBar" // ui3_feature_enabled keys are tied to unique IDs in togglableUIFeatures
@@ -5627,8 +5632,8 @@ function CameraListLoader()
 	var lastResponse = null;
 	var cameraIdToCameraMap = new Object();
 	var firstCameraListLoaded = false;
-	var hasOnlyOneCamera = false;
 	var cameraListUpdateTimeout = null;
+	var webcastingWarning;
 	this.LoadCameraList = function (successCallbackFunc)
 	{
 		if (cameraListUpdateTimeout != null)
@@ -5647,33 +5652,54 @@ function CameraListLoader()
 				return;
 			}
 			lastResponse = response;
-			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
 			var numGroups = 0;
 			var numCameras = 0;
+			var camIdsInGroups = {};
+			// See what we've got.
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
-				if (lastResponse.data[i].group)
+				var obj = lastResponse.data[i];
+				if (obj.group)
+				{
 					numGroups++;
+					for (var n = 0; n < obj.group.length; n++)
+						camIdsInGroups[obj.group[n]] = true;
+				}
 				else
 					numCameras++;
 			}
-			var containsGroup = numGroups > 0;
-			hasOnlyOneCamera = !containsGroup;
-			if (!containsGroup)
+			// Are any of the cameras not in a group?
+			var camsNotInGroup = [];
+			for (var i = 0; i < lastResponse.data.length; i++)
 			{
-				// No group was found, so we will add one.
-				var newDataArray = new Array();
-				newDataArray.push(GetFakeIndexCameraData());
-				for (var i = 0; i < lastResponse.data.length; i++)
-					newDataArray.push(lastResponse.data[i]);
-				lastResponse.data = newDataArray;
-
-				if (!firstCameraListLoaded && numCameras > 1)
+				var obj = lastResponse.data[i];
+				if (!self.CameraIsGroupOrCycle(obj) && obj.isEnabled)
 				{
-					toaster.Warning('Webcasting is not enabled for your camera groups. You will only be able to view one camera.<br><br>'
-						+ 'Click here to learn more.', 60000, true, function () { UIHelp.LearnMore('Camera Group Webcasting'); });
+					if (!camIdsInGroups[obj.optionValue])
+						camsNotInGroup.push(obj);
 				}
 			}
+			if (camsNotInGroup.length > 0)
+			{
+				// Create a fake group for each of these cameras.
+				for (var i = 0; i < camsNotInGroup.length; i++)
+				{
+					var fakeGroup = MakeFakeGroup(camsNotInGroup[i]);
+					lastResponse.data.push(fakeGroup);
+				}
+
+				if (!firstCameraListLoaded && numCameras > 1 && settings.ui3_webcasting_disabled_dontShowAgain != "1")
+				{
+					webcastingWarning = toaster.Info('Webcasting is not enabled for some of your camera groups.<br><br>'
+						+ camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? '' : 's')
+						+ ' have been individually added to the Current Group dropdown list.<br><br>'
+						+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
+						+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
+						, 60000, true);
+				}
+			}
+
+			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
 			cameraIdToCameraMap = new Object();
 			for (var i = 0; i < lastResponse.data.length; i++)
 				cameraIdToCameraMap[lastResponse.data[i].optionValue] = lastResponse.data[i];
@@ -5717,39 +5743,27 @@ function CameraListLoader()
 				}, 1000);
 			});
 	}
-	var GetFakeIndexCameraData = function ()
+	var MakeFakeGroup = function (cameraObj)
 	{
-		var camName;
-		var camWidth;
-		var camHeight;
-		var ptz;
-
-		for (var i = 0; i < lastResponse.data.length; i++)
-		{
-			var cameraObj = lastResponse.data[i];
-			if (!self.CameraIsGroupOrCycle(cameraObj) && cameraObj.isEnabled)
-			{
-				camName = cameraObj.optionValue;
-				camWidth = cameraObj.width;
-				camHeight = cameraObj.height;
-				ptz = cameraObj.ptz;
-				break;
-			}
-		}
-
 		return {
-			optionDisplay: "+All cameras"
-			, optionValue: camName
+			optionDisplay: "+" + cameraObj.optionDisplay
+			, optionValue: cameraObj.optionValue
 			, isMotion: false
 			, isTriggered: false
 			, xsize: 1
 			, ysize: 1
-			, width: camWidth
-			, height: camHeight
-			, ptz: ptz
+			, width: cameraObj.width
+			, height: cameraObj.height
+			, ptz: cameraObj.ptz
 			, group: []
 			, rects: []
+			, isFakeGroup: true
 		};
+	}
+	this.HideWebcastingWarning = function ()
+	{
+		if (webcastingWarning)
+			webcastingWarning.remove();
 	}
 	this.GetCameraBoundsInCurrentGroupImageScaled = function (cameraId, groupId)
 	{
@@ -5842,14 +5856,15 @@ function CameraListLoader()
 	{
 		return cameraObj.group || !cameraObj.optionValue.startsWith("@");
 	}
-	this.HasOnlyOneCamera = function ()
-	{
-		return hasOnlyOneCamera;
-	}
 	this.GetLastResponse = function ()
 	{
 		return lastResponse;
 	}
+}
+function DontShowWebcastingWarningAgain()
+{
+	settings.ui3_webcasting_disabled_dontShowAgain = "1";
+	cameraListLoader.HideWebcastingWarning();
 }
 ///////////////////////////////////////////////////////////////
 // Video Player Controller ////////////////////////////////////
@@ -6109,7 +6124,7 @@ function VideoPlayerController()
 			return;
 		// mouseCoordFixer.fix(event); // Don't call this more than once per event!
 		var camData = self.GetCameraUnderMousePointer(event);
-		if (camData != null && !cameraListLoader.HasOnlyOneCamera() && !cameraListLoader.CameraIsCycle(camData))
+		if (camData != null && !camData.isFakeGroup && !cameraListLoader.CameraIsCycle(camData))
 		{
 			thing(camData);
 		}
@@ -13114,7 +13129,8 @@ function UIHelpTool()
 	var Camera_Group_Webcasting = function ()
 	{
 		var $root = $('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
-			+ 'Enable webcasting for your groups in Blue Iris using the Group controls in the lower-left corner:<br><br>'
+			+ 'This interface is easier to use when all your camera groups have webcasting enabled.<br><br>'
+			+ 'Enable webcasting for your groups using the group settings panel.  This panel is found in the lower-left corner of the Blue Iris console:<br><br>'
 			+ '</div>');
 		var $img = $('<img src="ui3/help/img/GroupProperties.png" style="width:400px; height:320px;" />');
 		$root.append($img);
