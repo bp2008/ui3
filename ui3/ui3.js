@@ -227,8 +227,6 @@ var togglableUIFeatures =
 
 // TODO: Fix bug where image dragging can start on a button in the playback controls in live mode, or anywhere on the playback controls in recording mode.
 
-// TODO: Show strings from session.data.streams in tooltips for the "Streaming 0"/etc options.
-
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -1570,6 +1568,15 @@ function DropdownListItem(options)
 	this.text = "List Item";
 	this.autoSetLabelText = true;
 	// End options
+	this.GetTooltip = function ()
+	{
+		if (typeof self.tooltip == "function")
+			return self.tooltip(self);
+		else if (self.tooltip)
+			return self.tooltip;
+		else
+			return "";
+	}
 	$.extend(this, options);
 }
 function DropdownBoxes()
@@ -1686,9 +1693,9 @@ function DropdownBoxes()
 	if (h264_playback_supported)
 	{
 		streamingQualityList.items.splice(0, 0
-			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 0", uniqueQualityId: "S0", abbr: "H.264 0", shortAbbr: "S0" })
-			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 1", uniqueQualityId: "S1", abbr: "H.264 1", shortAbbr: "S1" })
-			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 2", uniqueQualityId: "S2", abbr: "H.264 2", shortAbbr: "S2" })
+			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 0", uniqueQualityId: "S0", abbr: "H.264 0", shortAbbr: "S0", tooltip: GetTooltipForStreamQuality })
+			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 1", uniqueQualityId: "S1", abbr: "H.264 1", shortAbbr: "S1", tooltip: GetTooltipForStreamQuality })
+			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 2", uniqueQualityId: "S2", abbr: "H.264 2", shortAbbr: "S2", tooltip: GetTooltipForStreamQuality })
 		);
 	}
 	var selectPreferredQuality = function ()
@@ -1928,8 +1935,9 @@ function DropdownBoxes()
 		});
 		if (item.icon)
 			$item.prepend('<div class="mainMenuIcon"><svg class="icon' + (item.icon.indexOf('_x5F_') == -1 ? " noflip" : "") + '"><use xlink:href="' + item.icon + '"></use></svg></div>');
-		if (item.tooltip)
-			$item.attr('title', item.tooltip);
+		var tooltip = item.GetTooltip();
+		if (tooltip)
+			$item.attr('title', tooltip);
 		$ddl.append($item);
 	}
 	$(document).mouseup(function (e)
@@ -1959,6 +1967,17 @@ function DropdownBoxes()
 			$ele.css("max-height", (windowH - $ele.offset().top - 2) + "px");
 		});
 	}
+}
+function GetTooltipForStreamQuality(item)
+{
+	if (item.uniqueQualityId == "S0")
+		return sessionManager.GetStreamsArray()[0];
+	else if (item.uniqueQualityId == "S1")
+		return sessionManager.GetStreamsArray()[1];
+	else if (item.uniqueQualityId == "S2")
+		return sessionManager.GetStreamsArray()[2];
+	else
+		return "";
 }
 ///////////////////////////////////////////////////////////////
 // PTZ Pad Buttons ////////////////////////////////////////////
@@ -3164,6 +3183,9 @@ function PlaybackControls()
 		{
 			var $item = $('<div class="playbackSettingsLine alignRight"></div>');
 			$item.text(qualityListDef.items[i].text);
+			var tooltip = qualityListDef.items[i].GetTooltip();
+			if (tooltip)
+				$item.attr('title', tooltip);
 			if (i == qualityListDef.selectedIndex)
 				$item.addClass("selected");
 			$item.get(0).listItemIndex = i;
@@ -5588,6 +5610,12 @@ function SessionManager()
 		if (lastResponse && lastResponse.data)
 			return lastResponse.data.schedules;
 		return null;
+	}
+	this.GetStreamsArray = function ()
+	{
+		if (lastResponse && lastResponse.data && lastResponse.data.streams && lastResponse.data.streams.length == 3)
+			return lastResponse.data.streams;
+		return ["", "", ""];
 	}
 }
 ///////////////////////////////////////////////////////////////
