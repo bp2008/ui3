@@ -6938,7 +6938,7 @@ function FetchOpenH264VideoModule()
 	var didRequestAudio = false;
 	var canRequestAudio = false;
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
-	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, utc: Date().now(), expectedInterframe: 100 };
+	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, utc: Date.now(), expectedInterframe: 100 };
 
 	var loading = new BICameraData();
 
