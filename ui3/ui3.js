@@ -249,6 +249,8 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Change the color of the flag icon to something more visible when a clip is hovered/selected.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -3917,7 +3919,7 @@ function ClipLoader(clipsBodySelector)
 					clipData.thumbPath = clip.path; // Path used for loading the thumbnail
 					clipData.path = isClipList ? clip.path : clip.clip; // Path used for loading the video stream
 					clipData.offsetKb = clip.offset ? clip.offset : 0; // Offset for H.264 streaming
-					clipData.offsetMs = clip.offsetMs ? clip.offsetMs : 0; // Offset for jpeg streaming
+					clipData.offsetMs = clip.offsetms ? clip.offsetms : 0; // Offset for jpeg streaming
 					clipData.flags = clip.flags;
 					clipData.audio = (clip.flags & clip_flag_audio) > 0;
 					clipData.date = new Date(clip.date * 1000);
@@ -4496,8 +4498,7 @@ function ClipLoader(clipsBodySelector)
 	{
 		var camIsFlagged = (clipData.flags & clip_flag_flag) > 0;
 		var newFlags = camIsFlagged ? clipData.flags ^ clip_flag_flag : clipData.flags | clip_flag_flag;
-		// TODO: Fix this since it is likely broken for alerts now.
-		UpdateClipFlags(clipData.path.replace(/\..*/g, ""), newFlags, function ()
+		UpdateClipFlags('@' + clipData.clipId, newFlags, function ()
 		{
 			// Success setting flag state
 			clipData.flags = newFlags;
@@ -4620,8 +4621,7 @@ function ClipLoader(clipsBodySelector)
 			}
 			else if (operation == "delete")
 			{
-				// TODO: Fix this since it is likely broken for alerts.
-				DeleteAlert(clipData.path, clipData.isClip, function ()
+				DeleteAlert("@" + clipData.clipId, clipData.isClip, function ()
 				{
 					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
 				},
@@ -6899,6 +6899,7 @@ function JpegVideoModule()
 	}
 	this.GetCurrentImageTimeMs = function ()
 	{
+		// TODO: Once alert playback is finalized, make sure this returns values that are as accurate as possible for clips and alerts (if a clip has gaps, it'll be inaccurate much of the time).
 		return currentImageTimestampMs;
 	}
 	var GetNewImage = function ()
@@ -6941,8 +6942,7 @@ function JpegVideoModule()
 			// Update currentImageTimestampMs so that saved snapshots know the time for file naming
 			if (clipData != null)
 			{
-				// TODO: This currentImageTimestampMs calculation is likely broken for alerts now.
-				currentImageTimestampMs = clipData.date.getTime() + clipPlaybackPosition;
+				currentImageTimestampMs = (clipData.date.getTime() - clipData.offsetMs) + clipPlaybackPosition;
 				isLoadingRecordedSnapshot = clipData.isSnapshot;
 				if (isLoadingRecordedSnapshot)
 					staticSnapshotId = loading.clipId;
@@ -7267,19 +7267,19 @@ function FetchOpenH264VideoModule()
 			if (clipData)
 			{
 				isLoadingRecordedSnapshot = clipData.isSnapshot;
-				currentImageDateMs = clipData.date.getTime();
-				if (honorAlertOffset)
+				var lastMs = (clipData.msec - 1);
+				if (honorAlertOffset && !clipData.isClip)
 				{
 					// We are starting the alert at a specific offset that was provided in kilobytes.
 					offsetArg = "&kbseek=" + clipData.offsetKb;
 					// The "pos" argument must be provided alongside "kbseek", even though "pos" will be ignored by Blue Iris.
 					// We recalculate the seek position here anyway because it helps with UI accuracy before the first frame arrives.
-					var lastMs = (clipData.msec - 1);
 					if (lastMs === 0)
 						currentSeekPositionPercent = 0;
 					else
 						currentSeekPositionPercent = Clamp(clipData.offsetMs / lastMs, 0, 1);
 				}
+				currentImageDateMs = clipData.date.getTime() + (currentSeekPositionPercent * lastMs);
 			}
 			var widthAndQualityArg = "";
 			if (speed == 0)
@@ -7379,6 +7379,8 @@ function FetchOpenH264VideoModule()
 	}
 	this.GetCurrentImageTimeMs = function ()
 	{
+		// TODO: After alert playback is finalized, ensure that saved snapshots have an accurate timestamp when the last rendered frame was a paused jpeg in both clips and alerts.
+		// And when it was a normal frame in both clips and alerts.
 		return currentImageDateMs;
 	}
 	this.Playback_IsPaused = function ()
