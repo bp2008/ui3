@@ -240,7 +240,7 @@ var togglableUIFeatures =
 
 // TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
 //       -- I've found bugs related to the cycles and reported them.  Awaiting fixes.
-// TODO: Handle alerts as bookmarks into the clip.  Requires BI changes to do cleanly for both streaming methods.
+// TODO: Test that alerts are handled correctly in both streaming methods, once Blue Iris adds accurate "msec" and "offsetMs" fields to alertlist responses.
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
 // TODO: Once session data indicates whether recording-viewing permission is granted, revert the "Failed to load." message.  When permission is unavailable, hide the Alerts and Clips tabs, and set Live View tab as the default.
@@ -3913,7 +3913,11 @@ function ClipLoader(clipsBodySelector)
 					clipData.roughLength = CleanUpFileSize(clip.filesize);
 					clipData.isSnapshot = clipData.roughLength == "Snapshot";
 					clipData.camera = clip.camera;
-					clipData.path = clip.path;
+					clipData.clipId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
+					clipData.thumbPath = clip.path; // Path used for loading the thumbnail
+					clipData.path = isClipList ? clip.path : clip.clip; // Path used for loading the video stream
+					clipData.offsetKb = clip.offset ? clip.offset : 0; // Offset for H.264 streaming
+					clipData.offsetMs = clip.offsetMs ? clip.offsetMs : 0; // Offset for jpeg streaming
 					clipData.flags = clip.flags;
 					clipData.audio = (clip.flags & clip_flag_audio) > 0;
 					clipData.date = new Date(clip.date * 1000);
@@ -3922,17 +3926,15 @@ function ClipLoader(clipsBodySelector)
 					clipData.fileSize = GetFileSize(clip.filesize);
 					if (clipData.isSnapshot)
 						clipData.msec = 2000;
-					else if (typeof clip.msec != "undefined" && listName == "cliplist")
+					else if (typeof clip.msec != "undefined" && !isNaN(clip.msec))
 						clipData.msec = clip.msec;
 					else
 						clipData.msec = GetClipLengthMs(clipData.roughLength);
 
-					clipData.clipId = clip.path.replace(/@/g, "").replace(/\..*/g, "");
-					clipData.thumbPath = clip.path;
 
-					if (!clipListCache[clip.camera])
-						clipListCache[clip.camera] = new Object();
-					var existingClipData = clipListCache[clip.camera][clip.path];
+					if (!clipListCache[clipData.camera])
+						clipListCache[clipData.camera] = new Object();
+					var existingClipData = clipListCache[clipData.camera][clipData.clipId];
 
 					if (!isSameDay(previousClipDate, clipData.displayDate))
 					{
@@ -3976,9 +3978,9 @@ function ClipLoader(clipsBodySelector)
 							tileLoader.registerOnAppearDisappear(clipData, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
 						}
 						TotalUniqueClipsLoaded++;
-						clipListCache[clip.camera][clip.path] = clipData;
+						clipListCache[clipData.camera][clipData.clipId] = clipData;
 						clipListIdCache[clipData.clipId] = clipData;
-						if (!isUpdateOfExistingList && previouslyOpenedClip == null && !loadingImage.isLive && loadingImage.path == clip.path)
+						if (!isUpdateOfExistingList && previouslyOpenedClip == null && !loadingImage.isLive && loadingImage.uniqueId == clipData.clipId)
 							previouslyOpenedClip = clipData;
 					}
 
@@ -4107,15 +4109,17 @@ function ClipLoader(clipsBodySelector)
 	{
 		return uiSizeHelper.GetCurrentSize() == "small" || uiSizeHelper.GetCurrentSize() == "smaller";
 	}
-	this.GetCachedClip = function (cameraId, clipPath)
+	this.GetCachedClip = function (cameraId, clipId)
 	{
+		/// <summary>Gets the clip with the specified camera ID and clip ID. I'm only keeping this more complicated cache around in case I want to enumerate clips by camera ID in the future.</summary>
 		var camClips = clipListCache[cameraId];
 		if (camClips)
-			return camClips[clipPath];
+			return camClips[clipId];
 		return null;
 	}
 	this.GetClipFromId = function (clipId)
 	{
+		/// <summary>Gets the clip with the specified clip ID.</summary>
 		return clipListIdCache[clipId];
 	}
 	this.GetClipIdsBetween = function (first, last)
@@ -4148,7 +4152,10 @@ function ClipLoader(clipsBodySelector)
 		retVal.href = currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetRemoteSessionArg("?");
 		var extensionIdx = clipData.path.indexOf(".");
 		if (extensionIdx == -1)
+		{
+			console.log('Could not find file extension in clip path "' + clipData.path + '"');
 			retVal.download = null;
+		}
 		else
 		{
 			var date = GetDateStr(clipData.displayDate);
@@ -4316,7 +4323,7 @@ function ClipLoader(clipsBodySelector)
 
 			if (selectedClipsMap[clipData.clipId])
 			{
-				if (videoPlayer.Loading().image.path == clipData.path)
+				if (videoPlayer.Loading().image.uniqueId == clipData.clipId)
 					self.OpenClip($clip.get(0), clipData.clipId, false);
 				else
 					$clip.addClass("selected");
@@ -4489,6 +4496,7 @@ function ClipLoader(clipsBodySelector)
 	{
 		var camIsFlagged = (clipData.flags & clip_flag_flag) > 0;
 		var newFlags = camIsFlagged ? clipData.flags ^ clip_flag_flag : clipData.flags | clip_flag_flag;
+		// TODO: Fix this since it is likely broken for alerts now.
 		UpdateClipFlags(clipData.path.replace(/\..*/g, ""), newFlags, function ()
 		{
 			// Success setting flag state
@@ -4612,6 +4620,7 @@ function ClipLoader(clipsBodySelector)
 			}
 			else if (operation == "delete")
 			{
+				// TODO: Fix this since it is likely broken for alerts.
 				DeleteAlert(clipData.path, clipData.isClip, function ()
 				{
 					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
@@ -6336,6 +6345,7 @@ function VideoPlayerController()
 		cli.maxheight = cli.fullheight = cli.actualheight = clc.height;
 		cli.aspectratio = clc.width / clc.height;
 		cli.path = clc.optionValue;
+		cli.uniqueId = clc.optionValue;
 		cli.isLive = true;
 		cli.ptz = clc.ptz;
 		cli.audio = clc.audio;
@@ -6355,7 +6365,7 @@ function VideoPlayerController()
 
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (playerModule)
-			playerModule.OpenVideo(cli);
+			playerModule.OpenVideo(cli, 0, false);
 
 		fullScreenModeController.updateFullScreenButtonState();
 	}
@@ -6372,6 +6382,7 @@ function VideoPlayerController()
 			cli.maxheight = cli.fullheight = cli.actualheight = clc.height;
 			cli.aspectratio = clc.width / clc.height;
 			cli.path = clipData.path;
+			cli.uniqueId = clipData.clipId;
 			cli.isLive = false;
 			cli.ptz = false;
 			cli.audio = clipData.audio || (!clipData.isClip && cli.audio); // Alerts never have the audio flag set.
@@ -6390,7 +6401,7 @@ function VideoPlayerController()
 
 			videoOverlayHelper.ShowLoadingOverlay(true);
 			if (playerModule)
-				playerModule.OpenVideo(cli);
+				playerModule.OpenVideo(cli, -1, false);
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
@@ -6400,6 +6411,7 @@ function VideoPlayerController()
 
 	this.SeekToPercent = function (pos, play)
 	{
+		pos = Clamp(pos, 0, 1);
 		seekBar.drawSeekbarAtPercent(pos);
 		playerModule.OpenVideo(currentlyLoadingImage, pos, !play);
 	}
@@ -6504,10 +6516,10 @@ function VideoPlayerController()
 		currentlyLoadedCamera = currentlyLoadingCamera;
 		resized();
 	}
-	this.ImageRendered = function (path, width, height, lastFrameLoadingTime, lastFrameDate)
+	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameDate)
 	{
 		jpegPreviewModule.Hide();
-		if (currentlyLoadedImage.path != path)
+		if (currentlyLoadedImage.uniqueId != uniqueId)
 			self.CameraOrResolutionChange();
 
 		// actualwidth and actualheight must be set after [CameraOrResolutionChange]
@@ -6529,7 +6541,7 @@ function VideoPlayerController()
 			playbackControls.SetProgressText(str);
 		}
 
-		if (currentlyLoadingImage.path != path)
+		if (currentlyLoadingImage.uniqueId != uniqueId)
 			return;
 
 		if (!currentlyLoadedImage.isLive)
@@ -6596,6 +6608,7 @@ function BICameraData()
 	this.actualwidth = 1280; // Actual size of image (when streaming jpeg, this is smaller than maxwidth)
 	this.actualheight = 720;
 	this.path = "";
+	this.uniqueId = "";
 	this.isLive = true;
 	this.ptz = false;
 	this.msec = 10000; // Millisecond duration of clips/alerts.  Ignore this if isLive is set.
@@ -6613,6 +6626,7 @@ function BICameraData()
 		self.actualwidth = other.actualwidth;
 		self.actualheight = other.actualheight;
 		self.path = other.path;
+		self.uniqueId = other.uniqueId;
 		self.isLive = other.isLive;
 		self.ptz = other.ptz;
 		self.msec = other.msec;
@@ -6649,7 +6663,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 			else
 			{
 				// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
-				videoPlayer.ImageRendered(img.myPath, this.naturalWidth, this.naturalHeight, performance.now() - img.startTime, false);
+				videoPlayer.ImageRendered(img.myUniqueId, this.naturalWidth, this.naturalHeight, performance.now() - img.startTime, false);
 				// Rendering the image shows the jpegPreviewModule again.
 				self.RenderImage(img.id);
 			}
@@ -6681,12 +6695,12 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 		Show();
 		videoOverlayHelper.HideLoadingOverlay();
 	}
-	this.RenderDataURI = function (startTime, path, dataUri)
+	this.RenderDataURI = function (startTime, uniqueId, dataUri)
 	{
 		Initialize();
 		var img = $("#jpegPreview_img").get(0);
 		img.startTime = startTime;
-		img.myPath = path;
+		img.myUniqueId = uniqueId;
 		img.src = dataUri;
 	}
 })();
@@ -6714,6 +6728,7 @@ function JpegVideoModule()
 	var staticSnapshotId = "";
 	var lastSnapshotUrl = "";
 	var lastSnapshotFullUrl = "";
+	var honorAlertOffset = false;
 
 	var playbackPaused = false;
 
@@ -6747,7 +6762,7 @@ function JpegVideoModule()
 			{
 				loadedFirstFrame = true;
 				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
-				videoPlayer.ImageRendered(loading.path, this.naturalWidth, this.naturalHeight, msLoadingTime, new Date(currentImageRequestedAtMs));
+				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, new Date(currentImageRequestedAtMs));
 
 				var loaded = videoPlayer.Loaded().image;
 				if (loaded.id.startsWith("@"))
@@ -6847,6 +6862,7 @@ function JpegVideoModule()
 		lastOpenVideoCallAt = perfNow;
 		console.log("jpeg.OpenVideo");
 		loading.CopyValuesFrom(videoData);
+		honorAlertOffset = offsetPercent === -1;
 		if (!offsetPercent)
 			offsetPercent = 0;
 		if (loading.isLive)
@@ -6863,7 +6879,11 @@ function JpegVideoModule()
 	}
 	this.GetSeekPercent = function ()
 	{
-		return Clamp(clipPlaybackPosition / (loading.msec - 1), 0, 1);
+		var lastMs = loading.msec - 1;
+		if (lastMs === 0)
+			return 0;
+		else
+			return Clamp(clipPlaybackPosition / lastMs, 0, 1);
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
@@ -6901,6 +6921,11 @@ function JpegVideoModule()
 				timePassed *= -1;
 			clipPlaybackPosition += timePassed;
 
+			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
+			if (honorAlertOffset && clipData != null)
+				clipPlaybackPosition = clipData.offsetMs; // This offset is where the alert begins within the clip.
+			honorAlertOffset = false;
+
 			if (clipPlaybackPosition < 0)
 			{
 				clipPlaybackPosition = 0;
@@ -6914,13 +6939,13 @@ function JpegVideoModule()
 
 			timeValue = clipPlaybackPosition;
 			// Update currentImageTimestampMs so that saved snapshots know the time for file naming
-			var clipData = clipLoader.GetCachedClip(loading.id, loading.path);
 			if (clipData != null)
 			{
+				// TODO: This currentImageTimestampMs calculation is likely broken for alerts now.
 				currentImageTimestampMs = clipData.date.getTime() + clipPlaybackPosition;
 				isLoadingRecordedSnapshot = clipData.isSnapshot;
 				if (isLoadingRecordedSnapshot)
-					staticSnapshotId = loading.path;
+					staticSnapshotId = loading.clipId;
 				else
 					staticSnapshotId = "";
 			}
@@ -6942,7 +6967,7 @@ function JpegVideoModule()
 		else
 		{
 			if ((isLoadingRecordedSnapshot
-				&& loading.path == videoPlayer.Loaded().image.path
+				&& loading.uniqueId == videoPlayer.Loaded().image.uniqueId
 				&& !CouldBenefitFromWidthChange(widthToRequest))
 				|| !isVisible
 			)
@@ -7136,7 +7161,7 @@ function FetchOpenH264VideoModule()
 			return;
 		isInitialized = true;
 		// Do one-time initialization here
-		console.log("Initializing openh264_player");
+		//console.log("Initializing openh264_player");
 		openh264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
 	}
 	var Activate = function ()
@@ -7146,7 +7171,7 @@ function FetchOpenH264VideoModule()
 		isCurrentlyActive = true;
 		lastActivatedAt = performance.now();
 		// Show yourself
-		console.log("Activating openh264_player");
+		//console.log("Activating openh264_player");
 		$("#volumeBar").removeClass("audioTemporarilyUnavailable");
 		openh264_player.GetCanvasRef().appendTo("#camimg_wrapper");
 		ClearCanvas("openh264_player_canvas");
@@ -7158,7 +7183,7 @@ function FetchOpenH264VideoModule()
 			return;
 		isCurrentlyActive = false;
 		// Stop what you are doing and hide
-		console.log("Deactivating openh264_player");
+		//console.log("Deactivating openh264_player");
 		$("#volumeBar").addClass("audioTemporarilyUnavailable");
 		StopStreaming();
 		openh264_player.GetCanvasRef().appendTo("#camimg_store");
@@ -7207,8 +7232,9 @@ function FetchOpenH264VideoModule()
 			}, 5);
 			return;
 		}
-		console.log("h264.OpenVideo");
+		//console.log("h264.OpenVideo");
 		loading.CopyValuesFrom(videoData);
+		var honorAlertOffset = offsetPercent === -1;
 		if (!offsetPercent)
 			offsetPercent = 0;
 		if (loading.isLive)
@@ -7227,7 +7253,7 @@ function FetchOpenH264VideoModule()
 		var videoUrl;
 		if (loading.isLive)
 		{
-			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + audioArg + "&stream=" + h264QualityHelper.getQualityArg() + "&extend=2";
+			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2";
 		}
 		else
 		{
@@ -7236,11 +7262,24 @@ function FetchOpenH264VideoModule()
 				speed *= -1;
 			if (startPaused)
 				speed = 0;
-			var clipData = clipLoader.GetCachedClip(loading.id, loading.path);
+			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
+			var offsetArg = "";
 			if (clipData)
 			{
 				isLoadingRecordedSnapshot = clipData.isSnapshot;
 				currentImageDateMs = clipData.date.getTime();
+				if (honorAlertOffset)
+				{
+					// We are starting the alert at a specific offset that was provided in kilobytes.
+					offsetArg = "&kbseek=" + clipData.offsetKb;
+					// The "pos" argument must be provided alongside "kbseek", even though "pos" will be ignored by Blue Iris.
+					// We recalculate the seek position here anyway because it helps with UI accuracy before the first frame arrives.
+					var lastMs = (clipData.msec - 1);
+					if (lastMs === 0)
+						currentSeekPositionPercent = 0;
+					else
+						currentSeekPositionPercent = Clamp(clipData.offsetMs / lastMs, 0, 1);
+				}
 			}
 			var widthAndQualityArg = "";
 			if (speed == 0)
@@ -7251,7 +7290,8 @@ function FetchOpenH264VideoModule()
 				didRequestAudio = false;
 				audioArg = "";
 			}
-			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + "&pos=" + parseInt(currentSeekPositionPercent * 10000) + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getQualityArg() + "&extend=2" + widthAndQualityArg;
+			var posArg = "&pos=" + parseInt(currentSeekPositionPercent * 10000);
+			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -7300,7 +7340,7 @@ function FetchOpenH264VideoModule()
 						PlaybackReachedNaturalEnd(1);
 					}, loading.msec);
 				}
-				jpegPreviewModule.RenderDataURI(frame.startTime, loading.path, frame.jpeg);
+				jpegPreviewModule.RenderDataURI(frame.startTime, loading.uniqueId, frame.jpeg);
 			}
 			else
 				openh264_player.AcceptFrame(frame);
@@ -7335,7 +7375,7 @@ function FetchOpenH264VideoModule()
 	}
 	this.GetStaticSnapshotId = function ()
 	{
-		return "";
+		return loading.clipId;
 	}
 	this.GetCurrentImageTimeMs = function ()
 	{
@@ -7415,7 +7455,7 @@ function FetchOpenH264VideoModule()
 		currentImageDateMs = frame.utc;
 		currentSeekPositionPercent = frame.pos / 10000;
 		var timeNow = performance.now();
-		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
+		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
 		writeNerdStats(frame, timeNow);
 		lastFrameAt = timeNow;
 		if (playbackPaused && !loading.isLive)
@@ -7425,7 +7465,7 @@ function FetchOpenH264VideoModule()
 	}
 	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
 	{
-		console.log("fetch stream ended: ", message);
+		//console.log("fetch stream ended: ", message);
 		if (!safeFetch.IsActive())
 			volumeIconHelper.setColorIdle();
 		if (wasJpeg)
@@ -7452,7 +7492,7 @@ function FetchOpenH264VideoModule()
 	}
 	var PlaybackReachedNaturalEnd = function (frameCount)
 	{
-		console.log("playback reached natural end of file after " + frameCount + " frames");
+		//console.log("playback reached natural end of file after " + frameCount + " frames");
 		if (!safeFetch.IsActive())
 			volumeIconHelper.setColorIdle();
 		if (loading.isLive)
@@ -8493,7 +8533,7 @@ function JpegQualityHelper()
 function H264QualityHelper()
 {
 	var self = this;
-	this.getQualityArg = function ()
+	this.getStreamArg = function ()
 	{
 		var currentQualityId = genericQualityHelper.GetID();
 		if (currentQualityId == "S0") // Streaming 0 profile
@@ -8676,8 +8716,7 @@ function CanvasContextMenu()
 
 		videoPlayer.suppressMouseHelper();
 
-		lastRecordContextMenuSelectedClip = clipLoader.GetCachedClip(videoPlayer.Loading().image.id, videoPlayer.Loading().image.path);
-		var clipData = clipLoader.GetClipFromId(lastRecordContextMenuSelectedClip.clipId);
+		var clipData = lastRecordContextMenuSelectedClip = clipLoader.GetClipFromId(videoPlayer.Loading().image.uniqueId);
 		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").closest(".b-m-item");
@@ -9696,7 +9735,6 @@ function ClipProperties()
 			$thumb.css("border-color", "#" + clipData.colorHex);
 			$camprop.append($thumb);
 
-			//$camprop.append(GetInfo("Path", clipData.path));
 			$camprop.append(GetInfo("Date", GetDateStr(clipData.displayDate)));
 			if (clipData.isClip)
 				$camprop.append(GetInfo("Real Time", clipData.roughLength).attr("title", "Real Time: Length of real time this clip covers.\nMay be significantly longer than Play Time if created from multiple alerts."));
