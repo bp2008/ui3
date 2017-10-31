@@ -57,12 +57,12 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 
 .selectable
 {
-	-webkit-touch-callout: initial;
-	-webkit-user-select: initial;
-	-khtml-user-select: initial;
-	-moz-user-select: initial;
-	-ms-user-select: initial;
-	user-select: initial;
+	-webkit-touch-callout: text;
+	-webkit-user-select: text;
+	-khtml-user-select: text;
+	-moz-user-select: text;
+	-ms-user-select: text;
+	user-select: text;
 	cursor: initial;
 }
 
@@ -1133,6 +1133,7 @@ div.icon, a.icon
 {
 	opacity: 0.333;
 }
+
 #volumeBar.audioTemporarilyUnavailable,
 #volumeBar.audioPermanentlyUnavailable
 {
@@ -1181,6 +1182,7 @@ div.icon, a.icon
 	height: 12px;
 	margin: 2px 0px;
 }
+
 #volumeBar.wide .progressBarOuter
 {
 	width: 70px;
@@ -2408,6 +2410,11 @@ div.icon, a.icon
 {
 	float: right;
 }
+
+#optionalFeaturesNotSupported
+{
+	display: none;
+}
 /* jpegSuppressionDialog */
 .jpegSuppressionDialog
 {
@@ -2919,7 +2926,6 @@ div.icon, a.icon
 {
 	box-sizing: border-box;
 	height: 28px;
-	line-height: 28px;
 	margin: 0px 10px;
 	float: right;
 }

@@ -9,6 +9,7 @@ var developerMode = false;
 // Feature Detect /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var h264_playback_supported = false;
+var audio_playback_supported = false;
 var web_workers_supported = false;
 var fetch_supported = false;
 var readable_stream_supported = false;
@@ -30,7 +31,6 @@ function DoUIFeatureDetection()
 			web_workers_supported = typeof Worker !== "undefined";
 			fetch_supported = typeof fetch == "function";
 			readable_stream_supported = typeof ReadableStream == "function";
-			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported;
 			var AudioContext = window.AudioContext || window.webkitAudioContext;
 			if (AudioContext)
 			{
@@ -48,7 +48,40 @@ function DoUIFeatureDetection()
 				}
 				catch (ex) { }
 			}
-
+			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported;
+			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported;
+			$(function ()
+			{
+				if (!h264_playback_supported || !audio_playback_supported)
+				{
+					var ul_root = $('<ul></ul>');
+					if (!h264_playback_supported)
+					{
+						var ul = $('<ul></ul>');
+						if (!web_workers_supported)
+							ul.append('<li>Web Workers</li>');
+						if (!fetch_supported)
+							ul.append('<li>Fetch API</li>');
+						if (!readable_stream_supported)
+							ul.append('<li>ReadableStream</li>');
+						ul_root.append($('<li>The H.264 video player requires these unsupported features:</li>').append(ul));
+					}
+					if (!audio_playback_supported)
+					{
+						var ul = $('<ul></ul>');
+						if (!h264_playback_supported)
+							ul.append('<li>H.264 Video Player</li>');
+						if (!web_audio_supported)
+							ul.append('<li>Web Audio API</li>');
+						if (!web_audio_buffer_source_supported)
+							ul.append('<li>AudioBufferSourceNode</li>');
+						ul_root.append($('<li>The audio player requires these unsupported features:</li>').append(ul));
+					}
+					var $opt = $('#optionalFeaturesNotSupported');
+					$opt.append(ul_root);
+					$opt.show();
+				}
+			});
 			return;
 		}
 		// A critical test failed
@@ -216,22 +249,12 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: The (touch) gesture that shows the playback controls should not be able to activate click actions on the playback controls.  I'm not sure what the best way to handle this is.  Perhaps a flag set on mousedown/touchstart that is unset with a 0ms timeout after mouseup/touchend/touchcancel/etc.
-// CONSIDER: An input event within the bounds of the live playback controls that also show the live playback controls should not count toward MouseHelper clicks or double-clicks.
-// CONSIDER: (+1 Should be pretty easy) Admin login prompt could pass along a callback method, to refresh panels like the server log, server configuration, full camera list, camera properties.  Also, test all functionality as a standard user to see if admin prompts are correctly shown.
-// CONSIDER: The video streaming loop is recursive and in theory this would lead to a stack overflow eventually.  Consider using a setTimeout(..., 0) every 100 or something pump calls to clear the call stack and in theory avoid a stack overflow.
-// CONSIDER: Consider having a dialog that shows which optional features were not detected, linked from the About dialog.
-// TODO: Remove debugging console.log calls in PcmAudioPlayer.
-// TODO: Add a button to UI settings that resets all settings to defaults.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// CONSIDER: I am aware that pausing H.264 playback before the first frame loads will cause no frame to load, and this isn't the best user-experience.  Currently this is more trouble than it is worth to fix.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
-// CONSIDER: Consider a "help" dialog in the main menu.  This should probably be an external file that gets loaded on demand.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -342,6 +365,34 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_collapsible_filterRecordings"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_info_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_gs_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_mt_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_mro_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_mgmt_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_General_Settings_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_Hotkeys_visible"
 			, value: "1"
 		}
 		, {
@@ -764,7 +815,7 @@ function OverrideDefaultSetting(key, value, IncludeInOptionsWindow, AlwaysReload
 }
 function LoadDefaultSettings()
 {
-	if (settings == null) // This null check allows previously-available local overrides templates to replace the settings object.
+	if (settings == null) // This null check allows local overrides to replace the settings object.
 		settings = GetLocalStorageWrapper();
 	for (var i = 0; i < defaultSettings.length; i++)
 	{
@@ -773,6 +824,11 @@ function LoadDefaultSettings()
 			|| IsNewGeneration(defaultSettings[i].key, defaultSettings[i].Generation))
 			settings.setItem(defaultSettings[i].key, defaultSettings[i].value);
 	}
+}
+function RevertSettingsToDefault()
+{
+	for (var i = 0; i < defaultSettings.length; i++)
+		settings.setItem(defaultSettings[i].key, defaultSettings[i].value);
 }
 function GetLocalStorage()
 {
@@ -1616,6 +1672,7 @@ function DropdownBoxes()
 					var schedulesArray = sessionManager.GetSchedulesArray();
 					if (schedulesArray && schedulesArray.length == 0)
 					{
+						console.log("Schedules array is empty. Opening login dialog because login responses provide the schedule list");
 						openLoginDialog();
 						return;
 					}
@@ -2266,7 +2323,7 @@ function PtzButtons()
 			return;
 		if (!sessionManager.IsAdministratorSession())
 		{
-			openLoginDialog();
+			openLoginDialog(function () { self.PresetSet(presetNumStr); });
 			return;
 		}
 		var presetNum = parseInt(presetNumStr);
@@ -3096,10 +3153,25 @@ function PlaybackControls()
 	$layoutbody.on("mouseenter mousemove mousedown mouseup touchstart touchmove touchend touchcancel", function (e)
 	{
 		mouseCoordFixer.fix(e);
+		var wasHidden = !isVisible;
 		self.FadeIn();
 		clearHideTimout();
-		if (!pointInsideElement($pc, e.pageX, e.pageY) && !pointInsideElement($playbackSettings, e.pageX, e.pageY))
+		if (!pointInsideElement($pc, e.pageX, e.pageY)
+			&& !pointInsideElement($playbackSettings, e.pageX, e.pageY)
+			&& !pointInsideElement(playbackHeader.Get$Ref(), e.pageX, e.pageY))
 			hideTimeout = setTimeout(function () { self.FadeOut(); }, videoPlayer.Loading().image.isLive ? self.hideTimeMs_Live : self.hideTimeMs_Recordings);
+		else
+		{
+			if (wasHidden && (e.type == "mousedown" || e.type == "touchstart"))
+			{
+				// Playback controls were invisible before this event.  This code prevents the event from triggering playback button actions.
+				// stopImmediatePropagation (instead of stopPropagation) would prevent it from reaching MouseEventHelper too.
+				// On one hand, this might be more intuitive (maybe the touch was meant to reveal those controls).
+				// On the other hand, maybe the touch was meant to affect the video view.  There is no perfect solution.
+				e.stopPropagation();
+				e.preventDefault();
+			}
+		}
 	});
 	$(document).mouseup(function (e)
 	{
@@ -3345,6 +3417,10 @@ function PlaybackHeader()
 	{
 		var name = clipLoader.GetClipDisplayName(clipData);
 		$clipNameHeading.text(name);
+	}
+	this.Get$Ref = function ()
+	{
+		return $ph;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -3839,7 +3915,7 @@ function ClipLoader(clipsBodySelector)
 					clipData.camera = clip.camera;
 					clipData.path = clip.path;
 					clipData.flags = clip.flags;
-					clipData.audio = (clip.flags & b0000_0001) > 0;
+					clipData.audio = (clip.flags & clip_flag_audio) > 0;
 					clipData.date = new Date(clip.date * 1000);
 					clipData.displayDate = GetServerDate(clipData.date);
 					clipData.colorHex = BlueIrisColorToCssColor(clip.color);
@@ -3854,22 +3930,35 @@ function ClipLoader(clipsBodySelector)
 					clipData.clipId = clip.path.replace(/@/g, "").replace(/\..*/g, "");
 					clipData.thumbPath = clip.path;
 
-					if (!isSameDay(previousClipDate, clipData.displayDate))
-					{
-						// TODO: (minor importance) Deal with adding new date tiles when isUpdateOfExistingList is true.  Perhaps just fake it and do a full clip list load when the system time changes from one day to the next.
-						if (previousClipDate.getTime() == 0)
-							$clipListTopDate.attr("defaultStr", GetDateDisplayStr(clipData.displayDate)); // Do not add the first date tile because it is redundant with a date display above the list.
-						else if (!isUpdateOfExistingList)
-						{
-							tileLoader.registerOnAppearDisappear({ isDateTile: true, date: clipData.displayDate }, DateTileOnAppear, DateTileOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
-							TotalDateTilesLoaded++;
-						}
-					}
-					previousClipDate = clipData.date;
-
 					if (!clipListCache[clip.camera])
 						clipListCache[clip.camera] = new Object();
 					var existingClipData = clipListCache[clip.camera][clip.path];
+
+					if (!isSameDay(previousClipDate, clipData.displayDate))
+					{
+						if (previousClipDate.getTime() == 0)
+							$clipListTopDate.attr("defaultStr", GetDateDisplayStr(clipData.displayDate)); // Do not add the first date tile because it is redundant with a date display above the list.
+						else
+						{
+							if (isUpdateOfExistingList)
+							{
+								if (!existingClipData)
+								{
+									// This adds the appropriate date tile if a day boundary is found within a background update.
+									newUpdateClips.push({ isDateTile: true, date: clipData.displayDate });
+									TotalDateTilesLoaded++;
+								}
+							}
+							else
+							{
+								tileLoader.registerOnAppearDisappear({ isDateTile: true, date: clipData.displayDate }, DateTileOnAppear, DateTileOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
+								TotalDateTilesLoaded++;
+							}
+						}
+					}
+
+					previousClipDate = clipData.displayDate;
+
 					if (existingClipData)
 					{
 						UpdateExistingClipData(existingClipData, clipData);
@@ -3896,9 +3985,16 @@ function ClipLoader(clipsBodySelector)
 				}
 				if (isUpdateOfExistingList && newUpdateClipIds.length > 0)
 				{
+					var oldestOfNewClipIds = newUpdateClipIds[newUpdateClipIds.length - 1];
+					if (loadedClipIds.length > 0 && !isSameDay(clipListIdCache[loadedClipIds[0]].displayDate, clipListIdCache[oldestOfNewClipIds].displayDate))
+					{
+						// This adds the appropriate date tile if a day boundary is found between a background update and the previously-loaded clips.
+						newUpdateClips.push({ isDateTile: true, date: clipListIdCache[loadedClipIds[0]].displayDate });
+						TotalDateTilesLoaded++;
+					}
 					loadedClipIds = newUpdateClipIds.concat(loadedClipIds);
 					tileLoader.preserveScrollPosition(clipTileHeight, HeightOfOneDateTilePx, newUpdateClipIds.length);
-					tileLoader.injectNewClips(newUpdateClips, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
+					tileLoader.injectNewClips(newUpdateClips, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx, DateTileOnAppear, DateTileOnDisappear);
 					clipListGrew = true;
 				}
 
@@ -4391,8 +4487,8 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ToggleClipFlag = function (clipData, onSuccess, onFailure)
 	{
-		var camIsFlagged = (clipData.flags & 2) > 0;
-		var newFlags = camIsFlagged ? clipData.flags ^ 2 : clipData.flags | 2;
+		var camIsFlagged = (clipData.flags & clip_flag_flag) > 0;
+		var newFlags = camIsFlagged ? clipData.flags ^ clip_flag_flag : clipData.flags | clip_flag_flag;
 		UpdateClipFlags(clipData.path.replace(/\..*/g, ""), newFlags, function ()
 		{
 			// Success setting flag state
@@ -4440,20 +4536,26 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ClipDataIndicatesFlagged = function (clipData)
 	{
-		return (clipData.flags & 2) > 0;
+		return (clipData.flags & clip_flag_flag) > 0;
 	}
 	this.Multi_Flag = function (allSelectedClipIDs, flagEnable, idx, myToast)
 	{
-		Multi_Operation("flag", allSelectedClipIDs, { flagEnable: flagEnable }, 0, null);
+		if (!sessionManager.IsAdministratorSession())
+			return openLoginDialog(function () { self.Multi_Flag(allSelectedClipIDs, flagEnable, idx, myToast); });
+		Multi_Operation("flag", allSelectedClipIDs, { flagEnable: flagEnable }, 0, null, 0);
 	}
 	this.Multi_Delete = function (allSelectedClipIDs)
 	{
-		Multi_Operation("delete", allSelectedClipIDs, null, 0, null);
+		if (!sessionManager.IsAdministratorSession())
+			return openLoginDialog(function () { self.Multi_Delete(allSelectedClipIDs); });
+		Multi_Operation("delete", allSelectedClipIDs, null, 0, null, 0);
 	}
-	var Multi_Operation = function (operation, allSelectedClipIDs, args, idx, myToast)
+	var Multi_Operation = function (operation, allSelectedClipIDs, args, idx, myToast, errorCount)
 	{
 		if (!idx)
 			idx = 0;
+		if (!errorCount)
+			errorCount = 0;
 
 		if (idx == 0 && bulkOperationInProgress)
 		{
@@ -4463,7 +4565,7 @@ function ClipLoader(clipsBodySelector)
 
 		if (idx >= allSelectedClipIDs.length)
 		{
-			Multi_Operation_Stop(operation, myToast, false);
+			Multi_Operation_Stop(operation, myToast, allSelectedClipIDs.length, errorCount);
 			return;
 		}
 
@@ -4500,10 +4602,10 @@ function ClipLoader(clipsBodySelector)
 				{
 					self.ToggleClipFlag(clipData, function ()
 					{
-						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast);
+						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
 					}, function ()
 						{
-							Multi_Operation_Stop(operation, myToast, true);
+							Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
 						});
 					return;
 				}
@@ -4512,39 +4614,45 @@ function ClipLoader(clipsBodySelector)
 			{
 				DeleteAlert(clipData.path, clipData.isClip, function ()
 				{
-					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast);
+					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
 				},
 					function (message)
 					{
 						toaster.Warning(message, 10000);
-						Multi_Operation_Stop(operation, myToast, true);
+						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
 					});
 				return;
 			}
 		}
 		else
 		{
-			Multi_Operation_Stop(operation, myToast, true);
-			return;
+			console.log('Null clipData encountered (clip ID "' + allSelectedClipIDs[idx] + '")');
+			errorCount++;
 		}
 		setTimeout(function ()
 		{
-			Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast);
+			Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
 		}, 0);
 	}
-	var Multi_Operation_Stop = function (operation, myToast, endedEarly)
+	var Multi_Operation_Stop = function (operation, myToast, totalItems, errorCount)
 	{
 		bulkOperationInProgress = false;
 		if (myToast)
 			myToast.remove();
-		if (endedEarly)
+		if (errorCount > 0)
 		{
-			toaster.Error("Bulk " + operation + " operation failed without completing.", 15000);
+			if (totalItems == 1 && operation == "delete")
+			{
+				// Deletion errors are already reported, and since this was a single deletion, there is no reason to create another error toast.
+			}
+			else
+				toaster.Error("Bulk " + operation + " operation failed on<br/> " + errorCount + " / " + totalItems + " items.", 15000);
 		}
-		else
+		if (totalItems - errorCount > 0)
 		{
 			if (operation == "delete")
 			{
+				// Some deletions were successful, so reload.
 				self.LoadClips();
 			}
 		}
@@ -4825,14 +4933,20 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 		appearDisappearRegisteredObjects = new Array();
 		appearedObjects = new Array();
 	}
-	this.injectNewClips = function (newClips, callbackOnAppearFunc, callbackOnDisappearFunc, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx)
+	this.injectNewClips = function (newClips, ClipOnAppear, ClipOnDisappear, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx, DateTileOnAppear, DateTileOnDisappear)
 	{
 		for (var i = 0; i < newClips.length; i++)
-			prepareClipDataForRegistration(newClips[i], callbackOnAppearFunc, callbackOnDisappearFunc, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx);
+		{
+			if (newClips[i].isDateTile)
+				prepareClipDataForRegistration(newClips[i], DateTileOnAppear, DateTileOnDisappear, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx);
+			else
+				prepareClipDataForRegistration(newClips[i], ClipOnAppear, ClipOnDisappear, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx);
+		}
 		appearDisappearRegisteredObjects = newClips.concat(appearDisappearRegisteredObjects);
 	}
 	this.resizeClipList = function (HeightOfOneClipTilePx, HeightOfOneDateTilePx)
 	{
+		/// <summary>Calculates new positions for all clip and date tiles in the list. Should be called after UI resizes and after registering new objects.</summary>
 		nextY = 0;
 		var scrollTop = $clipsbody.scrollTop();
 		var topmostVisibleElement = null;
@@ -4951,21 +5065,21 @@ function StatusLoader()
 			if (sessionManager.IsAdministratorSession())
 				args.profile = parseInt(profileNum);
 			else
-				openLoginDialog();
+				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
 		}
 		if (typeof stoplightState != "undefined" && stoplightState != null)
 		{
 			if (sessionManager.IsAdministratorSession())
 				args.signal = parseInt(stoplightState);
 			else
-				openLoginDialog();
+				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
 		}
 		if (typeof schedule != "undefined" && schedule != null)
 		{
 			if (sessionManager.IsAdministratorSession())
 				args.schedule = schedule;
 			else
-				openLoginDialog();
+				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
 		}
 		ExecJSON(args, function (response)
 		{
@@ -5531,6 +5645,11 @@ function SessionManager()
 			if (user == "")
 				user = "administrator";
 			toaster.Success("Logged in as " + htmlEncode(user) + "<br/>(Administrator)<br/><br/>Server \"" + lastResponse.data["system name"] + "\"<br/>Blue Iris version " + lastResponse.data.version);
+			if (typeof adminLoginCallbackSuccess == "function")
+			{
+				adminLoginCallbackSuccess(lastResponse);
+				adminLoginCallbackSuccess = null;
+			}
 			closeLoginDialog();
 		}
 		else
@@ -5897,11 +6016,11 @@ function VideoPlayerController()
 
 	var mouseHelper = null;
 
-	this.suppressMouseHelper = function ()
+	this.suppressMouseHelper = function (invalidateNextEvent)
 	{
 		/// <summary>Call this from mouse or touch events that conflict with the VideoPlayer's double-click helper, and past events will no longer count toward new clicks or drags.</summary>
 		if (mouseHelper)
-			mouseHelper.Invalidate();
+			mouseHelper.Invalidate(invalidateNextEvent);
 	}
 
 	this.getDoubleClickTime = function ()
@@ -6138,7 +6257,6 @@ function VideoPlayerController()
 	{
 		DoThingIfImgClickEligible(event, self.ImgClick_Camera);
 	}
-	// CONSIDER: Make ImgClick_Camera private
 	this.ImgClick_Camera = function (camData)
 	{
 		var scaleOut = false;
@@ -6150,7 +6268,7 @@ function VideoPlayerController()
 				playerModule.DrawFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
 			self.LoadLiveCamera(camData);
 			if (scaleOut && playerModule.DrawFullCameraAsThumb)
-				self.CameraOrResolutionChange(); // TODO: Verify this is working correctly here
+				self.CameraOrResolutionChange();
 		}
 		else
 		{
@@ -6159,7 +6277,7 @@ function VideoPlayerController()
 				playerModule.DrawThumbAsFullCamera(camData.optionValue);
 			self.LoadLiveCamera(camData);
 			if (playerModule.DrawThumbAsFullCamera)
-				self.CameraOrResolutionChange(); // TODO: Verify this is working correctly here
+				self.CameraOrResolutionChange();
 		}
 	}
 
@@ -7231,7 +7349,7 @@ function FetchOpenH264VideoModule()
 	{
 		playbackPaused = true;
 		playbackControls.setPlayPauseButtonState(playbackPaused);
-		if (!loading.isLive)
+		if (!loading.isLive && openh264_player.GetRenderedFrameCount() > 0)
 			StopStreaming();
 	}
 	this.Playback_Play = function ()
@@ -7298,8 +7416,8 @@ function FetchOpenH264VideoModule()
 		currentSeekPositionPercent = frame.pos / 10000;
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.path, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
-		lastFrameAt = timeNow;
 		writeNerdStats(frame, timeNow);
+		lastFrameAt = timeNow;
 		if (playbackPaused && !loading.isLive)
 		{
 			StopStreaming();
@@ -7606,7 +7724,6 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	this.Flush = function ()
 	{
 		decoder.Flush();
-		// CONSIDER: consider constructing new averageRenderTime and averageDecodeTime here.
 		renderScheduler.Reset(averageRenderTime);
 		acceptedFrameCount = 0;
 		decodedFrameCount = 0;
@@ -7903,7 +8020,7 @@ function NetDelayCalc()
 		if (baseRealTime == -1)
 			return 0;
 		var realTimePassed = performance.now() - baseRealTime;
-		// CONSIDER: Blue Iris does not increase frame timestamps at a rate equivalent to real time while encoding a reduced-speed video.
+		// Blue Iris does not increase frame timestamps at a rate equivalent to real time while encoding a reduced-speed video.
 		// I know it is overcompensating wildly, but I'm using playSpeed as a multiplier here to ensure we don't show erroneous network delay messages in the UI.
 		// The network would have to be performing exceptionally poorly to show high network delay while playing at a reduced speed.
 		if (!videoPlayer.Loading().image.isLive)
@@ -8178,9 +8295,6 @@ function ImageRenderer()
 		{
 			outerObjs.removeClass("grabcursor");
 			outerObjs.removeClass("grabbingcursor");
-			// TODO: Evaluate if the innerObjs cursor set can be skipped. This appears to be the only place the style is set.
-			var innerObjs = $('#camimg_wrapper,#zoomhint');
-			innerObjs.css("cursor", "default");
 		}
 	}
 	this.CamImgDragStart = function (e)
@@ -8763,15 +8877,12 @@ function ClipListContextMenu()
 		switch (this.data.alias)
 		{
 			case "flag":
-				if (!sessionManager.IsAdministratorSession())
-				{
-					openLoginDialog();
-					return;
-				}
+				var whatAction = (flagEnable ? "flag" : "unflag");
+				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s");
 				if (allSelectedClipIDs.length <= 12)
 					clipLoader.Multi_Flag(allSelectedClipIDs, flagEnable);
 				else
-					AskYesNo("Confirm " + (flagEnable ? "flag" : "unflag") + " of " + allSelectedClipIDs.length + " " + (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s") + "?", function ()
+					AskYesNo("Confirm " + whatAction + " of " + allSelectedClipIDs.length + " " + whichKind + "?", function ()
 					{
 						clipLoader.Multi_Flag(allSelectedClipIDs, flagEnable);
 					});
@@ -8783,12 +8894,8 @@ function ClipListContextMenu()
 					clipDownloadDialog.open(allSelectedClipIDs);
 				break;
 			case "delete":
-				if (!sessionManager.IsAdministratorSession())
-				{
-					openLoginDialog();
-					return;
-				}
-				AskYesNo("Confirm deletion of " + allSelectedClipIDs.length + " " + (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s") + "?", function ()
+				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				AskYesNo("Confirm deletion of " + allSelectedClipIDs.length + " " + whichKind + "?", function ()
 				{
 					clipLoader.Multi_Delete(allSelectedClipIDs);
 				});
@@ -8916,7 +9023,8 @@ function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onT
 ///////////////////////////////////////////////////////////////
 function CameraConfig()
 {
-	this.get = function (camId, successCallbackFunc, failCallbackFunc)
+	var self = this;
+	this.get = function (camId, successCallbackFunc, failCallbackFunc, adminLoginCallback)
 	{
 		ExecJSON({ cmd: "camconfig", camera: camId }, function (response)
 		{
@@ -8929,7 +9037,7 @@ function CameraConfig()
 			{
 				if (failCallbackFunc)
 					failCallbackFunc(camId);
-				openLoginDialog();
+				openLoginDialog(adminLoginCallback);
 				return;
 			}
 			if (successCallbackFunc)
@@ -9012,7 +9120,7 @@ function CameraConfig()
 			}
 			if (response.result == "fail")
 			{
-				openLoginDialog();
+				openLoginDialog(function () { self.set(camId, key, value, successCallbackFunc, failCallbackFunc); });
 				return;
 			}
 			console.log('CameraConfig Set ("' + htmlEncode(camId) + '", "' + htmlEncode(key) + '", "' + htmlEncode(value) + '")');
@@ -9376,9 +9484,14 @@ function CameraProperties()
 
 				modal_cameraPropDialog.contentChanged(!loadedOnce);
 				loadedOnce = true;
-			}, function ()
+			}
+				, function ()
 				{
 					CloseCameraProperties();
+				}
+				, function ()
+				{
+					self.open(camId);
 				});
 		}
 	}
@@ -9815,7 +9928,7 @@ function TriggerCamera(camId)
 	{
 		if (typeof response.result != "undefined" && response.result == "fail")
 		{
-			openLoginDialog();
+			openLoginDialog(function () { TriggerCamera(camId); });
 			return;
 		}
 		if (response.result == "success")
@@ -9840,7 +9953,7 @@ function UpdateClipFlags(path, flags, cbSuccess, cbFailure)
 				cbFailure();
 			else
 				toaster.Warning("Failed to update clip properties");
-			openLoginDialog();
+			openLoginDialog(function () { UpdateClipFlags(path, flags, cbSuccess, cbFailure); });
 			return;
 		}
 		else
@@ -9873,7 +9986,7 @@ function DeleteAlert(path, isClip, cbSuccess, cbFailure)
 			else
 				toaster.Warning(msg, 10000);
 			if (!sessionManager.IsAdministratorSession())
-				openLoginDialog();
+				openLoginDialog(function () { DeleteAlert(path, isClip, cbSuccess, cbFailure); });
 			return;
 		}
 		else
@@ -9936,7 +10049,7 @@ function SystemConfig()
 			if (response.result == "fail")
 			{
 				CloseSysConfigDialog();
-				openLoginDialog();
+				openLoginDialog(self.open);
 				return;
 			}
 			var $sysconfig = $("#sysconfigcontent");
@@ -9980,7 +10093,7 @@ function SystemConfig()
 			}
 			if (response.result == "fail")
 			{
-				openLoginDialog();
+				openLoginDialog(function () { SetSysConfig(key, value); });
 				return;
 			}
 			toaster.Success('Set configuration field "' + htmlEncode(key) + '" = "' + htmlEncode(value) + '"');
@@ -10000,7 +10113,7 @@ function ListDialog(options_arg)
 	var loadedOnce = false;
 	var $content;
 
-	var settings = $.extend({
+	var listSettings = $.extend({
 		title: "Unnamed List Dialog"
 		, json_command: ""
 		, headers: []
@@ -10014,7 +10127,7 @@ function ListDialog(options_arg)
 		$content = $('<div class="listDialogContent"><div style="text-align: center; margin-top: 20px;">Loading...</div></div>');
 		$dlg.append($content);
 		modal_dialog = $dlg.dialog({
-			title: settings.title
+			title: listSettings.title
 			, onRefresh: function () { refreshListDialog(); }
 			, onClosing: function ()
 			{
@@ -10027,7 +10140,7 @@ function ListDialog(options_arg)
 	var refreshListDialog = function ()
 	{
 		modal_dialog.setLoadingState(true);
-		ExecJSON({ cmd: settings.json_command }, function (response)
+		ExecJSON({ cmd: listSettings.json_command }, function (response)
 		{
 			if (modal_dialog == null)
 				return;
@@ -10035,30 +10148,30 @@ function ListDialog(options_arg)
 			if (typeof response.result == "undefined")
 			{
 				CloseListDialog();
-				toaster.Error("Unexpected response when requesting " + settings.title + " from server.");
+				toaster.Error("Unexpected response when requesting " + listSettings.title + " from server.");
 				return;
 			}
 			if (response.result == "fail")
 			{
 				CloseListDialog();
-				openLoginDialog();
+				openLoginDialog(self.open);
 				return;
 			}
 			if (!$content || $content.length == 0)
 				return;
 			var sb = [];
 			sb.push('<table><thead><tr>');
-			for (var i = 0; i < settings.headers.length; i++)
+			for (var i = 0; i < listSettings.headers.length; i++)
 			{
 				sb.push('<th>');
-				sb.push(settings.headers[i]);
+				sb.push(listSettings.headers[i]);
 				sb.push('</th>');
 			}
 			sb.push('</tr></thead><tbody></tbody></table>');
 			$content.html(sb.join(""));
 			var $tbody = $content.find("tbody");
 			for (var i = 0; i < response.data.length; i++)
-				$tbody.append(settings.get_row(response.data[i]));
+				$tbody.append(listSettings.get_row(response.data[i]));
 			modal_dialog.contentChanged(!loadedOnce);
 			loadedOnce = true;
 		}, function ()
@@ -10170,9 +10283,12 @@ function SaveSnapshotInBlueIris(camId)
 			else
 				toaster.Error("Blue Iris did not save a snapshot for camera " + camId);
 		})
-		.fail(function ()
+		.fail(function (jqXHR, textStatus, errorThrown)
 		{
-			toaster.Error("Blue Iris did not save a snapshot for camera " + camId);
+			if (jqXHR && jqXHR.status == 403)
+				openLoginDialog(function () { SaveSnapshotInBlueIris(camId); });
+			else
+				toaster.Error("Blue Iris did not save a snapshot for camera " + camId);
 		});
 }
 ///////////////////////////////////////////////////////////////
@@ -10196,7 +10312,8 @@ function closeAboutDialog()
 // Login Dialog ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var loginModal = null;
-function openLoginDialog()
+var adminLoginCallbackSuccess = null;
+function openLoginDialog(callbackSuccess)
 {
 	closeLoginDialog();
 	if (settings.bi_rememberMe == "1")
@@ -10207,15 +10324,21 @@ function openLoginDialog()
 	}
 	else
 		$("#cbRememberMe").prop("checked", false);
+	adminLoginCallbackSuccess = callbackSuccess;
 	loginModal = $("#loginDialog").dialog(
 		{
 			overlayOpacity: 0.3
 			, closeOnOverlayClick: true
 			, title: "Administrator Login"
+			, onClosing: function ()
+			{
+				adminLoginCallbackSuccess = null;
+			}
 		});
 }
 function closeLoginDialog()
 {
+	adminLoginCallbackSuccess = null;
 	if (loginModal != null)
 	{
 		loginModal.close();
@@ -10378,13 +10501,13 @@ function PcmAudioPlayer()
 		{
 			// This frame is late. Play it immediately.
 			nextTime = currentTime;
-			console.log("Audio frame is LATE by", offset);
+			//console.log("Audio frame is LATE by", offset);
 			offset = 0;
 		}
 		else if (offset < -0.7)
 		{
 			// We have received so many frames that we are queued at least 700ms ahead. Drop this frame.
-			console.log("Audio buffer is overfull at " + currentTime.toFixed(6) + " with " + offset.toFixed(6) + " milliseconds queued. Dropping audio frame to keep delay from growing too high.");
+			//console.log("Audio buffer is overfull at " + currentTime.toFixed(6) + " with " + offset.toFixed(6) + " milliseconds queued. Dropping audio frame to keep delay from growing too high.");
 			return;
 		}
 		pendingBufferQueue.enqueue(bufferSource);
@@ -12541,7 +12664,7 @@ function SimpleGraph()
 	}
 	var Refresh = function ()
 	{
-		dpiScale = 1;//BI_GetDevicePixelRatio();
+		dpiScale = 1;//BI_GetDevicePixelRatio(); // Rendering pixel-perfect on high DPI devices makes the graph harder to read because one pixel horizontally is one frame.
 		var h = Math.ceil($canvas.height() * dpiScale);
 		if (canvas.height != h)
 			canvas.height = h;
@@ -12553,7 +12676,7 @@ function SimpleGraph()
 			ctx.translate(0.5, 0);
 			ctx.imageSmoothingEnabled = false;
 			var newBuffer = new Array(canvas.width);
-			// Consider: Handle buffer resizes, preserving as much recent data as possible.
+			// CONSIDER: Handle buffer resizes, preserving as much recent data as possible.
 			//if (buffer)
 			//{
 			//	for (var i = 0, l = Math.min(buffer.length, newBuffer.length); i < l; i++)
@@ -12651,7 +12774,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	var singleClickTimeout = null;
 	var singleClickFunction = null;
 
-
+	var excludeNextEvent = false;
 	var exclude = false;
 	var excludeDragStart = false;
 	var clearExclusion = function ()
@@ -12807,12 +12930,13 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		dst.X = src.X;
 		dst.Y = src.Y;
 		dst.Time = src.Time;
-		dst.Excluded = exclude;
+		dst.Excluded = src.Excluded;
 		src.X = e.pageX;
 		src.Y = e.pageY;
 		src.Time = performance.now();
-		src.Excluded = exclude;
+		src.Excluded = exclude || excludeNextEvent;
 		lastEvent = eventType;
+		excludeNextEvent = false;
 	}
 	var positionsAreWithinTolerance = function (positionA, positionB)
 	{
@@ -12827,10 +12951,11 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			setTimeout(clearExclusion, 0);
 		}
 	}
-	this.Invalidate = function ()
+	this.Invalidate = function (invalidateNextEvent)
 	{
 		/// <summary>Sets the Excluded flag on all logged mouse events, causing them to not count toward clicks or double clicks.</summary>
 		lastMouseUp1.Excluded = lastMouseUp2.Excluded = lastMouseDown1.Excluded = lastMouseDown2.Excluded = true;
+		excludeNextEvent = invalidateNextEvent;
 	}
 	this.getDoubleClickTime = function ()
 	{
@@ -12907,19 +13032,20 @@ function UISettingsPanel()
 		});
 
 		for (var i = 0; i < settingsCategoryList.length; i++)
-			LoadCategory(i, settingsCategoryList[i]);
+			LoadCategory(settingsCategoryList[i]);
 
 		modal_dialog.contentChanged(true);
 	}
-	var LoadCategory = function (index, category)
+	var LoadCategory = function (category)
 	{
-		var cat = new CollapsibleSection("uiSettings_category_" + index, category, modal_dialog);
+		var cat = new CollapsibleSection("uiSettings_category_" + category, category, modal_dialog);
 
 		var rowIdx = 0;
 		if (category == "General Settings")
 		{
 			if (settings.bi_rememberMe == "1")
 				rowIdx = Add_ForgetSavedCredentialsButton(cat, rowIdx);
+			rowIdx = Add_ResetAllSettingsButton(cat, rowIdx);
 		}
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
@@ -12995,6 +13121,25 @@ function UISettingsPanel()
 		});
 		$row.append($input);
 		$row.append(GetDialogOptionLabel("Forget Saved Credentials"));
+		if (rowIdx++ % 2 == 1)
+			$row.addClass('everyOther');
+		cat.$section.append($row);
+		return rowIdx;
+	}
+	var Add_ResetAllSettingsButton = function (cat, rowIdx)
+	{
+		var $row = $('<div id="resetAllSettingsRow" class="uiSettingsRow dialogOption_item dialogOption_item_info"></div>');
+		var $input = $('<input type="button" value="Reset" />');
+		$input.on('click', function ()
+		{
+			AskYesNo('All UI settings will revert to their default values and the page will reload.<br><br><center>Continue?</center>', function ()
+			{
+				RevertSettingsToDefault();
+				location.reload();
+			});
+		});
+		$row.append($input);
+		$row.append(GetDialogOptionLabel("Reset All Settings"));
 		if (rowIdx++ % 2 == 1)
 			$row.addClass('everyOther');
 		cat.$section.append($row);
@@ -13145,7 +13290,7 @@ function UIHelpTool()
 	{
 		var $root = $('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
 			+ 'This interface is easier to use when all your camera groups have webcasting enabled.<br><br>'
-			+ 'Enable webcasting for your groups using the group settings panel.  This panel is found in the lower-left corner of the Blue Iris console:<br><br>'
+			+ 'Enable webcasting for your groups using the group settings panel.  This panel is found in the lower-left corner of the Blue Iris console (only when PTZ controls are enabled):<br><br>'
 			+ '</div>');
 		var $img = $('<img src="ui3/help/img/GroupProperties.png" style="width:400px; height:320px;" />');
 		$root.append($img);
@@ -13159,19 +13304,28 @@ function UIHelpTool()
 function CollapsibleSection(id, htmlTitle, dialogToNotify)
 {
 	var self = this;
+	var settingsKey = "ui3_cps_" + id.replace(/\s/, '_') + "_visible";
+	var visibleSetting = settings.getItem(settingsKey);
+	if (visibleSetting != "0" && visibleSetting != "1")
+	{
+		// The setting should have been added to defaultSettings.
+		console.log("SETTING DOES NOT EXIST", settingsKey);
+		visibleSetting = "1";
+		settings.setItem(settingsKey, visibleSetting);
+	}
 
 	var GetSectionHeading = function ()
 	{
 		var $heading = $('<div class="collapsible_section_heading">' + htmlTitle + '</div>');
 		$heading.on('click', SectionHeadingClick);
-		if (settings.getItem("ui3_cps_" + id + "_visible") == "1")
+		if (settings.getItem(settingsKey) == "1")
 			$heading.addClass("expanded");
 		return $heading;
 	}
 	var GetSection = function ()
 	{
 		var $section = $('<div class="collapsible_section"></div>');
-		if (settings.getItem("ui3_cps_" + id + "_visible") == "0")
+		if (settings.getItem(settingsKey) == "0")
 			$section.hide();
 		return $section;
 	}
@@ -13187,7 +13341,7 @@ function CollapsibleSection(id, htmlTitle, dialogToNotify)
 					if (dialogToNotify != null)
 						dialogToNotify.contentChanged(false, true);
 					var expanded = $section.is(":visible");
-					settings.setItem("ui3_cps_" + id + "_visible", expanded ? "1" : "0");
+					settings.setItem(settingsKey, expanded ? "1" : "0");
 					if (expanded)
 						$ele.addClass("expanded");
 					else
@@ -13210,6 +13364,8 @@ var b0001_0000 = 16;
 var b0010_0000 = 32;
 var b0100_0000 = 64;
 var b1000_0000 = 128;
+var clip_flag_audio = b0000_0001;
+var clip_flag_flag = b0000_0010;
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -13317,7 +13473,7 @@ function makeUnselectable($target)
 		.on('dragstart', function () { return false; });  // Needed since Firefox 16 seems to ingore the 'draggable' attribute we just applied above when '-moz-user-select: none' is applied to the CSS 
 
 	$target // Apply non-inheritable properties to the child elements
-		.find('*')
+		.find('*:not(.selectable)')
 		.attr('draggable', 'false')
 		.attr('unselectable', 'on');
 };

@@ -346,7 +346,7 @@
 	<div id="zoomhint" style="display: none">
 	</div>
 	<div id="loginDialog" style="display: none">
-		<div style="margin-top: 10px;">An administrator session is required to access this feature.  Please log in, then try your action again:</div>
+		<div style="margin-top: 10px;">An administrator session is required to access this feature.</div>
 		<div class="section monospace">User: <input type="text" varname="user" placeholder="Username" /></div>
 		<div class="monospace" style="margin-top: 5px;">Pass: <input type="password" varname="pass" placeholder="Password" onkeypress="return sessionManager.PwKeypress(this,event)" /></div>
 		<div class="lesserSection">
@@ -357,12 +357,15 @@
 		</div>
 		<div class="lesserSection"><input type="button" id="btnLogin" value="Log in" onclick="sessionManager.DoAdministratorDialogLogin()" /></div>
 	</div>
-	<div id="aboutDialog" style="display: none">
+	<div id="aboutDialog" class="selectable" style="display: none">
 		<div>
 			UI3 version <span id="ui_version_label"></span>, Blue Iris version: <span id="bi_version_label"></span>
 			<img class="about_icon" src="/favicon.ico" alt="Blue Iris" />
 		</div>
 		<div class="section">UI3 is a web interface for <a target="_blank" href="http://blueirissoftware.com/">Blue Iris</a></div>
+		<div id="optionalFeaturesNotSupported" class="section">
+			Some optional features are not supported in this browser.<br />
+		</div>
 		<div class="section">
 			UI3 is designed for use with:
 		</div>
