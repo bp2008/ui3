@@ -1026,6 +1026,8 @@ $(function ()
 			$("#layoutleftRecordings").show();
 			//$("#layoutbottom").show();
 			$("#recordingsFilterByHeading").text("Filter " + tabDisplayName + " by:");
+			if (currentPrimaryTab == "alerts")
+				toaster.Warning("Alert playback is not finalized in this beta version.", 10000);
 		}
 		if (skipTabLoadClipLoad)
 			skipTabLoadClipLoad = false;
@@ -1157,6 +1159,11 @@ $(function ()
 	if (currentPrimaryTab == "alerts" || currentPrimaryTab == "clips")
 		skipTabLoadClipLoad = true; // Prevent one clip load, to keep from loading twice.
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
+
+	BI_CustomEvent.AddListener("FinishedLoading", function ()
+	{
+		toaster.Info('Welcome to the UI3 beta test!<br><br>UI3 beta version: ' + ui_version + '<br>Blue Iris version: ' + bi_version + '<br><br><a href="javascript:UIHelp.LearnMore(\'beta_information\')" style="color: #00ff00; font-weight: bold; font-size: 1.4em;">Click here to learn more or to provide feedback.</a>', 15000, true);
+	});
 });
 function ValidateTabName(tabName)
 {
@@ -1794,7 +1801,8 @@ function DropdownBoxes()
 			selectedIndex: -1
 			, items:
 			[
-				new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
+				new DropdownListItem({ cmd: "beta_information", text: "Beta Information", icon: "#svg_x5F_Information", cssClass: "redLarger" })
+				, new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
 				, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
 				, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
@@ -1808,6 +1816,9 @@ function DropdownBoxes()
 			{
 				switch (item.cmd)
 				{
+					case "beta_information":
+						UIHelp.LearnMore("beta_information");
+						break;
 					case "ui_settings":
 						uiSettingsPanel.open();
 						break;
@@ -13393,6 +13404,9 @@ function UIHelpTool()
 			case 'Camera Group Webcasting':
 				Camera_Group_Webcasting();
 				break;
+			case 'beta_information':
+				Beta_Information();
+				break;
 		}
 	}
 	var Context_Menu_Compatibility_Mode = function ()
@@ -13434,6 +13448,18 @@ function UIHelpTool()
 		$root.append($img);
 		$img.lightbox();
 		$root.modalDialog({ title: 'Camera Group Webcasting' });
+	}
+	var Beta_Information = function ()
+	{
+		var $root = $('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
+			+ 'Welcome to UI3 Beta Test version ' + ui_version + '!<br><br>'
+			+ '<a href="https://goo.gl/forms/nw6rRrY0gPObYtJr1" target="_blank">Click here to report a bug or send other feedback.</a><br><br>'
+			+ '<img src="ui3/help/img/BetaInfoPanel.png" style="border: 2px solid #0097F0; float: right; margin-bottom: 10px;" />This panel is accessible at any time from the Main Menu in the upper right.<br><br>'
+			+ '<div style="clear:both;"></div>'
+			+ 'This interface uses cutting-edge web technology that is not available in all web browsers.  Full functionality exists in the latest versions of <a href="https://www.google.com/chrome/" target="_blank">Chrome</a>, <a href="https://www.opera.com/" target="_blank">Opera</a>, and <a href="https://www.microsoft.com/en-us/windows/microsoft-edge" target="_blank">Edge</a> browsers.  Firefox is expected to join this list in mid-November with the release of Firefox 57.<br><br>'
+			+ 'Some features are incomplete in this beta version, most notably Alert playback.  Alert playback has some quirks that cannot be fixed until minor additions are made to Blue Iris.  Clip playback should be fully functional.'
+			+ '</div>');
+		$root.modalDialog({ title: 'Beta Information' });
 	}
 }
 ///////////////////////////////////////////////////////////////

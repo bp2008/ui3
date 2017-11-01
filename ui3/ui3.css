@@ -1426,14 +1426,11 @@ div.icon, a.icon
 	padding: 6px 3px;
 }
 
-.dropdown_list > div.goldenLarger, .dropdown_list > div.blueLarger
+.dropdown_list > div.goldenLarger,
+.dropdown_list > div.blueLarger,
+.dropdown_list > div.redLarger
 {
 	font-size: 1.25em;
-}
-
-.dropdown_list > div.goldenLarger
-{
-	color: #BBBB00;
 }
 
 .dropdown_list > div.blueLarger
@@ -1453,6 +1450,11 @@ div.icon, a.icon
 		color: #99daff;
 	}
 
+.dropdown_list > div.goldenLarger
+{
+	color: #BBBB00;
+}
+
 .dropdown_list > div.goldenLarger:hover
 {
 	background-color: #444444;
@@ -1463,6 +1465,21 @@ div.icon, a.icon
 {
 	background-color: #666666;
 	color: #FFFF00;
+}
+
+.dropdown_list > div.redLarger
+{
+	color: #F09700;
+}
+.dropdown_list > div.redLarger:hover
+{
+	background-color: #444444;
+	color: #ffa919;
+}
+.dropdown_list > div.redLarger:active
+{
+	background-color: #666666;
+	color: #ffb944;
 }
 
 .mainMenuIcon
