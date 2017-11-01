@@ -386,6 +386,11 @@ div.icon, a.icon
 	padding: 0px 7px 5px 8px;
 }
 
+#layoutLeftRecordingsControls .leftBarBox
+{
+	padding-bottom: 0px;
+}
+
 .leftBarInnerBox
 {
 	padding-top: 15px;
@@ -584,17 +589,26 @@ div.icon, a.icon
 	box-sizing: border-box;
 }
 
-.fiveByTwoButtonSet, .dropdownBox, .standardLeftBarBoxSize
+.fiveByTwoButtonSet,
+.dropdownBox,
+.standardLeftBarBoxSize,
+.leftBarBool
 {
 	width: 190px;
 }
 
-.sizeMedium .fiveByTwoButtonSet, .sizeMedium .dropdownBox, .sizeMedium .standardLeftBarBoxSize
+.sizeMedium .fiveByTwoButtonSet,
+.sizeMedium .dropdownBox,
+.sizeMedium .standardLeftBarBoxSize,
+.sizeMedium .leftBarBool
 {
 	width: 155px;
 }
 
-.sizeSmall .fiveByTwoButtonSet, .sizeSmall .dropdownBox, .sizeSmall .standardLeftBarBoxSize
+.sizeSmall .fiveByTwoButtonSet,
+.sizeSmall .dropdownBox,
+.sizeSmall .standardLeftBarBoxSize,
+.sizeSmall .leftBarBool
 {
 	width: 125px;
 }
@@ -640,6 +654,21 @@ div.icon, a.icon
 .sizeSmall .leftBarTopPadding
 {
 	height: 7px;
+}
+
+#layoutLeftRecordingsControls .leftBarTopPadding
+{
+	height: 10px;
+}
+
+.sizeMedium #layoutLeftRecordingsControls .leftBarTopPadding
+{
+	height: 7px;
+}
+
+.sizeSmall #layoutLeftRecordingsControls .leftBarTopPadding
+{
+	height: 4px;
 }
 
 #ptzButtonsMain
@@ -731,7 +760,7 @@ div.icon, a.icon
 	display: block;
 }
 /* PTZ Presets */
-#ptzPresetsBox
+#ptzControlsBox
 {
 }
 
@@ -1135,7 +1164,8 @@ div.icon, a.icon
 }
 
 #volumeBar.audioTemporarilyUnavailable,
-#volumeBar.audioPermanentlyUnavailable
+#volumeBar.audioPermanentlyUnavailable,
+#volumeBar.audioNoPermission
 {
 	display: none;
 }
@@ -1280,6 +1310,21 @@ div.icon, a.icon
 	margin-top: 5px;
 	height: 19px;
 	padding-left: 3px;
+}
+
+#layoutLeftRecordingsControls .dropdownBox
+{
+	margin-top: 5px;
+}
+
+.sizeMedium #layoutLeftRecordingsControls .dropdownBox
+{
+	margin-top: 4px;
+}
+
+.sizeSmall #layoutLeftRecordingsControls .dropdownBox
+{
+	margin-top: 3px;
 }
 
 .dropdownLabel
@@ -1439,6 +1484,101 @@ div.icon, a.icon
 	width: 16px;
 	height: 16px;
 }
+/* Left Bar Checkboxes */
+.leftBarBool
+{
+	margin: 5px 0px;
+	cursor: pointer;
+}
+
+.sizeMedium .leftBarBool
+{
+	margin: 3px 0px;
+}
+
+.sizeSmall .leftBarBool
+{
+	margin: 1px 0px;
+}
+
+.leftBarBool:hover
+{
+	background-color: rgba(255,255,255,0.1);
+}
+
+.leftBarBool label
+{
+	cursor: pointer;
+	font-size: 16px;
+	display: inline-block;
+	vertical-align: middle;
+	padding: 2px;
+	box-sizing: border-box;
+	width: 100%;
+}
+
+.sizeMedium .leftBarBool label
+{
+	font-size: 14px;
+	padding: 1px;
+}
+
+.sizeSmall .leftBarBool label
+{
+	font-size: 12px;
+	padding: 1px 0px 0px 0px;
+}
+
+.leftBarBool input[type="checkbox"]
+{
+	cursor: pointer;
+	vertical-align: middle;
+	margin-right: 8px;
+	width: 15px;
+	height: 15px;
+}
+
+.sizeMedium .leftBarBool input[type="checkbox"]
+{
+	width: 14px;
+	height: 14px;
+}
+
+.sizeSmall .leftBarBool input[type="checkbox"]
+{
+	width: 13px;
+	height: 13px;
+}
+
+.leftBarBool .smallFlagIcon
+{
+	float: right;
+	display: inline-block;
+	vertical-align: middle;
+	width: 16px;
+	height: 16px;
+	color: #3d65ff;
+	padding-top: 1px;
+}
+
+.sizeMedium .leftBarBool .smallFlagIcon
+{
+	width: 14px;
+	height: 14px;
+	padding-top: 2px;
+}
+
+.sizeSmall .leftBarBool .smallFlagIcon
+{
+	width: 12px;
+	height: 12px;
+	padding-top: 3px;
+}
+
+.leftBarBool:hover .smallFlagIcon
+{
+	color: #6d8bff;
+}
 /* Calendar */
 #datePickerDialog
 {
@@ -1543,6 +1683,24 @@ div.icon, a.icon
 		color: #00FF00;
 	}
 
+.clipFlagWrapper
+{
+	position: absolute;
+	z-index: 1;
+	bottom: 5px;
+	right: 0px;
+	width: 20px;
+	height: 20px;
+	color: #3d65ff;
+}
+
+.sizeSmall .clipFlagWrapper
+{
+	bottom: 2px;
+	width: 16px;
+	height: 16px;
+}
+
 .datetile
 {
 	height: 20px;
@@ -1588,13 +1746,26 @@ div.icon, a.icon
 			color: #000000;
 		}
 
-.sizeMedium .cliptile, .sizeMedium .datetile
+	.cliptile:hover .clipFlagWrapper
+	{
+		color: #0035ff;
+	}
+
+	.cliptile.selected .clipFlagWrapper,
+	.cliptile.selected:hover .clipFlagWrapper
+	{
+		color: #d1dbff;
+	}
+
+.sizeMedium .cliptile,
+.sizeMedium .datetile
 {
 	left: 2px;
 	width: 183px;
 }
 
-.sizeSmall .cliptile, .sizeSmall .datetile
+.sizeSmall .cliptile,
+.sizeSmall .datetile
 {
 	left: 1px;
 	width: 135px;
@@ -1725,24 +1896,6 @@ div.icon, a.icon
 .sizeSmall .clipcam
 {
 	font-size: 10px;
-}
-
-.clipFlagWrapper
-{
-	position: absolute;
-	z-index: 1;
-	bottom: 5px;
-	right: 0px;
-	width: 20px;
-	height: 20px;
-	color: #3d65ff;
-}
-
-.sizeSmall .clipFlagWrapper
-{
-	bottom: 2px;
-	width: 16px;
-	height: 16px;
 }
 /* Timeline */
 #layoutbottomTimeline

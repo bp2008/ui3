@@ -1,29 +1,29 @@
-[type="checkbox"]:not(:checked),
-[type="checkbox"]:checked
+.sliderCb[type="checkbox"]:not(:checked),
+.sliderCb[type="checkbox"]:checked
 {
 	position: absolute;
 	left: -9999px;
 }
 
-	[type="checkbox"]:not(:checked) + label,
-	[type="checkbox"]:checked + label
+	.sliderCb[type="checkbox"]:not(:checked) + label,
+	.sliderCb[type="checkbox"]:checked + label
 	{
 		position: relative;
 		padding-right: 75px;
 		cursor: pointer;
 	}
 
-		[type="checkbox"]:not(:checked) + label:before,
-		[type="checkbox"]:checked + label:before,
-		[type="checkbox"]:not(:checked) + label:after,
-		[type="checkbox"]:checked + label:after
+		.sliderCb[type="checkbox"]:not(:checked) + label:before,
+		.sliderCb[type="checkbox"]:checked + label:before,
+		.sliderCb[type="checkbox"]:not(:checked) + label:after,
+		.sliderCb[type="checkbox"]:checked + label:after
 		{
 			content: '';
 			position: absolute;
 		}
 
-		[type="checkbox"]:not(:checked) + label:before,
-		[type="checkbox"]:checked + label:before
+		.sliderCb[type="checkbox"]:not(:checked) + label:before,
+		.sliderCb[type="checkbox"]:checked + label:before
 		{
 			right: 10px;
 			top: 6px;
@@ -35,8 +35,8 @@
 			transition: background-color .2s;
 		}
 
-		[type="checkbox"]:not(:checked) + label:after,
-		[type="checkbox"]:checked + label:after
+		.sliderCb[type="checkbox"]:not(:checked) + label:after,
+		.sliderCb[type="checkbox"]:checked + label:after
 		{
 			width: 20px;
 			height: 20px;
@@ -48,21 +48,21 @@
 		}
 
 		/* on checked */
-		[type="checkbox"]:checked + label:before
+		.sliderCb[type="checkbox"]:checked + label:before
 		{
 			background: #3C3F43;
 		}
 
-		[type="checkbox"]:checked + label:after
+		.sliderCb[type="checkbox"]:checked + label:after
 		{
 			background: #6ea8dd;
 			top: 11px;
 			right: 15px;
 		}
 
-		[type="checkbox"]:checked + label .ui,
-		[type="checkbox"]:not(:checked) + label .ui:before,
-		[type="checkbox"]:checked + label .ui:after
+		.sliderCb[type="checkbox"]:checked + label .ui,
+		.sliderCb[type="checkbox"]:not(:checked) + label .ui:before,
+		.sliderCb[type="checkbox"]:checked + label .ui:after
 		{
 			position: absolute;
 			right: 16px;
@@ -74,7 +74,7 @@
 			transition: all .2s;
 		}
 
-		[type="checkbox"]:not(:checked) + label .ui:before
+		.sliderCb[type="checkbox"]:not(:checked) + label .ui:before
 		{
 			content: "no";
 			right: -22px;
@@ -82,7 +82,7 @@
 			color: #A9A9A9;
 		}
 
-		[type="checkbox"]:checked + label .ui:after
+		.sliderCb[type="checkbox"]:checked + label .ui:after
 		{
 			right: -18px;
 			top: -4px;
@@ -90,7 +90,7 @@
 			color: #6ea8dd;
 		}
 
-[type="checkbox"]:focus + label:before
+.sliderCb[type="checkbox"]:focus + label:before
 {
 	border: 1px dashed #777;
 	margin-top: -1px;

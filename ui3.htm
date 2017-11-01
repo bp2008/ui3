@@ -107,9 +107,9 @@
 	<div id="layouttop" class="resizable">
 		<div id="topbar_vertical_align_helper"></div>
 		<div id="systemnamewrapper"><span id="systemname">%%SYSNAME%%</span></div>
-		<div class="topbar_tab selected" name="live"><span class="topbar_tab_label">Live View</span></div>
-		<div class="topbar_tab" name="alerts"><span class="topbar_tab_label">Alerts</span></div>
-		<div class="topbar_tab" name="clips"><span class="topbar_tab_label">Clips</span></div>
+		<div class="topbar_tab selected" name="live" id="topbar_tab_live"><span class="topbar_tab_label">Live View</span></div>
+		<div class="topbar_tab" name="alerts" id="topbar_tab_alerts"><span class="topbar_tab_label">Alerts</span></div>
+		<div class="topbar_tab" name="clips" id="topbar_tab_clips"><span class="topbar_tab_label">Clips</span></div>
 		<a id="Something"></a>
 		<div id="btn_main_menu" class="topbar_right_floating icon" name="mainMenu" extendLeft="1"><svg class="icon"><use xlink:href="#svg_x5F_Menu"></use></svg></div>
 		<a id="save_snapshot_btn" class="topbar_right_floating icon" href="javascript:void(0)" onclick="saveSnapshot()" target="_blank"><svg class="icon"><use xlink:href="#svg_x5F_Snapshot"></use></svg></a>
@@ -119,7 +119,7 @@
 			<div id="layoutleftLiveScrollableWrapper">
 				<div id="layoutleftLiveScrollable">
 					<div class="leftBarTopPadding"></div>
-					<div id="ptzPresetsBox" class="leftBarBox">
+					<div id="ptzControlsBox" class="leftBarBox">
 						<div class="leftBarHeading collapsibleTrigger" collapsibleid="ptz" title="Pan-Tilt-Zoom Controls">PTZ</div>
 						<div class="leftBarInnerBox">
 							<div id="ptzButtonsMain">
@@ -244,6 +244,7 @@
 					<div>
 						<div class="dropdownBox" name="currentGroup"></div>
 						<div class="standardLeftBarBoxSize" id="dateRange" onclick="dateFilter.OpenDatePicker(this);"><svg class="icon calendarIcon"><use xlink:href="#svg_x5F_Calendar2"></use></svg><span id="dateRangeLabel" class="oneLine">All Recent</span></div>
+						<div class="leftBarBool" name="flaggedOnly">Flagged Only</div>
 					</div>
 				</div>
 				<div id="clipListTopDate" class="datetile" style="position:relative;margin-bottom:0px" title="Click to scroll to the top" onclick="clipLoader.ScrollToTop()">...</div>
@@ -351,7 +352,7 @@
 		<div class="monospace" style="margin-top: 5px;">Pass: <input type="password" varname="pass" placeholder="Password" onkeypress="return sessionManager.PwKeypress(this,event)" /></div>
 		<div class="lesserSection">
 			<div class="customCheckboxWrapper">
-				<input id="cbRememberMe" type="checkbox" onchange="sessionManager.AdminLoginRememberMeChanged()" />
+				<input id="cbRememberMe" type="checkbox" class="sliderCb" onchange="sessionManager.AdminLoginRememberMeChanged()" />
 				<label for="cbRememberMe"><span class="ui"></span>Log in automatically<div class="customCheckboxSpacer"></div></label>
 			</div>
 		</div>

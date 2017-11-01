@@ -166,6 +166,7 @@ var clipProperties = null;
 var clipDownloadDialog = null;
 var statusBars = null;
 var dropdownBoxes = null;
+var leftBarBools = null;
 var genericQualityHelper = null;
 var jpegQualityHelper = null;
 var h264QualityHelper = null;
@@ -239,17 +240,17 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
-//       -- I've found bugs related to the cycles and reported them.  Awaiting fixes.
+//			-- I've found bugs related to the cycles and reported them.  Awaiting fixes.
 // TODO: Test that alerts are handled correctly in both streaming methods, once Blue Iris adds accurate "msec" and "offsetMs" fields to alertlist responses.
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 // TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
+//			-- tzone will now be read from the session response if and when it is added.  Close out this task once it works.
 // TODO: Once session data indicates whether recording-viewing permission is granted, revert the "Failed to load." message.  When permission is unavailable, hide the Alerts and Clips tabs, and set Live View tab as the default.
+//			-- Permissions "ptz", "audio", and "recordings" are now read from the session response as booleans and handled appropriately, but they don't exist yet.  Close out this task once it works.
 
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-
-// TODO: Change the color of the flag icon to something more visible when a clip is hovered/selected.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -299,6 +300,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_playback_loop"
+			, value: "0"
+		}
+		, {
+			key: "ui3_recordings_flagged_only"
 			, value: "0"
 		}
 		, {
@@ -1073,6 +1078,8 @@ $(function ()
 	pcmPlayer.SetAudioVolumeFromSettings();
 
 	dropdownBoxes = new DropdownBoxes();
+
+	leftBarBools = new LeftBarBooleans();
 
 	genericQualityHelper = new GenericQualityHelper();
 
@@ -2047,6 +2054,39 @@ function GetTooltipForStreamQuality(item)
 		return sessionManager.GetStreamsArray()[2];
 	else
 		return "";
+}
+///////////////////////////////////////////////////////////////
+// Left Bar Boolean Options ///////////////////////////////////
+///////////////////////////////////////////////////////////////
+function LeftBarBooleans()
+{
+	var $items = $('#layoutleft .leftBarBool');
+	$items.each(function (idx, ele)
+	{
+		var $ele = $(ele);
+		var name = $ele.attr("name");
+		switch (name)
+		{
+			case "flaggedOnly":
+				{
+					var $cb = $('<input type="checkbox" />');
+					if (settings.ui3_recordings_flagged_only == "1")
+						$cb.prop('checked', 'checked');
+					$cb.on('change', function ()
+					{
+						settings.ui3_recordings_flagged_only = $cb.is(':checked') ? "1" : "0";
+						clipLoader.LoadClips();
+					});
+					var $label = $('<label></label>');
+					$label.append('<div class="smallFlagIcon"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>');
+					$label.append($cb);
+					$label.append($ele.html());
+					$ele.empty();
+					$ele.append($label);
+				}
+				break;
+		}
+	});
 }
 ///////////////////////////////////////////////////////////////
 // PTZ Pad Buttons ////////////////////////////////////////////
@@ -3188,19 +3228,19 @@ function PlaybackControls()
 			return OpenQualityPanel();
 		RebuildSettingsPanelEmpty();
 		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
-			+ '<input id="cbAutoplay" type="checkbox" onclick="playbackControls.AutoplayClicked()" '
+			+ '<input id="cbAutoplay" type="checkbox" class="sliderCb" onclick="playbackControls.AutoplayClicked()" '
 			+ (autoplay ? ' checked="checked"' : '')
 			+ '/>'
 			+ '<label for="cbAutoplay"><span class="ui"></span>Autoplay<div class="playbackSettingsSpacer"></div></label>'
 			+ '</div>');
 		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
-			+ '<input id="cbReverse" type="checkbox" onclick="playbackControls.ReverseClicked()" '
+			+ '<input id="cbReverse" type="checkbox" class="sliderCb" onclick="playbackControls.ReverseClicked()" '
 			+ (playReverse ? ' checked="checked"' : '')
 			+ '/>'
 			+ '<label for="cbReverse"><span class="ui"></span>Reverse<div class="playbackSettingsSpacer"></div></label>'
 			+ '</div>');
 		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
-			+ '<input id="cbLoop" type="checkbox" onclick="playbackControls.LoopClicked()" '
+			+ '<input id="cbLoop" type="checkbox" class="sliderCb" onclick="playbackControls.LoopClicked()" '
 			+ (loopingEnabled ? ' checked="checked"' : '')
 			+ '/>'
 			+ '<label for="cbLoop"><span class="ui"></span>Loop<div class="playbackSettingsSpacer"></div></label>'
@@ -3799,7 +3839,7 @@ function ClipLoader(clipsBodySelector)
 		var loading = videoPlayer.Loading();
 		if (loading.image && loading.image.isLive)
 			lastLoadedCameraFilter = loading.image.id;
-		loadClipsInternal(listName, lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false);
+		loadClipsInternal(listName, lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false, false, null, settings.ui3_recordings_flagged_only == "1");
 	}
 	this.UpdateClipList = function ()
 	{
@@ -3813,10 +3853,12 @@ function ClipLoader(clipsBodySelector)
 			return;
 		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
 			return;
+		if (settings.ui3_recordings_flagged_only == "1")
+			return;
 		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
 		loadClipsInternal(null, lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true);
 	}
-	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate)
+	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly)
 	{
 		if ((currentPrimaryTab != "clips" && currentPrimaryTab != "alerts") || self.suppressClipListLoad)
 		{
@@ -3833,7 +3875,7 @@ function ClipLoader(clipsBodySelector)
 			{
 				QueuedClipListLoad = function ()
 				{
-					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate);
+					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly);
 				};
 				return;
 			}
@@ -3921,6 +3963,8 @@ function ClipLoader(clipsBodySelector)
 					clipData.offsetKb = clip.offset ? clip.offset : 0; // Offset for H.264 streaming
 					clipData.offsetMs = clip.offsetms ? clip.offsetms : 0; // Offset for jpeg streaming
 					clipData.flags = clip.flags;
+					if (flaggedOnly && (clip.flags & clip_flag_flag) == 0)
+						continue;
 					clipData.audio = (clip.flags & clip_flag_audio) > 0;
 					clipData.date = new Date(clip.date * 1000);
 					clipData.displayDate = GetServerDate(clipData.date);
@@ -4024,7 +4068,7 @@ function ClipLoader(clipsBodySelector)
 					myDateEnd = response.data[response.data.length - 1].date;
 					$("#clipListDateRange").html("&nbsp;Remaining to load:<br/>&nbsp;&nbsp;&nbsp;" + parseInt((myDateEnd - myDateStart) / 86400) + " days");
 					$.CustomScroll.callMeOnContainerResize();
-					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate);
+					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate, flaggedOnly);
 				}
 			}
 
@@ -4047,7 +4091,7 @@ function ClipLoader(clipsBodySelector)
 
 				if (TotalUniqueClipsLoaded == 0)
 				{
-					$clipsbody.append('<div class="clipListText">No recordings were found in the specified time range.</div>');
+					$clipsbody.append('<div class="clipListText">No recordings were found matching your filters.</div>');
 				}
 				asyncThumbnailDownloader = new AsyncThumbnailDownloader();
 				tileLoader.AppearDisappearCheckEnabled = true;
@@ -4080,7 +4124,7 @@ function ClipLoader(clipsBodySelector)
 				{
 					setTimeout(function ()
 					{
-						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate);
+						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly);
 					}, 1000);
 				}
 				else
@@ -5533,6 +5577,9 @@ function SessionManager()
 	var isAdministratorSession = false;
 	var lastResponse = null;
 	var latestAPISession = null;
+	var permission_ptz = true;
+	var permission_audio = true;
+	var permission_recordings = true;
 	this.Initialize = function ()
 	{
 		// Called once during page initialization
@@ -5648,6 +5695,33 @@ function SessionManager()
 		self.ApplyLatestAPISessionIfNecessary();
 
 		$("#systemname").text(lastResponse.data["system name"]);
+		if (lastResponse.data && lastResponse.data.profiles && lastResponse.data.profiles.length > 0)
+			statusLoader.SetCurrentProfileNames(lastResponse.data.profiles);
+		if (lastResponse && lastResponse.data && lastResponse.data.schedules)
+			dropdownBoxes.listDefs["schedule"].rebuildItems();
+
+		if (typeof lastResponse.data.tzone != "undefined")
+			serverTimeZoneOffsetMs = parseInt(parseFloat(lastResponse.data.tzone) * -60000);
+
+		permission_ptz = getBoolMaybe(lastResponse.data.ptz, true);
+		permission_audio = getBoolMaybe(lastResponse.data.audio, true);
+		permission_recordings = getBoolMaybe(lastResponse.data.recordings, true);
+
+		HandleUpdatedPermissions();
+
+		statusLoader.LoadStatus();
+		cameraListLoader.LoadCameraList();
+
+		if (lastResponse.data.streamtimelimit)
+		{
+			toaster.Info('This user account has time limits enabled.<br/><ul>'
+				+ '<li>Video streams may be interrupted periodically.</li>'
+				+ '<li>Your session may expire after some time, even if you are not idle.</li>'
+				+ '<li>You may have to wait some minutes between sessions.</li>'
+				+ '<li>You may have a daily limit of viewing time.</li>'
+				+ '<ul>', 60000, true);
+		}
+
 		if (lastResponse.data.admin)
 		{
 			isAdministratorSession = true;
@@ -5669,22 +5743,34 @@ function SessionManager()
 			if (!wasJustCheckingSessionStatus)
 				toaster.Info("Logged in as " + htmlEncode(user) + "<br/>(Limited User)<br/><br/>Server \"" + lastResponse.data["system name"] + "\"<br/>Blue Iris version " + lastResponse.data.version);
 		}
-		if (lastResponse.data && lastResponse.data.profiles && lastResponse.data.profiles.length > 0)
-			statusLoader.SetCurrentProfileNames(lastResponse.data.profiles);
-		if (lastResponse && lastResponse.data && lastResponse.data.schedules)
-			dropdownBoxes.listDefs["schedule"].rebuildItems();
+	}
+	var getBoolMaybe = function (boolMaybe, defaultValue)
+	{
+		if (typeof boolMaybe == "undefined")
+			return defaultValue;
+		return boolMaybe ? true : false;
+	}
+	var HandleUpdatedPermissions = function ()
+	{
+		if (permission_ptz)
+			$("#ptzControlsBox").show();
+		else
+			$("#ptzControlsBox").hide();
 
-		statusLoader.LoadStatus();
-		cameraListLoader.LoadCameraList();
+		if (permission_audio)
+			$("#volumeBar").removeClass("audioNoPermission");
+		else
+			$("#volumeBar").addClass("audioNoPermission");
 
-		if (lastResponse.data.streamtimelimit)
+		if (permission_recordings)
 		{
-			toaster.Info('This user account has time limits enabled.<br/><ul>'
-				+ '<li>Video streams may be interrupted periodically.</li>'
-				+ '<li>Your session may expire after some time, even if you are not idle.</li>'
-				+ '<li>You may have to wait some minutes between sessions.</li>'
-				+ '<li>You may have a daily limit of viewing time.</li>'
-				+ '<ul>', 60000, true);
+			$("#topbar_tab_alerts,#topbar_tab_clips").show();
+		}
+		else
+		{
+			$("#topbar_tab_alerts,#topbar_tab_clips").hide();
+			if (currentPrimaryTab != "live")
+				$("#topbar_tab_live").click();
 		}
 	}
 	this.ApplyLatestAPISessionIfNecessary = function ()
@@ -5754,6 +5840,18 @@ function SessionManager()
 		if (lastResponse && lastResponse.data && lastResponse.data.streams && lastResponse.data.streams.length == 3)
 			return lastResponse.data.streams;
 		return ["", "", ""];
+	}
+	this.HasPermission_Ptz = function ()
+	{
+		return permission_ptz;
+	}
+	this.HasPermission_Audio = function ()
+	{
+		return permission_audio;
+	}
+	this.HasPermission_Recordings = function ()
+	{
+		return permission_recordings;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -10053,7 +10151,7 @@ function GetCustomCheckbox(tag, label, checked, onChange)
 {
 	var myId = customCheckboxId++;
 	var $wrapper = $('<div class="customCheckboxWrapper"></div>');
-	var $cb = $('<input id="ccb_' + myId + '" type="checkbox" ' + (checked ? 'checked="checked" ' : '') + '/>');
+	var $cb = $('<input id="ccb_' + myId + '" type="checkbox" class="sliderCb" ' + (checked ? 'checked="checked" ' : '') + '/>');
 	$cb.on('change', function () { onChange(tag, $(this).is(":checked")); });
 	$wrapper.append($cb);
 	$wrapper.append('<label for="ccb_' + myId + '"><span class="ui"></span>' + label + '<div class="customCheckboxSpacer"></div></label>');
@@ -11460,7 +11558,7 @@ function FPSCounter1()
 	{
 		var now = performance.now();
 		// Trim times older than 1 second
-		while (!queue.isEmpty() && now - queue.peek() > 1000)
+		while (!queue.isEmpty() && now - queue.peek() >= 1000)
 			queue.dequeue();
 		queue.enqueue(now);
 		if (queue.getLength == 1)
