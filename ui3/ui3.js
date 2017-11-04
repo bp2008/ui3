@@ -3992,7 +3992,8 @@ function ClipLoader(clipsBodySelector)
 					clipData.camera = clip.camera;
 					clipData.clipId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
 					clipData.thumbPath = clip.path; // Path used for loading the thumbnail
-					clipData.path = isClipList ? clip.path : clip.clip; // Path used for loading the video stream
+					clipData.path = isClipList ? clip.path : clip.path; // Path used for loading the video stream
+					clipData.clipPath = clip.clip; // Path to the clip, because sometimes it is useful to have this when playing an alert.
 					clipData.offsetKb = clip.offset ? clip.offset : 0; // Offset for H.264 streaming
 					clipData.offsetMs = clip.offsetms ? clip.offsetms : 0; // Offset for jpeg streaming
 					clipData.flags = clip.flags;
@@ -7434,7 +7435,8 @@ function FetchOpenH264VideoModule()
 				if (honorAlertOffset && !clipData.isClip)
 				{
 					// We are starting the alert at a specific offset that was provided in kilobytes.
-					offsetArg = "&kbseek=" + clipData.offsetKb;
+					// This next line is disabled because kbseek= appears to have no effect when using an alert path with pos=0.
+					// offsetArg = "&kbseek=" + clipData.offsetKb; 
 					// The "pos" argument must be provided alongside "kbseek", even though "pos" will be ignored by Blue Iris.
 					// We recalculate the seek position here anyway because it helps with UI accuracy before the first frame arrives.
 					if (lastMs === 0)
@@ -7453,8 +7455,14 @@ function FetchOpenH264VideoModule()
 				didRequestAudio = false;
 				audioArg = "";
 			}
-			var posArg = "&pos=" + parseInt(currentSeekPositionPercent * 10000);
-			videoUrl = "/file/clips/" + loading.path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
+			var posInt = parseInt(currentSeekPositionPercent * 10000);
+			if (speed == 0 && posInt >= 10000)
+				posInt = 9999;
+			var posArg = "&pos=" + posInt;
+			var path = loading.path;
+			if (clipData && !clipData.isClip && !honorAlertOffset && posInt == 0)
+				path = clipData.clipPath; // This is a complicated workaround for the issue where seeking to the start of an alert path causes the stream to actually start at the alert offset.
+			videoUrl = "/file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
