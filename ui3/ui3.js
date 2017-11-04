@@ -13,6 +13,7 @@ var audio_playback_supported = false;
 var web_workers_supported = false;
 var fetch_supported = false;
 var readable_stream_supported = false;
+var webgl_supported = false;
 var web_audio_supported = false;
 var web_audio_buffer_source_supported = false;
 function DoUIFeatureDetection()
@@ -31,6 +32,7 @@ function DoUIFeatureDetection()
 			web_workers_supported = typeof Worker !== "undefined";
 			fetch_supported = typeof fetch == "function";
 			readable_stream_supported = typeof ReadableStream == "function";
+			webgl_supported = detectWebGLContext();
 			var AudioContext = window.AudioContext || window.webkitAudioContext;
 			if (AudioContext)
 			{
@@ -48,7 +50,7 @@ function DoUIFeatureDetection()
 				}
 				catch (ex) { }
 			}
-			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported;
+			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported && webgl_supported;
 			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported;
 			$(function ()
 			{
@@ -64,6 +66,8 @@ function DoUIFeatureDetection()
 							ul.append('<li>Fetch API</li>');
 						if (!readable_stream_supported)
 							ul.append('<li>ReadableStream</li>');
+						if (!webgl_supported)
+							ul.append('<li>WebGL</li>');
 						ul_root.append($('<li>The H.264 video player requires these unsupported features:</li>').append(ul));
 					}
 					if (!audio_playback_supported)
@@ -146,12 +150,20 @@ function requestAnimationFramePolyFill()
 		return false;
 	}
 }
+function detectWebGLContext()
+{
+	var canvas = document.createElement("canvas");
+	var gl = canvas.getContext("webgl")
+		|| canvas.getContext("experimental-webgl");
+	return gl && gl instanceof WebGLRenderingContext;
+}
 
 DoUIFeatureDetection();
 ///////////////////////////////////////////////////////////////
 // Globals (most of them) /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var toaster = new Toaster();
+var ajaxHistoryManager;
 var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
 var clipboardHelper;
@@ -304,6 +316,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_recordings_flagged_only"
+			, value: "0"
+		}
+		, {
+			key: "ui3_cliplist_larger_thumbnails"
 			, value: "0"
 		}
 		, {
@@ -3058,7 +3074,7 @@ function PlaybackControls()
 	};
 	SetPlaySpeedLabel();
 
-	if (!web_audio_supported || !web_audio_buffer_source_supported)
+	if (!audio_playback_supported)
 		$("#volumeBar").addClass("audioPermanentlyUnavailable");
 
 	this.resized = function ()
@@ -3815,6 +3831,9 @@ function ClipLoader(clipsBodySelector)
 	var self = this;
 	var HeightOfOneClipTilePx = 53;
 	var HeightOfOneSizeSmallClipTilePx = 40;
+	var HeightOfOneSizeLargeLargeThumbClipTilePx = 137;
+	var HeightOfOneSizeMediumLargeThumbClipTilePx = 130;
+	var HeightOfOneSizeSmallLargeThumbClipTilePx = 115;
 	var HeightOfOneDateTilePx = 27;
 	var asyncThumbnailDownloader = new AsyncThumbnailDownloader();
 	var $clipsbody = $(clipsBodySelector);
@@ -3828,7 +3847,10 @@ function ClipLoader(clipsBodySelector)
 	var failedClipListLoads = 0;
 	var TotalUniqueClipsLoaded = 0;
 	var TotalDateTilesLoaded = 0;
-	var lastUiSizeWasSmall; // Initialized at end of constructor
+	var lastClipTileSize; // Initialized at end of constructor
+	var lastClipListLargerThumbs = getLargerClipThumbnails(); // Initialized at end of constructor
+	if (lastClipListLargerThumbs)
+		$clipsbody.addClass("largerThumbs");
 	var currentTopDate = new Date(0);
 	var lastLoadedCameraFilter = "index";
 	this.suppressClipListLoad = false;
@@ -4148,11 +4170,19 @@ function ClipLoader(clipsBodySelector)
 	};
 	this.resizeClipList = function ()
 	{
-		var currentUiSizeIsSmall = useSmallClipTileHeight();
-		if ((lastUiSizeWasSmall && !currentUiSizeIsSmall) || (!lastUiSizeWasSmall && currentUiSizeIsSmall) || clipListGrew)
+		var currentClipTileSize = getClipTileSize();
+		var desiredLargerClipThumbnails = getLargerClipThumbnails();
+		if (lastClipTileSize != currentClipTileSize
+			|| clipListGrew
+			|| lastClipListLargerThumbs != desiredLargerClipThumbnails)
 		{
 			clipListGrew = false;
-			lastUiSizeWasSmall = currentUiSizeIsSmall;
+			lastClipTileSize = currentClipTileSize;
+			lastClipListLargerThumbs = desiredLargerClipThumbnails;
+			if (lastClipListLargerThumbs)
+				$clipsbody.addClass("largerThumbs");
+			else
+				$clipsbody.removeClass("largerThumbs");
 			var clipTileHeight = getClipTileHeight();
 			tileLoader.resizeClipList(clipTileHeight, HeightOfOneDateTilePx);
 			$("#clipListHeightSetter").css("height", ((clipTileHeight * TotalUniqueClipsLoaded) + (HeightOfOneDateTilePx * TotalDateTilesLoaded)) + "px");
@@ -4160,11 +4190,37 @@ function ClipLoader(clipsBodySelector)
 	}
 	var getClipTileHeight = function ()
 	{
-		return useSmallClipTileHeight() ? HeightOfOneSizeSmallClipTilePx : HeightOfOneClipTilePx;
+		var currentClipTileSize = getClipTileSize();
+		if (currentClipTileSize == "s")
+		{
+			if (getLargerClipThumbnails())
+				return HeightOfOneSizeSmallLargeThumbClipTilePx;
+			else
+				return HeightOfOneSizeSmallClipTilePx;
+		}
+		else if (currentClipTileSize == "m")
+		{
+			if (getLargerClipThumbnails())
+				return HeightOfOneSizeMediumLargeThumbClipTilePx;
+			else
+				return HeightOfOneClipTilePx;
+		}
+		else
+		{
+			if (getLargerClipThumbnails())
+				return HeightOfOneSizeLargeLargeThumbClipTilePx;
+			else
+				return HeightOfOneClipTilePx;
+		}
 	}
-	var useSmallClipTileHeight = function ()
+	var getClipTileSize = function ()
 	{
-		return uiSizeHelper.GetCurrentSize() == "small" || uiSizeHelper.GetCurrentSize() == "smaller";
+		if (uiSizeHelper.GetCurrentSize() == "small" || uiSizeHelper.GetCurrentSize() == "smaller")
+			return "s";
+		else if (uiSizeHelper.GetCurrentSize() == "medium")
+			return "m";
+		else
+			return "l";
 	}
 	this.GetCachedClip = function (cameraId, clipId)
 	{
@@ -4800,7 +4856,7 @@ function ClipLoader(clipsBodySelector)
 		}
 	}
 	// Some things must be initialized after methods are defined ...
-	lastUiSizeWasSmall = useSmallClipTileHeight();
+	lastClipTileSize = getClipTileSize();
 	var tileLoader = new ClipListDynamicTileLoader(clipsBodySelector, DateTileOnBecomeCurrent);
 	setInterval(self.UpdateClipList, 6000);
 	BI_CustomEvent.AddListener("ClipList_Updated", ClipList_Updated);
@@ -6118,8 +6174,6 @@ function VideoPlayerController()
 	*/
 	var self = this;
 	var isInitialized = false;
-
-	var ajaxHistoryManager = new AjaxHistoryManager();
 
 	var playerModule = null;
 	var moduleHolder = {};
@@ -7576,6 +7630,8 @@ function FetchOpenH264VideoModule()
 	}
 	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
 	{
+		if (currentServer.isLoggingOut)
+			return;
 		//console.log("fetch stream ended: ", message);
 		if (!safeFetch.IsActive())
 			volumeIconHelper.setColorIdle();
@@ -8956,7 +9012,7 @@ function ClipListContextMenu()
 
 	var onShowMenu = function (menu)
 	{
-		var itemsToEnable = ["flag", "download", "delete"];
+		var itemsToEnable = ["flag", "download", "delete", "larger_thumbnails"];
 		var itemsToDisable = [];
 		if (clipLoader.GetAllSelected().length > 1)
 			itemsToDisable.push("properties");
@@ -9020,6 +9076,10 @@ function ClipListContextMenu()
 			$dl_link.attr("href", "javascript:void(0)");
 			$dl_link.removeAttr("download");
 		}
+		if (settings.ui3_cliplist_larger_thumbnails == "1")
+			$("#cm_cliplist_larger_thumbnails").text("Shrink Thumbnails");
+		else
+			$("#cm_cliplist_larger_thumbnails").text("Enlarge Thumbnails");
 		return true;
 	}
 	var onContextMenuAction = function ()
@@ -9050,6 +9110,9 @@ function ClipListContextMenu()
 					clipLoader.Multi_Delete(allSelectedClipIDs);
 				});
 				break;
+			case "larger_thumbnails":
+				toggleLargerClipThumbnails();
+				break;
 			case "properties":
 				if (allSelectedClipIDs.length >= 1)
 					clipProperties.open(allSelectedClipIDs[0]);
@@ -9069,6 +9132,8 @@ function ClipListContextMenu()
 				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
 				, { type: "splitLine" }
+				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
+				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
 
 			]
@@ -9080,6 +9145,15 @@ function ClipListContextMenu()
 	{
 		$ele.contextmenu(menuOptions);
 	}
+}
+function getLargerClipThumbnails()
+{
+	return settings.ui3_cliplist_larger_thumbnails == "1";
+}
+function toggleLargerClipThumbnails()
+{
+	settings.ui3_cliplist_larger_thumbnails = getLargerClipThumbnails() ? "0" : "1";
+	resized();
 }
 ///////////////////////////////////////////////////////////////
 // Generic Enable/Disable Item Context Menu ///////////////////
@@ -10594,7 +10668,7 @@ function AudioEdgeFilter(buffer)
 function PcmAudioPlayer()
 {
 	var self = this;
-	var supported = web_audio_supported && web_audio_buffer_source_supported;
+	var supported = audio_playback_supported;
 	var AudioContext;
 	if (supported)
 		AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -11862,6 +11936,7 @@ function LoadingHelper()
 		for (var i = 0; i < things.length; i++)
 			if (!things[i][2])
 				return;
+		ajaxHistoryManager = new AjaxHistoryManager();
 		loadingFinished = true;
 		$("#loadingmsgwrapper").remove();
 		resized();

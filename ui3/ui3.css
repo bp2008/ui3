@@ -1455,32 +1455,34 @@ div.icon, a.icon
 	color: #BBBB00;
 }
 
-.dropdown_list > div.goldenLarger:hover
-{
-	background-color: #444444;
-	color: #DDDD00;
-}
+	.dropdown_list > div.goldenLarger:hover
+	{
+		background-color: #444444;
+		color: #DDDD00;
+	}
 
-.dropdown_list > div.goldenLarger:active
-{
-	background-color: #666666;
-	color: #FFFF00;
-}
+	.dropdown_list > div.goldenLarger:active
+	{
+		background-color: #666666;
+		color: #FFFF00;
+	}
 
 .dropdown_list > div.redLarger
 {
 	color: #F09700;
 }
-.dropdown_list > div.redLarger:hover
-{
-	background-color: #444444;
-	color: #ffa919;
-}
-.dropdown_list > div.redLarger:active
-{
-	background-color: #666666;
-	color: #ffb944;
-}
+
+	.dropdown_list > div.redLarger:hover
+	{
+		background-color: #444444;
+		color: #ffa919;
+	}
+
+	.dropdown_list > div.redLarger:active
+	{
+		background-color: #666666;
+		color: #ffb944;
+	}
 
 .mainMenuIcon
 {
@@ -1793,6 +1795,26 @@ div.icon, a.icon
 	height: 40px;
 }
 
+#clipsbody.largerThumbs .cliptile
+{
+	height: 137px;
+}
+
+.sizeMedium #clipsbody.largerThumbs .cliptile
+{
+	height: 130px;
+}
+
+.sizeSmall #clipsbody.largerThumbs .cliptile
+{
+	height: 115px;
+}
+
+#clipsbody.largerThumbs .verticalAlignHelper
+{
+	display: none;
+}
+
 .clipimghelper
 {
 	display: inline-block;
@@ -1827,6 +1849,51 @@ div.icon, a.icon
 		max-width: 48px;
 		max-height: 36px;
 	}
+
+#clipsbody.largerThumbs .clipimghelper
+{
+	display: block;
+	width: 187px;
+	height: 106px;
+	text-align: center;
+	margin: 4px auto 0px auto;
+	background-color: #000000;
+	margin-top: 4px;
+}
+
+.sizeMedium #clipsbody.largerThumbs .clipimghelper
+{
+	margin-top: 3px;
+	width: 179px;
+	height: 101px;
+}
+
+.sizeSmall #clipsbody.largerThumbs .clipimghelper
+{
+	margin-top: 2px;
+	width: 133px;
+	height: 75px;
+}
+
+#clipsbody.largerThumbs .clipimghelper img
+{
+	margin-left: 0px;
+	display: inline;
+	max-width: 187px;
+	max-height: 106px;
+}
+
+.sizeMedium #clipsbody.largerThumbs .clipimghelper img
+{
+	max-width: 179px;
+	max-height: 101px;
+}
+
+.sizeSmall #clipsbody.largerThumbs .clipimghelper img
+{
+	max-width: 133px;
+	max-height: 75px;
+}
 
 
 .clipdur
@@ -1866,6 +1933,29 @@ div.icon, a.icon
 	height: 36px;
 }
 
+#clipsbody.largerThumbs .clipcolorbar
+{
+	display: block;
+	vertical-align: auto;
+	width: 187px;
+	height: 4px;
+	margin: 2px 1px 2px 16px;
+}
+
+.sizeMedium #clipsbody.largerThumbs .clipcolorbar
+{
+	width: 179px;
+	height: 3px;
+	margin: 2px 1px 2px 2px;
+}
+
+.sizeSmall #clipsbody.largerThumbs .clipcolorbar
+{
+	width: 133px;
+	height: 3px;
+	margin: 2px 1px 2px 1px;
+}
+
 .clipdesc
 {
 	display: inline-block;
@@ -1891,6 +1981,26 @@ div.icon, a.icon
 	width: 80px;
 }
 
+#clipsbody.largerThumbs .clipdesc
+{
+	display: block;
+	vertical-align: auto;
+	text-align: right;
+	width: auto;
+	margin-right: 13px;
+}
+
+.sizeMedium #clipsbody.largerThumbs .clipdesc
+{
+	margin-right: 4px;
+}
+
+.sizeSmall #clipsbody.largerThumbs .clipdesc
+{
+	margin-right: 2px;
+	text-align: center;
+}
+
 .cliptime
 {
 	font-size: 14px;
@@ -1904,6 +2014,24 @@ div.icon, a.icon
 	line-height: 16px;
 }
 
+#clipsbody.largerThumbs .cliptime
+{
+	float: left;
+	margin-right: 3px;
+}
+
+.sizeMedium #clipsbody.largerThumbs .cliptime
+{
+	float: left;
+	margin-right: 2px;
+}
+
+.sizeSmall #clipsbody.largerThumbs .cliptime
+{
+	float: none;
+	margin-right: 0px;
+}
+
 .clipcam
 {
 	font-size: 11px;
@@ -1913,6 +2041,25 @@ div.icon, a.icon
 .sizeSmall .clipcam
 {
 	font-size: 10px;
+}
+
+
+#clipsbody.largerThumbs .clipcam
+{
+	display: inline;
+	text-align: right;
+}
+
+.sizeMedium #clipsbody.largerThumbs .clipcam
+{
+	display: inline;
+	text-align: right;
+}
+
+.sizeSmall #clipsbody.largerThumbs .clipcam
+{
+	display: block;
+	text-align: center;
 }
 /* Timeline */
 #layoutbottomTimeline

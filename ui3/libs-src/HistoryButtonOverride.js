@@ -2,6 +2,7 @@
 	HistoryButtonOverride.js
 	by bp2008
 	The HistoryButtonOverride code is released to the public domain.
+	IMPORTANT: Safari on mac will not raise the window.load event if you create an instance of this object before window.load is raised.
 */
 function HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed)
 {
