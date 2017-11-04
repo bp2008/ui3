@@ -11291,6 +11291,8 @@ function BI_Hotkeys()
 	var currentlyDownKeys = {};
 	$(document).keydown(function (e)
 	{
+		if ($("body").children(".dialog_overlay").length != 0)
+			return;
 		var charCode = e.which ? e.which : event.keyCode;
 		var hotkeysBeingRepeated = currentlyDownKeys[charCode];
 		if (hotkeysBeingRepeated)
@@ -11321,30 +11323,27 @@ function BI_Hotkeys()
 		var isRepeatKey = currentlyDownKeys[charCode];
 		currentlyDownKeys[charCode] = [];
 		var retVal = true;
-		if ($(".dialog_overlay").length == 0)
+		for (var i = 0; i < defaultSettings.length; i++)
 		{
-			for (var i = 0; i < defaultSettings.length; i++)
+			var s = defaultSettings[i];
+			if (s.hotkey)
 			{
-				var s = defaultSettings[i];
-				if (s.hotkey)
+				if (typeof s.actionDown == "function")
 				{
-					if (typeof s.actionDown == "function")
+					var val = settings[s.key];
+					if (!val)
+						continue;
+					var parts = val.split("|");
+					if (parts.length >= 4)
 					{
-						var val = settings[s.key];
-						if (!val)
-							continue;
-						var parts = val.split("|");
-						if (parts.length >= 4)
+						if ((e.ctrlKey ? "1" : "0") == parts[0]
+							&& (e.altKey ? "1" : "0") == parts[1]
+							&& (e.shiftKey ? "1" : "0") == parts[2]
+							&& (charCode == parts[3]))
 						{
-							if ((e.ctrlKey ? "1" : "0") == parts[0]
-								&& (e.altKey ? "1" : "0") == parts[1]
-								&& (e.shiftKey ? "1" : "0") == parts[2]
-								&& (charCode == parts[3]))
-							{
-								currentlyDownKeys[charCode].push(s);
-								s.actionDown();
-								retVal = false;
-							}
+							currentlyDownKeys[charCode].push(s);
+							s.actionDown();
+							retVal = false;
 						}
 					}
 				}
