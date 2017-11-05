@@ -1163,13 +1163,6 @@ div.icon, a.icon
 	opacity: 0.333;
 }
 
-#volumeBar.audioTemporarilyUnavailable,
-#volumeBar.audioPermanentlyUnavailable,
-#volumeBar.audioNoPermission
-{
-	display: none;
-}
-
 #volumeBar .statusBarLabel
 {
 	font-size: 0px;
@@ -3518,8 +3511,17 @@ div::-webkit-scrollbar-track
 {
 	background-color: #C03737;
 	color: #FFFFFF;
-    border: 0px solid transparent;
+	border: 0px solid transparent;
 	padding-left: 12px;
 	padding-right: 12px;
 	cursor: pointer;
 }*/
+
+#volumeBar.audioTemporarilyUnavailable,
+#volumeBar.audioNoPermission,
+.fullscreenUnavailable,
+.temporarilyUnavailable,
+.permanentlyUnavailable
+{
+	display: none;
+}

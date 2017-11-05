@@ -6,6 +6,7 @@
 */
 function HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed)
 {
+	var activated = false;
 	var Reset = function ()
 	{
 		if (history.state == null)
@@ -20,24 +21,10 @@ function HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed)
 		// The URLs of our 3 history states must have hash strings in them so that back and forward events never cause a page reload.
 		return location.origin + location.pathname + location.search + (location.hash && location.hash.length > 1 ? location.hash : "#");
 	}
-	if (history.state == null)
-	{
-		// This is the first page load. Inject new history states to help identify back/forward button presses.
-		var initialHistoryLength = history.length;
-		history.replaceState({ customHistoryStage: 1, initialHistoryLength: initialHistoryLength }, "", BuildURLWithHash());
-		history.pushState({ customHistoryStage: 2, initialHistoryLength: initialHistoryLength }, "", BuildURLWithHash());
-		history.pushState({ customHistoryStage: 3, initialHistoryLength: initialHistoryLength }, "", BuildURLWithHash());
-		history.back();
-	}
-	else if (history.state.customHistoryStage == 1)
-		history.forward();
-	else if (history.state.customHistoryStage == 3)
-		history.back();
-
 	$(window).bind("popstate", function ()
 	{
 		// Called when history navigation occurs.
-		if (history.state == null)
+		if (history.state == null || !activated)
 			return;
 		if (history.state.customHistoryStage == 1)
 		{
@@ -64,4 +51,22 @@ function HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed)
 				history.back(); // No forward-history to go to, so undo the forward operation.
 		}
 	});
+	if (history.state == null)
+	{
+		// This is the first page load. Inject new history states to help identify back/forward button presses.
+		var initialHistoryLength = history.length;
+		history.replaceState({ customHistoryStage: 1, initialHistoryLength: initialHistoryLength }, "", BuildURLWithHash());
+		history.pushState({ customHistoryStage: 2, initialHistoryLength: initialHistoryLength }, "", BuildURLWithHash());
+		if (typeof ForwardButtonPressed == "function")
+		{
+			history.pushState({ customHistoryStage: 3, initialHistoryLength: initialHistoryLength }, "", BuildURLWithHash());
+			history.back();
+		}
+	}
+	else if (history.state.customHistoryStage == 1)
+		history.forward();
+	else if (history.state.customHistoryStage == 3)
+		history.back();
+
+	activated = true;
 };

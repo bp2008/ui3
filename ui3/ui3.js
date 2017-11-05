@@ -16,6 +16,8 @@ var readable_stream_supported = false;
 var webgl_supported = false;
 var web_audio_supported = false;
 var web_audio_buffer_source_supported = false;
+var fullscreen_supported = false;
+var browser_is_ios = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -29,6 +31,7 @@ function DoUIFeatureDetection()
 		{
 			// All critical tests pass
 			// Non-critical tests can run here and store their results in global vars.
+			browser_is_ios = BrowserIsIOSSafari() || BrowserIsIOSChrome();
 			web_workers_supported = typeof Worker !== "undefined";
 			fetch_supported = typeof fetch == "function";
 			readable_stream_supported = typeof ReadableStream == "function";
@@ -50,6 +53,7 @@ function DoUIFeatureDetection()
 				}
 				catch (ex) { }
 			}
+			fullscreen_supported = ((document.documentElement.requestFullscreen || document.documentElement.msRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.webkitRequestFullscreen) && (document.exitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen || document.webkitExitFullscreen)) ? true : false;
 			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported && webgl_supported;
 			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported;
 			$(function ()
@@ -80,6 +84,14 @@ function DoUIFeatureDetection()
 						if (!web_audio_buffer_source_supported)
 							ul.append('<li>AudioBufferSourceNode</li>');
 						ul_root.append($('<li>The audio player requires these unsupported features:</li>').append(ul));
+					}
+					if (!fullscreen_supported)
+					{
+						ul_root.append('<li>Fullscreen mode is not supported.</li>');
+					}
+					if (browser_is_ios)
+					{
+						ul_root.append('<li>Context menus are not supported.</li>');
 					}
 					var $opt = $('#optionalFeaturesNotSupported');
 					$opt.append(ul_root);
@@ -129,6 +141,8 @@ function isHtml5HistorySupported()
 {
 	try
 	{
+		if (BrowserIsIOSChrome())
+			return false; // Chrome on iOS has too many history bugs.
 		if (window.history && typeof window.history.state == "object" && typeof window.history.pushState == "function" && typeof window.history.replaceState == "function")
 			return true;
 		return false;
@@ -2903,14 +2917,16 @@ function DateFilter(dateRangeLabelSelector)
 	var dp1 = new DatePicker("datePicker1Container", 1, self);
 	var dp2 = new DatePicker("datePicker2Container", 2, self);
 	var timeClosed = 0;
+	var mayClose = true;
 
-	$datePickerDialog.mouseup(function (e)
+	$datePickerDialog.on('mousedown mouseup touchstart touchend touchcancel', function (e)
 	{
-		return false;
+		mayClose = false;
+		setTimeout(function () { mayClose = true; }, 0);
 	});
-	$(document).mouseup(function (e)
+	$(document).on('mousedown mouseup touchstart touchend touchcancel', function (e)
 	{
-		if ($datePickerDialog.is(":visible"))
+		if (mayClose && $datePickerDialog.is(":visible"))
 		{
 			$datePickerDialog.hide();
 			timeClosed = new Date().getTime();
@@ -3075,7 +3091,10 @@ function PlaybackControls()
 	SetPlaySpeedLabel();
 
 	if (!audio_playback_supported)
-		$("#volumeBar").addClass("audioPermanentlyUnavailable");
+		$("#volumeBar").addClass("permanentlyUnavailable");
+
+	if (!fullscreen_supported)
+		$("#clipFullscreenButton").addClass("permanentlyUnavailable");
 
 	this.resized = function ()
 	{
@@ -3108,13 +3127,13 @@ function PlaybackControls()
 		{
 			playbackHeader.Hide();
 			$("#seekBarWrapper").hide();
-			$("#pcButtonContainer .hideWhenLive").hide();
+			$("#pcButtonContainer .hideWhenLive").addClass('temporarilyUnavailable');
 		}
 		else
 		{
 			playbackHeader.Show();
 			$("#seekBarWrapper").show();
-			$("#pcButtonContainer .hideWhenLive").show();
+			$("#pcButtonContainer .hideWhenLive").removeClass('temporarilyUnavailable');
 		}
 	}
 	this.Hide = function ()
@@ -10640,9 +10659,9 @@ function AudioEdgeFilter(buffer)
 
 	buffer.copyFromChannel(tmp, 0, 0);
 
-	let wasPositive = (tmp[0] > 0);
+	var wasPositive = (tmp[0] > 0);
 
-	for (let i = 0; i < buffer.length; i += 1)
+	for (var i = 0; i < buffer.length; i += 1)
 	{
 		buffer.copyFromChannel(tmp, 0, i);
 
@@ -10657,7 +10676,7 @@ function AudioEdgeFilter(buffer)
 
 	wasPositive = (tmp[0] > 0);
 
-	for (let i = buffer.length - 1; i > 0; i -= 1)
+	for (var i = buffer.length - 1; i > 0; i -= 1)
 	{
 		buffer.copyFromChannel(tmp, 0, i);
 
@@ -11113,13 +11132,13 @@ function FullScreenModeController()
 	{
 		if (self.isFullScreen())
 		{
-			$("#clipFullscreenButton").hide();
-			$("#clipExitFullscreenButton").show();
+			$("#clipFullscreenButton").addClass('fullscreenUnavailable');
+			$("#clipExitFullscreenButton").removeClass('fullscreenUnavailable');
 		}
 		else
 		{
-			$("#clipFullscreenButton").show();
-			$("#clipExitFullscreenButton").hide();
+			$("#clipFullscreenButton").removeClass('fullscreenUnavailable');
+			$("#clipExitFullscreenButton").addClass('fullscreenUnavailable');
 		}
 		resized();
 	}
@@ -11167,10 +11186,6 @@ function AjaxHistoryManager()
 	var self = this;
 	var buttonOverride;
 
-	var ForwardButtonPressed = function ()
-	{
-		return false;
-	}
 	var BackButtonPressed = function ()
 	{
 		var loading = videoPlayer.Loading();
@@ -11183,7 +11198,7 @@ function AjaxHistoryManager()
 		return true;
 	}
 	if (isHtml5HistorySupported())
-		buttonOverride = new HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed);
+		buttonOverride = new HistoryButtonOverride(BackButtonPressed);
 }
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////
@@ -14048,6 +14063,18 @@ function BrowserIsEdge()
 function BrowserIsChrome()
 {
 	return navigator.appVersion.indexOf(" Chrome/") > -1;
+}
+function BrowserIsIOS()
+{
+	return !!navigator.userAgent.match(/iPad|iPhone|iPod/);
+}
+function BrowserIsIOSSafari()
+{
+	return BrowserIsIOS() && !!navigator.userAgent.match(/ Safari\//) && !navigator.userAgent.match(/ CriOS\//);
+}
+function BrowserIsIOSChrome()
+{
+	return BrowserIsIOS() && !!navigator.userAgent.match(/ Safari\//) && !!navigator.userAgent.match(/ CriOS\//);
 }
 function getHiddenProp()
 {
