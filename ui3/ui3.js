@@ -11230,13 +11230,13 @@ function FullScreenModeController()
 	{
 		if (self.isFullScreen())
 		{
-			$("#clipFullscreenButton").addClass('fullscreenUnavailable');
-			$("#clipExitFullscreenButton").removeClass('fullscreenUnavailable');
+			$("#clipFullscreenButton").addClass('fullscreenButtonHidden');
+			$("#clipExitFullscreenButton").removeClass('fullscreenButtonHidden');
 		}
 		else
 		{
-			$("#clipFullscreenButton").removeClass('fullscreenUnavailable');
-			$("#clipExitFullscreenButton").addClass('fullscreenUnavailable');
+			$("#clipFullscreenButton").removeClass('fullscreenButtonHidden');
+			$("#clipExitFullscreenButton").addClass('fullscreenButtonHidden');
 		}
 		resized();
 	}

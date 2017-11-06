@@ -3589,7 +3589,7 @@ div::-webkit-scrollbar-track
 
 #volumeBar.audioTemporarilyUnavailable,
 #volumeBar.audioNoPermission,
-.fullscreenUnavailable,
+.fullscreenButtonHidden,
 .temporarilyUnavailable,
 .permanentlyUnavailable
 {
