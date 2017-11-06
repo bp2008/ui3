@@ -280,6 +280,7 @@ var togglableUIFeatures =
 
 // TODO: Add an "unsupported" or "unavailable" notice to the Fullscreen mode hotkey name when fullscreen mode is unavailable.
 // TODO: Add a note for iOS users in the help dialog for context menu compatibility mode, explaining that they probably can't make context menus work no matter what they do.
+// TODO: Implement pause button in camera properties.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -292,7 +293,7 @@ var togglableUIFeatures =
 // Settings ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var settings = null;
-var settingsCategoryList = ["General Settings", "Hotkeys"];
+var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Hotkeys"];
 var defaultSettings =
 	[
 		{
@@ -468,6 +469,34 @@ var defaultSettings =
 			, label: 'Context Menu Compatibility Mode<br><a href="javascript:UIHelp.LearnMore(\'Context Menu Compatibility Mode\')">(learn more)</a>'
 			, onChange: OnChange_ui3_contextMenus_longPress
 			, category: "General Settings"
+		}
+		, {
+			key: "ui3_clipicon_trigger_motion"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Alert"></use></svg> for motion-triggered alerts'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_trigger_audio"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_volumeUp"></use></svg> for audio-triggered alerts'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_trigger_external"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Alert2"></use></svg> for externally triggered alerts'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_clip_audio"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_volumeUp"></use></svg> for clips with audio'
+			, category: "Clip / Alert Icons"
 		}
 		, {
 			key: "ui3_hotkey_togglefullscreen2"
@@ -4644,13 +4673,13 @@ function ClipLoader(clipsBodySelector)
 	var GetClipIcons = function (clipData)
 	{
 		var icons = [];
-		//if ((clipData.flags & alert_flag_trigger_motion) > 0)
-		//	icons.push(self.GetClipIcon("trigger_motion"));
-		if ((clipData.flags & alert_flag_trigger_audio) > 0)
+		if ((clipData.flags & alert_flag_trigger_motion) > 0 && settings.ui3_clipicon_trigger_motion == "1")
+			icons.push(self.GetClipIcon("trigger_motion"));
+		if ((clipData.flags & alert_flag_trigger_audio) > 0 && settings.ui3_clipicon_trigger_audio == "1")
 			icons.push(self.GetClipIcon("trigger_audio"));
-		if ((clipData.flags & alert_flag_trigger_external) > 0)
+		if ((clipData.flags & alert_flag_trigger_external) > 0 && settings.ui3_clipicon_trigger_external == "1")
 			icons.push(self.GetClipIcon("trigger_external"));
-		if ((clipData.flags & clip_flag_audio) > 0)
+		if ((clipData.flags & clip_flag_audio) > 0 && settings.ui3_clipicon_clip_audio == "1")
 			icons.push(self.GetClipIcon("clip_audio"));
 		icons.push(self.GetClipIcon("flag"));
 		return icons.join("");

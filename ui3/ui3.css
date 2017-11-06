@@ -3360,7 +3360,8 @@ div.icon, a.icon
 	margin: 7px auto;
 }
 
-	.clipprop_item_info .clipicon
+	.clipprop_item_info .clipicon,
+	.uiSettingsRow .clipicon
 	{
 		width: 20px;
 		height: 20px;
