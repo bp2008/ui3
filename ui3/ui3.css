@@ -1569,7 +1569,7 @@ div.icon, a.icon
 	vertical-align: middle;
 	width: 16px;
 	height: 16px;
-	color: #3d65ff;
+	color: #2b4bc6;
 	padding-top: 1px;
 }
 
@@ -1695,23 +1695,80 @@ div.icon, a.icon
 		color: #00FF00;
 	}
 
-.clipFlagWrapper
+.clipIconWrapper
 {
 	position: absolute;
 	z-index: 1;
 	bottom: 5px;
 	right: 0px;
-	width: 20px;
-	height: 20px;
-	color: #3d65ff;
+	width: 45px;
+	height: 21px;
+	color: #2b4bc6;
+	text-align: right;
 }
 
-.sizeSmall .clipFlagWrapper
+	.clipIconWrapper .clipicon
+	{
+		width: 20px;
+		height: 20px;
+		padding: 0px 1px 1px 0px;
+		display: inline-block;
+	}
+
+.clipicon.icon_flag
+{
+	display: none;
+}
+
+.clipIconWrapper.icon_flag .clipicon.icon_flag
+{
+	display: inline-block;
+}
+
+.sizeSmall .clipIconWrapper
 {
 	bottom: 2px;
+	height: 15px;
+}
+
+	.sizeSmall .clipIconWrapper .clipicon
+	{
+		width: 14px;
+		height: 14px;
+	}
+
+#clipsbody.largerThumbs .clipIconWrapper
+{
+	bottom: 28px;
+	right: 1px;
 	width: 16px;
+	height: auto;
+	white-space: normal;
+}
+
+.sizeMedium #clipsbody.largerThumbs .clipIconWrapper
+{
+	bottom: 0px;
+	right: 1px;
+	width: auto;
 	height: 16px;
 }
+
+.sizeSmall #clipsbody.largerThumbs .clipIconWrapper
+{
+	bottom: 0px;
+	right: 0px;
+	width: 32px;
+	height: 32px;
+}
+
+	#clipsbody.largerThumbs .clipIconWrapper .clipicon,
+	.sizeMedium #clipsbody.largerThumbs .clipIconWrapper .clipicon,
+	.sizeSmall #clipsbody.largerThumbs .clipIconWrapper .clipicon
+	{
+		width: 14px;
+		height: 14px;
+	}
 
 .datetile
 {
@@ -1758,15 +1815,15 @@ div.icon, a.icon
 			color: #000000;
 		}
 
-	.cliptile:hover .clipFlagWrapper
+	.cliptile:hover .clipIconWrapper
 	{
 		color: #0035ff;
 	}
 
-	.cliptile.selected .clipFlagWrapper,
-	.cliptile.selected:hover .clipFlagWrapper
+	.cliptile.selected .clipIconWrapper,
+	.cliptile.selected:hover .clipIconWrapper
 	{
-		color: #d1dbff;
+		color: #95C7FC;
 	}
 
 .sizeMedium .cliptile,
@@ -1980,16 +2037,19 @@ div.icon, a.icon
 	vertical-align: auto;
 	text-align: right;
 	width: auto;
-	margin-right: 13px;
+	margin-left: 16px;
+	margin-right: 16px;
 }
 
 .sizeMedium #clipsbody.largerThumbs .clipdesc
 {
+	margin-left: 4px;
 	margin-right: 4px;
 }
 
 .sizeSmall #clipsbody.largerThumbs .clipdesc
 {
+	margin-left: 2px;
 	margin-right: 2px;
 	text-align: center;
 }
@@ -3299,6 +3359,15 @@ div.icon, a.icon
 	max-width: 430px;
 	margin: 7px auto;
 }
+
+	.clipprop_item_info .clipicon
+	{
+		width: 20px;
+		height: 20px;
+		display: inline-block;
+		padding-right: 10px;
+		vertical-align: middle;
+	}
 /* Webkit custom scrollbar for modal dialogs */
 div::-webkit-scrollbar
 {

@@ -278,6 +278,9 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Add an "unsupported" or "unavailable" notice to the Fullscreen mode hotkey name when fullscreen mode is unavailable.
+// TODO: Add a note for iOS users in the help dialog for context menu compatibility mode, explaining that they probably can't make context menus work no matter what they do.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -4441,6 +4444,9 @@ function ClipLoader(clipsBodySelector)
 				+ '</div>'
 				+ '<div class="clipcolorbar" style="background-color: #' + clipData.colorHex + ';"></div>'
 				+ '<div class="clipdesc"><div class="cliptime">' + timeStr + '</div><div class="clipcam">' + cameraListLoader.GetCameraName(clipData.camera) + '</div></div>'
+				+ '<div class="clipIconWrapper ' + GetClipIconClasses(clipData) + '">'
+				+ GetClipIcons(clipData)
+				+ '</div>'
 				+ '</div>');
 
 			var $img = $("#t" + clipData.clipId).get(0).thumbPath = clipData.thumbPath;
@@ -4625,6 +4631,53 @@ function ClipLoader(clipsBodySelector)
 		var clipData = lastOpenedClipEle.clipData;
 		self.ToggleClipFlag(clipData);
 	}
+	var GetClipIconClasses = function (clipData)
+	{
+		if ((clipData.flags & clip_flag_flag) > 0)
+			return GetClipIconClass("flag");
+		return "";
+	}
+	var GetClipIconClass = function (name)
+	{
+		return "icon_" + name;
+	}
+	var GetClipIcons = function (clipData)
+	{
+		var icons = [];
+		//if ((clipData.flags & alert_flag_trigger_motion) > 0)
+		//	icons.push(self.GetClipIcon("trigger_motion"));
+		if ((clipData.flags & alert_flag_trigger_audio) > 0)
+			icons.push(self.GetClipIcon("trigger_audio"));
+		if ((clipData.flags & alert_flag_trigger_external) > 0)
+			icons.push(self.GetClipIcon("trigger_external"));
+		if ((clipData.flags & clip_flag_audio) > 0)
+			icons.push(self.GetClipIcon("clip_audio"));
+		icons.push(self.GetClipIcon("flag"));
+		return icons.join("");
+	}
+	this.GetClipIcon = function (name)
+	{
+		switch (name)
+		{
+			case "trigger_motion":
+				return GetClipIcon_Internal(name, "#svg_x5F_Alert", false, "Triggered by motion detection")
+			case "trigger_audio":
+				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Triggered by audio");
+			case "trigger_external":
+				return GetClipIcon_Internal(name, "#svg_x5F_Alert2", false, "Triggered by external source");
+			case "clip_audio":
+				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Clip has audio");
+			case "flag":
+				return GetClipIcon_Internal(name, "#svg_x5F_Flag", false, "Item is flagged");
+		}
+		return "";
+	}
+	var GetClipIcon_Internal = function (name, svgId, noflip, title)
+	{
+		return '<div class="clipicon ' + GetClipIconClass(name) + '"'
+			+ (title ? (' title="' + title + '"') : '')
+			+ '><svg class="icon' + (noflip ? ' noflip' : '') + '"><use xlink:href="' + svgId + '"></use></svg></div>'
+	}
 	this.ToggleClipFlag = function (clipData, onSuccess, onFailure)
 	{
 		var camIsFlagged = (clipData.flags & clip_flag_flag) > 0;
@@ -4652,9 +4705,8 @@ function ClipLoader(clipsBodySelector)
 		var $clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
 			return;
-		var $flag = $clip.find(".clipFlagWrapper");
-		if ($flag.length > 0)
-			$flag.remove();
+		var $flag = $clip.find(".clipIconWrapper");
+		$flag.removeClass(GetClipIconClass("flag"));
 	}
 	this.ShowClipFlag = function (clipData)
 	{
@@ -4663,9 +4715,8 @@ function ClipLoader(clipsBodySelector)
 		var $clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
 			return;
-		var $flag = $clip.find(".clipFlagWrapper");
-		if ($flag.length == 0)
-			$clip.append('<div class="clipFlagWrapper"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>');
+		var $flag = $clip.find(".clipIconWrapper");
+		$flag.addClass(GetClipIconClass("flag"));
 	}
 	this.RepairClipFlagState = function (clipData)
 	{
@@ -9956,6 +10007,17 @@ function ClipProperties()
 			else
 				$camprop.append(GetInfo("Zones", clipData.rawData.zones));
 
+			if ((clipData.flags & alert_flag_trigger_motion) > 0)
+				$camprop.append(GetIcon("trigger_motion", "Triggered by motion detection"));
+			if ((clipData.flags & alert_flag_trigger_audio) > 0)
+				$camprop.append(GetIcon("trigger_audio", "Triggered by audio"));
+			if ((clipData.flags & alert_flag_trigger_external) > 0)
+				$camprop.append(GetIcon("trigger_external", "Triggered by external source"));
+			if ((clipData.flags & clip_flag_flag) > 0)
+				$camprop.append(GetIcon("flag", "Flagged"));
+			if ((clipData.flags & clip_flag_audio) > 0)
+				$camprop.append(GetIcon("clip_audio", "Clip has audio"));
+
 			var $link = $('<a href="javascript:void(0)">Click here to download the clip.</a>');
 			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 			$link.attr("href", clipInfo.href);
@@ -9978,6 +10040,12 @@ function ClipProperties()
 			, overlayOpacity: 0.3
 			, closeOnOverlayClick: true
 		});
+	}
+	var GetIcon = function (icon, label)
+	{
+		var $iconRow = $('<div class="dialogOption_item clipprop_item_info"></div>');
+		$iconRow.append(clipLoader.GetClipIcon(icon)).append(label);
+		return $iconRow;
 	}
 	var GetInfo = function (label, value)
 	{
@@ -13625,8 +13693,19 @@ var b0001_0000 = 16;
 var b0010_0000 = 32;
 var b0100_0000 = 64;
 var b1000_0000 = 128;
+var b0000_0001_0000_0000_0000_0000 = 65536;
+var b0000_0010_0000_0000_0000_0000 = 131072;
+var b0000_0100_0000_0000_0000_0000 = 262144;
+var b0000_1000_0000_0000_0000_0000 = 524288;
+var b0001_0000_0000_0000_0000_0000 = 1048576;
 var clip_flag_audio = b0000_0001;
 var clip_flag_flag = b0000_0010;
+var clip_flag_webbackup = b0100_0000;
+var alert_flag_offsetMs = b0000_0001_0000_0000_0000_0000;
+var alert_flag_trigger_motion = b0000_0010_0000_0000_0000_0000;
+var alert_flag_nosignal = b0000_0100_0000_0000_0000_0000;
+var alert_flag_trigger_audio = b0000_1000_0000_0000_0000_0000;
+var alert_flag_trigger_external = b0001_0000_0000_0000_0000_0000;
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -14127,4 +14206,9 @@ function GetServerTimeOffset()
 	var localOffsetMs = new Date().getTimezoneOffset() * 60000;
 	var serverOffsetMs = serverTimeZoneOffsetMs;
 	return localOffsetMs - serverOffsetMs;
+}
+function dec2bin(dec)
+{
+	/// <summary>Returns the binary representation of a number.</summary>
+	return (dec >>> 0).toString(2);
 }
