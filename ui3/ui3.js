@@ -486,7 +486,7 @@ var defaultSettings =
 			key: "ui3_clipicon_trigger_external"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Alert2"></use></svg> for externally triggered alerts'
+			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Alert2"></use></svg> for externally-triggered alerts'
 			, category: "Clip / Alert Icons"
 		}
 		, {
