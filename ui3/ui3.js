@@ -278,8 +278,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Add an "unsupported" or "unavailable" notice to the Fullscreen mode hotkey name when fullscreen mode is unavailable.
-// TODO: Add a note for iOS users in the help dialog for context menu compatibility mode, explaining that they probably can't make context menus work no matter what they do.
 // TODO: Implement pause button in camera properties.
 
 ///////////////////////////////////////////////////////////////
@@ -7208,7 +7206,7 @@ function JpegVideoModule()
 				currentImageTimestampMs = (clipData.date.getTime() - clipData.offsetMs) + clipPlaybackPosition;
 				isLoadingRecordedSnapshot = clipData.isSnapshot;
 				if (isLoadingRecordedSnapshot)
-					staticSnapshotId = loading.clipId;
+					staticSnapshotId = loading.uniqueId;
 				else
 					staticSnapshotId = "";
 			}
@@ -7645,7 +7643,10 @@ function FetchOpenH264VideoModule()
 	}
 	this.GetStaticSnapshotId = function ()
 	{
-		return loading.clipId;
+		if (isLoadingRecordedSnapshot)
+			return loading.uniqueId;
+		else
+			return "";
 	}
 	this.GetCurrentImageTimeMs = function ()
 	{
@@ -13415,7 +13416,10 @@ function UISettingsPanel()
 							+ hotkeys.getKeyName(parts[3]));
 					$row.addClass('dialogOption_item dialogOption_item_info');
 					$row.append($input);
-					$row.append(GetDialogOptionLabel(s.label));
+					var label = s.label;
+					if (!fullscreen_supported && s.key == 'ui3_hotkey_togglefullscreen2')
+						label += '<br>(Unavailable)';
+					$row.append(GetDialogOptionLabel(label));
 				}
 				else if (s.inputType == "checkbox")
 				{
@@ -13611,6 +13615,10 @@ function UIHelpTool()
 			+ 'However on some devices it is impossible to open context menus the normal way.  If this applies to you,'
 			+ ' enable "Context Menu Compatibility Mode".  This will change how context menus'
 			+ ' are triggered so they should open when the left mouse button is held down for a moment.'
+			+ (browser_is_ios
+				? ('<br><br>Your operating system was detected as iOS, where there is a known compatibility issue with context menus.'
+					+ '  You may be unable to access the context menu regardless of this setting.')
+				: '')
 			+ '</div>')
 			.modalDialog({ title: "Context Menu Compatibility Mode" });
 	}
