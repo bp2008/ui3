@@ -1,4 +1,4 @@
-/// <reference path="ui3-local-overrides.js" />
+﻿/// <reference path="ui3-local-overrides.js" />
 /// <reference path="libs-src/jquery-1.11.3.js" />
 /// <reference path="libs-ui3.js" />
 /// This web interface is licensed under the GNU LGPL Version 3
@@ -186,7 +186,6 @@ var uiSettingsPanel = null;
 var pcmPlayer = null;
 var diskUsageGUI = null;
 var systemConfig = null;
-var cameraProperties = null;
 var cameraListDialog = null;
 var clipProperties = null;
 var clipDownloadDialog = null;
@@ -277,8 +276,6 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-
-// TODO: Implement pause button in camera properties.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -472,7 +469,7 @@ var defaultSettings =
 			key: "ui3_clipicon_trigger_motion"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Alert"></use></svg> for motion-triggered alerts'
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_run"></use></svg> for motion-triggered alerts'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -490,10 +487,31 @@ var defaultSettings =
 			, category: "Clip / Alert Icons"
 		}
 		, {
+			key: "ui3_clipicon_trigger_group"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_quilt"></use></svg> for group-triggered alerts'
+			, category: "Clip / Alert Icons"
+		}
+		, {
 			key: "ui3_clipicon_clip_audio"
 			, value: "1"
 			, inputType: "checkbox"
 			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_volumeUp"></use></svg> for clips with audio'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_clip_backup"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_cloudUpload"></use></svg> for clips that have been backed up'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_protect"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_lock"></use></svg> for protected items'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -1110,8 +1128,6 @@ $(function ()
 	diskUsageGUI = new DiskUsageGUI();
 
 	systemConfig = new SystemConfig();
-
-	cameraProperties = new CameraProperties();
 
 	cameraListDialog = new CameraListDialog();
 
@@ -4662,6 +4678,8 @@ function ClipLoader(clipsBodySelector)
 	{
 		if ((clipData.flags & clip_flag_flag) > 0)
 			return GetClipIconClass("flag");
+		if ((clipData.flags & clip_flag_protect) > 0)
+			return GetClipIconClass("protect");
 		return "";
 	}
 	var GetClipIconClass = function (name)
@@ -4677,8 +4695,14 @@ function ClipLoader(clipsBodySelector)
 			icons.push(self.GetClipIcon("trigger_audio"));
 		if ((clipData.flags & alert_flag_trigger_external) > 0 && settings.ui3_clipicon_trigger_external == "1")
 			icons.push(self.GetClipIcon("trigger_external"));
+		if ((clipData.flags & alert_flag_trigger_group) > 0 && settings.ui3_clipicon_trigger_group == "1")
+			icons.push(self.GetClipIcon("trigger_group"));
 		if ((clipData.flags & clip_flag_audio) > 0 && settings.ui3_clipicon_clip_audio == "1")
 			icons.push(self.GetClipIcon("clip_audio"));
+		if ((clipData.flags & clip_flag_backup) > 0 && settings.ui3_clipicon_clip_backup == "1")
+			icons.push(self.GetClipIcon("clip_backup"));
+		if ((clipData.flags & clip_flag_backup) > 0 && settings.ui3_clipicon_protect == "1")
+			icons.push(self.GetClipIcon("protect"));
 		icons.push(self.GetClipIcon("flag"));
 		return icons.join("");
 	}
@@ -4687,13 +4711,19 @@ function ClipLoader(clipsBodySelector)
 		switch (name)
 		{
 			case "trigger_motion":
-				return GetClipIcon_Internal(name, "#svg_x5F_Alert", false, "Triggered by motion detection")
+				return GetClipIcon_Internal(name, "#svg_mio_run", true, "Triggered by motion detection")
 			case "trigger_audio":
 				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Triggered by audio");
 			case "trigger_external":
 				return GetClipIcon_Internal(name, "#svg_x5F_Alert2", false, "Triggered by external source");
+			case "trigger_group":
+				return GetClipIcon_Internal(name, "#svg_mio_quilt", true, "The group was triggered");
 			case "clip_audio":
 				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Clip has audio");
+			case "clip_backup":
+				return GetClipIcon_Internal(name, "#svg_mio_cloudUpload", true, "Clip has been backed up");
+			case "protect":
+				return GetClipIcon_Internal(name, "#svg_mio_lock", true, "Item is protected");
 			case "flag":
 				return GetClipIcon_Internal(name, "#svg_x5F_Flag", false, "Item is flagged");
 		}
@@ -4705,25 +4735,41 @@ function ClipLoader(clipsBodySelector)
 			+ (title ? (' title="' + title + '"') : '')
 			+ '><svg class="icon' + (noflip ? ' noflip' : '') + '"><use xlink:href="' + svgId + '"></use></svg></div>'
 	}
+	this.ToggleClipProtect = function (clipData, onSuccess, onFailure)
+	{
+		ToggleFlag(clipData, clip_flag_protect, function (clipData, flagIsSet)
+		{
+			if (flagIsSet)
+				self.HideClipProtect(clipData);
+			else
+				self.ShowClipProtect(clipData);
+			if (onSuccess)
+				onSuccess(clipData);
+		}, onFailure);
+	}
 	this.ToggleClipFlag = function (clipData, onSuccess, onFailure)
 	{
-		var camIsFlagged = (clipData.flags & clip_flag_flag) > 0;
-		var newFlags = camIsFlagged ? clipData.flags ^ clip_flag_flag : clipData.flags | clip_flag_flag;
-		UpdateClipFlags('@' + clipData.clipId, newFlags, function ()
+		ToggleFlag(clipData, clip_flag_flag, function (clipData, flagIsSet)
 		{
-			// Success setting flag state
-			clipData.flags = newFlags;
-			if (camIsFlagged)
+			if (flagIsSet)
 				self.HideClipFlag(clipData);
 			else
 				self.ShowClipFlag(clipData);
 			if (onSuccess)
 				onSuccess(clipData);
-		}, function ()
-			{
-				if (onFailure)
-					onFailure(clipData);
-			});
+		}, onFailure);
+	}
+	var ToggleFlag = function (clipData, flag, onSuccess, onFailure)
+	{
+		var flagIsSet = (clipData.flags & flag) > 0;
+		var newFlags = flagIsSet ? clipData.flags ^ flag : clipData.flags | flag;
+		UpdateClipFlags('@' + clipData.clipId, newFlags, function ()
+		{
+			// Success setting flag state
+			clipData.flags = newFlags;
+			if (onSuccess)
+				onSuccess(clipData, flagIsSet);
+		}, onFailure);
 	}
 	this.HideClipFlag = function (clipData)
 	{
@@ -4732,8 +4778,8 @@ function ClipLoader(clipsBodySelector)
 		var $clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
 			return;
-		var $flag = $clip.find(".clipIconWrapper");
-		$flag.removeClass(GetClipIconClass("flag"));
+		var $flags = $clip.find(".clipIconWrapper");
+		$flags.removeClass(GetClipIconClass("flag"));
 	}
 	this.ShowClipFlag = function (clipData)
 	{
@@ -4742,8 +4788,24 @@ function ClipLoader(clipsBodySelector)
 		var $clip = $("#c" + clipData.clipId);
 		if ($clip.length == 0)
 			return;
-		var $flag = $clip.find(".clipIconWrapper");
-		$flag.addClass(GetClipIconClass("flag"));
+		var $flags = $clip.find(".clipIconWrapper");
+		$flags.addClass(GetClipIconClass("flag"));
+	}
+	this.HideClipProtect = function (clipData)
+	{
+		var $clip = $("#c" + clipData.clipId);
+		if ($clip.length == 0)
+			return;
+		var $flags = $clip.find(".clipIconWrapper");
+		$flags.removeClass(GetClipIconClass("protect"));
+	}
+	this.ShowClipProtect = function (clipData)
+	{
+		var $clip = $("#c" + clipData.clipId);
+		if ($clip.length == 0)
+			return;
+		var $flags = $clip.find(".clipIconWrapper");
+		$flags.addClass(GetClipIconClass("protect"));
 	}
 	this.RepairClipFlagState = function (clipData)
 	{
@@ -4761,6 +4823,12 @@ function ClipLoader(clipsBodySelector)
 		if (!sessionManager.IsAdministratorSession())
 			return openLoginDialog(function () { self.Multi_Flag(allSelectedClipIDs, flagEnable, idx, myToast); });
 		Multi_Operation("flag", allSelectedClipIDs, { flagEnable: flagEnable }, 0, null, 0);
+	}
+	this.Multi_Protect = function (allSelectedClipIDs, protectEnable, idx, myToast)
+	{
+		if (!sessionManager.IsAdministratorSession())
+			return openLoginDialog(function () { self.Multi_Protect(allSelectedClipIDs, protectEnable, idx, myToast); });
+		Multi_Operation("protect", allSelectedClipIDs, { protectEnable: protectEnable }, 0, null, 0);
 	}
 	this.Multi_Delete = function (allSelectedClipIDs)
 	{
@@ -4804,8 +4872,15 @@ function ClipLoader(clipsBodySelector)
 		}
 		else
 		{
+			var verb = "ERROR";
+			if (operation == "flag")
+				verb = args.flagEnable ? "Flagging" : "Unflagging";
+			else if (operation == "protect")
+				verb = args.protectEnable ? "Protecting" : "Unprotecting";
+			else if (operation == "delete")
+				verb = "Deleting";
 			myToast = toaster.Info('<div id="multi_' + operation + '_status_toast" class="multi_operation_status_toast">'
-				+ '<div>' + (operation == "flag" ? "Flagging" : "Deleting") + ' ' + (currentPrimaryTab == "clips" ? "clip" : "alert") + ' <span class="multi_operation_count">' + (idx + 1) + '</span> / ' + allSelectedClipIDs.length + '</div>'
+				+ '<div>' + verb + ' ' + (currentPrimaryTab == "clips" ? "clip" : "alert") + ' <span class="multi_operation_count">' + (idx + 1) + '</span> / ' + allSelectedClipIDs.length + '</div>'
 				+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
 				+ '</div>', 60000, true);
 		}
@@ -4828,8 +4903,32 @@ function ClipLoader(clipsBodySelector)
 					return;
 				}
 			}
+			else if (operation == "protect")
+			{
+				var isProtected = (clipData.flags & clip_flag_protect) > 0;
+				if ((isProtected && !args.protectEnable) || (!isProtected && args.protectEnable))
+				{
+					self.ToggleClipProtect(clipData, function ()
+					{
+						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
+					}, function ()
+						{
+							Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
+						});
+					return;
+				}
+			}
 			else if (operation == "delete")
 			{
+				if (videoPlayer.Loading().image.uniqueId == clipData.clipId)
+				{
+					self.CloseCurrentClip();
+					setTimeout(function ()
+					{
+						Multi_Operation(operation, allSelectedClipIDs, args, idx, myToast, errorCount);
+					}, 500);
+					return;
+				}
 				DeleteAlert("@" + clipData.clipId, clipData.isClip, function ()
 				{
 					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
@@ -8923,7 +9022,7 @@ function CanvasContextMenu()
 				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
 					toaster.Warning("You cannot view properties of cameras that are part of an auto-cycle.");
 				else
-					cameraProperties.open(lastLiveContextMenuSelectedCamera.optionValue);
+					new CameraProperties(lastLiveContextMenuSelectedCamera.optionValue);
 				break;
 			case "openhls":
 				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
@@ -9117,10 +9216,11 @@ function ClipListContextMenu()
 	var self = this;
 	var allSelectedClipIDs = [];
 	var flagEnable = false;
+	var protectEnable = false;
 
 	var onShowMenu = function (menu)
 	{
-		var itemsToEnable = ["flag", "download", "delete", "larger_thumbnails"];
+		var itemsToEnable = ["flag", "protect", "download", "delete", "larger_thumbnails"];
 		var itemsToDisable = [];
 		if (clipLoader.GetAllSelected().length > 1)
 			itemsToDisable.push("properties");
@@ -9147,13 +9247,16 @@ function ClipListContextMenu()
 		allSelectedClipIDs = clipLoader.GetAllSelected();
 
 		flagEnable = false; // Turn all off, but if one is already off, then turn all on.
+		protectEnable = false;
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
 		{
 			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
-			if (clipData && !clipLoader.ClipDataIndicatesFlagged(clipData))
+			if (clipData)
 			{
-				flagEnable = true;
-				break;
+				if ((clipData.flags & clip_flag_flag) == 0)
+					flagEnable = true;
+				if ((clipData.flags & clip_flag_protect) == 0)
+					protectEnable = true;
 			}
 		}
 
@@ -9162,6 +9265,7 @@ function ClipListContextMenu()
 			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[0]);
 
 			$("#cm_cliplist_flag").text(flagEnable ? "Flag" : "Unflag");
+			$("#cm_cliplist_protect").text(protectEnable ? "Protect" : "Unprotect");
 			if (clipData.fileSize)
 				$("#cm_cliplist_download").text("Download (" + htmlEncode(clipData.fileSize) + ")");
 			else
@@ -9179,6 +9283,7 @@ function ClipListContextMenu()
 		{
 			var label = " " + allSelectedClipIDs.length + " " + (currentPrimaryTab == "clips" ? "clips" : "alerts");
 			$("#cm_cliplist_flag").text((flagEnable ? "Flag" : "Unflag") + label);
+			$("#cm_cliplist_protect").text((protectEnable ? "Protect" : "Unprotect") + label);
 			$("#cm_cliplist_download").text("Download" + label);
 			$("#cm_cliplist_delete").text("Delete" + label);
 			$dl_link.attr("href", "javascript:void(0)");
@@ -9203,6 +9308,17 @@ function ClipListContextMenu()
 					AskYesNo("Confirm " + whatAction + " of " + allSelectedClipIDs.length + " " + whichKind + "?", function ()
 					{
 						clipLoader.Multi_Flag(allSelectedClipIDs, flagEnable);
+					});
+				break;
+			case "protect":
+				var whatAction = (protectEnable ? "protect" : "unprotect");
+				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				if (allSelectedClipIDs.length <= 12)
+					clipLoader.Multi_Protect(allSelectedClipIDs, protectEnable);
+				else
+					AskYesNo("Confirm " + whatAction + " of " + allSelectedClipIDs.length + " " + whichKind + "?", function ()
+					{
+						clipLoader.Multi_Protect(allSelectedClipIDs, protectEnable);
 					});
 				break;
 			case "download":
@@ -9237,6 +9353,7 @@ function ClipListContextMenu()
 			alias: "cmroot_cliplist", width: 200, items:
 			[
 				{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
 				, { type: "splitLine" }
@@ -9578,7 +9695,7 @@ function CameraListDialog()
 	}
 	this.camListThumbClick = function (camId)
 	{
-		cameraProperties.open(camId);
+		new CameraProperties(camId);
 	}
 	this.UpdateCameraThumbnails = function (overrideImgDate)
 	{
@@ -9629,35 +9746,38 @@ function CameraListDialog()
 ///////////////////////////////////////////////////////////////
 // Camera Properties Dialog ///////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function CameraProperties()
+function CameraProperties(camId)
 {
 	var self = this;
 	var modal_cameraPropDialog = null;
 	var loadedOnce = false;
-	this.open = function (camId)
-	{
-		CloseCameraProperties();
+	var $dlg = $('<div class="campropdialog"></div>');
+	var $camprop = $('<div class="campropcontent dialogOptionPanel"><div style="text-align: center">Loading...</div></div>');
+	$dlg.append($camprop);
 
+	var $btnPause = $();
+	var $btnManrec = $();
+	var $btnDisable = $();
+	var initialize = function ()
+	{
 		var camName = cameraListLoader.GetCameraName(camId);
-		modal_cameraPropDialog = $('<div id="campropdialog">'
-			+ '<div id="campropcontent" class="dialogOptionPanel"><div style="text-align: center">Loading...</div></div>'
-			+ '</div>'
-		).dialog({
+		modal_cameraPropDialog = $dlg.dialog({
 			title: "Camera Properties"
 			, overlayOpacity: 0.3
 			, closeOnOverlayClick: true
 			, onClosing: function ()
 			{
-				loadedOnce = false;
+				BI_CustomEvent.RemoveListener("CameraListLoaded", CameraListLoadedCb);
 				modal_cameraPropDialog = null;
 				cameraListDialog.refresh();
 			}
-			, onRefresh: function () { self.refresh(camId); }
+			, onRefresh: function () { self.refresh(); }
 		});
+		BI_CustomEvent.AddListener("CameraListLoaded", CameraListLoadedCb);
 
-		self.refresh(camId);
+		self.refresh();
 	}
-	this.refresh = function (camId)
+	this.refresh = function ()
 	{
 		if (modal_cameraPropDialog)
 		{
@@ -9669,7 +9789,6 @@ function CameraProperties()
 					return;
 				modal_cameraPropDialog.setLoadingState(false);
 
-				var $camprop = $("#campropcontent");
 				$camprop.empty();
 				if ($camprop.length == 0)
 					return;
@@ -9728,23 +9847,19 @@ function CameraProperties()
 					$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
-					$generalSection.append('<div class="dialogOption_item dialogOption_item_ddl">'
-						+ '<select mysetting="record|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
-						+ GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
+					var $selectRecord = GetSelectRow("Record:", "record",
+						GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
 						+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
 						+ GetHtmlOptionElementMarkup("1", "Continuously", response.data.record.toString())
 						+ GetHtmlOptionElementMarkup("2", "When triggered", response.data.record.toString())
-						+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString())
-						+ '</select>' + GetDialogOptionLabel("Record:")
-						+ '</div>');
-					$generalSection.append('<div class="dialogOption_item dialogOption_item_ddl">'
-						+ '<select mysetting="alerts|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
-						+ GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
+						+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString()));
+					$generalSection.append($selectRecord);
+					var $selectAlerts = GetSelectRow("Alerts:", "alerts",
+						GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
 						+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
 						+ GetHtmlOptionElementMarkup("1", "Any camera in group is triggered", response.data.alerts.toString())
-						+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString())
-						+ '</select>' + GetDialogOptionLabel("Alerts:")
-						+ '</div>');
+						+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString()));
+					$generalSection.append($selectAlerts);
 					$camprop.append($generalSection);
 
 					var collapsible = new CollapsibleSection('mt', "Motion/Trigger", modal_cameraPropDialog);
@@ -9771,34 +9886,32 @@ function CameraProperties()
 					$motionSection.append(GetRangeSlider("setmotion.audio_sense|" + camId, "Audio Sensitivity: "
 						, response.data.setmotion.audio_sense, 0, 32000, 320, false, percentScalingMethod
 						, camPropSliderChanged));
-					$motionSection.append('<div class="dialogOption_item dialogOption_item_ddl">'
-						+ '<select mysetting="setmotion.showmotion|' + camId + '" onchange="cameraProperties.camPropSelectChange(this)">'
-						+ GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
+					var $selectHighlight = GetSelectRow("Highlight:", "setmotion.showmotion",
+						GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
 						+ GetHtmlOptionElementMarkup("1", "Motion", response.data.setmotion.showmotion.toString())
 						+ GetHtmlOptionElementMarkup("2", "Objects", response.data.setmotion.showmotion.toString())
-						+ GetHtmlOptionElementMarkup("3", "Motion + Objects", response.data.setmotion.showmotion.toString())
-						+ '</select>' + GetDialogOptionLabel("Highlight:")
-						+ '</div>');
+						+ GetHtmlOptionElementMarkup("3", "Motion + Objects", response.data.setmotion.showmotion.toString()));
+					$motionSection.append($selectHighlight);
 					$camprop.append($motionSection);
 
 					var collapsible = new CollapsibleSection('mro', "Manual Recording Options", modal_cameraPropDialog);
 					$camprop.append(collapsible.$heading);
 					var $manrecSection = collapsible.$section;
-					$manrecSection.append('<div class="dialogOption_item dialogOption_item_center">'
-						+ GetCameraPropertyButtonMarkup("Trigger", "trigger", "largeBtnYellow", camId)
-						+ GetCameraPropertyButtonMarkup("Snapshot", "snapshot", "largeBtnBlue", camId)
-						+ GetCameraPropertyButtonMarkup("Toggle Recording", "manrec", "largeBtnRed", camId)
-						+ '</div>');
+					var $btnSet1 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
+					$btnSet1.append(GetCameraPropertyButton("Trigger", "trigger", "largeBtnYellow", camId));
+					$btnSet1.append(GetCameraPropertyButton("Snapshot", "snapshot", "largeBtnBlue", camId));
+					$btnSet1.append($btnManrec = GetCameraPropertyButton("Toggle Recording", "manrec", "largeBtnRed", camId));
+					$manrecSection.append($btnSet1);
 					$camprop.append($manrecSection);
 
 					var collapsible = new CollapsibleSection('mgmt', "Camera Management", modal_cameraPropDialog);
 					$camprop.append(collapsible.$heading);
 					var $mgmtSection = collapsible.$section;
-					$mgmtSection.append('<div class="dialogOption_item dialogOption_item_center">'
-						+ GetCameraPropertyButtonMarkup("Pause", "pause", "largeBtnDisabled", camId)
-						+ GetCameraPropertyButtonMarkup("Restart", "reset", "largeBtnBlue", camId)
-						+ GetCameraPropertyButtonMarkup("Disable", "disable", "largeBtnRed", camId)
-						+ '</div>');
+					var $btnSet2 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
+					$btnSet2.append($btnPause = GetCameraPropertyButton("Pause", "pause", "largeBtnYellow", camId));
+					$btnSet2.append(GetCameraPropertyButton("Restart", "reset", "largeBtnBlue", camId));
+					$btnSet2.append($btnDisable = GetCameraPropertyButton("Disable", "disable", "largeBtnRed", camId));
+					$mgmtSection.append($btnSet2);
 					$camprop.append($mgmtSection);
 
 					if (cam)
@@ -9812,14 +9925,15 @@ function CameraProperties()
 					toaster.Error(ex);
 				}
 				if (developerMode)
-					$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraProperties.OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
+					$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="Camera_OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
 
 				modal_cameraPropDialog.contentChanged(!loadedOnce);
 				loadedOnce = true;
+				CameraListLoaded(response.data);
 			}
 				, function ()
 				{
-					CloseCameraProperties();
+					modal_cameraPropDialog.close();
 				}
 				, function ()
 				{
@@ -9827,10 +9941,22 @@ function CameraProperties()
 				});
 		}
 	}
-	var CloseCameraProperties = function ()
+	var CameraListLoadedCb = function ()
 	{
-		if (modal_cameraPropDialog != null)
-			modal_cameraPropDialog.close();
+		CameraListLoaded();
+	}
+	var CameraListLoaded = function (cam)
+	{
+		if (!cam)
+			cam = cameraListLoader.GetCameraWithId(camId);
+		if (!cam)
+			return;
+		if (cam.pause == 0)
+			$btnPause.val("Pause")
+		else if (cam.pause < 0)
+			$btnPause.val("Paused (no limit)");
+		else
+			$btnPause.val("Paused (" + msToTime(cam.pause * 1000) + ")");
 	}
 	var GetInfo = function (label, value)
 	{
@@ -9904,9 +10030,14 @@ function CameraProperties()
 	{
 		return parseInt(value / 10);
 	}
-	var GetCameraPropertyButtonMarkup = function (text, buttonId, colorClass, camId)
+	var GetCameraPropertyButton = function (text, buttonId, colorClass, camId)
 	{
-		return '<input type="button" id="camprop_button_' + buttonId + '" class="largeTextButton ' + colorClass + '" onclick="cameraProperties.camPropButtonClick(&quot;' + camId + '&quot;, &quot;' + buttonId + '&quot;)" value="' + text + '" />';
+		var $btn = $('<input type="button" class="largeTextButton ' + colorClass + '" value="' + text + '" />');
+		$btn.click(function ()
+		{
+			camPropButtonClick(camId, buttonId);
+		});
+		return $btn;
 	}
 	var camPropOnOffBtnClick = function (mysetting, buttonStateIsOn)
 	{
@@ -9922,16 +10053,21 @@ function CameraProperties()
 		var camId = parts[1];
 		cameraConfig.set(camId, settingName, value);
 	}
-	this.camPropSelectChange = function (select)
+	var GetSelectRow = function (label, settingKey, options)
 	{
-		var mysetting = $(select).attr("mysetting");
-		var parts = mysetting.split('|');
-		var settingName = parts[0];
-		var camId = parts[1];
-		var selectedValue = parseInt(select.value);
-		cameraConfig.set(camId, settingName, selectedValue);
+		var $row = $('<div class="dialogOption_item dialogOption_item_ddl"></div>');
+		var $select = $('<select></select>');
+		$select.on('change', function ()
+		{
+			var selectedValue = parseInt($select.val());
+			cameraConfig.set(camId, settingKey, selectedValue);
+		});
+		$select.append(options);
+		$row.append($select);
+		$row.append(GetDialogOptionLabel(label));
+		return $row;
 	}
-	this.camPropButtonClick = function (camId, button)
+	var camPropButtonClick = function (camId, button)
 	{
 		switch (button)
 		{
@@ -9942,19 +10078,21 @@ function CameraProperties()
 				SaveSnapshotInBlueIris(camId);
 				break;
 			case "manrec":
-				ManualRecordCamera(camId, $("#camprop_button_manrec").attr("start"), SetCameraPropertyManualRecordButtonState);
+				ManualRecordCamera(camId, $btnManrec.attr("start"), SetCameraPropertyManualRecordButtonState);
 				break;
 			case "reset":
 				ResetCamera(camId);
 				break;
 			case "disable":
-				cameraConfig.set(camId, "enable", $("#camprop_button_disable").attr("enabled") != "1"
+				cameraConfig.set(camId, "enable", $btnDisable.attr("enabled") != "1"
 					, function ()
 					{
-						SetCameraPropertyEnableButtonState($("#camprop_button_disable").attr("enabled") != "1");
+						SetCameraPropertyEnableButtonState($btnDisable.attr("enabled") != "1");
 					});
 				break;
 			case "pause":
+				new CameraPauseDialog(camId);
+				break;
 			default:
 				toaster.Error(button + " not implemented in this UI version");
 				break;
@@ -9964,43 +10102,45 @@ function CameraProperties()
 	{
 		if (is_recording)
 		{
-			$("#camprop_button_manrec").val("Stop Recording");
-			$("#camprop_button_manrec").attr("start", "0");
+			$btnManrec.val("Stop Recording");
+			$btnManrec.attr("start", "0");
 		}
 		else
 		{
-			$("#camprop_button_manrec").val("Start Recording");
-			$("#camprop_button_manrec").attr("start", "1");
+			$btnManrec.val("Start Recording");
+			$btnManrec.attr("start", "1");
 		}
 	}
 	var SetCameraPropertyEnableButtonState = function (is_enabled)
 	{
 		if (is_enabled)
 		{
-			$("#camprop_button_disable").val("Disable");
-			$("#camprop_button_disable").attr("enabled", "1");
-			$("#camprop_button_disable").removeClass("largeBtnGreen");
-			$("#camprop_button_disable").addClass("largeBtnRed");
+			$btnDisable.val("Disable");
+			$btnDisable.attr("enabled", "1");
+			$btnDisable.removeClass("largeBtnGreen");
+			$btnDisable.addClass("largeBtnRed");
 		}
 		else
 		{
-			$("#camprop_button_disable").val("Enable");
-			$("#camprop_button_disable").attr("enabled", "0");
-			$("#camprop_button_disable").removeClass("largeBtnRed");
-			$("#camprop_button_disable").addClass("largeBtnGreen");
+			$btnDisable.val("Enable");
+			$btnDisable.attr("enabled", "0");
+			$btnDisable.removeClass("largeBtnRed");
+			$btnDisable.addClass("largeBtnGreen");
 		}
 	}
-	this.OpenRaw = function (camId)
+
+	initialize();
+}
+function Camera_OpenRaw(camId)
+{
+	cameraConfig.get(camId, function (response)
 	{
-		cameraConfig.get(camId, function (response)
+		var cam = cameraListLoader.GetCameraWithId(camId);
+		objectVisualizer.open({ data: cam, config: response.data }, cam.optionDisplay + " Properties (Raw)");
+	}, function ()
 		{
-			var cam = cameraListLoader.GetCameraWithId(camId);
-			objectVisualizer.open({ data: cam, config: response.data }, cam.optionDisplay + " Properties (Raw)");
-		}, function ()
-			{
-				toaster.Warning("Unable to load camera properties for " + camId);
-			});
-	}
+			toaster.Warning("Unable to load camera properties for " + camId);
+		});
 }
 ///////////////////////////////////////////////////////////////
 // Clip Properties Dialog /////////////////////////////////////
@@ -10014,11 +10154,9 @@ function ClipProperties()
 
 		var camName = cameraListLoader.GetCameraName(clipData.camera);
 
-		var $dlg = $('<div id="campropdialog">'
-			+ '<div id="campropcontent"></div>'
-			+ '</div>');
-
-		var $camprop = $dlg.find("#campropcontent");
+		var $dlg = $('<div class="campropdialog"></div>');
+		var $camprop = $('<div class="campropcontent selectable"></div>');
+		$dlg.append($camprop);
 
 		try
 		{
@@ -10042,11 +10180,17 @@ function ClipProperties()
 			if ((clipData.flags & alert_flag_trigger_audio) > 0)
 				$camprop.append(GetIcon("trigger_audio", "Triggered by audio"));
 			if ((clipData.flags & alert_flag_trigger_external) > 0)
-				$camprop.append(GetIcon("trigger_external", "Triggered by external source"));
-			if ((clipData.flags & clip_flag_flag) > 0)
-				$camprop.append(GetIcon("flag", "Flagged"));
+				$camprop.append(GetIcon("trigger_external", "Triggered by external source such as DIO or manual trigger"));
+			if ((clipData.flags & alert_flag_trigger_group) > 0)
+				$camprop.append(GetIcon("trigger_group", "The group was triggered"));
 			if ((clipData.flags & clip_flag_audio) > 0)
 				$camprop.append(GetIcon("clip_audio", "Clip has audio"));
+			if ((clipData.flags & clip_flag_backup) > 0)
+				$camprop.append(GetIcon("clip_backup", "Clip has been backed up"));
+			if ((clipData.flags & clip_flag_protect) > 0)
+				$camprop.append(GetIcon("protect", "Item is protected"));
+			if ((clipData.flags & clip_flag_flag) > 0)
+				$camprop.append(GetIcon("flag", "Flagged"));
 
 			var $link = $('<a href="javascript:void(0)">Click here to download the clip.</a>');
 			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
@@ -10057,13 +10201,18 @@ function ClipProperties()
 				$link.attr("download", clipInfo.download);
 			}
 			$camprop.append(GetInfoEleValue("Download", $link));
+
+			if (developerMode)
+			{
+				$camprop.append(GetInfo("Flags", InsertSpacesInBinary(dec2bin(clipData.flags), 32)));
+			}
 		}
 		catch (ex)
 		{
 			toaster.Error(ex);
 		}
 		if (developerMode)
-			$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="clipProperties.OpenRaw(&quot;' + clipId + '&quot;)" value="view raw data" /></div>');
+			$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="ClipProperties_OpenRaw(&quot;' + clipId + '&quot;)" value="view raw data" /></div>');
 
 		$dlg.dialog({
 			title: htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties'
@@ -10089,11 +10238,11 @@ function ClipProperties()
 		$info.text(label + ": ").append(ele);
 		return $info;
 	}
-	this.OpenRaw = function (clipId)
-	{
-		var clipData = clipLoader.GetClipFromId(clipId);
-		objectVisualizer.open(clipData, "Clip Properties (raw)");
-	}
+}
+function ClipProperties_OpenRaw(clipId)
+{
+	var clipData = clipLoader.GetClipFromId(clipId);
+	objectVisualizer.open(clipData, "Clip Properties (raw)");
 }
 ///////////////////////////////////////////////////////////////
 // Clip Download Dialog ///////////////////////////////////////
@@ -10103,11 +10252,10 @@ function ClipDownloadDialog()
 	var self = this;
 	this.open = function (allSelectedClipIDs)
 	{
-		var $dlg = $('<div id="campropdialog">'
-			+ '<div id="campropcontent"></div>'
-			+ '</div>');
+		var $dlg = $('<div class="campropdialog"></div>');
+		var $camprop = $('<div class="campropcontent"></div>');
+		$dlg.append($camprop);
 
-		var $camprop = $dlg.find("#campropcontent");
 		$camprop.append('<div class="dialogOption_item clipprop_item_info">Click each link to download the desired clips.</div>');
 		$camprop.append('<div class="dialogOption_item clipprop_item_info">Each link will disappear after it is clicked, so you can\'t accidentally download duplicates.</div>');
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
@@ -10135,6 +10283,85 @@ function ClipDownloadDialog()
 		});
 		return $('<div class="dialogOption_item clipprop_item_info"></div>').append($link);
 	}
+}
+///////////////////////////////////////////////////////////////
+// Camera Pause Dialog ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function CameraPauseDialog(camId)
+{
+	var self = this;
+	var $status = $();
+	var initialize = function ()
+	{
+		var camData = cameraListLoader.GetCameraWithId(camId);
+		var $dlg = $('<div class="campausedialog"></div>');
+		var $camprop = $('<div class="campropcontent"></div>');
+		$dlg.append($camprop);
+
+		$status = $('<div class="dialogOption_item clipprop_item_info"></div>');
+		$camprop.append($status);
+		$camprop.append(GetButton(camId, "Off (unpause)", 0));
+		$camprop.append(GetButton(camId, "Add 30 seconds", 1));
+		$camprop.append(GetButton(camId, "Add 5 minutes", 2));
+		$camprop.append(GetButton(camId, "Add 30 minutes", 3));
+		$camprop.append(GetButton(camId, "Add 1 hour", 4));
+		$camprop.append(GetButton(camId, "Add 2 hours", 5));
+		$camprop.append(GetButton(camId, "Add 3 hours", 6));
+		$camprop.append(GetButton(camId, "Add 4 hours", 7));
+		$camprop.append(GetButton(camId, "Add 10 hours", 8));
+		$camprop.append(GetButton(camId, "Add 24 hours", 9));
+		$camprop.append(GetButton(camId, "Indefinitely", -1));
+
+		CameraListLoaded();
+		BI_CustomEvent.AddListener("CameraListLoaded", CameraListLoadedCb);
+
+		$dlg.dialog({
+			title: "Pause " + camData.optionDisplay
+			, overlayOpacity: 0.3
+			, onClosing: function ()
+			{
+				BI_CustomEvent.RemoveListener("CameraListLoaded", CameraListLoadedCb);
+			}
+		});
+
+	}
+	var GetButton = function (camId, label, pauseValue)
+	{
+		var $row = $('<div class="dialogOption_item clipprop_item_info"></div>');
+		var $btn = $('<input type="button" class="smallBtnYellow" value="' + label + '" />');
+		$btn.click(function () { DoPause(camId, pauseValue); });
+		$row.append($btn);
+		return $row;
+	}
+	var DoPause = function (camId, pauseValue)
+	{
+		if (!sessionManager.IsAdministratorSession())
+			openLoginDialog(function () { DoPause(camId, pauseValue); });
+		else
+			cameraConfig.set(camId, "pause", pauseValue, function (response)
+			{
+				CameraListLoaded(response.data);
+			});
+	}
+	var CameraListLoadedCb = function ()
+	{
+		CameraListLoaded();
+	}
+	var CameraListLoaded = function (cam)
+	{
+		if (!cam)
+			cam = cameraListLoader.GetCameraWithId(camId);
+		if (!cam)
+			return;
+		if (cam.pause == 0)
+			$status.text("Not paused")
+		else if (cam.pause < 0)
+			$status.text("Paused indefinitely");
+		else
+			$status.text("Paused for next " + msToTime(cam.pause * 1000));
+	}
+
+	initialize();
 }
 ///////////////////////////////////////////////////////////////
 // Object/JSON Visualize //////////////////////////////////////
@@ -13735,14 +13962,19 @@ var b0000_0010_0000_0000_0000_0000 = 131072;
 var b0000_0100_0000_0000_0000_0000 = 262144;
 var b0000_1000_0000_0000_0000_0000 = 524288;
 var b0001_0000_0000_0000_0000_0000 = 1048576;
+var b0010_0000_0000_0000_0000_0000 = 2097152;
+var b0100_0000_0000_0000_0000_0000 = 4194304;
+var b1000_0000_0000_0000_0000_0000 = 8388608;
 var clip_flag_audio = b0000_0001;
 var clip_flag_flag = b0000_0010;
-var clip_flag_webbackup = b0100_0000;
+var clip_flag_protect = b0000_0100;
+var clip_flag_backup = b0100_0000;
 var alert_flag_offsetMs = b0000_0001_0000_0000_0000_0000;
 var alert_flag_trigger_motion = b0000_0010_0000_0000_0000_0000;
 var alert_flag_nosignal = b0000_0100_0000_0000_0000_0000;
 var alert_flag_trigger_audio = b0000_1000_0000_0000_0000_0000;
 var alert_flag_trigger_external = b0001_0000_0000_0000_0000_0000;
+var alert_flag_trigger_group = b0100_0000_0000_0000_0000_0000;
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -14248,4 +14480,19 @@ function dec2bin(dec)
 {
 	/// <summary>Returns the binary representation of a number.</summary>
 	return (dec >>> 0).toString(2);
+}
+function InsertSpacesInBinary(binaryString, maxLength)
+{
+	if (binaryString.length < maxLength)
+		binaryString = binaryString.padLeft(maxLength, '0');
+	var output = [];
+	for (var i = 0; i < binaryString.length; i++)
+	{
+		if (i != 0 && i % 8 == 0)
+			output.push(" ");
+		else if (i != 0 && i % 4 == 0)
+			output.push("_");
+		output.push(binaryString[i]);
+	}
+	return output.join("");
 }

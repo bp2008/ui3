@@ -1701,7 +1701,7 @@ div.icon, a.icon
 	z-index: 1;
 	bottom: 5px;
 	right: 0px;
-	width: 45px;
+	width: auto;
 	height: 21px;
 	color: #2b4bc6;
 	text-align: right;
@@ -1715,12 +1715,14 @@ div.icon, a.icon
 		display: inline-block;
 	}
 
-.clipicon.icon_flag
+.clipicon.icon_flag,
+.clipicon.icon_protect
 {
 	display: none;
 }
 
-.clipIconWrapper.icon_flag .clipicon.icon_flag
+.clipIconWrapper.icon_flag .clipicon.icon_flag,
+.clipIconWrapper.icon_protect .clipicon.icon_protect
 {
 	display: inline-block;
 }
@@ -1740,7 +1742,7 @@ div.icon, a.icon
 #clipsbody.largerThumbs .clipIconWrapper
 {
 	bottom: 28px;
-	right: 1px;
+	right: 0px;
 	width: 16px;
 	height: auto;
 	white-space: normal;
@@ -2916,6 +2918,26 @@ div.icon, a.icon
 		background-color: #E3E34A;
 	}
 
+.smallBtnYellow
+{
+	background-color: #C0C037;
+	color: #000000;
+	border: 0px;
+	padding: 4px 8px;
+	cursor: pointer;
+	min-width: 120px;
+}
+
+	.smallBtnYellow:hover
+	{
+		background-color: #f0f05a;
+	}
+
+	.smallBtnYellow:active
+	{
+		background-color: #ffff93;
+	}
+
 .btnRed
 {
 	background-color: #B9B9B9;
@@ -3141,7 +3163,7 @@ div.icon, a.icon
 	height: 16px;
 }
 
-#campropcontent
+.campropcontent
 {
 	min-width: 283px;
 }
@@ -3244,17 +3266,17 @@ div.icon, a.icon
 	padding: 6px 0px;
 }
 
-#campropcontent .dialogOption_item_info
+.campropcontent .dialogOption_item_info
 {
 	max-width: 320px;
 }
 
-#campropcontent .dialogOption_item_cb
+.campropcontent .dialogOption_item_cb
 {
 	max-width: 340px;
 }
 
-#campropcontent .dialogOption_item_ddl
+.campropcontent .dialogOption_item_ddl
 {
 	max-width: 340px;
 }
@@ -3369,6 +3391,11 @@ div.icon, a.icon
 		padding-right: 10px;
 		vertical-align: middle;
 	}
+
+.campausedialog .clipprop_item_info
+{
+	text-align: center;
+}
 /* Webkit custom scrollbar for modal dialogs */
 div::-webkit-scrollbar
 {
@@ -3395,6 +3422,11 @@ div::-webkit-scrollbar-thumb
 div::-webkit-scrollbar-track
 {
 	background: #393939;
+}
+
+div::-webkit-scrollbar-corner
+{
+	background: #222222;
 }
 /* For IE */
 /*.dialog_content
