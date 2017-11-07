@@ -4701,8 +4701,7 @@ function ClipLoader(clipsBodySelector)
 			icons.push(self.GetClipIcon("clip_audio"));
 		if ((clipData.flags & clip_flag_backup) > 0 && settings.ui3_clipicon_clip_backup == "1")
 			icons.push(self.GetClipIcon("clip_backup"));
-		if ((clipData.flags & clip_flag_backup) > 0 && settings.ui3_clipicon_protect == "1")
-			icons.push(self.GetClipIcon("protect"));
+		icons.push(self.GetClipIcon("protect"));
 		icons.push(self.GetClipIcon("flag"));
 		return icons.join("");
 	}
