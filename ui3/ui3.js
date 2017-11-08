@@ -6465,7 +6465,11 @@ function VideoPlayerController()
 			document.addEventListener(evtname, function ()
 			{
 				// Called when page visibility changes.
-				playerModule.VisibilityChanged(!documentIsHidden());
+				var visibleNow = !documentIsHidden();
+				if (moduleHolder["jpeg"] != null)
+					moduleHolder["jpeg"].VisibilityChanged(visibleNow);
+				if (moduleHolder["h264"] != null)
+					moduleHolder["h264"].VisibilityChanged(visibleNow);
 			});
 		}
 		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint")
