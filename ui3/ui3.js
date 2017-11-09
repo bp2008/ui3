@@ -5414,7 +5414,6 @@ function StatusLoader()
 			lastResponse = response;
 			if (response && response.data)
 			{
-				console.log(response.data.alerts);
 				$("#stoplightBtn div").css("opacity", "");
 				if (response.data.signal == "0")
 					$("#stoplightRed").css("opacity", "1");
