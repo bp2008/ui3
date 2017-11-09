@@ -210,11 +210,14 @@
 		{
 			target = menutarget;
 			showMenuGroup.call(groups[option.alias], { left: e.pageX, top: e.pageY }, 0);
-			$(document).one('mousedown touchstart', function ()
-			{
-				if (!suppressCloseByDocClick)
-					hideMenuPane(e);
-			});
+			$(document).one('mousedown touchstart', docClickHideMenuPane);
+		}
+		function docClickHideMenuPane(e)
+		{
+			if (suppressCloseByDocClick)
+				$(document).one('mousedown touchstart', docClickHideMenuPane);
+			else
+				hideMenuPane(e);
 		}
 		var $root = $("#" + option.alias);
 		var root = null;
@@ -276,7 +279,6 @@
 		addItems = overItem = outItem = null;
 		me.hideAll = function ()
 		{
-			$(document).off('mousedown touchstart', hideMenuPane);
 			hideMenuPane();
 		}
 		allJQContextMenus.push(me);

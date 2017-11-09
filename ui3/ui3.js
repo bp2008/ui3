@@ -266,12 +266,7 @@ var togglableUIFeatures =
 
 // TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
 //			-- I've found bugs related to the cycles and reported them.  Awaiting fixes.
-// TODO: Test that alerts are handled correctly in both streaming methods, once Blue Iris adds accurate "msec" and "offsetMs" fields to alertlist responses.
 // TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
-// TODO: Read the "tzone" value earlier, either at login/session check or at page load via an HTML macro, whatever Blue Iris will provide.  Currently there is a race between status load and clip list load that could cause the clip list to load with no time zone offset.
-//			-- tzone will now be read from the session response if and when it is added.  Close out this task once it works.
-// TODO: Once session data indicates whether recording-viewing permission is granted, revert the "Failed to load." message.  When permission is unavailable, hide the Alerts and Clips tabs, and set Live View tab as the default.
-//			-- Permissions "ptz", "audio", and "recordings" are now read from the session response as booleans and handled appropriately, but they don't exist yet.  Close out this task once it works.
 
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
@@ -283,6 +278,7 @@ var togglableUIFeatures =
 
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
+// TODO: Refactor "clipId" field to "uniqueId" or "recId" to imply it could be either an alert ID or a clip ID.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -3240,12 +3236,13 @@ function PlaybackControls()
 		self.SetProgressText("Loading...");
 		self.setPlayPauseButtonState();
 	}
-	this.Recording = function ()
+	this.Recording = function (clipData)
 	{
 		self.Show();
 		$pc.removeClass("live");
 		self.SetProgressText("Loading...");
 		self.setPlayPauseButtonState();
+		SetDownloadClipLink(clipData);
 	}
 	this.setPlayPauseButtonState = function (paused)
 	{
@@ -3265,7 +3262,7 @@ function PlaybackControls()
 			$("#pcPause").show();
 		}
 	}
-	this.SetDownloadClipLink = function (clipData)
+	var SetDownloadClipLink = function (clipData)
 	{
 		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 		var $btn = $("#clipDownloadButton");
@@ -3584,7 +3581,11 @@ function SeekBar()
 	seekhint_img.load(function ()
 	{
 		if (isDragging)
+		{
 			jpegPreviewModule.RenderImage("seekhint_img");
+			var msecTotal = videoPlayer.Loading().image.msec;
+			playbackControls.SetProgressText(msToTime(seekHintInfo.loadingMsec, 0) + " / " + msToTime(msecTotal, 0));
+		}
 		CopyImageToCanvas("seekhint_img", "seekhint_canvas");
 		seekhint_loading.hide();
 		seekHintInfo.loading = false;
@@ -4022,8 +4023,7 @@ function ClipLoader(clipsBodySelector)
 		{
 			if (response.result != "success")
 			{
-				// TODO: Revert this error message to a simple "Failed to load." once session data indicates whether recording-viewing permission is granted.
-				$clipsbody.html('<div class="clipListText">This user account does not have permission to view recordings.</div>');
+				$clipsbody.html('<div class="clipListText">Failed to load.</div>');
 				return;
 			}
 			failedClipListLoads = 0;
@@ -4053,14 +4053,15 @@ function ClipLoader(clipsBodySelector)
 					clipData.rawData = clip;
 					clipData.isClip = isClipList;
 					clipData.roughLength = CleanUpFileSize(clip.filesize);
+					clipData.roughLengthMs = GetClipLengthMs(clipData.roughLength);
 					clipData.isSnapshot = clipData.roughLength == "Snapshot";
 					clipData.camera = clip.camera;
-					clipData.clipId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
+					clipData.recId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
+					clipData.clipId = isClipList ? clipData.recId : clip.clip.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID of the underlying clip.
 					clipData.thumbPath = clip.path; // Path used for loading the thumbnail
-					clipData.path = isClipList ? clip.path : clip.path; // Path used for loading the video stream
-					clipData.clipPath = clip.clip; // Path to the clip, because sometimes it is useful to have this when playing an alert.
-					clipData.offsetKb = clip.offset ? clip.offset : 0; // Offset for H.264 streaming
-					clipData.offsetMs = clip.offsetms ? clip.offsetms : 0; // Offset for jpeg streaming
+					clipData.path = isClipList ? clip.path : clip.clip; // Path used for loading the video stream
+					clipData.alertPath = clip.path; // Alert path if this is an alert, otherwise just another copy of the clip path.
+					clipData.offsetMs = clip.offset ? clip.offset : 0;
 					clipData.flags = clip.flags;
 					if (flaggedOnly && (clip.flags & clip_flag_flag) == 0)
 						continue;
@@ -4070,16 +4071,16 @@ function ClipLoader(clipsBodySelector)
 					clipData.colorHex = BlueIrisColorToCssColor(clip.color);
 					clipData.fileSize = GetFileSize(clip.filesize);
 					if (clipData.isSnapshot)
-						clipData.msec = 2000;
+						clipData.msec = clipData.roughLengthMs = 2000;
 					else if (typeof clip.msec != "undefined" && !isNaN(clip.msec))
 						clipData.msec = clip.msec;
 					else
-						clipData.msec = GetClipLengthMs(clipData.roughLength);
+						clipData.msec = clipData.offsetMs + clipData.roughLengthMs;
 
 
 					if (!clipListCache[clipData.camera])
 						clipListCache[clipData.camera] = new Object();
-					var existingClipData = clipListCache[clipData.camera][clipData.clipId];
+					var existingClipData = clipListCache[clipData.camera][clipData.recId];
 
 					if (!isSameDay(previousClipDate, clipData.displayDate))
 					{
@@ -4115,17 +4116,17 @@ function ClipLoader(clipsBodySelector)
 						if (isUpdateOfExistingList)
 						{
 							newUpdateClips.push(clipData);
-							newUpdateClipIds.push(clipData.clipId);
+							newUpdateClipIds.push(clipData.recId);
 						}
 						else
 						{
-							loadedClipIds.push(clipData.clipId);
+							loadedClipIds.push(clipData.recId);
 							tileLoader.registerOnAppearDisappear(clipData, ClipOnAppear, ClipOnDisappear, TileOnMove, clipTileHeight, HeightOfOneDateTilePx);
 						}
 						TotalUniqueClipsLoaded++;
-						clipListCache[clipData.camera][clipData.clipId] = clipData;
-						clipListIdCache[clipData.clipId] = clipData;
-						if (!isUpdateOfExistingList && previouslyOpenedClip == null && !loadingImage.isLive && loadingImage.uniqueId == clipData.clipId)
+						clipListCache[clipData.camera][clipData.recId] = clipData;
+						clipListIdCache[clipData.recId] = clipData;
+						if (!isUpdateOfExistingList && previouslyOpenedClip == null && !loadingImage.isLive && loadingImage.uniqueId == clipData.recId)
 							previouslyOpenedClip = clipData;
 					}
 
@@ -4203,7 +4204,7 @@ function ClipLoader(clipsBodySelector)
 					else
 					{
 						// A clip is still playing, and it is in the new list.  Select it and scroll to it.
-						self.SelectClipIdNoOpen(previouslyOpenedClip.clipId);
+						self.SelectClipIdNoOpen(previouslyOpenedClip.recId);
 						self.ScrollClipList(previouslyOpenedClip.y, clipTileHeight);
 					}
 				}
@@ -4288,18 +4289,18 @@ function ClipLoader(clipsBodySelector)
 		else
 			return "l";
 	}
-	this.GetCachedClip = function (cameraId, clipId)
+	this.GetCachedClip = function (cameraId, recId)
 	{
 		/// <summary>Gets the clip with the specified camera ID and clip ID. I'm only keeping this more complicated cache around in case I want to enumerate clips by camera ID in the future.</summary>
 		var camClips = clipListCache[cameraId];
 		if (camClips)
-			return camClips[clipId];
+			return camClips[recId];
 		return null;
 	}
-	this.GetClipFromId = function (clipId)
+	this.GetClipFromId = function (recId)
 	{
 		/// <summary>Gets the clip with the specified clip ID.</summary>
-		return clipListIdCache[clipId];
+		return clipListIdCache[recId];
 	}
 	this.GetClipIdsBetween = function (first, last)
 	{
@@ -4348,9 +4349,9 @@ function ClipLoader(clipsBodySelector)
 		var date = GetDateStr(clipData.displayDate);
 		return cameraListLoader.GetCameraName(clipData.camera) + " " + date;
 	}
-	this.IsClipSelected = function (clipId)
+	this.IsClipSelected = function (recId)
 	{
-		return selectedClipsMap[clipId] ? true : false;
+		return selectedClipsMap[recId] ? true : false;
 	}
 	this.GetAllSelected = function ()
 	{
@@ -4415,10 +4416,10 @@ function ClipLoader(clipsBodySelector)
 	}
 	var UpdateExistingClipData = function (oldClipData, newClipData)
 	{
-		if (oldClipData.clipId != newClipData.clipId)
+		if (oldClipData.recId != newClipData.recId)
 			return;
 
-		var $clip = $("#c" + oldClipData.clipId);
+		var $clip = $("#c" + oldClipData.recId);
 
 		if (oldClipData.roughLength != newClipData.roughLength)
 		{
@@ -4453,37 +4454,37 @@ function ClipLoader(clipsBodySelector)
 	var ClipOnAppear = function (clipData)
 	{
 		ClipTileCreate(clipData);
-		ThumbOnAppear($("#t" + clipData.clipId).get(0));
+		ThumbOnAppear($("#t" + clipData.recId).get(0));
 	}
 	var ClipOnDisappear = function (clipData)
 	{
-		ThumbOnDisappear($("#t" + clipData.clipId).get(0));
+		ThumbOnDisappear($("#t" + clipData.recId).get(0));
 		// We need clip elements to stick around after they've been created
 	}
-	var ClipTileCreateFromId = function (clipId)
+	var ClipTileCreateFromId = function (recId)
 	{
-		var $clip = $("#c" + clipId);
+		var $clip = $("#c" + recId);
 		if ($clip.length > 0)
 			return;
-		var clipData = self.GetClipFromId(clipId);
+		var clipData = self.GetClipFromId(recId);
 		if (clipData)
 			ClipTileCreate(clipData, $clip);
 	}
 	var ClipTileCreate = function (clipData, $clip)
 	{
 		if (!$clip)
-			$clip = $("#c" + clipData.clipId);
+			$clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 		{
 			var timeStr = GetTimeStr(clipData.displayDate);
 			var clipDur = GetClipDurStrFromMs(clipData.roughLength);
 			var clipDurTitle = clipDur == 'S' ? ' title="Snapshot"' : '';
-			$("#clipsbody").append('<div id="c' + clipData.clipId + '" class="cliptile" style="top:' + clipData.y + 'px">'
+			$("#clipsbody").append('<div id="c' + clipData.recId + '" class="cliptile" style="top:' + clipData.y + 'px">'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipimghelper">'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipdur"' + clipDurTitle + '>' + clipDur + '</div>'
-				+ '<img id="t' + clipData.clipId + '" src="ui3/LoadingImage.png" />'
+				+ '<img id="t' + clipData.recId + '" src="ui3/LoadingImage.png" />'
 				+ '</div>'
 				+ '<div class="clipcolorbar" style="background-color: #' + clipData.colorHex + ';"></div>'
 				+ '<div class="clipdesc"><div class="cliptime">' + timeStr + '</div><div class="clipcam">' + cameraListLoader.GetCameraName(clipData.camera) + '</div></div>'
@@ -4492,9 +4493,9 @@ function ClipLoader(clipsBodySelector)
 				+ '</div>'
 				+ '</div>');
 
-			var $img = $("#t" + clipData.clipId).get(0).thumbPath = clipData.thumbPath;
+			var $img = $("#t" + clipData.recId).get(0).thumbPath = clipData.thumbPath;
 
-			$clip = $("#c" + clipData.clipId);
+			$clip = $("#c" + clipData.recId);
 			$clip.click(ClipClicked);
 			var clipEle = $clip.get(0).clipData = clipData;
 
@@ -4503,10 +4504,10 @@ function ClipLoader(clipsBodySelector)
 			if (self.ClipDataIndicatesFlagged(clipData))
 				self.ShowClipFlag(clipData);
 
-			if (selectedClipsMap[clipData.clipId])
+			if (selectedClipsMap[clipData.recId])
 			{
-				if (videoPlayer.Loading().image.uniqueId == clipData.clipId)
-					self.OpenClip($clip.get(0), clipData.clipId, false);
+				if (videoPlayer.Loading().image.uniqueId == clipData.recId)
+					self.OpenClip($clip.get(0), clipData.recId, false);
 				else
 					$clip.addClass("selected");
 			}
@@ -4524,11 +4525,11 @@ function ClipLoader(clipsBodySelector)
 	}
 	var ClipClicked = function (e)
 	{
-		var clipId = this.clipData.clipId;
+		var recId = this.clipData.recId;
 		if (e.shiftKey && lastSelectedClipId)
 		{
 			// Multi-select add-range
-			var range = self.GetClipIdsBetween(lastSelectedClipId, this.clipData.clipId);
+			var range = self.GetClipIdsBetween(lastSelectedClipId, this.clipData.recId);
 
 			if (!e.ctrlKey)
 			{
@@ -4552,33 +4553,33 @@ function ClipLoader(clipsBodySelector)
 			}
 
 			if (e.ctrlKey)
-				lastSelectedClipId = clipId;
+				lastSelectedClipId = recId;
 		}
 		else if (e.ctrlKey)
 		{
 			// Multi-select toggle item
-			lastSelectedClipId = clipId;
-			if (selectedClipsMap[clipId] === true)
+			lastSelectedClipId = recId;
+			if (selectedClipsMap[recId] === true)
 			{
-				var idx = selectedClips.indexOf(clipId);
+				var idx = selectedClips.indexOf(recId);
 				if (idx > -1)
 					selectedClips.splice(idx, 1);
-				selectedClipsMap[clipId] = false;
-				$("#c" + clipId).removeClass("selected");
+				selectedClipsMap[recId] = false;
+				$("#c" + recId).removeClass("selected");
 			}
 			else
 			{
-				selectedClips.push(clipId);
-				selectedClipsMap[clipId] = true;
-				$("#c" + clipId).addClass("selected");
+				selectedClips.push(recId);
+				selectedClipsMap[recId] = true;
+				$("#c" + recId).addClass("selected");
 			}
 		}
 		else
 		{
-			self.OpenClip(this, clipId, true);
+			self.OpenClip(this, recId, true);
 		}
 	}
-	this.OpenClip = function (clipEle, clipId, alsoLoadClip)
+	this.OpenClip = function (clipEle, recId, alsoLoadClip)
 	{
 		self.UnselectAllClips(true);
 		lastOpenedClipEle = clipEle;
@@ -4589,19 +4590,19 @@ function ClipLoader(clipsBodySelector)
 			videoPlayer.LoadClip(clipEle.clipData);
 
 		// Multi-select start
-		lastSelectedClipId = clipId;
+		lastSelectedClipId = recId;
 		selectedClipsMap = new Object();
-		selectedClipsMap[clipId] = true;
+		selectedClipsMap[recId] = true;
 		selectedClips = [];
-		selectedClips.push(clipId);
+		selectedClips.push(recId);
 	}
-	this.SelectClipIdNoOpen = function (clipId)
+	this.SelectClipIdNoOpen = function (recId)
 	{
-		if (selectedClipsMap[clipId] !== true)
+		if (selectedClipsMap[recId] !== true)
 		{
-			selectedClips.push(clipId);
-			selectedClipsMap[clipId] = true;
-			$("#c" + clipId).addClass("selected");
+			selectedClips.push(recId);
+			selectedClipsMap[recId] = true;
+			$("#c" + recId).addClass("selected");
 		}
 	}
 	this.CloseCurrentClip = function ()
@@ -4664,7 +4665,7 @@ function ClipLoader(clipsBodySelector)
 		if (obj.isDateTile)
 			$("#dt" + obj.date.getTime()).css("top", obj.y + "px");
 		else
-			$("#c" + obj.clipId).css("top", obj.y + "px");
+			$("#c" + obj.recId).css("top", obj.y + "px");
 	}
 	this.FlagCurrentClip = function ()
 	{
@@ -4762,7 +4763,7 @@ function ClipLoader(clipsBodySelector)
 	{
 		var flagIsSet = (clipData.flags & flag) > 0;
 		var newFlags = flagIsSet ? clipData.flags ^ flag : clipData.flags | flag;
-		UpdateClipFlags('@' + clipData.clipId, newFlags, function ()
+		UpdateClipFlags('@' + clipData.recId, newFlags, function ()
 		{
 			// Success setting flag state
 			clipData.flags = newFlags;
@@ -4774,7 +4775,7 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (lastOpenedClipEle && lastOpenedClipEle.clipData == clipData)
 			$("#clipFlagButton").removeClass("flagged");
-		var $clip = $("#c" + clipData.clipId);
+		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
 		var $flags = $clip.find(".clipIconWrapper");
@@ -4784,7 +4785,7 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (lastOpenedClipEle && lastOpenedClipEle.clipData == clipData)
 			$("#clipFlagButton").addClass("flagged");
-		var $clip = $("#c" + clipData.clipId);
+		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
 		var $flags = $clip.find(".clipIconWrapper");
@@ -4792,7 +4793,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.HideClipProtect = function (clipData)
 	{
-		var $clip = $("#c" + clipData.clipId);
+		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
 		var $flags = $clip.find(".clipIconWrapper");
@@ -4800,7 +4801,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ShowClipProtect = function (clipData)
 	{
-		var $clip = $("#c" + clipData.clipId);
+		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
 		var $flags = $clip.find(".clipIconWrapper");
@@ -4919,7 +4920,7 @@ function ClipLoader(clipsBodySelector)
 			}
 			else if (operation == "delete")
 			{
-				if (videoPlayer.Loading().image.uniqueId == clipData.clipId)
+				if (videoPlayer.Loading().image.uniqueId == clipData.recId)
 				{
 					self.CloseCurrentClip();
 					setTimeout(function ()
@@ -4928,7 +4929,7 @@ function ClipLoader(clipsBodySelector)
 					}, 500);
 					return;
 				}
-				DeleteAlert("@" + clipData.clipId, clipData.isClip, function ()
+				DeleteAlert("@" + clipData.recId, clipData.isClip, function ()
 				{
 					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
 				},
@@ -5003,13 +5004,13 @@ function ClipLoader(clipsBodySelector)
 			return $("#c" + loadedClipIds[clipIdx - 1]);
 		return null;
 	}
-	var GetClipIndexFromClipId = function (clipId)
+	var GetClipIndexFromClipId = function (recId)
 	{
 		if (loadedClipIds == null || loadedClipIds.length == 0)
 			return -1;
 		for (var i = 0; i < loadedClipIds.length; i++)
 		{
-			if (loadedClipIds[i] == clipId)
+			if (loadedClipIds[i] == recId)
 				return i;
 		}
 		return -1;
@@ -5413,6 +5414,7 @@ function StatusLoader()
 			lastResponse = response;
 			if (response && response.data)
 			{
+				console.log(response.data.alerts);
 				$("#stoplightBtn div").css("opacity", "");
 				if (response.data.signal == "0")
 					$("#stoplightRed").css("opacity", "1");
@@ -5842,7 +5844,7 @@ function SessionManager()
 	var latestAPISession = null;
 	var permission_ptz = true;
 	var permission_audio = true;
-	var permission_recordings = true;
+	var permission_clips = true;
 	this.Initialize = function ()
 	{
 		// Called once during page initialization
@@ -5968,7 +5970,7 @@ function SessionManager()
 
 		permission_ptz = getBoolMaybe(lastResponse.data.ptz, true);
 		permission_audio = getBoolMaybe(lastResponse.data.audio, true);
-		permission_recordings = getBoolMaybe(lastResponse.data.recordings, true);
+		permission_clips = getBoolMaybe(lastResponse.data.clips, true);
 
 		HandleUpdatedPermissions();
 
@@ -6025,7 +6027,7 @@ function SessionManager()
 		else
 			$("#volumeBar").addClass("audioNoPermission");
 
-		if (permission_recordings)
+		if (permission_clips)
 		{
 			$("#topbar_tab_alerts,#topbar_tab_clips").show();
 		}
@@ -6112,9 +6114,9 @@ function SessionManager()
 	{
 		return permission_audio;
 	}
-	this.HasPermission_Recordings = function ()
+	this.HasPermission_Clips = function ()
 	{
-		return permission_recordings;
+		return permission_clips;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -6745,7 +6747,7 @@ function VideoPlayerController()
 			cli.maxheight = cli.fullheight = cli.actualheight = clc.height;
 			cli.aspectratio = clc.width / clc.height;
 			cli.path = clipData.path;
-			cli.uniqueId = clipData.clipId;
+			cli.uniqueId = clipData.recId;
 			cli.isLive = false;
 			cli.ptz = false;
 			cli.audio = clipData.audio || (!clipData.isClip && cli.audio); // Alerts never have the audio flag set.
@@ -6753,8 +6755,7 @@ function VideoPlayerController()
 			cli.isGroup = false;
 
 			playbackHeader.SetClipName(clipData);
-			playbackControls.Recording();
-			playbackControls.SetDownloadClipLink(clipData);
+			playbackControls.Recording(clipData);
 			if (clipLoader.ClipDataIndicatesFlagged(clipData))
 				$("#clipFlagButton").addClass("flagged");
 			else
@@ -7026,7 +7027,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 			else
 			{
 				// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
-				videoPlayer.ImageRendered(img.myUniqueId, this.naturalWidth, this.naturalHeight, performance.now() - img.startTime, false);
+				videoPlayer.ImageRendered(img.myUniqueId, img.naturalWidth, img.naturalHeight, performance.now() - img.startTime, false);
 				// Rendering the image shows the jpegPreviewModule again.
 				self.RenderImage(img.id);
 			}
@@ -7238,6 +7239,22 @@ function JpegVideoModule()
 		else
 			self.Playback_Play();
 		videoOverlayHelper.ShowLoadingOverlay(true);
+		var clipData = clipLoader.GetClipFromId(loading.uniqueId);
+		if (clipData && !clipData.isSnapshot && !clipData.isClip)
+		{
+			if (honorAlertOffset && (clipData.flags & alert_flag_offsetMs) == 0)
+				toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
+			// Load clip stats for this alert.
+			clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
+			{
+				clipData.msec = stats.msec;
+				if (loading.uniqueId == clipData.recId)
+					loading.msec = stats.msec;
+				var loadingImg = videoPlayer.Loading().image;
+				if (loadingImg.uniqueId == clipData.recId)
+					loadingImg.msec = stats.msec;
+			});
+		}
 		GetNewImage();
 	}
 	this.GetSeekPercent = function ()
@@ -7627,21 +7644,44 @@ function FetchOpenH264VideoModule()
 				speed = 0;
 			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
 			var offsetArg = "";
+			var path = loading.path;
 			if (clipData)
 			{
 				isLoadingRecordedSnapshot = clipData.isSnapshot;
+				if (!clipData.isSnapshot && !clipData.isClip)
+				{
+					clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
+					{
+						clipData.msec = stats.msec;
+						if (loading.uniqueId == clipData.recId)
+							loading.msec = stats.msec;
+						var loadingImg = videoPlayer.Loading().image;
+						if (loadingImg.uniqueId == clipData.recId)
+							loadingImg.msec = stats.msec;
+					});
+				}
 				var lastMs = (clipData.msec - 1);
 				if (honorAlertOffset && !clipData.isClip)
 				{
-					// We are starting the alert at a specific offset that was provided in kilobytes.
-					// This next line is disabled because kbseek= appears to have no effect when using an alert path with pos=0.
-					// offsetArg = "&kbseek=" + clipData.offsetKb; 
+					var offsetMs = clipData.offsetMs;
+					if ((clipData.flags & alert_flag_offsetMs) == 0)
+					{
+						toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
+						path = clipData.alertPath;
+					}
+					else
+					{
+						// We are starting the alert at a specific offset that was provided in milliseconds.
+						if (speed < 0) // If playing in reverse, lets start at the end of the clip's bounds.
+							offsetMs += clipData.roughLengthMs;
+						offsetArg = "&time=" + offsetMs;
+					}
 					// The "pos" argument must be provided alongside "kbseek", even though "pos" will be ignored by Blue Iris.
 					// We recalculate the seek position here anyway because it helps with UI accuracy before the first frame arrives.
 					if (lastMs === 0)
 						currentSeekPositionPercent = 0;
 					else
-						currentSeekPositionPercent = Clamp(clipData.offsetMs / lastMs, 0, 1);
+						currentSeekPositionPercent = Clamp(offsetMs / lastMs, 0, 1);
 				}
 				currentImageDateMs = clipData.date.getTime() + (currentSeekPositionPercent * lastMs);
 			}
@@ -7658,9 +7698,8 @@ function FetchOpenH264VideoModule()
 			if (speed == 0 && posInt >= 10000)
 				posInt = 9999;
 			var posArg = "&pos=" + posInt;
-			var path = loading.path;
-			if (clipData && !clipData.isClip && !honorAlertOffset && posInt == 0)
-				path = clipData.clipPath; // This is a complicated workaround for the issue where seeking to the start of an alert path causes the stream to actually start at the alert offset.
+			if (honorAlertOffset)
+				posArg = "";
 			videoUrl = "/file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
@@ -9126,7 +9165,7 @@ function CanvasContextMenu()
 		{
 			case "properties":
 				if (lastRecordContextMenuSelectedClip != null)
-					clipProperties.open(lastRecordContextMenuSelectedClip.clipId);
+					clipProperties.open(lastRecordContextMenuSelectedClip.recId);
 				break;
 			case "opennewtab":
 				videoPlayer.Playback_Pause();
@@ -9240,11 +9279,11 @@ function ClipListContextMenu()
 			downloadClipButton.wrap('<a id="cmroot_cliplist_downloadcliplink" style="display:block" href="javascript:void(0)" target="_blank"></a>');
 		var $dl_link = $("#cmroot_cliplist_downloadcliplink");
 
-		var clipId = e.currentTarget.id.substr(1);
-		if (!clipLoader.IsClipSelected(clipId))
+		var recId = e.currentTarget.id.substr(1);
+		if (!clipLoader.IsClipSelected(recId))
 		{
 			clipLoader.UnselectAllClips();
-			clipLoader.SelectClipIdNoOpen(clipId);
+			clipLoader.SelectClipIdNoOpen(recId);
 		}
 
 		allSelectedClipIDs = clipLoader.GetAllSelected();
@@ -9471,6 +9510,105 @@ function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onT
 		onToggle(GetUi3FeatureEnabled(uniqueSettingsId));
 }
 ///////////////////////////////////////////////////////////////
+// Get Clip Stats /////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var clipStatsLoader = new ClipStatsLoader();
+function ClipStatsLoader()
+{
+	var self = this;
+	var cache = {};
+	var maxCacheAge = 10000;
+	var queuedLoad = null;
+	var activeLoad = null;
+	this.LoadClipStats = function (clipId, onSuccess, preferCached)
+	{
+		/// <summary>Gets clipstats for the specified clip and sends the results to the onSuccess method.  If cached results are available (regardless of age), onSuccess will be called before this method returns.  If there is no cached value, or if the cached value is beyond the max age and "preferCached" is false, fresh data may be requested asynchronously and onSuccess may be called again later.  This method can be provided alert IDs as well, but it is preferable to provide clip IDs as these will be hit more often in the cache.</summary>
+		if (!clipId)
+			return;
+		var cachedValue = cache[clipId];
+		if (cachedValue)
+		{
+			if (onSuccess)
+				onSuccess(cachedValue.getStats());
+			if (preferCached || cachedValue.getAgeMs() < maxCacheAge)
+				return;
+		}
+		GetFresh(clipId, onSuccess);
+	}
+	var GetFresh = function (clipId, onSuccess)
+	{
+		if (activeLoad)
+		{
+			activeLoad.canceled = true; // Prevent onSuccess from being raised for previous requests.
+			queuedLoad = { clipId: clipId, onSuccess: onSuccess };
+		}
+		else
+		{
+			activeLoad = { clipId: clipId, onSuccess: onSuccess, canceled: false };
+			GetClipStats(clipId, function (stats)
+			{
+				cache[clipId] = new CachedClipStats(stats);
+				if (activeLoad && !activeLoad.canceled && onSuccess)
+					onSuccess(stats, clipId);
+				activeLoad = null;
+				processQueuedLoad();
+			}, function ()
+				{
+					activeLoad = null;
+					processQueuedLoad();
+				});
+		}
+	}
+	var processQueuedLoad = function ()
+	{
+		if (queuedLoad)
+		{
+			GetFresh(queuedLoad.clipId, queuedLoad.onSuccess);
+			queuedLoad = null;
+		}
+	}
+	var GetClipStats = function (clipId, onSuccess, onFail)
+	{
+		ExecJSON({ cmd: "clipstats", path: clipId }, function (response)
+		{
+			if (typeof response.result == "undefined")
+			{
+				toaster.Error("Unexpected response when getting clip stats from server. This alert may have an inaccurate duration.");
+				if (onFail)
+					onFail(clipId);
+			}
+			else if (response.result == "fail")
+			{
+				toaster.Error("Fail response when getting clip stats from server. This alert may have an inaccurate duration.");
+				if (onFail)
+					onFail(clipId);
+			}
+			else
+			{
+				if (onSuccess)
+					onSuccess(response.data, clipId);
+			}
+		}, function (jqXHR, textStatus, errorThrown)
+			{
+				toaster.Error("Error response when getting clip stats from server: " + jqXHR.status + " " + jqXHR.statusText + "<br>This alert may have an inaccurate duration.");
+				if (onFail)
+					onFail(clipId);
+			});
+	}
+}
+function CachedClipStats(stats)
+{
+	var created = performance.now();
+	this.getStats = function ()
+	{
+		return stats;
+	}
+	this.getAgeMs = function ()
+	{
+		return performance.now() - created;
+	}
+}
+///////////////////////////////////////////////////////////////
 // Get / Set Camera Config ////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function CameraConfig()
@@ -9483,6 +9621,8 @@ function CameraConfig()
 			if (typeof response.result == "undefined")
 			{
 				toaster.Error("Unexpected response when getting camera configuration from server.");
+				if (failCallbackFunc)
+					failCallbackFunc(camId);
 				return;
 			}
 			if (response.result == "fail")
@@ -9494,7 +9634,7 @@ function CameraConfig()
 			}
 			if (successCallbackFunc)
 				successCallbackFunc(response, camId);
-		}, function ()
+		}, function (jqXHR, textStatus, errorThrown)
 			{
 				if (failCallbackFunc)
 					failCallbackFunc(camId);
@@ -9578,7 +9718,7 @@ function CameraConfig()
 			console.log('CameraConfig Set ("' + htmlEncode(camId) + '", "' + htmlEncode(key) + '", "' + htmlEncode(value) + '")');
 			if (successCallbackFunc)
 				successCallbackFunc(response, camId, key, value);
-		}, function ()
+		}, function (jqXHR, textStatus, errorThrown)
 			{
 				if (failCallbackFunc)
 					failCallbackFunc(camId, key, value);
@@ -10151,9 +10291,9 @@ function Camera_OpenRaw(camId)
 function ClipProperties()
 {
 	var self = this;
-	this.open = function (clipId)
+	this.open = function (recId)
 	{
-		var clipData = clipLoader.GetClipFromId(clipId);
+		var clipData = clipLoader.GetClipFromId(recId);
 
 		var camName = cameraListLoader.GetCameraName(clipData.camera);
 
@@ -10215,7 +10355,7 @@ function ClipProperties()
 			toaster.Error(ex);
 		}
 		if (developerMode)
-			$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="ClipProperties_OpenRaw(&quot;' + clipId + '&quot;)" value="view raw data" /></div>');
+			$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="ClipProperties_OpenRaw(&quot;' + recId + '&quot;)" value="view raw data" /></div>');
 
 		$dlg.dialog({
 			title: htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties'
@@ -10242,9 +10382,9 @@ function ClipProperties()
 		return $info;
 	}
 }
-function ClipProperties_OpenRaw(clipId)
+function ClipProperties_OpenRaw(recId)
 {
-	var clipData = clipLoader.GetClipFromId(clipId);
+	var clipData = clipLoader.GetClipFromId(recId);
 	objectVisualizer.open(clipData, "Clip Properties (raw)");
 }
 ///////////////////////////////////////////////////////////////
@@ -10266,9 +10406,9 @@ function ClipDownloadDialog()
 
 		$dlg.dialog({ title: "Download Multiple Clips" });
 	}
-	var GetLink = function (clipId)
+	var GetLink = function (recId)
 	{
-		var clipData = clipLoader.GetClipFromId(clipId);
+		var clipData = clipLoader.GetClipFromId(recId);
 		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 		var $link = $('<a href=""></a>');
 		$link.attr("href", clipInfo.href);
