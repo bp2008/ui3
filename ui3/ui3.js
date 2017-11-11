@@ -520,7 +520,7 @@ var defaultSettings =
 			, value: "1|0|0|192" // 192: tilde (~`)
 			, hotkey: true
 			, label: "Maximize Video Area"
-			, hint: "Shows or hides the left and top control bars."
+			, hint: "Shows or hides the left and top control bars. This can be triggered on page load via the url parameter \"maximize=1\"."
 			, actionDown: BI_Hotkey_MaximizeVideoArea
 			, category: "Hotkeys"
 		}
@@ -1355,6 +1355,9 @@ function HandlePreLoadUrlParameters()
 				videoPlayer.ImgClick_Camera(camData);
 		});
 	}
+	var maximize = UrlParameters.Get("maximize");
+	if (maximize == "1" || maximize.toLowercase() == "true")
+		BI_Hotkey_MaximizeVideoArea();
 }
 ///////////////////////////////////////////////////////////////
 // UI Resize //////////////////////////////////////////////////
@@ -11827,7 +11830,8 @@ function BI_Hotkey_MaximizeVideoArea()
 		$("#layoutleft,#layouttop").hide();
 	else
 		$("#layoutleft,#layouttop").show();
-	resized();
+	if (loadingHelper.DidLoadingFinish())
+		resized();
 }
 function BI_Hotkey_FullScreen()
 {
@@ -12618,6 +12622,10 @@ function LoadingHelper()
 		resized();
 		videoPlayer.Initialize();
 		BI_CustomEvent.Invoke("FinishedLoading");
+	}
+	this.DidLoadingFinish = function ()
+	{
+		return loadingFinished;
 	}
 	$(window).load(function ()
 	{
