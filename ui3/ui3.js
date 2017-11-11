@@ -1356,7 +1356,7 @@ function HandlePreLoadUrlParameters()
 		});
 	}
 	var maximize = UrlParameters.Get("maximize");
-	if (maximize == "1" || maximize.toLowercase() == "true")
+	if (maximize == "1" || maximize.toLowerCase() == "true")
 		BI_Hotkey_MaximizeVideoArea();
 }
 ///////////////////////////////////////////////////////////////
