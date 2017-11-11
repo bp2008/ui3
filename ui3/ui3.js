@@ -424,6 +424,10 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_uiSettings_category_Clip___Alert_Icons_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_uiSettings_category_Hotkeys_visible"
 			, value: "1"
 		}
@@ -511,11 +515,20 @@ var defaultSettings =
 			, category: "Clip / Alert Icons"
 		}
 		, {
-			key: "ui3_hotkey_togglefullscreen2"
+			key: "ui3_hotkey_maximizeVideoArea"
+			, value: "1|0|0|192" // 192: tilde (~`)
+			, hotkey: true
+			, label: "Maximize Video Area"
+			, hint: "Shows or hides the left and top control bars."
+			, actionDown: BI_Hotkey_MaximizeVideoArea
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_togglefullscreen"
 			, value: "0|0|0|192" // 192: tilde (~`)
 			, hotkey: true
 			, label: "Full Screen Mode"
-			, hint: "Toggles the browser between full screen and windowed mode.  Most browsers also go fullscreen when you press F11, regardless of what you set here."
+			, hint: "Toggles Full Screen Mode and shows or hides the left and top control bars according to UI defaults."
 			, actionDown: BI_Hotkey_FullScreen
 			, category: "Hotkeys"
 		}
@@ -574,6 +587,24 @@ var defaultSettings =
 			, maxValue: 9999
 			, label: "Skip Time (seconds)"
 			, hint: "[1-9999] (default: 10) \r\nNumber of seconds to skip forward and back when using hotkeys to skip."
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_playback_faster"
+			, value: "0|0|0|221" // 221: ]
+			, hotkey: true
+			, label: "Playback Faster"
+			, hint: "Increases clip playback speed"
+			, actionDown: BI_Hotkey_PlaybackFaster
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_playback_slower"
+			, value: "0|0|0|219" // 219: [
+			, hotkey: true
+			, label: "Playback Slower"
+			, hint: "Decreases clip playback speed"
+			, actionDown: BI_Hotkey_PlaybackSlower
 			, category: "Hotkeys"
 		}
 		, {
@@ -697,7 +728,27 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset1"
+			key: "ui3_hotkey_ptzFocusFar"
+			, value: "0|0|0|221" // 221: ]
+			, hotkey: true
+			, label: "PTZ Focus Far"
+			, hint: "If the current live camera is PTZ, focuses the camera further away."
+			, actionDown: BI_Hotkey_PtzFocusFar
+			, actionUp: BI_Hotkey_PtzFocusFar_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzFocusNear"
+			, value: "0|0|0|219" // 219: [
+			, hotkey: true
+			, label: "PTZ Focus Near"
+			, hint: "If the current live camera is PTZ, focuses the camera closer."
+			, actionDown: BI_Hotkey_PtzFocusNear
+			, actionUp: BI_Hotkey_PtzFocusNear_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset1"
 			, value: "0|0|0|49" // 49: 1
 			, hotkey: true
 			, label: "Load Preset 1:"
@@ -706,7 +757,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset2"
+			key: "ui3_hotkey_ptzPreset2"
 			, value: "0|0|0|50" // 50: 2
 			, hotkey: true
 			, label: "Load Preset 2:"
@@ -715,7 +766,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset3"
+			key: "ui3_hotkey_ptzPreset3"
 			, value: "0|0|0|51" // 51: 3
 			, hotkey: true
 			, label: "Load Preset 3:"
@@ -724,7 +775,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset4"
+			key: "ui3_hotkey_ptzPreset4"
 			, value: "0|0|0|52" // 52: 4
 			, hotkey: true
 			, label: "Load Preset 4:"
@@ -733,7 +784,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset5"
+			key: "ui3_hotkey_ptzPreset5"
 			, value: "0|0|0|53" // 53: 5
 			, hotkey: true
 			, label: "Load Preset 5:"
@@ -742,7 +793,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset6"
+			key: "ui3_hotkey_ptzPreset6"
 			, value: "0|0|0|54" // 54: 6
 			, hotkey: true
 			, label: "Load Preset 6:"
@@ -751,7 +802,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset7"
+			key: "ui3_hotkey_ptzPreset7"
 			, value: "0|0|0|55" // 55: 7
 			, hotkey: true
 			, label: "Load Preset 7:"
@@ -760,7 +811,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset8"
+			key: "ui3_hotkey_ptzPreset8"
 			, value: "0|0|0|56" // 56: 8
 			, hotkey: true
 			, label: "Load Preset 8:"
@@ -769,7 +820,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset9"
+			key: "ui3_hotkey_ptzPreset9"
 			, value: "0|0|0|57" // 57: 9
 			, hotkey: true
 			, label: "Load Preset 9:"
@@ -778,7 +829,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset10"
+			key: "ui3_hotkey_ptzPreset10"
 			, value: "0|0|0|48" // 48: 0
 			, hotkey: true
 			, label: "Load Preset 10:"
@@ -787,7 +838,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset11"
+			key: "ui3_hotkey_ptzPreset11"
 			, value: "1|0|0|49" // 49: 1
 			, hotkey: true
 			, label: "Load Preset 11:"
@@ -796,7 +847,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset12"
+			key: "ui3_hotkey_ptzPreset12"
 			, value: "1|0|0|50" // 50: 2
 			, hotkey: true
 			, label: "Load Preset 12:"
@@ -805,7 +856,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset13"
+			key: "ui3_hotkey_ptzPreset13"
 			, value: "1|0|0|51" // 51: 3
 			, hotkey: true
 			, label: "Load Preset 13:"
@@ -814,7 +865,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset14"
+			key: "ui3_hotkey_ptzPreset14"
 			, value: "1|0|0|52" // 52: 4
 			, hotkey: true
 			, label: "Load Preset 14:"
@@ -823,7 +874,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset15"
+			key: "ui3_hotkey_ptzPreset15"
 			, value: "1|0|0|53" // 53: 5
 			, hotkey: true
 			, label: "Load Preset 15:"
@@ -832,7 +883,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset16"
+			key: "ui3_hotkey_ptzPreset16"
 			, value: "1|0|0|54" // 54: 6
 			, hotkey: true
 			, label: "Load Preset 16:"
@@ -841,7 +892,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset17"
+			key: "ui3_hotkey_ptzPreset17"
 			, value: "1|0|0|55" // 55: 7
 			, hotkey: true
 			, label: "Load Preset 17:"
@@ -850,7 +901,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset18"
+			key: "ui3_hotkey_ptzPreset18"
 			, value: "1|0|0|56" // 56: 8
 			, hotkey: true
 			, label: "Load Preset 18:"
@@ -859,7 +910,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset19"
+			key: "ui3_hotkey_ptzPreset19"
 			, value: "1|0|0|57" // 57: 9
 			, hotkey: true
 			, label: "Load Preset 19:"
@@ -868,7 +919,7 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_BI_Hotkey_PtzPreset20"
+			key: "ui3_hotkey_ptzPreset20"
 			, value: "1|0|0|48" // 48: 0
 			, hotkey: true
 			, label: "Load Preset 20:"
@@ -1812,9 +1863,9 @@ function DropdownBoxes()
 			selectedIndex: -1
 			, items:
 			[
-				new DropdownListItem({ player: "jpeg", text: "Jpeg Best Quality", uniqueQualityId: "A", abbr: "HD", shortAbbr: "HD" })
-				, new DropdownListItem({ player: "jpeg", text: "Jpeg SD (640)", uniqueQualityId: "B", abbr: "SD", shortAbbr: "SD" })
-				, new DropdownListItem({ player: "jpeg", text: "Jpeg Low (320)", uniqueQualityId: "C", abbr: "Low", shortAbbr: "LD" })
+				new DropdownListItem({ player: "jpeg", text: "Jpeg Best Quality", uniqueQualityId: "A", abbr: "Jpeg HD", shortAbbr: "HD" })
+				, new DropdownListItem({ player: "jpeg", text: "Jpeg SD (640)", uniqueQualityId: "B", abbr: "Jpeg SD", shortAbbr: "SD" })
+				, new DropdownListItem({ player: "jpeg", text: "Jpeg Low (320)", uniqueQualityId: "C", abbr: "Jpeg Low", shortAbbr: "LD" })
 			]
 			, onItemClick: function (item)
 			{
@@ -3135,9 +3186,6 @@ function PlaybackControls()
 	if (!audio_playback_supported)
 		$("#volumeBar").addClass("permanentlyUnavailable");
 
-	if (!fullscreen_supported)
-		$("#clipFullscreenButton").addClass("permanentlyUnavailable");
-
 	this.resized = function ()
 	{
 		var paddingSize = $pc.innerWidth() - $pc.width();
@@ -3229,6 +3277,11 @@ function PlaybackControls()
 			hideTimeout = null;
 		}
 	}
+	var hideAfterTimeout = function ()
+	{
+		clearHideTimout();
+		hideTimeout = setTimeout(function () { self.FadeOut(); }, videoPlayer.Loading().image.isLive ? self.hideTimeMs_Live : self.hideTimeMs_Recordings);
+	}
 	this.Live = function ()
 	{
 		self.Show();
@@ -3290,7 +3343,7 @@ function PlaybackControls()
 		if (!pointInsideElement($pc, e.pageX, e.pageY)
 			&& !pointInsideElement($playbackSettings, e.pageX, e.pageY)
 			&& !pointInsideElement(playbackHeader.Get$Ref(), e.pageX, e.pageY))
-			hideTimeout = setTimeout(function () { self.FadeOut(); }, videoPlayer.Loading().image.isLive ? self.hideTimeMs_Live : self.hideTimeMs_Recordings);
+			hideAfterTimeout();
 		else
 		{
 			if (wasHidden && (e.type == "mousedown" || e.type == "touchstart"))
@@ -3474,6 +3527,23 @@ function PlaybackControls()
 	this.GetLoopingEnabled = function ()
 	{
 		return loopingEnabled;
+	}
+	this.ChangePlaySpeed = function (offset)
+	{
+		for (var i = 0; i < SpeedOptions.length; i++)
+			if (SpeedOptions[i] == playSpeed)
+			{
+				i += offset;
+				if (i >= 0 && i < SpeedOptions.length)
+				{
+					settings.ui3_playback_speed = playSpeed = SpeedOptions[i];
+					SetPlaySpeedLabel();
+					videoPlayer.PlaybackSpeedChanged(playSpeed);
+					self.FadeIn();
+					hideAfterTimeout();
+				}
+				return;
+			}
 	}
 	var SetQualityHint = function (hintText)
 	{
@@ -3692,14 +3762,40 @@ function SeekBar()
 			if (seekHintInfo.lastSnapshotId != "" && seekHintInfo.lastSnapshotId == videoPlayer.GetStaticSnapshotId())
 				return; // No need to load same snapshot as before
 			seekHintInfo.lastSnapshotId = videoPlayer.GetStaticSnapshotId();
-			var h = (160 / videoPlayer.Loading().image.aspectratio);
-			seekhint_canvas.css('height', h + 'px');
-			seekhint_loading.css('height', h + 'px');
+			var largestDimensionKey;
+			var largestDimensionValue;
+			var hintW;
+			var hintH;
+			var loadingImg = videoPlayer.Loading().image;
+			if (loadingImg.aspectratio >= 1)
+			{
+				largestDimensionKey = "w";
+				largestDimensionValue = imageRenderer.GetSizeToRequest(false).w;
+				hintW = 160;
+				hintH = (hintW / videoPlayer.Loading().image.aspectratio);
+			}
+			else
+			{
+				largestDimensionKey = "h";
+				largestDimensionValue = imageRenderer.GetSizeToRequest(false).h;
+				hintH = 160;
+				hintW = (hintH * videoPlayer.Loading().image.aspectratio);
+			}
+			var hintMarginLeft = Clamp((160 - hintW) / 2, 0, 160);
+			seekhint_canvas.css("margin-left", hintMarginLeft + "px").css('width', hintW + 'px').css('height', hintH + 'px');
+			seekhint_loading.css("margin-left", hintMarginLeft + "px").css('width', hintW + 'px').css('height', hintH + 'px');
 			if (seekHintInfo.canvasVisible)
 				seekhint_loading.show();
+			var qualityArgs;
 			if (isDragging)
+			{
 				videoOverlayHelper.ShowLoadingOverlay(true, true);
-			seekhint_img.attr('src', videoPlayer.GetLastSnapshotUrl().replace(/time=\d+/, "time=" + msec) + "&w=160&q=50");
+
+				qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue);
+			}
+			else
+				qualityArgs = "&" + largestDimensionKey + "=160&q=50"
+			seekhint_img.attr('src', videoPlayer.GetLastSnapshotUrl().replace(/time=\d+/, "time=" + msec) + qualityArgs);
 		}
 	}
 	this.resetSeekHintImg = function ()
@@ -6963,12 +7059,12 @@ function BICameraData()
 {
 	var self = this;
 	this.id = "";
-	this.fullwidth = 1280; // Native resolution of image; used when calculating with group rects
+	this.fullwidth = 1280; // Native resolution of image; used when calculating with group rects and as a base for digital zoom
 	this.fullheight = 720;
 	this.aspectratio = 1280 / 720;
-	this.maxwidth = 1280; // Max image size available from Blue Iris; used as a base for digital zoom
+	this.maxwidth = 1280; // Max image size available from Blue Iris; not used for anything, and in fact not even accurate at all times as of Nov 10, 2017
 	this.maxheight = 720;
-	this.actualwidth = 1280; // Actual size of image (when streaming jpeg, this is smaller than maxwidth)
+	this.actualwidth = 1280; // Actual size of image (can be smaller than fullwidth/maxwidth)
 	this.actualheight = 720;
 	this.path = "";
 	this.uniqueId = "";
@@ -7330,7 +7426,7 @@ function JpegVideoModule()
 			}
 		}
 
-		var widthToRequest = imageRenderer.GetWidthToRequest();
+		var widthToRequest = imageRenderer.GetSizeToRequest(true).w;
 		$("#camimg").attr('loadingimg', loading.id);
 
 		var qualityArg = jpegQualityHelper.getQualityArg();
@@ -7686,7 +7782,7 @@ function FetchOpenH264VideoModule()
 			}
 			var widthAndQualityArg = "";
 			if (speed == 0)
-				widthAndQualityArg = "&w=" + imageRenderer.GetWidthToRequest() + "&q=50";
+				widthAndQualityArg = "&w=" + imageRenderer.GetSizeToRequest(false).w + "&q=50";
 			if (speed != 100)
 			{
 				canRequestAudio = false; // We won't receive audio if speed isn't exactly 100
@@ -8558,12 +8654,12 @@ function ImageRenderer()
 	previousImageDraw.h = -1;
 	previousImageDraw.z = 10;
 
-	this.GetWidthToRequest = function ()
+	this.GetSizeToRequest = function (modifyForJpegQualitySetting)
 	{
 		// Calculate the size of the image we need
 		var ciLoading = videoPlayer.Loading().image;
-		var imgDrawWidth = ciLoading.maxwidth * dpiScalingFactor * (zoomTable[digitalZoom]);
-		var imgDrawHeight = ciLoading.maxheight * dpiScalingFactor * (zoomTable[digitalZoom]);
+		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * (zoomTable[digitalZoom]);
+		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * (zoomTable[digitalZoom]);
 		if (imgDrawWidth == 0)
 		{
 			// Image is supposed to scale to fit the screen (first zoom level)
@@ -8578,16 +8674,18 @@ function ImageRenderer()
 		}
 		if (ciLoading.aspectratio < 1)
 		{
-			imgDrawHeight = jpegQualityHelper.ModifyImageDimension(imgDrawHeight);
+			if (modifyForJpegQualitySetting)
+				imgDrawHeight = jpegQualityHelper.ModifyImageDimension(imgDrawHeight);
 			imgDrawWidth = imgDrawHeight * ciLoading.aspectratio;
 		}
 		else
 		{
-			imgDrawWidth = jpegQualityHelper.ModifyImageDimension(imgDrawWidth);
+			if (modifyForJpegQualitySetting)
+				imgDrawWidth = jpegQualityHelper.ModifyImageDimension(imgDrawWidth);
 			imgDrawHeight = imgDrawWidth / ciLoading.aspectratio;
 		}
 		// Now we have the size we need.  Determine what argument we will send to Blue Iris
-		return parseInt(Math.round(imgDrawWidth));
+		return { w: parseInt(Math.round(imgDrawWidth)), h: parseInt(Math.round(imgDrawHeight)) };
 	}
 	this.SetMousePos = function (x, y)
 	{
@@ -8913,6 +9011,51 @@ function GenericQualityHelper()
 	this.GetPlayerID = function ()
 	{
 		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().player;
+	}
+	this.getSeekPreviewQualityArgs = function (dimKey, dimValue)
+	{
+		var playerId = self.GetPlayerID();
+		if (playerId == "h264")
+		{
+			var bitRate_Video = bitRateCalc_Video.GetBestGuess() * 8;
+			var bitRate_Audio = bitRateCalc_Audio.GetBestGuess() * 8;
+			var bitRateMbps = (bitRate_Video + bitRate_Audio) / 1000000;
+			var sizeLimit;
+			var quality;
+			if (bitRateMbps < 0.5)
+			{
+				sizeLimit = Math.min(dimValue, 320);
+				quality = 20;
+			}
+			else if (bitRateMbps < 1)
+			{
+				sizeLimit = Math.min(dimValue, 480);
+				quality = 20;
+			}
+			else if (bitRateMbps < 1.67)
+			{
+				sizeLimit = Math.min(dimValue, 640);
+				quality = 25;
+			}
+			else if (bitRateMbps < 2.33)
+			{
+				sizeLimit = Math.min(dimValue, 640);
+				quality = 50;
+			}
+			else if (bitRateMbps < 3.5)
+			{
+				sizeLimit = Math.min(dimValue, 1280);
+				quality = 50;
+			}
+			else // Plenty of bandwidth. Get whatever resolution fits best.
+			{
+				sizeLimit = dimValue;
+				quality = 50;
+			}
+			return "&" + dimKey + "=" + sizeLimit + "&q=" + quality;
+		}
+		else
+			return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimValue) + jpegQualityHelper.getQualityArg();
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -11611,10 +11754,17 @@ function FullScreenModeController()
 	}
 	this.toggleFullScreen = function ()
 	{
-		if (!self.isFullScreen())
-			requestFullScreen();
+		if (fullscreen_supported)
+		{
+			if (!self.isFullScreen())
+				requestFullScreen();
+			else
+				exitFullScreen();
+		}
 		else
-			exitFullScreen();
+		{
+			BI_Hotkey_MaximizeVideoArea();
+		}
 	}
 	this.isFullScreen = function ()
 	{
@@ -11670,6 +11820,14 @@ function AjaxHistoryManager()
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////
+function BI_Hotkey_MaximizeVideoArea()
+{
+	if ($("#layoutleft").is(":visible"))
+		$("#layoutleft,#layouttop").hide();
+	else
+		$("#layoutleft,#layouttop").show();
+	resized();
+}
 function BI_Hotkey_FullScreen()
 {
 	fullScreenModeController.toggleFullScreen();
@@ -11704,6 +11862,16 @@ function BI_Hotkey_SkipBack()
 {
 	if (!videoPlayer.Loading().image.isLive)
 		videoPlayer.SeekByMs(-1000 * parseInt(settings.ui3_skipAmount));
+}
+function BI_Hotkey_PlaybackFaster()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		playbackControls.ChangePlaySpeed(1);
+}
+function BI_Hotkey_PlaybackSlower()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		playbackControls.ChangePlaySpeed(-1);
 }
 function BI_Hotkey_DigitalZoomIn()
 {
@@ -11761,6 +11929,10 @@ function BI_Hotkey_PtzIn() { BI_PTZ_Action(5); }
 function BI_Hotkey_PtzIn_Up() { BI_PTZ_Action(5, true); }
 function BI_Hotkey_PtzOut() { BI_PTZ_Action(6); }
 function BI_Hotkey_PtzOut_Up() { BI_PTZ_Action(6, true); }
+function BI_Hotkey_PtzFocusFar() { BI_PTZ_Action(-2); }
+function BI_Hotkey_PtzFocusFar_Up() { BI_PTZ_Action(-2, true); }
+function BI_Hotkey_PtzFocusNear() { BI_PTZ_Action(-1); }
+function BI_Hotkey_PtzFocusNear_Up() { BI_PTZ_Action(-1, true); }
 function BI_Hotkey_PtzPreset(presetNum)
 {
 	var loading = videoPlayer.Loading();
@@ -12186,16 +12358,25 @@ function BitRateCalculator()
 	var queue = new Queue();
 	this.averageOverMs = 1000;
 	var sum = 0;
+	var best = 0;
 	this.AddDataPoint = function (bytes)
 	{
 		cleanup();
 		sum += bytes;
 		queue.enqueue(new BitRateDataPoint(bytes));
+		if (sum > best)
+			best += ((sum - best) * 0.1);
+		else if (sum < best)
+			best += ((sum - best) * 0.01);
 	}
 	this.GetBPS = function ()
 	{
 		cleanup();
 		return sum;
+	}
+	this.GetBestGuess = function ()
+	{
+		return best;
 	}
 	var cleanup = function ()
 	{
@@ -12219,6 +12400,7 @@ function RollingAverage(MAXSAMPLES)
 		MAXSAMPLES = 10;
 	var tickindex = 0;
 	var ticksum = 0;
+	var numTicks = 0;
 	var ticklist = [];
 	for (var i = 0; i < MAXSAMPLES; i++)
 		ticklist.push(0);
@@ -12231,11 +12413,15 @@ function RollingAverage(MAXSAMPLES)
 			ticklist[tickindex] = newValue;   // save new value so it can be subtracted later
 			if (++tickindex == MAXSAMPLES)   // inc buffer index
 				tickindex = 0;
+			if (numTicks < MAXSAMPLES)
+				numTicks++;
 		}
 	}
 	this.Get = function ()
 	{
-		return (ticksum / MAXSAMPLES);
+		if (numTicks == 0)
+			return 0;
+		return (ticksum / numTicks);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -13766,6 +13952,8 @@ function UISettingsPanel()
 			if (s.label && s.category == category)
 			{
 				var $row = $('<div class="uiSettingsRow"></div>');
+				if (s.hint && s.hint.length > 0)
+					$row.attr('title', s.hint);
 				if (rowIdx++ % 2 == 1)
 					$row.addClass('everyOther');
 				if (s.hotkey)
@@ -13786,7 +13974,7 @@ function UISettingsPanel()
 					$row.addClass('dialogOption_item dialogOption_item_info');
 					$row.append($input);
 					var label = s.label;
-					if (!fullscreen_supported && s.key == 'ui3_hotkey_togglefullscreen2')
+					if (!fullscreen_supported && s.key == 'ui3_hotkey_togglefullscreen')
 						label += '<br>(Unavailable)';
 					$row.append(GetDialogOptionLabel(label));
 				}
@@ -14039,7 +14227,7 @@ function UIHelpTool()
 function CollapsibleSection(id, htmlTitle, dialogToNotify)
 {
 	var self = this;
-	var settingsKey = "ui3_cps_" + id.replace(/\s/, '_') + "_visible";
+	var settingsKey = "ui3_cps_" + id.replace(/\s|\//g, '_') + "_visible";
 	var visibleSetting = settings.getItem(settingsKey);
 	if (visibleSetting != "0" && visibleSetting != "1")
 	{
