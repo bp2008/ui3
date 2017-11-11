@@ -272,13 +272,14 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Alert playback verification.  Remove notices about Alert playback being unfinished.  See additional TODO within the script below.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
-// TODO: Refactor "clipId" field to "uniqueId" or "recId" to imply it could be either an alert ID or a clip ID.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
