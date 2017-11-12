@@ -1080,6 +1080,8 @@ function GetDummyLocalStorage()
 ///////////////////////////////////////////////////////////////
 $(function ()
 {
+	BI_CustomEvent.Invoke("UI_Loading_Start");
+
 	$DialogDefaults.theme = "dark";
 
 	if (location.protocol == "file:")
@@ -1288,6 +1290,8 @@ $(function ()
 	{
 		toaster.Info('Welcome to the UI3 beta test!<br><br>UI3 beta version: ' + ui_version + '<br>Blue Iris version: ' + bi_version + '<br><br><a href="javascript:UIHelp.LearnMore(\'beta_information\')" style="color: #00ff00; font-weight: bold; font-size: 1.4em;">Click here to learn more or to provide feedback.</a>', 15000, true);
 	});
+
+	BI_CustomEvent.Invoke("UI_Loading_End");
 });
 function ValidateTabName(tabName)
 {
@@ -6285,9 +6289,9 @@ function CameraListLoader()
 
 				if (!firstCameraListLoaded && numCameras > 1 && settings.ui3_webcasting_disabled_dontShowAgain != "1")
 				{
-					webcastingWarning = toaster.Info('Webcasting is not enabled for some of your camera groups.<br><br>'
-						+ camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? '' : 's')
-						+ ' have been individually added to the Current Group dropdown list.<br><br>'
+					webcastingWarning = toaster.Info('Webcasting may not be enabled for some of your camera groups.<br><br>'
+						+ camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
+						+ ' been individually added to the Current Group dropdown list.<br><br>'
 						+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
 						+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
 						, 60000, true);
