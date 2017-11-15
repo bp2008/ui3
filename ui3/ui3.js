@@ -6018,9 +6018,9 @@ function SessionManager()
 					loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo);
 				}
 			}
-		}, function ()
+		}, function (jqXHR, textStatus, errorThrown)
 			{
-				loadingHelper.SetErrorStatus("login", 'Unable to contact Blue Iris server to check session status.');
+				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown);
 			});
 	}
 	var LogInWithCredentials = function (user, pass, onFail)
@@ -6047,14 +6047,14 @@ function SessionManager()
 						onFail(response, 'Failed to log in. ' + GetFailReason(response));
 				}, function ()
 					{
-						onFail(null, "Unable to contact server.");
+						onFail(null, 'Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown);
 					});
 			}
 			else
 				onFail(response, 'Failed to log in. ' + GetFailReason(response));
 		}, function ()
 			{
-				onFail(null, "Unable to contact server.");
+				onFail(null, 'Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown);
 			});
 	}
 	var GetFailReason = function (response)
@@ -12304,6 +12304,8 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 				ExecJSON(args, callbackSuccess, callbackFail, synchronous);
 				return;
 			}
+			if (!jqXHR)
+				jqXHR = { status: 0, statusText: "No jqXHR object was created" };
 			BI_CustomEvent.Invoke("ExecJSON_Fail", eventArgs);
 			if (callbackFail)
 				callbackFail(jqXHR, textStatus, errorThrown);
