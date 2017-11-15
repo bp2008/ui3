@@ -1115,7 +1115,7 @@ $(function ()
 		},
 		error: function (jqXHR, textStatus, errorThrown)
 		{
-			loadingHelper.SetErrorStatus("svg", "When trying to load icons.svg, server returned status:<br/>" + jqXHR.status + " " + jqXHR.statusText);
+			loadingHelper.SetErrorStatus("svg", "Error trying to load icons.svg<br/>" + jqXHR.ErrorMessageHtml);
 		}
 	});
 
@@ -4332,7 +4332,7 @@ function ClipLoader(clipsBodySelector)
 			{
 				$clipsbody.html('<div class="clipListText">Failed to load!</div>');
 				var tryAgain = !isContinuationOfPreviousLoad && ++failedClipListLoads < 5
-				toaster.Error("Failed to load " + (listName == "cliplist" ? "clip list" : "alert list") + ".<br/>Will " + (tryAgain ? "" : "NOT ") + "try again.<br/>" + textStatus + "<br/>" + errorThrown, 5000);
+				toaster.Error("Failed to load " + (listName == "cliplist" ? "clip list" : "alert list") + ".<br/>Will " + (tryAgain ? "" : "NOT ") + "try again.<br/>" + jqXHR.ErrorMessageHtml, 5000);
 
 				if (tryAgain)
 				{
@@ -6020,7 +6020,7 @@ function SessionManager()
 			}
 		}, function (jqXHR, textStatus, errorThrown)
 			{
-				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown + '<br/>' + jqXHR.OriginalURL);
+				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.ErrorMessageHtml);
 			});
 	}
 	var LogInWithCredentials = function (user, pass, onFail)
@@ -6047,14 +6047,14 @@ function SessionManager()
 						onFail(response, 'Failed to log in. ' + GetFailReason(response));
 				}, function (jqXHR, textStatus, errorThrown)
 					{
-						onFail(null, 'Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown + '<br/>' + jqXHR.OriginalURL);
+						onFail(null, 'Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.ErrorMessageHtml);
 					});
 			}
 			else
 				onFail(response, 'Failed to log in. ' + GetFailReason(response));
 		}, function (jqXHR, textStatus, errorThrown)
 			{
-				onFail(null, 'Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown + '<br/>' + jqXHR.OriginalURL);
+				onFail(null, 'Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.ErrorMessageHtml);
 			});
 	}
 	var GetFailReason = function (response)
@@ -10693,7 +10693,7 @@ var objectVisualizer = new (function ObjectVisualizer()
 					.fail(function (jqxhr, settings, exception)
 					{
 						isLoaded = isLoading = false;
-						toaster.Error("Unable to load jsonview library.", 5000);
+						toaster.Error("Unable to load jsonview library.<br>" + jqXHR.ErrorMessageHtml, 5000);
 					});
 			}
 			return;
@@ -11602,7 +11602,7 @@ function HLSPlayer()
 			{
 				initFinished = true;
 				self.CloseDialog();
-				toaster.Error("Failed to load HLS player script.");
+				toaster.Error("Failed to load HLS player script.<br>" + jqXHR.ErrorMessageHtml);
 			});
 	}
 	this.OpenDialog = function (camId)
@@ -12308,6 +12308,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 			if (!jqXHR)
 				jqXHR = { status: 0, statusText: "No jqXHR object was created" };
 			jqXHR.OriginalURL = reqUrl;
+			jqXHR.ErrorMessageHtml = 'Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '<br>Status: ' + textStatus + '<br>Error: ' + errorThrown + '<br>URL: ' + reqUrl;
 			BI_CustomEvent.Invoke("ExecJSON_Fail", eventArgs);
 			if (callbackFail)
 				callbackFail(jqXHR, textStatus, errorThrown);
