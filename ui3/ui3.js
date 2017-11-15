@@ -18,6 +18,7 @@ var web_audio_supported = false;
 var web_audio_buffer_source_supported = false;
 var fullscreen_supported = false;
 var browser_is_ios = false;
+var browser_is_Edge_16_16299 = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -32,6 +33,7 @@ function DoUIFeatureDetection()
 			// All critical tests pass
 			// Non-critical tests can run here and store their results in global vars.
 			browser_is_ios = BrowserIsIOSSafari() || BrowserIsIOSChrome();
+			browser_is_Edge_16_16299 = window.navigator.userAgent.indexOf(" Edge/16.16299") > -1;
 			web_workers_supported = typeof Worker !== "undefined";
 			fetch_supported = typeof fetch == "function";
 			readable_stream_supported = typeof ReadableStream == "function";
@@ -271,8 +273,6 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-
-// TODO: Alert playback verification.  Remove notices about Alert playback being unfinished.  See additional TODO within the script below.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -1154,8 +1154,6 @@ $(function ()
 			$("#layoutleftRecordings").show();
 			//$("#layoutbottom").show();
 			$("#recordingsFilterByHeading").text("Filter " + tabDisplayName + " by:");
-			if (currentPrimaryTab == "alerts")
-				toaster.Warning("Alert playback is not finalized in this beta version.", 10000);
 		}
 		if (skipTabLoadClipLoad)
 			skipTabLoadClipLoad = false;
@@ -1290,6 +1288,18 @@ $(function ()
 	{
 		toaster.Info('Welcome to the UI3 beta test!<br><br>UI3 beta version: ' + ui_version + '<br>Blue Iris version: ' + bi_version + '<br><br><a href="javascript:UIHelp.LearnMore(\'beta_information\')" style="color: #00ff00; font-weight: bold; font-size: 1.4em;">Click here to learn more or to provide feedback.</a>', 15000, true);
 	});
+	if (browser_is_Edge_16_16299)
+	{
+		BI_CustomEvent.AddListener("FinishedLoading", function ()
+		{
+			$('<div style="margin: 10px; text-align: center; max-width: 640px;">'
+				+ '<div style="color: #FFAA00; width: 40px; height: 40px; margin: 0px auto"><svg class="icon noflip"><use xlink:href="#svg_mio_warning"></use></svg></div>'
+				+ '<br><br>Your browser (Microsoft Edge 41.16299) has known compatibility issues with Blue Iris.'
+				+ '<br><br>Performance may be slow and/or unreliable.'
+				+ '<br><br><br><a target="_blank" href="https://www.google.com/chrome"><img src="ui3/chrome48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Try Google Chrome</a>.'
+				+ '</div>').modalDialog({ title: "Compatibility Problem" });
+		});
+	}
 
 	BI_CustomEvent.Invoke("UI_Loading_End");
 });
@@ -3336,9 +3346,9 @@ function PlaybackControls()
 	$layoutbody.on("mouseleave", function (e)
 	{
 		mouseCoordFixer.fix(e);
-		CloseSettings();
 		if (pointInsideElement($layoutbody, e.pageX, e.pageY))
 			return;
+		CloseSettings();
 		clearHideTimout();
 		self.FadeOut();
 	});
@@ -7382,7 +7392,6 @@ function JpegVideoModule()
 	}
 	this.GetCurrentImageTimeMs = function ()
 	{
-		// TODO: Once alert playback is finalized, make sure this returns values that are as accurate as possible for clips and alerts (if a clip has gaps, it'll be inaccurate much of the time).
 		return currentImageTimestampMs;
 	}
 	var GetNewImage = function ()
@@ -7894,8 +7903,6 @@ function FetchOpenH264VideoModule()
 	}
 	this.GetCurrentImageTimeMs = function ()
 	{
-		// TODO: After alert playback is finalized, ensure that saved snapshots have an accurate timestamp when the last rendered frame was a paused jpeg in both clips and alerts.
-		// And when it was a normal frame in both clips and alerts.
 		return currentImageDateMs;
 	}
 	this.Playback_IsPaused = function ()
@@ -8736,6 +8743,8 @@ function ImageRenderer()
 			// Find the mouse position percentage relative to the center of the image at its old size
 			var imgPos = $("#camimg_wrapper").position();
 			var layoutbodyOffset = $("#layoutbody").offset();
+			if (!layoutbodyOffset) // Edge complained about this once
+				layoutbodyOffset = { left: 0, top: 0 };
 			var xPos = mouseX;
 			var yPos = mouseY;
 			if (isFromKeyboard)
@@ -12881,6 +12890,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 	var statusBlockSize = 0;
 	var bitmapHeader = null;
 	var audioHeader = null;
+	var abort_controller = null;
 
 	this.StopStreaming = function ()
 	{
@@ -12896,11 +12906,30 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 			reader.cancel("Streaming canceled");
 			reader = null;
 		}
+		if (abort_controller)
+		{
+			abort_controller.abort();
+			abort_controller = null;
+		}
 	}
 	var Start = function ()
 	{
 		var startTime = performance.now();
-		fetch(url).then(function (res)
+
+		var fetchPromise;
+		if (typeof AbortController == "function")
+		{
+			// FF 57+, Edge 16+ (in theory)
+			abort_controller = new AbortController();
+			var signal = abort_controller.signal;
+			fetchPromise = fetch(url, { signal });
+		}
+		else
+		{
+			fetchPromise = fetch(url);
+		}
+
+		fetchPromise.then(function (res)
 		{
 			if (res.headers.get("Content-Type") == "image/jpeg")
 			{
@@ -12928,8 +12957,8 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 				reader = res.body.getReader();
 				return pump(reader);
 			}
-		})
-		["catch"](function (e)
+		});
+		fetchPromise["catch"](function (e)
 		{
 			CallStreamEnded(e);
 		});
@@ -12974,6 +13003,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 				{
 					stopStreaming_Internal();
 					CallStreamEnded("fetch graceful exit (type 3)");
+					return;
 				}
 				if (state == 0) // Read Stream Header Start
 				{
@@ -14228,8 +14258,7 @@ function UIHelpTool()
 			+ '<a href="https://goo.gl/forms/nw6rRrY0gPObYtJr1" target="_blank">Click here to report a bug or send other feedback.</a><br><br>'
 			+ '<img src="ui3/help/img/BetaInfoPanel.png" style="border: 2px solid #0097F0; float: right; margin-bottom: 10px;" />This panel is accessible at any time from the Main Menu in the upper right.<br><br>'
 			+ '<div style="clear:both;"></div>'
-			+ 'This interface uses cutting-edge web technology that is not available in all web browsers.  Full functionality exists in the latest versions of <a href="https://www.google.com/chrome/" target="_blank">Chrome</a>, <a href="https://www.opera.com/" target="_blank">Opera</a>, and <a href="https://www.microsoft.com/en-us/windows/microsoft-edge" target="_blank">Edge</a> browsers.  Firefox is expected to join this list in mid-November with the release of Firefox 57.<br><br>'
-			+ 'Some features are incomplete in this beta version, most notably Alert playback.  Alert playback has some quirks that cannot be fixed until minor additions are made to Blue Iris.  Clip playback should be fully functional.'
+			+ 'This interface uses cutting-edge web technology that is not available in all web browsers.  Full functionality exists in the latest versions of <a href="https://www.google.com/chrome/" target="_blank">Chrome</a>, <a href="https://www.opera.com/" target="_blank">Opera</a>, and Safari on Mac.  <a href="https://www.microsoft.com/en-us/windows/microsoft-edge" target="_blank">Edge</a> can work, depending on the version.  Firefox is currently experiencing growing pains and does not run UI3 as well as other browsers.<br><br>'
 			+ '</div>');
 		$root.modalDialog({ title: 'Beta Information' });
 	}

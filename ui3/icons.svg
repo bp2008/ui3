@@ -146,33 +146,33 @@
 <symbol id="svg_x5F_PTZpad" viewBox="-98 -98.001 196 196.002">
 	<path display="none" fill="#C02033" d="M0,17.5c-9.649,0-17.5-7.851-17.5-17.5S-9.649-17.5,0-17.5S17.5-9.649,17.5,0
 	S9.649,17.5,0,17.5z"/>
-	<use xlink:href="#svg_x5F_PTZbackground"  width="196" height="196.002" x="-98" y="-98.001" overflow="visible"/>
-	<use xlink:href="#svg_x5F_PTZoutsideRing"  width="192" height="192.002" x="-96" y="-96.001" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZbackground"  width="196" height="196.002" x="-98" y="-98.001"/>
+	<use xlink:href="#svg_x5F_PTZoutsideRing"  width="192" height="192.002" x="-96" y="-96.001"/>
 
-	<use xlink:href="#svg_x5F_PTZzoomIn"  width="57.911" height="26.45" x="-28.956" y="-13.226" transform="matrix(1 0 0 1 0 29.7725)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZzoomIn"  width="57.911" height="26.45" x="-28.956" y="-13.226" transform="matrix(1 0 0 1 0 29.7725)"/>
 
-	<use xlink:href="#svg_x5F_PTZzoomOut"  width="57.911" height="26.45" x="-28.956" y="-13.225" transform="matrix(1 0 0 1 0 -29.7715)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZzoomOut"  width="57.911" height="26.45" x="-28.956" y="-13.225" transform="matrix(1 0 0 1 0 -29.7715)"/>
 
-	<use xlink:href="#svg_x5F_PTZfocusNear"	 width="26.45" height="57.91" x="-13.225" y="-28.955" transform="matrix(1 0 0 1 29.7705 0)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZfocusNear"	 width="26.45" height="57.91" x="-13.225" y="-28.955" transform="matrix(1 0 0 1 29.7705 0)"/>
 
-	<use xlink:href="#svg_x5F_PTZfocusFar"	width="26.45" height="57.91" x="-13.225" y="-28.955" transform="matrix(1 0 0 1 -29.7705 0)" overflow="visible"/>
-	<use xlink:href="#svg_x5F_PTZstop"	width="34.986" height="34.986" id="XMLID_5_" x="-17.493" y="-17.493" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZfocusFar"	width="26.45" height="57.91" x="-13.225" y="-28.955" transform="matrix(1 0 0 1 -29.7705 0)"/>
+	<use xlink:href="#svg_x5F_PTZstop"	width="34.986" height="34.986" id="XMLID_5_" x="-17.493" y="-17.493"/>
 
-	<use xlink:href="#svg_x5F_PTZcardinalUp"  width="25" height="15.412" x="-12.5" y="-7.706" transform="matrix(1 0 0 1 0 65.498)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZcardinalUp"  width="25" height="15.412" x="-12.5" y="-7.706" transform="matrix(1 0 0 1 0 65.498)"/>
 
-	<use xlink:href="#svg_x5F_PTZcardinalRight"	 width="15.411" height="25" x="-7.706" y="-12.5" transform="matrix(1 0 0 1 65.3369 0)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZcardinalRight"	 width="15.411" height="25" x="-7.706" y="-12.5" transform="matrix(1 0 0 1 65.3369 0)"/>
 
-	<use xlink:href="#svg_x5F_PTZcardinalDown"	width="25" height="15.412" x="-12.5" y="-7.706" transform="matrix(1 0 0 1 0 -65.4648)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZcardinalDown"	width="25" height="15.412" x="-12.5" y="-7.706" transform="matrix(1 0 0 1 0 -65.4648)"/>
 
-	<use xlink:href="#svg_x5F_PTZcardinalLeft"	width="15.411" height="25" x="-7.706" y="-12.5" transform="matrix(1 0 0 1 -65.4985 0)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZcardinalLeft"	width="15.411" height="25" x="-7.706" y="-12.5" transform="matrix(1 0 0 1 -65.4985 0)"/>
 
-	<use xlink:href="#svg_x5F_PTZordinalNE"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 46.2002 46.2012)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZordinalNE"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 46.2002 46.2012)"/>
 
-	<use xlink:href="#svg_x5F_PTZordinalNW"	 width="7.167" height="7.167" x="-3.583" y="-3.583" transform="matrix(1 0 0 1 -46.2002 46.1982)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZordinalNW"	 width="7.167" height="7.167" x="-3.583" y="-3.583" transform="matrix(1 0 0 1 -46.2002 46.1982)"/>
 
-	<use xlink:href="#svg_x5F_PTZordinalSW"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 -46.1997 -46.1992)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZordinalSW"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 -46.1997 -46.1992)"/>
 
-	<use xlink:href="#svg_x5F_PTZordinalSE"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 46.2002 -46.1992)" overflow="visible"/>
+	<use xlink:href="#svg_x5F_PTZordinalSE"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 46.2002 -46.1992)"/>
 </symbol>
 <symbol id="svg_x5F_PTZstop" viewBox="-17.493 -17.493 34.986 34.986">
 	<path d="M0,17.493c-9.661,0-17.493-7.832-17.493-17.493S-9.661-17.493,0-17.493S17.493-9.661,17.493,0S9.661,17.493,0,17.493z
@@ -370,5 +370,9 @@
 <symbol id="svg_mio_lock" viewBox="2 1 20 21">
 	<path d="M0 0h24v24H0z" fill="none"/>
 	<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+</symbol>
+<symbol id="svg_mio_warning" viewBox="1 1 22 22">
+	<path d="M0 0h24v24H0z" fill="none"/>
+	<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
 </symbol>
 </svg>
