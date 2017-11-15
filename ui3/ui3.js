@@ -6020,7 +6020,7 @@ function SessionManager()
 			}
 		}, function (jqXHR, textStatus, errorThrown)
 			{
-				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown);
+				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown + '<br/>' + jqXHR.OriginalURL);
 			});
 	}
 	var LogInWithCredentials = function (user, pass, onFail)
@@ -6045,16 +6045,16 @@ function SessionManager()
 					}
 					else
 						onFail(response, 'Failed to log in. ' + GetFailReason(response));
-				}, function ()
+				}, function (jqXHR, textStatus, errorThrown)
 					{
-						onFail(null, 'Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown);
+						onFail(null, 'Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown + '<br/>' + jqXHR.OriginalURL);
 					});
 			}
 			else
 				onFail(response, 'Failed to log in. ' + GetFailReason(response));
-		}, function ()
+		}, function (jqXHR, textStatus, errorThrown)
 			{
-				onFail(null, 'Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown);
+				onFail(null, 'Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.status + ' ' + jqXHR.statusText + '<br/>' + textStatus + '<br/>' + errorThrown + '<br/>' + jqXHR.OriginalURL);
 			});
 	}
 	var GetFailReason = function (response)
@@ -12274,9 +12274,10 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 	}
 	var eventArgs = { id: execJsonCounter++, args: args };
 	BI_CustomEvent.Invoke("ExecJSON_Start", eventArgs);
+	var reqUrl = currentServer.remoteBaseURL + "json";
 	$.ajax({
 		type: 'POST',
-		url: currentServer.remoteBaseURL + "json",
+		url: reqUrl,
 		contentType: "text/plain",
 		data: JSON.stringify(args),
 		dataType: "json",
@@ -12306,6 +12307,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 			}
 			if (!jqXHR)
 				jqXHR = { status: 0, statusText: "No jqXHR object was created" };
+			jqXHR.OriginalURL = reqUrl;
 			BI_CustomEvent.Invoke("ExecJSON_Fail", eventArgs);
 			if (callbackFail)
 				callbackFail(jqXHR, textStatus, errorThrown);
