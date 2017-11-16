@@ -13,6 +13,11 @@ svg.icon
 	transform: scaleY(1);
 }
 
+.rotate90 svg.icon, svg.rotate90
+{
+	transform: rotate(90deg);
+}
+
 svg.stroke
 {
 	stroke: currentColor;
@@ -2167,7 +2172,7 @@ div.icon, a.icon
 
 .camimg_loading
 {
-	display: none;
+	visibility: hidden;
 	width: 100%;
 	height: 100%;
 	top: 0px;
@@ -2190,10 +2195,30 @@ div.icon, a.icon
 	position: absolute;
 }
 
+.camimg_loading_anim
+{
+	display: block;
+	visibility: hidden;
+}
+
 	.camimg_loading_anim svg
 	{
 		opacity: 0.5;
 	}
+
+#camimg_loading.visible,
+#camimg_loading_anim.visible,
+#camimg_false_loading.visible
+{
+	visibility: visible;
+}
+
+#camimg_loading.hidden,
+#camimg_loading_anim.hidden,
+#camimg_false_loading.hidden
+{
+	visibility: hidden;
+}
 
 #camimg_false_loading_anim
 {
@@ -2262,10 +2287,20 @@ div.icon, a.icon
 	background-color: rgba(0,0,0,0.25);
 }
 
-	#seekhint_loading svg
+	#seekhint.hidden,
+	#seekhint_loading.hidden,
+	#seekhint.hidden #seekhint_loading
 	{
-		opacity: 0.5;
+		visibility: hidden;
 	}
+
+#seekhint_loading_anim
+{
+	opacity: 0.5;
+	width: 100%;
+	height: 100%;
+	margin: 0px auto;
+}
 
 #seekhint_helper
 {
@@ -3113,38 +3148,6 @@ div.icon, a.icon
 .listDialogContent td.centercolumn
 {
 	text-align: center;
-}
-
-.spin2s
-{
-	-webkit-animation: spin 2s linear infinite;
-	-moz-animation: spin 2s linear infinite;
-	animation: spin 2s linear infinite;
-}
-
-@-moz-keyframes spin
-{
-	100%
-	{
-		-moz-transform: rotate(360deg);
-	}
-}
-
-@-webkit-keyframes spin
-{
-	100%
-	{
-		-webkit-transform: rotate(360deg);
-	}
-}
-
-@keyframes spin
-{
-	100%
-	{
-		-webkit-transform: rotate(360deg);
-		transform: rotate(360deg);
-	}
 }
 
 /* Camera Properties / Camera List / Clip Properties */

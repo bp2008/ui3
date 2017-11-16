@@ -18,7 +18,6 @@ var web_audio_supported = false;
 var web_audio_buffer_source_supported = false;
 var fullscreen_supported = false;
 var browser_is_ios = false;
-var browser_is_Edge_16_16299 = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -33,7 +32,6 @@ function DoUIFeatureDetection()
 			// All critical tests pass
 			// Non-critical tests can run here and store their results in global vars.
 			browser_is_ios = BrowserIsIOSSafari() || BrowserIsIOSChrome();
-			browser_is_Edge_16_16299 = window.navigator.userAgent.indexOf(" Edge/16.16299") > -1;
 			web_workers_supported = typeof Worker !== "undefined";
 			fetch_supported = typeof fetch == "function";
 			readable_stream_supported = typeof ReadableStream == "function";
@@ -1288,18 +1286,18 @@ $(function ()
 	{
 		toaster.Info('Welcome to the UI3 beta test!<br><br>UI3 beta version: ' + ui_version + '<br>Blue Iris version: ' + bi_version + '<br><br><a href="javascript:UIHelp.LearnMore(\'beta_information\')" style="color: #00ff00; font-weight: bold; font-size: 1.4em;">Click here to learn more or to provide feedback.</a>', 15000, true);
 	});
-	if (browser_is_Edge_16_16299)
-	{
-		BI_CustomEvent.AddListener("FinishedLoading", function ()
-		{
-			$('<div style="margin: 10px; text-align: center; max-width: 640px;">'
-				+ '<div style="color: #FFAA00; width: 40px; height: 40px; margin: 0px auto"><svg class="icon noflip"><use xlink:href="#svg_mio_warning"></use></svg></div>'
-				+ '<br><br>Your browser (Microsoft Edge 41.16299) has known compatibility issues with Blue Iris.'
-				+ '<br><br>Performance may be slow and/or unreliable.'
-				+ '<br><br><br><a target="_blank" href="https://www.google.com/chrome"><img src="ui3/chrome48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Try Google Chrome</a>.'
-				+ '</div>').modalDialog({ title: "Compatibility Problem" });
-		});
-	}
+	//if (browser_is_Edge_16_16299)
+	//{
+	//	BI_CustomEvent.AddListener("FinishedLoading", function ()
+	//	{
+	//		$('<div style="margin: 10px; text-align: center; max-width: 640px;">'
+	//			+ '<div style="color: #FFAA00; width: 40px; height: 40px; margin: 0px auto"><svg class="icon noflip"><use xlink:href="#svg_mio_warning"></use></svg></div>'
+	//			+ '<br><br>Your browser (Microsoft Edge 41.16299) has known compatibility issues with Blue Iris.'
+	//			+ '<br><br>Performance may be slow and/or unreliable.'
+	//			+ '<br><br><br><a target="_blank" href="https://www.google.com/chrome"><img src="ui3/chrome48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Try Google Chrome</a>.'
+	//			+ '</div>').modalDialog({ title: "Compatibility Problem" });
+	//	});
+	//}
 
 	BI_CustomEvent.Invoke("UI_Loading_End");
 });
@@ -3675,7 +3673,7 @@ function SeekBar()
 			playbackControls.SetProgressText(msToTime(seekHintInfo.loadingMsec, 0) + " / " + msToTime(msecTotal, 0));
 		}
 		CopyImageToCanvas("seekhint_img", "seekhint_canvas");
-		seekhint_loading.hide();
+		seekhint_loading.addClass('hidden');
 		seekHintInfo.loading = false;
 		seekHintInfo.visibleMsec = seekHintInfo.loadingMsec;
 		if (seekHintInfo.queuedMsec != -1)
@@ -3684,7 +3682,7 @@ function SeekBar()
 	seekhint_img.error(function ()
 	{
 		ClearCanvas("seekhint_canvas");
-		seekhint_loading.hide();
+		seekhint_loading.addClass('hidden');
 		seekHintInfo.loading = false;
 		seekHintInfo.loadingMsec = seekHintInfo.visibleMsec = -1;
 		if (seekHintInfo.queuedMsec != -1)
@@ -3710,7 +3708,7 @@ function SeekBar()
 			if (seekHintInfo.canvasVisible)
 			{
 				seekhint_canvas.hide();
-				seekhint_loading.hide();
+				seekhint_loading.addClass('hidden');
 				seekHintInfo.canvasVisible = false;
 			}
 		}
@@ -3803,7 +3801,11 @@ function SeekBar()
 			seekhint_canvas.css("margin-left", hintMarginLeft + "px").css('width', hintW + 'px').css('height', hintH + 'px');
 			seekhint_loading.css("margin-left", hintMarginLeft + "px").css('width', hintW + 'px').css('height', hintH + 'px');
 			if (seekHintInfo.canvasVisible)
-				seekhint_loading.show();
+			{
+				var loadSize = Math.min(hintW, hintH);
+				$("#seekhint_loading_anim").css('width', loadSize + 'px').css('height', loadSize + 'px')
+				seekhint_loading.removeClass('hidden');
+			}
 			var qualityArgs;
 			if (isDragging)
 			{
@@ -3821,7 +3823,7 @@ function SeekBar()
 		seekHintInfo.loadingMsec = seekHintInfo.queuedMsec = seekHintInfo.visibleMsec = -1;
 		seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
 		ClearCanvas("seekhint_canvas");
-		seekhint_loading.hide();
+		seekhint_loading.addClass('hidden');
 	}
 	this.drawSeekbarAtPercent = function (percentValue)
 	{
@@ -3876,14 +3878,14 @@ function SeekBar()
 		{
 			handle.addClass("focus");
 			bar.addClass("focus");
-			seekhint.show();
+			seekhint.removeClass('hidden');
 			seekHintVisible = true;
 		}
 		else
 		{
 			handle.removeClass("focus");
 			bar.removeClass("focus");
-			seekhint.hide();
+			seekhint.addClass('hidden');
 			seekHintVisible = false;
 			highlight.css("width", "0px");
 		}
@@ -7337,7 +7339,8 @@ function JpegVideoModule()
 			return;
 		}
 		lastOpenVideoCallAt = perfNow;
-		console.log("jpeg.OpenVideo");
+		if (developerMode)
+			console.log("jpeg.OpenVideo");
 		loading.CopyValuesFrom(videoData);
 		honorAlertOffset = offsetPercent === -1;
 		if (!offsetPercent)
@@ -7724,7 +7727,8 @@ function FetchOpenH264VideoModule()
 			}, 5);
 			return;
 		}
-		//console.log("h264.OpenVideo");
+		if (developerMode)
+			console.log("h264.OpenVideo");
 		loading.CopyValuesFrom(videoData);
 		var honorAlertOffset = offsetPercent === -1;
 		if (!offsetPercent)
@@ -7991,7 +7995,8 @@ function FetchOpenH264VideoModule()
 	{
 		if (currentServer.isLoggingOut)
 			return;
-		//console.log("fetch stream ended: ", message);
+		if (developerMode)
+			console.log("fetch stream ended: ", message);
 		if (!safeFetch.IsActive())
 			volumeIconHelper.setColorIdle();
 		if (wasJpeg)
@@ -8930,7 +8935,7 @@ var videoOverlayHelper = new (function ()
 		if (!loadingOverlayHidden)
 		{
 			loadingOverlayHidden = true;
-			$("#camimg_loading").hide();
+			$("#camimg_loading").addClass('hidden').removeClass('visible');
 		}
 		self.HideLoadingAnimation();
 	}
@@ -8939,7 +8944,7 @@ var videoOverlayHelper = new (function ()
 		if (!loadingAnimHidden)
 		{
 			loadingAnimHidden = true;
-			$("#camimg_loading_anim").hide();
+			$("#camimg_loading_anim").addClass('hidden').removeClass('visible');
 		}
 	}
 	this.ShowLoadingOverlay = function (showAnimation, lessIntenseOverlay)
@@ -8947,7 +8952,7 @@ var videoOverlayHelper = new (function ()
 		if (loadingOverlayHidden)
 		{
 			loadingOverlayHidden = false;
-			$("#camimg_loading").show();
+			$("#camimg_loading").removeClass('hidden').addClass('visible');
 		}
 		if (lessIntenseOverlay && !overlayIsLessIntense)
 			$("#camimg_loading").addClass("lessIntense");
@@ -8963,7 +8968,7 @@ var videoOverlayHelper = new (function ()
 		if (loadingAnimHidden)
 		{
 			loadingAnimHidden = false;
-			$("#camimg_loading_anim").show();
+			$("#camimg_loading_anim").removeClass('hidden').addClass('visible');
 		}
 	}
 	this.HideFalseLoadingOverlay = function ()
@@ -8971,7 +8976,7 @@ var videoOverlayHelper = new (function ()
 		if (!falseLoadingOverlayHidden)
 		{
 			falseLoadingOverlayHidden = true;
-			$("#camimg_false_loading").hide();
+			$("#camimg_false_loading").addClass('hidden').removeClass('visible');
 		}
 	}
 	this.ShowFalseLoadingOverlay = function ()
@@ -8979,7 +8984,7 @@ var videoOverlayHelper = new (function ()
 		if (falseLoadingOverlayHidden)
 		{
 			falseLoadingOverlayHidden = false;
-			$("#camimg_false_loading").show();
+			$("#camimg_false_loading").removeClass('hidden').addClass('visible');
 		}
 	}
 	this.ShowTemporaryPlayIcon = function (duration)
@@ -8987,10 +8992,10 @@ var videoOverlayHelper = new (function ()
 		self.HideTemporaryIcons();
 		fadeIcons($("#camimg_playIcon,#camimg_centerIconBackground"), duration);
 	}
-	this.ShowTemporaryPauseIcon = function ()
+	this.ShowTemporaryPauseIcon = function (duration)
 	{
 		self.HideTemporaryIcons();
-		fadeIcons($("#camimg_pauseIcon,#camimg_centerIconBackground"));
+		fadeIcons($("#camimg_pauseIcon,#camimg_centerIconBackground"), duration);
 	}
 	var fadeIcons = function ($icons, duration)
 	{
@@ -11627,8 +11632,8 @@ function HLSPlayer()
 		videoPlayer.DeactivatePlayer();
 		if (!initFinished)
 		{
-			container.append('<div style="width:50px;height:50px;margin:20px" class="spin2s">'
-				+ '<svg class="icon"><use xlink:href="#svg_x5F_Settings"></use></svg>'
+			container.append('<div style="width:50px;height:50px;margin: 20px auto" class="spin1s">'
+				+ '<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
 				+ '</div>');
 			Initialize(camId);
 		}
@@ -12905,16 +12910,17 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 	var stopStreaming_Internal = function ()
 	{
 		cancel_streaming = true;
+		// Aborting the AbortController must happen first, or else some versions of MS Edge leave the stream open in the background.
+		if (abort_controller)
+		{
+			abort_controller.abort();
+			abort_controller = null;
+		}
 		if (reader)
 		{
 			myStream = new GhettoStream(); // This is mostly just to release any data stored in the old stream.
 			reader.cancel("Streaming canceled");
 			reader = null;
-		}
-		if (abort_controller)
-		{
-			abort_controller.abort();
-			abort_controller = null;
 		}
 	}
 	var Start = function ()
@@ -12926,8 +12932,7 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 		{
 			// FF 57+, Edge 16+ (in theory)
 			abort_controller = new AbortController();
-			var signal = abort_controller.signal;
-			fetchPromise = fetch(url, { signal });
+			fetchPromise = fetch(url, { signal: abort_controller.signal });
 		}
 		else
 		{
