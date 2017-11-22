@@ -1949,6 +1949,7 @@ function DropdownBoxes()
 				, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
+				, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
 				, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
 			]
 			, onItemClick: function (item)
@@ -1981,6 +1982,9 @@ function DropdownBoxes()
 						break;
 					case "disk_usage":
 						statusLoader.diskUsageClick();
+						break;
+					case "help":
+						window.open("ui3/help/help.html#overview");
 						break;
 					case "logout":
 						logout();
@@ -7646,6 +7650,7 @@ function FetchOpenH264VideoModule()
 	var canRequestAudio = false;
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
 	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, utc: Date.now(), expectedInterframe: 100 };
+	var audioCodec = "";
 
 	var loading = new BICameraData();
 
@@ -7876,11 +7881,15 @@ function FetchOpenH264VideoModule()
 			if (frame.format.wFormatTag == 7 && frame.format.wBitsPerSample == 16 && frame.format.nChannels == 1)
 			{
 				// 7 is mu-law, mu-law is 8 bits per sample but decodes to 16 bits per sample normally, hence the 16 above.
+				audioCodec = "mu-law " + frame.format.nSamplesPerSec + "hz";
 				var pcm16Bit = muLawDecoder.DecodeUint8ArrayToFloat32Array(frame.frameData);
 				pcmPlayer.AcceptBuffer(pcm16Bit, frame.format.nChannels, frame.format.nSamplesPerSec);
 			}
 			else
+			{
+				audioCodec = "";
 				console.log("Unsupported audio frame format", frame.format);
+			}
 		}
 	}
 	this.GetSeekPercent = function ()
@@ -8041,6 +8050,9 @@ function FetchOpenH264VideoModule()
 			perfNow = performance.now();
 		if (nerdStats.IsOpen())
 		{
+			var codecs = "h264";
+			if (streamHasAudio == 1 && audioCodec)
+				codecs += ", " + audioCodec;
 			var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
 			var bitRate_Audio = bitRateCalc_Audio.GetBPS() * 8;
 			var bufferSize = pcmPlayer.GetBufferedMs();
@@ -8055,7 +8067,7 @@ function FetchOpenH264VideoModule()
 			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
 			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
-			nerdStats.UpdateStat("Codecs", "h264");
+			nerdStats.UpdateStat("Codecs", codecs);
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
 			nerdStats.UpdateStat("Audio Buffer", bufferSize, bufferSize.toFixed(0) + "ms", true);
