@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<!-- The above 2 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+	<meta name="description" content="Blue Iris UI3 Help">
+	<meta name="author" content="bp2008">
+	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+
+	<title>UI3 Help</title>
+
+	<link href="css/bootstrap.min.css" rel="stylesheet">
+	<link href="css/help.css" rel="stylesheet">
+</head>
+
+<body>
+	<header>
+		<nav id="navEle" class="navbar navbar-default navbar-static-top">
+			<!--navbar-fixed-top-->
+			<div class="container">
+				<div class="navbar-header">
+					<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+						<span class="sr-only">Toggle navigation</span>
+						<span class="icon-bar"></span>
+						<span class="icon-bar"></span>
+						<span class="icon-bar"></span>
+					</button>
+					<a class="navbar-brand" href="#overview">UI3 Help</a>
+				</div>
+				<div id="navbar" class="navbar-collapse collapse" role="navigation">
+					<ul class="nav navbar-nav nav-pills">
+						<li class="active"><a data-toggle="pill" href="#overview" id="nav-overview">Overview</a></li>
+						<li><a data-toggle="pill" href="#videostreaming" id="nav-videostreaming">Video Streaming</a></li>
+						<li class="dropdown">
+							<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Advanced <span class="caret"></span></a>
+							<ul class="dropdown-menu">
+								<li><a data-toggle="pill" href="#hlsstreams" id="nav-hlsstreams">HLS Streams</a></li>
+								<li><a data-toggle="pill" href="#nerdstats" id="nav-nerdstats">Stats for Nerds</a></li>
+								<li><a data-toggle="pill" href="#urlparameters" id="nav-urlparameters">URL Parameters</a></li>
+								<!--li role="separator" class="divider"></li>
+								<li class="dropdown-header">Nav header</li>
+								<li><a href="#">Separated link</a></li>
+								<li><a href="#">One more separated link</a></li>-->
+							</ul>
+						</li>
+					</ul>
+				</div><!--/#navbar -->
+			</div><!--/.container -->
+		</nav>
+	</header>
+
+	<div class="container">
+		<div class="row">
+			<div class="baseContainer">
+				<div class="tab-content">
+					<div class="tab-pane active" id="overview" role="tabpanel" aria-labelledby="nav-overview">
+						<h1>Overview</h1>
+						<p>This help file is a work-in-progress.  Please choose a section from the navigation menu above.</p>
+					</div>
+					<div class="tab-pane" id="videostreaming" role="tabpanel" aria-labelledby="nav-videostreaming">
+						<h1>Video Streaming</h1>
+						<p>UI3 can stream video using two different compression methods: <b>H.264</b> and <b>Jpeg</b>.  H.264 is more efficient with network bandwidth, and usually achieves a higher frame rate, making it the most desirable choice in most circumstances.  H.264 is the default streaming method in browsers which support it.  Jpeg streaming is simpler and can be used in all browsers capable of running UI3.</p>
+						<h2>H.264 Streaming</h2>
+						<p>UI3 can stream H.264 video if your browser supports it, otherwise you won't even see the option.  You can check for H.264 compatibility by looking for H.264 items in the Streaming Quality dropdown list.</p>
+						<p><b>H.264</b> streaming has several drawbacks, however.</p>
+						<ul>
+							<li>Due to limitations of modern web technology, UI3 can't take advantage of hardware acceleration for H.264 playback without causing video delay to go through the roof.  Therefore, H.264 playback in UI3 requires quite a bit more CPU than you are probably used to.</li>
+							<li>If your viewing device has insufficient CPU or network speed, the video will become increasingly delayed.  If this happens, UI3 will warn you and suggest that you try a different Streaming Quality option.  UI3 does not know which of your Streaming Quality options require fewer resources, so it cannot automatically change to a more efficient stream.</li>
+						</ul>
+						<h3>H.264 Streaming Profiles</h3>
+						<p>The three H.264 encoder profiles "Streaming 0", "Streaming 1", and "Streaming 2" are not configurable in UI3 directly.  Instead, you must configure them in Blue Iris.  Open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab > <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">Encoder "Preset" options</div>
+							<div class="panel-body">
+								In Blue Iris's <b>Encoder options</b> dialog, you must choose between three "Preset" options: "ultrafast", "superfast", and "veryfast".<br /><br />"ultrafast" is the lowest quality, but requires the least amount of CPU time to process, making it ideal for use on many mobile devices running UI3.  It can also help on struggling devices if you use a conservative bit rate limit, like 512 Kbps.
+							</div>
+						</div>
+						<div class="panel panel-info">
+							<div class="panel-heading">Encoder profiles are shared with mobile apps</div>
+							<div class="panel-body">
+								The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm page.
+							</div>
+						</div>
+						<h2>Jpeg Streaming</h2>
+						<p>Jpeg streaming is done by requesting Jpeg-compressed snapshots as quickly as possible.  It is not very efficient with network bandwidth and it can't achieve high frame rates over the internet.  However, being a simpler streaming method, it tends to "just work".  Jpeg streaming is capable of extremely high resolutions and excellent image quality.</p>
+						<p class="bg-warning padded-info"><b>Audio playback</b> is <b>not available</b> while streaming Jpeg snapshots.</p>
+					</div>
+					<div class="tab-pane" id="hlsstreams" role="tabpanel" aria-labelledby="nav-hlsstreams">
+						<h1>HLS Streams</h1>
+						<p>Blue Iris can stream any camera or group using the <abbr title="HTTP Live Stream">HLS</abbr> protocol.  Though it is not core functionality, UI3 provides the ability to consume these streams.</p>
+						<p>HLS streaming uses HTML5 video APIs, which delivers greater efficiency and compatibility than UI3's default H.264 streaming method.  Unfortunately, this induces video delay of at least several seconds, so HLS streaming is not used as a primary video streaming method.</p>
+						<p>HLS streaming is only available for live video, but it works with individual cameras and groups alike.</p>
+						<h2>Streaming with HLS in UI3</h2>
+						<p>Right-click on any video stream and choose "Open HLS Stream".  A special video player called <a href="https://github.com/clappr/clappr">Clappr</a> will open in a dialog window.</p>
+						<p class="bg-info padded-info">If you right click the HLS player, you have the option to "Open stream in New Tab".  Opening an HLS stream in a new tab actually opens a different page called "livestream.htm".</p>
+						<h2>livestream.htm</h2>
+						<p>One of the pages included with UI3 is "livestream.htm" which just plays an HLS stream from Blue Iris and does basically nothing else.  The page takes a single URL parameter "cam" with the short name of the camera or group you wish to view.  Example: <a href="../../livestream.htm?cam=index">livestream.htm?cam=index</a></p>
+						<p class="bg-info padded-info">If you omit the "cam" parameter, livestream.htm will attempt to load "index" (a.k.a. "all cameras" ).</p>
+					</div>
+					<div class="tab-pane" id="nerdstats" role="tabpanel" aria-labelledby="nav-nerdstats">
+						<h1>Stats for Nerds</h1>
+						<p>Inspired by YouTube's feature with the same name, UI3 has a "Stats for nerds" panel which shows an assortment of details about the video player.  This information can be useful for troubleshooting, but otherwise it is just fun to look at.</p>
+						<p>To access this panel, right-click on UI3's video player and choose the "Stats for nerds" option.</p>
+						<p><img src="img/StatsForNerds.png" alt="Stats for nerds" /></p>
+						<div class="panel panel-info">
+							<div class="panel-heading">"Stats for nerds" item descriptions</div>
+							<div class="panel-body">
+								Many items in this panel only exist when streaming H.264. Other items may only exist while streaming Jpeg frames.<br /><br />
+								<dl class="dl-horizontal">
+									<dt>Viewport</dt>
+									<dd>The size of the screen area available for video playback.</dd>
+									<dt>Stream Resolution</dt>
+									<dd>The resolution of the current video stream.  Jpeg frames are dynamically adjusted to the ideal resolution to fit the viewport.</dd>
+									<dt>Native Resolution</dt>
+									<dd>The resolution of the current video stream.  Jpeg frames are dynamically adjusted to the ideal resolution to fit the viewport.</dd>
+									<dt>Seek Position</dt>
+									<dd>Shows either "LIVE" or the current playback position as a percentage of the clip.</dd>
+									<dt>Frame Offset</dt>
+									<dd>The timestamp of the last-rendered frame relative to the start of the streaming connection.</dd>
+									<dt>Frame Time</dt>
+									<dd><span class="label label-info">H.264</span> The approximate date and time when the last-rendered frame was originally captured.</dd>
+									<dt>Codecs</dt>
+									<dd>The current video and audio codecs.</dd>
+									<dt>Jpeg Loading Time</dt>
+									<dd><span class="label label-primary">JPEG</span> The amount of time it took to load the last jpeg frame.</dd>
+									<dt>Video Bit Rate</dt>
+									<dd><span class="label label-info">H.264</span> Measured bit rate of the video stream.</dd>
+									<dt>Audio Bit Rate</dt>
+									<dd><span class="label label-info">H.264</span> Measured bit rate of the audio stream.</dd>
+									<dt>Audio Buffer</dt>
+									<dd><span class="label label-info">H.264</span> The amount of audio (in milliseconds) which has been received but not yet played.  If this reaches 0, it means no audio is playing.</dd>
+									<dt>Frame Size</dt>
+									<dd><span class="label label-info">H.264</span> The size in bytes of the last video frame.</dd>
+									<dt>Inter-Frame Time</dt>
+									<dd><span class="label label-info">H.264</span> The time in milliseconds between frame renders.  If this graph jumps around a lot, it is evidence that the video stream is not smooth.  Many cameras don't capture frames at a constant interval when they aren't streaming at their maximum frame rate, so it isn't uncommon to see a pattern like 50ms, 50ms, 100ms, 50ms, 50ms, 100ms.</dd>
+									<dt>Frame Timing Error</dt>
+									<dd><span class="label label-info">H.264</span> This is the difference between the time a frame was supposed to be rendered and the time it was actually rendered.  The closer this is to zero, the better.</dd>
+									<dt>Network Delay</dt>
+									<dd><span class="label label-info">H.264</span> The estimated video delay caused by insufficient network speed.  Values of a few hundred milliseconds are completely normal and nothing to worry about.</dd>
+									<dt>Player Delay</dt>
+									<dd><span class="label label-info">H.264</span> The estimated video delay caused by insufficient CPU speed.  Values of a few hundred milliseconds are completely normal and nothing to worry about.  A small amount of player delay is often intentional in order to keep the Frame Timing Error as close to zero as possible.</dd>
+									<dt>Delayed Frames</dt>
+									<dd><span class="label label-info">H.264</span> The number of frames that have been received but not yet decoded and rendered.  This directly correlates with Player Delay and low values (0-2) are completely normal. A small number of delayed frames is often intentional in order to keep the Frame Timing Error as close to zero as possible.</dd>
+								</dl>
+							</div><!--/.panel-body -->
+						</div><!--/.panel -->
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="urlparameters" role="tabpanel" aria-labelledby="nav-urlparameters">
+						<h1>URL Parameters</h1>
+						<p>Several URL parameters can change UI3's startup behavior.</p>
+						<table class="table">
+							<thead>
+								<tr>
+									<th>Parameter</th>
+									<th>Effect</th>
+									<th>Example</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>maximize=1</td>
+									<td>UI3 loads with the left and top control bars hidden.</td>
+									<td><a href="../../ui3.htm?maximize=1" target="_blank">ui3.htm?maximize=1</a></td>
+								</tr>
+								<tr>
+									<td>tab=live</td>
+									<td>The "Live" tab is loaded.</td>
+									<td><a href="../../ui3.htm?tab=live" target="_blank">ui3.htm?tab=live</a></td>
+								</tr>
+								<tr>
+									<td>tab=alerts</td>
+									<td>The "Alerts" tab is loaded.</td>
+									<td><a href="../../ui3.htm?tab=alerts" target="_blank">ui3.htm?tab=alerts</a></td>
+								</tr>
+								<tr>
+									<td>tab=clips</td>
+									<td>The "Clips" tab is loaded.</td>
+									<td><a href="../../ui3.htm?tab=clips" target="_blank">ui3.htm?tab=clips</a></td>
+								</tr>
+								<tr>
+									<td>group=groupname</td>
+									<td>The group with the specified name is loaded.</td>
+									<td><a href="../../ui3.htm?group=index" target="_blank">ui3.htm?group=index</a></td>
+								</tr>
+								<tr>
+									<td>cam=shortName</td>
+									<td>The camera with the specified "Short name" is loaded.</td>
+									<td><a href="../../ui3.htm?cam=porch" target="_blank">ui3.htm?cam=porch</a></td>
+								</tr>
+							</tbody>
+						</table>
+						<div class="panel panel-info">
+							<div class="panel-heading">Multiple parameters can be combined</div>
+							<div class="panel-body">
+								Separate multiple parameters with "&amp;", like this: <a href="../../ui3.htm?tab=alerts&cam=porch&maximize=1" target="_blank">ui3.htm?tab=alerts&cam=porch&maximize=1</a>
+							</div>
+						</div>
+					</div>
+				</div><!--/.tab-content -->
+			</div><!--/.baseContainer -->
+		</div><!--/.row -->
+	</div><!--/.container -->
+	<!-- Bootstrap core JavaScript
+	================================================== -->
+	<!-- Placed at the end of the document so the pages load faster -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+	<script>window.jQuery || document.write('<script src="js/jquery.min.js"><\/script>')</script>
+	<!--<script src="js/popper.min.js"></script>-->
+	<script src="js/bootstrap.min.js"></script>
+	<script src="js/jquery.stickytabs.js"></script>
+	<script src="js/help.js"></script>
+</body>
+</html>
