@@ -272,18 +272,21 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Windows Chrome Touchscreen > Long press on PTZ pad yields rectangular graphic as if right click is occurring. Try this fix for IE, maybe it works in Edge too: https://stackoverflow.com/questions/17801117/prevent-windows-8-right-click-square  Also try preventDefault and stopPropagation on the touchstart event if that is not happening already.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
+// CONSIDER: Android Chrome > Back button can't close the browser if there is no history.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var settings = null;
-var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Hotkeys"];
+var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Hotkeys", "Extra"];
 var defaultSettings =
 	[
 		{
@@ -926,6 +929,30 @@ var defaultSettings =
 			, actionDown: function () { BI_Hotkey_PtzPreset(20); }
 			, category: "Hotkeys"
 		}
+		, {
+			key: "ui3_pc_next_prev_buttons"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Next/Previous'
+			, onChange: OnChange_ui3_pc_next_prev_buttons
+			, category: "Extra"
+		}
+		, {
+			key: "ui3_pc_seek_buttons"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Seek Buttons'
+			, onChange: OnChange_ui3_pc_seek_buttons
+			, category: "Extra"
+		}
+		, {
+			key: "ui3_extra_playback_controls_padding"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Extra Padding'
+			, onChange: OnChange_ui3_extra_playback_controls_padding
+			, category: "Extra"
+		}
 	];
 
 function OverrideDefaultSetting(key, value, IncludeInOptionsWindow, AlwaysReload, Generation)
@@ -1271,6 +1298,10 @@ $(function ()
 
 		togglableContextMenus.push(new ContextMenu_EnableDisableItem(item[0], item[1], item[2], item[3], item[4], item[5], item[6]));
 	}
+
+	OnChange_ui3_pc_next_prev_buttons();
+	OnChange_ui3_pc_seek_buttons();
+	OnChange_ui3_extra_playback_controls_padding();
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -14203,6 +14234,27 @@ function OnChange_ui3_contextMenus_longPress(newValue)
 function GetPreferredContextMenuTrigger()
 {
 	return settings.ui3_contextMenus_longPress == "1" ? "longpress" : "right";
+}
+function OnChange_ui3_pc_next_prev_buttons()
+{
+	if (settings.ui3_pc_next_prev_buttons == "1")
+		$('#pcPrevClip,#pcNextClip').removeClass("hidden");
+	else
+		$('#pcPrevClip,#pcNextClip').addClass("hidden");
+}
+function OnChange_ui3_pc_seek_buttons()
+{
+	if (settings.ui3_pc_seek_buttons == "1")
+		$('#pcSkipBack,#pcSkipAhead').removeClass("hidden");
+	else
+		$('#pcSkipBack,#pcSkipAhead').addClass("hidden");
+}
+function OnChange_ui3_extra_playback_controls_padding()
+{
+	if (settings.ui3_extra_playback_controls_padding == "1")
+		$('#pcButtonContainer').addClass("extraPadding");
+	else
+		$('#pcButtonContainer').removeClass("extraPadding");
 }
 ///////////////////////////////////////////////////////////////
 // UI Help ////////////////////////////////////////////////////

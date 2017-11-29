@@ -2604,6 +2604,78 @@ div.icon, a.icon
 {
 	background-color: #880000;
 }
+
+#pcButtonContainer.extraPadding
+{
+	margin-top: 8px;
+}
+
+.sizeMedium #pcButtonContainer.extraPadding
+{
+	margin-top: 7px;
+}
+
+.sizeSmall #pcButtonContainer.extraPadding
+{
+	margin-top: 6px;
+}
+
+#pcButtonContainer.extraPadding .pcButton,
+#pcButtonContainer.extraPadding #volumeBar
+{
+	padding: 16px;
+}
+
+.sizeMedium #pcButtonContainer.extraPadding .pcButton,
+.sizeMedium #pcButtonContainer.extraPadding #volumeBar
+{
+	padding: 14px;
+}
+
+.sizeSmall #pcButtonContainer.extraPadding .pcButton,
+.sizeSmall #pcButtonContainer.extraPadding #volumeBar
+{
+	padding: 12px;
+}
+
+#pcButtonContainer.extraPadding .pcText
+{
+	padding: 8px 16px;
+}
+
+.sizeMedium #pcButtonContainer.extraPadding .pcText
+{
+	padding: 7px 14px;
+}
+
+.sizeSmall #pcButtonContainer.extraPadding .pcText
+{
+	padding: 8px 12px;
+}
+
+#pcButtonContainer.extraPadding #playbackSettingsQualityMark
+{
+	top: 22px;
+	right: 13px;
+}
+
+.sizeMedium #pcButtonContainer.extraPadding #playbackSettingsQualityMark
+{
+	top: 22px;
+	right: 13px;
+}
+
+.sizeSmall #pcButtonContainer.extraPadding #playbackSettingsQualityMark
+{
+	top: 22px;
+	right: 13px;
+}
+
+.pcButton.hidden
+{
+	display: none;
+}
+
 /* Seek Bar */
 #seekBarWrapper
 {
@@ -2755,8 +2827,8 @@ div.icon, a.icon
 {
 	display: inline-block;
 	vertical-align: top;
-	font-size: 32px;
-	line-height: 56px;
+	font-size: 24px;
+	line-height: 42px;
 	text-shadow: 0px 0px 7px rgba(0,0,0,0.5);
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -2764,19 +2836,27 @@ div.icon, a.icon
 	box-sizing: border-box;
 }
 
+.sizeMedium #clipNameHeading
+{
+	font-size: 18px;
+	line-height: 32px;
+	text-shadow: 0px 0px 6px rgba(0,0,0,0.5);
+}
+
 .sizeSmall #clipNameHeading
 {
-	font-size: 24px;
-	line-height: 32px;
+	font-size: 12px;
+	line-height: 20px;
 	text-shadow: 0px 0px 5px rgba(0,0,0,0.5);
 }
 
-.sizeMedium #clipNameHeading
+.sizeSmaller #clipNameHeading
 {
-	font-size: 28px;
-	line-height: 44px;
-	text-shadow: 0px 0px 6px rgba(0,0,0,0.5);
+	font-size: 10px;
+	line-height: 16px;
+	text-shadow: 0px 0px 5px rgba(0,0,0,0.5);
 }
+
 /* About / Login Dialogs */
 
 .monospace

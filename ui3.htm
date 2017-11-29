@@ -27,16 +27,16 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "b11";
+		var ui_version = "b12";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 	</script>
-	<script src="ui3/libs-ui3.js?v=b11-%%VERSION%%" type="text/javascript"></script>
-	<link href="ui3/libs-ui3.css?v=b11-%%VERSION%%" rel="stylesheet" type="text/css">
-	<script src="ui3/ui3.js?v=b11-%%VERSION%%" type="text/javascript"></script>
-	<link href="ui3/ui3.css?v=b11-%%VERSION%%" rel="stylesheet" type="text/css">
-	<script src="ui3/ui3-local-overrides.js?v=b11-%%VERSION%%" type="text/javascript"></script>
-	<link href="ui3/ui3-local-overrides.css?v=b11-%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="ui3/libs-ui3.js?v=b12-%%VERSION%%" type="text/javascript"></script>
+	<link href="ui3/libs-ui3.css?v=b12-%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="ui3/ui3.js?v=b12-%%VERSION%%" type="text/javascript"></script>
+	<link href="ui3/ui3.css?v=b12-%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="ui3/ui3-local-overrides.js?v=b12-%%VERSION%%" type="text/javascript"></script>
+	<link href="ui3/ui3-local-overrides.css?v=b12-%%VERSION%%" rel="stylesheet" type="text/css">
 	<script type="text/javascript">
 		$(function ()
 		{
@@ -306,8 +306,10 @@
 				<div class="pcButton hideWhenLive" id="pcPlay" onclick="videoPlayer.Playback_Play()" style="display: none;" title="Play">
 					<svg class="icon"><use xlink:href="#svg_x5F_Play"></use></svg>
 				</div>
-				<div class="pcButton hideWhenLive" onclick="videoPlayer.Playback_PreviousClip()" title="Previous Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>
-				<div class="pcButton hideWhenLive" onclick="videoPlayer.Playback_NextClip()" title="Next Clip"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>
+				<div class="pcButton hideWhenLive" onclick="videoPlayer.Playback_PreviousClip()" title="Previous Clip" id="pcPrevClip"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>
+				<div class="pcButton hideWhenLive" onclick="videoPlayer.Playback_NextClip()" title="Next Clip" id="pcNextClip"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>
+				<div class="pcButton hideWhenLive hidden" onclick="BI_Hotkey_SkipBack()" title="Skip Back" id="pcSkipBack"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div>
+				<div class="pcButton hideWhenLive hidden" onclick="BI_Hotkey_SkipAhead()" title="Skip Ahead" id="pcSkipAhead"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalRight"></use></svg></div>
 				<div id="volumeBar">
 					<div id="pcVolume" class="off">
 						<svg class="icon noflip off"><use xlink:href="#svg_mio_volumeOff"></use></svg>
