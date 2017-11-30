@@ -31,12 +31,15 @@
 				<div id="navbar" class="navbar-collapse collapse" role="navigation">
 					<ul class="nav navbar-nav nav-pills">
 						<li class="active"><a data-toggle="pill" href="#overview" id="nav-overview">Overview</a></li>
+						<li><a data-toggle="pill" href="#cameralayout" id="nav-cameralayout">Camera Layout</a></li>
+						<li><a data-toggle="pill" href="#recordings" id="nav-recordings">Recordings</a></li>
 						<li><a data-toggle="pill" href="#videostreaming" id="nav-videostreaming">Video Streaming</a></li>
 						<li class="dropdown">
 							<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Advanced <span class="caret"></span></a>
 							<ul class="dropdown-menu">
 								<li><a data-toggle="pill" href="#hlsstreams" id="nav-hlsstreams">HLS Streams</a></li>
 								<li><a data-toggle="pill" href="#nerdstats" id="nav-nerdstats">Stats for Nerds</a></li>
+								<li><a data-toggle="pill" href="#extensions" id="nav-extensions">UI Extensions</a></li>
 								<li><a data-toggle="pill" href="#urlparameters" id="nav-urlparameters">URL Parameters</a></li>
 								<!--li role="separator" class="divider"></li>
 								<li class="dropdown-header">Nav header</li>
@@ -55,8 +58,11 @@
 			<div class="baseContainer">
 				<div class="tab-content">
 					<div class="tab-pane active" id="overview" role="tabpanel" aria-labelledby="nav-overview">
-						<h1>Overview</h1>
-						<p>This help file is a work-in-progress.  Please choose a section from the navigation menu above.</p>
+						<h2>UI3 Help Overview</h2>
+						<p>Please choose a section from the navigation menu above.</p>
+						<h2>Support</h2>
+						<p>If you need support with UI3, the best place to go for help is <a href="https://ipcamtalk.com/forums/blue-iris.30/">the Blue Iris section of the IpCamTalk forum</a>.</p>
+						<p>This interface was developed by community member <a target="_blank" href="https://ipcamtalk.com/members/bp2008.28/">bp2008</a> from <a href="https://ipcamtalk.com/">IpCamTalk</a>.</p>
 					</div>
 					<div class="tab-pane" id="videostreaming" role="tabpanel" aria-labelledby="nav-videostreaming">
 						<h1>Video Streaming</h1>
@@ -102,7 +108,7 @@
 						<h1>Stats for Nerds</h1>
 						<p>Inspired by YouTube's feature with the same name, UI3 has a "Stats for nerds" panel which shows an assortment of details about the video player.  This information can be useful for troubleshooting, but otherwise it is just fun to look at.</p>
 						<p>To access this panel, right-click on UI3's video player and choose the "Stats for nerds" option.</p>
-						<p><img src="img/StatsForNerds.png" alt="Stats for nerds" /></p>
+						<p><img class="img-responsive" src="img/StatsForNerds.png" alt="Stats for nerds" /></p>
 						<div class="panel panel-info">
 							<div class="panel-heading">"Stats for nerds" item descriptions</div>
 							<div class="panel-body">
@@ -196,6 +202,49 @@
 								Separate multiple parameters with "&amp;", like this: <a href="../../ui3.htm?tab=alerts&cam=porch&maximize=1" target="_blank">ui3.htm?tab=alerts&cam=porch&maximize=1</a>
 							</div>
 						</div>
+					</div>
+					<div class="tab-pane" id="extensions" role="tabpanel" aria-labelledby="nav-extensions">
+						<h1>UI Extensions</h1>
+						<p>Experienced web developers can extend UI3 with custom JavaScript and CSS.</p>
+						<p>Of course if you take the most obvious route and modify <code>ui3.js</code> and <code>ui3.css</code> files directly, you would have to re-apply your changes after every update! To solve this problem, UI3 attemps to load two files which do not exist in releases: <code>ui3-local-overrides.js</code> and <code>ui3-local-overrides.css</code>. You can create either or both of these files and place them in the ui3 subdirectory alongside <code>ui3.js</code> and they will be loaded after all the other script and style files, allowing you to conveniently override virtually any default functionality you wish, if you have the skills to do so.</p>
+						<h2>Examples</h2>
+						<p>For examples, see <a href="https://github.com/bp2008/ui3/wiki/Local-Overrides-Scripts-and-Styles">https://github.com/bp2008/ui3/wiki/Local-Overrides-Scripts-and-Styles</a></p>
+					</div>
+					<div class="tab-pane" id="cameralayout" role="tabpanel" aria-labelledby="nav-cameralayout">
+						<h1>Camera Layout</h1>
+						<p>UI3 is unable to control your camera layout.  To change the camera layout, you must drag cameras around in Blue Iris's local console.</p>
+						<h2>Optimizing Group Frames</h2>
+						<p>The default group frame size may have a lot of empty black area, or the resolution may be lower than you would like. You can change the resolution of each group in Blue Iris's local console.</p>
+						<p><img class="img-responsive" src="img/GroupProperties.png" alt="Screenshot of Group Properties" /></p>
+						<p>For best results, you should use frame dimensions that are multiples of 16.  For convenience, here is a list of suitable multiples of 16 that you can copy from:</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">Multiples of 16</div>
+							<div class="panel-body">
+								16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 272, 288, 304, 320, 336, 352, 368, 384, 400, 416, 432, 448, 464, 480, 496, 512, 528, 544, 560, 576, 592, 608, 624, 640, 656, 672, 688, 704, 720, 736, 752, 768, 784, 800, 816, 832, 848, 864, 880, 896, 912, 928, 944, 960, 976, 992, 1008, 1024, 1040, 1056, 1072, 1088, 1104, 1120, 1136, 1152, 1168, 1184, 1200, 1216, 1232, 1248, 1264, 1280, 1296, 1312, 1328, 1344, 1360, 1376, 1392, 1408, 1424, 1440, 1456, 1472, 1488, 1504, 1520, 1536, 1552, 1568, 1584, 1600, 1616, 1632, 1648, 1664, 1680, 1696, 1712, 1728, 1744, 1760, 1776, 1792, 1808, 1824, 1840, 1856, 1872, 1888, 1904, 1920, 1936, 1952, 1968, 1984, 2000, 2016, 2032, 2048, 2064, 2080, 2096, 2112, 2128, 2144, 2160, 2176, 2192, 2208, 2224, 2240, 2256, 2272, 2288, 2304, 2320, 2336, 2352, 2368, 2384, 2400, 2416, 2432, 2448, 2464, 2480, 2496, 2512, 2528, 2544, 2560, 2576, 2592, 2608, 2624, 2640, 2656, 2672, 2688, 2704, 2720, 2736, 2752, 2768, 2784, 2800, 2816, 2832, 2848, 2864, 2880, 2896, 2912, 2928, 2944, 2960, 2976, 2992, 3008, 3024, 3040, 3056, 3072, 3088, 3104, 3120, 3136, 3152, 3168, 3184, 3200, 3216, 3232, 3248, 3264, 3280, 3296, 3312, 3328, 3344, 3360, 3376, 3392, 3408, 3424, 3440, 3456, 3472, 3488, 3504, 3520, 3536, 3552, 3568, 3584, 3600, 3616, 3632, 3648, 3664, 3680, 3696, 3712, 3728, 3744, 3760, 3776, 3792, 3808, 3824, 3840, 3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000
+							</div><!--/.panel-body -->
+						</div><!--/.panel -->
+						<h3>Group Optimization Example</h3>
+						<div style="display: inline-block;">
+							<h4>Before Optimization</h4>
+							<p><img class="img-responsive" src="img/PoorLayout.jpg" alt="Example of poor layout" /></p>
+						</div>
+						<div style="display: inline-block;">
+							<h4>After Optimization</h4>
+							<p><img class="img-responsive" src="img/BetterLayout.jpg" alt="Example of better layout" /></p>
+						</div>
+					</div>
+					<div class="tab-pane" id="recordings" role="tabpanel" aria-labelledby="nav-recordings">
+						<h1>Recordings</h1>
+						<p>To view recorded video, you must use either the "Alerts" or "Clips" tabs at the top of the UI.</p>
+						<h2>Alerts vs Clips</h2>
+						<p>The "Alerts" and "Clips" tabs look similar, but are different in subtle ways.  Clips may represent many triggered events or a continuous recording.  Alerts, however, are treated as bookmarks into a clip.</p>
+						<h2>Filters</h2>
+						<p>You can filter the Alerts/Clips list by camera, group, date, and flag state.</p>
+						<p>To filter by camera, simply maximize that camera by clicking on it in the main video area.  To filter by other criteria, use the filter controls above the Alert/Clip list.</p>
+						<p><img class="img-responsive" src="img/RecordingFilters.png" alt="Screenshot of recording filters" /></p>
+						<h3>Expanding the Filters</h3>
+						<p>If you don't see the filter controls, that means you have collapsed them by clicking on the "Filter Clips by:" text.  Click the "Filter Clips by:" text again to expand the filter controls section.</p>
+						<p></p>
 					</div>
 				</div><!--/.tab-content -->
 			</div><!--/.baseContainer -->

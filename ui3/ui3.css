@@ -2136,6 +2136,15 @@ div.icon, a.icon
 #toast-container
 {
 	font-size: 16px;
+	bottom: 64px;
+}
+.sizeMedium #toast-container
+{
+	bottom: 48px;
+}
+.sizeSmall #toast-container
+{
+	bottom: 36px;
 }
 /* camimg */
 #camimg_wrapper
@@ -2447,6 +2456,7 @@ div.icon, a.icon
 	overflow: hidden;
 	overflow-y: auto;
 	border: 1px solid #666666;
+	z-index: 9999999; /* Must be higher than toast messages or else toast messages can get in the way */
 }
 
 .playbackSettingsLine

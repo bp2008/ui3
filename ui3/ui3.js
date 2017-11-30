@@ -58,41 +58,41 @@ function DoUIFeatureDetection()
 			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported;
 			$(function ()
 			{
-				if (!h264_playback_supported || !audio_playback_supported)
+				var ul_root = $('<ul></ul>');
+				if (!h264_playback_supported)
 				{
-					var ul_root = $('<ul></ul>');
+					var ul = $('<ul></ul>');
+					if (!web_workers_supported)
+						ul.append('<li>Web Workers</li>');
+					if (!fetch_supported)
+						ul.append('<li>Fetch API</li>');
+					if (!readable_stream_supported)
+						ul.append('<li>ReadableStream</li>');
+					if (!webgl_supported)
+						ul.append('<li>WebGL</li>');
+					ul_root.append($('<li>The H.264 video player requires these unsupported features:</li>').append(ul));
+				}
+				if (!audio_playback_supported)
+				{
+					var ul = $('<ul></ul>');
 					if (!h264_playback_supported)
-					{
-						var ul = $('<ul></ul>');
-						if (!web_workers_supported)
-							ul.append('<li>Web Workers</li>');
-						if (!fetch_supported)
-							ul.append('<li>Fetch API</li>');
-						if (!readable_stream_supported)
-							ul.append('<li>ReadableStream</li>');
-						if (!webgl_supported)
-							ul.append('<li>WebGL</li>');
-						ul_root.append($('<li>The H.264 video player requires these unsupported features:</li>').append(ul));
-					}
-					if (!audio_playback_supported)
-					{
-						var ul = $('<ul></ul>');
-						if (!h264_playback_supported)
-							ul.append('<li>H.264 Video Player</li>');
-						if (!web_audio_supported)
-							ul.append('<li>Web Audio API</li>');
-						if (!web_audio_buffer_source_supported)
-							ul.append('<li>AudioBufferSourceNode</li>');
-						ul_root.append($('<li>The audio player requires these unsupported features:</li>').append(ul));
-					}
-					if (!fullscreen_supported)
-					{
-						ul_root.append('<li>Fullscreen mode is not supported.</li>');
-					}
-					if (browser_is_ios)
-					{
-						ul_root.append('<li>Context menus are not supported.</li>');
-					}
+						ul.append('<li>H.264 Video Player</li>');
+					if (!web_audio_supported)
+						ul.append('<li>Web Audio API</li>');
+					if (!web_audio_buffer_source_supported)
+						ul.append('<li>AudioBufferSourceNode</li>');
+					ul_root.append($('<li>The audio player requires these unsupported features:</li>').append(ul));
+				}
+				if (!fullscreen_supported)
+				{
+					ul_root.append('<li>Fullscreen mode is not supported.</li>');
+				}
+				if (browser_is_ios)
+				{
+					ul_root.append('<li>Context menus are not supported.</li>');
+				}
+				if (ul_root.children().length > 0)
+				{
 					var $opt = $('#optionalFeaturesNotSupported');
 					$opt.append(ul_root);
 					$opt.show();
@@ -273,11 +273,13 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // TODO: Windows Chrome Touchscreen > Long press on PTZ pad yields rectangular graphic as if right click is occurring. Try this fix for IE, maybe it works in Edge too: https://stackoverflow.com/questions/17801117/prevent-windows-8-right-click-square  Also try preventDefault and stopPropagation on the touchstart event if that is not happening already.
+// TODO: Finish Help file.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// CONSIDER: Play sounds like default.htm does when certain events occur.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
 // CONSIDER: Android Chrome > Back button can't close the browser if there is no history.
@@ -1116,6 +1118,9 @@ $(function ()
 		toaster.Error(fileSystemErrorMessage, 60000);
 	}
 
+	$("#ui_version_label").text(ui_version);
+	$("#bi_version_label").text(bi_version);
+
 	HandlePreLoadUrlParameters();
 
 	LoadDefaultSettings();
@@ -1837,6 +1842,7 @@ function DropdownBoxes()
 	var handleElements = {};
 	var $dropdownBoxes = $(".dropdownBox,#btn_main_menu");
 	var currentlyOpenList = null;
+	var preventDDLClose = false;
 
 	this.listDefs = {};
 	this.listDefs["schedule"] = new DropdownListDefinition("schedule",
@@ -2048,7 +2054,7 @@ function DropdownBoxes()
 			ele.$label = $();
 			ele.$arrow = $();
 		}
-		$ele.click(function ()
+		$ele.on('click', function ()
 		{
 			if ($ele.hasClass("disabled"))
 				return;
@@ -2174,7 +2180,8 @@ function DropdownBoxes()
 
 		closeDropdownLists();
 		currentlyOpenList = listDef;
-
+		preventDDLClose = true;
+		setTimeout(allowDDLClose, 0);
 		self.Resized();
 	}
 	var AddDropdownListItem = function ($ddl, listDef, i, selectedText)
@@ -2203,11 +2210,13 @@ function DropdownBoxes()
 	}
 	$(document).mouseup(function (e)
 	{
-		closeDropdownLists();
+		if (!preventDDLClose)
+			closeDropdownLists();
 	});
 	$(document).mouseleave(function (e)
 	{
-		closeDropdownLists();
+		if (!preventDDLClose)
+			closeDropdownLists();
 	});
 	var closeDropdownLists = function ()
 	{
@@ -2218,6 +2227,11 @@ function DropdownBoxes()
 			currentlyOpenList.timeClosed = new Date().getTime();
 			currentlyOpenList = null;
 		}
+	}
+	var allowDDLClose = function ()
+	{
+		/// <summary>This exists to prevent a glitch where dropdown lists close immediately in Edge when using a touchscreen, giving the appearance that the dropdown lists never even open.</summary>
+		preventDDLClose = false;
 	}
 	this.Resized = function ()
 	{
@@ -2438,6 +2452,8 @@ function PtzButtons()
 			onHoverLeave();
 		}
 	}
+	// Hide long-press square that appears when using ptz controls on Windows touchscreen devices.  Unfortunately, it can only be hidden in IE and Edge.
+	$ptzGraphicWrapper.get(0).addEventListener("MSHoldVisual", function (e) { e.preventDefault(); }, false);
 	$ptzGraphicWrapper.on('mousedown touchstart', function (e)
 	{
 		if (!ptzControlsEnabled)
@@ -6594,11 +6610,13 @@ function VideoPlayerController()
 	{
 		if (moduleHolder["jpeg"] == null)
 			moduleHolder["jpeg"] = new JpegVideoModule();
-		if (moduleHolder["h264"] == null && h264_playback_supported)
+		if (h264_playback_supported)
 		{
-			$("#loadingH264").parent().show();
-			moduleHolder["h264"] = new FetchOpenH264VideoModule();
+			if (moduleHolder["h264"] == null)
+				moduleHolder["h264"] = new FetchOpenH264VideoModule();
 		}
+		else
+			$("#loadingH264").parent().hide();
 	}
 
 	this.Initialize = function ()
@@ -14852,7 +14870,6 @@ function BrowserIsEdge()
 	if (_browser_is_edge == -1)
 		_browser_is_edge = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
 	return _browser_is_edge == 1;
-
 }
 function BrowserIsChrome()
 {

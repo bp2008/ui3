@@ -27,23 +27,13 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "b12";
+		var ui_version = "b13";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 	</script>
-	<script src="ui3/libs-ui3.js?v=b12-%%VERSION%%" type="text/javascript"></script>
-	<link href="ui3/libs-ui3.css?v=b12-%%VERSION%%" rel="stylesheet" type="text/css">
-	<script src="ui3/ui3.js?v=b12-%%VERSION%%" type="text/javascript"></script>
-	<link href="ui3/ui3.css?v=b12-%%VERSION%%" rel="stylesheet" type="text/css">
-	<script src="ui3/ui3-local-overrides.js?v=b12-%%VERSION%%" type="text/javascript"></script>
-	<link href="ui3/ui3-local-overrides.css?v=b12-%%VERSION%%" rel="stylesheet" type="text/css">
-	<script type="text/javascript">
-		$(function ()
-		{
-			$("#ui_version_label").text(ui_version);
-			$("#bi_version_label").text(bi_version);
-		});
-	</script>
+	<link href="ui3/libs-ui3.css?v=b13-%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="ui3/ui3.css?v=b13-%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="ui3/ui3-local-overrides.css?v=b13-%%VERSION%%" rel="stylesheet" type="text/css">
 </head>
 <body>
 	<div id="svgContainer" style="display: none;"></div>
@@ -69,7 +59,7 @@
 						BUSY
 					</div>
 				</div>
-				<div style="display:none;">
+				<div>
 					<div class="loadinglabel">
 						Loading H.264 Player...
 					</div>
@@ -403,5 +393,8 @@
 			<div id="datePicker2Container" class="calendarContainer"></div>
 		</div>
 	</div>
+	<script src="ui3/libs-ui3.js?v=b13-%%VERSION%%" type="text/javascript"></script>
+	<script src="ui3/ui3.js?v=b13-%%VERSION%%" type="text/javascript"></script>
+	<script src="ui3/ui3-local-overrides.js?v=b13-%%VERSION%%" type="text/javascript"></script>
 </body>
 </html>

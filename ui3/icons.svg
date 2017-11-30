@@ -143,37 +143,6 @@
 	<path d="M0,88.001c48.523,0,88-39.478,88-88.001S48.523-88.001,0-88.001S-88-48.523-88,0S-48.523,88.001,0,88.001 M0,96.001
 	C-53.019,96.001-96,53.02-96,0s42.981-96.001,96-96.001S96-53.02,96,0S53.019,96.001,0,96.001L0,96.001z"/>
 </symbol>
-<symbol id="svg_x5F_PTZpad" viewBox="-98 -98.001 196 196.002">
-	<path display="none" fill="#C02033" d="M0,17.5c-9.649,0-17.5-7.851-17.5-17.5S-9.649-17.5,0-17.5S17.5-9.649,17.5,0
-	S9.649,17.5,0,17.5z"/>
-	<use xlink:href="#svg_x5F_PTZbackground"  width="196" height="196.002" x="-98" y="-98.001"/>
-	<use xlink:href="#svg_x5F_PTZoutsideRing"  width="192" height="192.002" x="-96" y="-96.001"/>
-
-	<use xlink:href="#svg_x5F_PTZzoomIn"  width="57.911" height="26.45" x="-28.956" y="-13.226" transform="matrix(1 0 0 1 0 29.7725)"/>
-
-	<use xlink:href="#svg_x5F_PTZzoomOut"  width="57.911" height="26.45" x="-28.956" y="-13.225" transform="matrix(1 0 0 1 0 -29.7715)"/>
-
-	<use xlink:href="#svg_x5F_PTZfocusNear"	 width="26.45" height="57.91" x="-13.225" y="-28.955" transform="matrix(1 0 0 1 29.7705 0)"/>
-
-	<use xlink:href="#svg_x5F_PTZfocusFar"	width="26.45" height="57.91" x="-13.225" y="-28.955" transform="matrix(1 0 0 1 -29.7705 0)"/>
-	<use xlink:href="#svg_x5F_PTZstop"	width="34.986" height="34.986" id="XMLID_5_" x="-17.493" y="-17.493"/>
-
-	<use xlink:href="#svg_x5F_PTZcardinalUp"  width="25" height="15.412" x="-12.5" y="-7.706" transform="matrix(1 0 0 1 0 65.498)"/>
-
-	<use xlink:href="#svg_x5F_PTZcardinalRight"	 width="15.411" height="25" x="-7.706" y="-12.5" transform="matrix(1 0 0 1 65.3369 0)"/>
-
-	<use xlink:href="#svg_x5F_PTZcardinalDown"	width="25" height="15.412" x="-12.5" y="-7.706" transform="matrix(1 0 0 1 0 -65.4648)"/>
-
-	<use xlink:href="#svg_x5F_PTZcardinalLeft"	width="15.411" height="25" x="-7.706" y="-12.5" transform="matrix(1 0 0 1 -65.4985 0)"/>
-
-	<use xlink:href="#svg_x5F_PTZordinalNE"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 46.2002 46.2012)"/>
-
-	<use xlink:href="#svg_x5F_PTZordinalNW"	 width="7.167" height="7.167" x="-3.583" y="-3.583" transform="matrix(1 0 0 1 -46.2002 46.1982)"/>
-
-	<use xlink:href="#svg_x5F_PTZordinalSW"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 -46.1997 -46.1992)"/>
-
-	<use xlink:href="#svg_x5F_PTZordinalSE"	 width="7.167" height="7.167" x="-3.583" y="-3.584" transform="matrix(1 0 0 1 46.2002 -46.1992)"/>
-</symbol>
 <symbol id="svg_x5F_PTZstop" viewBox="-17.493 -17.493 34.986 34.986">
 	<path d="M0,17.493c-9.661,0-17.493-7.832-17.493-17.493S-9.661-17.493,0-17.493S17.493-9.661,17.493,0S9.661,17.493,0,17.493z
 		M7.5-7.5h-15v15h15V-7.5z"/>
@@ -314,7 +283,7 @@
 	<circle stroke-width="3" fill-opacity="0" cx="20" cy="20" r="18.5"/>
 	<path stroke-width="5" d="M 12,12 L 28,28 M 28,12 L 12,28" />
 </symbol>
-<symbol id="svg_stroke_loading_circle" width="100px" height="100px" viewBox="0 0 100 100">
+<symbol id="svg_stroke_loading_circle" viewBox="0 0 100 100">
 	<circle cx="50" cy="50" fill="none" stroke-width="10" r="35" stroke-dasharray="164.93361431346415 56.97787143782138" transform="rotate(258 50 50)">
 	</circle>
 </symbol>
