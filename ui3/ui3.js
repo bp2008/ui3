@@ -272,9 +272,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Windows Chrome Touchscreen > Long press on PTZ pad yields rectangular graphic as if right click is occurring. Try this fix for IE, maybe it works in Edge too: https://stackoverflow.com/questions/17801117/prevent-windows-8-right-click-square  Also try preventDefault and stopPropagation on the touchstart event if that is not happening already.
-// TODO: Finish Help file.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
