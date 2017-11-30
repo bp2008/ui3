@@ -272,6 +272,14 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Add optional (disabled by default) IR light, brightness, and contrast controls.
+// TODO: Try to insert the Video Player Context Menu image to the left of the item descriptions.
+// TODO: Create a help topic briefly describing the Camera Properties window.
+// TODO: Create a help topic describing the Main Menu and its options.
+// TODO: Create a help topic "Tips" describing other features unworthy of their own help section.  Mention how many things are collapsable or right-clickable.  Mention the Snapshot button next to the Main Menu.  Mention that "DISK" can be clicked to view more detailed disk status.
+// TODO: Opening the Disk Usage dialog more than once shouldn't open multiple copies.
+// TODO: Fix z-index problem that causes the UI's special dropdown boxes to be overlapped by dialog boxes.  It should be the other way around for usability's sake.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////

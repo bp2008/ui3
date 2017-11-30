@@ -33,7 +33,7 @@
 						<li class="active"><a data-toggle="pill" href="#overview" id="nav-overview">Overview</a></li>
 						<li><a data-toggle="pill" href="#cameralayout" id="nav-cameralayout">Camera Layout</a></li>
 						<li><a data-toggle="pill" href="#recordings" id="nav-recordings">Recordings</a></li>
-						<li><a data-toggle="pill" href="#videostreaming" id="nav-videostreaming">Video Streaming</a></li>
+						<li><a data-toggle="pill" href="#videoplayer" id="nav-videoplayer">Video Player</a></li>
 						<li class="dropdown">
 							<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Advanced <span class="caret"></span></a>
 							<ul class="dropdown-menu">
@@ -64,8 +64,8 @@
 						<p>If you need support with UI3, the best place to go for help is <a href="https://ipcamtalk.com/forums/blue-iris.30/">the Blue Iris section of the IpCamTalk forum</a>.</p>
 						<p>This interface was developed by community member <a target="_blank" href="https://ipcamtalk.com/members/bp2008.28/">bp2008</a> from <a href="https://ipcamtalk.com/">IpCamTalk</a>.</p>
 					</div>
-					<div class="tab-pane" id="videostreaming" role="tabpanel" aria-labelledby="nav-videostreaming">
-						<h1>Video Streaming</h1>
+					<div class="tab-pane" id="videoplayer" role="tabpanel" aria-labelledby="nav-videoplayer">
+						<h1>Video Player</h1>
 						<p>UI3 can stream video using two different compression methods: <b>H.264</b> and <b>Jpeg</b>.  H.264 is more efficient with network bandwidth, and usually achieves a higher frame rate, making it the most desirable choice in most circumstances.  H.264 is the default streaming method in browsers which support it.  Jpeg streaming is simpler and can be used in all browsers capable of running UI3.</p>
 						<h2>H.264 Streaming</h2>
 						<p>UI3 can stream H.264 video if your browser supports it, otherwise you won't even see the option.  You can check for H.264 compatibility by looking for H.264 items in the Streaming Quality dropdown list.</p>
@@ -91,6 +91,36 @@
 						<h2>Jpeg Streaming</h2>
 						<p>Jpeg streaming is done by requesting Jpeg-compressed snapshots as quickly as possible.  It is not very efficient with network bandwidth and it can't achieve high frame rates over the internet.  However, being a simpler streaming method, it tends to "just work".  Jpeg streaming is capable of extremely high resolutions and excellent image quality.</p>
 						<p class="bg-warning padded-info"><b>Audio playback</b> is <b>not available</b> while streaming Jpeg snapshots.</p>
+						<h3>Context Menu</h3>
+						<p>If you right click (long-press on touchscreens) on a camera, a context menu appears.  The first 4 actions are specific to the current video stream, while most other options are specific to the camera you clicked on.  Here, blue icons indicate actions that take effect on the Blue Iris server, while black icons indicate actions that occur in the web UI.  Actions include:</p>
+						<dl class="dl-horizontal">
+							<dt>Open image in new tab</dt>
+							<dd>Opens a snapshot of the current frame in a new tab.</dd>
+							<dt>Save image to disk</dt>
+							<dd>Downloads a high quality copy of the current frame.</dd>
+							<dt>Open HLS Stream</dt>
+							<dd>Opens a copy of the video stream using the <a href="#hlsstreams">HLS streaming protocol</a>.</dd>
+							<dt>Copy image address</dt>
+							<dd>Copies (to the clipboard) a URL for a high-quality jpeg snapshot from the current stream.  If you are viewing a clip, the URL will honor your playback position.</dd>
+							<dt>Camera Name</dt>
+							<dd>This item doesn't do anything.  It serves as a separator and indicator of which camera you clicked.</dd>
+							<dt>Maximize</dt>
+							<dd>Also called "Back to Group" if you are viewing a maximized camera, this item has the same effect as just clicking the camera would have had.</dd>
+							<dt>Trigger Now</dt>
+							<dd>Triggers an alert for this camera in Blue Iris.</dd>
+							<dt>Start/Stop Recording</dt>
+							<dd>Toggles manual recording for this camera in Blue Iris.</dd>
+							<dt>Snapshot in Blue Iris</dt>
+							<dd>Instructs Blue Iris to save a snapshot for this camera.  The snapshot will appear in your clip list.</dd>
+							<dt>Restart Camera</dt>
+							<dd>Instructs Blue Iris to restart this camera.  Useful mostly for debugging purposes or to fix streaming problems affecting just one camera.</dd>
+							<dt>Stats for nerds</dt>
+							<dd>Opens the <a href="#nerdstats">"Stats for nerds" panel</a>, containing low-level information about the current video and audio streams.</dd>
+							<dt>Properties</dt>
+							<dd>Opens a properties panel containing many options for this camera.</dd>
+						</dl>
+						<p></p>
+						<p><img class="img-responsive" src="img/CameraContextMenu.png" alt="Screenshot of clip list context menu" /></p>
 					</div>
 					<div class="tab-pane" id="hlsstreams" role="tabpanel" aria-labelledby="nav-hlsstreams">
 						<h1>HLS Streams</h1>
@@ -244,7 +274,9 @@
 						<p><img class="img-responsive" src="img/RecordingFilters.png" alt="Screenshot of recording filters" /></p>
 						<h3>Expanding the Filters</h3>
 						<p>If you don't see the filter controls, that means you have collapsed them by clicking on the "Filter Clips by:" text.  Click the "Filter Clips by:" text again to expand the filter controls section.</p>
-						<p></p>
+						<h3>Context Menu</h3>
+						<p>If you right click (long-press on touchscreens) on an alert or clip, a context menu appears.  It contains options to Flag, Protect, Download, or Delete.  It also allows you to toggle a layout with larger thumbnails, or to view alert/clip properties.</p>
+						<p><img class="img-responsive" src="img/ClipContextMenu.png" alt="Screenshot of clip list context menu" /></p>
 					</div>
 				</div><!--/.tab-content -->
 			</div><!--/.baseContainer -->
