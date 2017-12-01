@@ -279,6 +279,8 @@ var togglableUIFeatures =
 // TODO: Create a help topic "Tips" describing other features unworthy of their own help section.  Mention how many things are collapsable or right-clickable.  Mention the Snapshot button next to the Main Menu.  Mention that "DISK" can be clicked to view more detailed disk status.
 // TODO: Opening the Disk Usage dialog more than once shouldn't open multiple copies.
 // TODO: Fix z-index problem that causes the UI's special dropdown boxes to be overlapped by dialog boxes.  It should be the other way around for usability's sake.
+// TODO: Clicking the calendar button when it is already open should not make it re-open.
+// TODO: Extremely large clip lists don't perform well.  Some browsers handle it better.  The complexity of the clip tiles has a lot to do with this.  The ideal fix, I think, would be to remove clip tiles from the DOM and never have more than, say, 2000 of them in the DOM at a time.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -3710,6 +3712,8 @@ function SeekBar()
 	var seekhint = $("#seekhint");
 	var seekhint_img = $("#seekhint_img");
 	var seekhint_canvas = $("#seekhint_canvas");
+	var seekhint_img_ele = seekhint_img.get(0);
+	var seekhint_canvas_ele = seekhint_canvas.get(0);
 	var seekhint_loading = $("#seekhint_loading");
 	var seekhint_helper = $("#seekhint_helper");
 	var seekhint_label = $("#seekhint_label");
@@ -3724,11 +3728,11 @@ function SeekBar()
 	{
 		if (isDragging)
 		{
-			jpegPreviewModule.RenderImage("seekhint_img");
+			jpegPreviewModule.RenderImage(seekhint_img_ele);
 			var msecTotal = videoPlayer.Loading().image.msec;
 			playbackControls.SetProgressText(msToTime(seekHintInfo.loadingMsec, 0) + " / " + msToTime(msecTotal, 0));
 		}
-		CopyImageToCanvas("seekhint_img", "seekhint_canvas");
+		CopyImageToCanvas(seekhint_img_ele, seekhint_canvas_ele);
 		seekhint_loading.addClass('hidden');
 		seekHintInfo.loading = false;
 		seekHintInfo.visibleMsec = seekHintInfo.loadingMsec;
@@ -3737,7 +3741,7 @@ function SeekBar()
 	});
 	seekhint_img.error(function ()
 	{
-		ClearCanvas("seekhint_canvas");
+		ClearCanvas(seekhint_canvas_ele);
 		seekhint_loading.addClass('hidden');
 		seekHintInfo.loading = false;
 		seekHintInfo.loadingMsec = seekHintInfo.visibleMsec = -1;
@@ -3878,7 +3882,7 @@ function SeekBar()
 	{
 		seekHintInfo.loadingMsec = seekHintInfo.queuedMsec = seekHintInfo.visibleMsec = -1;
 		seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
-		ClearCanvas("seekhint_canvas");
+		ClearCanvas(seekhint_canvas_ele);
 		seekhint_loading.addClass('hidden');
 	}
 	this.drawSeekbarAtPercent = function (percentValue)
@@ -4651,7 +4655,7 @@ function ClipLoader(clipsBodySelector)
 			var timeStr = GetTimeStr(clipData.displayDate);
 			var clipDur = GetClipDurStrFromMs(clipData.roughLength);
 			var clipDurTitle = clipDur == 'S' ? ' title="Snapshot"' : '';
-			$("#clipsbody").append('<div id="c' + clipData.recId + '" class="cliptile" style="top:' + clipData.y + 'px">'
+			$clipsbody.append('<div id="c' + clipData.recId + '" class="cliptile" style="top:' + clipData.y + 'px">'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipimghelper">'
 				+ '<div class="verticalAlignHelper"></div>'
@@ -4811,7 +4815,7 @@ function ClipLoader(clipsBodySelector)
 		if ($dateTile.length == 0)
 		{
 			var timeStr = GetDateDisplayStr(dateTileData.date);
-			$("#clipsbody").append('<div id="dt' + time + '" class="datetile" style="top:' + dateTileData.y + 'px">'
+			$clipsbody.append('<div id="dt' + time + '" class="datetile" style="top:' + dateTileData.y + 'px">'
 				+ timeStr
 				+ '</div>');
 		}
@@ -5331,7 +5335,7 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 
 	this.appearDisappearCheck = function ()
 	{
-		if (!self.AppearDisappearCheckEnabled || appearDisappearRegisteredObjects.length == 0 || !$clipsbody.is(":visible"))
+		if (!self.AppearDisappearCheckEnabled || appearDisappearRegisteredObjects.length == 0 || currentPrimaryTab == "live")
 			return;
 		var scrollTop = $clipsbody.scrollTop();
 		var yMin = scrollTop - aboveAllowance;
@@ -5504,6 +5508,13 @@ function StatusLoader()
 	var profileChangedTimeout = null;
 	var statusUpdateTimeout = null;
 	var $profileBtns = $(".profilebtn");
+	var $scheduleLockBtn = $("#schedule_lock_button");
+	var $scheduleLockIcon = $("#schedule_lock_icon use");
+	var $stoplightDiv = $("#stoplightBtn div");
+	var $stoplightRed = $("#stoplightRed");
+	var $stoplightGreen = $("#stoplightGreen");
+	var $stoplightYellow = $("#stoplightYellow");
+	var $profileStatusBox = $("#profileStatusBox");
 
 	statusBars.addOnProgressChangedListener("cpu", function (cpu)
 	{
@@ -5586,13 +5597,13 @@ function StatusLoader()
 			lastResponse = response;
 			if (response && response.data)
 			{
-				$("#stoplightBtn div").css("opacity", "");
+				$stoplightDiv.css("opacity", "");
 				if (response.data.signal == "0")
-					$("#stoplightRed").css("opacity", "1");
+					$stoplightRed.css("opacity", "1");
 				else if (response.data.signal == "1")
-					$("#stoplightGreen").css("opacity", "1");
+					$stoplightGreen.css("opacity", "1");
 				else if (response.data.signal == "2")
-					$("#stoplightYellow").css("opacity", "1");
+					$stoplightYellow.css("opacity", "1");
 
 				var cpu = parseInt(response.data.cpu);
 				statusBars.setProgress("cpu", cpu / 100.0, cpu + "%");
@@ -5700,29 +5711,29 @@ function StatusLoader()
 			var lock = lastResponse.data.lock;
 			$profileBtns.removeClass("selected");
 			$profileBtns.css("color", "");
-			var $selectedProfileBtn = $('.profilebtn[profilenum="' + selectedProfile + '"]');
+			var $selectedProfileBtn = $profileStatusBox.find('.profilebtn[profilenum="' + selectedProfile + '"]');
 			$selectedProfileBtn.addClass("selected");
 			$selectedProfileBtn.css("color", $selectedProfileBtn.attr("selColor"));
 			if (lock == 0)
 			{
-				$("#schedule_lock_button").removeClass("hold");
-				$("#schedule_lock_button").removeClass("temp");
-				$("#schedule_lock_icon use").attr("href", "#svg_x5F_RunProfile");
-				$("#schedule_lock_button").attr("title", 'Schedule "' + schedule + '" is active. Click to disable automatic scheduling.');
+				$scheduleLockBtn.removeClass("hold");
+				$scheduleLockBtn.removeClass("temp");
+				$scheduleLockIcon.attr("href", "#svg_x5F_RunProfile");
+				$scheduleLockBtn.attr("title", 'Schedule "' + schedule + '" is active. Click to disable automatic scheduling.');
 			}
 			else if (lock == 1)
 			{
-				$("#schedule_lock_button").addClass("hold");
-				$("#schedule_lock_button").removeClass("temp");
-				$("#schedule_lock_icon use").attr("href", "#svg_x5F_HoldProfile");
-				$("#schedule_lock_button").attr("title", 'Schedule "' + schedule + '" is currently disabled. Click to re-enable.');
+				$scheduleLockBtn.addClass("hold");
+				$scheduleLockBtn.removeClass("temp");
+				$scheduleLockIcon.attr("href", "#svg_x5F_HoldProfile");
+				$scheduleLockBtn.attr("title", 'Schedule "' + schedule + '" is currently disabled. Click to re-enable.');
 			}
 			else if (lock == 2)
 			{
-				$("#schedule_lock_button").removeClass("hold");
-				$("#schedule_lock_button").addClass("temp");
-				$("#schedule_lock_icon use").attr("href", "#svg_x5F_TempProfile");
-				$("#schedule_lock_button").attr("title", 'Schedule "' + schedule + '" is temporarily overridden. Click to resume schedule, or wait some hours and it should return to normal.');
+				$scheduleLockBtn.removeClass("hold");
+				$scheduleLockBtn.addClass("temp");
+				$scheduleLockIcon.attr("href", "#svg_x5F_TempProfile");
+				$scheduleLockBtn.attr("title", 'Schedule "' + schedule + '" is temporarily overridden. Click to resume schedule, or wait some hours and it should return to normal.');
 			}
 			else
 				toaster.Error("unexpected <b>lock</b> value from Blue Iris status");
@@ -5733,7 +5744,7 @@ function StatusLoader()
 				var tooltipText = currentProfileNames[i];
 				if (i == 0 && tooltipText == "Inactive")
 					tooltipText = "Inactive profile";
-				$('.profilebtn[profilenum="' + i + '"]').attr("title", tooltipText);
+				$profileStatusBox.find('.profilebtn[profilenum="' + i + '"]').attr("title", tooltipText);
 			}
 	}
 	this.SetCurrentProfileNames = function (newProfileNames)
@@ -6554,6 +6565,8 @@ function VideoPlayerController()
 
 	var lastLiveCameraOrGroupId = "";
 	var currentlySelectedHomeGroupId = null;
+	var $layoutbody = $("#layoutbody");
+	var $camimg_wrapper = $("#camimg_wrapper");
 
 	var mouseHelper = null;
 
@@ -6765,8 +6778,8 @@ function VideoPlayerController()
 		// Find out which camera is under the mouse pointer, if any.
 		imageRenderer.SetMousePos(event.pageX, event.pageY);
 
-		var imgPos = $("#camimg_wrapper").position();
-		var layoutbodyOffset = $("#layoutbody").offset();
+		var imgPos = $camimg_wrapper.position();
+		var layoutbodyOffset = $layoutbody.offset();
 		var mouseRelX = parseFloat((event.pageX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
 		var mouseRelY = parseFloat((event.pageY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
 
@@ -7068,7 +7081,7 @@ function VideoPlayerController()
 		if (currentlyLoadingImage.isLive && lastFrameDate)
 		{
 			var str = "";
-			var w = $("#layoutbody").width();
+			var w = $layoutbody.width();
 			if (w < 240)
 				str = "LIVE";
 			else if (w < 325)
@@ -7182,13 +7195,18 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 	var isInitialized = false;
 	var isVisible = false;
 	var $myImgEle = null;
+	var $camimg_wrapper = $("#camimg_wrapper");
+	var $camimg_store = $("#camimg_store");
+	var $camimg_preview = $('<canvas id="camimg_preview" class="videoCanvas"></canvas>');
+	var camimg_preview_ele = $camimg_preview.get(0);
 	var Initialize = function ()
 	{
 		if (isInitialized)
 			return;
 		isInitialized = true;
-		$("#camimg_store").append('<canvas id="camimg_preview" class="videoCanvas"></canvas>');
+		$camimg_store.append($camimg_preview);
 		$myImgEle = $('<img crossOrigin="Anonymous" id="jpegPreview_img" alt="" style="display: none;" />');
+		var myImgEle_ele = $myImgEle.get(0);
 		$myImgEle.load(function ()
 		{
 			var img = $myImgEle.get(0);
@@ -7202,33 +7220,35 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 				// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
 				videoPlayer.ImageRendered(img.myUniqueId, img.naturalWidth, img.naturalHeight, performance.now() - img.startTime, false);
 				// Rendering the image shows the jpegPreviewModule again.
-				self.RenderImage(img.id);
+				self.RenderImage(myImgEle_ele);
 			}
 		});
 		$myImgEle.error(function ()
 		{
 			console.log('Bad image assigned to #jpegPreview_img.');
 		});
-		$("#camimg_store").append($myImgEle);
+		$camimg_store.append($myImgEle);
 	}
 	var Show = function ()
 	{
 		if (isVisible)
 			return;
+		Initialize();
 		isVisible = true;
-		$("#camimg_preview").appendTo("#camimg_wrapper");
+		$camimg_preview.appendTo($camimg_wrapper);
 	}
 	this.Hide = function ()
 	{
 		if (!isVisible)
 			return;
+		Initialize();
 		isVisible = false;
-		$("#camimg_preview").appendTo("#camimg_store");
+		$camimg_preview.appendTo($camimg_store);
 	}
-	this.RenderImage = function (imgId)
+	this.RenderImage = function (imgEle)
 	{
 		Initialize();
-		CopyImageToCanvas(imgId, "camimg_preview");
+		CopyImageToCanvas(imgEle, camimg_preview_ele);
 		Show();
 		videoOverlayHelper.HideLoadingOverlay();
 	}
@@ -7275,17 +7295,29 @@ function JpegVideoModule()
 
 	var loading = new BICameraData();
 
+	var $layoutbody = $("#layoutbody");
+	var $camimg_wrapper = $("#camimg_wrapper");
+	var $camimg_store = $("#camimg_store");
+	var $camimg_canvas;
+	var camimg_canvas_ele;
+	var backbuffer_canvas;
+
 	var Initialize = function ()
 	{
 		if (isInitialized)
 			return;
 		isInitialized = true;
 		// Do one-time initialization here
-		$("#camimg_store").append('<canvas id="camimg_canvas" class="videoCanvas"></canvas>');
-		$("#camimg_store").append('<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />');
-		$("#camimg_store").append('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
+		$camimg_canvas = $('<canvas id="camimg_canvas" class="videoCanvas"></canvas>');
+		camimg_canvas_ele = $camimg_canvas.get(0);
+		var camObj = $('<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />');
+		var $backbuffer_canvas = $('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
+		var backbuffer_canvas = $backbuffer_canvas.get(0);
+		$camimg_store.append($camimg_canvas);
+		$camimg_store.append(camObj);
+		$camimg_store.append($backbuffer_canvas);
 
-		var camObj = $("#camimg");
+		var camimg_ele = camObj.get(0);
 		camObj.load(function ()
 		{
 			ClearImageLoadTimeout();
@@ -7324,12 +7356,12 @@ function JpegVideoModule()
 
 				currentLoadedImageActualWidth = this.naturalWidth;
 
-				CopyImageToCanvas("camimg", "camimg_canvas");
+				CopyImageToCanvas(camimg_ele, camimg_canvas_ele);
 
 				if (nerdStats.IsOpen())
 				{
 					nerdStats.BeginUpdate();
-					nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
+					nerdStats.UpdateStat("Viewport", $layoutbody.width() + "x" + $layoutbody.height());
 					nerdStats.UpdateStat("Stream Resolution", loaded.actualwidth + "x" + loaded.actualheight);
 					nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
 					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "%"));
@@ -7353,9 +7385,9 @@ function JpegVideoModule()
 			return;
 		isCurrentlyActive = true;
 		// Show yourself
-		ClearCanvas("camimg_canvas");
+		ClearCanvas(camimg_canvas_ele);
 		videoOverlayHelper.ShowLoadingOverlay(true);
-		$("#camimg_canvas").appendTo("#camimg_wrapper");
+		$camimg_canvas.appendTo($camimg_wrapper);
 	}
 	this.Deactivate = function ()
 	{
@@ -7367,7 +7399,7 @@ function JpegVideoModule()
 		//clipPlaybackPosition = 0;
 		ClearImageLoadTimeout();
 		ClearGetNewImageTimeout();
-		$("#camimg_canvas").appendTo("#camimg_store");
+		$camimg_canvas.appendTo($camimg_store);
 	}
 	this.VisibilityChanged = function (visible)
 	{
@@ -7575,7 +7607,6 @@ function JpegVideoModule()
 			return;
 		var canvas = $("#camimg_canvas").get(0);
 
-		var backbuffer_canvas = $("#backbuffer_canvas").get(0);
 		backbuffer_canvas.width = groupObj.width;
 		backbuffer_canvas.height = groupObj.height;
 
@@ -7621,9 +7652,7 @@ function JpegVideoModule()
 		var cameraObj = cameraListLoader.GetCameraWithId(cameraId);
 		if (!cameraObj)
 			return;
-		var canvas = $("#camimg_canvas").get(0);
-
-		var backbuffer_canvas = $("#backbuffer_canvas").get(0);
+		var canvas = camimg_canvas_ele;
 
 		backbuffer_canvas.width = cameraObj.width;
 		backbuffer_canvas.height = cameraObj.height;
@@ -7634,7 +7663,7 @@ function JpegVideoModule()
 			, thumbBounds[0], thumbBounds[1], thumbBounds[2] - thumbBounds[0], thumbBounds[3] - thumbBounds[1]
 			, 0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
 
-		$("#camimg_wrapper").css("width", backbuffer_canvas.width + "px").css("height", backbuffer_canvas.height + "px");
+		$camimg_wrapper.css("width", backbuffer_canvas.width + "px").css("height", backbuffer_canvas.height + "px");
 		canvas.width = backbuffer_canvas.width;
 		canvas.height = backbuffer_canvas.height;
 		var context2d = canvas.getContext("2d");
@@ -7708,6 +7737,10 @@ function FetchOpenH264VideoModule()
 
 	var loading = new BICameraData();
 
+	var $layoutbody = $("#layoutbody");
+	var $camimg_wrapper = $("#camimg_wrapper");
+	var $camimg_store = $("#camimg_store");
+	var $volumeBar = $("#volumeBar");
 
 	var Initialize = function ()
 	{
@@ -7726,9 +7759,9 @@ function FetchOpenH264VideoModule()
 		lastActivatedAt = performance.now();
 		// Show yourself
 		//console.log("Activating openh264_player");
-		$("#volumeBar").removeClass("audioTemporarilyUnavailable");
-		openh264_player.GetCanvasRef().appendTo("#camimg_wrapper");
-		ClearCanvas("openh264_player_canvas");
+		$volumeBar.removeClass("audioTemporarilyUnavailable");
+		openh264_player.GetCanvasRef().appendTo($camimg_wrapper);
+		ClearCanvas(openh264_player.GetCanvasEle());
 		videoOverlayHelper.ShowLoadingOverlay(true);
 	}
 	this.Deactivate = function ()
@@ -7738,9 +7771,9 @@ function FetchOpenH264VideoModule()
 		isCurrentlyActive = false;
 		// Stop what you are doing and hide
 		//console.log("Deactivating openh264_player");
-		$("#volumeBar").addClass("audioTemporarilyUnavailable");
+		$volumeBar.addClass("audioTemporarilyUnavailable");
 		StopStreaming();
-		openh264_player.GetCanvasRef().appendTo("#camimg_store");
+		openh264_player.GetCanvasRef().appendTo($camimg_store);
 	}
 	var StopStreaming = function ()
 	{
@@ -8115,7 +8148,7 @@ function FetchOpenH264VideoModule()
 			var netDelay = openh264_player.GetNetworkDelay().toFloat();
 			var decoderDelay = openh264_player.GetBufferedTime().toFloat();
 			nerdStats.BeginUpdate();
-			nerdStats.UpdateStat("Viewport", $("#layoutbody").width() + "x" + $("#layoutbody").height());
+			nerdStats.UpdateStat("Viewport", $layoutbody.width() + "x" + $layoutbody.height());
 			nerdStats.UpdateStat("Stream Resolution", frame.width + "x" + frame.height);
 			nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
 			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
@@ -8399,6 +8432,10 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	this.GetCanvasRef = function ()
 	{
 		return $canvas;
+	}
+	this.GetCanvasEle = function ()
+	{
+		return canvas;
 	}
 	this.PreviousFrameIsLastFrame = function ()
 	{
@@ -8686,10 +8723,8 @@ function NetDelayCalc()
 // Image Renderer                                            //
 // provides rendering and scaling services                   //
 ///////////////////////////////////////////////////////////////
-function CopyImageToCanvas(imgId, canvasId)
+function CopyImageToCanvas(imgEle, canvas)
 {
-	var imgEle = $("#" + imgId).get(0);
-	var canvas = $("#" + canvasId).get(0);
 	if (canvas.width != imgEle.naturalWidth)
 		canvas.width = imgEle.naturalWidth;
 	if (canvas.height != imgEle.naturalHeight)
@@ -8698,9 +8733,8 @@ function CopyImageToCanvas(imgId, canvasId)
 	var context2d = canvas.getContext("2d");
 	context2d.drawImage(imgEle, 0, 0);
 }
-function ClearCanvas(canvasId)
+function ClearCanvas(canvas)
 {
-	var canvas = $("#" + canvasId).get(0);
 	var context2d = canvas.getContext("2d");
 	if (context2d != null)
 	{
@@ -8740,6 +8774,10 @@ function ImageRenderer()
 	previousImageDraw.h = -1;
 	previousImageDraw.z = 10;
 
+	var $layoutbody = $("#layoutbody");
+	var $camimg_wrapper = $("#camimg_wrapper");
+	var sccc_outerObjs = $('#layoutbody,#camimg_wrapper,#zoomhint');
+
 	this.GetSizeToRequest = function (modifyForJpegQualitySetting)
 	{
 		// Calculate the size of the image we need
@@ -8749,8 +8787,8 @@ function ImageRenderer()
 		if (imgDrawWidth == 0)
 		{
 			// Image is supposed to scale to fit the screen (first zoom level)
-			imgDrawWidth = $("#layoutbody").width() * dpiScalingFactor;
-			imgDrawHeight = $("#layoutbody").height() * dpiScalingFactor;
+			imgDrawWidth = $layoutbody.width() * dpiScalingFactor;
+			imgDrawHeight = $layoutbody.height() * dpiScalingFactor;
 
 			var availableRatio = imgDrawWidth / imgDrawHeight;
 			if (availableRatio < ciLoading.aspectratio)
@@ -8786,8 +8824,8 @@ function ImageRenderer()
 	{
 		dpiScalingFactor = BI_GetDevicePixelRatio();
 
-		var imgAvailableWidth = $("#layoutbody").width();
-		var imgAvailableHeight = $("#layoutbody").height();
+		var imgAvailableWidth = $layoutbody.width();
+		var imgAvailableHeight = $layoutbody.height();
 
 		// Calculate new size based on zoom levels
 		var imgForSizing = videoPlayer.Loaded().image;
@@ -8804,7 +8842,7 @@ function ImageRenderer()
 			else
 				imgDrawWidth = imgDrawHeight * imgForSizing.aspectratio;
 		}
-		$("#camimg_wrapper").css("width", imgDrawWidth + "px").css("height", imgDrawHeight + "px");
+		$camimg_wrapper.css("width", imgDrawWidth + "px").css("height", imgDrawHeight + "px");
 
 		imageIsLargerThanAvailableSpace = imgDrawWidth > imgAvailableWidth || imgDrawHeight > imgAvailableHeight;
 
@@ -8812,16 +8850,16 @@ function ImageRenderer()
 		{
 			// We just experienced a zoom change
 			// Find the mouse position percentage relative to the center of the image at its old size
-			var imgPos = $("#camimg_wrapper").position();
-			var layoutbodyOffset = $("#layoutbody").offset();
+			var imgPos = $camimg_wrapper.position();
+			var layoutbodyOffset = $layoutbody.offset();
 			if (!layoutbodyOffset) // Edge complained about this once
 				layoutbodyOffset = { left: 0, top: 0 };
 			var xPos = mouseX;
 			var yPos = mouseY;
 			if (isFromKeyboard)
 			{
-				xPos = layoutbodyOffset.left + ($("#layoutbody").outerWidth(true) / 2);
-				yPos = layoutbodyOffset.top + ($("#layoutbody").outerHeight(true) / 2);
+				xPos = layoutbodyOffset.left + ($layoutbody.outerWidth(true) / 2);
+				yPos = layoutbodyOffset.top + ($layoutbody.outerHeight(true) / 2);
 			}
 			var mouseRelX = -0.5 + (parseFloat((xPos - layoutbodyOffset.left) - imgPos.left) / previousImageDraw.w);
 			var mouseRelY = -0.5 + (parseFloat((yPos - layoutbodyOffset.top) - imgPos.top) / previousImageDraw.h);
@@ -8855,7 +8893,7 @@ function ImageRenderer()
 		var proposedX = (((imgAvailableWidth - imgDrawWidth) / 2) + imgDigitalZoomOffsetX);
 		var proposedY = (((imgAvailableHeight - imgDrawHeight) / 2) + imgDigitalZoomOffsetY);
 
-		$("#camimg_wrapper").css("left", proposedX + "px").css("top", proposedY + "px");
+		$camimg_wrapper.css("left", proposedX + "px").css("top", proposedY + "px");
 
 		// Store new image position for future calculations
 		previousImageDraw.x = proposedX;
@@ -8910,32 +8948,31 @@ function ImageRenderer()
 		var yPos = mouseY;
 		if (isFromKeyboard)
 		{
-			var layoutbodyOffset = $("#layoutbody").offset();
-			xPos = layoutbodyOffset.left + ($("#layoutbody").outerWidth(true) / 2);
-			yPos = layoutbodyOffset.top + ($("#layoutbody").outerHeight(true) / 2);
+			var layoutbodyOffset = $layoutbody.offset();
+			xPos = layoutbodyOffset.left + ($layoutbody.outerWidth(true) / 2);
+			yPos = layoutbodyOffset.top + ($layoutbody.outerHeight(true) / 2);
 		}
 		$("#zoomhint").css("left", (xPos - $("#zoomhint").outerWidth(true)) + "px").css("top", (yPos - $("#zoomhint").outerHeight(true)) + "px");
 	}
 	var SetCamCellCursor = function ()
 	{
-		var outerObjs = $('#layoutbody,#camimg_wrapper,#zoomhint');
 		if (imageIsLargerThanAvailableSpace)
 		{
 			if (imageIsDragging)
 			{
-				outerObjs.removeClass("grabcursor");
-				outerObjs.addClass("grabbingcursor");
+				sccc_outerObjs.removeClass("grabcursor");
+				sccc_outerObjs.addClass("grabbingcursor");
 			}
 			else
 			{
-				outerObjs.removeClass("grabbingcursor");
-				outerObjs.addClass("grabcursor");
+				sccc_outerObjs.removeClass("grabbingcursor");
+				sccc_outerObjs.addClass("grabcursor");
 			}
 		}
 		else
 		{
-			outerObjs.removeClass("grabcursor");
-			outerObjs.removeClass("grabbingcursor");
+			sccc_outerObjs.removeClass("grabcursor");
+			sccc_outerObjs.removeClass("grabbingcursor");
 		}
 	}
 	this.CamImgDragStart = function (e)
@@ -8976,7 +9013,7 @@ function ImageRenderer()
 		mouseY = e.pageY;
 	}
 	// Initialization script for ImageRenderer -- called on document ready
-	$('#layoutbody').mousewheel(function (e, delta, deltaX, deltaY)
+	$layoutbody.mousewheel(function (e, delta, deltaX, deltaY)
 	{
 		mouseCoordFixer.fix(e);
 		if (playbackControls.MouseInSettingsPanel(e))
