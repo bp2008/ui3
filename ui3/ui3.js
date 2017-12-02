@@ -4887,8 +4887,8 @@ function ClipLoader(clipsBodySelector)
 	{
 		ThumbOnDisappear($("#t" + clipData.recId).get(0));
 		clipVisibilityMap[clipData.recId] = false;
-		// We need clip elements to stick around after they've been created
-		// Otherwise we always have to reload thumbnails, and it makes multi-select difficult, etc.
+		// We need clip elements to stick around after they've been created.
+		// Otherwise we always have to reload thumbnails and it makes multi-select difficult.
 	}
 	var ClipTileCreateFromId = function (recId)
 	{
