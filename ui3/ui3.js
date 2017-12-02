@@ -272,7 +272,6 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // TODO: Add optional (disabled by default) IR light, brightness, and contrast controls.
-// TODO: Create a help topic "Tips" describing other features unworthy of their own help section.  Mention how many things are collapsable or right-clickable.  Mention the Snapshot button next to the Main Menu.  Mention that "DISK" can be clicked to view more detailed disk status.
 // TODO: Extremely large clip lists don't perform well.  Some browsers handle it better.  The complexity of the clip tiles has a lot to do with this.  The ideal fix, I think, would be to remove clip tiles from the DOM and never have more than, say, 1500 of them in the DOM at a time.  When creating a new clip tile beyond the limit, delete the oldest clip tile (using a queue).  The oldest is all but guaranteed to be far away.
 
 ///////////////////////////////////////////////////////////////
@@ -3198,6 +3197,8 @@ function DateFilter(dateRangeLabelSelector)
 
 	$("#dateRange").add($datePickerDialog).on('mousedown mouseup touchstart touchend touchcancel', function (e)
 	{
+		if (e.currentTarget.id == "dateRange" && e.button == 2)
+			return; // Right click here doesn't prevent close.
 		mayClose = false;
 		setTimeout(function () { mayClose = true; }, 0);
 	});

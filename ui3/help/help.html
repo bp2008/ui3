@@ -35,12 +35,13 @@
 						<li><a data-toggle="pill" href="#recordings" id="nav-recordings">Recordings</a></li>
 						<li><a data-toggle="pill" href="#videoplayer" id="nav-videoplayer">Video Player</a></li>
 						<li class="dropdown">
-							<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Advanced <span class="caret"></span></a>
+							<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">More Topics<span class="caret"></span></a>
 							<ul class="dropdown-menu">
 								<li><a data-toggle="pill" href="#cameraproperties" id="nav-cameraproperties">Camera Properties</a></li>
 								<li><a data-toggle="pill" href="#hlsstreams" id="nav-hlsstreams">HLS Streams</a></li>
 								<li><a data-toggle="pill" href="#mainmenu" id="nav-mainmenu">Main Menu</a></li>
 								<li><a data-toggle="pill" href="#nerdstats" id="nav-nerdstats">Stats for Nerds</a></li>
+								<li><a data-toggle="pill" href="#tips" id="nav-tips">Tips</a></li>
 								<li><a data-toggle="pill" href="#extensions" id="nav-extensions">UI Extensions</a></li>
 								<li><a data-toggle="pill" href="#urlparameters" id="nav-urlparameters">URL Parameters</a></li>
 								<!--li role="separator" class="divider"></li>
@@ -299,6 +300,27 @@
 						<h3>Multi-Select</h3>
 						<p>If your device has a physical keyboard, you can hold <span class="label label-default">SHIFT</span> and/or <span class="label label-default">CTRL</span> keys while clicking to select multiple items for bulk operations.</p>
 					</div>
+					<div class="tab-pane" id="tips" role="tabpanel" aria-labelledby="nav-tips">
+						<h1>Tips</h1>
+						<ul>
+							<li>Headings in the left toolbar can be clicked to collapse and expand their content.</li>
+							<li>The camera icon in the upper right corner is a quick way to download a snapshot of the current video.</li>
+							<li>
+								Several UI elements have a custom context menu that is accessible by right clicking (long-press on touchscreens).<br />These elements include:
+								<ul>
+									<li>Cameras</li>
+									<li>Alerts and Clips</li>
+									<li>The date filter on Alerts and Clips tabs</li>
+									<li>PTZ Preset buttons</li>
+									<li>Profile and Schedule controls</li>
+									<li>The Stoplight (in the status area at the bottom)</li>
+									<li>The heading that overlays the top of the video player during clip playback</li>
+									<li>The <a href="#hlsstreams">HLS Player</a></li>
+								</ul>
+							</li>
+							<li>The "DISK" status bar in the Status area can be clicked as a shortcut to open the Disk Usage panel.</li>
+						</ul>
+					</div>
 					<div class="tab-pane" id="cameraproperties" role="cameraproperties" aria-labelledby="nav-cameraproperties">
 						<h1>Camera Properties</h1>
 						<p><span class="label label-primary">Admin</span> user permission is required to access this functionality.</p>
@@ -335,7 +357,7 @@
 							</div>
 						</div>
 					</div><!--/.tab-pane -->
-					<div class="tab-pane" id="template" role="tabpanel" aria-labelledby="nav-template">
+					<div class="tab-pane" role="tabpanel" id="template" aria-labelledby="nav-template">
 						<h1>Template</h1>
 						<p></p>
 					</div><!--/.tab-pane -->
