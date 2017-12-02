@@ -4350,6 +4350,11 @@ function ClipLoader(clipsBodySelector)
 
 	var bulkOperationInProgress = false;
 
+	// We can't just create thousands of clip tiles and expect the UI to keep working.
+	var clipTileLimit = 1200;
+	var clipTileQueue = new Queue();
+	var clipVisibilityMap = {};
+
 	this.LoadClips = function (listName)
 	{
 		var loading = videoPlayer.Loading();
@@ -4399,6 +4404,7 @@ function ClipLoader(clipsBodySelector)
 			tileLoader.AppearDisappearCheckEnabled = false;
 
 			self.UnselectAllClips(true);
+
 			TotalUniqueClipsLoaded = 0;
 			TotalDateTilesLoaded = 0;
 			loadedClipIds = new Array();
@@ -4406,6 +4412,9 @@ function ClipLoader(clipsBodySelector)
 			newestClipDate = 0;
 			clipListCache = new Object();
 			clipListIdCache = new Object();
+
+			clipTileQueue = new Queue();
+			clipVisibilityMap = {};
 
 			$clipsbody.empty();
 			$clipListTopDate.html("...");
@@ -4872,11 +4881,14 @@ function ClipLoader(clipsBodySelector)
 	{
 		ClipTileCreate(clipData);
 		ThumbOnAppear($("#t" + clipData.recId).get(0));
+		clipVisibilityMap[clipData.recId] = true;
 	}
 	var ClipOnDisappear = function (clipData)
 	{
 		ThumbOnDisappear($("#t" + clipData.recId).get(0));
+		clipVisibilityMap[clipData.recId] = false;
 		// We need clip elements to stick around after they've been created
+		// Otherwise we always have to reload thumbnails, and it makes multi-select difficult, etc.
 	}
 	var ClipTileCreateFromId = function (recId)
 	{
@@ -4896,7 +4908,7 @@ function ClipLoader(clipsBodySelector)
 			var timeStr = GetTimeStr(clipData.displayDate);
 			var clipDur = GetClipDurStrFromMs(clipData.roughLength);
 			var clipDurTitle = clipDur == 'S' ? ' title="Snapshot"' : '';
-			$clipsbody.append('<div id="c' + clipData.recId + '" class="cliptile" style="top:' + clipData.y + 'px">'
+			$clip = $('<div id="c' + clipData.recId + '" class="cliptile" style="top:' + clipData.y + 'px">'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipimghelper">'
 				+ '<div class="verticalAlignHelper"></div>'
@@ -4909,10 +4921,10 @@ function ClipLoader(clipsBodySelector)
 				+ GetClipIcons(clipData)
 				+ '</div>'
 				+ '</div>');
+			$clipsbody.append($clip);
 
 			var $img = $("#t" + clipData.recId).get(0).thumbPath = clipData.thumbPath;
 
-			$clip = $("#c" + clipData.recId);
 			$clip.click(ClipClicked);
 			var clipEle = $clip.get(0).clipData = clipData;
 
@@ -4928,6 +4940,36 @@ function ClipLoader(clipsBodySelector)
 				else
 					$clip.addClass("selected");
 			}
+			clipTileQueue.enqueue($clip);
+			MaintainClipTileQueue();
+		}
+	}
+	var MaintainClipTileQueue = function ()
+	{
+		/// <summary
+		/// Removes clip tiles from the DOM until we are no longer over the limit, 
+		/// starting with the oldest created tiles. Selected tiles are not eligible 
+		/// for removal from the DOM, so this method can potentially fail to keep 
+		/// the tile count strictly under control.
+		/// </summary >
+		var maxIterations = 10;
+		var i = 0;
+		while (clipTileQueue.getLength() > clipTileLimit)
+		{
+			if (i++ > maxIterations)
+				return; // We don't want to spend too long doing this if we have a lot of selected tiles.
+			var $clip = clipTileQueue.dequeue();
+			if (!$clip)
+				return;
+			if (clipVisibilityMap[$clip.get(0).clipData.recId])
+			{
+				clipTileQueue.enqueue();
+				i--; // There are never many visible clips, so this won't count as an iteration.
+			}
+			else if ($clip.hasClass("selected"))
+				clipTileQueue.enqueue();
+			else
+				$clip.remove();
 		}
 	}
 	this.ScrollToClipObj = function ($clip)
@@ -4961,6 +5003,8 @@ function ClipLoader(clipsBodySelector)
 				{
 					if (!selectedClipsMap[range[i]])
 					{
+						if (CheckSelectionLimit())
+							return;
 						ClipTileCreateFromId(range[i]);
 						$("#c" + range[i]).addClass("selected");
 						selectedClips.push(range[i]);
@@ -4986,6 +5030,8 @@ function ClipLoader(clipsBodySelector)
 			}
 			else
 			{
+				if (CheckSelectionLimit())
+					return;
 				selectedClips.push(recId);
 				selectedClipsMap[recId] = true;
 				$("#c" + recId).addClass("selected");
@@ -4995,6 +5041,15 @@ function ClipLoader(clipsBodySelector)
 		{
 			self.OpenClip(this, recId, true);
 		}
+	}
+	var CheckSelectionLimit = function ()
+	{
+		if (selectedClips.length >= clipTileLimit)
+		{
+			toaster.Warning("For performance reasons, you can't select more than " + clipTileLimit + " items at once.");
+			return true;
+		}
+		return false;
 	}
 	this.OpenClip = function (clipEle, recId, alsoLoadClip)
 	{
@@ -5502,16 +5557,12 @@ function AsyncClipThumbnailDownloader()
 		var $img = $(img);
 		$img.css("width", "auto");
 		$img.css("height", "auto");
-		$img.unbind("load.asyncimage");
-		$img.unbind("error.asyncimage");
 	}
 	function onError(img)
 	{
 		var $img = $(img);
 		$img.css("width", "auto");
 		$img.css("height", "auto");
-		$img.unbind("load.asyncimage");
-		$img.unbind("error.asyncimage");
 		$img.attr('src', fallbackImg);
 	}
 	function loadCondition(obj)
@@ -5550,6 +5601,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 	var asyncImageQueue = new Array();
 	var stopImageQueue = false;
 	numThreads = Clamp(numThreads, 1, 5);
+	var loadTimeoutMs = 5000;
 
 	this.Stop = function ()
 	{
@@ -5570,18 +5622,27 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 				var $img = $(obj.img);
 				$img.bind("load.asyncimage", function ()
 				{
+					clearTimeout(obj.loadTimeout);
 					$img.unbind("load.asyncimage error.asyncimage");
 					if (onLoad)
 						onLoad(obj.img);
-					AsyncDownloadQueuedImage();
+					if (!obj.timedOut)
+						AsyncDownloadQueuedImage();
 				});
 				$img.bind("error.asyncimage", function ()
 				{
+					clearTimeout(obj.loadTimeout);
 					$img.unbind("load.asyncimage error.asyncimage");
 					if (onError)
 						onError(obj.img);
-					AsyncDownloadQueuedImage();
+					if (!obj.timedOut)
+						AsyncDownloadQueuedImage();
 				});
+				obj.loadTimeout = setTimeout(function ()
+				{
+					obj.timedOut = true;
+					AsyncDownloadQueuedImage();
+				}, loadTimeoutMs);
 				$img.attr('src', obj.path);
 			}
 			else // Image is already loaded
@@ -5603,6 +5664,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 		var newObj = new Object();
 		newObj.img = img;
 		newObj.path = path;
+		newObj.timedOut = false;
 		asyncImageQueue.push(newObj);
 	}
 	this.Dequeue = function (img)
