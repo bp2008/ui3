@@ -460,15 +460,25 @@ div.icon, a.icon
 		cursor: not-allowed;
 	}
 
-		.squareButton.disabled:hover, .oneByTwoSquareButton.disabled:hover
+		.squareButton.disabled:hover,
+		.squareButton.spacer:hover,
+		.oneByTwoSquareButton.disabled:hover
 		{
 			background-color: transparent;
 		}
 
-		.squareButton.disabled:active, .oneByTwoSquareButton.disabled:active
+		.squareButton.disabled:active,
+		.squareButton.spacer:active,
+		.oneByTwoSquareButton.disabled:active
 		{
 			background-color: transparent;
 		}
+
+	.squareButton.spacer
+	{
+		cursor: default;
+		border-color: transparent;
+	}
 
 .oneByTwoSquareButton
 {
@@ -510,6 +520,50 @@ div.icon, a.icon
 	padding: 14%;
 	width: 72%;
 	height: 72%;
+}
+
+.squareButton.noborder
+{
+	border-color: transparent;
+}
+
+#ptzIrBrightnessContrast .dropdownTrigger
+{
+	position: relative;
+}
+
+div.invisibleLabel
+{
+	display: none;
+}
+
+#irButtonText
+{
+	position: absolute;
+	top: 3px;
+	left: 12px;
+	color: #FFFF00;
+	font-style: italic;
+	font-weight: bold;
+	line-height: normal;
+	font-size: 16px;
+}
+.sizeMedium #irButtonText
+{
+	top: 1px;
+	left: 9px;
+	font-size: 14px;
+}
+.sizeSmall #irButtonText
+{
+	top: 0px;
+	left: 6px;
+	font-size: 14px;
+}
+
+.squareButton.yellow
+{
+	color: #FFFF00;
 }
 
 .profilebtn.selected
@@ -584,6 +638,11 @@ div.icon, a.icon
 		display: inline-block;
 	}
 
+.fiveByOneButtonSet
+{
+	height: 38px;
+}
+
 .fiveByTwoButtonSet, .fourByTwoButtonSet
 {
 	height: 76px;
@@ -594,6 +653,7 @@ div.icon, a.icon
 	box-sizing: border-box;
 }
 
+.fiveByOneButtonSet,
 .fiveByTwoButtonSet,
 .dropdownBox,
 .standardLeftBarBoxSize,
@@ -602,6 +662,7 @@ div.icon, a.icon
 	width: 190px;
 }
 
+.sizeMedium .fiveByOneButtonSet,
 .sizeMedium .fiveByTwoButtonSet,
 .sizeMedium .dropdownBox,
 .sizeMedium .standardLeftBarBoxSize,
@@ -610,6 +671,7 @@ div.icon, a.icon
 	width: 155px;
 }
 
+.sizeSmall .fiveByOneButtonSet,
 .sizeSmall .fiveByTwoButtonSet,
 .sizeSmall .dropdownBox,
 .sizeSmall .standardLeftBarBoxSize,
@@ -632,6 +694,16 @@ div.icon, a.icon
 .sizeSmall .fourByTwoButtonSet
 {
 	width: 100px;
+}
+
+.sizeMedium .fiveByOneButtonSet
+{
+	height: 31px;
+}
+
+.sizeSmall .fiveByOneButtonSet
+{
+	height: 25px;
 }
 
 .sizeMedium .fiveByTwoButtonSet, .sizeMedium .fourByTwoButtonSet

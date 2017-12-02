@@ -271,7 +271,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Add optional (disabled by default) IR light, brightness, and contrast controls.
 // TODO: Extremely large clip lists don't perform well.  Some browsers handle it better.  The complexity of the clip tiles has a lot to do with this.  The ideal fix, I think, would be to remove clip tiles from the DOM and never have more than, say, 1500 of them in the DOM at a time.  When creating a new clip tile beyond the limit, delete the oldest clip tile (using a queue).  The oldest is all but guaranteed to be far away.
 
 ///////////////////////////////////////////////////////////////
@@ -953,6 +952,14 @@ var defaultSettings =
 			, onChange: OnChange_ui3_extra_playback_controls_padding
 			, category: "Extra"
 		}
+		, {
+			key: "ui3_ir_brightness_contrast"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'PTZ: IR, Brightness, Contrast<br><a href="javascript:UIHelp.LearnMore(\'IR Brightness Contrast\')">(learn more)</a>'
+			, onChange: OnChange_ui3_ir_brightness_contrast
+			, category: "Extra"
+		}
 	];
 
 function OverrideDefaultSetting(key, value, IncludeInOptionsWindow, AlwaysReload, Generation)
@@ -1305,6 +1312,7 @@ $(function ()
 	OnChange_ui3_pc_next_prev_buttons();
 	OnChange_ui3_pc_seek_buttons();
 	OnChange_ui3_extra_playback_controls_padding();
+	OnChange_ui3_ir_brightness_contrast();
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -1838,7 +1846,7 @@ function DropdownBoxes()
 {
 	var self = this;
 	var handleElements = {};
-	var $dropdownBoxes = $(".dropdownBox,#btn_main_menu");
+	var $dropdownBoxes = $(".dropdownBox,#btn_main_menu,.dropdownTrigger");
 	var currentlyOpenList = null;
 	var preventDDLClose = false;
 
@@ -2031,6 +2039,72 @@ function DropdownBoxes()
 			}
 		});
 
+	this.listDefs["ptzIR"] = new DropdownListDefinition("ptzIR",
+		{
+			items:
+			[
+				new DropdownListItem({ cmd: "off", text: "IR Off" })
+				, new DropdownListItem({ cmd: "on", text: "IR On" })
+				, new DropdownListItem({ cmd: "auto", text: "IR Auto" })
+			]
+			, onItemClick: function (item)
+			{
+				var loading = videoPlayer.Loading().image;
+				if (loading.ptz && loading.isLive)
+					switch (item.cmd)
+					{
+						case "off":
+							ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 34);
+							ptzButtons.SetIRButtonState(0);
+							break;
+						case "on":
+							ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 35);
+							ptzButtons.SetIRButtonState(1);
+							break;
+						case "auto":
+							ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 36);
+							ptzButtons.SetIRButtonState(2);
+							break;
+					}
+			}
+		});
+	this.listDefs["ptzBrightness"] = new DropdownListDefinition("ptzBrightness",
+		{
+			items: GetNumberedDropdownListItems("Brightness", 0, 15)
+			, onItemClick: function (item)
+			{
+				var loading = videoPlayer.Loading().image;
+				if (loading.ptz && loading.isLive)
+				{
+					var newBrightness = Clamp(parseInt(item.cmd), 0, 15);
+					ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 11 + newBrightness);
+					ptzButtons.SetBrightnessButtonState(newBrightness);
+				}
+			}
+		});
+	this.listDefs["ptzContrast"] = new DropdownListDefinition("ptzContrast",
+		{
+			items: GetNumberedDropdownListItems("Contrast", 0, 6)
+			, onItemClick: function (item)
+			{
+				var loading = videoPlayer.Loading().image;
+				if (loading.ptz && loading.isLive)
+				{
+					var newContrast = Clamp(parseInt(item.cmd), 0, 6);
+					ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 27 + newContrast);
+					ptzButtons.SetContrastButtonState(newContrast);
+				}
+			}
+		});
+
+	function GetNumberedDropdownListItems(name, min, max)
+	{
+		var items = [];
+		for (var i = min; i <= max; i++)
+			items.push(new DropdownListItem({ cmd: i.toString(), text: name + " " + i }));
+		return items;
+	}
+
 	$dropdownBoxes.each(function (idx, ele)
 	{
 		var $ele = $(ele);
@@ -2049,6 +2123,10 @@ function DropdownBoxes()
 			ele.$arrow = $('<div class="dropdownArrow"><svg class="icon"><use xlink:href="#svg_x5F_DownArrow"></use></svg></div>');
 			$ele.append(ele.$label);
 			$ele.append(ele.$arrow);
+		}
+		else if ($ele.hasClass('dropdownTrigger'))
+		{
+			ele.$label = $ele.find('div.invisibleLabel');
 		}
 		else
 		{
@@ -2313,6 +2391,11 @@ function PtzButtons()
 	var $ptzPresets = $("#ptzPresetsContent .ptzpreset");
 	var $ptzButtons = $("#ptzButtonsMain");
 	var $ptzControlsContainers = $("#ptzPresetsContent,#ptzButtonsMain");
+	var $ptzExtraDropdowns = $("#ptzIrBrightnessContrast .dropdownTrigger");
+	var $irButtonText = $("#irButtonText");
+	var $irButtonLabel = $("#irButtonLabel");
+	var $brightnessButtonLabel = $("#brightnessButtonLabel");
+	var $contrastButtonLabel = $("#contrastButtonLabel");
 
 	var hitPolys = {};
 	hitPolys["PTZzoomIn"] = [[64, 64], [82, 82], [91, 77], [99, 77], [106, 81], [126, 64], [116, 58], [105, 53], [86, 53], [74, 58]];
@@ -2539,6 +2622,7 @@ function PtzButtons()
 			$ptzControlsContainers.removeAttr("title");
 			$ptzPresets.removeClass("disabled");
 			$ptzButtons.removeClass("disabled");
+			$ptzExtraDropdowns.removeClass("disabled");
 			$ptzBackgroundGraphics.css("color", $ptzBackgroundGraphics.get(0).defaultColor);
 		}
 		else
@@ -2546,6 +2630,7 @@ function PtzButtons()
 			$ptzControlsContainers.attr("title", featureEnabled ? "PTZ not available for current camera" : "PTZ disabled by user preference");
 			$ptzPresets.addClass("disabled");
 			$ptzButtons.addClass("disabled");
+			$ptzExtraDropdowns.addClass("disabled");
 			$ptzBackgroundGraphics.css("color", "#20242b");
 		}
 	}
@@ -2727,6 +2812,9 @@ function PtzButtons()
 				*/
 				currentPtzData = response.data;
 				currentPtzData.cameraId = cameraId;
+				self.SetIRButtonState();
+				self.SetBrightnessButtonState();
+				self.SetContrastButtonState();
 			}
 		}, function ()
 			{
@@ -2829,7 +2917,7 @@ function PtzButtons()
 	this.PTZ_unsafe_async_guarantee = function (cameraId, ptzCmd, updown)
 	{
 		unsafePtzActionInProgress = true;
-		var args = { cmd: "ptz", camera: cameraId, button: ptzCmd };
+		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd) };
 		if (updown == "1")
 			args.updown = 1;
 		else if (updown == "2")
@@ -2853,7 +2941,7 @@ function PtzButtons()
 	this.PTZ_unsafe_sync_guarantee = function (cameraId, ptzCmd, updown)
 	{
 		unsafePtzActionInProgress = true;
-		var args = { cmd: "ptz", camera: cameraId, button: ptzCmd };
+		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd) };
 		if (updown == "1")
 			args.updown = 1;
 		else if (updown == "2")
@@ -2874,6 +2962,39 @@ function PtzButtons()
 	this.Get$PtzPresets = function ()
 	{
 		return $ptzPresets;
+	}
+	this.SetIRButtonState = function (irmode)
+	{
+		if (typeof irmode != "undefined")
+			currentPtzData.irmode = irmode;
+
+		if (currentPtzData.irmode == 1)
+		{
+			$irButtonText.text("*").parent().addClass("yellow");
+			$irButtonLabel.text("IR On");
+		}
+		else if (currentPtzData.irmode == 2)
+		{
+			$irButtonText.text("A").parent().removeClass("yellow");
+			$irButtonLabel.text("IR Auto");
+		}
+		else // if (currentPtzData.irmode == 0)
+		{
+			$irButtonText.text("").parent().removeClass("yellow");
+			$irButtonLabel.text("IR Off");
+		}
+	}
+	this.SetBrightnessButtonState = function (brightness)
+	{
+		if (typeof brightness != "undefined")
+			currentPtzData.brightness = brightness;
+		$brightnessButtonLabel.text("Brightness " + currentPtzData.brightness);
+	}
+	this.SetContrastButtonState = function (contrast)
+	{
+		if (typeof contrast != "undefined")
+			currentPtzData.contrast = contrast;
+		$contrastButtonLabel.text("Contrast " + currentPtzData.contrast);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -14520,6 +14641,13 @@ function OnChange_ui3_extra_playback_controls_padding()
 	else
 		$('#pcButtonContainer').removeClass("extraPadding");
 }
+function OnChange_ui3_ir_brightness_contrast()
+{
+	if (settings.ui3_ir_brightness_contrast == "1")
+		$('#ptzIrBrightnessContrast').show();
+	else
+		$('#ptzIrBrightnessContrast').hide();
+}
 ///////////////////////////////////////////////////////////////
 // UI Help ////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -14543,6 +14671,9 @@ function UIHelpTool()
 			case 'beta_information':
 				Beta_Information();
 				break;
+			case "IR Brightness Contrast":
+				IR_Brightness_Contrast();
+				break;
 		}
 	}
 	var Context_Menu_Compatibility_Mode = function ()
@@ -14558,7 +14689,7 @@ function UIHelpTool()
 					+ '  You may be unable to access the context menu regardless of this setting.')
 				: '')
 			+ '</div>')
-			.modalDialog({ title: "Context Menu Compatibility Mode" });
+			.modalDialog({ title: "Context Menu Compatibility Mode", closeOnOverlayClick: true });
 	}
 	var Double_Click_to_Fullscreen = function ()
 	{
@@ -14576,7 +14707,7 @@ function UIHelpTool()
 				? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
 				: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
 			+ '</div>')
-			.modalDialog({ title: "Double-Click to Fullscreen" });
+			.modalDialog({ title: "Double-Click to Fullscreen", closeOnOverlayClick: true });
 	}
 	var Camera_Group_Webcasting = function ()
 	{
@@ -14587,7 +14718,7 @@ function UIHelpTool()
 		var $img = $('<img src="ui3/help/img/GroupProperties.png" style="width:400px; height:320px;" />');
 		$root.append($img);
 		$img.lightbox();
-		$root.modalDialog({ title: 'Camera Group Webcasting' });
+		$root.modalDialog({ title: 'Camera Group Webcasting', closeOnOverlayClick: true });
 	}
 	var Beta_Information = function ()
 	{
@@ -14596,9 +14727,17 @@ function UIHelpTool()
 			+ '<a href="https://goo.gl/forms/nw6rRrY0gPObYtJr1" target="_blank">Click here to report a bug or send other feedback.</a><br><br>'
 			+ '<img src="ui3/help/img/BetaInfoPanel.png" style="border: 2px solid #0097F0; float: right; margin-bottom: 10px;" />This panel is accessible at any time from the Main Menu in the upper right.<br><br>'
 			+ '<div style="clear:both;"></div>'
-			+ 'This interface uses cutting-edge web technology that is not available in all web browsers.  Full functionality exists in the latest versions of <a href="https://www.google.com/chrome/" target="_blank">Chrome</a>, <a href="https://www.opera.com/" target="_blank">Opera</a>, and Safari on Mac.  <a href="https://www.microsoft.com/en-us/windows/microsoft-edge" target="_blank">Edge</a> can work, depending on the version.  Firefox is currently experiencing growing pains and does not run UI3 as well as other browsers.<br><br>'
+			+ 'This interface uses cutting-edge web technology that is not available in all web browsers.  Full functionality exists in the latest versions of <a href="https://www.google.com/chrome/" target="_blank">Chrome</a>, <a href="https://www.opera.com/" target="_blank">Opera</a>, and Safari on Mac.  <a href="https://www.microsoft.com/en-us/windows/microsoft-edge" target="_blank">Edge</a> can work, depending on the version.<br><br>'
 			+ '</div>');
-		$root.modalDialog({ title: 'Beta Information' });
+		$root.modalDialog({ title: 'Beta Information', closeOnOverlayClick: true });
+	}
+	var IR_Brightness_Contrast = function ()
+	{
+		var $root = $('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
+			+ 'Infrared, Brightness, and Contrast controls do not work well with many cameras, so they are disabled by default to save space.<br><br>'
+			+ 'When enabled, these controls appear in the PTZ section below the presets, and only work when you have maximized a camera that has PTZ enabled in Blue Iris.'
+			+ '</div>');
+		$root.modalDialog({ title: 'IR, Brightness, and Contrast', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
