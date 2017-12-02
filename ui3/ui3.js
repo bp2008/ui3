@@ -266,21 +266,14 @@ var togglableUIFeatures =
 
 // TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
 //			-- I've found bugs related to the cycles and reported them.  Awaiting fixes.
-// TODO: Server-side ptz preset thumbnails.  Prerequisite: Server-side ptz preset thumbnails.
 
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
 // TODO: Add optional (disabled by default) IR light, brightness, and contrast controls.
-// TODO: Try to insert the Video Player Context Menu image to the left of the item descriptions.
-// TODO: Create a help topic briefly describing the Camera Properties window.
-// TODO: Create a help topic describing the Main Menu and its options.
 // TODO: Create a help topic "Tips" describing other features unworthy of their own help section.  Mention how many things are collapsable or right-clickable.  Mention the Snapshot button next to the Main Menu.  Mention that "DISK" can be clicked to view more detailed disk status.
-// TODO: Opening the Disk Usage dialog more than once shouldn't open multiple copies.
-// TODO: Fix z-index problem that causes the UI's special dropdown boxes to be overlapped by dialog boxes.  It should be the other way around for usability's sake.
-// TODO: Clicking the calendar button when it is already open should not make it re-open.
-// TODO: Extremely large clip lists don't perform well.  Some browsers handle it better.  The complexity of the clip tiles has a lot to do with this.  The ideal fix, I think, would be to remove clip tiles from the DOM and never have more than, say, 2000 of them in the DOM at a time.
+// TODO: Extremely large clip lists don't perform well.  Some browsers handle it better.  The complexity of the clip tiles has a lot to do with this.  The ideal fix, I think, would be to remove clip tiles from the DOM and never have more than, say, 1500 of them in the DOM at a time.  When creating a new clip tile beyond the limit, delete the oldest clip tile (using a queue).  The oldest is all but guaranteed to be far away.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -557,8 +550,7 @@ var defaultSettings =
 			, value: "0|0|0|38" // 38: up arrow
 			, hotkey: true
 			, label: "Next Clip"
-			, hint: '<img src="ui2/NextClip.png" style="float:right;height:48px" />'
-			+ "Load the next clip, higher up in the list."
+			, hint: "Load the next clip, higher up in the list."
 			, actionDown: BI_Hotkey_NextClip
 			, category: "Hotkeys"
 		}
@@ -1869,21 +1861,24 @@ function DropdownBoxes()
 				if (statusLoader.IsGlobalScheduleEnabled())
 				{
 					var schedulesArray = sessionManager.GetSchedulesArray();
-					if (schedulesArray && schedulesArray.length == 0)
+					if (schedulesArray)
 					{
-						console.log("Schedules array is empty. Opening login dialog because login responses provide the schedule list");
-						openLoginDialog();
-						return;
-					}
-					for (var i = 0; i < schedulesArray.length; i++)
-					{
-						var scheduleName = schedulesArray[i];
-						this.items.push(new DropdownListItem(
-							{
-								text: scheduleName
-								, id: scheduleName
-								, selected: scheduleName == statusLoader.GetCurrentlySelectedScheduleName()
-							}));
+						if (schedulesArray.length == 0)
+						{
+							console.log("Schedules array is empty. Opening login dialog because login responses provide the schedule list");
+							openLoginDialog();
+							return;
+						}
+						for (var i = 0; i < schedulesArray.length; i++)
+						{
+							var scheduleName = schedulesArray[i];
+							this.items.push(new DropdownListItem(
+								{
+									text: scheduleName
+									, id: scheduleName
+									, selected: scheduleName == statusLoader.GetCurrentlySelectedScheduleName()
+								}));
+						}
 					}
 				}
 				else
@@ -2305,8 +2300,6 @@ function PtzButtons()
 	var $hoveredEle = null;
 	var $activeEle = null;
 
-	var currentlyLoadedPtzThumbsCamId = "";
-
 	var unsafePtzActionNeedsStopped = false;
 	var currentPtz = "0";
 	var currentPtzCamId = "";
@@ -2318,7 +2311,7 @@ function PtzButtons()
 	var $ptzGraphics = $("#ptzGraphicWrapper div.ptzGraphic");
 	var $ptzBackgroundGraphics = $("#ptzGraphicWrapper div.ptzBackground");
 	var $ptzGraphicContainers = $("#ptzGraphicWrapper .ptzGraphicContainer");
-	var $ptzPresets = $(".ptzpreset");
+	var $ptzPresets = $("#ptzPresetsContent .ptzpreset");
 	var $ptzButtons = $("#ptzButtonsMain");
 	var $ptzControlsContainers = $("#ptzPresetsContent,#ptzButtonsMain");
 
@@ -2603,6 +2596,7 @@ function PtzButtons()
 			if (!ptzControlsEnabled)
 				return;
 
+			// Show big preset thumbnail
 			var thumb = $("#presetBigThumb");
 			thumb.remove();
 			$("body").append('<div id="presetBigThumb"></div>');
@@ -2612,21 +2606,36 @@ function PtzButtons()
 			$desc.text(self.GetPresetDescription(ele.presetnum));
 			thumb.append($desc);
 
-			var imgData = settings.getItem("ui2_preset_" + videoPlayer.Loading().image.id + "_" + ele.presetnum);
-			if (imgData != null && imgData.length > 0)
+			var assumedWidth = 0;
+			var assumedHeight = 0;
+			var imgData = ptzPresetThumbLoader.GetImgData(videoPlayer.Loading().image.id, ele.presetnum);
+			if (imgData)
 			{
 				var $img = $('<img alt="" />');
-				$img.attr("src", imgData);
+				$img.attr("src", imgData.src);
 				thumb.append($img);
+				assumedWidth = imgData.w;
+				assumedHeight = imgData.h;
 			}
 
-			var $parent = $(this).parent();
-			var thisOffset = $parent.offset();
-			var centerOffset = ($parent.width() - thumb.width()) / 2;
-			if (centerOffset <= 0)
-				centerOffset = 0;
-			thumb.css("left", (thisOffset.left + centerOffset) + "px");
-			thumb.css("top", (thisOffset.top - thumb.height() - 3) + "px");
+			var bW = $('#layoutbody').width();
+			var shrinkBy = assumedWidth ? bW / assumedWidth : 0;
+			if (shrinkBy > 0 && shrinkBy < 1)
+				assumedHeight = assumedHeight * shrinkBy;
+			var $this = $(this);
+			var tO = $this.offset();
+			var $parent = $this.parent();
+			var pO = $parent.offset();
+			var pW = $parent.width();
+			var wH = $(window).height();
+			var top = tO.top - (assumedHeight / 2);
+			if (top + (assumedHeight + 20) > wH) // 20 for the description
+				top = (wH - (assumedHeight + 20));
+			if (top < 0)
+				top = 0;
+			thumb.css("left", pO.left + pW + 3 + "px");
+			thumb.css("top", top + "px");
+			thumb.css("max-width", bW + "px");
 			thumb.show();
 		});
 		$ele.mouseleave(function (e)
@@ -2636,38 +2645,12 @@ function PtzButtons()
 		});
 	});
 	// Presets //
-	var LoadPtzPresetThumbs = function (loadThumbsOverride)
+	var LoadPtzPresetThumbs = function ()
 	{
 		var loading = videoPlayer.Loading().image;
 		if (loading.ptz && GetUi3FeatureEnabled("ptzControls"))
 		{
-			if (loadThumbsOverride || currentlyLoadedPtzThumbsCamId != loading.id)
-			{
-				$ptzPresets.each(function (idx, ele)
-				{
-					var imgData = settings.getItem("ui2_preset_" + loading.id + "_" + ele.presetnum);
-					if (imgData != null && imgData.length > 0)
-					{
-						$(ele).empty();
-						var $thumb = $('<img src="" alt="' + ele.presetnum + '" class="presetThumb" />');
-						$thumb.load(function ()
-						{
-							try
-							{
-								var remainder = $thumb[0].getBoundingClientRect().height % 1;
-								if (remainder != 0)
-									$thumb.css("padding-bottom", (1 - remainder) + "px");
-							}
-							catch (ex) { }
-						});
-						$thumb.attr("src", imgData);
-						$(ele).append($thumb);
-					}
-					else
-						$(ele).text(ele.presetnum);
-				});
-				currentlyLoadedPtzThumbsCamId = loading.id;
-			}
+			ptzPresetThumbLoader.NotifyPtzCameraSelected(loading.id);
 			LoadPTZPresetDescriptions(loading.id);
 		}
 		else
@@ -2676,7 +2659,6 @@ function PtzButtons()
 			{
 				$(ele).text(ele.presetnum);
 			});
-			currentlyLoadedPtzThumbsCamId = "";
 		}
 	}
 	this.PTZ_goto_preset = function (presetNumber)
@@ -2720,21 +2702,12 @@ function PtzButtons()
 	{
 		if (currentServer.isLoggingOut)
 			return;
-		if (cameraId != videoPlayer.Loading().image.id)
-			return;
 
-		var sizeArg = "&w=160";
-		if (videoPlayer.Loading().image.aspectratio < 1)
-			sizeArg = "&h=160";
-		var tmpImgSrc = currentServer.remoteBaseURL + "image/" + videoPlayer.Loading().image.path + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetRemoteSessionArg("&", true);
-		PersistImageFromUrl("ui2_preset_" + cameraId + "_" + presetNumber, tmpImgSrc
-			, function (imgAsDataURL)
-			{
-				LoadPtzPresetThumbs(true);
-			}, function (message)
-			{
-				toaster.Error("Failed to save preset image. " + message, 10000);
-			});
+		// Wait a moment in case Blue Iris needs time to save the updated preset image.
+		setTimeout(function ()
+		{
+			ptzPresetThumbLoader.ReloadPresetImage(cameraId, presetNumber);
+		}, 50);
 	}
 	var LoadPTZPresetDescriptions = function (cameraId)
 	{
@@ -2744,6 +2717,15 @@ function PtzButtons()
 		{
 			if (videoPlayer.Loading().image.id == cameraId)
 			{
+				/*
+					brightness:-1
+					contrast:0
+					irmode:0
+					powermode:-1
+					presetnum:15
+					presets:[""]
+					talksamplerate:8000
+				*/
 				currentPtzData = response.data;
 				currentPtzData.cameraId = cameraId;
 			}
@@ -2890,7 +2872,134 @@ function PtzButtons()
 				self.PTZ_unsafe_sync_guarantee(cameraId, ptzCmd, updown);
 			}, true);
 	}
+	this.Get$PtzPresets = function ()
+	{
+		return $ptzPresets;
+	}
 }
+///////////////////////////////////////////////////////////////
+// PtzPresetThumbLoader ///////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var ptzPresetThumbLoader = new (function ()
+{
+	var self = this;
+	// A two-level cache.  The first level is a map of camera names.  The second level is a map of preset numbers to image elements.
+	var cache = {};
+	var asyncThumbLoader = null;
+
+	var Initialize = function ()
+	{
+		if (asyncThumbLoader)
+			return;
+		asyncThumbLoader = new AsyncPresetThumbnailDownloader(thumbLoaded);
+	}
+	this.NotifyPtzCameraSelected = function (cameraId)
+	{
+		/// <summary>Call this when a PTZ camera is selected so the thumbnails can begin loading (unless they are already cached).</summary>
+		if (!CameraIsEligible(cameraId))
+			return;
+
+		var camCache = cache[cameraId];
+		if (!camCache)
+		{
+			camCache = cache[cameraId] = {};
+			for (var i = 0; i < 20; i++)
+			{
+				var $img = $('<img src="" alt="' + (i + 1) + '" class="presetThumb" />');
+				camCache[i] = $img[0];
+				$img.hide();
+				$img.load(thumbLoaded);
+			}
+		}
+		ptzButtons.Get$PtzPresets().each(function (idx, ele)
+		{
+			$(ele).empty()
+				.append('<span>' + ele.presetnum + '</span>')
+				.append(camCache[ele.presetnum - 1]);
+		});
+		for (var i = 0; i < 20; i++)
+		{
+			// Unfortunately, we can't allow the browser cache to be used for these, or the cached images become stale when updated and reloading the page doesn't fix it.
+			var img = camCache[i];
+			img.imgData = {
+				src: UrlForPreset(cameraId, i + 1, true),
+				w: 0,
+				h: 0
+			};
+			asyncThumbLoader.Enqueue(img, img.imgData.src);
+		}
+	}
+	this.ReloadPresetImage = function (cameraId, presetNumber)
+	{
+		/// <summary>Force-reloads a preset image from the server.</summary>
+		if (currentServer.isLoggingOut)
+			return false;
+
+		var idx = presetNumber - 1;
+		if (idx < 0 || idx > 19)
+			return;
+		var camCache = cache[cameraId];
+		if (camCache)
+		{
+			var img = camCache[idx];
+			img.imgData.src = UrlForPreset(cameraId, i + 1, true);
+			asyncThumbLoader.Enqueue(img, img.imgData.src);
+		}
+		else
+			self.NotifyPtzCameraSelected(cameraId); // This case shouldn't happen.
+	}
+	this.GetImgData = function (cameraId, presetNumber)
+	{
+		if (presetNumber > 0 && presetNumber < 21)
+		{
+			var camCache = cache[cameraId];
+			if (camCache)
+				return camCache[presetNumber - 1].imgData;
+		}
+		return null;
+	}
+	var thumbLoaded = function (img)
+	{
+		if (img.complete && typeof img.naturalWidth != "undefined" && img.naturalWidth > 0)
+		{
+			img.imgData.w = img.naturalWidth
+			img.imgData.h = img.naturalHeight;
+			var $img = $(img);
+			$img.prev('span').remove();
+			$img.show();
+			try
+			{
+				var remainder = img.getBoundingClientRect().height % 1;
+				if (remainder != 0)
+					$thumb.css("padding-bottom", (1 - remainder) + "px");
+			}
+			catch (ex) { }
+		}
+	}
+	var UrlForPreset = function (cameraId, presetNumber, overrideCache)
+	{
+		var idx = presetNumber - 1;
+		if (idx < 0 || idx > 19)
+			return "";
+		var sessionArg = currentServer.GetRemoteSessionArg("?");
+		var cacheArg = overrideCache ? ((sessionArg ? "&" : "?") + "cache=" + Date.now()) : "";
+		return currentServer.remoteBaseURL + "image/" + cameraId + "/preset_" + idx + ".jpg" + sessionArg + cacheArg;
+	}
+	var CameraIsEligible = function (cameraId)
+	{
+		if (currentServer.isLoggingOut)
+			return false;
+		var loading = videoPlayer.Loading().image;
+		if (cameraId != loading.id)
+			return false;
+		if (!loading.ptz)
+			return false;
+		if (!GetUi3FeatureEnabled("ptzControls"))
+			return false;
+		Initialize();
+		return true;
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // Timeline ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -3085,30 +3194,40 @@ function DateFilter(dateRangeLabelSelector)
 	var dp2 = new DatePicker("datePicker2Container", 2, self);
 	var timeClosed = 0;
 	var mayClose = true;
+	var isVisible = false;
 
-	$datePickerDialog.on('mousedown mouseup touchstart touchend touchcancel', function (e)
+	$("#dateRange").add($datePickerDialog).on('mousedown mouseup touchstart touchend touchcancel', function (e)
 	{
 		mayClose = false;
 		setTimeout(function () { mayClose = true; }, 0);
 	});
 	$(document).on('mousedown mouseup touchstart touchend touchcancel', function (e)
 	{
-		if (mayClose && $datePickerDialog.is(":visible"))
-		{
-			$datePickerDialog.hide();
-			timeClosed = new Date().getTime();
-		}
+		if (mayClose && isVisible)
+			self.CloseDatePicker();
 	});
 
 	this.OpenDatePicker = function (ele)
 	{
-		if (new Date().getTime() - 33 > timeClosed)
+		if (isVisible)
+			self.CloseDatePicker();
+		else if (performance.now() - 33 > timeClosed)
 		{
 			var $ele = $(ele);
 			var offset = $ele.offset();
 			$datePickerDialog.css("left", offset.left + $ele.outerWidth(true) + "px");
 			$datePickerDialog.css("top", offset.top + "px");
 			$datePickerDialog.show();
+			isVisible = true;
+		}
+	};
+	this.CloseDatePicker = function (ele)
+	{
+		if (isVisible)
+		{
+			isVisible = false;
+			$datePickerDialog.hide();
+			timeClosed = performance.now();
 		}
 	};
 	this.SelectToday = function ()
@@ -4077,7 +4196,7 @@ function ClipLoader(clipsBodySelector)
 	var HeightOfOneSizeMediumLargeThumbClipTilePx = 130;
 	var HeightOfOneSizeSmallLargeThumbClipTilePx = 115;
 	var HeightOfOneDateTilePx = 27;
-	var asyncThumbnailDownloader = new AsyncThumbnailDownloader();
+	var asyncThumbnailDownloader = new AsyncClipThumbnailDownloader();
 	var $clipsbody = $(clipsBodySelector);
 	var $clipListTopDate = $('#clipListTopDate');
 	var clipListCache = new Object();
@@ -4369,7 +4488,7 @@ function ClipLoader(clipsBodySelector)
 				{
 					$clipsbody.append('<div class="clipListText">No recordings were found matching your filters.</div>');
 				}
-				asyncThumbnailDownloader = new AsyncThumbnailDownloader();
+				asyncThumbnailDownloader = new AsyncClipThumbnailDownloader();
 				tileLoader.AppearDisappearCheckEnabled = true;
 				tileLoader.appearDisappearCheck();
 
@@ -5101,6 +5220,7 @@ function ClipLoader(clipsBodySelector)
 					self.CloseCurrentClip();
 					setTimeout(function ()
 					{
+						bulkOperationInProgress = false; // This prevents error message if idx is 0
 						Multi_Operation(operation, allSelectedClipIDs, args, idx, myToast, errorCount);
 					}, 500);
 					return;
@@ -5238,12 +5358,76 @@ function ClipLoader(clipsBodySelector)
 ///////////////////////////////////////////////////////////////
 // Asynchronous Image Downloading /////////////////////////////
 ///////////////////////////////////////////////////////////////
-function AsyncThumbnailDownloader()
+function AsyncClipThumbnailDownloader()
+{
+	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, onLoad, onError, loadCondition);
+	var fallbackImg = 'ui3/noimage.png';
+	this.Stop = function ()
+	{
+		asyncThumbnailDownloader.Stop();
+	}
+	this.Enqueue = function (img, path)
+	{
+		asyncThumbnailDownloader.Enqueue(img, path);
+	}
+	this.Dequeue = function (img)
+	{
+		asyncThumbnailDownloader.Dequeue(img);
+	}
+
+	function onLoad(img)
+	{
+		var $img = $(img);
+		$img.css("width", "auto");
+		$img.css("height", "auto");
+		$img.unbind("load.asyncimage");
+		$img.unbind("error.asyncimage");
+	}
+	function onError(img)
+	{
+		var $img = $(img);
+		$img.css("width", "auto");
+		$img.css("height", "auto");
+		$img.unbind("load.asyncimage");
+		$img.unbind("error.asyncimage");
+		$img.attr('src', fallbackImg);
+	}
+	function loadCondition(obj)
+	{
+		var src = obj.img.getAttribute('src');
+		return !src || src.length == 0 || src == "ui3/LoadingImage.png" || (src != obj.path && src != fallbackImg);
+	}
+}
+function AsyncPresetThumbnailDownloader(thumbLoaded)
+{
+	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, thumbLoaded, onError, loadCondition);
+
+	this.Stop = function ()
+	{
+		asyncThumbnailDownloader.Stop();
+	}
+	this.Enqueue = function (img, path)
+	{
+		asyncThumbnailDownloader.Enqueue(img, path);
+	}
+	this.Dequeue = function (img)
+	{
+		asyncThumbnailDownloader.Dequeue(img);
+	}
+
+	function onError(img)
+	{
+	}
+	function loadCondition(obj)
+	{
+		return true;
+	}
+}
+function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 {
 	var asyncImageQueue = new Array();
 	var stopImageQueue = false;
-	var fallbackImg = 'ui3/noimage.png';
-	var numThreads = 3; //Clamp(input, 1, 5);
+	numThreads = Clamp(numThreads, 1, 5);
 
 	this.Stop = function ()
 	{
@@ -5259,27 +5443,24 @@ function AsyncThumbnailDownloader()
 			setTimeout(AsyncDownloadQueuedImage, 250);
 		else
 		{
-			var src = $(obj.img).attr('src');
-			if (!src || src.length == 0 || src == "ui3/LoadingImage.png" || (src != obj.path && src != fallbackImg))
+			if (loadCondition(obj))
 			{
-				$(obj.img).bind("load.asyncimage", function ()
+				var $img = $(obj.img);
+				$img.bind("load.asyncimage", function ()
 				{
-					$(this).css("width", "auto");
-					$(this).css("height", "auto");
-					$(this).unbind("load.asyncimage");
-					$(this).unbind("error.asyncimage");
+					$img.unbind("load.asyncimage error.asyncimage");
+					if (onLoad)
+						onLoad(obj.img);
 					AsyncDownloadQueuedImage();
 				});
-				$(obj.img).bind("error.asyncimage", function ()
+				$img.bind("error.asyncimage", function ()
 				{
-					$(this).css("width", "auto");
-					$(this).css("height", "auto");
-					$(this).unbind("load.asyncimage");
-					$(this).unbind("error.asyncimage");
-					$(this).attr('src', fallbackImg);
+					$img.unbind("load.asyncimage error.asyncimage");
+					if (onError)
+						onError(obj.img);
 					AsyncDownloadQueuedImage();
 				});
-				$(obj.img).attr('src', obj.path);
+				$img.attr('src', obj.path);
 			}
 			else // Image is already loaded
 				AsyncDownloadQueuedImage();
@@ -5841,8 +6022,10 @@ function DiskUsageGUI()
 	var exceededAllocationOccurred = false;
 	var overAllocatedOccurred = false;
 	var normalStateOccurred = false;
+	var currentDialog = null;
 	this.open = function (disks)
 	{
+		self.close();
 		exceededAllocationOccurred = overAllocatedOccurred = normalStateOccurred = false;
 		var $dud = $('<div id="diskUsageDialog"></div>');
 		$dud.append('<div class="diskUsageSeparator"></div>');
@@ -5887,7 +6070,18 @@ function DiskUsageGUI()
 			$legend.append(CreateLegendItem('#FF00FF', 'Overallocated space'));
 		}
 		$legend.append(CreateLegendItem('#66DD66', 'Unallocated free space'));
-		$dud.dialog({ title: "Disk Usage" });
+		currentDialog = $dud.dialog({
+			title: "Disk Usage",
+			onClosing: function () { currentDialog = null; }
+		});
+	}
+	this.close = function ()
+	{
+		if (currentDialog)
+		{
+			currentDialog.close();
+			currentDialog = null;
+		}
 	}
 	var CreateLegendItem = function (color, label)
 	{
@@ -6113,7 +6307,11 @@ function SessionManager()
 						//setTimeout(function () { logoutOldSession(oldSession); }, 1000);
 					}
 					else
+					{
+						settings.bi_username = "";
+						settings.bi_password = "";
 						onFail(response, 'Failed to log in. ' + GetFailReason(response));
+					}
 				}, function (jqXHR, textStatus, errorThrown)
 					{
 						onFail(null, 'Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.ErrorMessageHtml);
@@ -7312,7 +7510,7 @@ function JpegVideoModule()
 		camimg_canvas_ele = $camimg_canvas.get(0);
 		var camObj = $('<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />');
 		var $backbuffer_canvas = $('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
-		var backbuffer_canvas = $backbuffer_canvas.get(0);
+		backbuffer_canvas = $backbuffer_canvas.get(0);
 		$camimg_store.append($camimg_canvas);
 		$camimg_store.append(camObj);
 		$camimg_store.append($backbuffer_canvas);
@@ -11022,7 +11220,7 @@ function SystemConfig()
 		var $sysconfig = $("#sysconfigcontent");
 		if ($sysconfig.length == 0)
 			return;
-		$sysconfig.html('<div style="text-align: center"><img src="ui2/ajax-loader-clips.gif" alt="Loading..." /></div>');
+		$sysconfig.html('<div style="text-align: center">Loading...</div>');
 		ExecJSON({ cmd: "sysconfig" }, function (response)
 		{
 			if (typeof response.result == "undefined")
@@ -11155,8 +11353,13 @@ function ListDialog(options_arg)
 			sb.push('</tr></thead><tbody></tbody></table>');
 			$content.html(sb.join(""));
 			var $tbody = $content.find("tbody");
-			for (var i = 0; i < response.data.length; i++)
-				$tbody.append(listSettings.get_row(response.data[i]));
+			if (response.data)
+			{
+				for (var i = 0; i < response.data.length; i++)
+					$tbody.append(listSettings.get_row(response.data[i]));
+			}
+			else
+				$tbody.append('<tr><td colspan="' + listSettings.headers.length + '" style="text-align: center; padding: 16px 0px;">This list is empty.</td></tr>');
 			modal_dialog.contentChanged(!loadedOnce);
 			loadedOnce = true;
 		}, function ()

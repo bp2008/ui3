@@ -789,14 +789,22 @@ div.icon, a.icon
 
 #presetBigThumb
 {
+	box-sizing: border-box;
 	position: absolute;
 	border: 4px ridge #888888;
 	border-radius: 5px;
-	max-width: 160px;
-	max-height: 180px;
+	max-width: 500px;
+	max-height: 500px;
+	z-index: 9999;
 	overflow: hidden;
 	font-size: 0px;
 }
+
+	#presetBigThumb img
+	{
+		max-width: 100%;
+		max-height: 100%;
+	}
 
 .presetDescription
 {
@@ -807,7 +815,7 @@ div.icon, a.icon
 	text-align: center;
 	background-color: #000000;
 	padding: 0px 2px;
-	max-width: 160px;
+	max-width: 100%;
 	max-height: 20px;
 }
 /* Progress Bars */
@@ -1381,7 +1389,7 @@ div.icon, a.icon
 	display: inline-block;
 	position: absolute;
 	border: 1px solid #969BA7;
-	z-index: 100;
+	z-index: 9999999; /* Same z-index as playback settings panels. Toasts are at 999999 (one less 9)*/
 	color: #DDDDDD;
 	overflow: auto;
 }
@@ -2138,10 +2146,12 @@ div.icon, a.icon
 	font-size: 16px;
 	bottom: 64px;
 }
+
 .sizeMedium #toast-container
 {
 	bottom: 48px;
 }
+
 .sizeSmall #toast-container
 {
 	bottom: 36px;

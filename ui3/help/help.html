@@ -37,7 +37,9 @@
 						<li class="dropdown">
 							<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Advanced <span class="caret"></span></a>
 							<ul class="dropdown-menu">
+								<li><a data-toggle="pill" href="#cameraproperties" id="nav-cameraproperties">Camera Properties</a></li>
 								<li><a data-toggle="pill" href="#hlsstreams" id="nav-hlsstreams">HLS Streams</a></li>
+								<li><a data-toggle="pill" href="#mainmenu" id="nav-mainmenu">Main Menu</a></li>
 								<li><a data-toggle="pill" href="#nerdstats" id="nav-nerdstats">Stats for Nerds</a></li>
 								<li><a data-toggle="pill" href="#extensions" id="nav-extensions">UI Extensions</a></li>
 								<li><a data-toggle="pill" href="#urlparameters" id="nav-urlparameters">URL Parameters</a></li>
@@ -67,60 +69,77 @@
 					<div class="tab-pane" id="videoplayer" role="tabpanel" aria-labelledby="nav-videoplayer">
 						<h1>Video Player</h1>
 						<p>UI3 can stream video using two different compression methods: <b>H.264</b> and <b>Jpeg</b>.  H.264 is more efficient with network bandwidth, and usually achieves a higher frame rate, making it the most desirable choice in most circumstances.  H.264 is the default streaming method in browsers which support it.  Jpeg streaming is simpler and can be used in all browsers capable of running UI3.</p>
-						<h2>H.264 Streaming</h2>
-						<p>UI3 can stream H.264 video if your browser supports it, otherwise you won't even see the option.  You can check for H.264 compatibility by looking for H.264 items in the Streaming Quality dropdown list.</p>
-						<p><b>H.264</b> streaming has several drawbacks, however.</p>
+						<h2>Video Codecs <small>(Streaming Quality)</small></h2>
+						<h3>H.264</h3>
+						<p>UI3 can stream H.264 video if your browser supports it, otherwise you won't even see the option.  You can check for H.264 compatibility by looking for H.264 items in the Streaming Quality dropdown list.  If it is available, it often provides a much smoother video stream.</p>
+						<p>H.264 streaming has several drawbacks, however.</p>
 						<ul>
 							<li>Due to limitations of modern web technology, UI3 can't take advantage of hardware acceleration for H.264 playback without causing video delay to go through the roof.  Therefore, H.264 playback in UI3 requires quite a bit more CPU than you are probably used to.</li>
 							<li>If your viewing device has insufficient CPU or network speed, the video will become increasingly delayed.  If this happens, UI3 will warn you and suggest that you try a different Streaming Quality option.  UI3 does not know which of your Streaming Quality options require fewer resources, so it cannot automatically change to a more efficient stream.</li>
 						</ul>
-						<h3>H.264 Streaming Profiles</h3>
-						<p>The three H.264 encoder profiles "Streaming 0", "Streaming 1", and "Streaming 2" are not configurable in UI3 directly.  Instead, you must configure them in Blue Iris.  Open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab > <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
-						<div class="panel panel-info">
-							<div class="panel-heading">Encoder "Preset" options</div>
-							<div class="panel-body">
-								In Blue Iris's <b>Encoder options</b> dialog, you must choose between three "Preset" options: "ultrafast", "superfast", and "veryfast".<br /><br />"ultrafast" is the lowest quality, but requires the least amount of CPU time to process, making it ideal for use on many mobile devices running UI3.  It can also help on struggling devices if you use a conservative bit rate limit, like 512 Kbps.
+						<h4>H.264 Streaming Profiles</h4>
+						<p>You can control the H.264 encoder parameters by configuring the three encoder profiles "Streaming 0", "Streaming 1", and "Streaming 2" in Blue Iris.  These profiles are not configurable in UI3 directly.  In Blue Iris's console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
+						<div class="row">
+							<div class="col-sm-4 col-lg-3">
+								<div class="panel panel-info">
+									<div class="panel-heading">Encoder profiles are shared with mobile apps</div>
+									<div class="panel-body">
+										The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm page.
+									</div>
+								</div>
+							</div>
+							<div class="col-sm-8 col-lg-9">
+								<div class="panel panel-info">
+									<div class="panel-heading">Encoder "Preset" options</div>
+									<div class="panel-body">
+										In Blue Iris's <b>Encoder options</b> dialog, you must choose between three "Preset" options: "ultrafast", "superfast", and "veryfast".<br /><br />"ultrafast" is the lowest quality, but requires the least amount of CPU time to process, making it ideal for use on many mobile devices running UI3.  It can also help on struggling devices if you use a conservative bit rate limit, like 512 Kbps.
+									</div>
+								</div>
 							</div>
 						</div>
-						<div class="panel panel-info">
-							<div class="panel-heading">Encoder profiles are shared with mobile apps</div>
-							<div class="panel-body">
-								The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm page.
-							</div>
-						</div>
-						<h2>Jpeg Streaming</h2>
+						<h3>Jpeg Streaming</h3>
 						<p>Jpeg streaming is done by requesting Jpeg-compressed snapshots as quickly as possible.  It is not very efficient with network bandwidth and it can't achieve high frame rates over the internet.  However, being a simpler streaming method, it tends to "just work".  Jpeg streaming is capable of extremely high resolutions and excellent image quality.</p>
 						<p class="bg-warning padded-info"><b>Audio playback</b> is <b>not available</b> while streaming Jpeg snapshots.</p>
-						<h3>Context Menu</h3>
-						<p>If you right click (long-press on touchscreens) on a camera, a context menu appears.  The first 4 actions are specific to the current video stream, while most other options are specific to the camera you clicked on.  Here, blue icons indicate actions that take effect on the Blue Iris server, while black icons indicate actions that occur in the web UI.  Actions include:</p>
-						<dl class="dl-horizontal">
-							<dt>Open image in new tab</dt>
-							<dd>Opens a snapshot of the current frame in a new tab.</dd>
-							<dt>Save image to disk</dt>
-							<dd>Downloads a high quality copy of the current frame.</dd>
-							<dt>Open HLS Stream</dt>
-							<dd>Opens a copy of the video stream using the <a href="#hlsstreams">HLS streaming protocol</a>.</dd>
-							<dt>Copy image address</dt>
-							<dd>Copies (to the clipboard) a URL for a high-quality jpeg snapshot from the current stream.  If you are viewing a clip, the URL will honor your playback position.</dd>
-							<dt>Camera Name</dt>
-							<dd>This item doesn't do anything.  It serves as a separator and indicator of which camera you clicked.</dd>
-							<dt>Maximize</dt>
-							<dd>Also called "Back to Group" if you are viewing a maximized camera, this item has the same effect as just clicking the camera would have had.</dd>
-							<dt>Trigger Now</dt>
-							<dd>Triggers an alert for this camera in Blue Iris.</dd>
-							<dt>Start/Stop Recording</dt>
-							<dd>Toggles manual recording for this camera in Blue Iris.</dd>
-							<dt>Snapshot in Blue Iris</dt>
-							<dd>Instructs Blue Iris to save a snapshot for this camera.  The snapshot will appear in your clip list.</dd>
-							<dt>Restart Camera</dt>
-							<dd>Instructs Blue Iris to restart this camera.  Useful mostly for debugging purposes or to fix streaming problems affecting just one camera.</dd>
-							<dt>Stats for nerds</dt>
-							<dd>Opens the <a href="#nerdstats">"Stats for nerds" panel</a>, containing low-level information about the current video and audio streams.</dd>
-							<dt>Properties</dt>
-							<dd>Opens a properties panel containing many options for this camera.</dd>
-						</dl>
-						<p></p>
-						<p><img class="img-responsive" src="img/CameraContextMenu.png" alt="Screenshot of clip list context menu" /></p>
+						<h2>Context Menu</h2>
+						<p>If you right click (long-press on touchscreens) on a camera, a context menu appears.  The first 4 actions are specific to the current video stream, while most other options are specific to the camera you clicked on.  Here, blue icons indicate actions that take effect on the Blue Iris server and require <span class="label label-primary">Admin</span> privilege, while black icons indicate actions that occur in the web UI.</p>
+						<div class="row">
+							<div class="col-sm-3">
+								<img class="img-responsive" src="img/CameraContextMenu.png" alt="Screenshot of clip list context menu" style="margin-bottom: 5px;" />
+							</div>
+							<div class="col-sm-9">
+								<div class="panel panel-info">
+									<div class="panel-heading">Live View Context Menu Actions</div>
+									<div class="panel-body">
+										<dl class="dl-horizontal">
+											<dt>Open image in new tab</dt>
+											<dd>Opens a snapshot of the current frame in a new tab.</dd>
+											<dt>Save image to disk</dt>
+											<dd>Downloads a high quality copy of the current frame.</dd>
+											<dt>Open HLS Stream</dt>
+											<dd>Opens a copy of the video stream using the <a href="#hlsstreams">HLS streaming protocol</a>.</dd>
+											<dt>Copy image address</dt>
+											<dd>Copies (to the clipboard) a URL for a high-quality jpeg snapshot from the current stream.  If you are viewing a clip, the URL will honor your playback position.</dd>
+											<dt>Camera Name</dt>
+											<dd>This item doesn't do anything.  It serves as a separator and indicator of which camera you clicked.</dd>
+											<dt>Maximize</dt>
+											<dd>Also called "Back to Group" if you are viewing a maximized camera, this item has the same effect as just clicking the camera would have had.</dd>
+											<dt>Trigger Now</dt>
+											<dd><span class="label label-primary">Admin</span> Triggers an alert for this camera in Blue Iris.</dd>
+											<dt>Start/Stop Recording</dt>
+											<dd><span class="label label-primary">Admin</span> Toggles manual recording for this camera in Blue Iris.</dd>
+											<dt>Snapshot in Blue Iris</dt>
+											<dd><span class="label label-primary">Admin</span> Instructs Blue Iris to save a snapshot for this camera.  The snapshot will appear in your clip list.</dd>
+											<dt>Restart Camera</dt>
+											<dd><span class="label label-primary">Admin</span> Instructs Blue Iris to restart this camera.  Useful mostly for debugging purposes or to fix streaming problems affecting just one camera.</dd>
+											<dt>Stats for nerds</dt>
+											<dd>Opens the <a href="#nerdstats">"Stats for nerds" panel</a>, containing low-level information about the current video and audio streams.</dd>
+											<dt>Properties</dt>
+											<dd><span class="label label-primary">Admin</span> Opens a <a href="#cameraproperties">properties panel</a> containing many options for this camera.</dd>
+										</dl>
+									</div>
+								</div>
+							</div>
+						</div>
 					</div>
 					<div class="tab-pane" id="hlsstreams" role="tabpanel" aria-labelledby="nav-hlsstreams">
 						<h1>HLS Streams</h1>
@@ -275,9 +294,51 @@
 						<h3>Expanding the Filters</h3>
 						<p>If you don't see the filter controls, that means you have collapsed them by clicking on the "Filter Clips by:" text.  Click the "Filter Clips by:" text again to expand the filter controls section.</p>
 						<h3>Context Menu</h3>
-						<p>If you right click (long-press on touchscreens) on an alert or clip, a context menu appears.  It contains options to Flag, Protect, Download, or Delete.  It also allows you to toggle a layout with larger thumbnails, or to view alert/clip properties.</p>
+						<p>If you right click (long-press on touchscreens) on an alert or clip, a context menu appears.  It contains options to Flag, Protect, Download, or Delete.  It also allows you to toggle a layout with larger thumbnails, or to view alert/clip properties.  <span class="label label-primary">Admin</span> privilege is required Flag, Protect, or Delete items.</p>
 						<p><img class="img-responsive" src="img/ClipContextMenu.png" alt="Screenshot of clip list context menu" /></p>
+						<h3>Multi-Select</h3>
+						<p>If your device has a physical keyboard, you can hold <span class="label label-default">SHIFT</span> and/or <span class="label label-default">CTRL</span> keys while clicking to select multiple items for bulk operations.</p>
 					</div>
+					<div class="tab-pane" id="cameraproperties" role="cameraproperties" aria-labelledby="nav-cameraproperties">
+						<h1>Camera Properties</h1>
+						<p><span class="label label-primary">Admin</span> user permission is required to access this functionality.</p>
+						<p>The Camera Properties panel is accessible from the context menu that appears when you right click on a camera (long-press on touchscreens).  This panel contains some information about the camera and provides a set of common administrative controls, such as the ability to reconfigure the motion sensor.  You can also disable a camera from here.  If you disable a camera, you can re-enable it from the Full Camera List in the <a href="#mainmenu">Main Menu</a>.</p>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="mainmenu" role="tabpanel" aria-labelledby="nav-mainmenu">
+						<h1><img src="img/MainMenuIcon.png" /> Main Menu</h1>
+						<p>To open the Main Menu, click the three dots in the upper right corner of UI3.</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">Main Menu Actions - Items marked with <span class="label label-primary">Admin</span> can only be accessed by Admin users.</div>
+							<div class="panel-body">
+								<dl class="dl-horizontal">
+									<dt>UI Settings</dt>
+									<dd>Opens the UI Settings panel, which contains many settings and hotkeys.  The settings here are not shared with other devices or browsers.</dd>
+									<dt>About This UI</dt>
+									<dd>Opens the About panel, which contains basic information about UI3.  If some features of UI3 are unavailable in your browser, there will be a note of it in the About panel.</dd>
+									<dt>System Log</dt>
+									<dd><span class="label label-primary">Admin</span> Opens Blue Iris's System Log.</dd>
+									<dt>User List</dt>
+									<dd><span class="label label-primary">Admin</span> Opens a list of all Blue Iris users configured in your system and shows some information about them.</dd>
+									<dt>Device List</dt>
+									<dd><span class="label label-primary">Admin</span> Opens a list of all mobile devices that have connected to your system.</dd>
+									<dt>Full Camera List</dt>
+									<dd>Opens a list of all cameras configured in your system, even those which are not currently enabled.</dd>
+									<dt>Disk Usage</dt>
+									<dd>Opens a panel which shows disk usage pie charts.</dd>
+									<dt>System Configuration</dt>
+									<dd><span class="label label-primary">Admin</span> Opens a panel containing a few global Blue Iris options you may set.</dd>
+									<dt>Help</dt>
+									<dd>Opens this help file.</dd>
+									<dt>Log Out</dt>
+									<dd>Log out of your current session and open the login page.</dd>
+								</dl>
+							</div>
+						</div>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="template" role="tabpanel" aria-labelledby="nav-template">
+						<h1>Template</h1>
+						<p></p>
+					</div><!--/.tab-pane -->
 				</div><!--/.tab-content -->
 			</div><!--/.baseContainer -->
 		</div><!--/.row -->

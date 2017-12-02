@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "9";
+		var login_version = "10";
 		var bi_version = "%%VERSION%%";
 	</script>
 	<script type="text/javascript">
@@ -94,8 +94,8 @@
 		}
 		var showLoadingMessageTimeout = setTimeout(IncreaseLoadingOpacity, 67);
 	</script>
-	<script src="applet/loginScripts.js?v=9_%%VERSION%%" type="text/javascript"></script>
-	<link href="applet/loginStyles.css?v=9_%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="applet/loginScripts.js?v=10_%%VERSION%%" type="text/javascript"></script>
+	<link href="applet/loginStyles.css?v=10_%%VERSION%%" rel="stylesheet" type="text/css">
 	<script type="text/javascript">
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
@@ -227,6 +227,10 @@
 					}
 					else
 					{
+						$("#cbLoginAutomatically").removeAttr('checked');
+						SetPersistedValue("bi_rememberMe", "0");
+						SetPersistedValue("bi_username", "");
+						SetPersistedValue("bi_password", "");
 						$("#btnLogin").val("Log in");
 						HandleError(response.data ? response.data.reason : "Login failed but Blue Iris did not provide a reason.");
 					}
