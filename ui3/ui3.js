@@ -271,8 +271,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Extremely large clip lists don't perform well.  Some browsers handle it better.  The complexity of the clip tiles has a lot to do with this.  The ideal fix, I think, would be to remove clip tiles from the DOM and never have more than, say, 1500 of them in the DOM at a time.  When creating a new clip tile beyond the limit, delete the oldest clip tile (using a queue).  The oldest is all but guaranteed to be far away.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
