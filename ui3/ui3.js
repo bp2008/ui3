@@ -466,6 +466,14 @@ var defaultSettings =
 			, category: "General Settings"
 		}
 		, {
+			key: "ui3_time24hour"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '24-Hour Time'
+			, onChange: OnChange_ui3_time24hour
+			, category: "General Settings"
+		}
+		, {
 			key: "ui3_clipicon_trigger_motion"
 			, value: "0"
 			, inputType: "checkbox"
@@ -1307,6 +1315,7 @@ $(function ()
 		togglableContextMenus.push(new ContextMenu_EnableDisableItem(item[0], item[1], item[2], item[3], item[4], item[5], item[6]));
 	}
 
+	OnChange_ui3_time24hour();
 	OnChange_ui3_pc_next_prev_buttons();
 	OnChange_ui3_pc_seek_buttons();
 	OnChange_ui3_extra_playback_controls_padding();
@@ -7272,8 +7281,8 @@ function VideoPlayerController()
 		var cli = currentlyLoadingImage;
 		var clc = currentlyLoadingCamera = camData;
 		cli.id = clc.optionValue;
-		cli.maxwidth = cli.fullwidth = cli.actualwidth = clc.width;
-		cli.maxheight = cli.fullheight = cli.actualheight = clc.height;
+		cli.fullwidth = cli.actualwidth = clc.width;
+		cli.fullheight = cli.actualheight = clc.height;
 		cli.aspectratio = clc.width / clc.height;
 		cli.path = clc.optionValue;
 		cli.uniqueId = clc.optionValue;
@@ -7309,8 +7318,8 @@ function VideoPlayerController()
 			var cli = currentlyLoadingImage;
 			var clc = currentlyLoadingCamera = cam;
 			cli.id = clc.optionValue;
-			cli.maxwidth = cli.fullwidth = cli.actualwidth = clc.width;
-			cli.maxheight = cli.fullheight = cli.actualheight = clc.height;
+			cli.fullwidth = cli.actualwidth = clc.width;
+			cli.fullheight = cli.actualheight = clc.height;
 			cli.aspectratio = clc.width / clc.height;
 			cli.path = clipData.path;
 			cli.uniqueId = clipData.recId;
@@ -7446,11 +7455,27 @@ function VideoPlayerController()
 		currentlyLoadedCamera = currentlyLoadingCamera;
 		resized();
 	}
+	var lastCycleWidth = 0;
+	var lastCycleHeight = 0;
 	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameDate)
 	{
 		jpegPreviewModule.Hide();
 		if (currentlyLoadedImage.uniqueId != uniqueId)
 			self.CameraOrResolutionChange();
+		else if (currentlyLoadingImage.isLive && uniqueId.startsWith("@"))
+		{
+			if (lastCycleWidth != width || lastCycleHeight != height)
+			{
+				lastCycleWidth = width;
+				lastCycleHeight = height;
+				currentlyLoadedImage.aspectratio = lastCycleWidth / lastCycleHeight;
+				resized();
+			}
+		}
+		else
+		{
+			lastCycleWidth = lastCycleHeight = 0;
+		}
 
 		// actualwidth and actualheight must be set after [CameraOrResolutionChange]
 		currentlyLoadedImage.actualwidth = width;
@@ -7533,9 +7558,7 @@ function BICameraData()
 	this.fullwidth = 1280; // Native resolution of image; used when calculating with group rects and as a base for digital zoom
 	this.fullheight = 720;
 	this.aspectratio = 1280 / 720;
-	this.maxwidth = 1280; // Max image size available from Blue Iris; not used for anything, and in fact not even accurate at all times as of Nov 10, 2017
-	this.maxheight = 720;
-	this.actualwidth = 1280; // Actual size of image (can be smaller than fullwidth/maxwidth)
+	this.actualwidth = 1280; // Actual size of image (can be smaller than fullwidth)
 	this.actualheight = 720;
 	this.path = "";
 	this.uniqueId = "";
@@ -7551,8 +7574,6 @@ function BICameraData()
 		self.fullwidth = other.fullwidth;
 		self.fullheight = other.fullheight;
 		self.aspectratio = other.aspectratio;
-		self.maxwidth = other.maxwidth;
-		self.maxheight = other.maxheight;
 		self.actualwidth = other.actualwidth;
 		self.actualheight = other.actualheight;
 		self.path = other.path;
@@ -7655,8 +7676,6 @@ function JpegVideoModule()
 	var timeLastClipFrame = 0;
 	var repeatedSameImageURLs = 1;
 	var loadedFirstFrame = false;
-	var lastCycleWidth = 0;
-	var lastCycleHeight = 0;
 	var lastRequestedWidth = 0;
 	var currentLoadedImageActualWidth = 1;
 
@@ -7713,33 +7732,13 @@ function JpegVideoModule()
 				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
 				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, new Date(currentImageRequestedAtMs));
 
-				var loaded = videoPlayer.Loaded().image;
-				if (loaded.id.startsWith("@"))
-				{
-					loaded.maxwidth = this.naturalWidth;
-					loaded.maxheight = this.naturalHeight;
-					if (lastCycleWidth != this.naturalWidth || lastCycleHeight != this.naturalHeight)
-					{
-						// TODO: Thoroughly test cycles and switching streaming methods and see what happens with sizes.
-						lastCycleWidth = this.naturalWidth;
-						lastCycleHeight = this.naturalHeight;
-						loaded.aspectratio = lastCycleWidth / lastCycleHeight;
-						resized();
-					}
-				}
-				else
-				{
-					loaded.maxwidth = loaded.fullwidth;
-					loaded.maxheight = loaded.fullheight;
-					lastCycleWidth = lastCycleHeight = 0;
-				}
-
 				currentLoadedImageActualWidth = this.naturalWidth;
 
 				CopyImageToCanvas(camimg_ele, camimg_canvas_ele);
 
 				if (nerdStats.IsOpen())
 				{
+					var loaded = videoPlayer.Loaded().image;
 					nerdStats.BeginUpdate();
 					nerdStats.UpdateStat("Viewport", $layoutbody.width() + "x" + $layoutbody.height());
 					nerdStats.UpdateStat("Stream Resolution", loaded.actualwidth + "x" + loaded.actualheight);
@@ -14548,9 +14547,131 @@ function UISettingsPanel()
 				cat.$section.append($row);
 			}
 		}
+		if (category == "Extra")
+		{
+			if (sessionManager.IsAdministratorSession())
+			{
+				rowIdx = Add_CreateLocalOverridesJsButton(cat, rowIdx);
+			}
+		}
 
 		$content.append(cat.$heading);
 		$content.append(cat.$section);
+	}
+	var Add_CreateLocalOverridesJsButton = function (cat, rowIdx)
+	{
+		var $row = $('<div id="createLocalOverridesScript" class="uiSettingsRow dialogOption_item dialogOption_item_info"></div>');
+		var $input = $('<a class="input" href="javascript:void(0)" download="ui3-local-overrides.js">Download</a>');
+		$input.on('click', function ()
+		{
+			var text = BuildLocalOverridesTemplate();
+
+			if (!text)
+				return false;
+
+			$input.attr('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+			setTimeout(function () { $input.attr('href', 'javascript:void(0)'); }, 0);
+			return true;
+		});
+		$row.append($input);
+		$row.append(GetDialogOptionLabel('Create Script: "ui3-local-overrides.js"<br><a href="javascript:UIHelp.LearnMore(\'ui3-local-overrides\')">(learn more)</a>'));
+		if (rowIdx++ % 2 == 1)
+			$row.addClass('everyOther');
+		cat.$section.append($row);
+		return rowIdx;
+	}
+	var BuildLocalOverridesTemplate = function ($input)
+	{
+		try
+		{
+			var sb = new StringBuilder("\r\n");
+			sb.AppendLine('/*');
+			sb.AppendLine('\tTHIS IS FOR ADVANCED USE ONLY');
+			sb.AppendLine('\t');
+			sb.AppendLine('\tIf you want to modify UI3\'s default behavior, ');
+			sb.AppendLine('\tyou must rename this file (if necessary) to "ui3-local-overrides.js"');
+			sb.AppendLine('\tand place it in the "ui3" subdirectory where "ui3.js" is located.');
+			sb.AppendLine('\t');
+			sb.AppendLine('\t"ui3-local-overrides.js" is not included with Blue Iris and should');
+			sb.AppendLine('\tnot be overwritten by updates.');
+			sb.AppendLine('*/');
+			sb.AppendLine();
+			sb.AppendLine();
+			for (var i = 0; i < settingsCategoryList.length; i++)
+				BuildLocalOverridesTemplate_Category(sb, settingsCategoryList[i]);
+			BuildLocalOverridesTemplate_Category(sb, null);
+			return sb.ToString();
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+			return false;
+		}
+	}
+	var BuildLocalOverridesTemplate_Category = function (sb, category)
+	{
+		// Output Category heading
+		sb.AppendLine('// Category "' + (category ? category : "Uncategorized") + '"');
+
+		// Output parameter legend, which requires measuring key and value max lengths beforehand
+		//                       Settings Key   Value   Options Window   Always Reload   Generation
+		//OverrideDefaultSetting(key,           value,  true,            false,          0);
+		var max_key = 14;
+		var max_value = 7;
+		for (var i = 0; i < defaultSettings.length; i++)
+		{
+			var s = defaultSettings[i];
+			if (s.category != category)
+				continue;
+			var value = settings[s.key];
+			if (typeof value == "string")
+				value = JavaScriptStringEncode(value, true);
+			else
+				value = value.toString();
+			max_key = Math.max(max_key, JavaScriptStringEncode(s.key, true).length + 1);
+			max_value = Math.max(max_value, value.length + 1);
+		}
+		sb.Append('//                     ');
+		sb.Append('Settings Key'.padRight(max_key + 1, ' '));
+		sb.Append('Value'.padRight(max_value + 1, ' '))
+		sb.AppendLine('Options Window   Always Reload   Generation');
+		// Output override lines
+		for (var i = 0; i < defaultSettings.length; i++)
+		{
+			var s = defaultSettings[i];
+			if (s.category != category)
+				continue;
+			var key = s.key;
+			if (key == "bi_rememberMe" || key == "bi_username" || key == "bi_password")
+				continue; // Don't write these to the file!
+			var value = settings[key];
+			sb.Append('OverrideDefaultSetting(');
+			sb.Append((JavaScriptStringEncode(key, true) + ",").padRight(max_key, ' '));
+			sb.Append(' ')
+			if (typeof value == "string")
+				sb.Append((JavaScriptStringEncode(value, true) + ",").padRight(max_value, ' '));
+			else
+				sb.Append((value.toString() + ",").padRight(max_value, ' '));
+			if (typeof s.IncludeInOptionsWindow == "undefined")
+				s.IncludeInOptionsWindow = true;
+			if (typeof s.AlwaysReload == "undefined")
+				s.AlwaysReload = false;
+			sb.Append(' ').Append((!!s.IncludeInOptionsWindow + ",").padRight(16, ' '));
+			sb.Append(' ').Append((!!s.AlwaysReload + ",").padRight(15, ' '));
+			sb.Append(' ');
+
+			// Increment generation.
+			sb.Append(GetNextGenerationForLocalOverrides(s).toString());
+			sb.AppendLine(");");
+		}
+		sb.AppendLine();
+	}
+	var GetNextGenerationForLocalOverrides = function (s)
+	{
+		if (typeof s.gen == "undefined" || s.gen == null)
+			return 1;
+		else
+			return parseInt(s.gen) + 1;
 	}
 	var Add_ForgetSavedCredentialsButton = function (cat, rowIdx)
 	{
@@ -14680,6 +14801,10 @@ function GetPreferredContextMenuTrigger()
 {
 	return settings.ui3_contextMenus_longPress == "1" ? "longpress" : "right";
 }
+function OnChange_ui3_time24hour()
+{
+	use24HourTime = settings.ui3_time24hour == "1";
+}
 function OnChange_ui3_pc_next_prev_buttons()
 {
 	if (settings.ui3_pc_next_prev_buttons == "1")
@@ -14733,6 +14858,9 @@ function UIHelpTool()
 				break;
 			case "IR Brightness Contrast":
 				IR_Brightness_Contrast();
+				break;
+			case "ui3-local-overrides":
+				UI3_Local_Overrides_Help();
 				break;
 		}
 	}
@@ -14798,6 +14926,14 @@ function UIHelpTool()
 			+ 'When enabled, these controls appear in the PTZ section below the presets, and only work when you have maximized a camera that has PTZ enabled in Blue Iris.'
 			+ '</div>');
 		$root.modalDialog({ title: 'IR, Brightness, and Contrast', closeOnOverlayClick: true });
+	}
+	var UI3_Local_Overrides_Help = function ()
+	{
+		$('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
+			+ 'Click "Download" to download a ui3-local-overrides.js file which is pre-configured to change the defaults for all of UI3\'s settings to match your current configuration.<br><br>'
+			+ 'The ui3-local-overrides system allows you to override default UI3 behavior for all your users.<br><br>'
+			+ '<a href="ui3/help/help.html#extensions" target="_blank">Click here to learn more about ui3-local-overrides.</a>'
+			+ '</div>').modalDialog({ title: 'ui3-local-overrides', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -14884,6 +15020,36 @@ var alert_flag_nosignal = b0000_0100_0000_0000_0000_0000;
 var alert_flag_trigger_audio = b0000_1000_0000_0000_0000_0000;
 var alert_flag_trigger_external = b0001_0000_0000_0000_0000_0000;
 var alert_flag_trigger_group = b0100_0000_0000_0000_0000_0000;
+///////////////////////////////////////////////////////////////
+// StringBuilder //////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function StringBuilder(lineBreakStr)
+{
+	var self = this;
+	var strings = [];
+	this.Append = function (value)
+	{
+		if (value)
+			strings.push(value);
+		return this;
+	}
+	this.AppendLine = function (value)
+	{
+		if (value)
+			strings.push(value);
+		strings.push(lineBreakStr);
+		return this;
+	}
+	this.Clear = function ()
+	{
+		strings = [];
+		return this;
+	}
+	this.ToString = function ()
+	{
+		return strings.join("");
+	}
+}
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -14973,15 +15139,49 @@ function AskYesNo(question, onYes, onNo, onError, yesText, noText, title)
 }
 String.prototype.padLeft = function (len, c)
 {
-	var str = this;
-	while (str.length < len)
-		str = (c || "&nbsp;") + str;
-	return str;
+	var pads = len - this.length;
+	if (pads > 0)
+	{
+		var sb = [];
+		var pad = c || "&nbsp;";
+		for (var i = 0; i < pads; i++)
+			sb.push(pad);
+		sb.push(this);
+		return sb.join("");
+	}
+	return this;
+
+};
+String.prototype.padRight = function (len, c)
+{
+	var pads = len - this.length;
+	if (pads > 0)
+	{
+		var sb = [];
+		sb.push(this);
+		var pad = c || "&nbsp;";
+		for (var i = 0; i < pads; i++)
+			sb.push(pad);
+		return sb.join("");
+	}
+	return this;
 };
 Number.prototype.padLeft = function (len, c)
 {
 	return this.toString().padLeft(len, c);
 };
+Number.prototype.padRight = function (len, c)
+{
+	return this.toString().padRight(len, c);
+};
+function NumToHex4(num)
+{
+	return num.ToString(16).toUpperCase().padLeft(4, '0');
+}
+function NumToHexUpper(num)
+{
+	return num.ToString(16).toUpperCase();
+}
 function makeUnselectable($target)
 {
 	$target
@@ -15029,9 +15229,39 @@ function stopDefault(e)
 	}
 	return false;
 }
-function JavaScriptStringEncode(str)
+function JavaScriptStringEncode(str, wrapInQuotes)
 {
-	return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+	/// <summary>Encodes a string so it can safely be written to a string literal in a JavaScript file.  Characters such as tab, carriage return, line feed, single and double quotes are escaped.</summary>
+	var sb = [];
+	if (wrapInQuotes)
+		sb.push('"');
+	for (var i = 0; i < str.length; i++)
+	{
+		var c = str.charCodeAt(i);
+		if ((c >= 0 && c <= 7) || c == 11 || (c >= 14 && c <= 31) || c == 39 || c == 60 || c == 62)
+			sb.push("\\u" + NumToHex4(c));
+		else if (c == 8)
+			sb.push("\\b");
+		else if (c == 9)
+			sb.push("\\t");
+		else if (c == 10)
+			sb.push("\\n");
+		else if (c == 12)
+			sb.push("\\f");
+		else if (c == 13)
+			sb.push("\\r");
+		else if (c == 34)
+			sb.push("\\\"");
+		else if (c == 39)
+			sb.push("\\'");
+		else if (c == 92)
+			sb.push("\\\\");
+		else
+			sb.push(str.charAt(i));
+	}
+	if (wrapInQuotes)
+		sb.push('"');
+	return sb.join("");
 }
 function CleanUpGroupName(groupName)
 {
@@ -15079,26 +15309,35 @@ function msToTime(totalMs, includeMs)
 
 	return retVal;
 }
+var use24HourTime = false;
 function GetTimeStr(date, includeMilliseconds)
 {
-	var ampm = "AM";
+	var ampm = "";
 	var hour = date.getHours();
-	if (hour == 0)
+	if (!use24HourTime)
 	{
-		hour = 12;
-	}
-	else if (hour == 12)
-	{
-		ampm = "PM";
-	}
-	else if (hour > 12)
-	{
-		hour -= 12;
-		ampm = "PM";
+		if (hour == 0)
+		{
+			hour = 12;
+			ampm = " AM";
+		}
+		else if (hour == 12)
+		{
+			ampm = " PM";
+		}
+		else if (hour > 12)
+		{
+			hour -= 12;
+			ampm = " PM";
+		}
+		else
+		{
+			ampm = " AM";
+		}
 	}
 	var ms = includeMilliseconds ? ("." + date.getMilliseconds()) : "";
 
-	var str = hour.toString().padLeft(2, '0') + ":" + date.getMinutes().toString().padLeft(2, '0') + ":" + date.getSeconds().toString().padLeft(2, '0') + ms + " " + ampm;
+	var str = hour.toString().padLeft(2, '0') + ":" + date.getMinutes().toString().padLeft(2, '0') + ":" + date.getSeconds().toString().padLeft(2, '0') + ms + ampm;
 	return str;
 }
 function GetDateStr(date, includeMilliseconds)

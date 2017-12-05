@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "10";
+		var login_version = "11";
 		var bi_version = "%%VERSION%%";
 	</script>
 	<script type="text/javascript">
@@ -94,8 +94,8 @@
 		}
 		var showLoadingMessageTimeout = setTimeout(IncreaseLoadingOpacity, 67);
 	</script>
-	<script src="applet/loginScripts.js?v=10_%%VERSION%%" type="text/javascript"></script>
-	<link href="applet/loginStyles.css?v=10_%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="applet/loginStyles.css?v=11_%%VERSION%%" rel="stylesheet" type="text/css">
+	<script src="applet/loginScripts.js?v=11_%%VERSION%%" type="text/javascript"></script>
 	<script type="text/javascript">
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
@@ -173,20 +173,25 @@
 			{
 				if (response.result == "fail")
 				{
-					// No existing session. Attempt Anonymous login
-					var myResponse = md5("Anonymous:" + response.session + ":");
-					ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
+					// No existing session.
+					var anonymousAvailable = response.data && response.data["auth-exempt"];
+					if (anonymousAvailable)
 					{
-						if (response.result == "success")
+						// Attempt Anonymous login, to get the permission level.
+						var myResponse = md5("Anonymous:" + response.session + ":");
+						ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
 						{
-							existingSession = response.session;
-							SetStatus("An anonymous " + (response.data.admin ? "administrator" : "user") + ' session is available. <a href="javascript:LeaveLoginPage()">Click here to use it.</a>');
-						}
-					},
-						function (jqXHR, textStatus, errorThrown)
-						{
-							HandleError("Unable to contact Blue Iris server");
-						});
+							if (response.result == "success")
+							{
+								existingSession = response.session;
+								SetStatus("An anonymous " + (response.data.admin ? "administrator" : "user") + ' session is available. <a href="javascript:LeaveLoginPage()">Click here to use it.</a>');
+							}
+						},
+							function (jqXHR, textStatus, errorThrown)
+							{
+								HandleError("Unable to contact Blue Iris server");
+							});
+					}
 				}
 				else if (response.result == "success")
 				{

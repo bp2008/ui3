@@ -548,12 +548,14 @@ div.invisibleLabel
 	line-height: normal;
 	font-size: 16px;
 }
+
 .sizeMedium #irButtonText
 {
 	top: 1px;
 	left: 9px;
 	font-size: 14px;
 }
+
 .sizeSmall #irButtonText
 {
 	top: 0px;
@@ -3486,12 +3488,21 @@ div.invisibleLabel
 	padding-right: 80px;
 }
 
-.dialogOptionPanel select, .dialogOptionPanel input[type="number"], .dialogOptionPanel input[type="text"], #uiSettingsPanel input[type="button"]
+.dialogOptionPanel select,
+.dialogOptionPanel input[type="number"],
+.dialogOptionPanel input[type="text"],
+#uiSettingsPanel input[type="button"],
+#uiSettingsPanel a.input
 {
 	box-sizing: border-box;
 	height: 28px;
 	margin: 0px 10px;
 	float: right;
+}
+
+#uiSettingsPanel a.input
+{
+	line-height: 28px;
 }
 
 .largeTextButton

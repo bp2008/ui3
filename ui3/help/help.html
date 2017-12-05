@@ -256,9 +256,22 @@
 					<div class="tab-pane" id="extensions" role="tabpanel" aria-labelledby="nav-extensions">
 						<h1>UI Extensions</h1>
 						<p>Experienced web developers can extend UI3 with custom JavaScript and CSS.</p>
-						<p>Of course if you take the most obvious route and modify <code>ui3.js</code> and <code>ui3.css</code> files directly, you would have to re-apply your changes after every update! To solve this problem, UI3 attemps to load two files which do not exist in releases: <code>ui3-local-overrides.js</code> and <code>ui3-local-overrides.css</code>. You can create either or both of these files and place them in the ui3 subdirectory alongside <code>ui3.js</code> and they will be loaded after all the other script and style files, allowing you to conveniently override virtually any default functionality you wish, if you have the skills to do so.</p>
+						<p>Of course if you take the most obvious route and modify <code>ui3.js</code> and <code>ui3.css</code> files directly, you would have to re-apply your changes after every update! To solve this problem, UI3 attemps to load two files which do not exist in releases: <code>ui3-local-overrides.js</code> and <code>ui3-local-overrides.css</code>. You can create either or both of these files and place them in the "ui3" subdirectory of your Blue Iris installation's web root directory ("www").  These two files will be loaded after all the other script and style files, allowing you to conveniently override virtually any default functionality you wish, if you have the programming skills to do so.</p>
 						<h2>Examples</h2>
 						<p>For examples, see <a href="https://github.com/bp2008/ui3/wiki/Local-Overrides-Scripts-and-Styles">https://github.com/bp2008/ui3/wiki/Local-Overrides-Scripts-and-Styles</a></p>
+						<h2>Quick Start <small>- Globally Override Default Settings</small></h2>
+						<p>At the bottom of the UI Settings panel is an item called 'Create Script: "ui3-local-overrides.js"'.  This item is only visible if you have logged in to UI3 as a Blue Iris administrator.</p>
+						<p>When you click the "Download" link, your browser should download a copy of your current settings in the form of a ui3-local-overrides.js file.  If you move this file into your "ui3" subdirectory, then all users will receive your current settings by default.</p>
+						<p>If you want to customize the default values in this auto-generated file, you should first understand some things:</p>
+						<ul class="list-group">
+							<li class="list-group-item">
+								If you manually edit a setting's value in the ui3-local-overrides.js script, you should also increment the Generation number.  Each user (each web browser, really) will only adopt your new default value if the Generation associated with it is a higher number than the generation they had previously.
+								<br /><br />
+								If you make the change in your own web browser and re-download the ui3-local-overrides.js file, this will automatically increment all generation numbers.  Then you just need to replace your old overrides file with the new one.
+							</li>
+							<li class="list-group-item">If you want your default value to ALWAYS be reloaded when UI3 is loaded, set "Always Reload" to true.  Then, the Generation number does not matter, and your specified value will take effect every time UI3 is loaded regardless of how each user has configured it.</li>
+							<li class="list-group-item">To prevent a setting from appearing in the UI Settings panel, change "true" to "false" for the "Options Window" parameter.  Uncategorized settings don't appear in the options window anyway, and some items from the UI Settings panel aren't settings in the first place, but buttons (e.g. to forget saved credentials).</li>
+						</ul>
 					</div>
 					<div class="tab-pane" id="cameralayout" role="tabpanel" aria-labelledby="nav-cameralayout">
 						<h1>Camera Layout</h1>
