@@ -3069,7 +3069,7 @@ var ptzPresetThumbLoader = new (function ()
 		if (camCache)
 		{
 			var img = camCache[idx];
-			img.imgData.src = UrlForPreset(cameraId, i + 1, true);
+			img.imgData.src = UrlForPreset(cameraId, idx + 1, true);
 			asyncThumbLoader.Enqueue(img, img.imgData.src);
 		}
 		else
