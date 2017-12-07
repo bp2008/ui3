@@ -3029,10 +3029,10 @@ var ptzPresetThumbLoader = new (function ()
 		var camCache = cache[cameraId];
 		if (!camCache)
 		{
-			camCache = cache[cameraId] = {};
-			for (var i = 0; i < 20; i++)
+			camCache = cache[cameraId] = {}; // Note: cache and camCache are maps, not arrays.
+			for (var i = 1; i <= 20; i++)
 			{
-				var $img = $('<img src="" alt="' + (i + 1) + '" class="presetThumb" />');
+				var $img = $('<img src="" alt="' + i + '" class="presetThumb" />');
 				camCache[i] = $img[0];
 				$img.hide();
 				$img.load(thumbLoaded);
@@ -3042,14 +3042,14 @@ var ptzPresetThumbLoader = new (function ()
 		{
 			$(ele).empty()
 				.append('<span>' + ele.presetnum + '</span>')
-				.append(camCache[ele.presetnum - 1]);
+				.append(camCache[ele.presetnum]);
 		});
-		for (var i = 0; i < 20; i++)
+		for (var i = 1; i <= 20; i++)
 		{
 			// Unfortunately, we can't allow the browser cache to be used for these, or the cached images become stale when updated and reloading the page doesn't fix it.
 			var img = camCache[i];
 			img.imgData = {
-				src: UrlForPreset(cameraId, i + 1, true),
+				src: UrlForPreset(cameraId, i, true),
 				w: 0,
 				h: 0
 			};
@@ -3062,14 +3062,13 @@ var ptzPresetThumbLoader = new (function ()
 		if (currentServer.isLoggingOut)
 			return false;
 
-		var idx = presetNumber - 1;
-		if (idx < 0 || idx > 19)
+		if (presetNumber < 1 || presetNumber > 20)
 			return;
 		var camCache = cache[cameraId];
 		if (camCache)
 		{
-			var img = camCache[idx];
-			img.imgData.src = UrlForPreset(cameraId, idx + 1, true);
+			var img = camCache[presetNumber];
+			img.imgData.src = UrlForPreset(cameraId, presetNumber, true);
 			asyncThumbLoader.Enqueue(img, img.imgData.src);
 		}
 		else
@@ -3077,11 +3076,11 @@ var ptzPresetThumbLoader = new (function ()
 	}
 	this.GetImgData = function (cameraId, presetNumber)
 	{
-		if (presetNumber > 0 && presetNumber < 21)
+		if (presetNumber >= 1 && presetNumber <= 20)
 		{
 			var camCache = cache[cameraId];
 			if (camCache)
-				return camCache[presetNumber - 1].imgData;
+				return camCache[presetNumber].imgData;
 		}
 		return null;
 	}
@@ -3105,12 +3104,11 @@ var ptzPresetThumbLoader = new (function ()
 	}
 	var UrlForPreset = function (cameraId, presetNumber, overrideCache)
 	{
-		var idx = presetNumber - 1;
-		if (idx < 0 || idx > 19)
+		if (presetNumber < 1 || presetNumber > 20)
 			return "";
 		var sessionArg = currentServer.GetRemoteSessionArg("?");
 		var cacheArg = overrideCache ? ((sessionArg ? "&" : "?") + "cache=" + Date.now()) : "";
-		return currentServer.remoteBaseURL + "image/" + cameraId + "/preset_" + idx + ".jpg" + sessionArg + cacheArg;
+		return currentServer.remoteBaseURL + "image/" + cameraId + "/preset_" + presetNumber + ".jpg" + sessionArg + cacheArg;
 	}
 	var CameraIsEligible = function (cameraId)
 	{
