@@ -1,0 +1,14 @@
+﻿{
+    "short_name": "UI3",
+    "name": "Blue Iris UI3",
+    "icons": [
+        {
+            "src": "launcher-icon.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        }
+    ],
+    "start_url": "../ui3.htm",
+    "display": "standalone",
+    "orientation": "any"
+}

@@ -935,6 +935,14 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_fullscreen_videoonly"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Full Screen: "Video Only"'
+			, onChange: OnChange_ui3_fullscreen_videoonly
+			, category: "Extra"
+		}
+		, {
 			key: "ui3_pc_next_prev_buttons"
 			, value: "1"
 			, inputType: "checkbox"
@@ -12227,7 +12235,7 @@ function FullScreenModeController()
 	var isFullScreen_cached = false;
 	$(document).on("webkitfullscreenchange mozfullscreenchange fullscreenchange MSFullscreenChange", function (event)
 	{
-		if (self.isFullScreen())
+		if (self.isFullScreen() && settings.ui3_fullscreen_videoonly == "1")
 			$("#layoutleft,#layouttop").hide();
 		else
 			$("#layoutleft,#layouttop").show();
@@ -12321,7 +12329,7 @@ function AjaxHistoryManager()
 			return false;
 		return true;
 	}
-	if (isHtml5HistorySupported())
+	if (isHtml5HistorySupported() && !navigator.standalone)
 		buttonOverride = new HistoryButtonOverride(BackButtonPressed);
 }
 //////////////////////////////////////////////////////////////////////
@@ -14803,6 +14811,17 @@ function OnChange_ui3_time24hour()
 {
 	use24HourTime = settings.ui3_time24hour == "1";
 }
+function OnChange_ui3_fullscreen_videoonly()
+{
+	if (fullScreenModeController.isFullScreen())
+	{
+		if (settings.ui3_fullscreen_videoonly == "1")
+			$("#layoutleft,#layouttop").hide();
+		else
+			$("#layoutleft,#layouttop").show();
+		resized();
+	}
+}
 function OnChange_ui3_pc_next_prev_buttons()
 {
 	if (settings.ui3_pc_next_prev_buttons == "1")
@@ -15051,9 +15070,13 @@ function StringBuilder(lineBreakStr)
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-// Date.now() and performance.now() polyfills
+function IsStandaloneApp()
+{
+	return navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches == true);
+}
 (function ()
 {
+	// Date.now() and performance.now() polyfills
 	window.Date.now = (Date.now || function () { return new Date().getTime(); });
 	if ("performance" in window == false)
 		window.performance = {};

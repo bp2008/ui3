@@ -1,8 +1,14 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+	<link rel="icon" href="ui3/launcher-icon.png">
+	<link rel="apple-touch-icon" href="ui3/launcher-icon.png">
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="apple-mobile-web-app-capable" content="yes"> <!--iOS Safari-->
+	<meta name="apple-mobile-web-app-status-bar-style" content="black">
+	<meta name="mobile-web-app-capable" content="yes"><!--Android Chrome-->
+	<meta name="theme-color" content="#000000">
+	<link rel="manifest" href="ui3/manifest.json">
 	<title>UI3 - Blue Iris</title>
 	<script type="text/javascript">
 		// If messages stating "An unexpected error has occurred." become troublesome, you can disable it by deleting this script block!
@@ -27,13 +33,13 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "b15";
+		var ui_version = "b16";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 	</script>
-	<link href="ui3/libs-ui3.css?v=b15-%%VERSION%%" rel="stylesheet" type="text/css">
-	<link href="ui3/ui3.css?v=b15-%%VERSION%%" rel="stylesheet" type="text/css">
-	<link href="ui3/ui3-local-overrides.css?v=b15-%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="ui3/libs-ui3.css?v=b16-%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="ui3/ui3.css?v=b16-%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="ui3/ui3-local-overrides.css?v=b16-%%VERSION%%" rel="stylesheet" type="text/css">
 </head>
 <body>
 	<div id="svgContainer" style="display: none;"></div>
@@ -402,8 +408,8 @@
 			<div id="datePicker2Container" class="calendarContainer"></div>
 		</div>
 	</div>
-	<script src="ui3/libs-ui3.js?v=b15-%%VERSION%%" type="text/javascript"></script>
-	<script src="ui3/ui3.js?v=b15-%%VERSION%%" type="text/javascript"></script>
-	<script src="ui3/ui3-local-overrides.js?v=b15-%%VERSION%%" type="text/javascript"></script>
+	<script src="ui3/libs-ui3.js?v=b16-%%VERSION%%" type="text/javascript"></script>
+	<script src="ui3/ui3.js?v=b16-%%VERSION%%" type="text/javascript"></script>
+	<script src="ui3/ui3-local-overrides.js?v=b16-%%VERSION%%" type="text/javascript"></script>
 </body>
 </html>
