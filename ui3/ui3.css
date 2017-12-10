@@ -2987,6 +2987,8 @@ div.invisibleLabel
 .about_icon
 {
 	float: right;
+	width: 48px;
+	height: 48px;
 }
 
 #optionalFeaturesNotSupported
