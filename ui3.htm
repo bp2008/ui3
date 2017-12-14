@@ -33,13 +33,13 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "b16";
+		var ui_version = "b17";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 	</script>
-	<link href="ui3/libs-ui3.css?v=b16-%%VERSION%%" rel="stylesheet" type="text/css">
-	<link href="ui3/ui3.css?v=b16-%%VERSION%%" rel="stylesheet" type="text/css">
-	<link href="ui3/ui3-local-overrides.css?v=b16-%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="ui3/libs-ui3.css?v=b17-%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="ui3/ui3.css?v=b17-%%VERSION%%" rel="stylesheet" type="text/css">
+	<link href="ui3/ui3-local-overrides.css?v=b17-%%VERSION%%" rel="stylesheet" type="text/css">
 </head>
 <body>
 	<div id="svgContainer" style="display: none;"></div>
@@ -313,8 +313,10 @@
 				</div>
 				<div class="pcButton hideWhenLive" onclick="videoPlayer.Playback_PreviousClip()" title="Previous Clip" id="pcPrevClip"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>
 				<div class="pcButton hideWhenLive" onclick="videoPlayer.Playback_NextClip()" title="Next Clip" id="pcNextClip"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>
-				<div class="pcButton hideWhenLive hidden" onclick="BI_Hotkey_SkipBack()" title="Skip Back" id="pcSkipBack"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div>
-				<div class="pcButton hideWhenLive hidden" onclick="BI_Hotkey_SkipAhead()" title="Skip Ahead" id="pcSkipAhead"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalRight"></use></svg></div>
+				<div class="pcButton hideWhenLive hidden skipbtn stdSkipBtn" onclick="BI_Hotkey_SkipBack()" title="Skip Back" id="pcSkipBack"><svg class="icon noflip"><use xlink:href="#svg_mio_replay"></use></svg><div id="lblSkipBack" class="centerText"></div></div>
+				<div class="pcButton hideWhenLive hidden skipbtn stdSkipBtn" onclick="BI_Hotkey_SkipAhead()" title="Skip Ahead" id="pcSkipAhead"><svg class="icon noflip invertv"><use xlink:href="#svg_mio_replay"></use></svg><div id="lblSkipAhead" class="centerText"></div></div>
+				<div class="pcButton hideWhenLive hidden skipbtn" onclick="BI_Hotkey_SkipBack1Frame()" title="Skip Back 1 Frame" id="pcSkipBack1Frame"><svg class="icon noflip"><use xlink:href="#svg_mio_replay"></use></svg><div class="centerText">1</div></div>
+				<div class="pcButton hideWhenLive hidden skipbtn" onclick="BI_Hotkey_SkipAhead1Frame()" title="Skip Ahead 1 Frame" id="pcSkipAhead1Frame"><svg class="icon noflip invertv"><use xlink:href="#svg_mio_replay"></use></svg><div class="centerText">1</div></div>
 				<div id="volumeBar">
 					<div id="pcVolume" class="off">
 						<svg class="icon noflip off"><use xlink:href="#svg_mio_volumeOff"></use></svg>
@@ -408,8 +410,8 @@
 			<div id="datePicker2Container" class="calendarContainer"></div>
 		</div>
 	</div>
-	<script src="ui3/libs-ui3.js?v=b16-%%VERSION%%" type="text/javascript"></script>
-	<script src="ui3/ui3.js?v=b16-%%VERSION%%" type="text/javascript"></script>
-	<script src="ui3/ui3-local-overrides.js?v=b16-%%VERSION%%" type="text/javascript"></script>
+	<script src="ui3/libs-ui3.js?v=b17-%%VERSION%%" type="text/javascript"></script>
+	<script src="ui3/ui3.js?v=b17-%%VERSION%%" type="text/javascript"></script>
+	<script src="ui3/ui3-local-overrides.js?v=b17-%%VERSION%%" type="text/javascript"></script>
 </body>
 </html>

@@ -13,6 +13,11 @@ svg.icon
 	transform: scaleY(1);
 }
 
+.invertv svg.icon, svg.invertv
+{
+	transform: scaleX(-1);
+}
+
 .rotate90 svg.icon, svg.rotate90
 {
 	transform: rotate(90deg);
@@ -2768,6 +2773,56 @@ div.invisibleLabel
 .pcButton.hidden
 {
 	display: none;
+}
+
+.stdSkipBtn
+{
+	color: #CCCCCC;
+}
+
+	.stdSkipBtn div.centerText
+	{
+		text-shadow: 0px 0px 7px #000000;
+	}
+
+.skipbtn
+{
+	position: relative;
+	color: #CCCCCC;
+}
+
+	.skipbtn div.centerText
+	{
+		position: absolute;
+		bottom: 0px;
+		right: 0px;
+		font-size: 14px;
+		color: #FFFFFF;
+	}
+
+.sizeMedium .skipbtn div.centerText
+{
+	font-size: 11px;
+}
+
+.sizeSmall .skipbtn div.centerText
+{
+	font-size: 10px;
+}
+
+#pcButtonContainer.extraPadding div.centerText
+{
+	margin: 8px;
+}
+
+.sizeMedium #pcButtonContainer.extraPadding div.centerText
+{
+	margin: 7px;
+}
+
+.sizeSmall #pcButtonContainer.extraPadding div.centerText
+{
+	margin: 6px;
 }
 
 /* Seek Bar */

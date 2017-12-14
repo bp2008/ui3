@@ -18,6 +18,7 @@ var web_audio_supported = false;
 var web_audio_buffer_source_supported = false;
 var fullscreen_supported = false;
 var browser_is_ios = false;
+var browser_is_android = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -32,6 +33,7 @@ function DoUIFeatureDetection()
 			// All critical tests pass
 			// Non-critical tests can run here and store their results in global vars.
 			browser_is_ios = BrowserIsIOSSafari() || BrowserIsIOSChrome();
+			browser_is_android = BrowserIsAndroid();
 			web_workers_supported = typeof Worker !== "undefined";
 			fetch_supported = typeof fetch == "function";
 			readable_stream_supported = typeof ReadableStream == "function";
@@ -91,6 +93,10 @@ function DoUIFeatureDetection()
 				{
 					ul_root.append('<li>Context menus are not supported.</li>');
 				}
+				if (isHtml5HistorySupported())
+				{
+					ul_root.append('<li>The back button will not close the current clip or camera, like it does on most other platforms.</li>');
+				}
 				if (ul_root.children().length > 0)
 				{
 					var $opt = $('#optionalFeaturesNotSupported');
@@ -143,6 +149,8 @@ function isHtml5HistorySupported()
 	{
 		if (BrowserIsIOSChrome())
 			return false; // Chrome on iOS has too many history bugs.
+		if (BrowserIsAndroid())
+			return false; // If the back button is overridden on Android, it can't be used to close the browser while UI3 is the first item in history.
 		if (window.history && typeof window.history.state == "object" && typeof window.history.pushState == "function" && typeof window.history.replaceState == "function")
 			return true;
 		return false;
@@ -264,9 +272,6 @@ var togglableUIFeatures =
 // Notes that require BI changes //////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Thoroughly test camera cycles and ensure their performance is acceptable.
-//			-- I've found bugs related to the cycles and reported them.  Awaiting fixes.
-
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -277,8 +282,8 @@ var togglableUIFeatures =
 
 // CONSIDER: Play sounds like default.htm does when certain events occur.
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
-// CONSIDER: Remove the "Streaming Quality" item from the Live View left bar and change UI scaling sizes to match.
-// CONSIDER: Android Chrome > Back button can't close the browser if there is no history.
+// CONSIDER: Android Chrome > Back button can't close the browser if there is no history, so the back button override is disabled on Android.  Also disabled on iOS for similar bugs.
+// CONSIDER: Seeking while paused in Chrome, the canvas sometimes shows the image scaled using nearest-neighbor.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -541,12 +546,48 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_hotkey_tab_live"
+			, value: "0|0|0|112" // 112: F1
+			, hotkey: true
+			, label: "Load Tab: Live View"
+			, hint: "Opens the Live View tab"
+			, actionDown: BI_Hotkey_Load_Tab_Live
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_tab_alerts"
+			, value: "0|0|0|113" // 113: F2
+			, hotkey: true
+			, label: "Load Tab: Alerts"
+			, hint: "Opens the Alerts tab"
+			, actionDown: BI_Hotkey_Load_Tab_Alerts
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_tab_clips"
+			, value: "0|0|0|114" // 114: F3
+			, hotkey: true
+			, label: "Load Tab: Clips"
+			, hint: "Opens the Clips tab"
+			, actionDown: BI_Hotkey_Load_Tab_Clips
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_hotkey_playpause"
 			, value: "0|0|0|32" // 32: space
 			, hotkey: true
 			, label: "Play/Pause"
 			, hint: "Plays or pauses the current recording."
 			, actionDown: BI_Hotkey_PlayPause
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_toggleReverse"
+			, value: "0|0|0|8" // 8: backspace
+			, hotkey: true
+			, label: "Reverse Playback"
+			, hint: "Toggles between Forward and Reverse playback."
+			, actionDown: BI_Hotkey_ToggleReverse
 			, category: "Hotkeys"
 		}
 		, {
@@ -589,11 +630,29 @@ var defaultSettings =
 			key: "ui3_skipAmount"
 			, value: 10
 			, inputType: "number"
-			, inputWidth: 40
-			, minValue: 1
+			, minValue: 0
 			, maxValue: 9999
 			, label: "Skip Time (seconds)"
-			, hint: "[1-9999] (default: 10) \r\nNumber of seconds to skip forward and back when using hotkeys to skip."
+			, hint: "[0.01-9999] (default: 10) \r\nNumber of seconds to skip forward and back when using hotkeys to skip."
+			, onChange: OnChange_ui3_skipAmount
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_skipAhead1Frame"
+			, value: "0|0|0|190" // 190: . (period)
+			, hotkey: true
+			, label: "Skip Ahead 1 Frame:"
+			, hint: "Skips ahead in the current recording by approximately one frame."
+			, actionDown: BI_Hotkey_SkipAhead1Frame
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_skipBack1Frame"
+			, value: "0|0|0|188" // 188: , (comma)
+			, hotkey: true
+			, label: "Skip Back 1 Frame:"
+			, hint: "Skips back in the current recording by approximately one frame."
+			, actionDown: BI_Hotkey_SkipBack1Frame
 			, category: "Hotkeys"
 		}
 		, {
@@ -612,6 +671,24 @@ var defaultSettings =
 			, label: "Playback Slower"
 			, hint: "Decreases clip playback speed"
 			, actionDown: BI_Hotkey_PlaybackSlower
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_close_clip"
+			, value: "0|0|0|27" // 27: escape
+			, hotkey: true
+			, label: "Close Clip"
+			, hint: "Closes the current clip."
+			, actionDown: BI_Hotkey_CloseClip
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_close_camera"
+			, value: "0|0|0|27" // 27: escape
+			, hotkey: true
+			, label: "Close Camera"
+			, hint: "Closes the current live camera and returns to the group view."
+			, actionDown: BI_Hotkey_CloseCamera
 			, category: "Hotkeys"
 		}
 		, {
@@ -939,6 +1016,7 @@ var defaultSettings =
 			, value: "1"
 			, inputType: "checkbox"
 			, label: 'Full Screen: "Video Only"'
+			, hint: 'If "yes", then the left and top control bars are hidden when the UI enters fullscreen mode.'
 			, onChange: OnChange_ui3_fullscreen_videoonly
 			, category: "Extra"
 		}
@@ -954,8 +1032,16 @@ var defaultSettings =
 			key: "ui3_pc_seek_buttons"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'Playback Controls: Seek Buttons'
+			, label: 'Playback Controls: Skip Buttons'
 			, onChange: OnChange_ui3_pc_seek_buttons
+			, category: "Extra"
+		}
+		, {
+			key: "ui3_pc_seek_1frame_buttons"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Skip 1 Frame Buttons'
+			, onChange: OnChange_ui3_pc_seek_1frame_buttons
 			, category: "Extra"
 		}
 		, {
@@ -972,6 +1058,14 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'PTZ: IR, Brightness, Contrast<br><a href="javascript:UIHelp.LearnMore(\'IR Brightness Contrast\')">(learn more)</a>'
 			, onChange: OnChange_ui3_ir_brightness_contrast
+			, category: "Extra"
+		}
+		, {
+			key: "ui3_show_session_success"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Show Session Status at Startup'
+			, hint: 'If enabled, session status is shown in the lower-right corner when the UI loads.'
 			, category: "Extra"
 		}
 	];
@@ -1324,8 +1418,10 @@ $(function ()
 	}
 
 	OnChange_ui3_time24hour();
+	OnChange_ui3_skipAmount();
 	OnChange_ui3_pc_next_prev_buttons();
 	OnChange_ui3_pc_seek_buttons();
+	OnChange_ui3_pc_seek_1frame_buttons();
 	OnChange_ui3_extra_playback_controls_padding();
 	OnChange_ui3_ir_brightness_contrast();
 
@@ -3613,6 +3709,7 @@ function PlaybackControls()
 	this.Live = function ()
 	{
 		self.Show();
+		hideAfterTimeout();
 		$pc.addClass("live");
 		self.SetProgressText("Loading...");
 		self.setPlayPauseButtonState();
@@ -3620,6 +3717,7 @@ function PlaybackControls()
 	this.Recording = function (clipData)
 	{
 		self.Show();
+		hideAfterTimeout();
 		$pc.removeClass("live");
 		self.SetProgressText("Loading...");
 		self.setPlayPauseButtonState();
@@ -3715,7 +3813,7 @@ function PlaybackControls()
 			+ '/>'
 			+ '<label for="cbLoop"><span class="ui"></span>Loop<div class="playbackSettingsSpacer"></div></label>'
 			+ '</div>');
-		var $speedBtn = $('<div class="playbackSettingsLine">'
+		var $speedBtn = $('<div class="playbackSettingsLine speedBtn">'
 			+ 'Speed<div class="playbackSettingsFloatRight">'
 			+ (playSpeed == 1 ? "Normal" : playSpeed)
 			+ '<div class="playbackSettingsRightArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalRight"></use></svg></div>'
@@ -3818,17 +3916,38 @@ function PlaybackControls()
 	}
 	this.AutoplayClicked = function ()
 	{
+		self.FadeIn();
+		hideAfterTimeout();
 		autoplay = $("#cbAutoplay").is(":checked");
 		settings.ui3_playback_autoplay = autoplay ? "1" : "0";
 	}
 	this.ReverseClicked = function ()
 	{
+		self.FadeIn();
+		hideAfterTimeout();
 		playReverse = $("#cbReverse").is(":checked");
+		settings.ui3_playback_reverse = playReverse ? "1" : "0";
+		videoPlayer.PlaybackDirectionChanged(playReverse);
+	}
+	this.ToggleReverse = function ()
+	{
+		self.FadeIn();
+		hideAfterTimeout();
+		if ($("#cbReverse").length > 0)
+		{
+			if ($("#cbReverse").is(":checked"))
+				$("#cbReverse").removeProp("checked");
+			else
+				$("#cbReverse").prop("checked", "checked");
+		}
+		playReverse = !playReverse;
 		settings.ui3_playback_reverse = playReverse ? "1" : "0";
 		videoPlayer.PlaybackDirectionChanged(playReverse);
 	}
 	this.LoopClicked = function ()
 	{
+		self.FadeIn();
+		hideAfterTimeout();
 		loopingEnabled = $("#cbLoop").is(":checked");
 		settings.ui3_playback_loop = loopingEnabled ? "1" : "0";
 	}
@@ -3865,13 +3984,25 @@ function PlaybackControls()
 				if (i >= 0 && i < SpeedOptions.length)
 				{
 					settings.ui3_playback_speed = playSpeed = SpeedOptions[i];
-					SetPlaySpeedLabel();
 					videoPlayer.PlaybackSpeedChanged(playSpeed);
 					self.FadeIn();
 					hideAfterTimeout();
+					NotifySpeedChanged();
 				}
 				return;
 			}
+	}
+	var NotifySpeedChanged = function ()
+	{
+		/// <summary>Updates several GUI elements with the new playSpeed value.</summary>
+		SetPlaySpeedLabel();
+		if ($playbackSettings && $playbackSettings.length > 0)
+		{
+			if ($playbackSettings.hasClass("speedPanel"))
+				self.OpenSpeedPanel();
+			else
+				$playbackSettings.find("div.speedBtn .playbackSettingsFloatRight").html((playSpeed == 1 ? "Normal" : playSpeed));
+		}
 	}
 	var SetQualityHint = function (hintText)
 	{
@@ -6528,7 +6659,7 @@ function SessionManager()
 		else
 			return "null response";
 	}
-	this.HandleSuccessfulLogin = function (response, wasJustCheckingSessionStatus)
+	this.HandleSuccessfulLogin = function (response, wasAutomatic)
 	{
 		lastResponse = response;
 		var user = response && response.data && response.data.user ? response.data.user : "";
@@ -6569,7 +6700,6 @@ function SessionManager()
 			isAdministratorSession = true;
 			if (user == "")
 				user = "administrator";
-			toaster.Success("Logged in as " + htmlEncode(user) + "<br/>(Administrator)<br/><br/>Server \"" + lastResponse.data["system name"] + "\"<br/>Blue Iris version " + lastResponse.data.version);
 			if (typeof adminLoginCallbackSuccess == "function")
 			{
 				adminLoginCallbackSuccess(lastResponse);
@@ -6582,8 +6712,14 @@ function SessionManager()
 			isAdministratorSession = false;
 			if (user == "")
 				user = "user";
-			if (!wasJustCheckingSessionStatus)
-				toaster.Info("Logged in as " + htmlEncode(user) + "<br/>(Limited User)<br/><br/>Server \"" + lastResponse.data["system name"] + "\"<br/>Blue Iris version " + lastResponse.data.version);
+		}
+		if (!wasAutomatic || settings.ui3_show_session_success == "1")
+		{
+			var message = "Logged in as " + htmlEncode(user) + "<br/>(" + (isAdministratorSession ? "Administrator" : "Limited User") + ")<br/><br/>Server \"" + lastResponse.data["system name"] + "\"<br/>Blue Iris version " + lastResponse.data.version;
+			if (isAdministratorSession)
+				toaster.Success(message);
+			else
+				toaster.Info(message);
 		}
 	}
 	var getBoolMaybe = function (boolMaybe, defaultValue)
@@ -7130,6 +7266,13 @@ function VideoPlayerController()
 	{
 		return { cam: currentlyLoadedCamera, image: currentlyLoadedImage };
 	}
+	this.GetExpectedFrameIntervalOfCurrentCamera = function ()
+	{
+		if (typeof currentlyLoadingCamera.FPS == "number")
+			return 1000 / currentlyLoadingCamera.FPS;
+		else
+			return 100;
+	}
 	this.GetCurrentHomeGroupObj = function ()
 	{
 		return cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId);
@@ -7360,7 +7503,7 @@ function VideoPlayerController()
 		seekBar.drawSeekbarAtPercent(pos);
 		playerModule.OpenVideo(currentlyLoadingImage, pos, !play);
 	}
-	this.SeekByMs = function (offset)
+	this.SeekByMs = function (offset, play)
 	{
 		var msLength = currentlyLoadingImage.msec - 1;
 		if (msLength <= 0)
@@ -7368,7 +7511,9 @@ function VideoPlayerController()
 		var currentMs = playerModule.GetSeekPercent() * msLength;
 		var newPos = (currentMs + offset) / msLength;
 		newPos = Clamp(newPos, 0, 1);
-		self.SeekToPercent(newPos);
+		if (typeof play == "undefined")
+			play = !playerModule.Playback_IsPaused();
+		self.SeekToPercent(newPos, play);
 	}
 	this.AudioToggleNotify = function (audioEnabled)
 	{
@@ -7519,7 +7664,7 @@ function VideoPlayerController()
 			if (playbackControls.GetPlayReverse())
 			{
 				if (playbackControls.GetLoopingEnabled())
-					self.SeekToPercent(1);
+					self.SeekToPercent(1, true);
 				else if (playbackControls.GetAutoplay())
 					self.Playback_PreviousClip();
 				else
@@ -7532,7 +7677,7 @@ function VideoPlayerController()
 			if (!playbackControls.GetPlayReverse())
 			{
 				if (playbackControls.GetLoopingEnabled())
-					self.SeekToPercent(0);
+					self.SeekToPercent(0, true);
 				else if (playbackControls.GetAutoplay())
 					self.Playback_NextClip();
 				else
@@ -7683,7 +7828,7 @@ function JpegVideoModule()
 	var repeatedSameImageURLs = 1;
 	var loadedFirstFrame = false;
 	var lastRequestedWidth = 0;
-	var currentLoadedImageActualWidth = 1;
+	var lastLoadedTimeValue = -1;
 
 	var currentImageTimestampMs = new Date().getTime();
 	var currentImageRequestedAtMs = new Date().getTime();
@@ -7737,8 +7882,6 @@ function JpegVideoModule()
 				loadedFirstFrame = true;
 				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
 				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, new Date(currentImageRequestedAtMs));
-
-				currentLoadedImageActualWidth = this.naturalWidth;
 
 				CopyImageToCanvas(camimg_ele, camimg_canvas_ele);
 
@@ -7883,7 +8026,7 @@ function JpegVideoModule()
 		if (!loading.isLive)
 		{
 			var timePassed = timeValue - timeLastClipFrame;
-			timeLastClipFrame = timeValue;
+			timeLastClipFrame = timeValue.toFixed(0);
 			var speedMultiplier = playbackControls.GetPlaybackSpeed();
 			timePassed *= speedMultiplier;
 			if (playbackPaused || seekBar.IsDragging() || !isVisible)
@@ -7927,16 +8070,16 @@ function JpegVideoModule()
 		var qualityArg = jpegQualityHelper.getQualityArg();
 
 		if (loading.isLive)
-			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue + currentServer.GetRemoteSessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetRemoteSessionArg("&", true);
 		else
-			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue + currentServer.GetRemoteSessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetRemoteSessionArg("&", true);
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + "&w=" + widthToRequest + qualityArg;
 
 		if ($("#camimg").attr('src') == imgSrcPath)
 			GetNewImageAfterTimeout();
 		else
 		{
-			if ((isLoadingRecordedSnapshot
+			if ((lastLoadedTimeValue == timeValue
 				&& loading.uniqueId == videoPlayer.Loaded().image.uniqueId
 				&& !CouldBenefitFromWidthChange(widthToRequest))
 				|| !isVisible
@@ -7951,13 +8094,14 @@ function JpegVideoModule()
 				lastRequestedWidth = widthToRequest;
 				repeatedSameImageURLs = 1;
 				SetImageLoadTimeout();
+				lastLoadedTimeValue = timeValue;
 				$("#camimg").attr('src', imgSrcPath);
 			}
 		}
 	}
 	var CouldBenefitFromWidthChange = function (newWidth)
 	{
-		return newWidth > lastRequestedWidth && currentLoadedImageActualWidth >= lastRequestedWidth;
+		return newWidth > lastRequestedWidth && loading.fullwidth > lastRequestedWidth;
 	}
 
 	this.Playback_IsPaused = function ()
@@ -8190,6 +8334,14 @@ function FetchOpenH264VideoModule()
 	{
 		return openh264_player.GetRenderedFrameCount() > 0;
 	}
+	var AreSameClip = function (uid1, uid2)
+	{
+		var cd1 = clipLoader.GetClipFromId(uid1);
+		var cd2 = clipLoader.GetClipFromId(uid2);
+		if (cd1 && cd2 && cd1.clipId == cd2.clipId)
+			return true;
+		return false;
+	}
 	var openVideoTimeout = null;
 	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
@@ -8206,6 +8358,7 @@ function FetchOpenH264VideoModule()
 		}
 		if (developerMode)
 			console.log("h264.OpenVideo");
+		var isSameClipAsBefore = AreSameClip(loading.uniqueId, videoData.uniqueId);
 		loading.CopyValuesFrom(videoData);
 		var honorAlertOffset = offsetPercent === -1;
 		if (!offsetPercent)
@@ -8265,7 +8418,7 @@ function FetchOpenH264VideoModule()
 					else
 					{
 						// We are starting the alert at a specific offset that was provided in milliseconds.
-						if (speed < 0) // If playing in reverse, lets start at the end of the clip's bounds.
+						if (speed < 0) // If playing in reverse, lets start at the end of the alert's bounds.
 							offsetMs += clipData.roughLengthMs;
 						offsetArg = "&time=" + offsetMs;
 					}
@@ -8293,6 +8446,15 @@ function FetchOpenH264VideoModule()
 			var posArg = "&pos=" + posInt;
 			if (honorAlertOffset)
 				posArg = "";
+			if (isSameClipAsBefore && offsetArg == "")
+			{
+				// Another hack to work around API limitations.
+				// This allows us to seek frame-by-frame with millisecond precision 
+				// instead of precision equalling 1/10000th of the clip's duration.
+				// isSameClipAsBefore helps ensure we have an accurate msec value.
+				offsetArg = "&time=" + (currentSeekPositionPercent * loading.msec).dropDecimals();
+				posArg = "";
+			}
 			videoUrl = "/file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
@@ -12329,7 +12491,7 @@ function AjaxHistoryManager()
 			return false;
 		return true;
 	}
-	if (isHtml5HistorySupported() && !navigator.standalone)
+	if (isHtml5HistorySupported())
 		buttonOverride = new HistoryButtonOverride(BackButtonPressed);
 }
 //////////////////////////////////////////////////////////////////////
@@ -12348,6 +12510,18 @@ function BI_Hotkey_FullScreen()
 {
 	fullScreenModeController.toggleFullScreen();
 }
+function BI_Hotkey_Load_Tab_Live()
+{
+	$('.topbar_tab[name="live"]').click();
+}
+function BI_Hotkey_Load_Tab_Alerts()
+{
+	$('.topbar_tab[name="alerts"]').click();
+}
+function BI_Hotkey_Load_Tab_Clips()
+{
+	$('.topbar_tab[name="clips"]').click();
+}
 function BI_Hotkey_PlayPause()
 {
 	if (!videoPlayer.Loading().image.isLive)
@@ -12358,6 +12532,11 @@ function BI_Hotkey_PlayPause()
 			videoOverlayHelper.ShowTemporaryPauseIcon();
 		videoPlayer.Playback_PlayPause();
 	}
+}
+function BI_Hotkey_ToggleReverse()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		playbackControls.ToggleReverse();
 }
 function BI_Hotkey_NextClip()
 {
@@ -12372,12 +12551,26 @@ function BI_Hotkey_PreviousClip()
 function BI_Hotkey_SkipAhead()
 {
 	if (!videoPlayer.Loading().image.isLive)
-		videoPlayer.SeekByMs(1000 * parseInt(settings.ui3_skipAmount));
+		videoPlayer.SeekByMs(1000 * GetSkipAmount());
 }
 function BI_Hotkey_SkipBack()
 {
 	if (!videoPlayer.Loading().image.isLive)
-		videoPlayer.SeekByMs(-1000 * parseInt(settings.ui3_skipAmount));
+		videoPlayer.SeekByMs(-1000 * GetSkipAmount());
+}
+function GetSkipAmount()
+{
+	return Clamp(parseFloat(settings.ui3_skipAmount), 0.01, 9999);
+}
+function BI_Hotkey_SkipAhead1Frame()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		videoPlayer.SeekByMs(videoPlayer.GetExpectedFrameIntervalOfCurrentCamera(), false);
+}
+function BI_Hotkey_SkipBack1Frame()
+{
+	if (!videoPlayer.Loading().image.isLive)
+		videoPlayer.SeekByMs(-1 * videoPlayer.GetExpectedFrameIntervalOfCurrentCamera(), false);
 }
 function BI_Hotkey_PlaybackFaster()
 {
@@ -12388,6 +12581,25 @@ function BI_Hotkey_PlaybackSlower()
 {
 	if (!videoPlayer.Loading().image.isLive)
 		playbackControls.ChangePlaySpeed(-1);
+}
+function BI_Hotkey_CloseClip()
+{
+	if (!videoPlayer.Loading().image.isLive)
+	{
+		clipLoader.CloseCurrentClip();
+		// Prevent this same hotkey event from closing the current camera, too.
+		suppress_Hotkey_CloseCamera = true;
+		setTimeout(function () { suppress_Hotkey_CloseCamera = false; }, 0);
+	}
+}
+var suppress_Hotkey_CloseCamera = false;
+function BI_Hotkey_CloseCamera()
+{
+	if (suppress_Hotkey_CloseCamera)
+		return;
+	var loading = videoPlayer.Loading();
+	if (loading.image.isLive && !loading.image.isGroup)
+		videoPlayer.ImgClick_Camera(loading.cam);
 }
 function BI_Hotkey_DigitalZoomIn()
 {
@@ -12662,11 +12874,15 @@ function BI_Hotkeys()
 		m[123] = "F12";
 		m[144] = "num lock";
 		m[145] = "scroll lock";
-		m[186] = ";";
+		m[176] = "Media Next";
+		m[177] = "Media Previous";
+		m[178] = "Media Stop";
+		m[179] = "Media Play/Pause";
+		m[186] = "semicolon (;)";
 		m[187] = "=";
-		m[188] = ",";
-		m[189] = "-";
-		m[190] = ".";
+		m[188] = "comma (,)";
+		m[189] = "hyphen (-)";
+		m[190] = "period (.)";
 		m[191] = "/";
 		m[192] = "tilde (~`)";
 		m[219] = "[";
@@ -14544,6 +14760,10 @@ function UISettingsPanel()
 				else if (s.inputType == "number")
 				{
 					var $input = $('<input type="number" />');
+					if (typeof s.minValue != "undefined")
+						$input.attr('min', s.minValue);
+					if (typeof s.maxValue != "undefined")
+						$input.attr('max', s.maxValue);
 					$input.val(settings[s.key]);
 					AddChangeEventToElement(NumberChanged, s, $input);
 					$row.addClass('dialogOption_item dialogOption_item_info');
@@ -14822,6 +15042,10 @@ function OnChange_ui3_fullscreen_videoonly()
 		resized();
 	}
 }
+function OnChange_ui3_skipAmount()
+{
+	$('#lblSkipBack,#lblSkipAhead').text(GetSkipAmount().dropDecimalsStr() + "s");
+}
 function OnChange_ui3_pc_next_prev_buttons()
 {
 	if (settings.ui3_pc_next_prev_buttons == "1")
@@ -14835,6 +15059,13 @@ function OnChange_ui3_pc_seek_buttons()
 		$('#pcSkipBack,#pcSkipAhead').removeClass("hidden");
 	else
 		$('#pcSkipBack,#pcSkipAhead').addClass("hidden");
+}
+function OnChange_ui3_pc_seek_1frame_buttons()
+{
+	if (settings.ui3_pc_seek_1frame_buttons == "1")
+		$('#pcSkipBack1Frame,#pcSkipAhead1Frame').removeClass("hidden");
+	else
+		$('#pcSkipBack1Frame,#pcSkipAhead1Frame').addClass("hidden");
 }
 function OnChange_ui3_extra_playback_controls_padding()
 {
@@ -15094,24 +15325,34 @@ function isCanvasSupported()
 function logout()
 {
 	currentServer.isLoggingOut = true;
+	var fallbackLogoutUrl = currentServer.remoteBaseURL + 'logout.htm' + currentServer.GetRemoteSessionArg("?");
 	if (currentServer.isUsingRemoteServer)
 	{
-		ExecJSON({ cmd: "logout" }, function ()
+		ExecJSON({ cmd: "logout" }, function (response)
 		{
-			// If implementing remote server connections:  Here, we would do SendToServerListOnStartup();
+			if (response && response.result == "success")
+			{
+				// If implementing remote server connections:  Here, we would do SendToServerListOnStartup();
+				location.href = fallbackLogoutUrl;
+			}
+			else
+				location.href = fallbackLogoutUrl;
 		}, function ()
 			{
-				location.href = currentServer.remoteBaseURL + 'logout.htm' + GetRemoteSessionArg("?");
+				location.href = fallbackLogoutUrl;
 			});
 	}
 	else
 	{
-		ExecJSON({ cmd: "logout" }, function ()
+		ExecJSON({ cmd: "logout" }, function (response)
 		{
-			location.href = currentServer.remoteBaseURL + "login.htm?autologin=0&page=" + encodeURIComponent(location.pathname);
+			if (response && response.result == "success")
+				location.href = currentServer.remoteBaseURL + "login.htm?autologin=0&page=" + encodeURIComponent(location.pathname);
+			else
+				location.href = fallbackLogoutUrl;
 		}, function ()
 			{
-				location.href = currentServer.remoteBaseURL + 'logout.htm';
+				location.href = fallbackLogoutUrl;
 			});
 	}
 }
@@ -15306,6 +15547,30 @@ String.prototype.toFloat = function (digits)
 Number.prototype.toFloat = function (digits)
 {
 	return parseFloat(this.toFixed(digits));
+};
+Number.prototype.toFixedNoE = function (digits)
+{
+	var str = this.toFixed(digits);
+	if (str.indexOf('e+') < 0)
+		return str;
+
+	// if number is in scientific notation, pick (b)ase and (p)ower
+	return str.replace('.', '').split('e+').reduce(function (p, b)
+	{
+		return p + Array(b - p.length + 2).join(0);
+	}) + (digits > 0 ? ('.' + Array(digits + 1).join(0)) : '');
+};
+Number.prototype.dropDecimals = function ()
+{
+	return Number(this.dropDecimalsStr());
+};
+Number.prototype.dropDecimalsStr = function ()
+{
+	var str = this.toFixedNoE(100);
+	var idxDot = str.indexOf('.');
+	if (idxDot > -1)
+		str = str.substr(0, idxDot);
+	return str;
 };
 function msToTime(totalMs, includeMs)
 {
@@ -15591,6 +15856,10 @@ function BrowserIsIOSSafari()
 function BrowserIsIOSChrome()
 {
 	return BrowserIsIOS() && !!navigator.userAgent.match(/ Safari\//) && !!navigator.userAgent.match(/ CriOS\//);
+}
+function BrowserIsAndroid()
+{
+	return !!navigator.userAgent.match(/ Android /);
 }
 function getHiddenProp()
 {
