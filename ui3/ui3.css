@@ -22,6 +22,10 @@ svg.icon
 {
 	transform: rotate(90deg);
 }
+.rotate270 svg.icon, svg.rotate270
+{
+	transform: rotate(-90deg);
+}
 
 svg.stroke
 {
@@ -856,6 +860,7 @@ div.invisibleLabel
 {
 	position: relative;
 	vertical-align: top;
+    overflow: hidden;
 }
 
 .presetThumb
@@ -866,8 +871,9 @@ div.invisibleLabel
 	vertical-align: middle;
 }
 
-#presetBigThumb
+#bigThumb
 {
+	display: none;
 	box-sizing: border-box;
 	position: absolute;
 	border: 4px ridge #888888;
@@ -877,15 +883,17 @@ div.invisibleLabel
 	z-index: 9999;
 	overflow: hidden;
 	font-size: 0px;
+	text-align: center;
+	background-color: #000000;
 }
 
-	#presetBigThumb img
+	#bigThumb img
 	{
 		max-width: 100%;
 		max-height: 100%;
 	}
 
-.presetDescription
+.bigThumbDescription
 {
 	white-space: nowrap;
 	overflow: hidden;

@@ -272,6 +272,8 @@ var togglableUIFeatures =
 // Notes that require BI changes //////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Once Blue Iris stops telling the browser not to cache clip thumbnails, stop using ImageToDataUrl for the clip thumbnail mouseover popup.
+
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -335,6 +337,10 @@ var defaultSettings =
 		, {
 			key: "ui3_cliplist_larger_thumbnails"
 			, value: "0"
+		}
+		, {
+			key: "ui3_cliplist_mouseover_thumbnails"
+			, value: "1"
 		}
 		, {
 			key: "bi_rememberMe"
@@ -2792,51 +2798,21 @@ function PtzButtons()
 				return;
 
 			// Show big preset thumbnail
-			var thumb = $("#presetBigThumb");
-			thumb.remove();
-			$("body").append('<div id="presetBigThumb"></div>');
-			thumb = $("#presetBigThumb");
-
-			var $desc = $('<div class="presetDescription"></div>');
-			$desc.text(self.GetPresetDescription(ele.presetnum));
-			thumb.append($desc);
-
-			var assumedWidth = 0;
-			var assumedHeight = 0;
 			var imgData = ptzPresetThumbLoader.GetImgData(videoPlayer.Loading().image.id, ele.presetnum);
-			if (imgData)
+			var imgUrl = null;
+			var imgW = 0;
+			var imgH = 0;
+			if (imgData && !imgData.error)
 			{
-				var $img = $('<img alt="" />');
-				$img.attr("src", imgData.src);
-				thumb.append($img);
-				assumedWidth = imgData.w;
-				assumedHeight = imgData.h;
+				imgUrl = imgData.src;
+				imgW = imgData.w;
+				imgH = imgData.h;
 			}
-
-			var bW = $('#layoutbody').width();
-			var shrinkBy = assumedWidth ? bW / assumedWidth : 0;
-			if (shrinkBy > 0 && shrinkBy < 1)
-				assumedHeight = assumedHeight * shrinkBy;
-			var $this = $(this);
-			var tO = $this.offset();
-			var $parent = $this.parent();
-			var pO = $parent.offset();
-			var pW = $parent.width();
-			var wH = $(window).height();
-			var top = tO.top - (assumedHeight / 2);
-			if (top + (assumedHeight + 20) > wH) // 20 for the description
-				top = (wH - (assumedHeight + 20));
-			if (top < 0)
-				top = 0;
-			thumb.css("left", pO.left + pW + 3 + "px");
-			thumb.css("top", top + "px");
-			thumb.css("max-width", bW + "px");
-			thumb.show();
+			bigThumbHelper.Show($ele, $ele.parent(), self.GetPresetDescription(ele.presetnum), imgUrl, imgW, imgH);
 		});
 		$ele.mouseleave(function (e)
 		{
-			var thumb = $("#presetBigThumb");
-			thumb.hide();
+			bigThumbHelper.Hide();
 		});
 	});
 	// Presets //
@@ -3122,7 +3098,7 @@ var ptzPresetThumbLoader = new (function ()
 	{
 		if (asyncThumbLoader)
 			return;
-		asyncThumbLoader = new AsyncPresetThumbnailDownloader(thumbLoaded);
+		asyncThumbLoader = new AsyncPresetThumbnailDownloader(thumbLoaded, thumbError);
 	}
 	this.NotifyPtzCameraSelected = function (cameraId)
 	{
@@ -3137,28 +3113,25 @@ var ptzPresetThumbLoader = new (function ()
 			for (var i = 1; i <= 20; i++)
 			{
 				var $img = $('<img src="" alt="' + i + '" class="presetThumb" />');
-				camCache[i] = $img[0];
 				$img.hide();
-				$img.load(thumbLoaded);
+				var img = camCache[i] = $img[0];
+				// Unfortunately, we can't allow the browser cache to be used for these, or the cached images become stale when updated and reloading the page doesn't fix it.
+				img.imgData = {
+					src: UrlForPreset(cameraId, i, true),
+					w: 0,
+					h: 0
+				};
+				asyncThumbLoader.Enqueue(img, img.imgData.src);
 			}
 		}
 		ptzButtons.Get$PtzPresets().each(function (idx, ele)
 		{
-			$(ele).empty()
-				.append('<span>' + ele.presetnum + '</span>')
-				.append(camCache[ele.presetnum]);
+			var $ele = $(ele).empty();
+			var img = camCache[ele.presetnum];
+			if (img.imgData.w == 0)
+				$ele.append('<span>' + ele.presetnum + '</span>')
+			$ele.append(img);
 		});
-		for (var i = 1; i <= 20; i++)
-		{
-			// Unfortunately, we can't allow the browser cache to be used for these, or the cached images become stale when updated and reloading the page doesn't fix it.
-			var img = camCache[i];
-			img.imgData = {
-				src: UrlForPreset(cameraId, i, true),
-				w: 0,
-				h: 0
-			};
-			asyncThumbLoader.Enqueue(img, img.imgData.src);
-		}
 	}
 	this.ReloadPresetImage = function (cameraId, presetNumber)
 	{
@@ -3205,6 +3178,10 @@ var ptzPresetThumbLoader = new (function ()
 			}
 			catch (ex) { }
 		}
+	}
+	var thumbError = function (img)
+	{
+		img.imgData.error = true;
 	}
 	var UrlForPreset = function (cameraId, presetNumber, overrideCache)
 	{
@@ -4428,6 +4405,56 @@ function SeekBar()
 	});
 }
 ///////////////////////////////////////////////////////////////
+// Big Thumbnail Helper (PTZ Presets, Alerts, Clips) //////////
+///////////////////////////////////////////////////////////////
+var bigThumbHelper = new BigThumbHelper();
+function BigThumbHelper()
+{
+	var self = this;
+	var $thumb = $();
+	this.Show = function ($vAlign, $hAlign, descriptionText, imgUrl, imgW, imgH)
+	{
+		$thumb.remove();
+		$thumb = $('<div id="bigThumb"></div>');
+		$("body").append($thumb);
+
+		var $desc = $('<div class="bigThumbDescription"></div>');
+		$desc.text(descriptionText);
+		$thumb.append($desc);
+
+		var assumedWidth = 0;
+		var assumedHeight = 0;
+		if (imgUrl)
+		{
+			var $img = $('<img alt="" />');
+			$img.attr("src", imgUrl);
+			$thumb.append($img);
+			assumedWidth = imgW;
+			assumedHeight = imgH;
+		}
+
+		var bW = $('#layoutbody').width();
+		var shrinkBy = assumedWidth ? bW / assumedWidth : 0;
+		if (shrinkBy > 0 && shrinkBy < 1)
+			assumedHeight = assumedHeight * shrinkBy;
+		var left = $hAlign.offset().left + $hAlign.width() + 3;
+		var wH = $(window).height();
+		var top = ($vAlign.offset().top + ($vAlign.height() / 2)) - (assumedHeight / 2) - 20; // 20 for the description
+		if (top + (assumedHeight + 20) > wH)
+			top = (wH - (assumedHeight + 20));
+		if (top < 0)
+			top = 0;
+		$thumb.css("left", left + "px");
+		$thumb.css("top", top + "px");
+		$thumb.css("max-width", bW + "px");
+		$thumb.show();
+	}
+	this.Hide = function ()
+	{
+		$thumb.hide();
+	}
+}
+///////////////////////////////////////////////////////////////
 // Touch Event Helper /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function TouchEventHelper()
@@ -5052,6 +5079,7 @@ function ClipLoader(clipsBodySelector)
 			var timeStr = GetTimeStr(clipData.displayDate);
 			var clipDur = GetClipDurStrFromMs(clipData.roughLength);
 			var clipDurTitle = clipDur == 'S' ? ' title="Snapshot"' : '';
+			var camName = cameraListLoader.GetCameraName(clipData.camera);
 			$clip = $('<div id="c' + clipData.recId + '" class="cliptile" style="top:' + clipData.y + 'px">'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipimghelper">'
@@ -5060,16 +5088,35 @@ function ClipLoader(clipsBodySelector)
 				+ '<img id="t' + clipData.recId + '" src="ui3/LoadingImage.png" />'
 				+ '</div>'
 				+ '<div class="clipcolorbar" style="background-color: #' + clipData.colorHex + ';"></div>'
-				+ '<div class="clipdesc"><div class="cliptime">' + timeStr + '</div><div class="clipcam">' + cameraListLoader.GetCameraName(clipData.camera) + '</div></div>'
+				+ '<div class="clipdesc"><div class="cliptime">' + timeStr + '</div><div class="clipcam">' + camName + '</div></div>'
 				+ '<div class="clipIconWrapper ' + GetClipIconClasses(clipData) + '">'
 				+ GetClipIcons(clipData)
 				+ '</div>'
 				+ '</div>');
 			$clipsbody.append($clip);
 
-			var $img = $("#t" + clipData.recId).get(0).thumbPath = clipData.thumbPath;
+			var thumbEle = $("#t" + clipData.recId).get(0);
+			thumbEle.thumbPath = clipData.thumbPath;
 
 			$clip.click(ClipClicked);
+			$clip.on("mouseenter touchstart touchmove", function (e)
+			{
+				if (touchEvents.Gate(e) || touchEvents.isTouchEvent(e))
+					return;
+
+				if (getMouseoverClipThumbnails())
+				{
+					var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetRemoteSessionArg("?");
+					if (thumbEle.getAttribute("src") == thumbPath)
+						thumbPath = ImageToDataUrl(thumbEle);
+					bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight);
+				}
+			});
+			$clip.on("mouseleave touchend touchcancel", function (e)
+			{
+				touchEvents.Gate(e);
+				bigThumbHelper.Hide();
+			});
 			var clipEle = $clip.get(0).clipData = clipData;
 
 			clipListContextMenu.AttachContextMenu($clip);
@@ -5183,6 +5230,7 @@ function ClipLoader(clipsBodySelector)
 		}
 		else
 		{
+			bigThumbHelper.Hide();
 			self.OpenClip(this, recId, true);
 		}
 	}
@@ -5715,9 +5763,9 @@ function AsyncClipThumbnailDownloader()
 		return !src || src.length == 0 || src == "ui3/LoadingImage.png" || (src != obj.path && src != fallbackImg);
 	}
 }
-function AsyncPresetThumbnailDownloader(thumbLoaded)
+function AsyncPresetThumbnailDownloader(thumbLoaded, thumbError)
 {
-	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, thumbLoaded, onError, loadCondition);
+	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, thumbLoaded, thumbError, loadCondition);
 
 	this.Stop = function ()
 	{
@@ -5730,10 +5778,6 @@ function AsyncPresetThumbnailDownloader(thumbLoaded)
 	this.Dequeue = function (img)
 	{
 		asyncThumbnailDownloader.Dequeue(img);
-	}
-
-	function onError(img)
-	{
 	}
 	function loadCondition(obj)
 	{
@@ -5784,7 +5828,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 				});
 				obj.loadTimeout = setTimeout(function ()
 				{
-					obj.timedOut = true;
+					obj.timedOut = true; // This timeout occurs if the element is removed from the DOM before the load is completed.
 					AsyncDownloadQueuedImage();
 				}, loadTimeoutMs);
 				$img.attr('src', obj.path);
@@ -10076,7 +10120,7 @@ function ClipListContextMenu()
 
 	var onShowMenu = function (menu)
 	{
-		var itemsToEnable = ["flag", "protect", "download", "delete", "larger_thumbnails"];
+		var itemsToEnable = ["flag", "protect", "download", "delete", "larger_thumbnails", "mouseover_thumbnails"];
 		var itemsToDisable = [];
 		if (clipLoader.GetAllSelected().length > 1)
 			itemsToDisable.push("properties");
@@ -10145,10 +10189,16 @@ function ClipListContextMenu()
 			$dl_link.attr("href", "javascript:void(0)");
 			$dl_link.removeAttr("download");
 		}
-		if (settings.ui3_cliplist_larger_thumbnails == "1")
+
+		if (getLargerClipThumbnails())
 			$("#cm_cliplist_larger_thumbnails").text("Shrink Thumbnails");
 		else
 			$("#cm_cliplist_larger_thumbnails").text("Enlarge Thumbnails");
+
+		if (getMouseoverClipThumbnails())
+			$("#cm_cliplist_mouseover_thumbnails").text("Disable Mouseover Thumbs");
+		else
+			$("#cm_cliplist_mouseover_thumbnails").text("Enable Mouseover Thumbs");
 		return true;
 	}
 	var onContextMenuAction = function ()
@@ -10193,6 +10243,9 @@ function ClipListContextMenu()
 			case "larger_thumbnails":
 				toggleLargerClipThumbnails();
 				break;
+			case "mouseover_thumbnails":
+				toggleMouseoverClipThumbnails();
+				break;
 			case "properties":
 				if (allSelectedClipIDs.length >= 1)
 					clipProperties.open(allSelectedClipIDs[0]);
@@ -10214,6 +10267,7 @@ function ClipListContextMenu()
 				, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
 				, { type: "splitLine" }
 				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
 
@@ -10235,6 +10289,14 @@ function toggleLargerClipThumbnails()
 {
 	settings.ui3_cliplist_larger_thumbnails = getLargerClipThumbnails() ? "0" : "1";
 	resized();
+}
+function getMouseoverClipThumbnails()
+{
+	return settings.ui3_cliplist_mouseover_thumbnails == "1";
+}
+function toggleMouseoverClipThumbnails()
+{
+	settings.ui3_cliplist_mouseover_thumbnails = getMouseoverClipThumbnails() ? "0" : "1";
 }
 ///////////////////////////////////////////////////////////////
 // Generic Enable/Disable Item Context Menu ///////////////////
@@ -13433,6 +13495,20 @@ function ArrayToHtmlTable(a)
 ///////////////////////////////////////////////////////////////
 // Save Images to Local Storage ///////////////////////////////
 ///////////////////////////////////////////////////////////////
+function ImageToDataUrl(imgEle)
+{
+	var imgCanvas = document.createElement("canvas");
+
+	// Make sure canvas is as big as the picture
+	imgCanvas.width = imgEle.naturalWidth;
+	imgCanvas.height = imgEle.naturalHeight;
+
+	// Draw image into canvas element
+	var imgContext = imgCanvas.getContext("2d");
+	imgContext.drawImage(imgEle, 0, 0, imgEle.naturalWidth, imgEle.naturalHeight);
+
+	return imgCanvas.toDataURL("image/jpeg");
+}
 function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 {
 	if (!isCanvasSupported())
@@ -13462,18 +13538,9 @@ function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 		}
 		else
 		{
-			var imgCanvas = document.createElement("canvas"),
-				imgContext = imgCanvas.getContext("2d");
-
-			// Make sure canvas is as big as the picture
-			imgCanvas.width = tmpImg.width;
-			imgCanvas.height = tmpImg.height;
-
-			// Draw image into canvas element
-			imgContext.drawImage(tmpImg, 0, 0, tmpImg.width, tmpImg.height);
 
 			// Get canvas contents as a data URL
-			var imgAsDataURL = imgCanvas.toDataURL("image/jpeg");
+			var imgAsDataURL = ImageToDataUrl(tmpImg);
 
 			$tmpImg.remove();
 
@@ -15566,7 +15633,7 @@ Number.prototype.dropDecimals = function ()
 };
 Number.prototype.dropDecimalsStr = function ()
 {
-	var str = this.toFixedNoE(100);
+	var str = this.toFixedNoE(20);
 	var idxDot = str.indexOf('.');
 	if (idxDot > -1)
 		str = str.substr(0, idxDot);
