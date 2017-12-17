@@ -1224,6 +1224,23 @@ function GetDummyLocalStorage()
 ///////////////////////////////////////////////////////////////
 // UI Loading /////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+// Load svg before document.ready, to give it a head-start.
+$.ajax({
+	url: "ui3/icons.svg?v=" + combined_version,
+	dataType: "html",
+	cache: true,
+	success: function (data)
+	{
+		$("#svgContainer").html(data);
+		loadingHelper.SetLoadedStatus("svg");
+
+		BI_CustomEvent.Invoke("svgLoaded");
+	},
+	error: function (jqXHR, textStatus, errorThrown)
+	{
+		loadingHelper.SetErrorStatus("svg", "Error trying to load icons.svg<br/>" + jqXHR.ErrorMessageHtml);
+	}
+});
 $(function ()
 {
 	BI_CustomEvent.Invoke("UI_Loading_Start");
@@ -1250,23 +1267,6 @@ $(function ()
 
 	if (!h264_playback_supported)
 		loadingHelper.SetLoadedStatus("h264"); // We aren't going to load the player, so clear the loading step.
-
-	$.ajax({
-		url: "ui3/icons.svg?v=" + combined_version,
-		dataType: "html",
-		cache: true,
-		success: function (data)
-		{
-			$("#svgContainer").html(data);
-			loadingHelper.SetLoadedStatus("svg");
-
-			BI_CustomEvent.Invoke("svgLoaded");
-		},
-		error: function (jqXHR, textStatus, errorThrown)
-		{
-			loadingHelper.SetErrorStatus("svg", "Error trying to load icons.svg<br/>" + jqXHR.ErrorMessageHtml);
-		}
-	});
 
 	$("#layoutleftLiveScrollable").CustomScroll(
 		{
@@ -4521,9 +4521,8 @@ function ClipLoader(clipsBodySelector)
 
 	var bulkOperationInProgress = false;
 
-	// We can't just create thousands of clip tiles and expect the UI to keep working.
-	var clipTileLimit = 1200;
-	var clipTileQueue = new Queue();
+	// Too many clip tiles bogs down the UI, and clip tiles must exist to be selected.
+	var clipTileSelectLimit = 1000;
 	var clipVisibilityMap = {};
 
 	this.LoadClips = function (listName)
@@ -4584,7 +4583,6 @@ function ClipLoader(clipsBodySelector)
 			clipListCache = new Object();
 			clipListIdCache = new Object();
 
-			clipTileQueue = new Queue();
 			clipVisibilityMap = {};
 
 			$clipsbody.empty();
@@ -4996,7 +4994,7 @@ function ClipLoader(clipsBodySelector)
 	{
 		var hours = 0;
 		var minutes = 0;
-		var seconds = 10;
+		var seconds = 0;
 
 		var match = new RegExp("(\\d+)h").exec(str);
 		if (match)
@@ -5006,16 +5004,22 @@ function ClipLoader(clipsBodySelector)
 		if (match)
 			minutes = parseInt(match[1]);
 
-		match = new RegExp("(\\d+)sec").exec(str);
+		match = new RegExp("(\\d+)s").exec(str);
 		if (match)
 			seconds = parseInt(match[1]);
+
+		if (hours == 0 && minutes == 0 && seconds == 0)
+			seconds = 10;
+
 		return { hours: hours, minutes: minutes, seconds: seconds };
 	}
 	var UpdateExistingClipData = function (oldClipData, newClipData)
 	{
 		if (oldClipData.recId != newClipData.recId)
 			return;
-
+		var loading = videoPlayer.Loading().image;
+		if (loading.uniqueId == newClipData.recId)
+			return; // If Blue Iris is currently playing this clip, it has cached a copy of the metadata and if we refresh it clientside it will be out of sync.
 		var $clip = $("#c" + oldClipData.recId);
 
 		if (oldClipData.roughLength != newClipData.roughLength)
@@ -5028,14 +5032,25 @@ function ClipLoader(clipsBodySelector)
 		{
 			oldClipData.fileSize = newClipData.fileSize;
 		}
-		if (oldClipData.msec != newClipData.msec)
-		{
-			oldClipData.msec = newClipData.msec;
-		}
 		if (oldClipData.flags != newClipData.flags)
 		{
 			oldClipData.flags = newClipData.flags;
 			self.RepairClipFlagState(oldClipData);
+		}
+		if (oldClipData.msec != newClipData.msec)
+		{
+			oldClipData.msec = newClipData.msec;
+
+			//var loaded = videoPlayer.Loaded().image;
+			//if (loaded.uniqueId == newClipData.recId)
+			//	loaded.msec = newClipData.msec;
+
+			//var loading = videoPlayer.Loading().image;
+			//if (loading.uniqueId == newClipData.recId)
+			//{
+			//	loading.msec = newClipData.msec;
+			//	videoPlayer.NotifyClipMetadataChanged(newClipData);
+			//}
 		}
 	}
 	var ThumbOnAppear = function (ele)
@@ -5058,8 +5073,9 @@ function ClipLoader(clipsBodySelector)
 	{
 		ThumbOnDisappear($("#t" + clipData.recId).get(0));
 		clipVisibilityMap[clipData.recId] = false;
-		// We need clip elements to stick around after they've been created.
-		// Otherwise we always have to reload thumbnails and it makes multi-select difficult.
+		if (!selectedClipsMap[clipData.recId]) // We need clip elements to stick around if they're selected, for the sake of multi-select.
+			$("#c" + clipData.recId).remove();
+		bigThumbHelper.Hide();
 	}
 	var ClipTileCreateFromId = function (recId)
 	{
@@ -5131,36 +5147,6 @@ function ClipLoader(clipsBodySelector)
 				else
 					$clip.addClass("selected");
 			}
-			clipTileQueue.enqueue($clip);
-			MaintainClipTileQueue();
-		}
-	}
-	var MaintainClipTileQueue = function ()
-	{
-		/// <summary
-		/// Removes clip tiles from the DOM until we are no longer over the limit, 
-		/// starting with the oldest created tiles. Selected tiles are not eligible 
-		/// for removal from the DOM, so this method can potentially fail to keep 
-		/// the tile count strictly under control.
-		/// </summary >
-		var maxIterations = 10;
-		var i = 0;
-		while (clipTileQueue.getLength() > clipTileLimit)
-		{
-			if (i++ > maxIterations)
-				return; // We don't want to spend too long doing this if we have a lot of selected tiles.
-			var $clip = clipTileQueue.dequeue();
-			if (!$clip)
-				return;
-			if (clipVisibilityMap[$clip.get(0).clipData.recId])
-			{
-				clipTileQueue.enqueue();
-				i--; // There are never many visible clips, so this won't count as an iteration.
-			}
-			else if ($clip.hasClass("selected"))
-				clipTileQueue.enqueue();
-			else
-				$clip.remove();
 		}
 	}
 	this.ScrollToClipObj = function ($clip)
@@ -5215,7 +5201,11 @@ function ClipLoader(clipsBodySelector)
 			{
 				var idx = selectedClips.indexOf(recId);
 				if (idx > -1)
+				{
 					selectedClips.splice(idx, 1);
+					if (!clipVisibilityMap[recId])
+						ClipOnDisappear(self.GetClipFromId(recId));
+				}
 				selectedClipsMap[recId] = false;
 				$("#c" + recId).removeClass("selected");
 			}
@@ -5236,9 +5226,9 @@ function ClipLoader(clipsBodySelector)
 	}
 	var CheckSelectionLimit = function ()
 	{
-		if (selectedClips.length >= clipTileLimit)
+		if (selectedClips.length >= clipTileSelectLimit)
 		{
-			toaster.Warning("For performance reasons, you can't select more than " + clipTileLimit + " items at once.");
+			toaster.Warning("For performance reasons, you can't select more than " + clipTileSelectLimit + " items at once.");
 			return true;
 		}
 		return false;
@@ -5285,16 +5275,24 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.UnselectAllClips = function (alsoRemoveOpenedStatus)
 	{
+		var unselectedOffscreen = new Array();
 		if (alsoRemoveOpenedStatus && lastOpenedClipEle)
 		{
 			$(lastOpenedClipEle).removeClass("opened");
 			lastOpenedClipEle = null;
 		}
 		for (var i = 0; i < selectedClips.length; i++)
+		{
+			if (!clipVisibilityMap[selectedClips[i]])
+				unselectedOffscreen.push(selectedClips[i]);
 			$("#c" + selectedClips[i]).removeClass("selected");
+		}
 		lastSelectedClipId = null;
 		selectedClipsMap = new Object();
 		selectedClips = [];
+
+		for (var i = 0; i < unselectedOffscreen.length; i++)
+			ClipOnDisappear(self.GetClipFromId(unselectedOffscreen[i]));
 	}
 	var DateTileOnAppear = function (dateTileData)
 	{
@@ -5786,7 +5784,9 @@ function AsyncPresetThumbnailDownloader(thumbLoaded, thumbError)
 }
 function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 {
+	var self = this;
 	var asyncImageQueue = new Array();
+	var currentlyLoadingImages = new Array();
 	var stopImageQueue = false;
 	numThreads = Clamp(numThreads, 1, 5);
 	var loadTimeoutMs = 5000;
@@ -5795,6 +5795,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 	{
 		stopImageQueue = true;
 		asyncImageQueue = new Array();
+		currentlyLoadingImages = new Array();
 	}
 	var AsyncDownloadQueuedImage = function ()
 	{
@@ -5810,6 +5811,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 				var $img = $(obj.img);
 				$img.bind("load.asyncimage", function ()
 				{
+					ImgNotLoading(obj.img);
 					clearTimeout(obj.loadTimeout);
 					$img.unbind("load.asyncimage error.asyncimage");
 					if (onLoad)
@@ -5819,6 +5821,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 				});
 				$img.bind("error.asyncimage", function ()
 				{
+					ImgNotLoading(obj.img);
 					clearTimeout(obj.loadTimeout);
 					$img.unbind("load.asyncimage error.asyncimage");
 					if (onError)
@@ -5828,9 +5831,12 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 				});
 				obj.loadTimeout = setTimeout(function ()
 				{
+					ImgNotLoading(obj.img);
+					$img.unbind("load.asyncimage error.asyncimage");
 					obj.timedOut = true; // This timeout occurs if the element is removed from the DOM before the load is completed.
 					AsyncDownloadQueuedImage();
 				}, loadTimeoutMs);
+				currentlyLoadingImages.push(obj);
 				$img.attr('src', obj.path);
 			}
 			else // Image is already loaded
@@ -5855,6 +5861,17 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 		newObj.timedOut = false;
 		asyncImageQueue.push(newObj);
 	}
+	var ImgNotLoading = function (img)
+	{
+		for (var i = 0; i < currentlyLoadingImages.length; i++)
+		{
+			if (currentlyLoadingImages[i].img == img)
+			{
+				currentlyLoadingImages.splice(i, 1);
+				return;
+			}
+		}
+	}
 	this.Dequeue = function (img)
 	{
 		for (var i = 0; i < asyncImageQueue.length; i++)
@@ -5862,6 +5879,17 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 			if (asyncImageQueue[i].img == img)
 			{
 				asyncImageQueue.splice(i, 1);
+				return;
+			}
+		}
+		for (var i = 0; i < currentlyLoadingImages.length; i++)
+		{
+			if (currentlyLoadingImages[i].img == img)
+			{
+				clearTimeout(currentlyLoadingImages[i].loadTimeout);
+				$(img).unbind("load.asyncimage error.asyncimage").attr('src', 'ui3/LoadingImage.png');
+				currentlyLoadingImages.splice(i, 1);
+				setTimeout(AsyncDownloadQueuedImage, 250);
 				return;
 			}
 		}
@@ -7642,6 +7670,12 @@ function VideoPlayerController()
 		if (typeof playerModule.PlaybackDirectionChanged == "function")
 			playerModule.PlaybackDirectionChanged(playReverse);
 	}
+	this.NotifyClipMetadataChanged = function (clipData)
+	{
+		// <summary>Tells the video player about a clip's new duration.  As of BI 4.6.5.2, this currently should not be called as it will make UI3 and Blue Iris disagree about the clip duration.</summary>
+		if (videoPlayer.Loading().image.uniqueId == clipData.recId && typeof playerModule.NotifyClipMetadataChanged == "function")
+			playerModule.NotifyClipMetadataChanged(clipData);
+	}
 	// Callback methods for a player module to inform the VideoPlayerController of state changes.
 	this.CameraOrResolutionChange = function ()
 	{
@@ -8170,6 +8204,10 @@ function JpegVideoModule()
 		if (clipPlaybackPosition < 0)
 			clipPlaybackPosition = 0;
 	}
+	this.NotifyClipMetadataChanged = function (clipData)
+	{
+		loading.msec = clipData.msec;
+	}
 	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
 		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
@@ -8627,6 +8665,10 @@ function FetchOpenH264VideoModule()
 	{
 		if (!playbackPaused)
 			ReopenStreamAtCurrentSeekPosition();
+	}
+	this.NotifyClipMetadataChanged = function (clipData)
+	{
+		loading.msec = clipData.msec;
 	}
 	this.AudioToggleNotify = function (audioEnabled)
 	{

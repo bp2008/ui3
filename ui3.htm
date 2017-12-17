@@ -11,7 +11,7 @@
 	<link rel="manifest" href="ui3/manifest.json">
 	<title>UI3 - Blue Iris</title>
 	<script type="text/javascript">
-		// If messages stating "An unexpected error has occurred." become troublesome, you can disable it by deleting this script block!
+		// If messages stating "An unexpected error has occurred" become troublesome, you can disable it by deleting this script block!
 		// Also, be sure to report the problem so I can fix it!
 		window.onerror = function (msg, url, line, charIdx)
 		{
@@ -33,13 +33,15 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "b18";
+		var ui_version = "b19";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
+		//if (!!navigator.userAgent.match(/ Android /))
+		//	combined_version += "-" + Date.now();
+		document.write('<link href="ui3/libs-ui3.css?v=' + combined_version + '" rel="stylesheet" />'
+			+ '<link href="ui3/ui3.css?v=' + combined_version + '" rel="stylesheet" />'
+			+ '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + '" rel="stylesheet" />');
 	</script>
-	<link href="ui3/libs-ui3.css?v=b18-%%VERSION%%" rel="stylesheet" type="text/css">
-	<link href="ui3/ui3.css?v=b18-%%VERSION%%" rel="stylesheet" type="text/css">
-	<link href="ui3/ui3-local-overrides.css?v=b18-%%VERSION%%" rel="stylesheet" type="text/css">
 </head>
 <body>
 	<div id="svgContainer" style="display: none;"></div>
@@ -410,8 +412,10 @@
 			<div id="datePicker2Container" class="calendarContainer"></div>
 		</div>
 	</div>
-	<script src="ui3/libs-ui3.js?v=b18-%%VERSION%%" type="text/javascript"></script>
-	<script src="ui3/ui3.js?v=b18-%%VERSION%%" type="text/javascript"></script>
-	<script src="ui3/ui3-local-overrides.js?v=b18-%%VERSION%%" type="text/javascript"></script>
+	<script>
+		document.write('<script src="ui3/libs-ui3.js?v=' + combined_version + '"><\/script>'
+			+ '<script src="ui3/ui3.js?v=' + combined_version + '"><\/script>'
+			+ '<script src="ui3/ui3-local-overrides.js?v=' + combined_version + '"><\/script>');
+	</script>
 </body>
 </html>
