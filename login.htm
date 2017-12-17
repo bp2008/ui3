@@ -5,8 +5,9 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "11";
+		var login_version = "12";
 		var bi_version = "%%VERSION%%";
+		var combined_version = login_version + "-" + bi_version;
 	</script>
 	<script type="text/javascript">
 		window.onerror = function (msg, url, line, charIdx)
@@ -93,9 +94,10 @@
 				showLoadingMessageTimeout = setTimeout(IncreaseLoadingOpacity, 33);
 		}
 		var showLoadingMessageTimeout = setTimeout(IncreaseLoadingOpacity, 67);
+
+		document.write('<link href="applet/loginStyles.css?v=' + combined_version + '" rel="stylesheet" />'
+			+ '<script src="applet/loginScripts.js?v=' + combined_version + '"><\/script>');
 	</script>
-	<link href="applet/loginStyles.css?v=11_%%VERSION%%" rel="stylesheet" type="text/css">
-	<script src="applet/loginScripts.js?v=11_%%VERSION%%" type="text/javascript"></script>
 	<script type="text/javascript">
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
@@ -119,6 +121,8 @@
 				$("#login").css("color", "#EEEEEE").css("margin", "8px");
 				return;
 			}
+			SetupLoginContextMenu();
+			SetStatus();
 			$(window).resize(resized);
 			resized();
 			window.onbeforeunload = function ()
@@ -143,7 +147,7 @@
 				{
 					if ($("#txtUn").val() != "" && $("#txtPw").val() != "")
 					{
-						if ($("#txtUn").val() == "SOME_USER_NAME_TO_LOG_IN_INSTANTLY")
+						if (GetAutoLoginInstantly())
 						{
 							if ($("#cbLoginAutomatically").is(":checked"))
 								login();
@@ -319,9 +323,12 @@
 		}
 		function resized()
 		{
-			$("#status").hide();
-			$("#status").css("max-width", $("#login").width() + "px");
-			$("#status").show();
+			if ($("#status").is(":visible"))
+			{
+				$("#status").hide();
+				$("#status").css("max-width", $("#login").width() + "px");
+				$("#status").show();
+			}
 			$('#login').css({ position: 'absolute', left: ($(window).width() - $('#login').outerWidth()) / 2, top: ($(window).height() - $('#login').outerHeight()) / 2 });
 			$("#status").css("max-width", $("#login").width() + "px");
 			var heightTotal = 0;
@@ -339,7 +346,7 @@
 				if ($("#status").parent().attr("id") != "status_wrapper_lower")
 					$("#status_wrapper_lower").append($("#status"));
 			}
-			$("#lblLoginAutomatically").parent().css("margin-left", (($('#login').outerWidth() - $("#lblLoginAutomatically").outerWidth(true)) / 2) + "px");
+			$("#lblLoginAutomatically").parent().css("padding-left", (($('#login').outerWidth() - $("#lblLoginAutomatically").outerWidth(true)) / 2) + "px");
 		};
 		function HandleError(error)
 		{
@@ -359,6 +366,40 @@
 			$("#status").html(html);
 			$("#status").css("color", color);
 			resized();
+		}
+		function GetAutoLoginInstantly()
+		{
+			return GetPersistedValue("bi_autoLoginInstant") == "1";
+		}
+		function GetPreferredContextMenuTrigger()
+		{
+			return GetPersistedValue("ui3_contextMenus_longPress") == "1" ? "longpress" : "right";
+		}
+		function SetupLoginContextMenu()
+		{
+			var onTriggerContextMenu = function (e)
+			{
+				if (GetAutoLoginInstantly())
+					$("#autoLoginNoDelay").text("Auto Login: Instant (click to change)");
+				else
+					$("#autoLoginNoDelay").text("Auto Login: Delayed (click to change)");
+				return true;
+			}
+			var onContextMenuAction = function ()
+			{
+				if (this.data.alias == "autoLoginNoDelay")
+					SetPersistedValue("bi_autoLoginInstant", GetAutoLoginInstantly() ? "0" : "1");
+			}
+			var menuOptions =
+				{
+					alias: "cmroot_login", width: "300px", items:
+					[
+						{ text: '<span id="autoLoginNoDelay"></span>', icon: "", alias: "autoLoginNoDelay", action: onContextMenuAction }
+					]
+					, onContextMenu: onTriggerContextMenu
+					, clickType: GetPreferredContextMenuTrigger()
+				};
+			$(".checkboxWrapper,#btnLogin").contextmenu(menuOptions);
 		}
 	</script>
 </body>

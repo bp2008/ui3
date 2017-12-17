@@ -1,4 +1,6 @@
-﻿/**
+﻿/* wdContextMenu/contextmenu.css */
+.b-m-mpanel{background-color:#F0F0F0;border:1px solid #718BB7;padding:2px 0;position:absolute;z-index:99997;left:0;top:0;color:#000;font-size:12px;cursor:default}.b-m-split{height:0;border-top:1px solid #D0CFCF;border-bottom:1px solid #FFF;font-size:0;margin:2px}.b-m-idisable,.b-m-item{padding:4px 2px;margin:0 2px 0 3px;cursor:normal;line-height:100%}.b-m-idisable{color:grey}.b-m-arrow,.b-m-ibody{overflow:hidden;text-overflow:ellipsis}.b-m-arrow{background:url(data:image/gif;base64,R0lGODlhBQAJAMQUAFSg6UGJ2TyE04rD/CluvlWUzo7D9ixwwDiC1j2I3UeLyTmE0zJ1v2eg1Tp6zmKq8ZXL/ypxv1Kg7Ct1yv///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAABQALAAAAAAFAAkAAAUcIEKNVCKQE7SMkzEE1AQ8DTNJRRQrBHuQDhIlBAA7) right no-repeat}.b-m-idisable .b-m-arrow{background:0 0}.b-m-icon{display:inline-block;vertical-align:middle;margin-right:8px;width:16px;height:16px}.b-m-ifocus{background:url(data:image/gif;base64,R0lGODlhAQAWAIAAAOvz/dno+yH5BAAAAAAALAAAAAABABYAAAIFhI+hy1oAOw==) bottom repeat-x;border:1px solid #AACCF6;padding:3px 1px;margin:0 2px 0 3px;cursor:normal;line-height:100%}.b-m-idisable .b-m-icon{visibility:hidden}
+/**
 		* Html5 Placeholder Polyfill - v2.1.0 - 2016-02-26
 		* web: http://blog.ginader.de/dev/jquery/HTML5-placeholder-polyfill/
 		* issues: https://github.com/ginader/HTML5-placeholder-polyfill/issues
@@ -64,6 +66,18 @@ body
 	background: -webkit-radial-gradient(center, ellipse cover, #45484d 0%,#000000 100%); /* Chrome10-25,Safari5.1-6 */
 	background: radial-gradient(ellipse at center, #45484d 0%,#000000 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
 	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#45484d', endColorstr='#000000',GradientType=0 ); /* IE6-9 fallback on horizontal gradient */
+}
+svg.icon
+{
+	fill: currentColor;
+	width: 100%;
+	height: 100%;
+	transform: scaleY(-1);
+	pointer-events: none; /* Firefox otherwise fires document.mouseleave when mousing over svg */
+}
+.b-m-mpanel
+{
+	font-family: Consolas, Arial, sans-serif;
 }
 
 #login
@@ -140,7 +154,7 @@ input
 
 .checkboxWrapper
 {
-	margin: 5px 0 15px 0;
+	padding: 5px 0 15px 0;
 }
 
 label
