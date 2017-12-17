@@ -4592,16 +4592,13 @@ function ClipLoader(clipsBodySelector)
 
 			tileLoader.unregisterAllOnAppearDisappear();
 			asyncThumbnailDownloader.Stop();
-
-			isLoadingAClipList = true;
-			//return;
 		}
 		if (isUpdateOfExistingList)
 		{
 			if (isLoadingAClipList)
 				return;
-			isLoadingAClipList = true;
 		}
+		isLoadingAClipList = true;
 
 		var allowContinuation = false;
 		var args = { cmd: listName, camera: cameraId };
@@ -4819,6 +4816,7 @@ function ClipLoader(clipsBodySelector)
 				{
 					setTimeout(function ()
 					{
+						isLoadingAClipList = false;
 						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly);
 					}, 1000);
 				}
