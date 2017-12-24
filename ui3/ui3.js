@@ -223,6 +223,7 @@ var sessionManager = null;
 var statusLoader = null;
 var cameraListLoader = null;
 var clipLoader = null;
+var clipThumbnailVideoPreview = null;
 var nerdStats = null;
 var sessionTimeout = null;
 
@@ -441,6 +442,13 @@ var defaultSettings =
 		, {
 			key: "ui3_cps_uiSettings_category_Hotkeys_visible"
 			, value: "1"
+		}
+		, {
+			key: "ui3_clipPreviewEnabled_beta"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: "BETA: Clip Preview Animations"
+			, category: "General Settings"
 		}
 		, {
 			key: "ui3_timeout"
@@ -1400,6 +1408,8 @@ $(function ()
 	cameraListLoader = new CameraListLoader();
 
 	clipLoader = new ClipLoader("#clipsbody");
+
+	clipThumbnailVideoPreview = new ClipThumbnailVideoPreview_BruteForce();
 
 	nerdStats = new UI3NerdStats();
 
@@ -4411,28 +4421,67 @@ var bigThumbHelper = new BigThumbHelper();
 function BigThumbHelper()
 {
 	var self = this;
-	var $thumb = $();
-	this.Show = function ($vAlign, $hAlign, descriptionText, imgUrl, imgW, imgH)
+	var $thumb, $desc, $img, img, $canvas, canvas;
+	var isShowing = false;
+	var initialized = false;
+	var imgCompleteCallback;
+	var imgCompleteUserContext;
+	var Initialize = function ()
 	{
-		$thumb.remove();
+		if (initialized)
+			return;
+		initialized = true;
 		$thumb = $('<div id="bigThumb"></div>');
 		$("body").append($thumb);
-
-		var $desc = $('<div class="bigThumbDescription"></div>');
-		$desc.text(descriptionText);
+		$desc = $('<div class="bigThumbDescription"></div>');
 		$thumb.append($desc);
+		$img = $('<img />');
+		$img.on('load', imgLoaded);
+		$img.on('error', imgErrored);
+		img = $img[0];
+		$canvas = $("<canvas>HTML5 canvas not supported</canvas>");
+		$thumb.append($canvas);
+		canvas = $canvas[0];
+	}
+	var imgLoaded = function ()
+	{
+		if (isShowing)
+		{
+			CopyImageToCanvas(img, canvas);
+			if (imgCompleteCallback)
+				imgCompleteCallback($img, imgCompleteUserContext, true);
+		}
+	}
+	var imgErrored = function ()
+	{
+		if (isShowing)
+		{
+			if (imgCompleteCallback)
+				imgCompleteCallback($img, imgCompleteUserContext, false);
+		}
+	}
+	this.Show = function ($vAlign, $hAlign, descriptionText, imgUrl, imgW, imgH, imgComplete, userContext, noClear)
+	{
+		Initialize();
+
+		imgCompleteCallback = imgComplete;
+		imgCompleteUserContext = userContext;
+
+		$desc.text(descriptionText);
+
+		if (!noClear && (!imgUrl || !imgUrl.startsWith('data:image/')))
+		{
+			canvas.width = canvas.height = 0;
+		}
 
 		var assumedWidth = 0;
 		var assumedHeight = 0;
 		if (imgUrl)
 		{
-			var $img = $('<img alt="" />');
 			$img.attr("src", imgUrl);
-			$thumb.append($img);
 			assumedWidth = imgW;
 			assumedHeight = imgH;
 		}
-
 		var bW = $('#layoutbody').width();
 		var shrinkBy = assumedWidth ? bW / assumedWidth : 0;
 		if (shrinkBy > 0 && shrinkBy < 1)
@@ -4448,10 +4497,24 @@ function BigThumbHelper()
 		$thumb.css("top", top + "px");
 		$thumb.css("max-width", bW + "px");
 		$thumb.show();
+
+		if (!isShowing)
+		{
+			$thumb.show();
+			isShowing = true;
+		}
 	}
 	this.Hide = function ()
 	{
-		$thumb.hide();
+		if (isShowing)
+		{
+			isShowing = false;
+			$thumb.hide();
+		}
+	}
+	this.IsShowing = function ()
+	{
+		return isShowing;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -5075,7 +5138,7 @@ function ClipLoader(clipsBodySelector)
 		clipVisibilityMap[clipData.recId] = false;
 		if (!selectedClipsMap[clipData.recId]) // We need clip elements to stick around if they're selected, for the sake of multi-select.
 			$("#c" + clipData.recId).remove();
-		bigThumbHelper.Hide();
+		self.HideBigClipThumb();
 	}
 	var ClipTileCreateFromId = function (recId)
 	{
@@ -5126,12 +5189,13 @@ function ClipLoader(clipsBodySelector)
 					if (thumbEle.getAttribute("src") == thumbPath)
 						thumbPath = ImageToDataUrl(thumbEle);
 					bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight);
+					clipThumbnailVideoPreview.Start($clip, clipData, camName);
 				}
 			});
 			$clip.on("mouseleave touchend touchcancel", function (e)
 			{
 				touchEvents.Gate(e);
-				bigThumbHelper.Hide();
+				self.HideBigClipThumb();
 			});
 			var clipEle = $clip.get(0).clipData = clipData;
 
@@ -5148,6 +5212,11 @@ function ClipLoader(clipsBodySelector)
 					$clip.addClass("selected");
 			}
 		}
+	}
+	this.HideBigClipThumb = function ()
+	{
+		bigThumbHelper.Hide();
+		clipThumbnailVideoPreview.Stop();
 	}
 	this.ScrollToClipObj = function ($clip)
 	{
@@ -5220,7 +5289,7 @@ function ClipLoader(clipsBodySelector)
 		}
 		else
 		{
-			bigThumbHelper.Hide();
+			self.HideBigClipThumb();
 			self.OpenClip(this, recId, true);
 		}
 	}
@@ -5721,6 +5790,107 @@ function ClipLoader(clipsBodySelector)
 	setInterval(self.UpdateClipList, 6000);
 	BI_CustomEvent.AddListener("ClipList_Updated", ClipList_Updated);
 	$clipsbody.on('scroll', ClipsBodyScroll);
+}
+///////////////////////////////////////////////////////////////
+// Clip Thumbnail Video Preview ///////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipThumbnailVideoPreview_BruteForce()
+{
+	var self = this;
+	var lastThumbLoadTime = -60000;
+	var thumbVideoTimeout = null;
+	var clipPreviewNumFrames = 8;
+	var clipPreviewNumLoopsAllowed = 3;
+	var clipThumbPlaybackActive = false;
+	var clipPreviewStartTimeout = null;
+	var queuedPreview = null;
+	var lastItemId = null;
+
+	this.Start = function ($clip, clipData, camName, frameNum, loopNum)
+	{
+		console.log(arguments);
+		if (settings.ui3_clipPreviewEnabled_beta != "1" || clipData.msec < 500)
+			return;
+		if (lastItemId != clipData.recId)
+		{
+			if (clipPreviewStartTimeout != null)
+			{
+				// A preview recently started. Schedule this to start later.
+				queuedPreview = { clip: $clip, clipData: clipData, camName: camName };
+				return;
+			}
+			clipPreviewStartTimeout = setTimeout(function ()
+			{
+				clipPreviewStartTimeout = null;
+				if (queuedPreview)
+				{
+					self.Start(queuedPreview.clip, queuedPreview.clipData, queuedPreview.camName);
+				}
+			}, 500);
+		}
+		queuedPreview = null;
+		if (!frameNum)
+			frameNum = 0;
+		if (!loopNum)
+			loopNum = 0;
+
+		// Throttle image loads to one per 200ms.
+		var perfNow = performance.now();
+		var timeWaited = perfNow - lastThumbLoadTime;
+		var timeToWait = Clamp(200 - timeWaited, 0, 1000);
+		if (timeToWait > 0)
+		{
+			thumbVideoTimeout = setTimeout(function ()
+			{
+				self.Start($clip, clipData, camName, frameNum, loopNum);
+			}, timeToWait);
+			return;
+		}
+		lastThumbLoadTime = perfNow;
+		lastItemId = clipData.recId;
+		var thumbEle = $("#t" + clipData.recId).get(0);
+		if (!thumbEle)
+			return;
+		clipThumbPlaybackActive = true;
+		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * clipData.msec;
+		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&w=" + Clamp(thumbEle.naturalWidth, 100, 768) + currentServer.GetRemoteSessionArg("&", true);
+		var thumbLabel = camName + " " + GetTimeStr(new Date(clipData.displayDate.getTime() + timeValue));
+		bigThumbHelper.Show($clip, $clip, thumbLabel, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight, function ($img, userContext, success)
+		{
+			if (clipThumbPlaybackActive)
+			{
+				frameNum++;
+				if (frameNum >= clipPreviewNumFrames)
+				{
+					frameNum = 0;
+					loopNum++;
+				}
+				if (loopNum >= clipPreviewNumLoopsAllowed && performance.now() - lastThumbLoadTime > 40)
+					return;
+
+				self.Start($clip, clipData, camName, frameNum, loopNum);
+			}
+		}, null, true);
+	}
+	this.Stop = function ()
+	{
+		ClearTimeouts();
+		clipThumbPlaybackActive = false;
+		bigThumbHelper.Hide();
+	}
+	var ClearTimeouts = function()
+	{
+		if (thumbVideoTimeout != null)
+		{
+			clearTimeout(thumbVideoTimeout);
+			thumbVideoTimeout = null;
+		}
+		if (clipPreviewStartTimeout != null)
+		{
+			clearTimeout(clipPreviewStartTimeout);
+			clipPreviewStartTimeout = null;
+		}
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Asynchronous Image Downloading /////////////////////////////
