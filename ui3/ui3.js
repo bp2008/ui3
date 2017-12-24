@@ -4512,7 +4512,7 @@ function ClipLoader(clipsBodySelector)
 	// For updating an existing clip list
 	var newestClipDate = 0;
 	var clipListGrew = false;
-	var lastClipListLoadedAtTime = new Date().getTime();
+	var lastClipListLoadedAt = performance.now();
 
 	// For handling multi-select only
 	var selectedClips = [];
@@ -4534,9 +4534,11 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.UpdateClipList = function ()
 	{
+		if (documentIsHidden())
+			return;
 		if (isLoadingAClipList)
 			return;
-		if (new Date().getTime() - lastClipListLoadedAtTime < 5000)
+		if (performance.now() - lastClipListLoadedAt < 5000)
 			return;
 		if (newestClipDate == 0)
 			return;
@@ -4741,7 +4743,7 @@ function ClipLoader(clipsBodySelector)
 				if (QueuedClipListLoad != null)
 				{
 					isLoadingAClipList = false;
-					lastClipListLoadedAtTime = new Date().getTime();
+					lastClipListLoadedAt = performance.now();
 					QueuedClipListLoad();
 					QueuedClipListLoad = null;
 					return;
@@ -4753,7 +4755,7 @@ function ClipLoader(clipsBodySelector)
 					{
 						toaster.Info("Automatic " + (listName == "cliplist" ? "clip list" : "alert list") + " update got too many items.  Refreshing clip list now.", 10000);
 						isLoadingAClipList = false;
-						lastClipListLoadedAtTime = new Date().getTime();
+						lastClipListLoadedAt = performance.now();
 						self.LoadClips();
 						return;
 					}
@@ -4765,7 +4767,7 @@ function ClipLoader(clipsBodySelector)
 			}
 
 			isLoadingAClipList = false;
-			lastClipListLoadedAtTime = new Date().getTime();
+			lastClipListLoadedAt = performance.now();
 			if (isUpdateOfExistingList)
 			{
 				if (clipListGrew)
@@ -4823,7 +4825,7 @@ function ClipLoader(clipsBodySelector)
 				else
 				{
 					isLoadingAClipList = false;
-					lastClipListLoadedAtTime = new Date().getTime();
+					lastClipListLoadedAt = performance.now();
 					failedClipListLoads = 0;
 				}
 			});
@@ -6080,6 +6082,7 @@ function StatusLoader()
 {
 	var self = this;
 	var updateDelay = 5000;
+	var lastStatusUpdateAt = performance.now() - 600000;
 	var lastResponse = null;
 	var currentProfileNames = null;
 	var currentlySelectedSchedule = null;
@@ -6138,6 +6141,17 @@ function StatusLoader()
 	{
 		if (statusUpdateTimeout != null)
 			clearTimeout(statusUpdateTimeout);
+		if (documentIsHidden())
+		{
+			if (browser_is_android || browser_is_ios || performance.now() - lastStatusUpdateAt < 45000)
+			{
+				statusUpdateTimeout = setTimeout(function ()
+				{
+					self.LoadStatus();
+				}, updateDelay);
+				return;
+			}
+		}
 		var args = { cmd: "status" };
 		if (typeof profileNum != "undefined" && profileNum != null)
 		{
@@ -6162,6 +6176,7 @@ function StatusLoader()
 		}
 		ExecJSON(args, function (response)
 		{
+			lastStatusUpdateAt = performance.now();
 			if (response && typeof response.result != "undefined" && response.result == "fail")
 			{
 				toaster.Warning('Your Blue Iris session may have expired.  This page will reload momentarily.', 10000);
@@ -6171,7 +6186,6 @@ function StatusLoader()
 				}, 5000);
 				return;
 			}
-
 			HandleChangesInStatus(lastResponse, response);
 			lastResponse = response;
 			if (response && response.data)
@@ -6917,6 +6931,14 @@ function CameraListLoader()
 	{
 		if (cameraListUpdateTimeout != null)
 			clearTimeout(cameraListUpdateTimeout);
+		if (documentIsHidden())
+		{
+			cameraListUpdateTimeout = setTimeout(function ()
+			{
+				self.LoadCameraList();
+			}, 5000);
+			return;
+		}
 		ExecJSON({ cmd: "camlist" }, function (response)
 		{
 			if (typeof (response.data) == "undefined" || response.data.length == 0)
@@ -8434,6 +8456,11 @@ function FetchOpenH264VideoModule()
 			{
 				self.OpenVideo(videoData, offsetPercent, startPaused);
 			}, 5);
+			return;
+		}
+		if (!isVisible)
+		{
+			console.log("Denying OpenVideo command because the page is believed to be inactive.");
 			return;
 		}
 		if (developerMode)
