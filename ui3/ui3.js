@@ -5808,8 +5808,8 @@ function ClipThumbnailVideoPreview_BruteForce()
 
 	this.Start = function ($clip, clipData, camName, frameNum, loopNum)
 	{
-		console.log(arguments);
-		if (settings.ui3_clipPreviewEnabled_beta != "1" || clipData.msec < 500)
+		var duration = clipData.isClip ? clipData.msec : clipData.roughLengthMs;
+		if (settings.ui3_clipPreviewEnabled_beta != "1" || duration < 500)
 			return;
 		if (lastItemId != clipData.recId)
 		{
@@ -5852,7 +5852,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 		if (!thumbEle)
 			return;
 		clipThumbPlaybackActive = true;
-		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * clipData.msec;
+		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * duration;
 		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&w=" + Clamp(thumbEle.naturalWidth, 100, 768) + currentServer.GetRemoteSessionArg("&", true);
 		var thumbLabel = camName + " " + GetTimeStr(new Date(clipData.displayDate.getTime() + timeValue));
 		bigThumbHelper.Show($clip, $clip, thumbLabel, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight, function ($img, userContext, success)
