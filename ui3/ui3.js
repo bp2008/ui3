@@ -5848,14 +5848,19 @@ function ClipThumbnailVideoPreview_BruteForce()
 		}
 		lastThumbLoadTime = perfNow;
 		lastItemId = clipData.recId;
-		var thumbEle = $("#t" + clipData.recId).get(0);
-		if (!thumbEle)
-			return;
+		var aspectRatio;
+		var camData = cameraListLoader.GetCameraWithId(clipData.camera);
+		if (camData && camData.height != 0)
+			aspectRatio = camData.width / camData.height;
+		else
+			aspectRatio = 16 / 9;
+		var expectedHeight = 240;
+		var expectedWidth = expectedHeight * aspectRatio;
 		clipThumbPlaybackActive = true;
 		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * duration;
-		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&w=" + Clamp(thumbEle.naturalWidth, 100, 768) + currentServer.GetRemoteSessionArg("&", true);
+		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&h=" + expectedHeight + currentServer.GetRemoteSessionArg("&", true);
 		var thumbLabel = camName + " " + GetTimeStr(new Date(clipData.displayDate.getTime() + timeValue));
-		bigThumbHelper.Show($clip, $clip, thumbLabel, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight, function ($img, userContext, success)
+		bigThumbHelper.Show($clip, $clip, thumbLabel, thumbPath, expectedWidth, expectedHeight, function ($img, userContext, success)
 		{
 			if (clipThumbPlaybackActive)
 			{
@@ -5878,7 +5883,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 		clipThumbPlaybackActive = false;
 		bigThumbHelper.Hide();
 	}
-	var ClearTimeouts = function()
+	var ClearTimeouts = function ()
 	{
 		if (thumbVideoTimeout != null)
 		{
@@ -8107,8 +8112,6 @@ function JpegVideoModule()
 
 	var playbackPaused = false;
 
-	var isVisible = !documentIsHidden();
-
 	var clipPlaybackPosition = 0; // milliseconds
 
 	var loading = new BICameraData();
@@ -8199,7 +8202,6 @@ function JpegVideoModule()
 	}
 	this.VisibilityChanged = function (visible)
 	{
-		isVisible = visible;
 	}
 	this.LoadedFrameSinceActivate = function ()
 	{
@@ -8291,6 +8293,7 @@ function JpegVideoModule()
 		sessionManager.ApplyLatestAPISessionIfNecessary();
 		var timeValue = currentImageTimestampMs = currentImageRequestedAtMs = new Date().getTime();
 		var isLoadingRecordedSnapshot = false;
+		var isVisible = !documentIsHidden();
 		if (!loading.isLive)
 		{
 			var timePassed = timeValue - timeLastClipFrame;
@@ -8518,7 +8521,6 @@ function FetchOpenH264VideoModule()
 	var isCurrentlyActive = false;
 	var lastActivatedAt = 0;
 	var openh264_player;
-	var isVisible = !documentIsHidden();
 	var currentSeekPositionPercent = 0;
 	var lastFrameAt = 0;
 	var playbackPaused = false;
@@ -8589,8 +8591,7 @@ function FetchOpenH264VideoModule()
 	}
 	this.VisibilityChanged = function (visible)
 	{
-		isVisible = visible;
-		if (isVisible && isCurrentlyActive)
+		if (visible && isCurrentlyActive)
 		{
 			if (loading.isLive)
 				self.OpenVideo(loading);
@@ -8628,7 +8629,7 @@ function FetchOpenH264VideoModule()
 			}, 5);
 			return;
 		}
-		if (!isVisible)
+		if (documentIsHidden())
 		{
 			console.log("Denying OpenVideo command because the page is believed to be inactive.");
 			return;
