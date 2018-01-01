@@ -308,8 +308,36 @@
 						<h3>Expanding the Filters</h3>
 						<p>If you don't see the filter controls, that means you have collapsed them by clicking on the "Filter Clips by:" text.  Click the "Filter Clips by:" text again to expand the filter controls section.</p>
 						<h3>Context Menu</h3>
-						<p>If you right click (long-press on touchscreens) on an alert or clip, a context menu appears.  It contains options to Flag, Protect, Download, or Delete.  It also allows you to toggle a layout with larger thumbnails, or to view alert/clip properties.  <span class="label label-primary">Admin</span> privilege is required Flag, Protect, or Delete items.</p>
-						<p><img class="img-responsive" src="img/ClipContextMenu.png" alt="Screenshot of clip list context menu" /></p>
+						<p>If you right click (long-press on touchscreens) on an alert or clip, a context menu appears.</p>
+						<div class="row">
+							<div class="col-sm-3">
+								<img class="img-responsive" src="img/ClipContextMenu.png" alt="Screenshot of clip list context menu" />
+							</div>
+							<div class="col-sm-9">
+								<div class="panel panel-info">
+									<div class="panel-heading">Clip list context menu actions</div>
+									<div class="panel-body">
+										<p><span class="label label-primary">Admin</span> privilege is required for some actions.</p>
+										<dl class="dl-vertical">
+											<dt>Flag <span class="label label-primary">Admin</span></dt>
+											<dd>Flags the specified item(s) to make them easier to find later.</dd>
+											<dt>Protect <span class="label label-primary">Admin</span></dt>
+											<dd>Protects the specified item(s) so they will not be deleted by Blue Iris's space-reclaiming algorithm.</dd>
+											<dt>Download </dt>
+											<dd>Downloads the specified clip(s). Only clips can be downloaded.  If you attempt to download an alert, the browser will download the clip which contains the alert.  The format of the downloaded clip is whatever format you have configured for the camera in Blue Iris.</dd>
+											<dt>Delete <span class="label label-primary">Admin</span></dt>
+											<dd>Deletes the specified item(s).</dd>
+											<dt>Enlarge/Shrink Thumbnails</dt>
+											<dd>Toggles between the standard layout and one that dedicates much more space to thumbnail images.</dd>
+											<dt>Enable/Disable Mouseover Thumbs</dt>
+											<dd>Enables or disables a much larger thumbnail that appears when you mouse over each clip.</dd>
+											<dt>Properties</dt>
+											<dd>Opens a panel containing properties of the selected clip or alert.</dd>
+										</dl>
+									</div><!--/.panel-body -->
+								</div><!--/.panel -->
+							</div>
+						</div>
 						<h3>Multi-Select</h3>
 						<p>If your device has a physical keyboard, you can hold <span class="label label-default">SHIFT</span> and/or <span class="label label-default">CTRL</span> keys while clicking to select multiple items for bulk operations.</p>
 					</div>
