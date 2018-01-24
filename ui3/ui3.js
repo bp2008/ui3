@@ -93,7 +93,7 @@ function DoUIFeatureDetection()
 				{
 					ul_root.append('<li>Context menus are not supported.</li>');
 				}
-				if (isHtml5HistorySupported())
+				if (!isHtml5HistorySupported())
 				{
 					ul_root.append('<li>The back button will not close the current clip or camera, like it does on most other platforms.</li>');
 				}
@@ -279,6 +279,12 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// DONE: Fixed bug where alerts that don't include video cause errors.
+// DONE: Added hotkeys for moving to the previous or next camera.
+// DONE: Fixed audio playback in single-camera groups with audio.
+// DONE: Preview animations no longer start for alerts or clips that are only one frame long.
+// DONE: Fixed flipped logic for the back button warning in "About this UI" panel.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -287,6 +293,7 @@ var togglableUIFeatures =
 // CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Android Chrome > Back button can't close the browser if there is no history, so the back button override is disabled on Android.  Also disabled on iOS for similar bugs.
 // CONSIDER: Seeking while paused in Chrome, the canvas sometimes shows the image scaled using nearest-neighbor.
+// CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -587,6 +594,24 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_hotkey_nextCamera"
+			, value: "0|0|0|190" // 190: . (period)
+			, hotkey: true
+			, label: "Next Camera"
+			, hint: "Manually cycles to the next camera when a camera is maximized."
+			, actionDown: BI_Hotkey_NextCamera
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_prevCamera"
+			, value: "0|0|0|188" // 188: , (comma)
+			, hotkey: true
+			, label: "Previous Camera"
+			, hint: "Manually cycles to the previous camera when a camera is maximized."
+			, actionDown: BI_Hotkey_PreviousCamera
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_hotkey_playpause"
 			, value: "0|0|0|32" // 32: space
 			, hotkey: true
@@ -626,7 +651,7 @@ var defaultSettings =
 			key: "ui3_hotkey_skipAhead"
 			, value: "0|0|0|39" // 39: right arrow
 			, hotkey: true
-			, label: "Skip Ahead:"
+			, label: "Skip Ahead"
 			, hint: "Skips ahead in the current recording by a configurable number of seconds."
 			, actionDown: BI_Hotkey_SkipAhead
 			, category: "Hotkeys"
@@ -635,7 +660,7 @@ var defaultSettings =
 			key: "ui3_hotkey_skipBack"
 			, value: "0|0|0|37" // 37: left arrow
 			, hotkey: true
-			, label: "Skip Back:"
+			, label: "Skip Back"
 			, hint: "Skips back in the current recording by a configurable number of seconds."
 			, actionDown: BI_Hotkey_SkipBack
 			, category: "Hotkeys"
@@ -655,7 +680,7 @@ var defaultSettings =
 			key: "ui3_hotkey_skipAhead1Frame"
 			, value: "0|0|0|190" // 190: . (period)
 			, hotkey: true
-			, label: "Skip Ahead 1 Frame:"
+			, label: "Skip Ahead 1 Frame"
 			, hint: "Skips ahead in the current recording by approximately one frame."
 			, actionDown: BI_Hotkey_SkipAhead1Frame
 			, category: "Hotkeys"
@@ -664,7 +689,7 @@ var defaultSettings =
 			key: "ui3_hotkey_skipBack1Frame"
 			, value: "0|0|0|188" // 188: , (comma)
 			, hotkey: true
-			, label: "Skip Back 1 Frame:"
+			, label: "Skip Back 1 Frame"
 			, hint: "Skips back in the current recording by approximately one frame."
 			, actionDown: BI_Hotkey_SkipBack1Frame
 			, category: "Hotkeys"
@@ -849,7 +874,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset1"
 			, value: "0|0|0|49" // 49: 1
 			, hotkey: true
-			, label: "Load Preset 1:"
+			, label: "Load Preset 1"
 			, hint: "If the current live camera is PTZ, loads preset 1."
 			, actionDown: function () { BI_Hotkey_PtzPreset(1); }
 			, category: "Hotkeys"
@@ -858,7 +883,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset2"
 			, value: "0|0|0|50" // 50: 2
 			, hotkey: true
-			, label: "Load Preset 2:"
+			, label: "Load Preset 2"
 			, hint: "If the current live camera is PTZ, loads preset 2."
 			, actionDown: function () { BI_Hotkey_PtzPreset(2); }
 			, category: "Hotkeys"
@@ -867,7 +892,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset3"
 			, value: "0|0|0|51" // 51: 3
 			, hotkey: true
-			, label: "Load Preset 3:"
+			, label: "Load Preset 3"
 			, hint: "If the current live camera is PTZ, loads preset 3."
 			, actionDown: function () { BI_Hotkey_PtzPreset(3); }
 			, category: "Hotkeys"
@@ -876,7 +901,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset4"
 			, value: "0|0|0|52" // 52: 4
 			, hotkey: true
-			, label: "Load Preset 4:"
+			, label: "Load Preset 4"
 			, hint: "If the current live camera is PTZ, loads preset 4."
 			, actionDown: function () { BI_Hotkey_PtzPreset(4); }
 			, category: "Hotkeys"
@@ -885,7 +910,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset5"
 			, value: "0|0|0|53" // 53: 5
 			, hotkey: true
-			, label: "Load Preset 5:"
+			, label: "Load Preset 5"
 			, hint: "If the current live camera is PTZ, loads preset 5."
 			, actionDown: function () { BI_Hotkey_PtzPreset(5); }
 			, category: "Hotkeys"
@@ -894,7 +919,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset6"
 			, value: "0|0|0|54" // 54: 6
 			, hotkey: true
-			, label: "Load Preset 6:"
+			, label: "Load Preset 6"
 			, hint: "If the current live camera is PTZ, loads preset 6."
 			, actionDown: function () { BI_Hotkey_PtzPreset(6); }
 			, category: "Hotkeys"
@@ -903,7 +928,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset7"
 			, value: "0|0|0|55" // 55: 7
 			, hotkey: true
-			, label: "Load Preset 7:"
+			, label: "Load Preset 7"
 			, hint: "If the current live camera is PTZ, loads preset 7."
 			, actionDown: function () { BI_Hotkey_PtzPreset(7); }
 			, category: "Hotkeys"
@@ -912,7 +937,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset8"
 			, value: "0|0|0|56" // 56: 8
 			, hotkey: true
-			, label: "Load Preset 8:"
+			, label: "Load Preset 8"
 			, hint: "If the current live camera is PTZ, loads preset 8."
 			, actionDown: function () { BI_Hotkey_PtzPreset(8); }
 			, category: "Hotkeys"
@@ -921,7 +946,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset9"
 			, value: "0|0|0|57" // 57: 9
 			, hotkey: true
-			, label: "Load Preset 9:"
+			, label: "Load Preset 9"
 			, hint: "If the current live camera is PTZ, loads preset 9."
 			, actionDown: function () { BI_Hotkey_PtzPreset(9); }
 			, category: "Hotkeys"
@@ -930,7 +955,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset10"
 			, value: "0|0|0|48" // 48: 0
 			, hotkey: true
-			, label: "Load Preset 10:"
+			, label: "Load Preset 10"
 			, hint: "If the current live camera is PTZ, loads preset 10."
 			, actionDown: function () { BI_Hotkey_PtzPreset(10); }
 			, category: "Hotkeys"
@@ -939,7 +964,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset11"
 			, value: "1|0|0|49" // 49: 1
 			, hotkey: true
-			, label: "Load Preset 11:"
+			, label: "Load Preset 11"
 			, hint: "If the current live camera is PTZ, loads preset 11."
 			, actionDown: function () { BI_Hotkey_PtzPreset(11); }
 			, category: "Hotkeys"
@@ -948,7 +973,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset12"
 			, value: "1|0|0|50" // 50: 2
 			, hotkey: true
-			, label: "Load Preset 12:"
+			, label: "Load Preset 12"
 			, hint: "If the current live camera is PTZ, loads preset 12."
 			, actionDown: function () { BI_Hotkey_PtzPreset(12); }
 			, category: "Hotkeys"
@@ -957,7 +982,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset13"
 			, value: "1|0|0|51" // 51: 3
 			, hotkey: true
-			, label: "Load Preset 13:"
+			, label: "Load Preset 13"
 			, hint: "If the current live camera is PTZ, loads preset 13."
 			, actionDown: function () { BI_Hotkey_PtzPreset(13); }
 			, category: "Hotkeys"
@@ -966,7 +991,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset14"
 			, value: "1|0|0|52" // 52: 4
 			, hotkey: true
-			, label: "Load Preset 14:"
+			, label: "Load Preset 14"
 			, hint: "If the current live camera is PTZ, loads preset 14."
 			, actionDown: function () { BI_Hotkey_PtzPreset(14); }
 			, category: "Hotkeys"
@@ -975,7 +1000,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset15"
 			, value: "1|0|0|53" // 53: 5
 			, hotkey: true
-			, label: "Load Preset 15:"
+			, label: "Load Preset 15"
 			, hint: "If the current live camera is PTZ, loads preset 15."
 			, actionDown: function () { BI_Hotkey_PtzPreset(15); }
 			, category: "Hotkeys"
@@ -984,7 +1009,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset16"
 			, value: "1|0|0|54" // 54: 6
 			, hotkey: true
-			, label: "Load Preset 16:"
+			, label: "Load Preset 16"
 			, hint: "If the current live camera is PTZ, loads preset 16."
 			, actionDown: function () { BI_Hotkey_PtzPreset(16); }
 			, category: "Hotkeys"
@@ -993,7 +1018,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset17"
 			, value: "1|0|0|55" // 55: 7
 			, hotkey: true
-			, label: "Load Preset 17:"
+			, label: "Load Preset 17"
 			, hint: "If the current live camera is PTZ, loads preset 17."
 			, actionDown: function () { BI_Hotkey_PtzPreset(17); }
 			, category: "Hotkeys"
@@ -1002,7 +1027,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset18"
 			, value: "1|0|0|56" // 56: 8
 			, hotkey: true
-			, label: "Load Preset 18:"
+			, label: "Load Preset 18"
 			, hint: "If the current live camera is PTZ, loads preset 18."
 			, actionDown: function () { BI_Hotkey_PtzPreset(18); }
 			, category: "Hotkeys"
@@ -1011,7 +1036,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset19"
 			, value: "1|0|0|57" // 57: 9
 			, hotkey: true
-			, label: "Load Preset 19:"
+			, label: "Load Preset 19"
 			, hint: "If the current live camera is PTZ, loads preset 19."
 			, actionDown: function () { BI_Hotkey_PtzPreset(19); }
 			, category: "Hotkeys"
@@ -1020,7 +1045,7 @@ var defaultSettings =
 			key: "ui3_hotkey_ptzPreset20"
 			, value: "1|0|0|48" // 48: 0
 			, hotkey: true
-			, label: "Load Preset 20:"
+			, label: "Load Preset 20"
 			, hint: "If the current live camera is PTZ, loads preset 20."
 			, actionDown: function () { BI_Hotkey_PtzPreset(20); }
 			, category: "Hotkeys"
@@ -4711,12 +4736,29 @@ function ClipLoader(clipsBodySelector)
 					clipData.isClip = isClipList;
 					clipData.roughLength = CleanUpFileSize(clip.filesize);
 					clipData.roughLengthMs = GetClipLengthMs(clipData.roughLength);
-					clipData.isSnapshot = clipData.roughLength == "Snapshot";
 					clipData.camera = clip.camera;
 					clipData.recId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
-					clipData.clipId = isClipList ? clipData.recId : clip.clip.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID of the underlying clip.
 					clipData.thumbPath = clip.path; // Path used for loading the thumbnail
-					clipData.path = isClipList ? clip.path : clip.clip; // Path used for loading the video stream
+					if (isClipList)
+					{
+						clipData.isSnapshot = clipData.roughLength == "Snapshot"
+						clipData.clipId = clipData.recId; // Unique ID of the underlying clip.
+						clipData.path = clip.path; // Path used for loading the video stream
+					}
+					else
+					{
+						clipData.isSnapshot = clip.clip.startsWith("@-1.");
+						if (clipData.isSnapshot)
+						{
+							clipData.clipId = ""; // Unique ID of the underlying clip.
+							clipData.path = clip.path; // Path used for loading the video stream
+						}
+						else
+						{
+							clipData.clipId = clip.clip.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID of the underlying clip.
+							clipData.path = clip.clip; // Path used for loading the video stream
+						}
+					}
 					clipData.alertPath = clip.path; // Alert path if this is an alert, otherwise just another copy of the clip path.
 					clipData.offsetMs = clip.offset ? clip.offset : 0;
 					clipData.flags = clip.flags;
@@ -5189,7 +5231,8 @@ function ClipLoader(clipsBodySelector)
 					if (thumbEle.getAttribute("src") == thumbPath)
 						thumbPath = ImageToDataUrl(thumbEle);
 					bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight);
-					clipThumbnailVideoPreview.Start($clip, clipData, camName);
+					if (!clipData.isSnapshot)
+						clipThumbnailVideoPreview.Start($clip, clipData, camName);
 				}
 			});
 			$clip.on("mouseleave touchend touchcancel", function (e)
@@ -6644,8 +6687,8 @@ function DiskUsageGUI()
 		$legend.append(CreateLegendItem('#333333', 'Other files'));
 		if (normalStateOccurred || overAllocatedOccurred)
 		{
-			$legend.append(CreateLegendItem('#0097F0', 'Used by recordings'));
-			$legend.append(CreateLegendItem('#0065aa', 'Allocated free space'));
+			$legend.append(CreateLegendItem('#0065AA', 'Used by recordings'));
+			$legend.append(CreateLegendItem('#0097F0', 'Allocated free space'));
 		}
 		if (exceededAllocationOccurred)
 		{
@@ -6726,8 +6769,8 @@ function DiskUsageGUI()
 			chartData =
 				[
 					[other_used, '#333333']
-					, [bi_used, '#0097F0']
-					, [disk_freeSpace, '#0065aa'] // Unused available allocation
+					, [bi_used, '#0065AA']
+					, [disk_freeSpace, '#0097F0'] // Unused available allocation
 					, [bi_free - disk_freeSpace, '#FF00FF'] // Unused unavailable allocation
 				];
 		}
@@ -6738,8 +6781,8 @@ function DiskUsageGUI()
 			chartData =
 				[
 					[other_used, '#333333']
-					, [bi_used, '#0097F0']
-					, [bi_free, '#0065aa']
+					, [bi_used, '#0065AA']
+					, [bi_free, '#0097F0']
 					, [other_free, '#66DD66']
 				];
 		}
@@ -7233,6 +7276,7 @@ function CameraListLoader()
 			, ptz: cameraObj.ptz
 			, group: []
 			, rects: []
+			, audio: cameraObj.audio
 			, isFakeGroup: true
 		};
 	}
@@ -8685,7 +8729,7 @@ function FetchOpenH264VideoModule()
 					});
 				}
 				var lastMs = (clipData.msec - 1);
-				if (honorAlertOffset && !clipData.isClip)
+				if (honorAlertOffset && !clipData.isClip && !clipData.isSnapshot)
 				{
 					var offsetMs = clipData.offsetMs;
 					if ((clipData.flags & alert_flag_offsetMs) == 0)
@@ -12821,6 +12865,46 @@ function BI_Hotkey_Load_Tab_Alerts()
 function BI_Hotkey_Load_Tab_Clips()
 {
 	$('.topbar_tab[name="clips"]').click();
+}
+function BI_Hotkey_NextCamera()
+{
+	LoadNextOrPreviousCamera(1);
+}
+function BI_Hotkey_PreviousCamera()
+{
+	LoadNextOrPreviousCamera(-1);
+}
+function LoadNextOrPreviousCamera(offset)
+{
+	var loading = videoPlayer.Loading();
+	if (!loading.image.isLive || cameraListLoader.CameraIsCycle(loading.cam))
+		return;
+	//if (cameraListLoader.CameraIsGroup(loading.cam))
+	//	return;
+	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
+	var idxCurrentMaximizedCamera = -1;
+	for (var i = 0; i < groupCamera.group.length; i++)
+	{
+		if (groupCamera.group[i] == loading.cam.optionValue)
+		{
+			idxCurrentMaximizedCamera = i;
+			break;
+		}
+	}
+	if (offset == 1 && idxCurrentMaximizedCamera >= groupCamera.group.length - 1)
+		idxCurrentMaximizedCamera = -1;
+	else if (offset == -1 && idxCurrentMaximizedCamera <= -1)
+		idxCurrentMaximizedCamera = groupCamera.group.length - 1;
+	else
+		idxCurrentMaximizedCamera += offset;
+
+	var newCamera = groupCamera;
+	if (idxCurrentMaximizedCamera != -1)
+	{
+		var newCameraId = groupCamera.group[idxCurrentMaximizedCamera];
+		newCamera = cameraListLoader.GetCameraWithId(newCameraId);
+	}
+	videoPlayer.ImgClick_Camera(newCamera);
 }
 function BI_Hotkey_PlayPause()
 {
