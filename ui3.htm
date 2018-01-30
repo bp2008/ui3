@@ -33,7 +33,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "b24";
+		var ui_version = "b25";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
@@ -319,7 +319,7 @@
 				<div class="pcButton hideWhenLive hidden skipbtn stdSkipBtn" onclick="BI_Hotkey_SkipAhead()" title="Skip Ahead" id="pcSkipAhead"><svg class="icon noflip invertv"><use xlink:href="#svg_mio_replay"></use></svg><div id="lblSkipAhead" class="centerText"></div></div>
 				<div class="pcButton hideWhenLive hidden skipbtn" onclick="BI_Hotkey_SkipBack1Frame()" title="Skip Back 1 Frame" id="pcSkipBack1Frame"><svg class="icon noflip"><use xlink:href="#svg_mio_replay"></use></svg><div class="centerText">1</div></div>
 				<div class="pcButton hideWhenLive hidden skipbtn" onclick="BI_Hotkey_SkipAhead1Frame()" title="Skip Ahead 1 Frame" id="pcSkipAhead1Frame"><svg class="icon noflip invertv"><use xlink:href="#svg_mio_replay"></use></svg><div class="centerText">1</div></div>
-				<div id="volumeBar">
+				<div id="volumeBar" class="audioTemporarilyUnavailable">
 					<div id="pcVolume" class="off">
 						<svg class="icon noflip off"><use xlink:href="#svg_mio_volumeOff"></use></svg>
 						<svg class="icon noflip mute"><use xlink:href="#svg_mio_volumeMute"></use></svg>
