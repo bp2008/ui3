@@ -15410,7 +15410,7 @@ function OnChange_ui3_contextMenus_longPress(newValue)
 {
 	if (ui3_contextMenus_longPress_toast)
 		ui3_contextMenus_longPress_toast.remove();
-	ui3_contextMenus_longPress_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
+	ui3_contextMenus_longPress_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Context menus will open on " + (settings.ui3_contextMenus_longPress == "1" ? "long-press" : "right click") + ".<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
 			location.reload();

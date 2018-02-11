@@ -12,6 +12,8 @@
 * http://github.com/vaidik/jquery-longpress/
 *
 * Copyright (c) 2008-2013, Vaidik Kapoor (kapoor [*dot*] vaidik -[at]- gmail [*dot*] com)
+*
+* Modified for UI3 by bp2008
 */
 
 (function ($)
@@ -39,7 +41,7 @@
 				if (e.which != 1)
 					return;
 				mouse_down_time = new Date().getTime();
-				var context = $(this);
+				var context = this;
 				mouse_down_x = e.pageX;
 				mouse_down_y = e.pageY;
 				// set a timeout to call the longpress callback when time elapses
