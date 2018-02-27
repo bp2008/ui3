@@ -606,6 +606,24 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_hotkey_nextGroup"
+			, value: "1|0|1|190" // 190: CTRL + SHIFT + . (period)
+			, hotkey: true
+			, label: "Next Group"
+			, hint: "Manually loads your next group or cycle stream."
+			, actionDown: BI_Hotkey_NextGroup
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_prevGroup"
+			, value: "1|0|1|188" // 188: CTRL + SHIFT + , (comma)
+			, hotkey: true
+			, label: "Previous Group"
+			, hint: "Manually loads your previous group or cycle stream."
+			, actionDown: BI_Hotkey_PreviousGroup
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_hotkey_playpause"
 			, value: "0|0|0|32" // 32: space
 			, hotkey: true
@@ -7361,6 +7379,21 @@ function CameraListLoader()
 		}
 		return null;
 	}
+	this.GetGroupAndCycleList = function ()
+	{
+		var arr = new Array();
+		if (lastResponse && lastResponse.data)
+		{
+			for (var i = 0; i < lastResponse.data.length; i++)
+			{
+				if (self.CameraIsGroupOrCycle(lastResponse.data[i]))
+				{
+					arr.push(lastResponse.data[i]);
+				}
+			}
+		}
+		return arr;
+	}
 	this.CameraIsGroup = function (cameraObj)
 	{
 		return cameraObj.group;
@@ -12909,6 +12942,39 @@ function LoadNextOrPreviousCamera(offset)
 		newCamera = cameraListLoader.GetCameraWithId(newCameraId);
 	}
 	videoPlayer.ImgClick_Camera(newCamera);
+}
+function BI_Hotkey_NextGroup()
+{
+	LoadNextOrPreviousGroup(1);
+}
+function BI_Hotkey_PreviousGroup()
+{
+	LoadNextOrPreviousGroup(-1);
+}
+function LoadNextOrPreviousGroup(offset)
+{
+	var loading = videoPlayer.Loading();
+	if (!loading.image.isLive)
+		return;
+	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
+	var groupList = cameraListLoader.GetGroupAndCycleList();
+	var idxCurrentGroup = -1;
+	for (var i = 0; i < groupList.length; i++)
+	{
+		if (groupList[i] == groupCamera)
+		{
+			idxCurrentGroup = i;
+			break;
+		}
+	}
+	var idxDesiredGroup;
+	var safeOffset = (idxCurrentGroup + offset) % groupList.length;
+	if (safeOffset < 0)
+		idxDesiredGroup = groupList.length + safeOffset;
+	else
+		idxDesiredGroup = safeOffset;
+
+	videoPlayer.SelectCameraGroup(groupList[idxDesiredGroup].optionValue);
 }
 function BI_Hotkey_PlayPause()
 {
