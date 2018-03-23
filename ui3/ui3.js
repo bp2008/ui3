@@ -279,6 +279,8 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Mousing onto a clip should clear the preview canvas, because loading the thumbnail isn't always instant.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -2852,7 +2854,10 @@ function PtzButtons()
 			var imgH = 0;
 			if (imgData && !imgData.error)
 			{
-				imgUrl = imgData.src;
+				if (imgData.loaded)
+					imgUrl = imgData.imgEle;
+				else
+					imgUrl = imgData.src;
 				imgW = imgData.w;
 				imgH = imgData.h;
 			}
@@ -3167,7 +3172,8 @@ var ptzPresetThumbLoader = new (function ()
 				img.imgData = {
 					src: UrlForPreset(cameraId, i, true),
 					w: 0,
-					h: 0
+					h: 0,
+					imgEle: img
 				};
 				asyncThumbLoader.Enqueue(img, img.imgData.src);
 			}
@@ -3216,6 +3222,7 @@ var ptzPresetThumbLoader = new (function ()
 			img.imgData.error = false;
 			img.imgData.w = img.naturalWidth
 			img.imgData.h = img.naturalHeight;
+			img.imgData.loaded = true;
 			var $img = $(img);
 			$img.prev('span').remove();
 			$img.show();
@@ -4486,11 +4493,16 @@ function BigThumbHelper()
 	}
 	var imgLoaded = function ()
 	{
+		if ($img.attr("src") != "")
+			renderImage(img, $img);
+	}
+	var renderImage = function (imgEle, $imgEle)
+	{
 		if (isShowing)
 		{
-			CopyImageToCanvas(img, canvas);
+			CopyImageToCanvas(imgEle, canvas);
 			if (imgCompleteCallback)
-				imgCompleteCallback($img, imgCompleteUserContext, true);
+				imgCompleteCallback($imgEle, imgCompleteUserContext, true);
 		}
 	}
 	var imgErrored = function ()
@@ -4501,25 +4513,40 @@ function BigThumbHelper()
 				imgCompleteCallback($img, imgCompleteUserContext, false);
 		}
 	}
-	this.Show = function ($vAlign, $hAlign, descriptionText, imgUrl, imgW, imgH, imgComplete, userContext, noClear)
+	this.Show = function ($vAlign, $hAlign, descriptionText, imgSrc, imgW, imgH, imgComplete, userContext, noClear)
 	{
 		Initialize();
 
-		imgCompleteCallback = imgComplete;
-		imgCompleteUserContext = userContext;
+		isShowing = true;
+
+		// These callbacks are handled really clumsily such that they won't be called correctly if Show() is called again before the callback from the previous Show().
+		imgCompleteCallback = null;
+		imgCompleteUserContext = null;
 
 		$desc.text(descriptionText);
 
-		if (!noClear && (!imgUrl || !imgUrl.startsWith('data:image/')))
+		var isImgEle = imgSrc && typeof imgSrc == "object" && typeof imgSrc.getAttribute == "function";
+
+		if (!isImgEle && !noClear && (!imgSrc || !imgSrc.startsWith('data:image/')))
 		{
 			canvas.width = canvas.height = 0;
 		}
 
 		var assumedWidth = 0;
 		var assumedHeight = 0;
-		if (imgUrl)
+		if (imgSrc)
 		{
-			$img.attr("src", imgUrl);
+			if (isImgEle)
+			{
+				$img.attr("src", "");
+				renderImage(imgSrc, $(imgSrc));
+			}
+			else
+			{
+				imgCompleteCallback = imgComplete;
+				imgCompleteUserContext = userContext;
+				$img.attr("src", imgSrc);
+			}
 			assumedWidth = imgW;
 			assumedHeight = imgH;
 		}
@@ -4538,12 +4565,6 @@ function BigThumbHelper()
 		$thumb.css("top", top + "px");
 		$thumb.css("max-width", bW + "px");
 		$thumb.show();
-
-		if (!isShowing)
-		{
-			$thumb.show();
-			isShowing = true;
-		}
 	}
 	this.Hide = function ()
 	{
@@ -5247,7 +5268,7 @@ function ClipLoader(clipsBodySelector)
 				{
 					var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetRemoteSessionArg("?");
 					if (thumbEle.getAttribute("src") == thumbPath)
-						thumbPath = ImageToDataUrl(thumbEle);
+						thumbPath = thumbEle;
 					bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight);
 					if (!clipData.isSnapshot)
 						clipThumbnailVideoPreview.Start($clip, clipData, camName);
