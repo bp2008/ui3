@@ -22,6 +22,7 @@ svg.icon
 {
 	transform: rotate(90deg);
 }
+
 .rotate270 svg.icon, svg.rotate270
 {
 	transform: rotate(-90deg);
@@ -228,6 +229,11 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	background-color: #0097F0;
 	color: #FFFFFF;
 }
+
+	#systemnamewrapper.hot
+	{
+		cursor: pointer;
+	}
 
 .topbar_tab
 {
@@ -860,7 +866,7 @@ div.invisibleLabel
 {
 	position: relative;
 	vertical-align: top;
-    overflow: hidden;
+	overflow: hidden;
 }
 
 .presetThumb
@@ -891,6 +897,12 @@ div.invisibleLabel
 	{
 		max-width: 100%;
 		max-height: 100%;
+	}
+
+	#bigThumb canvas
+	{
+		width: 100%;
+		height: 100%;
 	}
 
 .bigThumbDescription
@@ -3045,6 +3057,15 @@ div.invisibleLabel
 	#aboutDialog .lesserSection, #loginDialog .lesserSection
 	{
 		margin-top: 10px;
+	}
+
+	#aboutDialog .browserIcon
+	{
+		display: inline-block;
+		vertical-align: middle;
+		width: 24px;
+		height: 24px;
+		margin-right: 10px;
 	}
 
 .about_icon

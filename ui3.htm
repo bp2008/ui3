@@ -33,7 +33,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "b30";
+		var ui_version = "1";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
@@ -104,7 +104,7 @@
 	</div>
 	<div id="layouttop" class="resizable">
 		<div id="topbar_vertical_align_helper"></div>
-		<div id="systemnamewrapper"><span id="systemname">%%SYSNAME%%</span></div>
+		<div id="systemnamewrapper" onclick="systemNameButtonClick()"><span id="systemname">%%SYSNAME%%</span></div>
 		<div class="topbar_tab selected" name="live" id="topbar_tab_live"><span class="topbar_tab_label">Live View</span></div>
 		<div class="topbar_tab" name="alerts" id="topbar_tab_alerts"><span class="topbar_tab_label">Alerts</span></div>
 		<div class="topbar_tab" name="clips" id="topbar_tab_clips"><span class="topbar_tab_label">Clips</span></div>
@@ -382,10 +382,10 @@
 			UI3 is designed for use with:
 		</div>
 		<div style="margin-top:10px;">
-			<a target="_blank" href="https://www.google.com/chrome"><img src="ui3/chrome48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Google Chrome</a>
+			<a target="_blank" href="https://www.google.com/chrome"><div class="browserIcon"><svg class="icon noflip"><use xlink:href="#svg_chrome"></use></svg></div>Google Chrome</a>
 		</div>
 		<div style="margin-top:10px;">
-			<a target="_blank" href="https://www.mozilla.org/en-US/firefox/new/"><img src="ui3/firefox48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Mozilla Firefox</a>
+			<a target="_blank" href="https://www.mozilla.org/en-US/firefox/new/"><div class="browserIcon"><svg class="icon noflip"><use xlink:href="#svg_firefox"></use></svg></div>Mozilla Firefox</a>
 		</div>
 		<div style="margin:10px 0px 20px 0px;">
 			Other browsers, including mobile versions of those listed above, may or may not provide full functionality.

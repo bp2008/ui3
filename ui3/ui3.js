@@ -445,10 +445,11 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_clipPreviewEnabled_beta"
+			key: "ui3_clipPreviewEnabled"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: "BETA: Clip Preview Animations"
+			, label: "Clip Preview Animations"
+			, hint: "When enabled, mousing over the alert/clip list shows a rapid animated preview.  Video streaming performance may suffer while the animation is active."
 			, category: "General Settings"
 		}
 		, {
@@ -475,14 +476,6 @@ var defaultSettings =
 			, inputType: "select"
 			, options: ["None", "Live View", "Recordings", "Both"]
 			, label: 'Double-Click to Fullscreen<br><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a>'
-			, category: "General Settings"
-		}
-		, {
-			key: "ui3_contextMenus_longPress"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Context Menu Compatibility Mode<br><a href="javascript:UIHelp.LearnMore(\'Context Menu Compatibility Mode\')">(learn more)</a>'
-			, onChange: OnChange_ui3_contextMenus_longPress
 			, category: "General Settings"
 		}
 		, {
@@ -1119,6 +1112,25 @@ var defaultSettings =
 			, hint: 'If enabled, session status is shown in the lower-right corner when the UI loads.'
 			, category: "Extra"
 		}
+		, {
+			key: "ui3_contextMenus_longPress"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Context Menu Compatibility Mode<br><a href="javascript:UIHelp.LearnMore(\'Context Menu Compatibility Mode\')">(learn more)</a>'
+			, onChange: OnChange_ui3_contextMenus_longPress
+			, category: "Extra"
+		}
+		, {
+			key: "ui3_system_name_button"
+			, value: "About This UI"
+			, inputType: "select"
+			, options: []
+			, getOptions: getSystemNameButtonOptions
+			, label: 'System Name Button Action'
+			, hint: 'This action occurs when you click the system name in the upper left.'
+			, onChange: setSystemNameButtonState
+			, category: "Extra"
+		}
 	];
 
 function OverrideDefaultSetting(key, value, IncludeInOptionsWindow, AlwaysReload, Generation)
@@ -1308,6 +1320,8 @@ $(function ()
 
 	currentPrimaryTab = ValidateTabName(settings.ui3_defaultTab);
 
+	setSystemNameButtonState();
+
 	ptzButtons = new PtzButtons();
 
 	if (!h264_playback_supported)
@@ -1487,23 +1501,6 @@ $(function ()
 	if (currentPrimaryTab == "alerts" || currentPrimaryTab == "clips")
 		skipTabLoadClipLoad = true; // Prevent one clip load, to keep from loading twice.
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
-
-	BI_CustomEvent.AddListener("FinishedLoading", function ()
-	{
-		toaster.Info('Welcome to the UI3 beta test!<br><br>UI3 beta version: ' + ui_version + '<br>Blue Iris version: ' + bi_version + '<br><br><a href="javascript:UIHelp.LearnMore(\'beta_information\')" style="color: #00ff00; font-weight: bold; font-size: 1.4em;">Click here to learn more or to provide feedback.</a>', 15000, true);
-	});
-	//if (browser_is_Edge_16_16299)
-	//{
-	//	BI_CustomEvent.AddListener("FinishedLoading", function ()
-	//	{
-	//		$('<div style="margin: 10px; text-align: center; max-width: 640px;">'
-	//			+ '<div style="color: #FFAA00; width: 40px; height: 40px; margin: 0px auto"><svg class="icon noflip"><use xlink:href="#svg_mio_warning"></use></svg></div>'
-	//			+ '<br><br>Your browser (Microsoft Edge 41.16299) has known compatibility issues with Blue Iris.'
-	//			+ '<br><br>Performance may be slow and/or unreliable.'
-	//			+ '<br><br><br><a target="_blank" href="https://www.google.com/chrome"><img src="ui3/chrome48.png" alt="" style="vertical-align: middle;width:24px;height:24px;margin-right:10px;" />Try Google Chrome</a>.'
-	//			+ '</div>').modalDialog({ title: "Compatibility Problem" });
-	//	});
-	//}
 
 	BI_CustomEvent.Invoke("UI_Loading_End");
 });
@@ -2151,8 +2148,7 @@ function DropdownBoxes()
 			selectedIndex: -1
 			, items:
 			[
-				new DropdownListItem({ cmd: "beta_information", text: "Beta Information", icon: "#svg_x5F_Information", cssClass: "redLarger" })
-				, new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
+				new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
 				, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
 				, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
 				, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
@@ -2167,9 +2163,6 @@ function DropdownBoxes()
 			{
 				switch (item.cmd)
 				{
-					case "beta_information":
-						UIHelp.LearnMore("beta_information");
-						break;
 					case "ui_settings":
 						uiSettingsPanel.open();
 						break;
@@ -2497,6 +2490,36 @@ function GetTooltipForStreamQuality(item)
 		return sessionManager.GetStreamsArray()[2];
 	else
 		return "";
+}
+///////////////////////////////////////////////////////////////
+// System Name Button /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var systemNameButton;
+function getSystemNameButtonOptions()
+{
+	var mmItems = dropdownBoxes.listDefs["mainMenu"].items;
+	var opts = new Array();
+	for (var i = 0; i < mmItems.length; i++)
+		opts.push(mmItems[i].text);
+	opts.push("Do Nothing");
+	return opts;
+}
+function systemNameButtonClick()
+{
+	var mmItems = dropdownBoxes.listDefs["mainMenu"].items;
+	for (var i = 0; i < mmItems.length; i++)
+		if (settings.ui3_system_name_button == mmItems[i].text)
+		{
+			dropdownBoxes.listDefs["mainMenu"].onItemClick(mmItems[i]);
+			return;
+		}
+}
+function setSystemNameButtonState()
+{
+	if (settings.ui3_system_name_button == "Do Nothing")
+		$("#systemnamewrapper").removeClass("hot");
+	else
+		$("#systemnamewrapper").addClass("hot");
 }
 ///////////////////////////////////////////////////////////////
 // Left Bar Boolean Options ///////////////////////////////////
@@ -2836,11 +2859,12 @@ function PtzButtons()
 		$ele.text(ele.presetnum);
 		$ele.click(function (e)
 		{
+			bigThumbHelper.Hide();
 			self.PTZ_goto_preset(ele.presetnum);
 		});
 		if (settings.ui3_contextMenus_longPress != "1")
 			$ele.longpress(function (e) { self.PresetSet($ele.attr("presetnum")); });
-		$ele.mouseenter(function (e)
+		$ele.on("mouseenter touchstart", function (e)
 		{
 			if (!ptzControlsEnabled)
 				return;
@@ -2861,10 +2885,14 @@ function PtzButtons()
 			}
 			bigThumbHelper.Show($ele, $ele.parent(), self.GetPresetDescription(ele.presetnum), imgUrl, imgW, imgH);
 		});
-		$ele.mouseleave(function (e)
+		$ele.on("mouseleave touchend touchcancel", function (e)
 		{
 			bigThumbHelper.Hide();
 		});
+	});
+	$(document).on('touchend touchcancel', function (e)
+	{
+		bigThumbHelper.Hide();
 	});
 	// Presets //
 	var LoadPtzPresetThumbs = function ()
@@ -4537,6 +4565,8 @@ function BigThumbHelper()
 			if (isImgEle)
 			{
 				$img.attr("src", "");
+				imgCompleteCallback = imgComplete;
+				imgCompleteUserContext = userContext;
 				renderImage(imgSrc, $(imgSrc));
 			}
 			else
@@ -5890,7 +5920,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 	this.Start = function ($clip, clipData, camName, frameNum, loopNum)
 	{
 		var duration = clipData.isClip ? clipData.msec : clipData.roughLengthMs;
-		if (settings.ui3_clipPreviewEnabled_beta != "1" || duration < 500)
+		if (settings.ui3_clipPreviewEnabled != "1" || duration < 500)
 			return;
 		if (lastItemId != clipData.recId)
 		{
@@ -7055,7 +7085,7 @@ function SessionManager()
 		}
 		if (!wasAutomatic || settings.ui3_show_session_success == "1")
 		{
-			var message = "Logged in as " + htmlEncode(user) + "<br/>(" + (isAdministratorSession ? "Administrator" : "Limited User") + ")<br/><br/>Server \"" + lastResponse.data["system name"] + "\"<br/>Blue Iris version " + lastResponse.data.version;
+			var message = 'Logged in as ' + htmlEncode(user) + '<br/>(' + (isAdministratorSession ? "Administrator" : "Limited User") + ')<br/><br/>Server "' + lastResponse.data["system name"] + '"<br/>UI3 version: ' + ui_version + '<br>Blue Iris version: ' + lastResponse.data.version;
 			if (isAdministratorSession)
 				toaster.Success(message);
 			else
@@ -15226,6 +15256,8 @@ function UISettingsPanel()
 				{
 					var sb = [];
 					sb.push('<select>');
+					if (s.options.length == 0 && typeof s.getOptions == "function")
+						s.options = s.getOptions();
 					for (var n = 0; n < s.options.length; n++)
 						sb.push(GetHtmlOptionElementMarkup(s.options[n], s.options[n], settings[s.key]));
 					sb.push('</select>');
@@ -15579,9 +15611,6 @@ function UIHelpTool()
 			case 'Camera Group Webcasting':
 				Camera_Group_Webcasting();
 				break;
-			case 'beta_information':
-				Beta_Information();
-				break;
 			case "IR Brightness Contrast":
 				IR_Brightness_Contrast();
 				break;
@@ -15633,17 +15662,6 @@ function UIHelpTool()
 		$root.append($img);
 		$img.lightbox();
 		$root.modalDialog({ title: 'Camera Group Webcasting', closeOnOverlayClick: true });
-	}
-	var Beta_Information = function ()
-	{
-		var $root = $('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
-			+ 'Welcome to UI3 Beta Test version ' + ui_version + '!<br><br>'
-			+ '<a href="https://goo.gl/forms/nw6rRrY0gPObYtJr1" target="_blank">Click here to report a bug or send other feedback.</a><br><br>'
-			+ '<img src="ui3/help/img/BetaInfoPanel.png" style="border: 2px solid #0097F0; float: right; margin-bottom: 10px;" />This panel is accessible at any time from the Main Menu in the upper right.<br><br>'
-			+ '<div style="clear:both;"></div>'
-			+ 'This interface uses cutting-edge web technology that is not available in all web browsers.  Full functionality exists in the latest versions of <a href="https://www.google.com/chrome/" target="_blank">Chrome</a>, <a href="https://www.opera.com/" target="_blank">Opera</a>, and Safari on Mac.  <a href="https://www.microsoft.com/en-us/windows/microsoft-edge" target="_blank">Edge</a> can work, depending on the version.<br><br>'
-			+ '</div>');
-		$root.modalDialog({ title: 'Beta Information', closeOnOverlayClick: true });
 	}
 	var IR_Brightness_Contrast = function ()
 	{
