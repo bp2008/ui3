@@ -6946,7 +6946,7 @@ function SessionManager()
 									// The login failed
 									toaster.Error(errorMessage, 3000);
 									self.HandleSuccessfulLogin(response, true); // Session is valid
-								});
+								}, true);
 								return;
 							}
 						}
@@ -6984,7 +6984,7 @@ function SessionManager()
 				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.ErrorMessageHtml);
 			});
 	}
-	var LogInWithCredentials = function (user, pass, onFail)
+	var LogInWithCredentials = function (user, pass, onFail, isAutomatic)
 	{
 		var oldSession = currentServer.isUsingRemoteServer ? "" : $.cookie("session");
 		var args = { cmd: "login" };
@@ -7001,7 +7001,7 @@ function SessionManager()
 					lastResponse = response;
 					if (response.result && response.result == "success")
 					{
-						self.HandleSuccessfulLogin(response);
+						self.HandleSuccessfulLogin(response, isAutomatic);
 						//setTimeout(function () { logoutOldSession(oldSession); }, 1000);
 					}
 					else
@@ -12742,7 +12742,7 @@ function HLSPlayer()
 			container.append('<div id="hlsPlayer"></div>');
 
 			var src = currentServer.remoteBaseURL + "h264/" + camId + "/temp.m3u8" + currentServer.GetRemoteSessionArg("?", true);
-			playerObj = new Clappr.Player({ source: src, parentId: "#hlsPlayer", autoPlay: false, disableVideoTagContextMenu: true });
+			playerObj = new Clappr.Player({ source: src, parentId: "#hlsPlayer", autoPlay: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 });
 			playerObj.on('error', onHlsError);
 			playerObj.on('fullscreen', function ()
 			{
@@ -12797,7 +12797,7 @@ function HLSPlayer()
 		{
 			case "newtab":
 				self.CloseDialog();
-				window.open(currentServer.remoteBaseURL + "livestream.htm?cam=" + encodeURIComponent(hlsPlayerLastCamId));
+				window.open("livestream.htm?cam=" + encodeURIComponent(hlsPlayerLastCamId));
 				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");

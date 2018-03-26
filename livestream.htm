@@ -5,22 +5,22 @@
 	<script type="text/javascript" src="clappr/clappr.min.js"></script>
 	<script type="text/javascript">
 		var UrlParameters =
-		{
-			loaded: false,
-			parsed_url_params: {},
-			Get: function (key)
 			{
-				if (!this.loaded)
+				loaded: false,
+				parsed_url_params: {},
+				Get: function (key)
 				{
-					var params = this.parsed_url_params;
-					window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value) { params[key.toLowerCase()] = decodeURIComponent(value); })
-					this.loaded = true;
+					if (!this.loaded)
+					{
+						var params = this.parsed_url_params;
+						window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value) { params[key.toLowerCase()] = decodeURIComponent(value); })
+						this.loaded = true;
+					}
+					if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
+						return this.parsed_url_params[key.toLowerCase()];
+					return "";
 				}
-				if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
-					return this.parsed_url_params[key.toLowerCase()];
-				return "";
-			}
-		};
+			};
 		function onResize()
 		{
 			var dataplayer = getElementWithAttribute("data-player");
@@ -99,11 +99,24 @@
 	<script type="text/javascript">
 		var camId = (UrlParameters.Get("cam") == "" ? "index" : UrlParameters.Get("cam"));
 		var src = "/h264/" + camId + "/temp.m3u8";
-		var player = new Clappr.Player({ source: src, parentId: "#player", autoPlay: false, disableVideoTagContextMenu: true });
+		var mode = UrlParameters.Get("mode");
+		var args = { source: src, parentId: "#player", autoPlay: false, chromeless: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 };
+		if (mode == 2 || mode == 3)
+		{
+			args.chromeless = true;
+			args.disableVideoTagContextMenu = false;
+		}
+		var player = new Clappr.Player(args);
 		player.on('error', onStreamingError);
 		player.on('fullscreen', function () { setTimeout(onResize, 0); setTimeout(onResize, 100); });
 		player.play();
 		onResize();
+		if (mode == 3)
+		{
+			var ele = document.getElementById("player");
+			if (ele.querySelector)
+				ele.querySelector("video").setAttribute("controls", "controls");
+		}
 	</script>
 </body>
 </html>
