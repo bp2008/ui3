@@ -8543,6 +8543,7 @@ function JpegVideoModule()
 
 		backbuffer_canvas.width = groupObj.width;
 		backbuffer_canvas.height = groupObj.height;
+		FitRectangleIntoCanvas(thumbBounds, backbuffer_canvas);
 
 		var backbuffer_context2d = backbuffer_canvas.getContext("2d");
 		backbuffer_context2d.clearRect(0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
@@ -8587,6 +8588,7 @@ function JpegVideoModule()
 		if (!cameraObj)
 			return;
 		var canvas = camimg_canvas_ele;
+		FitRectangleIntoCanvas(thumbBounds, canvas);
 
 		backbuffer_canvas.width = cameraObj.width;
 		backbuffer_canvas.height = cameraObj.height;
@@ -8603,7 +8605,6 @@ function JpegVideoModule()
 		var context2d = canvas.getContext("2d");
 		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
 	}
-
 	var imgLoadTimeout = null;
 	var SetImageLoadTimeout = function ()
 	{
@@ -15867,6 +15868,17 @@ function GetDialogOptionLabel(text)
 function GetHtmlOptionElementMarkup(value, name, selectedValue)
 {
 	return '<option value="' + value + '"' + (selectedValue == value ? ' selected="selected"' : '') + '>' + name + '</option>';
+}
+function FitRectangleIntoCanvas(rect, canvas)
+{
+	var w = canvas.width;
+	var h = canvas.height;
+	if (w < 1 || h < 1)
+		return;
+	rect[0] = Clamp(rect[0], 0, w - 1);
+	rect[1] = Clamp(rect[1], 0, h - 1);
+	rect[2] = Clamp(rect[2], rect[0] + 1, w);
+	rect[3] = Clamp(rect[3], rect[1] + 1, h);
 }
 function Clamp(i, min, max)
 {
