@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "13";
+		var login_version = "14";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 	</script>
@@ -21,7 +21,7 @@
 				if (typeof bi_version != "undefined")
 					biVersionStr = bi_version;
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
-				alert("An unexpected error has occurred in Blue Iris Login (version " + versionStr + " / " + biVersionStr + ").\n\nIf you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nURL: " + url + "\nLine: " + line + "\nChar: " + charIdx);
+				alert("An unexpected error has occurred in Blue Iris Login (v " + uiVersionStr + " / " + biVersionStr + "). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent);
 			}
 			catch (ex)
 			{
