@@ -78,26 +78,30 @@
 							<li>Due to limitations of modern web technology, UI3 can't take advantage of hardware acceleration for H.264 playback without causing video delay to go through the roof.  Therefore, H.264 playback in UI3 requires quite a bit more CPU than you are probably used to.</li>
 							<li>If your viewing device has insufficient CPU or network speed, the video will become increasingly delayed.  If this happens, UI3 will warn you and suggest that you try a different Streaming Quality option.  UI3 does not know which of your Streaming Quality options require fewer resources, so it cannot automatically change to a more efficient stream.</li>
 						</ul>
-						<h4>H.264 Streaming Profiles</h4>
+						<h3>H.264 Streaming Profiles</h3>
 						<p>You can control the H.264 encoder parameters by configuring the three encoder profiles "Streaming 0", "Streaming 1", and "Streaming 2" in Blue Iris.  These profiles are not configurable in UI3 directly.  In Blue Iris's console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
-						<div class="row">
-							<div class="col-sm-4 col-lg-3">
-								<div class="panel panel-info">
-									<div class="panel-heading">Encoder profiles are shared with mobile apps</div>
-									<div class="panel-body">
-										The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm page.
-									</div>
-								</div>
-							</div>
-							<div class="col-sm-8 col-lg-9">
-								<div class="panel panel-info">
-									<div class="panel-heading">Encoder "Preset" options</div>
-									<div class="panel-body">
-										In Blue Iris's <b>Encoder options</b> dialog, you must choose between three "Preset" options: "ultrafast", "superfast", and "veryfast".<br /><br />"ultrafast" is the lowest quality, but requires the least amount of CPU time to process, making it ideal for use on many mobile devices running UI3.  It can also help on struggling devices if you use a conservative bit rate limit, like 512 Kbps.
-									</div>
-								</div>
-							</div>
-						</div>
+						<p class="bg-warning padded-info">The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm page.</p>
+						<h4>Audio</h4>
+						<p>The audio codec setting has no effect on UI3.  UI3 only knows how to decode "mu-law" and that is what Blue Iris provides no matter what you set here.</p>
+						<h4>Quality vs Bit Rate</h4>
+						<p>Blue Iris will encode up to your specified <b>Quality</b> level, automatically reducing quality if necessary to stay within the bit rate limit. For streaming, it is recommended to always use the <b>Limit bitrate</b> setting, otherwise the actual bit rate can get excessively high and in extreme cases this can cause decoding errors.</p>
+						<p>Lower bit rates work better with devices that have a slow CPU or slow network connection.</p>
+						<h4>Maximum keyframe interval (GOP)</h4>
+						<p>Also known as the i-frame interval.  For UI3, you should <b>set this as high as it goes</b> (300 at the time of this writing).</p>
+						<h4>Maximum B-frames between P-frames</h4>
+						<p>UI3 is not compatible with B-frames.  Keep this set to 0, though evidence suggests this setting has no effect anyway.</p>
+						<h4>Advanced &gt; Profile</h4>
+						<p>"high" profile is recommended for most users. "baseline" profile may reduce CPU requirements slightly at the cost of image quality.</p>
+						<h4>Advanced &gt; Preset</h4>
+						<ul>
+							<li>"ultrafast" - Lowest CPU usage and lowest image quality</li>
+							<li>"superfast" - A good balance between CPU usage and image quality</li>
+							<li>"veryfast" - Slightly better image quality at the cost of higher CPU usage</li>
+						</ul>
+						<h4>Zero frame latency</h4>
+						<p>Recommended to be enabled for best UI responsiveness. In testing, no perceptible difference was seen with this enabled or disabled.</p>
+						<h4>Resize output frame width x height</h4>
+						<p>This setting doesn't work as of March 2018 :(</p>
 						<h3>Jpeg Streaming</h3>
 						<p>Jpeg streaming is done by requesting Jpeg-compressed snapshots as quickly as possible.  It is not very efficient with network bandwidth and it can't achieve high frame rates over the internet.  However, being a simpler streaming method, it tends to "just work".  Jpeg streaming is capable of extremely high resolutions and excellent image quality.</p>
 						<p class="bg-warning padded-info"><b>Audio playback</b> is <b>not available</b> while streaming Jpeg snapshots.</p>
