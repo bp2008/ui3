@@ -10300,7 +10300,10 @@ function CanvasContextMenu()
 				window.open(videoPlayer.GetLastSnapshotFullUrl());
 				break;
 			case "copyimageaddress":
-				clipboardHelper.CopyText(location.origin + videoPlayer.GetLastSnapshotUrl());
+				var relUrl = videoPlayer.GetLastSnapshotUrl();
+				if (!relUrl.startsWith("/"))
+					relUrl = "/" + relUrl;
+				clipboardHelper.CopyText(location.origin + relUrl);
 				break;
 			case "saveas":
 				return true;
@@ -10409,7 +10412,10 @@ function CanvasContextMenu()
 				nerdStats.Open();
 				return;
 			case "copyimageaddress":
-				clipboardHelper.CopyText(location.origin + videoPlayer.GetLastSnapshotUrl());
+				var relUrl = videoPlayer.GetLastSnapshotUrl();
+				if (!relUrl.startsWith("/"))
+					relUrl = "/" + relUrl;
+				clipboardHelper.CopyText(location.origin + relUrl);
 				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
