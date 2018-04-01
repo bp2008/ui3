@@ -69,8 +69,11 @@
 					</div>
 					<div class="tab-pane" id="videoplayer" role="tabpanel" aria-labelledby="nav-videoplayer">
 						<h1>Video Player</h1>
-						<p>UI3 can stream video using two different compression methods: <b>H.264</b> and <b>Jpeg</b>.  H.264 is more efficient with network bandwidth, and usually achieves a higher frame rate, making it the most desirable choice in most circumstances.  H.264 is the default streaming method in browsers which support it.  Jpeg streaming is simpler and can be used in all browsers capable of running UI3.</p>
+						<p class="bg-info padded-info"><b>Troubleshooting Tip</b><br /><br />If you experience choppy audio in UI3, or have trouble playing clips that were recorded in the MP4 format, try installing the <b>K-Lite Codec Pack</b> on your <b>Blue Iris server</b>.  Beware of bundled adware when installing any codec pack.  You can safely and conveniently get K-Lite Codecs from <b><a href="https://ninite.com/">ninite.com</a></b>.</p>
+						<h2>Audio Streaming</h2>
+						<p>UI3 supports one-way audio streaming from Blue Iris to UI3.  Audio playback is only available when streaming H.264 video, due to the streaming methods used.</p>
 						<h2>Video Codecs <small>(Streaming Quality)</small></h2>
+						<p>UI3 can stream video using two different compression methods: <b>H.264</b> and <b>Jpeg</b>.  H.264 is more efficient with network bandwidth, and usually achieves a higher frame rate, making it the most desirable choice in most circumstances.  H.264 is the default streaming method in browsers which support it.  Jpeg streaming is simpler and can be used in all browsers capable of running UI3.</p>
 						<h3>H.264</h3>
 						<p>UI3 can stream H.264 video if your browser supports it, otherwise you won't even see the option.  You can check for H.264 compatibility by looking for H.264 items in the Streaming Quality dropdown list.  If it is available, it often provides a much smoother video stream.</p>
 						<p>H.264 streaming has several drawbacks, however.</p>
