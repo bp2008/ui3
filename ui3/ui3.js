@@ -522,10 +522,17 @@ var defaultSettings =
 			, category: "Clip / Alert Icons"
 		}
 		, {
+			key: "ui3_clipicon_clip_backingup"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_cloudUploading"></use></svg> for clips that are being backed up'
+			, category: "Clip / Alert Icons"
+		}
+		, {
 			key: "ui3_clipicon_clip_backup"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_cloudUpload"></use></svg> for clips that have been backed up'
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_cloudUploaded"></use></svg> for clips that have been backed up'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -5542,8 +5549,10 @@ function ClipLoader(clipsBodySelector)
 			icons.push(self.GetClipIcon("trigger_group"));
 		if ((clipData.flags & clip_flag_audio) > 0 && settings.ui3_clipicon_clip_audio == "1")
 			icons.push(self.GetClipIcon("clip_audio"));
-		if ((clipData.flags & clip_flag_backup) > 0 && settings.ui3_clipicon_clip_backup == "1")
-			icons.push(self.GetClipIcon("clip_backup"));
+		if ((clipData.flags & clip_flag_backingup) > 0 && settings.ui3_clipicon_clip_backingup == "1")
+			icons.push(self.GetClipIcon("clip_backingup"));
+		if ((clipData.flags & clip_flag_backedup) > 0 && settings.ui3_clipicon_clip_backup == "1")
+			icons.push(self.GetClipIcon("clip_backedup"));
 		icons.push(self.GetClipIcon("protect"));
 		icons.push(self.GetClipIcon("flag"));
 		return icons.join("");
@@ -5562,12 +5571,18 @@ function ClipLoader(clipsBodySelector)
 				return GetClipIcon_Internal(name, "#svg_mio_quilt", true, "The group was triggered");
 			case "clip_audio":
 				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Clip has audio");
-			case "clip_backup":
-				return GetClipIcon_Internal(name, "#svg_mio_cloudUpload", true, "Clip has been backed up");
+			case "clip_backingup":
+				return GetClipIcon_Internal(name, "#svg_mio_cloudUploading", true, "Clip is being backed up");
+			case "clip_backedup":
+				return GetClipIcon_Internal(name, "#svg_mio_cloudUploaded", true, "Clip has been backed up");
 			case "protect":
 				return GetClipIcon_Internal(name, "#svg_mio_lock", true, "Item is protected");
 			case "flag":
 				return GetClipIcon_Internal(name, "#svg_x5F_Flag", false, "Item is flagged");
+			case "is_recording":
+				return GetClipIcon_Internal(name, "#svg_x5F_Stoplight", false, "Clip is still recording");
+			case "nosignal":
+				return GetClipIcon_Internal(name, "#svg_x5F_Error", false, "Camera was in a no-signal state");
 		}
 		return "";
 	}
@@ -11579,12 +11594,18 @@ function ClipProperties()
 				$camprop.append(GetIcon("trigger_group", "The group was triggered"));
 			if ((clipData.flags & clip_flag_audio) > 0)
 				$camprop.append(GetIcon("clip_audio", "Clip has audio"));
-			if ((clipData.flags & clip_flag_backup) > 0)
-				$camprop.append(GetIcon("clip_backup", "Clip has been backed up"));
+			if ((clipData.flags & clip_flag_backingup) > 0)
+				$camprop.append(GetIcon("clip_backingup", "Clip is currently being backed up"));
+			if ((clipData.flags & clip_flag_backedup) > 0)
+				$camprop.append(GetIcon("clip_backedup", "Clip has been backed up"));
 			if ((clipData.flags & clip_flag_protect) > 0)
 				$camprop.append(GetIcon("protect", "Item is protected"));
 			if ((clipData.flags & clip_flag_flag) > 0)
 				$camprop.append(GetIcon("flag", "Flagged"));
+			if ((clipData.flags & clip_flag_is_recording) > 0)
+				$camprop.append(GetIcon("is_recording", "Clip is still recording"));
+			if ((clipData.flags & alert_flag_nosignal) > 0)
+				$camprop.append(GetIcon("nosignal", "Camera had no signal"));
 
 			var $link = $('<a href="javascript:void(0)">Click here to download the clip.</a>');
 			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
@@ -15753,6 +15774,7 @@ var b0001_0000 = 16;
 var b0010_0000 = 32;
 var b0100_0000 = 64;
 var b1000_0000 = 128;
+var b0001_0000_0000 = 256;
 var b0000_0001_0000_0000_0000_0000 = 65536;
 var b0000_0010_0000_0000_0000_0000 = 131072;
 var b0000_0100_0000_0000_0000_0000 = 262144;
@@ -15764,7 +15786,9 @@ var b1000_0000_0000_0000_0000_0000 = 8388608;
 var clip_flag_audio = b0000_0001;
 var clip_flag_flag = b0000_0010;
 var clip_flag_protect = b0000_0100;
-var clip_flag_backup = b0100_0000;
+var clip_flag_backingup = b0100_0000;
+var clip_flag_backedup = b1000_0000;
+var clip_flag_is_recording = b0001_0000_0000;
 var alert_flag_offsetMs = b0000_0001_0000_0000_0000_0000;
 var alert_flag_trigger_motion = b0000_0010_0000_0000_0000_0000;
 var alert_flag_nosignal = b0000_0100_0000_0000_0000_0000;
