@@ -1229,14 +1229,7 @@ function GetLocalStorageWrapper()
 }
 function GetRemoteServerLocalStorage()
 {
-	if (!ValidateRemoteServerNameSimpleRules(remoteServerName))
-	{
-		toaster.Error("Unable to validate remote server name. Connecting to local server instead.", 10000);
-		SetRemoteServer("");
-		return GetLocalStorage();
-	}
-
-	var serverNamePrefix = remoteServerName.toLowerCase().replace(/ /g, '_') + "_";
+	var serverNamePrefix = currentServer.remoteServerName.toLowerCase().replace(/ /g, '_') + "_";
 
 	var myLocalStorage = GetLocalStorage();
 	var wrappedStorage = new Object();
@@ -6937,71 +6930,82 @@ function SessionManager()
 	this.Initialize = function ()
 	{
 		// Called once during page initialization
-		// First, check the current session status
-		var oldSession = currentServer.isUsingRemoteServer ? "" : $.cookie("session");
-		ExecJSON({ cmd: "login", session: oldSession }, function (response)
+		if (currentServer.isUsingRemoteServer)
 		{
-			lastResponse = response;
-			var errorInfo = "";
-			if (response.result)
+			LogInWithCredentials(currentServer.remoteServerUser, currentServer.remoteServerPass, function (failResponse, errorMessage)
 			{
-				if (response.result == "success")
+				// The login failed
+				loadingHelper.SetErrorStatus("login", 'UI3 was unable to log in to the remote server. ' + errorMessage);
+			}, true);
+		}
+		else
+		{
+			// First, check the current session status
+			var oldSession = self.GetSession();
+			ExecJSON({ cmd: "login", session: oldSession }, function (response)
+			{
+				lastResponse = response;
+				var errorInfo = "";
+				if (response.result)
 				{
-					if (settings.bi_rememberMe == "1")
+					if (response.result == "success")
 					{
-						var user = Base64.decode(settings.bi_username);
-						if (user != "")
+						if (settings.bi_rememberMe == "1")
 						{
-							var sessionUser = response && response.data && response.data.user ? response.data.user : "";
-							if (user.toLowerCase() != sessionUser.toLowerCase())
+							var user = Base64.decode(settings.bi_username);
+							if (user != "")
 							{
-								var pass = Base64.decode(settings.bi_password);
-								LogInWithCredentials(user, pass, function (failResponse, errorMessage)
+								var sessionUser = response && response.data && response.data.user ? response.data.user : "";
+								if (user.toLowerCase() != sessionUser.toLowerCase())
 								{
-									// The login failed
-									toaster.Error(errorMessage, 3000);
-									self.HandleSuccessfulLogin(response, true); // Session is valid
-								}, true);
-								return;
+									var pass = Base64.decode(settings.bi_password);
+									LogInWithCredentials(user, pass, function (failResponse, errorMessage)
+									{
+										// The login failed
+										toaster.Error(errorMessage, 3000);
+										self.HandleSuccessfulLogin(response, true); // Session is valid
+									}, true);
+									return;
+								}
 							}
 						}
+						self.HandleSuccessfulLogin(response, true);
 					}
-					self.HandleSuccessfulLogin(response, true);
-				}
-				else if (response.result == "fail")
-				{
-					if (response.data)
+					else if (response.result == "fail")
 					{
-						if (response.data.reason == "missing response")
+						if (response.data)
 						{
-							// The { cmd: "login", session: oldSession } method of learning session status always seemed a little hacky.  If this error ever arises, it means Blue Iris has broken this method and we need a replacement.
-							loadingHelper.SetErrorStatus("login", 'Blue Iris sent an authentication challenge instead of session data (probably indicates a Blue Iris bug).');
-							return;
+							if (response.data.reason == "missing response")
+							{
+								// The { cmd: "login", session: oldSession } method of learning session status always seemed a little hacky.  If this error ever arises, it means Blue Iris has broken this method and we need a replacement.
+								loadingHelper.SetErrorStatus("login", 'Blue Iris sent an authentication challenge instead of session data (probably indicates a Blue Iris bug).');
+								return;
+							}
+							else
+								errorInfo = JSON.stringify(response);
 						}
 						else
-							errorInfo = JSON.stringify(response);
+						{
+							loadingHelper.SetErrorStatus("login", 'The current session is invalid or expired.  Reloading this page momentarily.');
+							setTimeout(function () { location.reload(); }, 5000);
+							return;
+						}
 					}
 					else
 					{
-						loadingHelper.SetErrorStatus("login", 'The current session is invalid or expired.  Reloading this page momentarily.');
-						setTimeout(function () { location.reload(); }, 5000);
-						return;
+						errorInfo = JSON.stringify(response);
+						loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo);
 					}
 				}
-				else
+			}, function (jqXHR, textStatus, errorThrown)
 				{
-					errorInfo = JSON.stringify(response);
-					loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo);
-				}
-			}
-		}, function (jqXHR, textStatus, errorThrown)
-			{
-				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.ErrorMessageHtml);
-			});
+					loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.ErrorMessageHtml);
+				});
+		}
 	}
 	var LogInWithCredentials = function (user, pass, onFail, isAutomatic)
 	{
-		var oldSession = currentServer.isUsingRemoteServer ? "" : $.cookie("session");
+		var oldSession = self.GetSession();
 		var args = { cmd: "login" };
 		ExecJSON(args, function (response)
 		{
@@ -7017,7 +7021,7 @@ function SessionManager()
 					if (response.result && response.result == "success")
 					{
 						self.HandleSuccessfulLogin(response, isAutomatic);
-						//setTimeout(function () { logoutOldSession(oldSession); }, 1000);
+						setTimeout(function () { logoutOldSession(oldSession); }, 1000);
 					}
 					else
 					{
@@ -7138,14 +7142,29 @@ function SessionManager()
 	}
 	this.ApplyLatestAPISessionIfNecessary = function ()
 	{
-		if (latestAPISession == null)
+		if (latestAPISession == null || currentServer.isUsingRemoteServer)
 			return;
-		if ($.cookie("session") != latestAPISession)
+		if (self.GetSession() != latestAPISession)
 		{
 			// If this happens a lot, usually the cause is another window with a web UI open that has a different latestAPISession value
-			bilog.verbose("APISession Changing session from " + $.cookie("session") + " to " + latestAPISession);
-			$.cookie("session", latestAPISession, { path: "/" });
+			bilog.verbose("SessionManager changing session from " + self.GetSession() + " to " + latestAPISession);
+			this.SetSession(latestAPISession);
 		}
+	}
+	this.GetSession = function ()
+	{
+		return currentServer.isUsingRemoteServer ? latestAPISession : $.cookie("session");
+	}
+	this.SetSession = function (session)
+	{
+		if (currentServer.isUsingRemoteServer)
+			latestAPISession = session;
+		else
+			$.cookie("session", session, { path: "/" });
+	}
+	this.GetAPISession = function ()
+	{
+		return latestAPISession;
 	}
 
 	this.AdminLoginRememberMeChanged = function ()
@@ -8803,7 +8822,7 @@ function FetchOpenH264VideoModule()
 		var videoUrl;
 		if (loading.isLive)
 		{
-			videoUrl = "/video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2";
+			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2";
 		}
 		else
 		{
@@ -8879,7 +8898,7 @@ function FetchOpenH264VideoModule()
 				offsetArg = "&time=" + (currentSeekPositionPercent * loading.msec).dropDecimals();
 				posArg = "";
 			}
-			videoUrl = "/file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -13512,7 +13531,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 		return;
 	sessionManager.ApplyLatestAPISessionIfNecessary();
 	var isLogin = args.cmd == "login";
-	var oldSession = $.cookie("session");
+	var oldSession = sessionManager.GetSession();
 	if (typeof args.session == "undefined" && !isLogin)
 	{
 		args.session = oldSession;
@@ -13532,12 +13551,12 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 			eventArgs.data = data;
 			BI_CustomEvent.Invoke("ExecJSON_Success", eventArgs);
 			if (isLogin)
-				$.cookie("session", oldSession, { path: "/" });
-			else if (typeof data.session != "undefined" && data.session != $.cookie("session"))
+				sessionManager.SetSession(oldSession);
+			else if (!currentServer.isUsingRemoteServer && typeof data.session != "undefined" && data.session != sessionManager.GetSession())
 			{
 				// If this happens a lot, usually the cause is another window with a web UI open that has a different latestAPISession value
-				bilog.verbose('ExecJSON("' + args.cmd + '").success Changing session from ' + $.cookie("session") + ' to ' + data.session);
-				$.cookie("session", data.session, { path: "/" });
+				bilog.verbose('ExecJSON("' + args.cmd + '").success changing session from ' + sessionManager.GetSession() + ' to ' + data.session);
+				sessionManager.SetSession(data.session);
 			}
 			if (callbackSuccess)
 				callbackSuccess(data);
@@ -13727,16 +13746,57 @@ var currentServer =
 	{
 		remoteBaseURL: ""
 		, remoteSession: ""
+		, remoteServerName: ""
+		, remoteServerUser: ""
+		, remoteServerPass: ""
 		, isLoggingOut: false
 		, isUsingRemoteServer: false
 		, GetRemoteSessionArg: function (prefix, overrideRemoteRequirement)
 		{
-			if (currentServer.isUsingRemoteServer)
-				return prefix + "session=" + latestAPISession;
-			else if (overrideRemoteRequirement)
-				return prefix + "session=" + $.cookie("session");
+			if (currentServer.isUsingRemoteServer || overrideRemoteRequirement)
+				return prefix + "session=" + sessionManager.GetSession();
 			else
 				return "";
+		}
+		, SetRemoteServer: function (serverName, baseUrl, user, pass)
+		{
+			if (!currentServer.ValidateRemoteServerNameSimpleRules(serverName))
+			{
+				toaster.Error("Unable to validate remote server name. Connecting to local server instead.", 10000);
+				serverName = "";
+			}
+			if (serverName == "")
+			{
+				currentServer.remoteBaseURL = "";
+				currentServer.remoteSession = "";
+				currentServer.remoteServerName = "";
+				currentServer.remoteServerUser = "";
+				currentServer.remoteServerPass = "";
+				currentServer.isUsingRemoteServer = false;
+			}
+			else
+			{
+				currentServer.remoteBaseURL = baseUrl;
+				currentServer.remoteSession = "";
+				currentServer.remoteServerName = serverName;
+				currentServer.remoteServerUser = user;
+				currentServer.remoteServerPass = pass;
+				currentServer.isUsingRemoteServer = true;
+			}
+		}
+		, ValidateRemoteServerNameSimpleRules: function (val)
+		{
+			if (val.length == 0)
+				return false;
+			if (val.length > 16)
+				return false;
+			for (var i = 0; i < val.length; i++)
+			{
+				var c = val.charAt(i);
+				if ((c < "a" || c > "z") && (c < "A" || c > "Z") && (c < "0" || c > "9") && c != " ")
+					return false;
+			}
+			return true;
 		}
 	};
 ///////////////////////////////////////////////////////////////
@@ -15887,8 +15947,9 @@ function logoutOldSession(oldSession)
 {
 	// When running multiple instances of the UI in the same browser, this causes instances to log out the session belonging to another instance.
 	// As long as cookies are sharing sessions between multiple browser tabs, this code should not be enabled.
-	// An alternative would be to have Ken include the user name in the session data, so we could avoid creating unnecessary new sessions in the first place.  Then maybe it would be safe to turn this feature on.
-	//if (oldSession != null && oldSession != $.cookie("session"))
+	// With the user name in the session data, we avoid creating most unnecessary new sessions in the first place, but it does not make this feature safe to turn on.
+	// NOTE: Blue Iris fails to log out the session anyway if it is currently in use by an active connection.
+	//if (oldSession != null && oldSession != sessionManager.GetSession())
 	//	ExecJSON({ cmd: "logout", session: oldSession });
 }
 function GetDialogOptionLabel(text)
