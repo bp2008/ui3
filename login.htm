@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "16";
+		var login_version = "17";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 	</script>
@@ -104,9 +104,13 @@
 		var existingSession = "";
 		var isStoredDataLoaded = false;
 		var windowUnloading = false;
+		var cookiesEnabled;
+		var localStorageEnabled;
 		$(function ()
 		{
-			if (UrlParameters.Get("autologin") == "0")
+			cookiesEnabled = areCookiesEnabled();
+			localStorageEnabled = isLocalStorageEnabled();
+			if (UrlParameters.Get("autologin") === "0")
 			{
 				SetPersistedValue("bi_override_disable_auto_login_once", "1");
 				location.href = location.href.replace(/autologin=0&?/gi, '');
@@ -115,12 +119,14 @@
 			clearTimeout(showLoadingMessageTimeout);
 			$("#loginLoading").hide();
 			$("#login").show();
-			if (typeof window.JSON == 'undefined')
+			if (typeof window.JSON === 'undefined')
 			{
-				$("#login").text("Your web browser is too old to use the Blue Iris web interface properly.\n\nTo proceed with this browser, disable the \"Secure only\" requirement within Blue Iris's web server settings.");
+				$("#login").html("<div>Your web browser is too old to use the Blue Iris web interface properly.<br><br>To proceed with this browser, disable the \"Secure only\" requirement within Blue Iris's web server settings.</div>");
 				$("#login").css("color", "#EEEEEE").css("margin", "8px");
 				return;
 			}
+			if (!cookiesEnabled && !localStorageEnabled)
+				$("#cbLoginAutomatically").parent().text("Note: Cookies and Local Storage are disabled in your browser.").css("color", "#EEEEEE");
 			SetupLoginContextMenu();
 			SetStatus();
 			$(window).resize(resized);
@@ -258,10 +264,13 @@
 		}
 		function LeaveLoginPage()
 		{
-			$.cookie("session", existingSession, { path: "/" });
 			var page = UrlParameters.Get("page");
 			if (page == "")
 				page = "/";
+			if (cookiesEnabled)
+				$.cookie("session", existingSession, { path: "/" });
+			else
+				page += (page.indexOf("?") < 0 ? "?" : "&") + "session=" + existingSession;
 			location.href = page + location.hash;
 		}
 		function cancelAutoLogin()
@@ -291,9 +300,9 @@
 		function GetPersistedValue(key)
 		{
 			var value;
-			if (typeof Storage !== "undefined" && localStorage)
+			if (localStorageEnabled)
 				value = localStorage.getItem(key);
-			else
+			else if (cookiesEnabled)
 				value = $.cookie(key);
 			if (!value)
 				value = "";
@@ -301,9 +310,9 @@
 		}
 		function SetPersistedValue(key, value)
 		{
-			if (typeof Storage !== "undefined" && localStorage)
+			if (localStorageEnabled)
 				return localStorage.setItem(key, value);
-			else
+			else if (cookiesEnabled)
 				return $.cookie(key, value, { expires: 365 });
 		}
 		function pwKeypress(ele, e)

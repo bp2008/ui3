@@ -26,8 +26,8 @@ function DoUIFeatureDetection()
 		requestAnimationFramePolyFill();
 		if (!isCanvasSupported())
 			MissingRequiredFeature("HTML5 Canvas"); // Excludes IE 8
-		else if (!isLocalStorageEnabled())
-			MissingRequiredFeature("Local Storage");
+		else if (!areCookiesEnabled())
+			MissingRequiredFeature("Cookies", "Cookies are required for UI3's session management.");
 		else
 		{
 			// All critical tests pass
@@ -121,18 +121,32 @@ function DoUIFeatureDetection()
 		}
 	}
 }
-function MissingRequiredFeature(featureName)
+function MissingRequiredFeature(featureName, description)
 {
-	alert("This web interface requires a feature that is unavailable or disabled in your web browser.\n\nMissing feature: " + featureName + "\n\nYou will be redirected to a simpler web interface.");
+	alert("This web interface requires a feature that is unavailable or disabled in your web browser.\n\nMissing feature: " + featureName + (description ? ". " + description : "") + "\n\nYou will be redirected to a simpler web interface.");
 }
 function isCanvasSupported()
 {
 	var elem = document.createElement('canvas');
 	return !!(elem.getContext && elem.getContext('2d'));
 }
-function isLocalStorageEnabled()
+function areCookiesEnabled()
 {
 	try
+	{
+		var session = $.cookie("session");
+		if (session)
+			return true;
+		$.cookie("session", "test", { path: "/" });
+		session = $.cookie("session")
+		$.cookie("session", "", { path: "/" });
+		return session === "test";
+	} catch (e) { }
+	return false;
+}
+function isLocalStorageEnabled()
+{
+	try // May throw exception if local storage is disabled by browser settings!
 	{
 		var key = "local_storage_test_item";
 		localStorage.setItem(key, key);
@@ -1179,14 +1193,8 @@ function GetLocalStorage()
 	/// Returns the localStorage object, or a dummy localStorage object if the localStorage object is not available.
 	/// This method should be used only when the wrapped localStorage object is not desired (e.g. when using settings that are persisted globally, not specific to a Blue Iris server).
 	/// </summary>
-	try
-	{
-		if (typeof (Storage) !== "undefined" && localStorage)
-			return localStorage; // May throw exception if local storage is disabled by browser settings!
-	}
-	catch (ex)
-	{
-	}
+	if (isLocalStorageEnabled())
+		return localStorage;
 	return GetDummyLocalStorage();
 }
 function IsNewGeneration(key, gen)
@@ -1209,7 +1217,7 @@ function IsNewGeneration(key, gen)
 function GetLocalStorageWrapper()
 {
 	/// <summary>Returns the local storage object or a wrapper suitable for the current Blue Iris server. The result of this should be stored in the settings variable.</summary>
-	if (typeof (Storage) !== "undefined" && localStorage)
+	if (isLocalStorageEnabled())
 	{
 		if (currentServer.isUsingRemoteServer)
 		{
@@ -1309,6 +1317,12 @@ $(function ()
 		var fileSystemErrorMessage = "This interface must be loaded through the Blue Iris web server, and cannot function when loaded directly from your filesystem.";
 		alert(fileSystemErrorMessage);
 		toaster.Error(fileSystemErrorMessage, 60000);
+		return;
+	}
+
+	if (!isLocalStorageEnabled())
+	{
+		toaster.Warning("Local Storage is disabled or unavailable in your browser. Settings will not be saved between sessions.", 10000);
 	}
 
 	$("#ui_version_label").text(ui_version);
