@@ -13245,9 +13245,9 @@ function BI_Hotkeys()
 	var currentlyDownKeys = {};
 	$(document).keydown(function (e)
 	{
-		if ($("body").children(".dialog_overlay").length != 0)
+		var charCode = e.which;
+		if ($("body").children(".dialog_overlay").length != 0 || !charCode)
 			return;
-		var charCode = e.which ? e.which : event.keyCode;
 		var hotkeysBeingRepeated = currentlyDownKeys[charCode];
 		if (hotkeysBeingRepeated)
 		{
@@ -13308,7 +13308,9 @@ function BI_Hotkeys()
 	});
 	$(document).keyup(function (e)
 	{
-		var charCode = e.which ? e.which : event.keyCode;
+		var charCode = e.which;
+		if (!charCode)
+			return;
 		var hotkeysBeingReleased = currentlyDownKeys[charCode];
 		currentlyDownKeys[charCode] = false;
 		var retVal = true;
