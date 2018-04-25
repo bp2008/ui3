@@ -761,7 +761,7 @@ var defaultSettings =
 			, value: "0|0|1|187" // 187: =
 			, hotkey: true
 			, label: "Digital Zoom In"
-			, hint: "This has the same function as rolling a mouse wheel upward."
+			, hint: "This has the same function as rolling a mouse wheel one notch."
 			, actionDown: BI_Hotkey_DigitalZoomIn
 			, allowRepeatKey: true
 			, category: "Hotkeys"
@@ -771,7 +771,7 @@ var defaultSettings =
 			, value: "0|0|1|189" // : 189: -
 			, hotkey: true
 			, label: "Digital Zoom Out"
-			, hint: "This has the same function as rolling a mouse wheel downward."
+			, hint: "This has the same function as rolling a mouse wheel one notch."
 			, actionDown: BI_Hotkey_DigitalZoomOut
 			, allowRepeatKey: true
 			, category: "Hotkeys"
@@ -1134,10 +1134,18 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
+			key: "ui3_wheelZoomReverse"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Reverse Mouse Wheel Zoom'
+			, hint: "By default, UI3 follows the de-facto standard for mouse wheel zoom, where up zooms in."
+			, category: "Extra"
+		}
+		, {
 			key: "ui3_contextMenus_longPress"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'Context Menu Compatibility Mode<br><a href="javascript:UIHelp.LearnMore(\'Context Menu Compatibility Mode\')">(learn more)</a>'
+			, label: 'Context Menu On Long-Press<br><a href="javascript:UIHelp.LearnMore(\'Context Menu On Long-Press\')">(learn more)</a>'
 			, onChange: OnChange_ui3_contextMenus_longPress
 			, category: "Extra"
 		}
@@ -10020,13 +10028,14 @@ function ImageRenderer()
 		mouseX = e.pageX;
 		mouseY = e.pageY;
 	}
-	// Initialization script for ImageRenderer -- called on document ready
 	$layoutbody.mousewheel(function (e, delta, deltaX, deltaY)
 	{
 		mouseCoordFixer.fix(e);
 		if (playbackControls.MouseInSettingsPanel(e))
 			return;
 		e.preventDefault();
+		if (settings.ui3_wheelZoomReverse === "1")
+			deltaY *= -1;
 		self.DigitalZoomNow(deltaY, false);
 	});
 }
@@ -15709,8 +15718,8 @@ function UIHelpTool()
 			case 'Double-Click to Fullscreen':
 				Double_Click_to_Fullscreen();
 				break;
-			case 'Context Menu Compatibility Mode':
-				Context_Menu_Compatibility_Mode();
+			case 'Context Menu On Long-Press':
+				Context_Menu_On_Long_Press();
 				break;
 			case 'Camera Group Webcasting':
 				Camera_Group_Webcasting();
@@ -15723,20 +15732,20 @@ function UIHelpTool()
 				break;
 		}
 	}
-	var Context_Menu_Compatibility_Mode = function ()
+	var Context_Menu_On_Long_Press = function ()
 	{
 		$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
 			+ 'Many useful functions in this interface are accessed by context menus (a.k.a. "Right-click menus").<br><br>'
 			+ 'Context menus are normally opened by right clicking.  On most touchscreen devices, instead you must press and hold.<br><br>'
 			+ 'However on some devices it is impossible to open context menus the normal way.  If this applies to you,'
-			+ ' enable "Context Menu Compatibility Mode".  This will change how context menus'
+			+ ' enable "Context Menu On Long-Press".  This will change how context menus'
 			+ ' are triggered so they should open when the left mouse button is held down for a moment.'
 			+ (browser_is_ios
 				? ('<br><br>Your operating system was detected as iOS, where there is a known compatibility issue with context menus.'
 					+ '  You may be unable to access the context menu regardless of this setting.')
 				: '')
 			+ '</div>')
-			.modalDialog({ title: "Context Menu Compatibility Mode", closeOnOverlayClick: true });
+			.modalDialog({ title: "Context Menu On Long-Press", closeOnOverlayClick: true });
 	}
 	var Double_Click_to_Fullscreen = function ()
 	{
