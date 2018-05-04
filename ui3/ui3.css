@@ -3148,6 +3148,35 @@ div.invisibleLabel
 	cursor: -webkit-grabbing !important;
 	cursor: grabbing !important;
 }
+/* Corner Status Icons */
+#cornerStatusIcons
+{
+	position: absolute;
+	top: 0px;
+	right: 0px;
+	color: #FFFFFF;
+	width: 50%;
+}
+
+.cornerStatusIconWrapper
+{
+	float: right;
+	display: inline;
+	width: 20px;
+	height: 20px;
+	padding: 5px 5px;
+	margin: 5px;
+	border: 1px solid transparent;
+	border-radius: 50%;
+	display: none;
+}
+
+	.cornerStatusIconWrapper svg
+	{
+		pointer-events: none;
+		filter: drop-shadow( 0px 0px 2px rgba(0,0,0,1) );
+	}
+
 /* Question Dialog */
 /* Simple text buttons */
 .simpleTextButton
@@ -3526,6 +3555,15 @@ div.invisibleLabel
 	padding: 6px 0px;
 }
 
+.dialogOption_item_comment
+{
+	color: #66cd66;
+}
+.dialogOption_item_comment .settingsCommentError
+{
+	color: #FF6666;
+}
+
 .campropcontent .dialogOption_item_info
 {
 	max-width: 320px;
@@ -3541,7 +3579,7 @@ div.invisibleLabel
 	max-width: 340px;
 }
 
-.dialogOption_item_range
+.campropcontent .dialogOption_item_range
 {
 	max-width: 320px;
 	margin: 0px auto;
@@ -3549,12 +3587,12 @@ div.invisibleLabel
 	position: relative;
 }
 
-	.dialogOption_item_range:hover
+	.campropcontent .dialogOption_item_range:hover
 	{
 		background-color: rgba(255,255,255,0.1);
 	}
 
-	.dialogOption_item_range input
+	.campropcontent .dialogOption_item_range input
 	{
 		width: 315px;
 		display: block;
@@ -3584,6 +3622,7 @@ div.invisibleLabel
 	height: 28px;
 	margin: 0px 10px;
 	float: right;
+	max-width: 35%;
 }
 
 #uiSettingsPanel a.input
@@ -3862,10 +3901,14 @@ div::-webkit-scrollbar-corner
 {
 	width: 80px;
 }
-
 #uiSettingsPanel input[type="text"]
 {
 	width: 169px;
+}
+#uiSettingsPanel input[type="range"]
+{
+	width: 90%;
+	margin: 0px 5%;
 }
 
 .uiSettingsRow

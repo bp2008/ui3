@@ -214,6 +214,7 @@ var clipDownloadDialog = null;
 var statusBars = null;
 var dropdownBoxes = null;
 var leftBarBools = null;
+var cornerStatusIcons = null;
 var genericQualityHelper = null;
 var jpegQualityHelper = null;
 var h264QualityHelper = null;
@@ -307,7 +308,7 @@ var togglableUIFeatures =
 // Settings ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var settings = null;
-var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Hotkeys", "Extra"];
+var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Extra"];
 var defaultSettings =
 	[
 		{
@@ -555,6 +556,81 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_lock"></use></svg> for protected items'
 			, category: "Clip / Alert Icons"
+		}
+		, {
+			inputType: "comment"
+			, comment: GenerateEventTriggeredIconsComment
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_icon_motion"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip" style="fill: rgba(120,205,255,1)"><use xlink:href="#svg_mio_run"></use></svg> on Motion Detected'
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_icon_trigger"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon" style="fill: rgba(255,64,64,1)"><use xlink:href="#svg_x5F_Alert2"></use></svg> on Camera Triggered'
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_icon_recording"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon" style="fill: rgba(255,0,0,1)"><use xlink:href="#svg_x5F_Stoplight"></use></svg> on Camera Recording'
+			, hint: "Does not appear when viewing a group of cameras"
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_icons_extraVisibility"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Extra Visibility For Icons'
+			, onChange: OnChange_ui3_icons_extraVisibility
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			inputType: "comment"
+			, comment: GenerateEventTriggeredSoundsComment
+			, category: "Event-Triggered Sounds"
+		}
+		, {
+			key: "ui3_sound_motion"
+			, value: "None"
+			, inputType: "select"
+			, options: []
+			, getOptions: getBISoundOptions
+			, alwaysRefreshOptions: true
+			, label: 'Motion Detected'
+			, onChange: function () { biSoundPlayer.PlayEvent("motion"); }
+			, category: "Event-Triggered Sounds"
+		}
+		, {
+			key: "ui3_sound_trigger"
+			, value: "None"
+			, inputType: "select"
+			, options: []
+			, getOptions: getBISoundOptions
+			, alwaysRefreshOptions: true
+			, label: 'Camera Triggered'
+			, onChange: function () { biSoundPlayer.PlayEvent("trigger"); }
+			, category: "Event-Triggered Sounds"
+		}
+		, {
+			key: "ui3_eventSoundVolume"
+			, value: 100
+			, minValue: 0
+			, maxValue: 100
+			, step: 1
+			, unitLabel: "%"
+			, inputType: "range"
+			, label: 'Sound Effect Volume'
+			, onChange: function () { biSoundPlayer.AdjustVolume(); }
+			, changeOnStep: true
+			, category: "Event-Triggered Sounds"
 		}
 		, {
 			key: "ui3_hotkey_maximizeVideoArea"
@@ -1436,6 +1512,8 @@ $(function ()
 	dropdownBoxes = new DropdownBoxes();
 
 	leftBarBools = new LeftBarBooleans();
+
+	cornerStatusIcons = new CornerStatusIcons();
 
 	genericQualityHelper = new GenericQualityHelper();
 
@@ -5999,7 +6077,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 		var expectedWidth = expectedHeight * aspectRatio;
 		clipThumbPlaybackActive = true;
 		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * duration;
-		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&h=" + expectedHeight + currentServer.GetRemoteSessionArg("&", true);
+		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&cache=1&h=" + expectedHeight + currentServer.GetRemoteSessionArg("&", true);
 		var thumbLabel = camName + " " + GetTimeStr(new Date(clipData.displayDate.getTime() + timeValue));
 		bigThumbHelper.Show($clip, $clip, thumbLabel, thumbPath, expectedWidth, expectedHeight, function ($img, userContext, success)
 		{
@@ -6949,6 +7027,8 @@ function SessionManager()
 	var permission_ptz = true;
 	var permission_audio = true;
 	var permission_clips = true;
+	var biSoundOptions = ["None"];
+	this.supportedHTML5AudioFormats = [".mp3", ".wav"]; // File extensions, in order of preference
 	this.Initialize = function ()
 	{
 		// Called once during page initialization
@@ -7132,6 +7212,50 @@ function SessionManager()
 			else
 				toaster.Info(message);
 		}
+
+		ProcessSoundsArray();
+	}
+	var ProcessSoundsArray = function ()
+	{
+		biSoundOptions = ["None"];
+		// Find the best format of each sound.
+		var formats = new Object(); // This object maps file names without extensions to the best format available.
+		if (lastResponse && lastResponse.data && lastResponse.data.sounds)
+		{
+			for (var i = 0; i < lastResponse.data.sounds.length; i++)
+			{
+				var file = lastResponse.data.sounds[i];
+				// Determine the format of this file.
+				for (var f = 0; f < self.supportedHTML5AudioFormats.length; f++)
+				{
+					var ext = self.supportedHTML5AudioFormats[f];
+					if (file.endsWithCaseInsensitive(ext))
+					{
+						// This file is one of our supported formats.
+						var nameNoExt = file.substr(0, file.length - ext.length)
+
+						var previousFormat = formats[nameNoExt];
+						if (previousFormat && previousFormat.priority < i)
+							continue; // Already found a better format.
+
+						// The format is an improvement over the last one we found (or this is the first we found).
+						formats[nameNoExt] = {
+							ext: ext
+							, priority: i
+							, fullName: file
+						};
+						break;
+					}
+				}
+			}
+			var choices = new Array(); // This array is used for ordering
+			for (var nameNoExt in formats)
+				choices.push(formats[nameNoExt].fullName);
+			choices.sort();
+
+			for (var i = 0; i < choices.length; i++)
+				biSoundOptions.push(choices[i]);
+		}
 	}
 	var getBoolMaybe = function (boolMaybe, defaultValue)
 	{
@@ -7257,6 +7381,14 @@ function SessionManager()
 	{
 		return permission_clips;
 	}
+	this.GetBISoundOptions = function ()
+	{
+		return biSoundOptions;
+	}
+}
+function getBISoundOptions()
+{
+	return sessionManager.GetBISoundOptions();
 }
 ///////////////////////////////////////////////////////////////
 // Camera List ////////////////////////////////////////////////
@@ -8732,6 +8864,8 @@ function FetchOpenH264VideoModule()
 	var $camimg_store = $("#camimg_store");
 	var $volumeBar = $("#volumeBar");
 
+	var lastStatusBlock = null;
+
 	var Initialize = function ()
 	{
 		if (isInitialized)
@@ -8831,6 +8965,7 @@ function FetchOpenH264VideoModule()
 		if (loading.isLive)
 			startPaused = false;
 		Activate();
+		lastStatusBlock = null;
 		currentSeekPositionPercent = Clamp(offsetPercent, 0, 1);
 		lastFrameAt = performance.now();
 		currentImageDateMs = Date.now();
@@ -8937,7 +9072,7 @@ function FetchOpenH264VideoModule()
 		if (startPaused)
 		{
 			self.Playback_Pause(); // If opening the stream while paused, the stream will stop after one frame.
-			safeFetch.OpenStream(videoUrl, acceptFrame, StreamEnded);
+			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, StreamEnded);
 		}
 		else
 		{
@@ -8945,7 +9080,7 @@ function FetchOpenH264VideoModule()
 			playbackControls.setPlayPauseButtonState(playbackPaused);
 			// Calling StopStream before opening the new stream will drop any buffered frames in the decoder, allowing the new stream to begin playback immediately.
 			StopStreaming();
-			safeFetch.OpenStream(videoUrl, acceptFrame, StreamEnded);
+			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, StreamEnded);
 		}
 	}
 	var acceptFrame = function (frame, streams)
@@ -8990,6 +9125,30 @@ function FetchOpenH264VideoModule()
 				console.log("Unsupported audio frame format", frame.format);
 			}
 		}
+	}
+	var acceptStatusBlock = function (status)
+	{
+		if (!status)
+		{
+			cornerStatusIcons.HideAll();
+			lastStatusBlock = null;
+			return;
+		}
+		cornerStatusIcons.Set("motion", status.bMotion);
+		cornerStatusIcons.Set("trigger", status.bTriggered);
+		cornerStatusIcons.Set("recording", status.bRec);
+
+		if (lastStatusBlock)
+		{
+			if (status.bMotion && !lastStatusBlock.bMotion)
+				biSoundPlayer.PlayEvent("motion");
+			if (status.bTriggered && !lastStatusBlock.bTriggered)
+				biSoundPlayer.PlayEvent("trigger");
+		}
+
+		BI_CustomEvent.Invoke("Video Status Block", arguments);
+
+		lastStatusBlock = status;
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -9109,6 +9268,10 @@ function FetchOpenH264VideoModule()
 			return;
 		if (developerMode)
 			console.log("fetch stream ended: ", message);
+		cornerStatusIcons.Hide("trigger");
+		cornerStatusIcons.Hide("motion");
+		cornerStatusIcons.Hide("recording");
+		BI_CustomEvent.Invoke("Video Stream Ended", arguments);
 		if (!safeFetch.IsActive())
 			volumeIconHelper.setColorIdle();
 		if (wasJpeg)
@@ -10126,6 +10289,223 @@ var videoOverlayHelper = new (function ()
 	this.HideTemporaryIcons = function ()
 	{
 		$("#camimg_playIcon,#camimg_pauseIcon,#camimg_centerIconBackground").stop(true, true);
+	}
+})();
+///////////////////////////////////////////////////////////////
+// Corner Status Icons ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function CornerStatusIcons()
+{
+	var self = this;
+	var iconMap = new Object();
+	// Icon names should be unique and alphanumeric ([0-9A-Za-z_]) because they are used to build the name of a setting.
+	self.iconList = new Array();
+	self.iconList.push({
+		name: "recording",
+		iconHtml: '<svg class="icon"><use xlink:href="#svg_x5F_Stoplight"></use></svg>',
+		rgb: "255,0,0",
+		title: "A camera is recording"
+	});
+	self.iconList.push({
+		name: "trigger",
+		iconHtml: '<svg class="icon"><use xlink:href="#svg_x5F_Alert2"></use></svg>',
+		rgb: "255,64,64",
+		title: "A camera is triggered"
+	});
+	self.iconList.push({
+		name: "motion",
+		iconHtml: '<svg class="icon noflip"><use xlink:href="#svg_mio_run"></use></svg>',
+		rgb: "120,205,255",
+		title: "Motion is detected"
+	});
+	this.Set = function (iconName, show)
+	{
+		if (show && self.IsIconEnabled(iconName))
+			self.Show(iconName);
+		else
+			self.Hide(iconName);
+	}
+	this.Show = function (iconName)
+	{
+		var icon = iconMap[iconName];
+		if (icon && !icon.visible && icon.$ele)
+		{
+			icon.$ele.show();
+			icon.visible = true;
+		}
+	}
+	this.Hide = function (iconName)
+	{
+		var icon = iconMap[iconName];
+		if (icon && icon.visible && icon.$ele)
+		{
+			icon.$ele.hide();
+			icon.visible = false;
+		}
+	}
+	this.ShowAll = function ()
+	{
+		for (var key in iconMap)
+			this.Show(key);
+	}
+	this.HideAll = function ()
+	{
+		for (var key in iconMap)
+			this.Hide(key);
+	}
+	this.IsIconEnabled = function (iconName)
+	{
+		return settings.getItem("ui3_icon_" + iconName) !== "0";
+	}
+	this.ReInitialize = function ()
+	{
+		/// <summary>This can be called at any time to recreate icons from iconList, e.g. if new icons were added to the array.</summary>
+		var $container = $("#cornerStatusIcons");
+		$container.empty();
+		iconMap = new Object();
+		for (var i = 0; i < self.iconList.length; i++)
+		{
+			var icon = self.iconList[i];
+			iconMap[icon.name] = icon;
+			icon.$ele = $('<div class="cornerStatusIconWrapper"></div>');
+			icon.$ele.attr('iconName', icon.name);
+			icon.$ele.attr('title', icon.title);
+			icon.$ele.html(icon.iconHtml);
+			if (icon.rgb)
+			{
+				icon.$ele.css("color", "rgba(" + icon.rgb + ",1)");
+				if (settings.ui3_icons_extraVisibility === "1")
+				{
+					icon.$ele.css("border-color", "rgba(" + icon.rgb + ",0.5)");
+					icon.$ele.css("background-color", "rgba(" + icon.rgb + ",0.3)");
+				}
+			}
+			if (icon.visible)
+			{
+				icon.visible = false;
+				self.Show(icon.name);
+			}
+			$container.append(icon.$ele);
+		}
+	}
+	this.ReInitialize();
+}
+///////////////////////////////////////////////////////////////
+// Sound Effect Player ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function BISoundEffect()
+{
+	var self = this;
+	var audio = null;
+	this.Play = function (file, volume)
+	{
+		if (!volume)
+			volume = 0;
+		if (file)
+		{
+			if (file == "None")
+			{
+				if (audio && !audio.ended)
+					audio.pause();
+				return;
+			}
+			var path = currentServer.remoteBaseURL + "sounds/" + file;
+			if (!audio)
+			{
+				audio = new Audio(path);
+				audio.addEventListener("error", function ()
+				{
+					if (audio)
+						HandleAudioError(audio.error);
+				});
+			}
+			else if (audio.src != path)
+			{
+				if (!audio.ended)
+					audio.pause();
+				audio.src = path;
+			}
+			self.AdjustVolume(volume);
+			var playPromise = audio.play();
+
+			if (playPromise && playPromise["catch"])
+				playPromise["catch"](function (ex)
+				{
+					try
+					{
+						toaster.Error("Audio Play Error: " + htmlEncode(ex.name) + "<br>" + htmlEncode(ex.message), 15000);
+					}
+					catch (e)
+					{
+						console.error(e);
+					}
+				});
+		}
+	}
+	this.AdjustVolume = function (volume)
+	{
+		if (audio)
+			audio.volume = volume / 100;
+	}
+	var HandleAudioError = function (error)
+	{
+		try
+		{
+			var sb = new StringBuilder("<br>");
+			sb.Append("Audio Error: ");
+			if (error)
+			{
+				sb.Append("code ");
+				sb.Append(htmlEncode(error.code));
+				sb.Append(" (");
+				if (MediaError)
+				{
+					if (error.code == MediaError.MEDIA_ERR_ABORTED)
+						sb.Append("MEDIA_ERR_ABORTED");
+					else if (error.code == MediaError.MEDIA_ERR_NETWORK)
+						sb.Append("MEDIA_ERR_NETWORK");
+					else if (error.code == MediaError.MEDIA_ERR_DECODE)
+						sb.Append("MEDIA_ERR_DECODE");
+					else if (error.code == MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
+						sb.Append("MEDIA_ERR_SRC_NOT_SUPPORTED");
+					else
+						sb.Append("unknown error code");
+				}
+				else
+					sb.Append("unknown error code");
+				sb.AppendLine(")");
+				sb.Append(htmlEncode(error.message));
+			}
+			else
+				sb.Append("Unknown error");
+			toaster.Warning(sb.ToString(), 10000);
+		}
+		catch (e)
+		{
+			console.error(error, e);
+		}
+	}
+}
+var biSoundPlayer = new (function ()
+{
+	var self = this;
+	var playerCache = new Object();
+	this.PlayEvent = function (event)
+	{
+		var player = playerCache[event];
+		if (!player)
+			player = playerCache[event] = new BISoundEffect();
+
+		var file = settings.getItem("ui3_sound_" + event);
+		player.Play(file, settings.ui3_eventSoundVolume);
+	}
+	this.AdjustVolume = function ()
+	{
+		for (var event in playerCache)
+		{
+			var player = playerCache[event];
+			player.AdjustVolume(settings.ui3_eventSoundVolume);
+		}
 	}
 })();
 ///////////////////////////////////////////////////////////////
@@ -13491,7 +13871,7 @@ function Toaster()
 	var showToastInternal = function (type, message, showTime, closeButton, onClick)
 	{
 		if (typeof message == "object" && typeof message.stack == "string")
-			message = message.stack;
+			message = htmlEncode(message.stack);
 		var overrideOptions = {};
 
 		if (showTime)
@@ -14146,9 +14526,9 @@ var safeFetch = new (function ()
 	var queuedRequest = null;
 	var stopTimeout = null;
 	var streamEndedCbForActiveFetch = null;
-	this.OpenStream = function (url, frameCallback, streamEnded)
+	this.OpenStream = function (url, frameCallback, statusBlockCallback, streamEnded)
 	{
-		queuedRequest = { url: url, frameCallback: frameCallback, streamEnded: streamEnded, activated: false };
+		queuedRequest = { url: url, frameCallback: frameCallback, statusBlockCallback: statusBlockCallback, streamEnded: streamEnded, activated: false };
 		if (streamer)
 		{
 			// A fetch stream is currently active.  Try to stop it.
@@ -14182,7 +14562,7 @@ var safeFetch = new (function ()
 		}
 		queuedRequest.activated = true;
 		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
-		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, StreamEndedWrapper);
+		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, StreamEndedWrapper);
 	}
 	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
 	{
@@ -14202,7 +14582,7 @@ var safeFetch = new (function ()
 		toaster.Error('Video streaming connection stuck open! You should reload the page.', 600000, true);
 	}
 })();
-function FetchVideoH264Streamer(url, frameCallback, streamEnded)
+function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamEnded)
 {
 	var self = this;
 	var cancel_streaming = false;
@@ -14249,7 +14629,17 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 		if (reader)
 		{
 			myStream = new GhettoStream(); // This is mostly just to release any data stored in the old stream.
-			reader.cancel("Streaming canceled");
+			var cancelPromise = reader.cancel("Streaming canceled");
+			if (cancelPromise && cancelPromise["catch"])
+				cancelPromise["catch"](function (e)
+				{
+					if (DOMException && DOMException.ABORT_ERR && e && e.code == DOMException.ABORT_ERR)
+					{
+						// Expected result. Don't spam console.
+					}
+					else
+						console.error(e);
+				});
 			reader = null;
 		}
 	}
@@ -14271,43 +14661,95 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 
 		fetchPromise.then(function (res)
 		{
-			if (res.headers.get("Content-Type") == "image/jpeg")
+			try
 			{
-				var blobPromise = res.blob();
-				blobPromise.then(function (jpegBlob)
+				if (res.headers.get("Content-Type") == "image/jpeg")
 				{
-					if (parseInt(res.headers.get("Content-Length")) != jpegBlob.size)
+					var blobPromise = res.blob();
+					blobPromise.then(function (jpegBlob)
 					{
-						CallStreamEnded("fetch graceful exit (jpeg incomplete)", true, true);
-						return;
-					}
-					var jpegObjectURL = URL.createObjectURL(jpegBlob);
-					frameCallback({ startTime: startTime, jpeg: jpegObjectURL, isVideo: true }, 1)
-					CallStreamEnded("fetch graceful exit (jpeg)", true, true);
-				})
-				["catch"](function (e)
+						try
+						{
+							if (parseInt(res.headers.get("Content-Length")) != jpegBlob.size)
+							{
+								CallStreamEnded("fetch graceful exit (jpeg incomplete)", true, true);
+								return;
+							}
+							var jpegObjectURL = URL.createObjectURL(jpegBlob);
+							try
+							{
+								CallFrameCallback({ startTime: startTime, jpeg: jpegObjectURL, isVideo: true }, 1);
+							}
+							catch (e)
+							{
+								toaster.Error(e);
+							}
+							CallStreamEnded("fetch graceful exit (jpeg)", true, true);
+						}
+						catch (e)
+						{
+							toaster.Error(e);
+						}
+					})
+					["catch"](function (e)
+					{
+						CallStreamEnded(e);
+					});
+					return blobPromise;
+				}
+				else
 				{
-					CallStreamEnded(e);
-				});
-				return blobPromise;
+					// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
+					reader = res.body.getReader();
+					return pump(reader);
+				}
 			}
-			else
+			catch (e)
 			{
-				// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
-				reader = res.body.getReader();
-				return pump(reader);
+				toaster.Error(e);
 			}
 		});
 		fetchPromise["catch"](function (e)
 		{
-			CallStreamEnded(e);
+			try
+			{
+				CallStreamEnded(e);
+			}
+			catch (e)
+			{
+				toaster.Error(e);
+			}
 		});
 	}
 	function CallStreamEnded(message, naturalEndOfStream, wasJpeg)
 	{
 		if (typeof streamEnded == "function")
-			streamEnded(message, wasJpeg, stopCalledByApp, naturalEndOfStream);
+		{
+			try
+			{
+				streamEnded(message, wasJpeg, stopCalledByApp, naturalEndOfStream);
+			}
+			catch (e)
+			{
+				if (typeof message == "object" && typeof message.stack == "string")
+					message = message.stack;
+				if (typeof e == "object" && typeof e.stack == "string")
+					e = e.stack;
+				toaster.Error("An unhandled error occurred while handling the end-of-stream event: " + htmlEncode(e) + "<br>The stream ended because: " + htmlEncode(message));
+			}
+		}
 		streamEnded = null;
+	}
+	function CallFrameCallback()
+	{
+		try
+		{
+			frameCallback.apply(this, arguments);
+		}
+		catch (e)
+		{
+			toaster.Error(e);
+		}
 	}
 	function protocolError(error)
 	{
@@ -14323,177 +14765,200 @@ function FetchVideoH264Streamer(url, frameCallback, streamEnded)
 			return;
 		reader.read().then(function (result)
 		{
-			if (result.done)
+			try
 			{
-				CallStreamEnded("fetch graceful exit (type 1)");
-				return;
-			}
-			else if (cancel_streaming)
-			{
-				stopStreaming_Internal();
-				CallStreamEnded("fetch graceful exit (type 2)");
-				return;
-			}
-
-			myStream.Write(result.value);
-
-			while (true)
-			{
-				if (cancel_streaming)
+				if (result.done)
 				{
-					stopStreaming_Internal();
-					CallStreamEnded("fetch graceful exit (type 3)");
+					CallStreamEnded("fetch graceful exit (type 1)");
 					return;
 				}
-				if (state == 0) // Read Stream Header Start
+				else if (cancel_streaming)
 				{
-					var buf = myStream.Read(6);
-					if (buf == null)
-						return pump();
-
-					// First 4 bytes are supposed to be ASCII "blue"
-					if (buf[0] != 98 || buf[1] != 108 || buf[2] != 117 || buf[3] != 101)
-						return protocolError("stream did not start with \"blue\"");
-
-					availableStreams = buf[4];
-					if (availableStreams != 1 && availableStreams != 2)
-						return protocolError("availableStreams (" + availableStreams + ") was supposed to be 1 (video) or 2 (audio+video)");
-
-					streamHeaderSize = buf[5];
-
-					state = 1;
+					stopStreaming_Internal();
+					CallStreamEnded("fetch graceful exit (type 2)");
+					return;
 				}
-				else if (state == 1) // Read Stream Header Remainder
+
+				myStream.Write(result.value);
+
+				while (true)
 				{
-					var buf = myStream.Read(streamHeaderSize);
-					if (buf == null)
-						return pump();
-
-					// Read BITMAPINFOHEADER structure
-					var offsetWrapper = { offset: 0 };
-					var bitmapHeaderSize = ReadUInt32LE(buf, offsetWrapper) - 4;
-					if (bitmapHeaderSize > 0)
-						bitmapHeader = new BITMAPINFOHEADER(ReadSubArray(buf, offsetWrapper, bitmapHeaderSize));
-
-					if (offsetWrapper.offset < streamHeaderSize)
-					{
-						// Audio stream was provided.
-						// Assuming the remainder of the header is WAVEFORMATEX structure
-						audioHeader = new WAVEFORMATEX(ReadSubArray(buf, offsetWrapper, streamHeaderSize - offsetWrapper.offset));
-					}
-
-					state = 2;
-				}
-				else if (state == 2) // Read Block Header Start
-				{
-					var buf = myStream.Read(5);
-					if (buf == null)
-						return pump();
-
-					// First 4 bytes are supposed to be ASCII "Blue"
-					if (buf[0] != 66 || buf[1] != 108 || buf[2] != 117 || buf[3] != 101)
-						return protocolError("block did not start with \"Blue\"");
-
-					blockType = buf[4];
-
-					state = 3;
-				}
-				else if (state == 3) // Read Block Header Remainder
-				{
-					if (blockType == 0) // Video
-					{
-						var buf = myStream.Read(18); // 2 + 4 + 8 + 4
-						if (buf == null)
-							return pump();
-						var offsetWrapper = { offset: 0 };
-						currentVideoFrame.pos = ReadUInt16(buf, offsetWrapper);
-						currentVideoFrame.time = ReadUInt32(buf, offsetWrapper);
-						currentVideoFrame.utc = ReadUInt64LE(buf, offsetWrapper);
-						currentVideoFrame.size = ReadUInt32(buf, offsetWrapper);
-						if (currentVideoFrame.size > 10000000)
-							return protocolError("Video frame size of " + currentVideoFrame.size + " was rejected.");
-
-						state = 4;
-					}
-					else if (blockType == 1) // Audio
-					{
-						var buf = myStream.Read(4);
-						if (buf == null)
-							return pump();
-
-						currentAudioFrame.size = ReadInt32(buf, { offset: 0 });
-						if (currentAudioFrame.size > 2000000)
-							return protocolError("Audio frame size of " + currentAudioFrame.size + " was rejected.");
-
-						state = 4;
-					}
-					else if (blockType == 2) // Status
-					{
-						var buf = myStream.Read(1);
-						if (buf == null)
-							return pump();
-
-						statusBlockSize = buf[0];
-
-						if (statusBlockSize < 6)
-							return protocolError("Status block size was invalid (" + statusBlockSize + ")!");
-
-						state = 4;
-					}
-					else if (blockType == 4)
+					if (cancel_streaming)
 					{
 						stopStreaming_Internal();
-						CallStreamEnded("natural end of stream", true);
+						CallStreamEnded("fetch graceful exit (type 3)");
 						return;
 					}
-					else
-						return protocolError("Unknown block type " + blockType + " at state " + state);
+					if (state == 0) // Read Stream Header Start
+					{
+						var buf = myStream.Read(6);
+						if (buf == null)
+							return pump();
+
+						// First 4 bytes are supposed to be ASCII "blue"
+						if (buf[0] != 98 || buf[1] != 108 || buf[2] != 117 || buf[3] != 101)
+							return protocolError("stream did not start with \"blue\"");
+
+						availableStreams = buf[4];
+						if (availableStreams != 1 && availableStreams != 2)
+							return protocolError("availableStreams (" + availableStreams + ") was supposed to be 1 (video) or 2 (audio+video)");
+
+						streamHeaderSize = buf[5];
+
+						state = 1;
+					}
+					else if (state == 1) // Read Stream Header Remainder
+					{
+						var buf = myStream.Read(streamHeaderSize);
+						if (buf == null)
+							return pump();
+
+						// Read BITMAPINFOHEADER structure
+						var offsetWrapper = { offset: 0 };
+						var bitmapHeaderSize = ReadUInt32LE(buf, offsetWrapper) - 4;
+						if (bitmapHeaderSize > 0)
+							bitmapHeader = new BITMAPINFOHEADER(ReadSubArray(buf, offsetWrapper, bitmapHeaderSize));
+
+						if (offsetWrapper.offset < streamHeaderSize)
+						{
+							// Audio stream was provided.
+							// Assuming the remainder of the header is WAVEFORMATEX structure
+							audioHeader = new WAVEFORMATEX(ReadSubArray(buf, offsetWrapper, streamHeaderSize - offsetWrapper.offset));
+						}
+
+						state = 2;
+					}
+					else if (state == 2) // Read Block Header Start
+					{
+						var buf = myStream.Read(5);
+						if (buf == null)
+							return pump();
+
+						// First 4 bytes are supposed to be ASCII "Blue"
+						if (buf[0] != 66 || buf[1] != 108 || buf[2] != 117 || buf[3] != 101)
+							return protocolError("block did not start with \"Blue\"");
+
+						blockType = buf[4];
+
+						state = 3;
+					}
+					else if (state == 3) // Read Block Header Remainder
+					{
+						if (blockType == 0) // Video
+						{
+							var buf = myStream.Read(18); // 2 + 4 + 8 + 4
+							if (buf == null)
+								return pump();
+							var offsetWrapper = { offset: 0 };
+							currentVideoFrame.pos = ReadUInt16(buf, offsetWrapper);
+							currentVideoFrame.time = ReadUInt32(buf, offsetWrapper);
+							currentVideoFrame.utc = ReadUInt64LE(buf, offsetWrapper);
+							currentVideoFrame.size = ReadUInt32(buf, offsetWrapper);
+							if (currentVideoFrame.size > 10000000)
+								return protocolError("Video frame size of " + currentVideoFrame.size + " was rejected.");
+
+							state = 4;
+						}
+						else if (blockType == 1) // Audio
+						{
+							var buf = myStream.Read(4);
+							if (buf == null)
+								return pump();
+
+							currentAudioFrame.size = ReadInt32(buf, { offset: 0 });
+							if (currentAudioFrame.size > 2000000)
+								return protocolError("Audio frame size of " + currentAudioFrame.size + " was rejected.");
+
+							state = 4;
+						}
+						else if (blockType == 2) // Status
+						{
+							var buf = myStream.Read(1);
+							if (buf == null)
+								return pump();
+
+							statusBlockSize = buf[0];
+
+							if (statusBlockSize < 6)
+								return protocolError("Status block size was invalid (" + statusBlockSize + ")!");
+
+							state = 4;
+						}
+						else if (blockType == 4)
+						{
+							stopStreaming_Internal();
+							CallStreamEnded("natural end of stream", true);
+							return;
+						}
+						else
+							return protocolError("Unknown block type " + blockType + " at state " + state);
+					}
+					else if (state == 4) // Read AV frame data
+					{
+						if (blockType == 0) // Video
+						{
+							var buf = myStream.Read(currentVideoFrame.size);
+							if (buf == null)
+								return pump();
+
+							bitRateCalc_Video.AddDataPoint(currentVideoFrame.size);
+
+							CallFrameCallback(new VideoFrame(buf, currentVideoFrame), availableStreams);
+
+							state = 2;
+						}
+						else if (blockType == 1) // Audio
+						{
+							var buf = myStream.Read(currentAudioFrame.size);
+							if (buf == null)
+								return pump();
+
+							bitRateCalc_Audio.AddDataPoint(currentAudioFrame.size);
+
+							CallFrameCallback(new AudioFrame(buf, audioHeader), availableStreams);
+
+							state = 2;
+						}
+						else if (blockType == 2) // Status
+						{
+							var buf = myStream.Read(statusBlockSize - 6); // We already read the first 6 bytes ['B', 'L', 'U', 'E', 2, statusBlockSize]
+							if (buf == null)
+								return pump();
+
+							var statusBlock = new StatusBlock(buf);
+
+							try
+							{
+								statusBlockCallback(statusBlock);
+							}
+							catch (e)
+							{
+								toaster.Error(e);
+							}
+
+							state = 2;
+						}
+						else
+							return protocolError("Unknown block type " + blockType + " at state " + state);
+					}
 				}
-				else if (state == 4) // Read AV frame data
-				{
-					if (blockType == 0) // Video
-					{
-						var buf = myStream.Read(currentVideoFrame.size);
-						if (buf == null)
-							return pump();
-
-						bitRateCalc_Video.AddDataPoint(currentVideoFrame.size);
-
-						frameCallback(new VideoFrame(buf, currentVideoFrame), availableStreams);
-
-						state = 2;
-					}
-					else if (blockType == 1) // Audio
-					{
-						var buf = myStream.Read(currentAudioFrame.size);
-						if (buf == null)
-							return pump();
-
-						bitRateCalc_Audio.AddDataPoint(currentAudioFrame.size);
-
-						frameCallback(new AudioFrame(buf, audioHeader), availableStreams);
-
-						state = 2;
-					}
-					else if (blockType == 2) // Status
-					{
-						var buf = myStream.Read(statusBlockSize - 6); // We already read the first 6 bytes ['B', 'L', 'U', 'E', 2, statusBlockSize]
-						if (buf == null)
-							return pump();
-
-						var statusBlock = new StatusBlock(buf);
-
-						state = 2;
-					}
-					else
-						return protocolError("Unknown block type " + blockType + " at state " + state);
-				}
+			}
+			catch (e)
+			{
+				toaster.Error(e);
 			}
 		}
 		)["catch"](function (e)
 		{
-			stopStreaming_Internal();
-			CallStreamEnded(e);
+			try
+			{
+				stopStreaming_Internal();
+				CallStreamEnded(e);
+			}
+			catch (e)
+			{
+				toaster.Error(e);
+			}
 		});
 	}
 
@@ -15323,21 +15788,22 @@ function UISettingsPanel()
 		var cat = new CollapsibleSection("uiSettings_category_" + category, category, modal_dialog);
 
 		var rowIdx = 0;
-		if (category == "General Settings")
+		if (category === "General Settings")
 		{
-			if (settings.bi_rememberMe == "1")
+			if (settings.bi_rememberMe === "1")
 				rowIdx = Add_ForgetSavedCredentialsButton(cat, rowIdx);
 			rowIdx = Add_ResetAllSettingsButton(cat, rowIdx);
 		}
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
 			var s = defaultSettings[i];
-			if (s.label && s.category == category)
+			var isDisplayable = (s.label || (s.comment && s.inputType === "comment")) && s.category === category;
+			if (isDisplayable)
 			{
 				var $row = $('<div class="uiSettingsRow"></div>');
 				if (s.hint && s.hint.length > 0)
 					$row.attr('title', s.hint);
-				if (rowIdx++ % 2 == 1)
+				if (rowIdx++ % 2 === 1)
 					$row.addClass('everyOther');
 				if (s.hotkey)
 				{
@@ -15350,26 +15816,26 @@ function UISettingsPanel()
 					if (parts.length < 4)
 						$input.val("unset");
 					else
-						$input.val((parts[0] == "1" ? "CTRL + " : "")
-							+ (parts[1] == "1" ? "ALT + " : "")
-							+ (parts[2] == "1" ? "SHIFT + " : "")
+						$input.val((parts[0] === "1" ? "CTRL + " : "")
+							+ (parts[1] === "1" ? "ALT + " : "")
+							+ (parts[2] === "1" ? "SHIFT + " : "")
 							+ hotkeys.getKeyName(parts[3]));
 					$row.addClass('dialogOption_item dialogOption_item_info');
 					$row.append($input);
 					var label = s.label;
-					if (!fullscreen_supported && s.key == 'ui3_hotkey_togglefullscreen')
+					if (!fullscreen_supported && s.key === 'ui3_hotkey_togglefullscreen')
 						label += '<br>(Unavailable)';
 					$row.append(GetDialogOptionLabel(label));
 				}
-				else if (s.inputType == "checkbox")
+				else if (s.inputType === "checkbox")
 				{
-					$row.append(GetCustomCheckbox(s, s.label, settings[s.key] == "1", CheckboxChanged));
+					$row.append(GetCustomCheckbox(s, s.label, settings[s.key] === "1", CheckboxChanged));
 				}
-				else if (s.inputType == "select")
+				else if (s.inputType === "select")
 				{
 					var sb = [];
 					sb.push('<select>');
-					if (s.options.length == 0 && typeof s.getOptions == "function")
+					if ((s.options.length === 0 || s.alwaysRefreshOptions) && typeof s.getOptions === "function")
 						s.options = s.getOptions();
 					for (var n = 0; n < s.options.length; n++)
 						sb.push(GetHtmlOptionElementMarkup(s.options[n], s.options[n], settings[s.key]));
@@ -15380,23 +15846,56 @@ function UISettingsPanel()
 					$row.append($select);
 					$row.append(GetDialogOptionLabel(s.label));
 				}
-				else if (s.inputType == "number")
+				else if (s.inputType === "number" || s.inputType === "range")
 				{
-					var $input = $('<input type="number" />');
+					var $input = $('<input type="' + s.inputType + '" />');
 					if (typeof s.minValue != "undefined")
 						$input.attr('min', s.minValue);
 					if (typeof s.maxValue != "undefined")
 						$input.attr('max', s.maxValue);
+					if (typeof s.step != "undefined")
+						$input.attr('step', s.step);
 					$input.val(settings[s.key]);
 					AddChangeEventToElement(NumberChanged, s, $input);
 					$row.addClass('dialogOption_item dialogOption_item_info');
-					$row.append($input);
-					$row.append(GetDialogOptionLabel(s.label));
+					var $label = $(GetDialogOptionLabel(s.label));
+					if (s.inputType === "range")
+					{
+						if (s.changeOnStep)
+							AddInputEventToElement(NumberChanged, s, $input);
+						// Set up numeric output for range control
+						$label.append("<span>: </span>");
+						var $numericValue = $("<span></span>");
+						$numericValue.text($input.val());
+						$label.append($numericValue);
+						if (s.unitLabel)
+							$label.append($('<span></span>').text(s.unitLabel));
+						$input.on('input change', function ()
+						{
+							$numericValue.text($input.val());
+						});
+
+						// Add to row
+						$row.addClass('dialogOption_item_range');
+						$row.append($label);
+						$row.append($input);
+					}
+					else
+					{
+						$row.append($input);
+						$row.append($label);
+					}
+				}
+				else if (s.inputType === "comment")
+				{
+					$row.addClass('dialogOption_item dialogOption_item_info dialogOption_item_comment');
+					var comment = typeof s.comment === "function" ? s.comment() : s.comment;
+					$row.append(GetDialogOptionLabel(comment));
 				}
 				cat.$section.append($row);
 			}
 		}
-		if (category == "Extra")
+		if (category === "Extra")
 		{
 			if (sessionManager.IsAdministratorSession())
 			{
@@ -15603,6 +16102,11 @@ function UISettingsPanel()
 		/// <summary>Adds a change event handler to the input element.  Doing this in a separate function forces the creation of a new scope and that ensures the arguments to the event handler stay correct.</summary>
 		$input.on('change', function (e) { return eventHandler(e, defaultSetting, $input); });
 	}
+	var AddInputEventToElement = function (eventHandler, defaultSetting, $input)
+	{
+		/// <summary>Adds an input event handler to the input element.  Doing this in a separate function forces the creation of a new scope and that ensures the arguments to the event handler stay correct.</summary>
+		$input.on('input', function (e) { return eventHandler(e, defaultSetting, $input); });
+	}
 	var AddKeydownEventToElement = function (eventHandler, defaultSetting, $input)
 	{
 		/// <summary>Adds a keydown event handler to the input element.</summary>
@@ -15631,6 +16135,18 @@ function UISettingsPanel()
 		}
 	}
 }
+function GenerateEventTriggeredSoundsComment()
+{
+	return GenerateH264RequirementString() + "<br/>Sounds are loaded from Blue Iris's \"sounds\" directory. Supported extensions: " + sessionManager.supportedHTML5AudioFormats.join(", ");
+}
+function GenerateEventTriggeredIconsComment()
+{
+	return GenerateH264RequirementString() + "<br/>Icons are shown in the upper-right corner of the video player.";
+}
+function GenerateH264RequirementString()
+{
+	return '-- Requires an H.264 stream. --' + (h264_playback_supported ? '' : '<br/><span class="settingsCommentError">-- H.264 streams are not supported by this browser --</span>');
+}
 function OnChange_ui3_preferred_ui_scale(newValue)
 {
 	uiSizeHelper.SetUISizeByName(newValue);
@@ -15653,6 +16169,10 @@ function GetPreferredContextMenuTrigger()
 function OnChange_ui3_time24hour()
 {
 	use24HourTime = settings.ui3_time24hour == "1";
+}
+function OnChange_ui3_icons_extraVisibility()
+{
+	cornerStatusIcons.ReInitialize();
 }
 function OnChange_ui3_fullscreen_videoonly()
 {
@@ -15799,7 +16319,7 @@ function UIHelpTool()
 function CollapsibleSection(id, htmlTitle, dialogToNotify)
 {
 	var self = this;
-	var settingsKey = "ui3_cps_" + id.replace(/\s|\//g, '_') + "_visible";
+	var settingsKey = "ui3_cps_" + id.replace(/\W/g, '_') + "_visible";
 	var visibleSetting = settings.getItem(settingsKey);
 	if (visibleSetting != "0" && visibleSetting != "1")
 	{
@@ -15887,6 +16407,8 @@ function StringBuilder(lineBreakStr)
 {
 	var self = this;
 	var strings = [];
+	if (!lineBreakStr)
+		lineBreakStr = "\r\n";
 	this.Append = function (value)
 	{
 		if (value)
@@ -16159,10 +16681,23 @@ String.prototype.startsWith = function (prefix)
 {
 	return this.lastIndexOf(prefix, 0) === 0;
 }
-
+String.prototype.startsWithCaseInsensitive = function (prefix)
+{
+	if (this.length < suffix.length)
+		return false;
+	return this.substr(0, suffix.length).toLowerCase() === suffix.toLowerCase();
+}
 String.prototype.endsWith = function (suffix)
 {
-	return this.match(suffix + "$") == suffix;
+	if (this.length < suffix.length)
+		return false;
+	return this.substr(this.length - suffix.length) === suffix;
+};
+String.prototype.endsWithCaseInsensitive = function (suffix)
+{
+	if (this.length < suffix.length)
+		return false;
+	return this.substr(this.length - suffix.length).toLowerCase() === suffix.toLowerCase();
 };
 String.prototype.toFloat = function (digits)
 {
