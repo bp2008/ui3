@@ -7214,6 +7214,8 @@ function SessionManager()
 		}
 
 		ProcessSoundsArray();
+
+		BI_CustomEvent.Invoke("Login Success", response);
 	}
 	var ProcessSoundsArray = function ()
 	{
@@ -15969,7 +15971,7 @@ function UISettingsPanel()
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
 			var s = defaultSettings[i];
-			if (s.category != category)
+			if (s.category != category || !s.key)
 				continue;
 			var value = settings[s.key];
 			if (typeof value == "string")
@@ -15990,7 +15992,7 @@ function UISettingsPanel()
 			if (s.category != category)
 				continue;
 			var key = s.key;
-			if (key == "bi_rememberMe" || key == "bi_username" || key == "bi_password")
+			if (!key || key === "bi_rememberMe" || key === "bi_username" || key === "bi_password")
 				continue; // Don't write these to the file!
 			var value = settings[key];
 			sb.Append('OverrideDefaultSetting(');
