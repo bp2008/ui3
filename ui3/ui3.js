@@ -14649,17 +14649,15 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamE
 	{
 		var startTime = performance.now();
 
+		var fetchArgs = { credentials: "include" };
 		var fetchPromise;
 		if (typeof AbortController == "function")
 		{
 			// FF 57+, Edge 16+ (in theory)
 			abort_controller = new AbortController();
-			fetchPromise = fetch(url, { signal: abort_controller.signal });
+			fetchArgs.signal = abort_controller.signal;
 		}
-		else
-		{
-			fetchPromise = fetch(url);
-		}
+		fetchPromise = fetch(url, fetchArgs);
 
 		fetchPromise.then(function (res)
 		{
@@ -15358,7 +15356,6 @@ function StatsRow(name)
 		if (hidden)
 			return false;
 		hidden = true;
-		console.log("Hid " + name);
 		$root.hide();
 		return true;
 	}
