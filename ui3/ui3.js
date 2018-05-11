@@ -7222,41 +7222,47 @@ function SessionManager()
 		biSoundOptions = ["None"];
 		// Find the best format of each sound.
 		var formats = new Object(); // This object maps file names without extensions to the best format available.
-		if (lastResponse && lastResponse.data && lastResponse.data.sounds)
+		if (lastResponse && lastResponse.data)
 		{
-			for (var i = 0; i < lastResponse.data.sounds.length; i++)
+			var soundsArr = lastResponse.data.www_sounds;
+			if (!soundsArr)
+				soundsArr = lastResponse.data.sounds;
+			if (soundsArr)
 			{
-				var file = lastResponse.data.sounds[i];
-				// Determine the format of this file.
-				for (var f = 0; f < self.supportedHTML5AudioFormats.length; f++)
+				for (var i = 0; i < soundsArr.length; i++)
 				{
-					var ext = self.supportedHTML5AudioFormats[f];
-					if (file.endsWithCaseInsensitive(ext))
+					var file = soundsArr[i];
+					// Determine the format of this file.
+					for (var f = 0; f < self.supportedHTML5AudioFormats.length; f++)
 					{
-						// This file is one of our supported formats.
-						var nameNoExt = file.substr(0, file.length - ext.length)
+						var ext = self.supportedHTML5AudioFormats[f];
+						if (file.endsWithCaseInsensitive(ext))
+						{
+							// This file is one of our supported formats.
+							var nameNoExt = file.substr(0, file.length - ext.length)
 
-						var previousFormat = formats[nameNoExt];
-						if (previousFormat && previousFormat.priority < i)
-							continue; // Already found a better format.
+							var previousFormat = formats[nameNoExt];
+							if (previousFormat && previousFormat.priority < i)
+								continue; // Already found a better format.
 
-						// The format is an improvement over the last one we found (or this is the first we found).
-						formats[nameNoExt] = {
-							ext: ext
-							, priority: i
-							, fullName: file
-						};
-						break;
+							// The format is an improvement over the last one we found (or this is the first we found).
+							formats[nameNoExt] = {
+								ext: ext
+								, priority: i
+								, fullName: file
+							};
+							break;
+						}
 					}
 				}
-			}
-			var choices = new Array(); // This array is used for ordering
-			for (var nameNoExt in formats)
-				choices.push(formats[nameNoExt].fullName);
-			choices.sort();
+				var choices = new Array(); // This array is used for ordering
+				for (var nameNoExt in formats)
+					choices.push(formats[nameNoExt].fullName);
+				choices.sort();
 
-			for (var i = 0; i < choices.length; i++)
-				biSoundOptions.push(choices[i]);
+				for (var i = 0; i < choices.length; i++)
+					biSoundOptions.push(choices[i]);
+			}
 		}
 	}
 	var getBoolMaybe = function (boolMaybe, defaultValue)
