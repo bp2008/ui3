@@ -558,7 +558,9 @@ var defaultSettings =
 			, category: "Clip / Alert Icons"
 		}
 		, {
-			inputType: "comment"
+			key: "ui3_comment_eventTriggeredIcons_Heading"
+			, value: ""
+			, inputType: "comment"
 			, comment: GenerateEventTriggeredIconsComment
 			, category: "Event-Triggered Icons"
 		}
@@ -593,7 +595,9 @@ var defaultSettings =
 			, category: "Event-Triggered Icons"
 		}
 		, {
-			inputType: "comment"
+			key: "ui3_comment_eventTriggeredSounds_Heading"
+			, value: ""
+			, inputType: "comment"
 			, comment: GenerateEventTriggeredSoundsComment
 			, category: "Event-Triggered Sounds"
 		}
@@ -7212,6 +7216,8 @@ function SessionManager()
 			else
 				toaster.Info(message);
 		}
+		if (lastResponse.data.version)
+			$("#bi_version_label").text(lastResponse.data.version);
 
 		ProcessSoundsArray();
 
@@ -14657,7 +14663,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamE
 	{
 		var startTime = performance.now();
 
-		var fetchArgs = { credentials: "include" };
+		var fetchArgs = { credentials: "same-origin" };
 		var fetchPromise;
 		if (typeof AbortController == "function")
 		{
