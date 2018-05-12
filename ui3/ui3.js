@@ -7226,6 +7226,8 @@ function SessionManager()
 		{
 			var soundsArr = lastResponse.data.www_sounds;
 			if (!soundsArr)
+				soundsArr = lastResponse.data["www-sounds"];
+			if (!soundsArr)
 				soundsArr = lastResponse.data.sounds;
 			if (soundsArr)
 			{
