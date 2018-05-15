@@ -5329,12 +5329,22 @@ function ClipLoader(clipsBodySelector)
 	}
 	var ThumbOnAppear = function (ele)
 	{
+		if (!ele)
+		{
+			console.error("ThumbOnAppear called with undefined ele");
+			return;
+		}
 		var path = currentServer.remoteBaseURL + "thumbs/" + ele.thumbPath + currentServer.GetRemoteSessionArg("?");
 		if (ele.getAttribute('src') != path)
 			asyncThumbnailDownloader.Enqueue(ele, path);
 	}
 	var ThumbOnDisappear = function (ele)
 	{
+		if (!ele)
+		{
+			console.error("ThumbOnDisappear called with undefined ele");
+			return;
+		}
 		asyncThumbnailDownloader.Dequeue(ele);
 	}
 	var ClipOnAppear = function (clipData)
@@ -10750,7 +10760,7 @@ function CanvasContextMenu()
 				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
 				break;
 			case "opennewtab":
-				window.open(videoPlayer.GetLastSnapshotFullUrl());
+				window.open(videoPlayer.GetLastSnapshotUrl());
 				break;
 			case "copyimageaddress":
 				var relUrl = videoPlayer.GetLastSnapshotUrl();
@@ -10852,7 +10862,7 @@ function CanvasContextMenu()
 				break;
 			case "opennewtab":
 				videoPlayer.Playback_Pause();
-				window.open(videoPlayer.GetLastSnapshotFullUrl());
+				window.open(videoPlayer.GetLastSnapshotUrl());
 				break;
 			case "saveas":
 				return true;
