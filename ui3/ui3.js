@@ -319,6 +319,7 @@ var togglableUIFeatures =
 // TODO: Add AVI export to the clip list context menu, but only for one clip at a time like the Properties item.
 // TODO: Add AVI export to the clip properties panel.
 // TODO: Move AVI.js to the libs-ui3.js file before release.
+// TODO: Add w= arguments to all jpeg snapshot requests because Ken wants the Streaming 0 profile's frame size to limit the resolution of jpeg snapshot requests to 720p by default.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
