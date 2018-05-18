@@ -11,6 +11,8 @@ var developerMode = false;
 var h264_playback_supported = false;
 var audio_playback_supported = false;
 var web_workers_supported = false;
+var export_blob_supported = false;
+var exporting_clips_to_avi_supported = false;
 var fetch_supported = false;
 var readable_stream_supported = false;
 var webgl_supported = false;
@@ -35,8 +37,9 @@ function DoUIFeatureDetection()
 			browser_is_ios = BrowserIsIOSSafari() || BrowserIsIOSChrome();
 			browser_is_android = BrowserIsAndroid();
 			web_workers_supported = typeof Worker !== "undefined";
+			export_blob_supported = detectIfCanExportBlob();
 			fetch_supported = typeof fetch == "function";
-			readable_stream_supported = typeof ReadableStream == "function";
+			readable_stream_supported = typeof ReadableStream === "function";
 			webgl_supported = detectWebGLContext();
 			var AudioContext = window.AudioContext || window.webkitAudioContext;
 			if (AudioContext)
@@ -45,11 +48,11 @@ function DoUIFeatureDetection()
 				{
 					var context = new AudioContext();
 
-					if (typeof context.createGain == "function")
+					if (typeof context.createGain === "function")
 					{
 						web_audio_supported = true;
 
-						if (typeof context.createBuffer == "function" && typeof context.createBufferSource == "function")
+						if (typeof context.createBuffer === "function" && typeof context.createBufferSource === "function")
 							web_audio_buffer_source_supported = true;
 					}
 				}
@@ -58,6 +61,7 @@ function DoUIFeatureDetection()
 			fullscreen_supported = ((document.documentElement.requestFullscreen || document.documentElement.msRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.webkitRequestFullscreen) && (document.exitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen || document.webkitExitFullscreen)) ? true : false;
 			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported && webgl_supported;
 			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported;
+			exporting_clips_to_avi_supported = h264_playback_supported && export_blob_supported;
 			$(function ()
 			{
 				var ul_root = $('<ul></ul>');
@@ -96,6 +100,10 @@ function DoUIFeatureDetection()
 				if (!isHtml5HistorySupported())
 				{
 					ul_root.append('<li>The back button will not close the current clip or camera, like it does on most other platforms.</li>');
+				}
+				if (!exporting_clips_to_avi_supported)
+				{
+					ul_root.append('<li>Exporting clips to AVI is not supported.</li>');
 				}
 				if (ul_root.children().length > 0)
 				{
@@ -193,6 +201,17 @@ function detectWebGLContext()
 		|| canvas.getContext("experimental-webgl");
 	return gl && gl instanceof WebGLRenderingContext;
 }
+function detectIfCanExportBlob()
+{
+	try
+	{
+		return typeof window.URL !== "undefined" && typeof window.URL.revokeObjectURL === "function" && typeof Blob !== "undefined";
+	}
+	catch (ex)
+	{
+	}
+	return false;
+}
 
 DoUIFeatureDetection();
 ///////////////////////////////////////////////////////////////
@@ -288,21 +307,27 @@ var togglableUIFeatures =
 // Notes that require BI changes //////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Once Blue Iris stops telling the browser not to cache clip thumbnails, stop using ImageToDataUrl for the clip thumbnail mouseover popup.
-
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+
+// TODO: Don't allow clicking or hotkeys outside of the export panel while AVI export is active.
+// TODO: Enable cancellation of AVI export.
+// TODO: Show a warning when the size of the AVI export is large and could be unreliable.
+// TODO: Test AVI export in other browsers.
+// TODO: Add Start and End point selection for AVI export.
+// TODO: Add AVI export to the clip list context menu, but only for one clip at a time like the Properties item.
+// TODO: Add AVI export to the clip properties panel.
+// TODO: Move AVI.js to the libs-ui3.js file before release.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// CONSIDER: Play sounds like default.htm does when certain events occur.
-// CONSIDER: Show status icons in the upper right corner of H.264 video based on values received in the Status blocks.
 // CONSIDER: Android Chrome > Back button can't close the browser if there is no history, so the back button override is disabled on Android.  Also disabled on iOS for similar bugs.
 // CONSIDER: Seeking while paused in Chrome, the canvas sometimes shows the image scaled using nearest-neighbor.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
+// CONSIDER: Stop using ImageToDataUrl for the clip thumbnail mouseover popup, now that clip thumbnails are cacheable.  I'm not sure there is a point though.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -5199,17 +5224,18 @@ function ClipLoader(clipsBodySelector)
 	{
 		var retVal = {};
 		retVal.href = currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetRemoteSessionArg("?");
+		var date = GetDateStr(clipData.displayDate);
+		date = date.replace(/\//g, '-').replace(/:/g, '.');
+		retVal.fileNameNoExt = cameraListLoader.GetCameraName(clipData.camera) + " " + date;
 		var extensionIdx = clipData.path.indexOf(".");
 		if (extensionIdx == -1)
 		{
-			console.log('Could not find file extension in clip path "' + clipData.path + '"');
-			retVal.download = null;
+			toaster.Warning('Could not find file extension in clip path "' + clipData.path + '"');
+			retVal.download = retVal.fileNameNoExt
 		}
 		else
 		{
-			var date = GetDateStr(clipData.displayDate);
-			date = date.replace(/\//g, '-').replace(/:/g, '.');
-			retVal.download = cameraListLoader.GetCameraName(clipData.camera) + " " + date + clipData.path.substr(extensionIdx);
+			retVal.download = retVal.fileNameNoExt + clipData.path.substr(extensionIdx);
 		}
 		return retVal;
 	}
@@ -7891,6 +7917,12 @@ function VideoPlayerController()
 			return 0;
 		return playerModule.GetSeekPercent();
 	}
+	this.GetClipPlaybackPositionMs = function ()
+	{
+		if (currentlyLoadingImage.isLive)
+			return 0;
+		return playerModule.GetClipPlaybackPositionMs();
+	}
 	this.IsFrameVisible = function ()
 	{
 		if (playerModule)
@@ -8618,6 +8650,10 @@ function JpegVideoModule()
 	{
 		return lastSnapshotFullUrl;
 	}
+	this.GetClipPlaybackPositionMs = function ()
+	{
+		return clipPlaybackPosition.dropDecimals();
+	}
 	this.GetStaticSnapshotId = function ()
 	{
 		return staticSnapshotId;
@@ -9058,7 +9094,7 @@ function FetchOpenH264VideoModule()
 				currentImageDateMs = clipData.date.getTime() + (currentSeekPositionPercent * lastMs);
 			}
 			var widthAndQualityArg = "";
-			if (speed == 0)
+			if (speed == 0) // speed == 0 means we'll get a jpeg, so we should include w and q arguments.
 				widthAndQualityArg = "&w=" + imageRenderer.GetSizeToRequest(false).w + "&q=50";
 			if (speed != 100)
 			{
@@ -9098,7 +9134,7 @@ function FetchOpenH264VideoModule()
 		if (startPaused)
 		{
 			self.Playback_Pause(); // If opening the stream while paused, the stream will stop after one frame.
-			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, StreamEnded);
+			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 		}
 		else
 		{
@@ -9106,7 +9142,7 @@ function FetchOpenH264VideoModule()
 			playbackControls.setPlayPauseButtonState(playbackPaused);
 			// Calling StopStream before opening the new stream will drop any buffered frames in the decoder, allowing the new stream to begin playback immediately.
 			StopStreaming();
-			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, StreamEnded);
+			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 		}
 	}
 	var acceptFrame = function (frame, streams)
@@ -9138,9 +9174,9 @@ function FetchOpenH264VideoModule()
 		else if (frame.isAudio)
 		{
 			// The only supported format is mu-law encoding with one audio channel.
-			if (frame.format.wFormatTag == 7 && frame.format.wBitsPerSample == 16 && frame.format.nChannels == 1)
+			if (frame.format.wFormatTag == 7 && frame.format.nChannels == 1)
 			{
-				// 7 is mu-law, mu-law is 8 bits per sample but decodes to 16 bits per sample normally, hence the 16 above.
+				// 7 is mu-law, mu-law is 8 bits per sample but decodes to 16 bits per sample.
 				audioCodec = "mu-law " + frame.format.nSamplesPerSec + "hz";
 				var pcm16Bit = muLawDecoder.DecodeUint8ArrayToFloat32Array(frame.frameData);
 				pcmPlayer.AcceptBuffer(pcm16Bit, frame.format.nChannels, frame.format.nSamplesPerSec);
@@ -9176,6 +9212,9 @@ function FetchOpenH264VideoModule()
 
 		lastStatusBlock = status;
 	}
+	var streamInfoCallback = function (bitmapInfoHeader, waveFormatEx)
+	{
+	}
 	this.GetSeekPercent = function ()
 	{
 		return currentSeekPositionPercent;
@@ -9185,11 +9224,15 @@ function FetchOpenH264VideoModule()
 		if (loading.isLive)
 			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + currentServer.GetRemoteSessionArg("&", true);
 		else
-			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + parseInt(currentSeekPositionPercent * loading.msec - 1) + currentServer.GetRemoteSessionArg("&", true);
+			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetRemoteSessionArg("&", true);
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
 		return self.GetLastSnapshotUrl();
+	}
+	this.GetClipPlaybackPositionMs = function ()
+	{
+		return (currentSeekPositionPercent * loading.msec - 1).dropDecimals();
 	}
 	this.GetStaticSnapshotId = function ()
 	{
@@ -10868,6 +10911,9 @@ function CanvasContextMenu()
 				return true;
 			case "downloadclip":
 				return true;
+			case "exportavi":
+				new ClipExportDialog(videoPlayer.Loading().image.uniqueId);
+				break;
 			case "closeclip":
 				clipLoader.CloseCurrentClip();
 				return;
@@ -10892,6 +10938,7 @@ function CanvasContextMenu()
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
+				, { text: 'Export as AVI', icon: "#svg_x5F_DownArrow", alias: "exportavi", action: onRecordContextMenuAction }
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
@@ -12148,6 +12195,155 @@ function ClipDownloadDialog()
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Clip Export Dialog /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipExportDialog(clipId)
+{
+	var self = this;
+	var clipData = clipLoader.GetClipFromId(clipId);
+	var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
+	var startTimeMs = 0; //videoPlayer.GetClipPlaybackPositionMs();
+	var durationMs = clipData.msec;
+
+	var $dlg = $('<div class="campropdialog"></div>');
+	var $camprop = $('<div class="campropcontent"></div>');
+	$dlg.append($camprop);
+	var $status = $('<div class="dialogOption_item clipprop_item_info">Starting export…</div>');
+	$camprop.append($status);
+
+	var progressUpdate = function (state, message)
+	{
+		$status.text(message);
+	}
+	var aviReady = function (dataUri)
+	{
+		$camprop.append('<div class="dialogOption_item clipprop_item_info">Click the link below to save!</div>');
+		$camprop.append(GetLink(dataUri));
+	}
+
+	var GetLink = function (dataUri)
+	{
+		var $link = $('<a href=""></a>');
+		$link.attr("href", dataUri);
+		$link.text(clipInfo.fileNameNoExt + ".avi");
+		$link.attr("download", clipInfo.fileNameNoExt + ".avi");
+		return $('<div class="dialogOption_item clipprop_item_info"></div>').append($link);
+	}
+
+	$dlg.dialog({
+		title: "Export to AVI"
+		, onClosing: function ()
+		{
+			setTimeout(function ()
+			{
+				if (exportStreamer)
+					exportStreamer.Dispose();
+			}, 1000);
+		}
+	});
+
+	var exportStreamer = new ClipExportStreamer(clipData, startTimeMs, durationMs, progressUpdate, aviReady);
+}
+///////////////////////////////////////////////////////////////
+// Clip Export Streaming //////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipExportStreamer(clipData, startTimeMs, durationMs, progressUpdate, aviReady)
+{
+	var self = this;
+	var aviEncoder = null;
+	var dataUri = null;
+	var totalVideoFrames = 0;
+	var totalExportedTimeMs = 0;
+
+	this.Dispose = function ()
+	{
+		if (dataUri)
+			window.URL.revokeObjectURL(dataUri);
+		aviEncoder = null;
+		aviReady = null;
+	}
+
+	var acceptFrame = function (frame, streams)
+	{
+		if (!aviReady)
+			return;
+		if (!aviEncoder)
+		{
+			toaster.Error("Streaming protocol error: Stream metadata was not received by ClipExportStreamer before the first frame!");
+			return;
+		}
+		if (frame.isVideo)
+		{
+			aviEncoder.AddVideoFrame(frame.frameData, frame.isKeyframe);
+			totalVideoFrames++;
+			totalExportedTimeMs = frame.time;
+			if (frame.time >= durationMs)
+			{
+				HandleAviReady();
+				safeFetch.CloseStream();
+			}
+			else
+			{
+				var percent = Math.round(frame.time / durationMs * 100);
+				progressUpdate(2, "Export progress: " + percent + "%");
+			}
+		}
+		else if (frame.isAudio)
+			aviEncoder.AddAudioFrame(frame.frameData, frame.isKeyframe);
+	}
+	var acceptStatusBlock = function (status)
+	{
+	}
+	var streamInfoCallback = function (bitmapInfoHeader, waveFormatEx)
+	{
+		aviEncoder = new AVIEncoder("H264", bitmapInfoHeader, waveFormatEx ? "ulaw" : null, waveFormatEx);
+		progressUpdate(1, "Export progress: 0%");
+	}
+	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
+	{
+		if (!aviReady)
+			return;
+		if (videoFinishedStreaming)
+			HandleAviReady();
+		else
+		{
+			HandleExportFailure("Export failed because the data stream ended prematurely!");
+			aviReady = null;
+		}
+	}
+	var HandleAviReady = function ()
+	{
+		if (aviReady)
+		{
+			progressUpdate(3, "Export progress: 100%");
+			if (aviEncoder)
+			{
+				var fps = (totalVideoFrames / totalExportedTimeMs) * 1000;
+				aviReady(Uint8ArrayToDataURI(aviEncoder.FinishAndGetUint8Array(fps)));
+			}
+			else
+				HandleExportFailure("Export failed because no frames were received.");
+			aviReady = null;
+		}
+	}
+	var HandleExportFailure = function (reason)
+	{
+		progressUpdate(3, reason);
+		toaster.Error("Export failed because no frames were received.");
+	}
+	// Begin the clip export.
+
+	if (typeof aviReady !== "function")
+	{
+		toaster.Error("API Error: no aviReady callback was provided to ClipExportStreamer");
+		return;
+	}
+
+	videoPlayer.Playback_Pause();
+	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + clipData.path + currentServer.GetRemoteSessionArg("?", true) + "&record=1&speed=100&audio=1&stream=0&extend=2&time=" + startTimeMs;
+	safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+}
+///////////////////////////////////////////////////////////////
 // Camera Pause Dialog ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function CameraPauseDialog(camId)
@@ -12950,7 +13146,7 @@ function PcmAudioPlayer()
 		else if (offset < -0.7)
 		{
 			// We have received so many frames that we are queued at least 700ms ahead. Drop this frame.
-			//console.log("Audio buffer is overfull at " + currentTime.toFixed(6) + " with " + offset.toFixed(6) + " milliseconds queued. Dropping audio frame to keep delay from growing too high.");
+			console.log("Audio buffer is overfull at " + currentTime.toFixed(6) + " with " + offset.toFixed(6) + " milliseconds queued. Dropping audio frame to keep delay from growing too high.");
 			return;
 		}
 		pendingBufferQueue.enqueue(bufferSource);
@@ -12996,7 +13192,7 @@ function PcmAudioPlayer()
 			return;
 		clearMuteStopTimeout();
 		newVolume = Clamp(newVolume, 0, 1);
-		volumeController.gain.value = newVolume * newVolume;
+		volumeController.gain.setValueAtTime(newVolume * newVolume, context.currentTime);
 		volumeIconHelper.setIconForVolume(newVolume);
 		if (newVolume == 0)
 			audioStopTimeout = setTimeout(toggleAudioPlayback, 1000);
@@ -14552,9 +14748,9 @@ var safeFetch = new (function ()
 	var queuedRequest = null;
 	var stopTimeout = null;
 	var streamEndedCbForActiveFetch = null;
-	this.OpenStream = function (url, frameCallback, statusBlockCallback, streamEnded)
+	this.OpenStream = function (url, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded)
 	{
-		queuedRequest = { url: url, frameCallback: frameCallback, statusBlockCallback: statusBlockCallback, streamEnded: streamEnded, activated: false };
+		queuedRequest = { url: url, frameCallback: frameCallback, statusBlockCallback: statusBlockCallback, streamInfoCallback: streamInfoCallback, streamEnded: streamEnded, activated: false };
 		if (streamer)
 		{
 			// A fetch stream is currently active.  Try to stop it.
@@ -14588,7 +14784,7 @@ var safeFetch = new (function ()
 		}
 		queuedRequest.activated = true;
 		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
-		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, StreamEndedWrapper);
+		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, queuedRequest.streamInfoCallback, StreamEndedWrapper);
 	}
 	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
 	{
@@ -14608,7 +14804,7 @@ var safeFetch = new (function ()
 		toaster.Error('Video streaming connection stuck open! You should reload the page.', 600000, true);
 	}
 })();
-function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamEnded)
+function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded)
 {
 	var self = this;
 	var cancel_streaming = false;
@@ -14839,7 +15035,8 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamE
 
 						// Read BITMAPINFOHEADER structure
 						var offsetWrapper = { offset: 0 };
-						var bitmapHeaderSize = ReadUInt32LE(buf, offsetWrapper) - 4;
+						var bitmapHeaderSize = ReadUInt32LE(buf, offsetWrapper);
+						offsetWrapper.offset -= 4; // Reverse the previous read so it will be included in the object.
 						if (bitmapHeaderSize > 0)
 							bitmapHeader = new BITMAPINFOHEADER(ReadSubArray(buf, offsetWrapper, bitmapHeaderSize));
 
@@ -14848,6 +15045,15 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamE
 							// Audio stream was provided.
 							// Assuming the remainder of the header is WAVEFORMATEX structure
 							audioHeader = new WAVEFORMATEX(ReadSubArray(buf, offsetWrapper, streamHeaderSize - offsetWrapper.offset));
+						}
+
+						try
+						{
+							streamInfoCallback(bitmapHeader, audioHeader);
+						}
+						catch (e)
+						{
+							toaster.Error(e);
 						}
 
 						state = 2;
@@ -15011,14 +15217,16 @@ function StatusBlock(buf)
 function BITMAPINFOHEADER(buf)
 {
 	var offsetWrapper = { offset: 0 };
-	this.biWidth = ReadUInt32LE(buf, offsetWrapper); // Width in pixels
-	this.biHeight = ReadUInt32LE(buf, offsetWrapper); // Height in pixels
+	this.raw = buf;
+	this.biSize = ReadUInt32LE(buf, offsetWrapper);
+	this.biWidth = ReadInt32LE(buf, offsetWrapper); // Width in pixels
+	this.biHeight = ReadInt32LE(buf, offsetWrapper); // Height in pixels
 	this.biPlanes = ReadUInt16LE(buf, offsetWrapper); // Number of planes (always 1)
 	this.biBitCount = ReadUInt16LE(buf, offsetWrapper); // Bits Per Pixel
 	this.biCompression = ReadUInt32LE(buf, offsetWrapper); // ['J','P','E','G'] or ['M','J','P','G'] (this can be ignored)
 	this.biSizeImage = ReadUInt32LE(buf, offsetWrapper); // Image size in bytes
-	this.biXPelsPerMeter = ReadUInt32LE(buf, offsetWrapper);
-	this.biYPelsPerMeter = ReadUInt32LE(buf, offsetWrapper);
+	this.biXPelsPerMeter = ReadInt32LE(buf, offsetWrapper);
+	this.biYPelsPerMeter = ReadInt32LE(buf, offsetWrapper);
 	this.biClrUsed = ReadUInt32LE(buf, offsetWrapper);
 	this.biClrImportant = ReadUInt32LE(buf, offsetWrapper);
 }
@@ -15064,9 +15272,9 @@ function AudioFrame(buf, formatHeader)
 ///////////////////////////////////////////////////////////////
 // GhettoStream ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-// A class which consumes Uint8Array objects and produces Uint8Array objects of whatever size you want by concatenating the inputs as needed.
 function GhettoStream()
 {
+	// <summary>A class which consumes Uint8Array objects and produces Uint8Array objects of whatever size you want by concatenating the inputs as needed.</summary>
 	var self = this;
 	var dataQueue = new Queue();
 	var totalCachedBytes = 0;
@@ -16454,6 +16662,15 @@ function StringBuilder(lineBreakStr)
 	{
 		return strings.join("");
 	}
+}
+///////////////////////////////////////////////////////////////
+// Uint8Array to Data URI /////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function Uint8ArrayToDataURI(someUint8Array)
+{
+	// <summary>The dataUri returned from this method should be sent to window.URL.revokeObjectURL() when it is done being used!</summary>
+	var blob = new Blob([someUint8Array]);
+	return window.URL.createObjectURL(blob);
 }
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
