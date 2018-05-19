@@ -313,11 +313,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-
-// TODO: Add AVI export to the clip list context menu, but only for one clip at a time like the Properties item. Choosing this will open the clip.
-// TODO: Add AVI export to the clip properties panel. Choosing this will open the clip.
-// TODO: Test AVI export in other browsers.  Ensure good behavior in browsers where it is unsupported (IE).
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -326,6 +321,7 @@ var togglableUIFeatures =
 // CONSIDER: Seeking while paused in Chrome, the canvas sometimes shows the image scaled using nearest-neighbor.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
 // CONSIDER: Stop using ImageToDataUrl for the clip thumbnail mouseover popup, now that clip thumbnails are cacheable.  I'm not sure there is a point though.
+// CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -5467,9 +5463,11 @@ function ClipLoader(clipsBodySelector)
 			if (selectedClipsMap[clipData.recId])
 			{
 				if (videoPlayer.Loading().image.uniqueId == clipData.recId)
-					self.OpenClip($clip.get(0), clipData.recId, false);
-				else
-					$clip.addClass("selected");
+				{
+					lastOpenedClipEle = $clip.get(0);
+					$clip.addClass("opened");
+				}
+				$clip.addClass("selected");
 			}
 		}
 		return $clip;
@@ -10943,6 +10941,7 @@ function CanvasContextMenu()
 				break;
 		}
 	}
+	var exportListItem = exporting_clips_to_avi_supported ? { text: 'Export as AVI', icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "exportavi", action: onRecordContextMenuAction } : { type: "skip" };
 	var optionRecord =
 		{
 			alias: "cmroot_record", width: 200, items:
@@ -10950,7 +10949,7 @@ function CanvasContextMenu()
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
-				, { text: 'Export as AVI', icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "exportavi", action: onRecordContextMenuAction }
+				, exportListItem
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
@@ -11019,10 +11018,14 @@ function ClipListContextMenu()
 	{
 		var itemsToEnable = ["flag", "protect", "download", "delete", "larger_thumbnails", "mouseover_thumbnails"];
 		var itemsToDisable = [];
+
+		var singleClipItems = itemsToEnable;
 		if (clipLoader.GetAllSelected().length > 1)
-			itemsToDisable.push("properties");
-		else
-			itemsToEnable.push("properties");
+			singleClipItems = itemsToDisable;
+		singleClipItems.push("properties");
+		if (exporting_clips_to_avi_supported)
+			singleClipItems.push("exportavi");
+
 		menu.applyrule({ name: "disable_items", disable: true, items: itemsToDisable });
 		menu.applyrule({ name: "enable_items", disable: false, items: itemsToEnable });
 
@@ -11143,6 +11146,15 @@ function ClipListContextMenu()
 			case "mouseover_thumbnails":
 				toggleMouseoverClipThumbnails();
 				break;
+			case "exportavi":
+				if (allSelectedClipIDs.length >= 1)
+				{
+					videoPlayer.LoadClip(clipLoader.GetClipFromId(allSelectedClipIDs[0]));
+					new ClipExportDialog(videoPlayer.Loading().image.uniqueId);
+				}
+				else
+					toaster.Warning("No " + (currentPrimaryTab == "clips" ? "clip" : "alert") + " is selected.");
+				break;
 			case "properties":
 				if (allSelectedClipIDs.length >= 1)
 					clipProperties.open(allSelectedClipIDs[0]);
@@ -11154,6 +11166,8 @@ function ClipListContextMenu()
 				break;
 		}
 	}
+	var exportListItemSplitline = exporting_clips_to_avi_supported ? { type: "splitLine" } : { type: "skip" };
+	var exportListItem = exporting_clips_to_avi_supported ? { text: "Export as AVI", icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "exportavi", action: onContextMenuAction } : { type: "skip" };
 	var menuOptions =
 		{
 			alias: "cmroot_cliplist", width: 200, items:
@@ -11165,6 +11179,8 @@ function ClipListContextMenu()
 				, { type: "splitLine" }
 				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
+				, exportListItemSplitline
+				, exportListItem
 				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
 
@@ -12066,6 +12082,7 @@ function ClipProperties()
 	var self = this;
 	this.open = function (recId)
 	{
+		var dialog = null;
 		var clipData = clipLoader.GetClipFromId(recId);
 
 		var camName = cameraListLoader.GetCameraName(clipData.camera);
@@ -12124,6 +12141,18 @@ function ClipProperties()
 			}
 			$camprop.append(GetInfoEleValue("Download", $link));
 
+			if (exporting_clips_to_avi_supported)
+			{
+				var $exportBtn = $('<a href="javascript:void(0)">Export a section of the clip.</a>');
+				$exportBtn.on('click', function ()
+				{
+					videoPlayer.LoadClip(clipData);
+					new ClipExportDialog(videoPlayer.Loading().image.uniqueId);
+					dialog.close();
+				});
+				$camprop.append(GetInfoEleValue("Export as AVI", $exportBtn));
+			}
+
 			if (developerMode)
 			{
 				$camprop.append(GetInfo("Flags", InsertSpacesInBinary(dec2bin(clipData.flags), 32)));
@@ -12136,7 +12165,7 @@ function ClipProperties()
 		if (developerMode)
 			$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="ClipProperties_OpenRaw(&quot;' + recId + '&quot;)" value="view raw data" /></div>');
 
-		$dlg.dialog({
+		dialog = $dlg.dialog({
 			title: htmlEncode(camName) + ' ' + (clipData.isClip ? "Clip" : "Alert") + ' Properties'
 			, overlayOpacity: 0.3
 			, closeOnOverlayClick: true
@@ -12209,12 +12238,11 @@ function ClipDownloadDialog()
 ///////////////////////////////////////////////////////////////
 // Clip Export Dialog /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ClipExportDialog(clipId)
+function ClipExportDialog(recId)
 {
 	// <summary>This dialog helps the user set up a clip export operation.</summary>
 	var self = this;
-	var clipData = clipLoader.GetClipFromId(clipId);
-	var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
+	var clipData = clipLoader.GetClipFromId(recId);
 	var startTimeMs = 0;
 	var endTimeMs = clipData.msec;
 	var $dlg = $('<div class="exportDialog"></div>');
@@ -12230,6 +12258,14 @@ function ClipExportDialog(clipId)
 
 	var Initialize = function ()
 	{
+		dialog = $dlg.dialog({
+			title: "Export as AVI"
+			, onClosing: function ()
+			{
+				BI_CustomEvent.RemoveListener("OpenVideo", CheckCurrentClip);
+			}
+		});
+
 		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
 		if (clipData.isClip)
 			InitializeClip();
@@ -12246,6 +12282,7 @@ function ClipExportDialog(clipId)
 			else // We have not, so our clip duration and size values need updated.
 			{
 				$dlg.append('<div style="text-align: center; margin-top: 20px;">Loading...</div>');
+				dialog.contentChanged(true);
 				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
 				{
 					// This success callback can be called more than once. hasLoadedClipStats will tell.
@@ -12256,20 +12293,17 @@ function ClipExportDialog(clipId)
 				});
 			}
 		}
-
-		dialog = $dlg.dialog({
-			title: "Export to AVI"
-			, onClosing: function ()
-			{
-				BI_CustomEvent.RemoveListener("OpenVideo", CheckCurrentClip);
-			}
-		});
 	}
 	var InitializeClip = function ()
 	{
 		fileDuration = clipData.msec;
 		fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
 		$dlg.empty();
+		if (!exporting_clips_to_avi_supported)
+		{
+			$dlg.append("This browser does not support the necessary features to export clips to AVI.");
+			return;
+		}
 		$dlg.append($content);
 
 		$content.append('<div>Use the buttons below to lock in start and end offsets for export. <a class="clipExportHelp" href="javascript:UIHelp.LearnMore(\'Clip Export\')">(learn more)</a></div>');
@@ -12314,7 +12348,7 @@ function ClipExportDialog(clipId)
 			CheckCurrentClip();
 			var durationMs = (endTimeMs - startTimeMs);
 			if (durationMs > 0)
-				new ActiveClipExportDialog(clipId, startTimeMs, endTimeMs);
+				new ActiveClipExportDialog(clipData, startTimeMs, endTimeMs);
 			else
 				toaster.Warning("Please adjust your export start and end offsets.", 5000);
 		});
@@ -12323,6 +12357,7 @@ function ClipExportDialog(clipId)
 		//$content.append($('<div>Duration: </div>').append($duration).append('<span>, approximately </span>').append($clipSize));
 
 		UpdateTiming();
+		dialog.contentChanged(true);
 	}
 
 	var UpdateTiming = function ()
@@ -12348,7 +12383,7 @@ function ClipExportDialog(clipId)
 	}
 	var CheckCurrentClip = function ()
 	{
-		if (clipId !== videoPlayer.Loading().image.uniqueId)
+		if (recId !== videoPlayer.Loading().image.uniqueId)
 		{
 			toaster.Info("The clip export operation was canceled because the clip was closed!", 10000);
 			dialog.close();
@@ -12364,10 +12399,11 @@ function ClipExportDialog(clipId)
 
 	Initialize();
 }
-function ActiveClipExportDialog(clipId, startTimeMs, endTimeMs)
+function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs)
 {
 	// <summary>This dialog controls the actual export operation and lacks a normal close button.</summary>
 	var self = this;
+	var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 	var durationMs = endTimeMs - startTimeMs;
 	var userHasDownloadedAVI = false;
 
@@ -12447,13 +12483,14 @@ function ActiveClipExportDialog(clipId, startTimeMs, endTimeMs)
 			dialog.close();
 	});
 
-	var exportStreamer = new ClipExportStreamer(clipData.path, startTimeMs, durationMs, progressUpdate, exportComplete);
+	var exportStreamer = new ClipExportStreamer(clipData.path, startTimeMs, durationMs, progressUpdate, exportComplete, enableRecordingOffsetWorkaround);
 }
 ///////////////////////////////////////////////////////////////
 // Clip Export Streaming //////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var ui3ClipIsExporting = false; // This flag helps the H.264 player module not end the fetch stream if the browser tab visibility changes.
-function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, exportCompleteCb)
+var enableRecordingOffsetWorkaround = true;
+function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, exportCompleteCb, recordingOffsetWorkaround)
 {
 	var self = this;
 	var aviEncoder = null;
@@ -12562,8 +12599,31 @@ function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, expor
 
 	ui3ClipIsExporting = true;
 	videoPlayer.Playback_Pause();
-	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + "&record=1&speed=100&audio=1&stream=0&extend=2&time=" + startTimeMs;
-	safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+
+	var beginRecording = function ()
+	{
+		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + "&record=1&speed=100&audio=1&stream=0&extend=2&time=" + startTimeMs;
+		safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+	}
+	if (recordingOffsetWorkaround)
+		DoExportRecordingOffsetWorkaround(beginRecording, path, startTimeMs);
+	else
+		beginRecording();
+}
+function DoExportRecordingOffsetWorkaround(callbackMethod, path, startTimeMs)
+{
+	// <summary>As of BI 4.7.4.4, seeking with "time" does not work if record=1, so this method performs a low-cost seek without the record argument and then the playback object will already be at the correct position, or close enough.</summary>
+	var anyCallback = function ()
+	{
+		if (callbackMethod)
+		{
+			safeFetch.CloseStream();
+			callbackMethod();
+			callbackMethod = null;
+		}
+	}
+	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + "&speed=0&audio=0&stream=0&extend=2&w=160&q=10&time=" + startTimeMs;
+	safeFetch.OpenStream(videoUrl, anyCallback, anyCallback, anyCallback, anyCallback);
 }
 ///////////////////////////////////////////////////////////////
 // Camera Pause Dialog ////////////////////////////////////////
@@ -15532,12 +15592,13 @@ function VideoFrame(buf, metadata)
 }
 function AudioFrame(buf, formatHeader)
 {
+	var self = this;
 	this.isAudio = true;
 	this.frameData = buf;
 	this.format = formatHeader;
 	this.isKeyframe = function ()
 	{
-		return frame.format.wFormatTag === 7;
+		return self.format.wFormatTag === 7;
 	}
 }
 ///////////////////////////////////////////////////////////////

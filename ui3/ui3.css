@@ -3798,6 +3798,7 @@ div::-webkit-scrollbar-corner
 	position: relative;
 	display: flex;
 	flex-direction: column;
+	min-width: 50px;
 }
 
 .clipExportDuration

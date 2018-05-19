@@ -26,6 +26,7 @@
 		var gTemplet = $("<div/>").addClass("b-m-mpanel").attr("unselectable", "on").css("display", "none");
 		var iTemplet = $("<div/>").addClass("b-m-item").attr("unselectable", "on");
 		var sTemplet = $("<div/>").addClass("b-m-split");
+		var nTemplet = $('<div style="display:none"/>').addClass("b-m-none");
 		var suppressCloseByDocClick = false;
 		function preventCloseByDocClick()
 		{
@@ -87,7 +88,9 @@
 			var tmp = null;
 			for (var i = 0; i < items.length; i++)
 			{
-				if (items[i].type == "splitLine")
+				if (items[i].type == "skip")
+					tmp = nTemplet.clone()[0];
+				else if (items[i].type == "splitLine")
 				{
 					//split line
 					tmp = sTemplet.clone()[0];
@@ -275,7 +278,7 @@
 		{
 			applyRule(option.rule);
 		}
-		gTemplet = iTemplet = sTemplet = itemTpl = buildGroup = buildItem = null;
+		gTemplet = iTemplet = sTemplet = nTemplet = itemTpl = buildGroup = buildItem = null;
 		addItems = overItem = outItem = null;
 		me.hideAll = function ()
 		{
