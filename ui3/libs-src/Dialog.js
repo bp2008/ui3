@@ -46,6 +46,7 @@ var $DialogDefaults = { theme: "light" };
 				, reattachContentAfterClose: true
 				, onRefresh: null
 				, theme: $DialogDefaults.theme
+				, includeCloseButton: true
 			}, options);
 
 		var open = function ()
@@ -97,6 +98,7 @@ var $DialogDefaults = { theme: "light" };
 						self.$refreshbtn.click(function (e) { self.settings.onRefresh(); });
 						self.$titlebar.append(self.$refreshbtn);
 					}
+					if (self.settings.includeCloseButton)
 					{
 						self.$closebtn = $('<div class="dialog_close">'
 							+ '<div class="dialog_close_icon"><svg viewbox="0 0 12 12">'

@@ -3559,10 +3559,11 @@ div.invisibleLabel
 {
 	color: #66cd66;
 }
-.dialogOption_item_comment .settingsCommentError
-{
-	color: #FF6666;
-}
+
+	.dialogOption_item_comment .settingsCommentError
+	{
+		color: #FF6666;
+	}
 
 .campropcontent .dialogOption_item_info
 {
@@ -3766,6 +3767,74 @@ div::-webkit-scrollbar-corner
 	height: 100%;
 	background-color: #0097F0;
 }
+/* Export Dialog */
+.exportDialog
+{
+	padding: 10px;
+	max-width: 300px;
+}
+
+.activeExportDialog
+{
+	padding: 10px;
+}
+
+.clipExportConfig
+{
+	display: flex;
+	justify-content: center;
+	margin: 10px auto;
+	background-color: rgba(255,255,255,0.075);
+}
+
+.clipExportDefineStart, .clipExportDefineSize, .clipExportDefineEnd
+{
+	text-align: center;
+	margin: 10px;
+}
+
+.clipExportDefineSize
+{
+	position: relative;
+	display: flex;
+	flex-direction: column;
+}
+
+.clipExportDuration
+{
+	flex: 1 0 auto;
+	font-size: 16pt;
+	padding-top: 12px;
+}
+
+.clipExportSize
+{
+	width: 100%;
+}
+
+.clipExportDefineSvg
+{
+	width: 48px;
+	height: 48px;
+	cursor: pointer;
+}
+
+.clipExportMessage
+{
+	text-align: center;
+}
+
+	.clipExportMessage[warning="1"]
+	{
+		color: orange;
+	}
+/* UIHelp */
+.UIHelp
+{
+	padding: 10px;
+	font-size: 1.2em;
+	max-width: 400px;
+}
 /* Stats for nerds */
 .statsForNerds
 {
@@ -3901,10 +3970,12 @@ div::-webkit-scrollbar-corner
 {
 	width: 80px;
 }
+
 #uiSettingsPanel input[type="text"]
 {
 	width: 169px;
 }
+
 #uiSettingsPanel input[type="range"]
 {
 	width: 90%;

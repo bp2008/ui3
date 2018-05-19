@@ -307,19 +307,16 @@ var togglableUIFeatures =
 // Notes that require BI changes //////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Around May 11, 2018 with BI 4.7.4.1, Blue Iris began enforcing a default jpeg height of 720px sourced from the Streaming 0 profile's frame size setting and I haven't been able to talk the developer out of it.  UI3 now works around this by appending w=99999 to jpeg requests that are intended to be native resolution.  If this limit goes away, the workarounds should be removed.  The workarounds are tagged with "LOC0" (approximately 9 locations).
+
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Don't allow clicking or hotkeys outside of the export panel while AVI export is active.
-// TODO: Enable cancellation of AVI export.
-// TODO: Show a warning when the size of the AVI export is large and could be unreliable.
-// TODO: Test AVI export in other browsers.
-// TODO: Add Start and End point selection for AVI export.
-// TODO: Add AVI export to the clip list context menu, but only for one clip at a time like the Properties item.
-// TODO: Add AVI export to the clip properties panel.
-// TODO: Move AVI.js to the libs-ui3.js file before release.
-// TODO: Add w= arguments to all jpeg snapshot requests because Ken wants the Streaming 0 profile's frame size to limit the resolution of jpeg snapshot requests to 720p by default.
+
+// TODO: Add AVI export to the clip list context menu, but only for one clip at a time like the Properties item. Choosing this will open the clip.
+// TODO: Add AVI export to the clip properties panel. Choosing this will open the clip.
+// TODO: Test AVI export in other browsers.  Ensure good behavior in browsers where it is unsupported (IE).
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -4298,6 +4295,7 @@ function SeekBar()
 	var isDragging = false;
 	var isTouchDragging = false;
 	var didPauseOnDrag = false;
+	var mouseDidActuallyDrag = false; // This is set only for the duration of the mousedown handler which causes playback pausing for dragging.  Helps work around a bug where a seek hint image is loaded simply due to a single click on the seek bar while a clip is playing.
 	var seekHintInfo = { canvasVisible: false, helperVisible: false, visibleMsec: -1, queuedMsec: -1, loadingMsec: -1, lastSnapshotId: "" }
 
 	seekhint_img.load(function ()
@@ -4386,7 +4384,7 @@ function SeekBar()
 		seekhint.css("left", seekHintL + "px");
 		var positionRelative = (hintX / barW);
 		var seekHintMs = Clamp(parseInt(positionRelative * (msec - 1)), 0, msec);
-		if (videoPlayer.Playback_IsPaused())
+		if (videoPlayer.Playback_IsPaused() && mouseDidActuallyDrag)
 		{
 			// show preview image
 			setSeekHintCanvasVisibility(!isDragging);
@@ -4573,6 +4571,7 @@ function SeekBar()
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
+		mouseDidActuallyDrag = false;
 		if (e.which != 3)
 		{
 			isDragging = true;
@@ -4596,6 +4595,7 @@ function SeekBar()
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
+		mouseDidActuallyDrag = true;
 		mouseMoved(e);
 	});
 	$(document).on("mouseup mouseleave touchend touchcancel", function (e)
@@ -5266,6 +5266,15 @@ function ClipLoader(clipsBodySelector)
 		if (parentheticals && parentheticals.length > 0)
 			return parentheticals[0].substr(1, parentheticals[0].length - 2);
 		return "";
+	}
+	this.ApplyMissingStatsToClipData = function (stats, clipData)
+	{
+		if (stats.path != clipData.path)
+			return false;
+		clipData.hasLoadedClipStats = true;
+		clipData.msec = stats.msec;
+		clipData.fileSize = GetFileSize(stats.filesize);
+		return true;
 	}
 	var GetClipLengthMs = function (str)
 	{
@@ -8625,7 +8634,7 @@ function JpegVideoModule()
 			// Load clip stats for this alert.
 			clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
 			{
-				clipData.msec = stats.msec;
+				clipLoader.ApplyMissingStatsToClipData(stats, clipData);
 				if (loading.uniqueId == clipData.recId)
 					loading.msec = stats.msec;
 				var loadingImg = videoPlayer.Loading().image;
@@ -8634,6 +8643,7 @@ function JpegVideoModule()
 			});
 		}
 		GetNewImage();
+		BI_CustomEvent.Invoke("OpenVideo", loading);
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -8982,7 +8992,7 @@ function FetchOpenH264VideoModule()
 			else if (!playbackPaused)
 				self.Playback_Play();
 		}
-		else
+		else if (!ui3ClipIsExporting)
 		{
 			StopStreaming();
 		}
@@ -9061,7 +9071,7 @@ function FetchOpenH264VideoModule()
 				{
 					clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
 					{
-						clipData.msec = stats.msec;
+						clipLoader.ApplyMissingStatsToClipData(stats, clipData);
 						if (loading.uniqueId == clipData.recId)
 							loading.msec = stats.msec;
 						var loadingImg = videoPlayer.Loading().image;
@@ -9145,16 +9155,17 @@ function FetchOpenH264VideoModule()
 			StopStreaming();
 			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 		}
+		BI_CustomEvent.Invoke("OpenVideo", loading);
 	}
 	var acceptFrame = function (frame, streams)
 	{
-		if (streamHasAudio == 0 && didRequestAudio && streams != 2)
+		if (streamHasAudio === 0 && didRequestAudio && streams !== 2)
 		{
 			// We requested audio, but the stream says it doesn't contain any.
 			canRequestAudio = false;
 			volumeIconHelper.setEnabled(false);
 		}
-		streamHasAudio = streams == 2 ? 1 : -1;
+		streamHasAudio = streams === 2 ? 1 : -1;
 		if (frame.isVideo)
 		{
 			if (frame.jpeg)
@@ -9175,7 +9186,7 @@ function FetchOpenH264VideoModule()
 		else if (frame.isAudio)
 		{
 			// The only supported format is mu-law encoding with one audio channel.
-			if (frame.format.wFormatTag == 7 && frame.format.nChannels == 1)
+			if (frame.format.wFormatTag === 7 && frame.format.nChannels === 1)
 			{
 				// 7 is mu-law, mu-law is 8 bits per sample but decodes to 16 bits per sample.
 				audioCodec = "mu-law " + frame.format.nSamplesPerSec + "hz";
@@ -10735,10 +10746,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
 		else
 			downloadButton.wrap('<a id="cmroot_liveview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl()
+				+ videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */
 				+ '" onclick="saveSnapshot(&quot;#cmroot_liveview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_liveview_downloadlink").attr("download", "temp.jpg");
 
@@ -10804,10 +10815,10 @@ function CanvasContextMenu()
 				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
 				break;
 			case "opennewtab":
-				window.open(videoPlayer.GetLastSnapshotUrl());
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
 				break;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl();
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */;
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -10874,10 +10885,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
 		else
 			downloadButton.wrap('<a id="cmroot_recordview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl()
+				+ videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */
 				+ '" onclick="saveSnapshot(&quot;#cmroot_recordview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_recordview_downloadlink").attr("download", "temp.jpg");
 
@@ -10906,7 +10917,7 @@ function CanvasContextMenu()
 				break;
 			case "opennewtab":
 				videoPlayer.Playback_Pause();
-				window.open(videoPlayer.GetLastSnapshotUrl());
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
 				break;
 			case "saveas":
 				return true;
@@ -10922,7 +10933,7 @@ function CanvasContextMenu()
 				nerdStats.Open();
 				return;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl();
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */;
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -10939,7 +10950,7 @@ function CanvasContextMenu()
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
-				, { text: 'Export as AVI', icon: "#svg_x5F_DownArrow", alias: "exportavi", action: onRecordContextMenuAction }
+				, { text: 'Export as AVI', icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "exportavi", action: onRecordContextMenuAction }
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
@@ -12200,26 +12211,196 @@ function ClipDownloadDialog()
 ///////////////////////////////////////////////////////////////
 function ClipExportDialog(clipId)
 {
+	// <summary>This dialog helps the user set up a clip export operation.</summary>
 	var self = this;
 	var clipData = clipLoader.GetClipFromId(clipId);
 	var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
-	var startTimeMs = 0; //videoPlayer.GetClipPlaybackPositionMs();
-	var durationMs = clipData.msec;
+	var startTimeMs = 0;
+	var endTimeMs = clipData.msec;
+	var $dlg = $('<div class="exportDialog"></div>');
+	var $content = $('<div class="campropcontent"></div>');
+	var $startOffset = $('<div class="clipExportStart"></div>');
+	var $endOffset = $('<div class="clipExportEnd"></div>');
+	var $duration = $('<div class="clipExportDuration"></div>');
+	var $clipSize = $('<div class="clipExportSize"></div>');
+	var $message = $('<div class="clipExportMessage">…</div>');
+	var fileDuration;
+	var fileSizeBytes;
+	var dialog = null;
 
-	var $dlg = $('<div class="campropdialog"></div>');
-	var $camprop = $('<div class="campropcontent"></div>');
-	$dlg.append($camprop);
+	var Initialize = function ()
+	{
+		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
+		if (clipData.isClip)
+			InitializeClip();
+		else
+		{
+			if ((clipData.flags & alert_flag_offsetMs) !== 0)
+			{
+				startTimeMs = clipData.offsetMs;
+				endTimeMs = startTimeMs + clipData.roughLengthMs;
+			}
+			// We've probably already loaded the clip duration for this alert because that happens when starting to stream it.
+			if (clipData.hasLoadedClipStats)
+				InitializeClip(); // We have
+			else // We have not, so our clip duration and size values need updated.
+			{
+				$dlg.append('<div style="text-align: center; margin-top: 20px;">Loading...</div>');
+				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
+				{
+					// This success callback can be called more than once. hasLoadedClipStats will tell.
+					if (clipData.hasLoadedClipStats)
+						return;
+					clipLoader.ApplyMissingStatsToClipData(stats, clipData);
+					InitializeClip();
+				});
+			}
+		}
+
+		dialog = $dlg.dialog({
+			title: "Export to AVI"
+			, onClosing: function ()
+			{
+				BI_CustomEvent.RemoveListener("OpenVideo", CheckCurrentClip);
+			}
+		});
+	}
+	var InitializeClip = function ()
+	{
+		fileDuration = clipData.msec;
+		fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
+		$dlg.empty();
+		$dlg.append($content);
+
+		$content.append('<div>Use the buttons below to lock in start and end offsets for export. <a class="clipExportHelp" href="javascript:UIHelp.LearnMore(\'Clip Export\')">(learn more)</a></div>');
+		$content.append('<div style="height:10px;"></div>');
+		$content.append('<div>The full clip is ' + msToTime(fileDuration) + ' long, and is ' + formatBytes2(fileSizeBytes, 1) + '.</div>');
+		$content.append('<div style="height:10px;"></div>');
+
+		// Build configuration buttons/display
+		var $config = $('<div class="clipExportConfig"></div>');
+
+		var $defStart = $('<div class="clipExportDefineStart"></div>');
+		var $btnStart = $('<div class="clipExportDefineSvg icon"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>');
+		$btnStart.on('click', function ()
+		{
+			CheckCurrentClip();
+			startTimeMs = videoPlayer.GetClipPlaybackPositionMs();
+			UpdateTiming();
+		});
+		$defStart.append($btnStart).append($startOffset);
+
+		var $defEnd = $('<div class="clipExportDefineEnd"></div>');
+		var $btnEnd = $('<div class="clipExportDefineSvg icon"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>');
+		$btnEnd.on('click', function ()
+		{
+			CheckCurrentClip();
+			endTimeMs = videoPlayer.GetClipPlaybackPositionMs();
+			UpdateTiming();
+		});
+		$defEnd.append($btnEnd).append($endOffset);
+
+		var $defSize = $('<div class="clipExportDefineSize"></div>');
+		$defSize.append($duration).append($clipSize);
+
+		$config.append($defStart).append($defSize).append($defEnd);
+		$content.append($config);
+
+		$content.append($message);
+
+		var $beginExportBtn = $('<input type="button" value="Begin Export" style="display:block;margin:20px auto 0px auto;" />');
+		$beginExportBtn.on('click', function ()
+		{
+			CheckCurrentClip();
+			var durationMs = (endTimeMs - startTimeMs);
+			if (durationMs > 0)
+				new ActiveClipExportDialog(clipId, startTimeMs, endTimeMs);
+			else
+				toaster.Warning("Please adjust your export start and end offsets.", 5000);
+		});
+		$content.append($beginExportBtn);
+		//$content.append($('<div></div>').append('<span>Currently configured to export </span>').append($exportDesc));
+		//$content.append($('<div>Duration: </div>').append($duration).append('<span>, approximately </span>').append($clipSize));
+
+		UpdateTiming();
+	}
+
+	var UpdateTiming = function ()
+	{
+		var durationMs = (endTimeMs - startTimeMs);
+		var percentOfClip = durationMs / fileDuration;
+		var estimatedSize = percentOfClip * fileSizeBytes;
+
+		$startOffset.text(msToTime(startTimeMs));
+		$endOffset.text(msToTime(endTimeMs));
+		$duration.text(msToTime(durationMs));
+		$clipSize.text(formatBytes2(estimatedSize, 1));
+
+		$duration.css('color', durationMs < 0 ? 'red' : 'inherit');
+		$clipSize.css('color', durationMs < 0 ? 'red' : 'inherit');
+
+		if (estimatedSize >= 400000000)
+			$message.attr('warning', '1').text("WARNING: The export selection is very large and may fail to complete successfully in UI3. Consider downloading the clip raw instead, or perform your export in Blue Iris's local console.");
+		else if (estimatedSize >= 200000000)
+			$message.attr('warning', '1').text("WARNING: The export selection is large and may take a long time to complete.");
+		else
+			$message.attr('warning', '0').text("Ready to Export");
+	}
+	var CheckCurrentClip = function ()
+	{
+		if (clipId !== videoPlayer.Loading().image.uniqueId)
+		{
+			toaster.Info("The clip export operation was canceled because the clip was closed!", 10000);
+			dialog.close();
+		}
+	}
+	var GetInfo = function (label, value)
+	{
+		var $info = $('<div class="dialogOption_item clipprop_item_info"></div>');
+		$info.text(label + ": " + value);
+		$info.get(0).label = label;
+		return $info;
+	}
+
+	Initialize();
+}
+function ActiveClipExportDialog(clipId, startTimeMs, endTimeMs)
+{
+	// <summary>This dialog controls the actual export operation and lacks a normal close button.</summary>
+	var self = this;
+	var durationMs = endTimeMs - startTimeMs;
+	var userHasDownloadedAVI = false;
+
+	var $dlg = $('<div class="activeExportDialog"></div>');
+	var $content = $('<div class="campropcontent"></div>');
+	$dlg.append($content);
+
+	var $linkLabel = $('<div class="dialogOption_item clipprop_item_info">Your AVI file is being generated.</div>');
+	$content.append($linkLabel);
+
 	var $status = $('<div class="dialogOption_item clipprop_item_info">Starting export…</div>');
-	$camprop.append($status);
+	$content.append($status);
+
+	var $closeBtn = $('<input type="button" value="Cancel" style="display:block;margin:40px auto 0px auto;" iscancel="1" />');
+	$content.append($closeBtn);
 
 	var progressUpdate = function (state, message)
 	{
 		$status.text(message);
 	}
-	var aviReady = function (dataUri)
+	var exportComplete = function (dataUri)
 	{
-		$camprop.append('<div class="dialogOption_item clipprop_item_info">Click the link below to save!</div>');
-		$camprop.append(GetLink(dataUri));
+		if (dataUri)
+		{
+			$status.after(GetLink(dataUri));
+			$status.remove();
+			$linkLabel.text("Click the link below to save!");
+		}
+		else
+			$linkLabel.text("Error!");
+
+		$closeBtn.val("Close");
+		$closeBtn.attr('iscancel', '0');
 	}
 
 	var GetLink = function (dataUri)
@@ -12228,27 +12409,51 @@ function ClipExportDialog(clipId)
 		$link.attr("href", dataUri);
 		$link.text(clipInfo.fileNameNoExt + ".avi");
 		$link.attr("download", clipInfo.fileNameNoExt + ".avi");
+		$link.on('click', function ()
+		{
+			userHasDownloadedAVI = true;
+			return true;
+		});
 		return $('<div class="dialogOption_item clipprop_item_info"></div>').append($link);
 	}
 
-	$dlg.dialog({
-		title: "Export to AVI"
+	var dialog = $dlg.dialog({
+		title: "Export in Progress"
+		, includeCloseButton: false
+		, overlayOpacity: 0.5
 		, onClosing: function ()
 		{
-			setTimeout(function ()
-			{
-				if (exportStreamer)
-					exportStreamer.Dispose();
-			}, 1000);
+			if (exportStreamer)
+				exportStreamer.Dispose();
 		}
 	});
+	$closeBtn.on('click', function ()
+	{
+		if ($closeBtn.attr('iscancel') == '1')
+		{
+			SimpleDialog.ConfirmText("Are you sure you wish to cancel this export?", function ()
+			{
+				dialog.close();
+			});
+		}
+		else if (!userHasDownloadedAVI)
+		{
+			SimpleDialog.ConfirmHtml("You have not yet saved the exported AVI.<br>If you close this dialog now, the exported AVI file will be lost.<br><br>Are you sure you wish to close?", function ()
+			{
+				dialog.close();
+			});
+		}
+		else
+			dialog.close();
+	});
 
-	var exportStreamer = new ClipExportStreamer(clipData, startTimeMs, durationMs, progressUpdate, aviReady);
+	var exportStreamer = new ClipExportStreamer(clipData.path, startTimeMs, durationMs, progressUpdate, exportComplete);
 }
 ///////////////////////////////////////////////////////////////
 // Clip Export Streaming //////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ClipExportStreamer(clipData, startTimeMs, durationMs, progressUpdate, aviReady)
+var ui3ClipIsExporting = false; // This flag helps the H.264 player module not end the fetch stream if the browser tab visibility changes.
+function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, exportCompleteCb)
 {
 	var self = this;
 	var aviEncoder = null;
@@ -12258,15 +12463,26 @@ function ClipExportStreamer(clipData, startTimeMs, durationMs, progressUpdate, a
 
 	this.Dispose = function ()
 	{
+		ui3ClipIsExporting = false;
 		if (dataUri)
-			window.URL.revokeObjectURL(dataUri);
+		{
+			setTimeout(function ()
+			{
+				window.URL.revokeObjectURL(dataUri);
+			}, 1000);
+		}
 		aviEncoder = null;
-		aviReady = null;
+		exportCompleteCb = null;
+		if (safeFetch.IsActive())
+		{
+			safeFetch.CloseStream();
+			console.log("Closed stream");
+		}
 	}
 
 	var acceptFrame = function (frame, streams)
 	{
-		if (!aviReady)
+		if (!exportCompleteCb)
 			return;
 		if (!aviEncoder)
 		{
@@ -12275,7 +12491,7 @@ function ClipExportStreamer(clipData, startTimeMs, durationMs, progressUpdate, a
 		}
 		if (frame.isVideo)
 		{
-			aviEncoder.AddVideoFrame(frame.frameData, frame.isKeyframe);
+			aviEncoder.AddVideoFrame(frame.frameData, frame.isKeyframe());
 			totalVideoFrames++;
 			totalExportedTimeMs = frame.time;
 			if (frame.time >= durationMs)
@@ -12290,58 +12506,63 @@ function ClipExportStreamer(clipData, startTimeMs, durationMs, progressUpdate, a
 			}
 		}
 		else if (frame.isAudio)
-			aviEncoder.AddAudioFrame(frame.frameData, frame.isKeyframe);
+			aviEncoder.AddAudioFrame(frame.frameData, frame.isKeyframe());
 	}
 	var acceptStatusBlock = function (status)
 	{
 	}
 	var streamInfoCallback = function (bitmapInfoHeader, waveFormatEx)
 	{
+		if (!exportCompleteCb)
+			return;
 		aviEncoder = new AVIEncoder("H264", bitmapInfoHeader, waveFormatEx ? "ulaw" : null, waveFormatEx);
 		progressUpdate(1, "Export progress: 0%");
 	}
 	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
 	{
-		if (!aviReady)
+		if (!exportCompleteCb)
 			return;
 		if (videoFinishedStreaming)
 			HandleAviReady();
 		else
 		{
 			HandleExportFailure("Export failed because the data stream ended prematurely!");
-			aviReady = null;
+			exportCompleteCb = null;
 		}
 	}
 	var HandleAviReady = function ()
 	{
-		if (aviReady)
+		if (exportCompleteCb)
 		{
 			progressUpdate(3, "Export progress: 100%");
 			if (aviEncoder)
 			{
 				var fps = (totalVideoFrames / totalExportedTimeMs) * 1000;
-				aviReady(Uint8ArrayToDataURI(aviEncoder.FinishAndGetUint8Array(fps)));
+				exportCompleteCb(Uint8ArrayToDataURI(aviEncoder.FinishAndGetUint8Array(fps)));
 			}
 			else
 				HandleExportFailure("Export failed because no frames were received.");
-			aviReady = null;
+			exportCompleteCb = null;
 		}
 	}
 	var HandleExportFailure = function (reason)
 	{
 		progressUpdate(3, reason);
-		toaster.Error("Export failed because no frames were received.");
+		toaster.Error("Export failed because no frames were received.", 30000);
+		if (exportCompleteCb)
+			exportCompleteCb();
 	}
 	// Begin the clip export.
 
-	if (typeof aviReady !== "function")
+	if (typeof exportCompleteCb !== "function")
 	{
-		toaster.Error("API Error: no aviReady callback was provided to ClipExportStreamer");
+		toaster.Error("API Error: no exportCompleteCb callback was provided to ClipExportStreamer");
 		return;
 	}
 
+	ui3ClipIsExporting = true;
 	videoPlayer.Playback_Pause();
-	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + clipData.path + currentServer.GetRemoteSessionArg("?", true) + "&record=1&speed=100&audio=1&stream=0&extend=2&time=" + startTimeMs;
+	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + "&record=1&speed=100&audio=1&stream=0&extend=2&time=" + startTimeMs;
 	safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 }
 ///////////////////////////////////////////////////////////////
@@ -12744,7 +12965,7 @@ function SystemConfig()
 function ListDialog(options_arg)
 {
 	var self = this;
-	var modal_dialog = null;
+	var dialog = null;
 	var loadedOnce = false;
 	var $content;
 
@@ -12761,12 +12982,12 @@ function ListDialog(options_arg)
 		var $dlg = $('<div class="listDialog"></div>');
 		$content = $('<div class="listDialogContent"><div style="text-align: center; margin-top: 20px;">Loading...</div></div>');
 		$dlg.append($content);
-		modal_dialog = $dlg.dialog({
+		dialog = $dlg.dialog({
 			title: listSettings.title
 			, onRefresh: function () { refreshListDialog(); }
 			, onClosing: function ()
 			{
-				modal_dialog = null;
+				dialog = null;
 				loadedOnce = false;
 			}
 		});
@@ -12774,12 +12995,12 @@ function ListDialog(options_arg)
 	}
 	var refreshListDialog = function ()
 	{
-		modal_dialog.setLoadingState(true);
+		dialog.setLoadingState(true);
 		ExecJSON({ cmd: listSettings.json_command }, function (response)
 		{
-			if (modal_dialog == null)
+			if (dialog == null)
 				return;
-			modal_dialog.setLoadingState(false);
+			dialog.setLoadingState(false);
 			if (typeof response.result == "undefined")
 			{
 				CloseListDialog();
@@ -12812,7 +13033,7 @@ function ListDialog(options_arg)
 			}
 			else
 				$tbody.append('<tr><td colspan="' + listSettings.headers.length + '" style="text-align: center; padding: 16px 0px;">This list is empty.</td></tr>');
-			modal_dialog.contentChanged(!loadedOnce);
+			dialog.contentChanged(!loadedOnce);
 			loadedOnce = true;
 		}, function ()
 			{
@@ -12822,8 +13043,8 @@ function ListDialog(options_arg)
 	}
 	var CloseListDialog = function ()
 	{
-		if (modal_dialog != null)
-			modal_dialog.close();
+		if (dialog != null)
+			dialog.close();
 	}
 }
 function GetLevelImageMarkup(level)
@@ -13328,7 +13549,7 @@ function saveSnapshot(btnSelector)
 	date = date.replace(/\//g, '-').replace(/:/g, '.');
 	var fileName = camName + " " + date + ".jpg";
 	$(btnSelector).attr("download", fileName);
-	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl());
+	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
 	setTimeout(function ()
 	{
 		$(btnSelector).attr("download", "temp.jpg");
@@ -14446,7 +14667,13 @@ var BI_CustomEvent =
 			var handlers = this.customEventRegistry[eventName];
 			var idx = handlers.indexOf(eventHandler);
 			if (idx > -1)
-				handlers.splice(idx, 1);
+			{
+				var handler = handlers[idx];
+				if (handler.isExecutingEventHandlerNow)
+					handler.removeEventHandlerWhenFinished = true;
+				else
+					handlers.splice(idx, 1);
+			}
 		},
 		Invoke: function (eventName, args)
 		{
@@ -14454,7 +14681,15 @@ var BI_CustomEvent =
 				for (var i = 0; i < this.customEventRegistry[eventName].length; i++)
 					try
 					{
-						this.customEventRegistry[eventName][i](args);
+						var handler = this.customEventRegistry[eventName][i];
+						handler.isExecutingEventHandlerNow = true;
+						handler(args);
+						handler.isExecutingEventHandlerNow = false;
+						if (handler.removeEventHandlerWhenFinished)
+						{
+							this.customEventRegistry[eventName].splice(i, 1);
+							i--;
+						}
 					}
 					catch (ex)
 					{
@@ -15257,18 +15492,53 @@ function WAVEFORMATEX(buf)
 }
 function VideoFrame(buf, metadata)
 {
+	var self = this;
 	this.isVideo = true;
 	this.frameData = buf;
 	this.pos = metadata.pos;
 	this.time = metadata.time;
 	this.utc = metadata.utc;
 	this.size = metadata.size;
+	this.isKeyframe = function ()
+	{
+		if (self.frameData && self.frameData.length > 0)
+		{
+			// The NALU type is the last 5 bits of the first byte after a start code.
+			// This method will look in the first 1000 bytes to find a "VCL NALU" (types 1-5) and assume the 
+			// first found indicates the frame type.
+			var end = Math.min(self.frameData.length, 1001) - 1;
+			var zeroBytes = 0;
+			for (var i = 0; i < end; i++)
+			{
+				if (self.frameData[i] === 0)
+					zeroBytes++;
+				else
+				{
+					if (zeroBytes >= 2 && self.frameData[i] === 1)
+					{
+						// Identified a start code.  Check the NALU type.
+						var NALU_Type = self.frameData[i + 1] & 31; // 31 is 0b00011111
+						if (NALU_Type == 5) // This is a slice of a keyframe.
+							return true;
+						else if (0 < NALU_Type && NALU_Type < 5) // This is another frame type
+							return false;
+					}
+					zeroBytes = 0;
+				}
+			}
+		}
+		return false;
+	}
 }
 function AudioFrame(buf, formatHeader)
 {
 	this.isAudio = true;
 	this.frameData = buf;
 	this.format = formatHeader;
+	this.isKeyframe = function ()
+	{
+		return frame.format.wFormatTag === 7;
+	}
 }
 ///////////////////////////////////////////////////////////////
 // GhettoStream ///////////////////////////////////////////////
@@ -16482,11 +16752,14 @@ function UIHelpTool()
 			case "ui3-local-overrides":
 				UI3_Local_Overrides_Help();
 				break;
+			case "Clip Export":
+				Clip_Export_Help();
+				break;
 		}
 	}
 	var Context_Menu_On_Long_Press = function ()
 	{
-		$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
+		$('<div class="UIHelp" style="max-width:500px;">'
 			+ 'Many useful functions in this interface are accessed by context menus (a.k.a. "Right-click menus").<br><br>'
 			+ 'Context menus are normally opened by right clicking.  On most touchscreen devices, instead you must press and hold.<br><br>'
 			+ 'However on some devices it is impossible to open context menus the normal way.  If this applies to you,'
@@ -16501,7 +16774,7 @@ function UIHelpTool()
 	}
 	var Double_Click_to_Fullscreen = function ()
 	{
-		$('<div style="padding:10px;font-size: 1.2em;max-width:500px;">'
+		$('<div class="UIHelp" style="max-width:500px;">'
 			+ 'This setting controls whether or not double-clicking the video area triggers fullscreen mode.<br><br>'
 			+ 'When double-clicking is enabled, single-click actions on the same area will be delayed by ' + videoPlayer.getDoubleClickTime()
 			+ ' milliseconds.  This is to allow the browser time to determine if you intended a single-click or a double-click.<br><br>'
@@ -16519,7 +16792,7 @@ function UIHelpTool()
 	}
 	var Camera_Group_Webcasting = function ()
 	{
-		var $root = $('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
+		var $root = $('<div class="UIHelp">'
 			+ 'This interface is easier to use when all your camera groups have webcasting enabled.<br><br>'
 			+ 'Enable webcasting for your groups using the group settings panel.  This panel is found in the lower-left corner of the Blue Iris console (only when PTZ controls are enabled):<br><br>'
 			+ '</div>');
@@ -16530,7 +16803,7 @@ function UIHelpTool()
 	}
 	var IR_Brightness_Contrast = function ()
 	{
-		var $root = $('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
+		var $root = $('<div class="UIHelp">'
 			+ 'Infrared, Brightness, and Contrast controls do not work well with many cameras, so they are disabled by default to save space.<br><br>'
 			+ 'When enabled, these controls appear in the PTZ section below the presets, and only work when you have maximized a camera that has PTZ enabled in Blue Iris.'
 			+ '</div>');
@@ -16538,11 +16811,21 @@ function UIHelpTool()
 	}
 	var UI3_Local_Overrides_Help = function ()
 	{
-		$('<div style="padding:10px;font-size: 1.2em;max-width:400px;">'
+		$('<div class="UIHelp">'
 			+ 'Click "Download" to download a ui3-local-overrides.js file which is pre-configured to change the defaults for all of UI3\'s settings to match your current configuration.<br><br>'
 			+ 'The ui3-local-overrides system allows you to override default UI3 behavior for all your users.<br><br>'
 			+ '<a href="ui3/help/help.html#extensions" target="_blank">Click here to learn more about ui3-local-overrides.</a>'
 			+ '</div>').modalDialog({ title: 'ui3-local-overrides', closeOnOverlayClick: true });
+	}
+	var Clip_Export_Help = function ()
+	{
+		$('<div class="UIHelp">'
+			+ 'UI3 can efficiently download clips in the format they are stored in on disk, but this is inconvenient if you only want a small part of a large clip, or if your clips are stored in proprietary ".bvr" format.<br><br>'
+			+ 'To remedy this, UI3 can export entire clips or sections of clips as standard AVI files.<br><br>'
+			+ '<div style="width:20px;height:20px;display:inline-block;vertical-align:bottom;margin-right:10px;"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div> sets the export start offset to your current clip playback position<br><br>'
+			+ '<div style="width:20px;height:20px;display:inline-block;vertical-align:bottom;margin-right:10px;"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div> sets the end offset<br><br>'
+			+ 'When you are happy with your offsets, click "Begin Export". After the export reaches 100%, a link will appear, allowing you to download the AVI file to your computer.'
+			+ '</div>').modalDialog({ title: 'Clip Export Help', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -17171,6 +17454,18 @@ function formatBytes(bytes, decimals)
 		sizes = ['B', 'K', 'M', 'G', 'T', 'PB', 'EB', 'ZB', 'YB'],
 		i = Math.floor(Math.log(bytes) / Math.log(k));
 	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + sizes[i];
+}
+function formatBytes2(bytes, decimals)
+{
+	if (bytes == 0) return '0 B';
+	var negative = bytes < 0;
+	if (negative)
+		bytes = -bytes;
+	var k = 1024,
+		dm = typeof decimals != "undefined" ? decimals : 2,
+		sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'],
+		i = Math.floor(Math.log(bytes) / Math.log(k));
+	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + ' ' + sizes[i];
 }
 function formatBitsPerSecond(bits)
 {

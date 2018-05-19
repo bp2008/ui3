@@ -456,8 +456,7 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 			var avih = new CHUNK("avih");
 			avih.data = aviHeader = new MainAVIHeader();
 			{
-				aviHeader.dwFlags = HeaderFlags.AVIF_HASINDEX | HeaderFlags.AVIF_ISINTERLEAVED
-				//| HeaderFlags.AVIF_TRUSTCKTYPE
+				aviHeader.dwFlags = HeaderFlags.AVIF_HASINDEX | HeaderFlags.AVIF_ISINTERLEAVED | HeaderFlags.AVIF_TRUSTCKTYPE;
 				aviHeader.dwStreams = streams;
 				aviHeader.dwWidth = bi.biWidth;
 				aviHeader.dwHeight = bi.biHeight;
