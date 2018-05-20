@@ -18,6 +18,7 @@ var readable_stream_supported = false;
 var webgl_supported = false;
 var web_audio_supported = false;
 var web_audio_buffer_source_supported = false;
+var web_audio_buffer_copyToChannel_supported = false;
 var fullscreen_supported = false;
 var browser_is_ios = false;
 var browser_is_android = false;
@@ -53,14 +54,22 @@ function DoUIFeatureDetection()
 						web_audio_supported = true;
 
 						if (typeof context.createBuffer === "function" && typeof context.createBufferSource === "function")
-							web_audio_buffer_source_supported = true;
+						{
+							var buffer = context.createBuffer(1, 1, 22050);
+							if (buffer)
+							{
+								web_audio_buffer_source_supported = true;
+								if (typeof buffer.copyFromChannel === "function" && typeof buffer.copyToChannel === "function")
+									web_audio_buffer_copyToChannel_supported = true;
+							}
+						}
 					}
 				}
 				catch (ex) { }
 			}
 			fullscreen_supported = ((document.documentElement.requestFullscreen || document.documentElement.msRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.webkitRequestFullscreen) && (document.exitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen || document.webkitExitFullscreen)) ? true : false;
 			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported && webgl_supported;
-			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported;
+			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported && web_audio_buffer_copyToChannel_supported;
 			exporting_clips_to_avi_supported = h264_playback_supported && export_blob_supported;
 			$(function ()
 			{
@@ -87,6 +96,8 @@ function DoUIFeatureDetection()
 						ul.append('<li>Web Audio API</li>');
 					if (!web_audio_buffer_source_supported)
 						ul.append('<li>AudioBufferSourceNode</li>');
+					if (!web_audio_buffer_copyToChannel_supported)
+						ul.append('<li>AudioBuffer.copyToChannel</li>');
 					ul_root.append($('<li>The audio player requires these unsupported features:</li>').append(ul));
 				}
 				if (!fullscreen_supported)
@@ -13677,7 +13688,7 @@ function PcmAudioPlayer()
 			return;
 		clearMuteStopTimeout();
 		newVolume = Clamp(newVolume, 0, 1);
-		volumeController.gain.setValueAtTime(newVolume * newVolume, context.currentTime);
+		volumeController.gain.value = newVolume * newVolume; // Don't use setValueAtTime method because it has issues (UI3-v17 + Chrome 66 was affected)
 		volumeIconHelper.setIconForVolume(newVolume);
 		if (newVolume == 0)
 			audioStopTimeout = setTimeout(toggleAudioPlayback, 1000);
@@ -14577,8 +14588,13 @@ function Toaster()
 		}
 	var showToastInternal = function (type, message, showTime, closeButton, onClick)
 	{
-		if (typeof message == "object" && typeof message.stack == "string")
-			message = htmlEncode(message.stack);
+		if (typeof message == "object" && typeof message.message == "string" && typeof message.stack == "string")
+		{
+			console.error(type + " toast", message);
+			message = htmlEncode(message.message + ": " + message.stack);
+		}
+		else
+			bilog.info(type + " toast: ", message);
 		var overrideOptions = {};
 
 		if (showTime)
@@ -14595,8 +14611,6 @@ function Toaster()
 			overrideOptions.onclick = onClick;
 
 		var myToast = toastr[type](message, null, overrideOptions);
-
-		bilog.info(type + " toast: " + message);
 
 		return myToast;
 	}

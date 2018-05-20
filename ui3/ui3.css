@@ -4109,5 +4109,5 @@ div::-webkit-scrollbar-corner
 .temporarilyUnavailable,
 .permanentlyUnavailable
 {
-	display: none;
+	display: none !important;
 }
