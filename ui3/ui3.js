@@ -3871,7 +3871,7 @@ function PlaybackControls()
 		if (isVisible)
 		{
 			CloseSettings();
-			if (self.IsSeekbarDragging())
+			if (self.IsSeekbarDragging() || exportControls.IsEnabled())
 				return;
 			$pc.stop(true, true);
 			$pc.fadeOut(100);
@@ -4679,7 +4679,7 @@ function ExportControls()
 		exportOffsetStart.resized();
 		exportOffsetEnd.resized();
 
-		var labelFontSize = Clamp(w * 0.04, 12, 18);
+		var labelFontSize = Clamp(w * 0.04, 11, 18);
 		$exportControlsStatus.css('font-size', labelFontSize + 'px');
 		$exportControlsStatus.css('line-height', labelFontSize + 'px');
 
@@ -4688,6 +4688,10 @@ function ExportControls()
 	this.IsDragging = function ()
 	{
 		return exportOffsetStart.IsDragging() || exportOffsetEnd.IsDragging();
+	}
+	this.IsEnabled = function ()
+	{
+		return controlsEnabled;
 	}
 	this.mouseMove = function (e)
 	{
@@ -4758,7 +4762,7 @@ function ExportControls()
 		if ((clipData.flags & alert_flag_offsetMs) !== 0)
 		{
 			startTime = clipData.offsetMs / fileDuration;
-			endTime = (startTimeMs + clipData.roughLengthMs) / fileDuration;
+			endTime = (clipData.offsetMs + clipData.roughLengthMs) / fileDuration;
 		}
 
 		exportOffsetStart.setClipData(clipData);
@@ -4771,7 +4775,7 @@ function ExportControls()
 		$exportControlsExportBtn.removeAttr('disabled');
 
 		var $selectOffsetsMessage = $('<div class="exportOffsetMessage">Choose offsets by dragging the handles</div>');
-		var labelFontSize = Clamp($layoutBottom.width() * 0.04, 12, 18);
+		var labelFontSize = Clamp($layoutBottom.width() * 0.04, 9, 18);
 		$selectOffsetsMessage.css('font-size', labelFontSize + 'px');
 		$selectOffsetsMessage.fadeIn(function ()
 		{
