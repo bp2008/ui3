@@ -239,6 +239,7 @@ var jpegQualityHelper = null;
 var h264QualityHelper = null;
 var ptzButtons = null;
 var playbackHeader = null;
+var exportControls = null;
 var seekBar = null;
 var playbackControls = null;
 var clipTimeline = null;
@@ -1545,6 +1546,8 @@ $(function ()
 	h264QualityHelper = new H264QualityHelper();
 
 	SetupCollapsibleTriggers();
+
+	exportControls = new ExportControls();
 
 	seekBar = new SeekBar();
 
@@ -3806,6 +3809,7 @@ function PlaybackControls()
 			$("#volumeBar").removeClass("wide");
 
 		seekBar.resized();
+		exportControls.resized();
 	}
 	this.SetProgressText = function (text)
 	{
@@ -3867,7 +3871,7 @@ function PlaybackControls()
 		if (isVisible)
 		{
 			CloseSettings();
-			if (seekBar.IsDragging())
+			if (self.IsSeekbarDragging())
 				return;
 			$pc.stop(true, true);
 			$pc.fadeOut(100);
@@ -3906,6 +3910,10 @@ function PlaybackControls()
 		self.SetProgressText("Loading...");
 		self.setPlayPauseButtonState();
 		SetDownloadClipLink(clipData);
+	}
+	this.IsSeekbarDragging = function ()
+	{
+		return seekBar.IsDragging() || exportControls.IsDragging();
 	}
 	this.setPlayPauseButtonState = function (paused)
 	{
@@ -4196,6 +4204,22 @@ function PlaybackControls()
 		$("#playbackSettingsQualityMark").addClass(hintText);
 		$("#playbackSettingsQualityMark").text(hintText);
 	}
+	$(document).on("mousemove touchmove", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		if (touchEvents.Gate(e))
+			return;
+		if (!exportControls.mouseMove(e))
+			seekBar.mouseMove(e, true);
+	});
+	$(document).on("mouseup mouseleave touchend touchcancel", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		if (touchEvents.Gate(e))
+			return;
+		if (!exportControls.mouseUp(e))
+			seekBar.mouseUp(e);
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Playback Controls //////////////////////////////////////////
@@ -4502,13 +4526,24 @@ function SeekBar()
 		handle.removeClass("focus");
 		bar.removeClass("focus");
 	}
+	this.getWidth = function ()
+	{
+		return bar.width();
+	}
+	this.getOffset = function ()
+	{
+		return bar.offset();
+	}
 	var SetBarState = function (state)
 	{
 		if (state == 1)
 		{
-			handle.addClass("focus");
 			bar.addClass("focus");
-			seekhint.removeClass('hidden');
+			if (!exportControls.IsDragging())
+			{
+				handle.addClass("focus");
+				seekhint.removeClass('hidden');
+			}
 			seekHintVisible = true;
 		}
 		else
@@ -4520,14 +4555,12 @@ function SeekBar()
 			highlight.css("width", "0px");
 		}
 	}
-	var mouseUp = function (e)
+	this.mouseUp = function (e)
 	{
-		mouseCoordFixer.fix(e);
-
 		if (!isDragging)
 			return;
 
-		mouseMoved(e);
+		self.mouseMove(e, true);
 
 		var barO = bar.offset();
 		var barW = bar.width();
@@ -4549,8 +4582,9 @@ function SeekBar()
 			SetBarState(0);
 		updateSeekHint(e);
 	}
-	var mouseMoved = function (e)
+	this.mouseMove = function (e, isRealMoveEvent)
 	{
+		mouseDidActuallyDrag = isRealMoveEvent;
 		if (isDragging)
 		{
 			var barO = bar.offset();
@@ -4562,11 +4596,8 @@ function SeekBar()
 		}
 		updateSeekHint(e);
 	}
-	wrapper.on("mousedown touchstart", function (e)
+	this.mouseDown = function (e)
 	{
-		mouseCoordFixer.fix(e);
-		if (touchEvents.Gate(e))
-			return;
 		mouseDidActuallyDrag = false;
 		if (e.which != 3)
 		{
@@ -4579,27 +4610,19 @@ function SeekBar()
 
 			SetBarState(1);
 
-			mouseMoved(e);
+			self.mouseMove(e);
 			$.hideAllContextMenus();
 			return stopDefault(e);
 		}
 		else
-			mouseMoved(e);
-	});
-	$(document).on("mousemove touchmove", function (e)
+			self.mouseMove(e);
+	}
+	wrapper.on("mousedown touchstart", function (e)
 	{
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		mouseDidActuallyDrag = true;
-		mouseMoved(e);
-	});
-	$(document).on("mouseup mouseleave touchend touchcancel", function (e)
-	{
-		mouseCoordFixer.fix(e);
-		if (touchEvents.Gate(e))
-			return;
-		mouseUp(e);
+		self.mouseDown(e);
 	});
 	wrapper.on("mouseenter", function (e)
 	{
@@ -4613,6 +4636,343 @@ function SeekBar()
 		if (!isDragging)
 			SetBarState(0);
 	});
+}
+///////////////////////////////////////////////////////////////
+// Clip Export Controls ///////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ExportControls()
+{
+	var self = this;
+	var $layoutBottom = $('#layoutbottom');
+	var $exportOffsetWrapper = $("#exportOffsetWrapper");
+	var $exportControlsWrapper = $("#exportControlsWrapper");
+	var exportOffsetStart;
+	var exportOffsetEnd;
+	var $exportControlsStatus = $("#exportControlsStatus");
+	var $exportControlsExportBtn = $("#exportControlsExportBtn");
+	var $exportControlsCancelBtn = $("#exportControlsCancelBtn");
+
+	var clipData = null;
+	var fileDuration = 2;
+	var fileSizeBytes = 2;
+
+	var controlsEnabled = false;
+	var clipStatsLoaded = false;
+
+	var Initialize = function ()
+	{
+		$exportOffsetWrapper.hide();
+		$exportControlsWrapper.hide();
+		exportOffsetStart = new ExportOffsetControl($("#exportOffsetStart"), 0.75, offsetChanged);
+		exportOffsetEnd = new ExportOffsetControl($("#exportOffsetEnd"), 0.25, offsetChanged);
+		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
+		$exportControlsExportBtn.on('click', beginExport);
+		$exportControlsCancelBtn.on('click', self.Disable);
+	}
+
+	this.resized = function ()
+	{
+		if (!controlsEnabled)
+			return;
+		var w = $layoutBottom.width();
+
+		exportOffsetStart.resized();
+		exportOffsetEnd.resized();
+
+		var labelFontSize = Clamp(w * 0.04, 12, 18);
+		$exportControlsStatus.css('font-size', labelFontSize + 'px');
+		$exportControlsStatus.css('line-height', labelFontSize + 'px');
+
+		offsetChanged();
+	}
+	this.IsDragging = function ()
+	{
+		return exportOffsetStart.IsDragging() || exportOffsetEnd.IsDragging();
+	}
+	this.mouseMove = function (e)
+	{
+		var r1 = exportOffsetStart.mouseMove(e);
+		var r2 = exportOffsetEnd.mouseMove(e);
+		return r1 || r2;
+	}
+	this.mouseUp = function (e)
+	{
+		var r1 = exportOffsetStart.mouseUp(e);
+		var r2 = exportOffsetEnd.mouseUp(e);
+		return r1 || r2;
+	}
+	this.Enable = function (recId)
+	{
+		if (!exporting_clips_to_avi_supported)
+		{
+			toaster.Warning("This browser does not support the necessary features to export clips to AVI.", 15000);
+			return;
+		}
+		if (controlsEnabled)
+			return;
+		controlsEnabled = true;
+
+		clipData = clipLoader.GetClipFromId(recId);
+
+		if (!videoPlayer.Playback_IsPaused())
+			videoPlayer.Playback_Pause();
+
+		$exportControlsWrapper.show();
+		$layoutBottom.show();
+
+		if (clipData.isClip)
+			ClipStatsLoaded();
+		else
+		{
+			// We've probably already loaded the clip duration for this alert because that happens when starting to stream it.
+			if (clipData.hasLoadedClipStats)
+				ClipStatsLoaded(); // We have
+			else // We have not, so our clip duration and size values need updated.
+			{
+				$exportControlsStatus.text('Loading…');
+				$exportControlsExportBtn.attr('disabled', 'disabled');
+				// call global resized
+				resized();
+				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
+				{
+					// This success callback can be called more than once. clipStatsLoaded will tell.
+					if (clipStatsLoaded || !controlsEnabled)
+						return;
+					clipLoader.ApplyMissingStatsToClipData(stats, clipData);
+					ClipStatsLoaded();
+				});
+			}
+		}
+	}
+	var ClipStatsLoaded = function ()
+	{
+		if (!controlsEnabled)
+			return;
+		clipStatsLoaded = true;
+
+		fileDuration = Math.max(clipData.msec, 2);
+		fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
+
+		var startTime = 0;
+		var endTime = 1;
+		if ((clipData.flags & alert_flag_offsetMs) !== 0)
+		{
+			startTime = clipData.offsetMs / fileDuration;
+			endTime = (startTimeMs + clipData.roughLengthMs) / fileDuration;
+		}
+
+		exportOffsetStart.setClipData(clipData);
+		exportOffsetEnd.setClipData(clipData);
+		exportOffsetStart.setPosition(startTime);
+		exportOffsetEnd.setPosition(endTime);
+
+		$exportOffsetWrapper.show();
+
+		$exportControlsExportBtn.removeAttr('disabled');
+
+		var $selectOffsetsMessage = $('<div class="exportOffsetMessage">Choose offsets by dragging the handles</div>');
+		var labelFontSize = Clamp($layoutBottom.width() * 0.04, 12, 18);
+		$selectOffsetsMessage.css('font-size', labelFontSize + 'px');
+		$selectOffsetsMessage.fadeIn(function ()
+		{
+			setTimeout(function ()
+			{
+				$selectOffsetsMessage.fadeOut(function ()
+				{
+					$selectOffsetsMessage.remove();
+				});
+			}, 4000);
+		});
+		$exportOffsetWrapper.append($selectOffsetsMessage);
+
+		// call global resized
+		resized();
+	}
+	this.Disable = function ()
+	{
+		if (!controlsEnabled)
+			return;
+		controlsEnabled = false;
+		clipStatsLoaded = false;
+
+		clipData = null;
+
+		$exportOffsetWrapper.hide();
+		$layoutBottom.hide();
+		$exportControlsWrapper.hide();
+
+		// call global resized
+		resized();
+	}
+	var CheckCurrentClip = function ()
+	{
+		if (!controlsEnabled)
+			return;
+		if (clipData.recId !== videoPlayer.Loading().image.uniqueId)
+		{
+			toaster.Info("The clip export operation was canceled because the clip was closed!", 10000);
+			self.Disable();
+		}
+	}
+	var offsetChanged = function ()
+	{
+		if (!controlsEnabled || !clipStatsLoaded)
+			return;
+		var percentOfClip = Math.abs(exportOffsetEnd.getPosition() - exportOffsetStart.getPosition());
+		var durationMs = percentOfClip * fileDuration;
+		var estimatedSize = percentOfClip * fileSizeBytes;
+		$exportControlsStatus.text('Ready to Export ' + msToTime(durationMs) + ' (' + formatBytes2(estimatedSize, 1) + ')');
+	}
+	var beginExport = function ()
+	{
+		CheckCurrentClip();
+		var startTimeMs = exportOffsetStart.getPosition() * fileDuration;
+		var endTimeMs = exportOffsetEnd.getPosition() * fileDuration;
+		var durationMs = endTimeMs - startTimeMs;
+		if (durationMs === 0)
+		{
+			// Both markers are in exactly the same spot.
+			// Adjust end time offset 10 seconds forward.
+			endTimeMs = Clamp(endTimeMs + 10000, 0, fileDuration);
+			startTimeMs = Clamp(endTimeMs - 10000, 0, fileDuration);
+		}
+		else if (durationMs < 0)
+		{
+			// End marker is before Start marker.  Swap them.
+			var tmp = startTimeMs;
+			startTimeMs = endTimeMs;
+			endTimeMs = tmp;
+		}
+		var percentOfClip = durationMs / fileDuration;
+		var estimatedSize = percentOfClip * fileSizeBytes;
+		var proceedFunc = function ()
+		{
+			new ActiveClipExportDialog(clipData, startTimeMs, endTimeMs);
+			self.Disable();
+		}
+		if (estimatedSize >= 950000000)
+		{
+			// 1 GB is the supposed limit for AVI files produced by UI3 at this time.
+			SimpleDialog.ConfirmText("Your selection size is very large, approximately " + formatBytes2(estimatedSize, 1) + ", and the export will probably fail.  Do you wish to try anyway?", proceedFunc);
+		}
+		else if (estimatedSize >= 450000000)
+		{
+			// 500-600 MB is the supposed limit for Blobs / Data URIs in some browsers.
+			SimpleDialog.ConfirmText("Your selection size is very large, approximately " + formatBytes2(estimatedSize, 1) + ", and the export may fail.  Do you wish to try anyway?", proceedFunc);
+		}
+		else
+			proceedFunc();
+	}
+
+	Initialize();
+}
+function ExportOffsetControl($handle, polePosition, offsetChanged)
+{
+	var self = this;
+	var $parent = $handle.parent();
+	var percent;
+	var po = $parent.offset();
+	var pw = Math.max(2, $parent.width());
+	var pwm1 = pw - 1;
+	var w = $handle.width();
+	var seekBarW = pw;
+	var seekBarWm1 = pwm1;
+	var seekBarO = po;
+	var dragOffset = 0;
+	var isDragging = false;
+	var $label = $('<div class="exportOffsetFlagLabel"></div>');
+	$handle.append($label);
+	$handle.append('<div class="exportOffsetFlagpole"></div>');
+	var clipData;
+	this.setClipData = function (cd)
+	{
+		clipData = cd;
+		self.resized();
+	}
+	this.setPosition = function (newPercent)
+	{
+		percent = Clamp(newPercent, 0, 1);
+		self.resized();
+		offsetChanged();
+	}
+	this.resized = function ()
+	{
+		if (!seekBar)
+			return;
+		po = $parent.offset();
+		pw = Math.max(2, $parent.width());
+		pwm1 = pw - 1;
+		w = $handle.width();
+		seekBarW = seekBar.getWidth();
+		seekBarWm1 = seekBarW - 1;
+		seekBarO = seekBar.getOffset();
+
+		$handle.css('left', ((seekBarWm1 * percent) - (w * polePosition) + (seekBarO.left - po.left)) + 'px');
+
+		if (clipData)
+			$label.text(msToTime(percent * clipData.msec));
+	}
+	this.getPosition = function ()
+	{
+		return percent;
+	}
+	this.IsDragging = function ()
+	{
+		return isDragging;
+	}
+	var FakeMouseEventForSeekBar = function (e)
+	{
+		return {
+			pageX: e.pageX - dragOffset,
+			pageY: e.pageY,
+			type: e.type,
+			noSeekHint: true
+		};
+	}
+	var Initialize = function ()
+	{
+		$handle.on("mousedown touchstart", function (e)
+		{
+			mouseCoordFixer.fix(e);
+			if (touchEvents.Gate(e))
+				return;
+			self.mouseDown(e);
+			seekBar.mouseDown(FakeMouseEventForSeekBar(e));
+			return false;
+		});
+	}
+
+	this.mouseDown = function (e)
+	{
+		dragOffset = (e.pageX - $handle.offset().left) - (w * polePosition);
+		isDragging = true;
+		if (!videoPlayer.Playback_IsPaused())
+			videoPlayer.Playback_Pause();
+	}
+	this.mouseMove = function (e)
+	{
+		if (isDragging)
+		{
+			var newPosX = (e.pageX - seekBarO.left) - dragOffset;
+			self.setPosition(newPosX / seekBarWm1);
+			seekBar.mouseMove(FakeMouseEventForSeekBar(e), true);
+			return true;
+		}
+		return false;
+	}
+	this.mouseUp = function (e)
+	{
+		self.mouseMove(e);
+		if (isDragging)
+		{
+			isDragging = false;
+			seekBar.mouseUp(FakeMouseEventForSeekBar(e));
+			return true;
+		}
+		return false;
+	}
+
+	Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // Big Thumbnail Helper (PTZ Presets, Alerts, Clips) //////////
@@ -8686,7 +9046,7 @@ function JpegVideoModule()
 			timeLastClipFrame = timeValue.toFixed(0);
 			var speedMultiplier = playbackControls.GetPlaybackSpeed();
 			timePassed *= speedMultiplier;
-			if (playbackPaused || seekBar.IsDragging() || !isVisible)
+			if (playbackPaused || playbackControls.IsSeekbarDragging() || !isVisible)
 				timePassed = 0;
 			else if (playbackControls.GetPlayReverse())
 				timePassed *= -1;
@@ -10922,7 +11282,7 @@ function CanvasContextMenu()
 			case "downloadclip":
 				return true;
 			case "exportavi":
-				new ClipExportDialog(videoPlayer.Loading().image.uniqueId);
+				exportControls.Enable(videoPlayer.Loading().image.uniqueId);
 				break;
 			case "closeclip":
 				clipLoader.CloseCurrentClip();
@@ -11150,7 +11510,7 @@ function ClipListContextMenu()
 				if (allSelectedClipIDs.length >= 1)
 				{
 					videoPlayer.LoadClip(clipLoader.GetClipFromId(allSelectedClipIDs[0]));
-					new ClipExportDialog(videoPlayer.Loading().image.uniqueId);
+					exportControls.Enable(videoPlayer.Loading().image.uniqueId);
 				}
 				else
 					toaster.Warning("No " + (currentPrimaryTab == "clips" ? "clip" : "alert") + " is selected.");
@@ -12147,7 +12507,7 @@ function ClipProperties()
 				$exportBtn.on('click', function ()
 				{
 					videoPlayer.LoadClip(clipData);
-					new ClipExportDialog(videoPlayer.Loading().image.uniqueId);
+					exportControls.Enable(videoPlayer.Loading().image.uniqueId);
 					dialog.close();
 				});
 				$camprop.append(GetInfoEleValue("Export as AVI", $exportBtn));
@@ -12238,167 +12598,6 @@ function ClipDownloadDialog()
 ///////////////////////////////////////////////////////////////
 // Clip Export Dialog /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ClipExportDialog(recId)
-{
-	// <summary>This dialog helps the user set up a clip export operation.</summary>
-	var self = this;
-	var clipData = clipLoader.GetClipFromId(recId);
-	var startTimeMs = 0;
-	var endTimeMs = clipData.msec;
-	var $dlg = $('<div class="exportDialog"></div>');
-	var $content = $('<div class="campropcontent"></div>');
-	var $startOffset = $('<div class="clipExportStart"></div>');
-	var $endOffset = $('<div class="clipExportEnd"></div>');
-	var $duration = $('<div class="clipExportDuration"></div>');
-	var $clipSize = $('<div class="clipExportSize"></div>');
-	var $message = $('<div class="clipExportMessage">…</div>');
-	var fileDuration;
-	var fileSizeBytes;
-	var dialog = null;
-
-	var Initialize = function ()
-	{
-		dialog = $dlg.dialog({
-			title: "Export as AVI"
-			, onClosing: function ()
-			{
-				BI_CustomEvent.RemoveListener("OpenVideo", CheckCurrentClip);
-			}
-		});
-
-		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
-		if (clipData.isClip)
-			InitializeClip();
-		else
-		{
-			if ((clipData.flags & alert_flag_offsetMs) !== 0)
-			{
-				startTimeMs = clipData.offsetMs;
-				endTimeMs = startTimeMs + clipData.roughLengthMs;
-			}
-			// We've probably already loaded the clip duration for this alert because that happens when starting to stream it.
-			if (clipData.hasLoadedClipStats)
-				InitializeClip(); // We have
-			else // We have not, so our clip duration and size values need updated.
-			{
-				$dlg.append('<div style="text-align: center; margin-top: 20px;">Loading...</div>');
-				dialog.contentChanged(true);
-				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
-				{
-					// This success callback can be called more than once. hasLoadedClipStats will tell.
-					if (clipData.hasLoadedClipStats)
-						return;
-					clipLoader.ApplyMissingStatsToClipData(stats, clipData);
-					InitializeClip();
-				});
-			}
-		}
-	}
-	var InitializeClip = function ()
-	{
-		fileDuration = clipData.msec;
-		fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
-		$dlg.empty();
-		if (!exporting_clips_to_avi_supported)
-		{
-			$dlg.append("This browser does not support the necessary features to export clips to AVI.");
-			return;
-		}
-		$dlg.append($content);
-
-		$content.append('<div>Use the buttons below to lock in start and end offsets for export. <a class="clipExportHelp" href="javascript:UIHelp.LearnMore(\'Clip Export\')">(learn more)</a></div>');
-		$content.append('<div style="height:10px;"></div>');
-		$content.append('<div>The full clip is ' + msToTime(fileDuration) + ' long, and is ' + formatBytes2(fileSizeBytes, 1) + '.</div>');
-		$content.append('<div style="height:10px;"></div>');
-
-		// Build configuration buttons/display
-		var $config = $('<div class="clipExportConfig"></div>');
-
-		var $defStart = $('<div class="clipExportDefineStart"></div>');
-		var $btnStart = $('<div class="clipExportDefineSvg icon"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div>');
-		$btnStart.on('click', function ()
-		{
-			CheckCurrentClip();
-			startTimeMs = videoPlayer.GetClipPlaybackPositionMs();
-			UpdateTiming();
-		});
-		$defStart.append($btnStart).append($startOffset);
-
-		var $defEnd = $('<div class="clipExportDefineEnd"></div>');
-		var $btnEnd = $('<div class="clipExportDefineSvg icon"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div>');
-		$btnEnd.on('click', function ()
-		{
-			CheckCurrentClip();
-			endTimeMs = videoPlayer.GetClipPlaybackPositionMs();
-			UpdateTiming();
-		});
-		$defEnd.append($btnEnd).append($endOffset);
-
-		var $defSize = $('<div class="clipExportDefineSize"></div>');
-		$defSize.append($duration).append($clipSize);
-
-		$config.append($defStart).append($defSize).append($defEnd);
-		$content.append($config);
-
-		$content.append($message);
-
-		var $beginExportBtn = $('<input type="button" value="Begin Export" style="display:block;margin:20px auto 0px auto;" />');
-		$beginExportBtn.on('click', function ()
-		{
-			CheckCurrentClip();
-			var durationMs = (endTimeMs - startTimeMs);
-			if (durationMs > 0)
-				new ActiveClipExportDialog(clipData, startTimeMs, endTimeMs);
-			else
-				toaster.Warning("Please adjust your export start and end offsets.", 5000);
-		});
-		$content.append($beginExportBtn);
-		//$content.append($('<div></div>').append('<span>Currently configured to export </span>').append($exportDesc));
-		//$content.append($('<div>Duration: </div>').append($duration).append('<span>, approximately </span>').append($clipSize));
-
-		UpdateTiming();
-		dialog.contentChanged(true);
-	}
-
-	var UpdateTiming = function ()
-	{
-		var durationMs = (endTimeMs - startTimeMs);
-		var percentOfClip = durationMs / fileDuration;
-		var estimatedSize = percentOfClip * fileSizeBytes;
-
-		$startOffset.text(msToTime(startTimeMs));
-		$endOffset.text(msToTime(endTimeMs));
-		$duration.text(msToTime(durationMs));
-		$clipSize.text(formatBytes2(estimatedSize, 1));
-
-		$duration.css('color', durationMs < 0 ? 'red' : 'inherit');
-		$clipSize.css('color', durationMs < 0 ? 'red' : 'inherit');
-
-		if (estimatedSize >= 400000000)
-			$message.attr('warning', '1').text("WARNING: The export selection is very large and may fail to complete successfully in UI3. Consider downloading the clip raw instead, or perform your export in Blue Iris's local console.");
-		else if (estimatedSize >= 200000000)
-			$message.attr('warning', '1').text("WARNING: The export selection is large and may take a long time to complete.");
-		else
-			$message.attr('warning', '0').text("Ready to Export");
-	}
-	var CheckCurrentClip = function ()
-	{
-		if (recId !== videoPlayer.Loading().image.uniqueId)
-		{
-			toaster.Info("The clip export operation was canceled because the clip was closed!", 10000);
-			dialog.close();
-		}
-	}
-	var GetInfo = function (label, value)
-	{
-		var $info = $('<div class="dialogOption_item clipprop_item_info"></div>');
-		$info.text(label + ": " + value);
-		$info.get(0).label = label;
-		return $info;
-	}
-
-	Initialize();
-}
 function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs)
 {
 	// <summary>This dialog controls the actual export operation and lacks a normal close button.</summary>
@@ -12538,7 +12737,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, expor
 			}
 			else
 			{
-				var percent = Math.round(frame.time / durationMs * 100);
+				var percent = Math.round((frame.time / durationMs) * 100);
 				progressUpdate(2, "Export progress: " + percent + "%");
 			}
 		}
@@ -16813,9 +17012,6 @@ function UIHelpTool()
 			case "ui3-local-overrides":
 				UI3_Local_Overrides_Help();
 				break;
-			case "Clip Export":
-				Clip_Export_Help();
-				break;
 		}
 	}
 	var Context_Menu_On_Long_Press = function ()
@@ -16877,16 +17073,6 @@ function UIHelpTool()
 			+ 'The ui3-local-overrides system allows you to override default UI3 behavior for all your users.<br><br>'
 			+ '<a href="ui3/help/help.html#extensions" target="_blank">Click here to learn more about ui3-local-overrides.</a>'
 			+ '</div>').modalDialog({ title: 'ui3-local-overrides', closeOnOverlayClick: true });
-	}
-	var Clip_Export_Help = function ()
-	{
-		$('<div class="UIHelp">'
-			+ 'UI3 can efficiently download clips in the format they are stored in on disk, but this is inconvenient if you only want a small part of a large clip, or if your clips are stored in proprietary ".bvr" format.<br><br>'
-			+ 'To remedy this, UI3 can export entire clips or sections of clips as standard AVI files.<br><br>'
-			+ '<div style="width:20px;height:20px;display:inline-block;vertical-align:bottom;margin-right:10px;"><svg class="icon"><use xlink:href="#svg_x5F_SkipBack"></use></svg></div> sets the export start offset to your current clip playback position<br><br>'
-			+ '<div style="width:20px;height:20px;display:inline-block;vertical-align:bottom;margin-right:10px;"><svg class="icon"><use xlink:href="#svg_x5F_SkipForward"></use></svg></div> sets the end offset<br><br>'
-			+ 'When you are happy with your offsets, click "Begin Export". After the export reaches 100%, a link will appear, allowing you to download the AVI file to your computer.'
-			+ '</div>').modalDialog({ title: 'Clip Export Help', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////

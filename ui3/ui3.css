@@ -178,7 +178,6 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	position: absolute;
 	background-color: #15171B;
 	left: 256px;
-	height: 96px;
 	bottom: 0px;
 	overflow: hidden;
 	display: none;
@@ -2232,6 +2231,7 @@ div.invisibleLabel
 #layoutbottomTimeline
 {
 	height: 96px;
+	display: none;
 }
 
 #canvas_clipTimeline
@@ -2446,7 +2446,6 @@ div.invisibleLabel
 	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#00000000', endColorstr='#bf000000',GradientType=0 ); /* IE6-9 */
 	bottom: 0px;
 	width: 100%;
-	padding: 0px 8px;
 	overflow: hidden;
 	white-space: nowrap;
 	/*pointer-events: none;*/
@@ -2459,10 +2458,10 @@ div.invisibleLabel
 
 #pcButtonContainer
 {
-	width: 100%;
 	margin-bottom: 6px;
 	overflow: hidden;
 	white-space: normal;
+	padding: 0px 8px;
 }
 
 .sizeMedium #pcButtonContainer
@@ -2850,8 +2849,8 @@ div.invisibleLabel
 {
 	position: relative;
 	box-sizing: border-box;
-	width: 100%;
 	height: 16px;
+	margin: 0px 8px;
 	padding: 0px 8px;
 	cursor: pointer;
 }
@@ -3768,66 +3767,167 @@ div::-webkit-scrollbar-corner
 	background-color: #0097F0;
 }
 /* Export Dialog */
-.exportDialog
-{
-	padding: 10px;
-	max-width: 300px;
-}
-
 .activeExportDialog
 {
 	padding: 10px;
 }
-
-.clipExportConfig
-{
-	display: flex;
-	justify-content: center;
-	margin: 10px auto;
-	background-color: rgba(255,255,255,0.075);
-}
-
-.clipExportDefineStart, .clipExportDefineSize, .clipExportDefineEnd
-{
-	text-align: center;
-	margin: 10px;
-}
-
-.clipExportDefineSize
+/* Export Offset Selection */
+#exportOffsetWrapper
 {
 	position: relative;
-	display: flex;
-	flex-direction: column;
-	min-width: 50px;
+	height: 56px;
+	display: none;
 }
 
-.clipExportDuration
+#exportOffsetStart,
+#exportOffsetEnd
+{
+	position: absolute;
+	bottom: 0px;
+	height: 32px;
+	width: 32px;
+	border-radius: 25%;
+	cursor: ew-resize;
+}
+
+.sizeSmall #exportOffsetStart,
+.sizeSmall #exportOffsetEnd
+{
+	height: 28px;
+	width: 28px;
+}
+
+#exportOffsetStart
+{
+	z-index: 1;
+}
+
+#exportOffsetEnd
+{
+	z-index: 2;
+}
+
+.exportOffsetFlagpole
+{
+	position: absolute;
+	bottom: -16px;
+	height: 16px;
+	width: 1px;
+}
+
+.sizeSmall .exportOffsetFlagpole
+{
+	bottom: -12px;
+	height: 12px;
+}
+
+#exportOffsetStart,
+#exportOffsetStart .exportOffsetFlagpole
+{
+	background-color: rgba(0,255,0,0.5);
+	left: 75%;
+}
+
+	#exportOffsetStart:hover,
+	#exportOffsetStart:hover .exportOffsetFlagpole
+	{
+		background-color: rgba(0,255,0,0.6);
+	}
+
+#exportOffsetEnd,
+#exportOffsetEnd .exportOffsetFlagpole
+{
+	background-color: rgba(255,0,0,0.5);
+	left: 25%;
+}
+
+	#exportOffsetEnd:hover,
+	#exportOffsetEnd:hover .exportOffsetFlagpole
+	{
+		background-color: rgba(255,0,0,0.6);
+	}
+
+.exportOffsetFlagLabel
+{
+	position: absolute;
+	top: -22px;
+	font-size: 16px;
+	line-height: 16px;
+	padding: 2px 5px;
+	color: #EEEEEE;
+	background-color: rgba(0,0,0,0.75);
+	opacity: 1;
+	border-radius: 3px;
+}
+
+#exportOffsetStart .exportOffsetFlagLabel
+{
+	right: 0px;
+}
+
+#exportOffsetEnd .exportOffsetFlagLabel
+{
+	left: 0px;
+}
+
+.exportOffsetMessage
+{
+	position: absolute;
+	bottom: 0px;
+	width: 100%;
+	text-align: center;
+	font-size: 24px;
+	color: rgba(255,255,255,1);
+	text-shadow: 0px 0px 10px rgba(0,0,0,1);
+}
+
+#exportControlsWrapper
+{
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	margin: 4px 8px;
+}
+
+#exportControlsStatus
 {
 	flex: 1 0 auto;
-	font-size: 16pt;
-	padding-top: 12px;
+	color: #CCCCCC;
+	margin: 2px 4px;
 }
 
-.clipExportSize
+#exportControlsButtons input[type="button"]
 {
-	width: 100%;
-}
-
-.clipExportDefineSvg
-{
-	width: 48px;
-	height: 48px;
+	margin: 2px 4px;
+	border: none;
+	color: #FFFFFF;
+	padding: 3px 6px;
+	border-radius: 3px;
 	cursor: pointer;
 }
 
-.clipExportMessage
+#exportControlsExportBtn
 {
-	text-align: center;
+	background-color: #377EC0;
 }
 
-	.clipExportMessage[warning="1"]
+	#exportControlsExportBtn:hover
 	{
-		color: orange;
+	color: #FFFFFF;
+		background-color: #3992e4;
+     box-shadow: 0px 0px 5px rgba(255,255,255,0.5) inset;
+	}
+
+#exportControlsCancelBtn
+{
+	background-color: #C03737;
+}
+
+	#exportControlsCancelBtn:hover
+	{
+	color: #FFFFFF;
+		background-color: #EA2D2D;
+     box-shadow: 0px 0px 5px rgba(255,255,255,0.5) inset;
 	}
 /* UIHelp */
 .UIHelp

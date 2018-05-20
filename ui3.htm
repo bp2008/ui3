@@ -34,7 +34,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "15";
+		var ui_version = "16";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
@@ -303,6 +303,10 @@
 			<div id="clipNameHeading"></div>
 		</div>
 		<div id="playbackControls" style="display: none;">
+			<div id="exportOffsetWrapper">
+				<div id="exportOffsetStart"></div>
+				<div id="exportOffsetEnd"></div>
+			</div>
 			<div id="seekBarWrapper">
 				<div class="verticalAlignHelper"></div>
 				<div id="seekBarMain"><div id="seekBarLeft"></div><div id="seekBarHighlight"></div></div>
@@ -351,6 +355,10 @@
 	<div id="layoutbottom">
 		<div id="layoutbottomTimeline">
 			<canvas id="canvas_clipTimeline">Your browser does not support HTML5 canvas.</canvas>
+		</div>
+		<div id="exportControlsWrapper">
+			<div id="exportControlsStatus"></div>
+			<div id="exportControlsButtons"><input id="exportControlsExportBtn" type="button" value="Begin Export" /> <input id="exportControlsCancelBtn" type="button" value="Cancel" /></div>
 		</div>
 	</div>
 	<div id="preloadcontainer" style="display: none">
