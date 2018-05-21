@@ -1229,6 +1229,14 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
+			key: "ui3_extra_playback_controls_timestamp"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Real Timestamp<br>When Streaming H.264'
+			, hint: 'Adds a real-world timestamp to the playback controls, available only when streaming .bvr recordings with an H.264 streaming method.'
+			, category: "Extra"
+		}
+		, {
 			key: "ui3_ir_brightness_contrast"
 			, value: "0"
 			, inputType: "checkbox"
@@ -3805,6 +3813,9 @@ function PlaybackControls()
 	};
 	SetPlaySpeedLabel();
 
+	var pcFrameTimestampVisible = false;
+	var $playbackFrameTimestamp = $('#playbackFrameTimestamp');
+
 	if (!audio_playback_supported)
 		$("#volumeBar").addClass("permanentlyUnavailable");
 
@@ -4194,6 +4205,24 @@ function PlaybackControls()
 				}
 				return;
 			}
+	}
+	this.FrameTimestampUpdated = function (utc)
+	{
+		if (utc && settings.ui3_extra_playback_controls_timestamp === "1")
+		{
+			var dateStr = GetDateStr(GetServerDate(new Date(utc)));
+			$playbackFrameTimestamp.text(dateStr);
+			if (!pcFrameTimestampVisible)
+			{
+				$playbackFrameTimestamp.show();
+				pcFrameTimestampVisible = true;
+			}
+		}
+		else if (pcFrameTimestampVisible)
+		{
+			$playbackFrameTimestamp.hide();
+			pcFrameTimestampVisible = false;
+		}
 	}
 	var NotifySpeedChanged = function ()
 	{
@@ -4941,7 +4970,13 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 			pageX: e.pageX - dragOffset,
 			pageY: e.pageY,
 			type: e.type,
-			noSeekHint: true
+			noSeekHint: true,
+			which: e.which,
+			preventDefault: function ()
+			{
+				if (e.preventDefault)
+					e.preventDefault();
+			}
 		};
 	}
 	var Initialize = function ()
@@ -4951,9 +4986,12 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 			mouseCoordFixer.fix(e);
 			if (touchEvents.Gate(e))
 				return;
-			self.mouseDown(e);
-			seekBar.mouseDown(FakeMouseEventForSeekBar(e));
-			return false;
+			if (e.which != 3)
+			{
+				self.mouseDown(e);
+				seekBar.mouseDown(FakeMouseEventForSeekBar(e));
+				return false;
+			}
 		});
 	}
 
@@ -8670,9 +8708,9 @@ function VideoPlayerController()
 			if (w < 240)
 				str = "LIVE";
 			else if (w < 325)
-				str = "LIVE: " + GetTimeStr(GetServerDate(lastFrameDate))
+				str = "LIVE: " + GetTimeStr(GetServerDate(lastFrameDate));
 			else
-				str = "LIVE: " + GetDateStr(GetServerDate(lastFrameDate))
+				str = "LIVE: " + GetDateStr(GetServerDate(lastFrameDate));
 			playbackControls.SetProgressText(str);
 		}
 
@@ -8832,6 +8870,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 		CopyImageToCanvas(imgEle, camimg_preview_ele);
 		Show();
 		videoOverlayHelper.HideLoadingOverlay();
+		playbackControls.FrameTimestampUpdated(false);
 	}
 	this.RenderDataURI = function (startTime, uniqueId, dataUri)
 	{
@@ -8909,6 +8948,8 @@ function JpegVideoModule()
 				loadedFirstFrame = true;
 				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
 				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, new Date(currentImageRequestedAtMs));
+
+				playbackControls.FrameTimestampUpdated(false);
 
 				CopyImageToCanvas(camimg_ele, camimg_canvas_ele);
 
@@ -9709,6 +9750,10 @@ function FetchOpenH264VideoModule()
 		currentSeekPositionPercent = frame.pos / 10000;
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
+		if (loading.isLive)
+			playbackControls.FrameTimestampUpdated(false);
+		else
+			playbackControls.FrameTimestampUpdated(frame.utc);
 		writeNerdStats(frame, timeNow);
 		lastFrameAt = timeNow;
 		if (playbackPaused && !loading.isLive)
@@ -17420,7 +17465,7 @@ function stopDefault(e)
 	{
 		e.preventDefault();
 	}
-	else
+	else if (window.event)
 	{
 		window.event.returnValue = false;
 	}
