@@ -4988,6 +4988,12 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 	}
 	var Initialize = function ()
 	{
+		$handle.attr('title', 'Right-click handle to set to current playback position');
+		$handle.on('contextmenu', function (e)
+		{
+			self.setPosition(videoPlayer.GetClipPlaybackPositionPercent());
+			return false;
+		});
 		$handle.on("mousedown touchstart", function (e)
 		{
 			mouseCoordFixer.fix(e);
