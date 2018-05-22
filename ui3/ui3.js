@@ -1237,6 +1237,13 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
+			key: "ui3_extra_playback_controls_alwaysVisible"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Always Visible'
+			, category: "Extra"
+		}
+		, {
 			key: "ui3_ir_brightness_contrast"
 			, value: "0"
 			, inputType: "checkbox"
@@ -3893,7 +3900,7 @@ function PlaybackControls()
 		if (isVisible)
 		{
 			CloseSettings();
-			if (self.IsSeekbarDragging() || exportControls.IsEnabled())
+			if (self.IsSeekbarDragging() || exportControls.IsEnabled() || settings.ui3_extra_playback_controls_alwaysVisible === "1")
 				return;
 			$pc.stop(true, true);
 			$pc.fadeOut(100);
