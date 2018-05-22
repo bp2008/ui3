@@ -12705,7 +12705,10 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs)
 			$linkLabel.text("Click the link below to save!");
 		}
 		else
+		{
 			$linkLabel.text("Error!");
+			userHasDownloadedAVI = true;
+		}
 
 		$closeBtn.val("Close");
 		$closeBtn.attr('iscancel', '0');
@@ -12835,6 +12838,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, expor
 			HandleAviReady();
 		else
 		{
+			console.error("Export Failed: " + message);
 			HandleExportFailure("Export failed because the data stream ended prematurely!");
 			exportCompleteCb = null;
 		}
@@ -12857,7 +12861,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, expor
 	var HandleExportFailure = function (reason)
 	{
 		progressUpdate(3, reason);
-		toaster.Error("Export failed because no frames were received.", 30000);
+		toaster.Error(reason, 30000);
 		if (exportCompleteCb)
 			exportCompleteCb();
 	}
@@ -15162,7 +15166,17 @@ var BILogger = function ()
 	{
 		try
 		{
-			console.log(msg);
+			console.log.apply(null, arguments);
+		}
+		catch (ex)
+		{
+		}
+	}
+	var errorInner = function (msg)
+	{
+		try
+		{
+			console.error.apply(null, arguments);
 		}
 		catch (ex)
 		{
@@ -15170,7 +15184,7 @@ var BILogger = function ()
 	}
 	this.verbose = logInner;
 	this.info = logInner;
-	this.debug = logInner;
+	this.debug = errorInner;
 }
 var bilog = new BILogger();
 ///////////////////////////////////////////////////////////////
