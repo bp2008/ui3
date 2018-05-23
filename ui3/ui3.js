@@ -5350,6 +5350,7 @@ function ClipLoader(clipsBodySelector)
 						newestClipDate = clip.date;
 					var clipData = new Object();
 					clipData.rawData = clip;
+					clipData.rawClipData = clip;
 					clipData.isClip = isClipList;
 					clipData.roughLength = CleanUpFileSize(clip.filesize);
 					clipData.roughLengthMs = GetClipLengthMs(clipData.roughLength);
@@ -5696,6 +5697,7 @@ function ClipLoader(clipsBodySelector)
 		clipData.hasLoadedClipStats = true;
 		clipData.msec = stats.msec;
 		clipData.fileSize = GetFileSize(stats.filesize);
+		clipData.rawClipData = stats;
 		return true;
 	}
 	var GetClipLengthMs = function (str)
@@ -9774,7 +9776,7 @@ function FetchOpenH264VideoModule()
 			StopStreaming();
 		}
 	}
-	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
+	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
 	{
 		if (currentServer.isLoggingOut)
 			return;
@@ -12679,9 +12681,26 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs)
 	var durationMs = endTimeMs - startTimeMs;
 	var userHasDownloadedAVI = false;
 
+	var fastExport = false;
+	if (clipData.rawClipData.filetype)
+	{
+		var fileTypeParts = clipData.rawClipData.filetype.split(' ');
+		for (var i = 0; i < fileTypeParts.length; i++)
+			fileTypeParts[i] = fileTypeParts[i].toLowerCase();
+		var isBVR = fileTypeParts.indexOf("bvr") > -1;
+		var isH264 = fileTypeParts.indexOf("h264") > -1;
+		fastExport = isBVR && isH264;
+	}
+
 	var $dlg = $('<div class="activeExportDialog"></div>');
 	var $content = $('<div class="campropcontent"></div>');
 	$dlg.append($content);
+
+	var $exportTypeRow = $('<div class="dialogOption_item clipprop_item_info">Export Type: </div>');
+	var $exportType = $('<span></span>');
+	$exportTypeRow.append($exportType);
+	$exportTypeRow.append('<a href="javascript:UIHelp.LearnMore(\'Export Types\')">(learn more)</a>');
+	$content.append($exportTypeRow);
 
 	var $linkLabel = $('<div class="dialogOption_item clipprop_item_info">Your AVI file is being generated.</div>');
 	$content.append($linkLabel);
@@ -12692,17 +12711,29 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs)
 	var $closeBtn = $('<input type="button" value="Cancel" style="display:block;margin:40px auto 0px auto;" iscancel="1" />');
 	$content.append($closeBtn);
 
+	var updateExportType = function ()
+	{
+		if (fastExport)
+			$exportType.text("Native ");
+		else
+			$exportType.text("Slow Transcode ");
+	}
+	updateExportType();
+
 	var progressUpdate = function (state, message)
 	{
 		$status.text(message);
 	}
-	var exportComplete = function (dataUri)
+	var exportComplete = function (dataUri, finishedSuccessfully)
 	{
 		if (dataUri)
 		{
 			$status.after(GetLink(dataUri));
 			$status.remove();
-			$linkLabel.text("Click the link below to save!");
+			if (finishedSuccessfully)
+				$linkLabel.text("Click the link below to save!");
+			else
+				$linkLabel.text("The export did not complete, but we got some video data.  Click the link below to save it!");
 		}
 		else
 		{
@@ -12758,14 +12789,14 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs)
 			dialog.close();
 	});
 
-	var exportStreamer = new ClipExportStreamer(clipData.path, startTimeMs, durationMs, progressUpdate, exportComplete, enableRecordingOffsetWorkaround);
+	var exportStreamer = new ClipExportStreamer(clipData.path, startTimeMs, durationMs, !fastExport, progressUpdate, exportComplete, enableRecordingOffsetWorkaround);
 }
 ///////////////////////////////////////////////////////////////
 // Clip Export Streaming //////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var ui3ClipIsExporting = false; // This flag helps the H.264 player module not end the fetch stream if the browser tab visibility changes.
 var enableRecordingOffsetWorkaround = true;
-function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, exportCompleteCb, recordingOffsetWorkaround)
+function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, progressUpdate, exportCompleteCb, recordingOffsetWorkaround)
 {
 	var self = this;
 	var aviEncoder = null;
@@ -12808,7 +12839,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, expor
 			totalExportedTimeMs = frame.time;
 			if (frame.time >= durationMs)
 			{
-				HandleAviReady();
+				HandleAviReady(true, -1);
 				safeFetch.CloseStream();
 			}
 			else
@@ -12830,31 +12861,52 @@ function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, expor
 		aviEncoder = new AVIEncoder("H264", bitmapInfoHeader, waveFormatEx ? "ulaw" : null, waveFormatEx);
 		progressUpdate(1, "Export progress: 0%");
 	}
-	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
+	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
 	{
 		if (!exportCompleteCb)
 			return;
 		if (videoFinishedStreaming)
-			HandleAviReady();
+			HandleAviReady(true, 0);
 		else
 		{
-			console.error("Export Failed: " + message);
-			HandleExportFailure("Export failed because the data stream ended prematurely!");
-			exportCompleteCb = null;
+			if (aviEncoder && totalVideoFrames > 0)
+			{
+				// At least one frame was received before the failure.  Provide the AVI but let it be known that we didn't get all we expected.
+				HandleAviReady(false, -1);
+			}
+			else
+			{
+				console.error("Export Failed: " + message, responseError);
+				if (responseError)
+					HandleExportFailure("Export failed because the fetch video response was \"" + responseError + "\"");
+				else
+					HandleExportFailure("Export failed because the data stream ended prematurely!");
+				exportCompleteCb = null;
+			}
 		}
 	}
-	var HandleAviReady = function ()
+	var HandleAviReady = function (finishedSuccessfully, frameCountOffset)
 	{
 		if (exportCompleteCb)
 		{
-			progressUpdate(3, "Export progress: 100%");
+			if (finishedSuccessfully)
+				progressUpdate(3, "Export progress: 100%");
 			if (aviEncoder)
 			{
-				var fps = (totalVideoFrames / totalExportedTimeMs) * 1000;
-				exportCompleteCb(Uint8ArrayToDataURI(aviEncoder.FinishAndGetUint8Array(fps)));
+				var fps;
+				if (totalVideoFrames <= 0)
+					HandleExportFailure("Export failed because no video frames were received.");
+				else if (totalVideoFrames == 1 || totalExportedTimeMs <= 0)
+					fps = 1;
+				else
+				{
+					// frameCountOffset accounts for the fact that sometimes our totalExportedTimeMs value will not include the duration of the last frame.  In theory this results in a more accurate FPS calculation.
+					fps = ((totalVideoFrames + frameCountOffset) / totalExportedTimeMs) * 1000;
+				}
+				exportCompleteCb(Uint8ArrayToDataURI(aviEncoder.FinishAndGetUint8Array(fps)), finishedSuccessfully);
 			}
 			else
-				HandleExportFailure("Export failed because no frames were received.");
+				HandleExportFailure("Export failed because no stream metadata was received.");
 			exportCompleteCb = null;
 		}
 	}
@@ -12878,7 +12930,8 @@ function ClipExportStreamer(path, startTimeMs, durationMs, progressUpdate, expor
 
 	var beginRecording = function ()
 	{
-		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + "&record=1&speed=100&audio=1&stream=0&extend=2&time=" + startTimeMs;
+		var recordArg = useTranscodeMethod ? "" : "&record=1";
+		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + recordArg + "&speed=100&audio=1&stream=0&extend=2&time=" + startTimeMs;
 		safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 	}
 	if (recordingOffsetWorkaround)
@@ -15371,7 +15424,7 @@ var safeFetch = new (function ()
 		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
 		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, queuedRequest.streamInfoCallback, StreamEndedWrapper);
 	}
-	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming)
+	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
 	{
 		if (stopTimeout != null)
 		{
@@ -15380,7 +15433,7 @@ var safeFetch = new (function ()
 		}
 		streamer = null;
 		if (streamEndedCbForActiveFetch)
-			streamEndedCbForActiveFetch(message, wasJpeg, wasAppTriggered, videoFinishedStreaming);
+			streamEndedCbForActiveFetch(message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError);
 		OpenStreamNow();
 	}
 	var StopTimedOut = function ()
@@ -15418,6 +15471,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 	var bitmapHeader = null;
 	var audioHeader = null;
 	var abort_controller = null;
+	var responseError = null;
 
 	this.StopStreaming = function ()
 	{
@@ -15504,6 +15558,8 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 				}
 				else
 				{
+					if (!res.ok)
+						responseError = res.status + " " + res.statusText;
 					// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
 					reader = res.body.getReader();
 					return pump(reader);
@@ -15532,7 +15588,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 		{
 			try
 			{
-				streamEnded(message, wasJpeg, stopCalledByApp, naturalEndOfStream);
+				streamEnded(message, wasJpeg, stopCalledByApp, naturalEndOfStream, responseError);
 			}
 			catch (e)
 			{
@@ -17102,6 +17158,9 @@ function UIHelpTool()
 			case "ui3-local-overrides":
 				UI3_Local_Overrides_Help();
 				break;
+			case "Export Types":
+				UI3_Export_Types_Help();
+				break;
 		}
 	}
 	var Context_Menu_On_Long_Press = function ()
@@ -17163,6 +17222,14 @@ function UIHelpTool()
 			+ 'The ui3-local-overrides system allows you to override default UI3 behavior for all your users.<br><br>'
 			+ '<a href="ui3/help/help.html#extensions" target="_blank">Click here to learn more about ui3-local-overrides.</a>'
 			+ '</div>').modalDialog({ title: 'ui3-local-overrides', closeOnOverlayClick: true });
+	}
+	var UI3_Export_Types_Help = function ()
+	{
+		$('<div class="UIHelp">'
+			+ 'UI3 will export in "Native" mode or "Slow Transcode" mode depending on the format of the source recording.<br><br>'
+			+ '"Native" mode is used when the source recording has H.264 video in a .bvr container.  This mode is fast (depending on network speed) and results in excellent video quality.<br><br>'
+			+ '"Slow Transcode" mode is used when "Native" mode is not possible.  This mode transcodes the source video to H.264 in real-time using your Streaming 0 profile.  The export will take about as many seconds as the size of the exported section.'
+			+ '</div>').modalDialog({ title: 'Export Types', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
