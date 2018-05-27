@@ -34,7 +34,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "23";
+		var ui_version = "24";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
@@ -352,6 +352,7 @@
 			<div id="seekhint_helper">Pause video to see preview.</div>
 			<div id="seekhint_label"></div>
 		</div>
+		<div id="cameraLabelsWrapper" class="hidden"></div>
 	</div>
 	<div id="layoutbottom">
 		<div id="layoutbottomTimeline">
@@ -359,7 +360,13 @@
 		</div>
 		<div id="exportControlsWrapper">
 			<div id="exportControlsStatus"></div>
-			<div id="exportControlsButtons"><input id="exportControlsExportBtn" type="button" value="Begin Export" /> <input id="exportControlsCancelBtn" type="button" value="Cancel" /></div>
+			<div id="exportControlsButtons">
+				<div id="exportControlsAudioButton">
+					<svg class="icon noflip audioDisabled"><use xlink:href="#svg_mio_volumeOff"></use></svg>
+					<svg class="icon noflip audioEnabled"><use xlink:href="#svg_mio_volumeUp"></use></svg>
+				</div>
+				<input id="exportControlsExportBtn" type="button" value="Begin Export" /><input id="exportControlsCancelBtn" type="button" value="Cancel" />
+			</div>
 		</div>
 	</div>
 	<div id="preloadcontainer" style="display: none">

@@ -265,6 +265,7 @@ var togglableContextMenus = null;
 var cameraConfig = null;
 var videoPlayer = null;
 var imageRenderer = null;
+var cameraNameLabels = null;
 var sessionManager = null;
 var statusLoader = null;
 var cameraListLoader = null;
@@ -338,8 +339,19 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var CameraLabelTextValues = {
+	Name: "Name",
+	ShortName: "Short Name",
+	Both: "Name (Short Name)"
+}
+var CameraLabelPositionValues = {
+	Above: "Above",
+	Top: "Top",
+	Bottom: "Bottom",
+	Below: "Below"
+}
 var settings = null;
-var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Extra"];
+var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Extra"];
 var defaultSettings =
 	[
 		{
@@ -388,6 +400,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_cliplist_mouseover_thumbnails"
+			, value: "1"
+		}
+		, {
+			key: "ui3_clip_export_withAudio"
 			, value: "1"
 		}
 		, {
@@ -487,7 +503,23 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_uiSettings_category_Event_Triggered_Icons_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_Event_Triggered_Sounds_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_uiSettings_category_Hotkeys_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_Camera_Labels_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_Extra_visible"
 			, value: "1"
 		}
 		, {
@@ -710,6 +742,22 @@ var defaultSettings =
 			, label: "Load Tab: Clips"
 			, hint: "Opens the Clips tab"
 			, actionDown: BI_Hotkey_Load_Tab_Clips
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_cameraLabels"
+			, value: "1|0|0|76" // 76: L
+			, hotkey: true
+			, label: "Toggle Camera Labels"
+			, actionDown: BI_Hotkey_Toggle_Camera_Labels
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_downloadframe"
+			, value: "1|0|0|83" // 83: S
+			, hotkey: true
+			, label: "Download Frame"
+			, actionDown: BI_Hotkey_DownloadFrame
 			, category: "Hotkeys"
 		}
 		, {
@@ -1188,6 +1236,61 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_cameraLabels_enabled"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Camera Labels Enabled'
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_text"
+			, value: CameraLabelTextValues.Name
+			, inputType: "select"
+			, options: [CameraLabelTextValues.Name, CameraLabelTextValues.ShortName, CameraLabelTextValues.Both]
+			, label: "Label Text"
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_position"
+			, value: CameraLabelPositionValues.Top
+			, inputType: "select"
+			, options: [CameraLabelPositionValues.Above, CameraLabelPositionValues.Top, CameraLabelPositionValues.Bottom, CameraLabelPositionValues.Below]
+			, label: "Label Position"
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_fontSize"
+			, value: 10
+			, inputType: "number"
+			, minValue: 0
+			, maxValue: 128
+			, label: "Font Size"
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_minimumFontSize"
+			, value: 6
+			, inputType: "number"
+			, minValue: 0
+			, maxValue: 128
+			, label: "Min Font Size"
+			, hint: "When a group view is rendered smaller than native resolution, font size is scaled down no smaller than this."
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_cameraColor"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Use Camera Color'
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
 			key: "ui3_fullscreen_videoonly"
 			, value: "1"
 			, inputType: "checkbox"
@@ -1603,6 +1706,8 @@ $(function ()
 	videoPlayer.PreLoadPlayerModules();
 
 	imageRenderer = new ImageRenderer();
+
+	cameraNameLabels = new CameraNameLabels();
 
 	statusLoader = new StatusLoader();
 
@@ -4693,6 +4798,9 @@ function ExportControls()
 	var $layoutBottom = $('#layoutbottom');
 	var $exportOffsetWrapper = $("#exportOffsetWrapper");
 	var $exportControlsWrapper = $("#exportControlsWrapper");
+	var $exportControlsAudioButton = $("#exportControlsAudioButton");
+	var $audioDisabled = $exportControlsAudioButton.children(".audioDisabled");
+	var $audioEnabled = $exportControlsAudioButton.children(".audioEnabled");
 	var exportOffsetStart;
 	var exportOffsetEnd;
 	var $exportControlsStatus = $("#exportControlsStatus");
@@ -4715,8 +4823,30 @@ function ExportControls()
 		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
 		$exportControlsExportBtn.on('click', beginExport);
 		$exportControlsCancelBtn.on('click', self.Disable);
+		$exportControlsAudioButton.on('click', ToggleAudioButtonState);
+		SetAudioButtonState();
 	}
-
+	var ToggleAudioButtonState = function ()
+	{
+		settings.ui3_clip_export_withAudio = settings.ui3_clip_export_withAudio === "1" ? "0" : "1";
+		SetAudioButtonState();
+	}
+	var SetAudioButtonState = function ()
+	{
+		var not = "";
+		if (settings.ui3_clip_export_withAudio === "1")
+		{
+			$exportControlsAudioButton.attr("title", "Audio will be included in the export, if available.");
+			$audioDisabled.hide();
+			$audioEnabled.show();
+		}
+		else
+		{
+			$exportControlsAudioButton.attr("title", "Audio will NOT be included in the export.");
+			$audioDisabled.show();
+			$audioEnabled.hide();
+		}
+	}
 	this.resized = function ()
 	{
 		if (!controlsEnabled)
@@ -4898,7 +5028,7 @@ function ExportControls()
 		var estimatedSize = percentOfClip * fileSizeBytes;
 		var proceedFunc = function ()
 		{
-			new ActiveClipExportDialog(clipData, startTimeMs, endTimeMs);
+			new ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, settings.ui3_clip_export_withAudio === "1");
 			self.Disable();
 		}
 		if (estimatedSize >= 950000000)
@@ -10717,6 +10847,100 @@ function ImageRenderer()
 	});
 }
 ///////////////////////////////////////////////////////////////
+// Camera Name Labels /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function onui3_cameraLabelsChanged()
+{
+	cameraNameLabels.show();
+}
+function CameraNameLabels()
+{
+	var self = this;
+	var $camimg_wrapper = $("#camimg_wrapper");
+	var $camLabels_wrapper = $("#cameraLabelsWrapper");
+
+	BI_CustomEvent.AddListener("ImageResized", onui3_cameraLabelsChanged);
+
+	this.show = function (isHotkeyShow)
+	{
+		self.hide();
+		var loaded = videoPlayer.Loaded();
+		if (!loaded.cam || !loaded.image.uniqueId || settings.ui3_cameraLabels_enabled != "1")
+			return;
+
+		var showName = settings.ui3_cameraLabels_text === CameraLabelTextValues.Name;
+		var showShortName = settings.ui3_cameraLabels_text === CameraLabelTextValues.ShortName;
+		if (settings.ui3_cameraLabels_text === CameraLabelTextValues.Both)
+			showName = showShortName = true;
+		if (!showName && !showShortName)
+			return;
+
+		if (loaded.image.isGroup)
+		{
+			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.actualwidth;
+			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.actualheight;
+			var offsetCamHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Below;
+			var offsetNegativeLabelHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Above || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom;
+
+			// Calculate label font size
+			var fontSizePt = parseFloat(settings.ui3_cameraLabels_fontSize);
+
+			var zoomAmount = (scaleX + scaleY) / 2; // scaleX and scaleY are probably the same or very close anyway.
+			fontSizePt *= zoomAmount;
+			var minScaledFontSize = parseFloat(settings.ui3_cameraLabels_minimumFontSize);
+			if (fontSizePt < minScaledFontSize)
+				fontSizePt = minScaledFontSize;
+
+			var imgPos = $camimg_wrapper.position();
+			for (var i = 0; i < loaded.cam.group.length; i++)
+			{
+				var cam = cameraListLoader.GetCameraWithId(loaded.cam.group[i]);
+				var rect = loaded.cam.rects[i];
+
+				// Calculate scaled/adjusted rectangle boundaries
+				var adjX = rect[0] * scaleX;
+				var adjY = rect[1] * scaleY;
+				var adjW = (rect[2] - rect[0]) * scaleX;
+				var adjH = (rect[3] - rect[1]) * scaleY;
+
+				// Create and style labels.
+				var $label = $('<div class="cameraNameLabel"></div>');
+				if (showName && showShortName)
+					$label.text(cam.optionDisplay + " (" + cam.optionValue + ")");
+				else if (showName)
+					$label.text(cam.optionDisplay);
+				else
+					$label.text(cam.optionValue);
+				$label.css("width", adjW + "px");
+				if (settings.ui3_cameraLabels_cameraColor == "1")
+				{
+					var colorHex = BlueIrisColorToCssColor(cam.color);
+					$label.css("background-color", "#" + colorHex);
+					$label.css("color", "#" + GetReadableTextColorHexForBackgroundColorHex(colorHex));
+				}
+				$label.css("font-size", fontSizePt + "pt");
+				$label.css("left", (adjX + imgPos.left) + "px");
+				$camLabels_wrapper.append($label);
+
+				var yOffset = 0;
+				if (offsetCamHeight)
+					yOffset += adjH;
+				if (offsetNegativeLabelHeight)
+					yOffset -= $label.height();
+				$label.css("top", (adjY + imgPos.top + yOffset) + "px");
+			}
+		}
+		else if (isHotkeyShow)
+		{
+			toaster.Info("Camera name labels can only be shown on groups of cameras.");
+		}
+	}
+	this.hide = function ()
+	{
+		$camLabels_wrapper.empty();
+	}
+}
+///////////////////////////////////////////////////////////////
 // VideoCenter Icons and Video Loading/Buffering Overlay //////
 ///////////////////////////////////////////////////////////////
 var videoOverlayHelper = new (function ()
@@ -12673,7 +12897,7 @@ function ClipDownloadDialog()
 ///////////////////////////////////////////////////////////////
 // Clip Export Dialog /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs)
+function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 {
 	// <summary>This dialog controls the actual export operation and lacks a normal close button.</summary>
 	var self = this;
@@ -12789,14 +13013,14 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs)
 			dialog.close();
 	});
 
-	var exportStreamer = new ClipExportStreamer(clipData.path, startTimeMs, durationMs, !fastExport, progressUpdate, exportComplete, enableRecordingOffsetWorkaround);
+	var exportStreamer = new ClipExportStreamer(clipData.path, startTimeMs, durationMs, !fastExport, includeAudio, progressUpdate, exportComplete, enableRecordingOffsetWorkaround);
 }
 ///////////////////////////////////////////////////////////////
 // Clip Export Streaming //////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var ui3ClipIsExporting = false; // This flag helps the H.264 player module not end the fetch stream if the browser tab visibility changes.
 var enableRecordingOffsetWorkaround = true;
-function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, progressUpdate, exportCompleteCb, recordingOffsetWorkaround)
+function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, includeAudio, progressUpdate, exportCompleteCb, recordingOffsetWorkaround)
 {
 	var self = this;
 	var aviEncoder = null;
@@ -12931,7 +13155,8 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, p
 	var beginRecording = function ()
 	{
 		var recordArg = useTranscodeMethod ? "" : "&record=1";
-		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + recordArg + "&speed=100&audio=1&stream=0&extend=2&time=" + startTimeMs;
+		var audioArg = "&audio=" + (includeAudio ? "1" : "0");
+		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + recordArg + audioArg + "&speed=100&stream=0&extend=2&time=" + startTimeMs;
 		safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 	}
 	if (recordingOffsetWorkaround)
@@ -14234,6 +14459,15 @@ function BI_Hotkey_Load_Tab_Alerts()
 function BI_Hotkey_Load_Tab_Clips()
 {
 	$('.topbar_tab[name="clips"]').click();
+}
+function BI_Hotkey_Toggle_Camera_Labels()
+{
+	settings.ui3_cameraLabels_enabled = settings.ui3_cameraLabels_enabled === "1" ? "0" : "1";
+	cameraNameLabels.show();
+}
+function BI_Hotkey_DownloadFrame()
+{
+	$("#save_snapshot_btn").get(0).click();
 }
 function BI_Hotkey_NextCamera()
 {
@@ -17240,10 +17474,10 @@ function CollapsibleSection(id, htmlTitle, dialogToNotify)
 	var self = this;
 	var settingsKey = "ui3_cps_" + id.replace(/\W/g, '_') + "_visible";
 	var visibleSetting = settings.getItem(settingsKey);
-	if (visibleSetting != "0" && visibleSetting != "1")
+	if (visibleSetting !== "0" && visibleSetting !== "1")
 	{
 		// The setting should have been added to defaultSettings.
-		console.log("SETTING DOES NOT EXIST", settingsKey);
+		console.error("SETTING DOES NOT EXIST", settingsKey);
 		visibleSetting = "1";
 		settings.setItem(settingsKey, visibleSetting);
 	}
