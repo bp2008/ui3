@@ -2298,7 +2298,8 @@ div.invisibleLabel
 	display: none;
 }
 
-.videoCanvas
+.videoCanvas,
+#pnacl_wrapper
 {
 	width: 100%;
 	height: 100%;
