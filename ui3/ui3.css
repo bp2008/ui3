@@ -2305,6 +2305,14 @@ div.invisibleLabel
 	height: 100%;
 }
 
+	#pnacl_wrapper.deactivated
+	{
+		position: absolute;
+		top: -50000px;
+		left: -50000px;
+		opacity: 0;
+	}
+
 #zoomhint
 {
 	position: absolute;

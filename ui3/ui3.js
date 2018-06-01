@@ -10575,7 +10575,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			}
 			else if (message_event.data.startsWith("vr ")) // Video Resized and the player is about to start painting a frame of this size.
 			{
-				//console.log(message_event.data);
+				videoPlayer.CameraOrResolutionChange();
 			}
 			//else if (message_event.data.startsWith("Received frame "))
 			//{
@@ -10625,7 +10625,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		console.log("pnacl_player.Initialize()");
 		var $parent = $("#pnacl_wrapper");
 		$parent.remove();
-		$parent = $('<div id="pnacl_wrapper"></div>');
+		$parent = $('<div id="pnacl_wrapper" class="deactivated"></div>');
 		$startingContainer.append($parent);
 
 		var listenerDiv = $parent.get(0);
@@ -10721,9 +10721,9 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	this.Toggle = function ($wrapper, activate)
 	{
 		if (activate)
-			$("#pnacl_wrapper").show();
+			$("#pnacl_wrapper").removeClass('deactivated');
 		else
-			$("#pnacl_wrapper").hide();
+			$("#pnacl_wrapper").addClass('deactivated');
 	}
 	this.ClearDrawingSurface = function ()
 	{
