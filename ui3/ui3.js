@@ -382,7 +382,7 @@ var togglableUIFeatures =
 // Notes that require BI changes //////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Around May 11, 2018 with BI 4.7.4.1, Blue Iris began enforcing a default jpeg height of 720px sourced from the Streaming 0 profile's frame size setting and I haven't been able to talk the developer out of it.  UI3 now works around this by appending w=99999 to jpeg requests that are intended to be native resolution.  If this limit goes away, the workarounds should be removed.  The workarounds are tagged with "LOC0" (approximately 9 locations).
+// TODO: Around May 11, 2018 with BI 4.7.4.1, Blue Iris began enforcing a default jpeg height of 720px sourced from the Streaming 0 profile's frame size setting and I haven't been able to talk the developer out of it.  UI3 now works around this by appending w=99999 to jpeg requests that are intended to be native resolution.  If this limit goes away, the workarounds should be removed.  The workarounds are tagged with "LOC0" (approximately 9 locations).  Since shortly after, this affects quality too, so a q=85 argument has been added at LOC0 locations too.
 
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
@@ -390,6 +390,7 @@ var togglableUIFeatures =
 
 // TODO: EDGE + HTML5: As a clip ends and Delayed Frames goes down, Network Delay goes up.
 // TODO: Chrome + HTML5: "video stalled" warnings appear in the console a moment after a clip ends.  Perhaps the player is not being reset/flushed.
+// TODO: Seeking to the end of a paused clip in H.264 mode causes the first frame to load while the seek bar remains at the end.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -12270,10 +12271,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
 		else
 			downloadButton.wrap('<a id="cmroot_liveview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */
+				+ videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */
 				+ '" onclick="saveSnapshot(&quot;#cmroot_liveview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_liveview_downloadlink").attr("download", "temp.jpg");
 
@@ -12339,10 +12340,10 @@ function CanvasContextMenu()
 				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
 				break;
 			case "opennewtab":
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
 				break;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */;
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */;
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -12409,10 +12410,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
 		else
 			downloadButton.wrap('<a id="cmroot_recordview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */
+				+ videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */
 				+ '" onclick="saveSnapshot(&quot;#cmroot_recordview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_recordview_downloadlink").attr("download", "temp.jpg");
 
@@ -12441,7 +12442,7 @@ function CanvasContextMenu()
 				break;
 			case "opennewtab":
 				videoPlayer.Playback_Pause();
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
 				break;
 			case "saveas":
 				return true;
@@ -12457,7 +12458,7 @@ function CanvasContextMenu()
 				nerdStats.Open();
 				return;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */;
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */;
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -15052,7 +15053,7 @@ function saveSnapshot(btnSelector)
 	date = date.replace(/\//g, '-').replace(/:/g, '.');
 	var fileName = camName + " " + date + ".jpg";
 	$(btnSelector).attr("download", fileName);
-	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999" /* LOC0 */);
+	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
 	setTimeout(function ()
 	{
 		$(btnSelector).attr("download", "temp.jpg");
