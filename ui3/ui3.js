@@ -388,10 +388,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: EDGE + HTML5: As a clip ends and Delayed Frames goes down, Network Delay goes up.
-// TODO: Chrome + HTML5: "video stalled" warnings appear in the console a moment after a clip ends.  Perhaps the player is not being reset/flushed.
-// TODO: Seeking to the end of a paused clip in H.264 mode causes the first frame to load while the seek bar remains at the end.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -9420,7 +9416,8 @@ function JpegVideoModule()
 		{
 			if ((lastLoadedTimeValue == timeValue
 				&& loading.uniqueId == videoPlayer.Loaded().image.uniqueId
-				&& !CouldBenefitFromWidthChange(widthToRequest))
+				&& !CouldBenefitFromWidthChange(widthToRequest)
+				&& loadedFirstFrame)
 				|| !isVisible
 			)
 			{
@@ -9811,7 +9808,8 @@ function FetchH264VideoModule()
 				// This allows us to seek frame-by-frame with millisecond precision 
 				// instead of precision equalling 1/10000th of the clip's duration.
 				// isSameClipAsBefore helps ensure we have an accurate msec value.
-				offsetArg = "&time=" + (currentSeekPositionPercent * loading.msec).dropDecimals();
+				var offsetMsec = currentSeekPositionPercent === 1 && !startPaused ? 0 : -1;
+				offsetArg = "&time=" + (currentSeekPositionPercent * (loading.msec + offsetMsec)).dropDecimals();
 				posArg = "";
 			}
 			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
@@ -10994,6 +10992,11 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				StartPlayback();
 			}, 1);
 	}
+	var onPlayerStalled = function (e)
+	{
+		if (acceptedFrameCount > 0)
+			console.log("HTML5 video stalled");
+	}
 	var dropFrame = function ()
 	{
 		finishedFrameCount++;
@@ -11028,7 +11031,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		player.addEventListener('timeupdate', onTimeUpdate);
 		player.addEventListener('loadedmetadata', onTimeUpdate);
 		player.addEventListener('pause', onPlayerPaused);
-		player.addEventListener('stalled', function (e) { console.log("HTML5 video stalled"); });
+		player.addEventListener('stalled', onPlayerStalled);
 		player.addEventListener('suspend', function (e) { console.log("HTML5 video suspended"); });
 
 		isLoaded = true;
@@ -11072,6 +11075,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		/// If the system has sufficient network bandwidth, this number should remain close to 0.
 		/// One or two frames worth of delay is nothing to worry about.
 		/// </summary>
+		if (allFramesAccepted)
+			return 0;
 		return netDelayCalc.Calc();
 	}
 	this.GetBufferedTime = function ()
@@ -11092,6 +11097,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			jmuxer.destroy();
 			jmuxer = null;
 		}
+		player.pause();
 		delayCompensation = new HTML5DelayCompensationHelper(player);
 		lastFrame = false;
 		lastFrameDuration = 0;
@@ -11128,6 +11134,10 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 					$('body').append($inputOverlay);
 					inputRequiredOverlayIsActive = true;
 					playerErrorHandler("INPUT REQUIRED");
+				}
+				else if (acceptedFrameCount === 0)
+				{
+					// Probably we just Flushed the player.
 				}
 				else
 					toaster.Warning(ex.message, 15000);
@@ -11276,7 +11286,6 @@ function HTML5DelayCompensationHelper(player)
 		else
 		{
 			averager.Add(delayedTime);
-			console.log("Average Delay: " + averager.Get());
 		}
 	}
 	var UpdateAggressionLevel = function ()
