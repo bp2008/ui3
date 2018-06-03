@@ -10942,7 +10942,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var frameMetadataQueue = new FrameMetadataQueue();
 
 	var lastFrame;
-	var lastFrameDuration = 0;
+	var lastFrameDuration = 16;
 	var hasToldPlayerToPlay = false;
 	var playerW;
 	var playerH;
@@ -11100,7 +11100,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		player.pause();
 		delayCompensation = new HTML5DelayCompensationHelper(player);
 		lastFrame = false;
-		lastFrameDuration = 0;
+		lastFrameDuration = 16;
 		acceptedFrameCount = 0;
 		finishedFrameCount = 0;
 		frameMetadataQueue.Reset();
