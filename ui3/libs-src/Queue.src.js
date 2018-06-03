@@ -91,12 +91,9 @@ function Queue()
 	{
 		var len = (queue.length - offset);
 		var arr = new Array(len);
-		for (var i = 0, n = offset; i < len; i++ , n++)
-		{
-			if (n >= len)
-				n = 0;
-			arr[i] = queue[n];
-		}
+		var n = 0;
+		for (var i = offset; i < queue.length; i++)
+			arr[n++] = queue[i];
 		return arr;
 	}
 	this.find = function (where)

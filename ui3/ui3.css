@@ -2299,19 +2299,30 @@ div.invisibleLabel
 }
 
 .videoCanvas,
-#pnacl_wrapper
+#videoElement_wrapper,
+#videoElement_wrapper video
 {
 	width: 100%;
 	height: 100%;
 }
 
-	#pnacl_wrapper.deactivated
+	#videoElement_wrapper.deactivated
 	{
 		position: absolute;
 		top: -50000px;
 		left: -50000px;
 		opacity: 0;
 	}
+
+	#videoElement_wrapper video
+	{
+		pointer-events: none;
+	}
+
+body + div
+{
+	display: none !important; /* Remove opera's video element overlay */
+}
 
 #zoomhint
 {
@@ -2323,6 +2334,30 @@ div.invisibleLabel
 	margin: 0px 5px 5px 0px;
 	font-size: 16px;
 }
+
+.inputRequiredToPlay
+{
+	width: 100%;
+	height: 100%;
+	top: 0px;
+	left: 0px;
+	position: absolute;
+	background-color: rgba(0,0,0,0.5);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+	.inputRequiredToPlay div
+	{
+		font-size: 16pt;
+		background-color: rgba(25,0,0,0.75);
+		text-align: center;
+		padding: 20px;
+		margin: 10px;
+		border: 3px outset #BB6666;
+		border-radius: 5px;
+	}
 
 .camimg_loading
 {

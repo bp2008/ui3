@@ -8,6 +8,20 @@ var developerMode = false;
 ///////////////////////////////////////////////////////////////
 // Feature Detect /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var _browser_is_ie = -1;
+function BrowserIsIE()
+{
+	if (_browser_is_ie == -1)
+		_browser_is_ie = /MSIE \d|Trident.*rv:/.test(navigator.userAgent) ? 1 : 0;
+	return _browser_is_ie == 1;
+}
+var _browser_is_edge = -1;
+function BrowserIsEdge()
+{
+	if (_browser_is_edge === -1)
+		_browser_is_edge = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
+	return _browser_is_edge === 1;
+}
 var h264_playback_supported = false;
 var audio_playback_supported = false;
 var web_workers_supported = false;
@@ -19,10 +33,13 @@ var webgl_supported = false;
 var web_audio_supported = false;
 var web_audio_buffer_source_supported = false;
 var web_audio_buffer_copyToChannel_supported = false;
+var web_audio_requires_user_input = false;
 var fullscreen_supported = false;
 var browser_is_ios = false;
 var browser_is_android = false;
 var pnacl_player_supported = false;
+var mse_mp4_h264_supported = false;
+var mse_mp4_aac_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -42,37 +59,21 @@ function DoUIFeatureDetection()
 			export_blob_supported = detectIfCanExportBlob();
 			fetch_supported = typeof fetch == "function";
 			readable_stream_supported = typeof ReadableStream === "function";
-			pnacl_player_supported = detectIfPnaclSupported();
 			webgl_supported = detectWebGLContext();
-			var AudioContext = window.AudioContext || window.webkitAudioContext;
-			if (AudioContext)
-			{
-				try
-				{
-					var context = new AudioContext();
-
-					if (typeof context.createGain === "function")
-					{
-						web_audio_supported = true;
-
-						if (typeof context.createBuffer === "function" && typeof context.createBufferSource === "function")
-						{
-							var buffer = context.createBuffer(1, 1, 22050);
-							if (buffer)
-							{
-								web_audio_buffer_source_supported = true;
-								if (typeof buffer.copyFromChannel === "function" && typeof buffer.copyToChannel === "function")
-									web_audio_buffer_copyToChannel_supported = true;
-							}
-						}
-					}
-				}
-				catch (ex) { }
-			}
+			detectAudioSupport();
 			fullscreen_supported = ((document.documentElement.requestFullscreen || document.documentElement.msRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.webkitRequestFullscreen) && (document.exitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen || document.webkitExitFullscreen)) ? true : false;
 			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported && webgl_supported;
 			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported && web_audio_buffer_copyToChannel_supported;
 			exporting_clips_to_avi_supported = h264_playback_supported && export_blob_supported;
+
+			if (h264_playback_supported)
+			{
+				pnacl_player_supported = detectIfPnaclSupported();
+				var mse_support = detectMSESupport();
+				mse_mp4_h264_supported = (mse_support & 1) > 0;
+				mse_mp4_aac_supported = (mse_support & 2) > 0; // Not yet used
+			}
+
 			$(function ()
 			{
 				var ul_root = $('<ul></ul>');
@@ -124,6 +125,15 @@ function DoUIFeatureDetection()
 					$opt.append(ul_root);
 					$opt.show();
 				}
+				var $videoPlayers = $("<ul></ul>");
+				$videoPlayers.append("<li>Jpeg</li>");
+				if (h264_playback_supported)
+					$videoPlayers.append("<li>H.264 via JavaScript</li>");
+				if (pnacl_player_supported)
+					$videoPlayers.append("<li>H.264 via NaCl</li>");
+				if (mse_mp4_h264_supported)
+					$videoPlayers.append("<li>H.264 via HTML5</li>");
+				$('#videoPlayersSupported').append($videoPlayers);
 			});
 			return;
 		}
@@ -233,6 +243,47 @@ function detectIfPnaclSupported()
 	}
 	catch (ex) { }
 	return false;
+}
+function detectMSESupport()
+{
+	try
+	{
+		if (window.MediaSource)
+		{
+			if (MediaSource.isTypeSupported("video/mp4; codecs=\"avc1.640033\""))
+				return 1;
+		}
+	}
+	catch (ex) { }
+	return 0;
+}
+function detectAudioSupport()
+{
+	var AudioContext = window.AudioContext || window.webkitAudioContext;
+	if (AudioContext)
+	{
+		try
+		{
+			var context = new AudioContext();
+
+			if (typeof context.createGain === "function")
+			{
+				web_audio_supported = true;
+
+				if (typeof context.createBuffer === "function" && typeof context.createBufferSource === "function")
+				{
+					var buffer = context.createBuffer(1, 1, 22050);
+					if (buffer)
+					{
+						web_audio_buffer_source_supported = true;
+						if (typeof buffer.copyFromChannel === "function" && typeof buffer.copyToChannel === "function")
+							web_audio_buffer_copyToChannel_supported = true;
+					}
+				}
+			}
+		}
+		catch (ex) { }
+	}
 }
 
 DoUIFeatureDetection();
@@ -363,9 +414,30 @@ var CameraLabelPositionValues = {
 }
 var H264PlayerOptions = {
 	JavaScript: "JavaScript",
-	Native_HWVA_Auto: "Native (Auto hw accel)",
-	Native_HWVA_No: "Native (No hw accel)",
-	Native_HWVA_Yes: "Native (Only hw accel)"
+	HTML5: "HTML5",
+	NaCl_HWVA_Auto: "NaCl (Auto hw accel)",
+	NaCl_HWVA_No: "NaCl (No hw accel)",
+	NaCl_HWVA_Yes: "NaCl (Only hw accel)"
+}
+function GetH264PlayerOptions()
+{
+	var arr = new Array();
+	if (mse_mp4_h264_supported)
+		arr.push(H264PlayerOptions.HTML5);
+	if (pnacl_player_supported)
+	{
+		arr.push(H264PlayerOptions.NaCl_HWVA_Auto);
+		arr.push(H264PlayerOptions.NaCl_HWVA_No);
+		arr.push(H264PlayerOptions.NaCl_HWVA_Yes);
+	}
+	arr.push(H264PlayerOptions.JavaScript);
+	return arr;
+}
+function GetDefaultH264PlayerOption()
+{
+	if (BrowserIsEdge())
+		return H264PlayerOptions.JavaScript;
+	return GetH264PlayerOptions()[0];
 }
 var settings = null;
 var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Extra"];
@@ -422,6 +494,10 @@ var defaultSettings =
 		, {
 			key: "ui3_clip_export_withAudio"
 			, value: "1"
+		}
+		, {
+			key: "ui3_html5_aggressive_delay_compensation"
+			, value: "0" // Currently unlisted in options menu until it proves necessary.
 		}
 		, {
 			key: "bi_rememberMe"
@@ -582,13 +658,13 @@ var defaultSettings =
 			, category: "General Settings"
 		}
 		, {
-			key: "ui3_h264_choice"
-			, value: H264PlayerOptions.Native_HWVA_Auto
+			key: "ui3_h264_choice2"
+			, value: GetDefaultH264PlayerOption()
 			, inputType: "select"
-			, options: [H264PlayerOptions.JavaScript, H264PlayerOptions.Native_HWVA_Auto, H264PlayerOptions.Native_HWVA_No, H264PlayerOptions.Native_HWVA_Yes]
+			, options: GetH264PlayerOptions()
 			, label: 'H.264 Player <a href="javascript:UIHelp.LearnMore(\'H.264 Player Options\')">(learn more)</a>'
-			, onChange: OnChange_ui3_h264_choice
-			, preconditionFunc: Precondition_ui3_h264_choice
+			, onChange: OnChange_ui3_h264_choice2
+			, preconditionFunc: Precondition_ui3_h264_choice2
 			, category: "General Settings"
 		}
 		, {
@@ -2369,11 +2445,11 @@ function DropdownBoxes()
 		{
 			selectedIndex: -1
 			, items:
-			[
-				new DropdownListItem({ player: "jpeg", text: "Jpeg Best Quality", uniqueQualityId: "A", abbr: "Jpeg HD", shortAbbr: "HD" })
-				, new DropdownListItem({ player: "jpeg", text: "Jpeg SD (640)", uniqueQualityId: "B", abbr: "Jpeg SD", shortAbbr: "SD" })
-				, new DropdownListItem({ player: "jpeg", text: "Jpeg Low (320)", uniqueQualityId: "C", abbr: "Jpeg Low", shortAbbr: "LD" })
-			]
+				[
+					new DropdownListItem({ player: "jpeg", text: "Jpeg Best Quality", uniqueQualityId: "A", abbr: "Jpeg HD", shortAbbr: "HD" })
+					, new DropdownListItem({ player: "jpeg", text: "Jpeg SD (640)", uniqueQualityId: "B", abbr: "Jpeg SD", shortAbbr: "SD" })
+					, new DropdownListItem({ player: "jpeg", text: "Jpeg Low (320)", uniqueQualityId: "C", abbr: "Jpeg Low", shortAbbr: "LD" })
+				]
 			, onItemClick: function (item)
 			{
 				settings.ui3_streamingQuality = item.uniqueQualityId;
@@ -2431,18 +2507,18 @@ function DropdownBoxes()
 		{
 			selectedIndex: -1
 			, items:
-			[
-				new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
-				, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
-				, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
-				, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
-				, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
-				, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
-				, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
-				, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
-				, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
-				, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
-			]
+				[
+					new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
+					, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
+					, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
+					, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
+					, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
+					, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
+					, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
+					, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
+					, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
+					, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
+				]
 			, onItemClick: function (item)
 			{
 				switch (item.cmd)
@@ -2484,11 +2560,11 @@ function DropdownBoxes()
 	this.listDefs["ptzIR"] = new DropdownListDefinition("ptzIR",
 		{
 			items:
-			[
-				new DropdownListItem({ cmd: "off", text: "IR Off" })
-				, new DropdownListItem({ cmd: "on", text: "IR On" })
-				, new DropdownListItem({ cmd: "auto", text: "IR Auto" })
-			]
+				[
+					new DropdownListItem({ cmd: "off", text: "IR Off" })
+					, new DropdownListItem({ cmd: "on", text: "IR On" })
+					, new DropdownListItem({ cmd: "auto", text: "IR Auto" })
+				]
 			, onItemClick: function (item)
 			{
 				var loading = videoPlayer.Loading().image;
@@ -9533,7 +9609,12 @@ function FetchH264VideoModule()
 		isInitialized = true;
 		// Do one-time initialization here
 		//console.log("Initializing h264_player");
-		if (pnacl_player_supported && settings.ui3_h264_choice !== H264PlayerOptions.JavaScript)
+		if (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5)
+			h264_player = new HTML5_MSE_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd, playerErrorCb);
+		else if (pnacl_player_supported &&
+			(settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Auto
+				|| settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_No
+				|| settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Yes))
 			h264_player = new Pnacl_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd);
 		else
 			h264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
@@ -9937,6 +10018,12 @@ function FetchH264VideoModule()
 			StopStreaming();
 		}
 	}
+	var playerErrorCb = function (message)
+	{
+		StopStreaming();
+		if (message !== "INPUT REQUIRED")
+			toaster.Error(message, 15000);
+	}
 	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
 	{
 		if (currentServer.isLoggingOut)
@@ -10001,6 +10088,11 @@ function FetchH264VideoModule()
 			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
 			var netDelay = h264_player.GetNetworkDelay().toFloat();
 			var decoderDelay = h264_player.GetBufferedTime().toFloat();
+			if (h264_player.isMsePlayer)
+			{
+				interFrame = frame.duration ? frame.duration : 0;
+				interFrameError = 0;
+			}
 			nerdStats.BeginUpdate();
 			nerdStats.UpdateStat("Viewport", $layoutbody.width() + "x" + $layoutbody.height());
 			nerdStats.UpdateStat("Stream Resolution", frame.width + "x" + frame.height);
@@ -10050,9 +10142,18 @@ function FetchH264VideoModule()
 			return;
 		}
 		if (netDelay > 2000) // Blue Iris appears to drop frames when it detects the network buffer getting too large, so this needs to be fairly low.
-			perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime.  Consider changing the streaming quality.', 10000);
-		if (bufferedTime > 3000)
-			perf_warning_cpu = toaster.Warning('Your CPU is not fast enough to handle this stream in realtime.  Consider changing the streaming quality.', 10000);
+			perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime. Consider changing the streaming quality.', 10000);
+		if (h264_player.isMsePlayer)
+		{
+			if (bufferedTime > h264_player.MaxBufferedTime)
+			{
+				perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which probably indicates a compatibility issue with the browser you are using. Please try a different browser, or open UI Settings and change the H.264 player to a different option.', 10000);
+			}
+		}
+		else if (bufferedTime > 3000)
+		{
+			perf_warning_cpu = toaster.Warning('This stream is becoming delayed because your CPU is not fast enough. Consider changing the streaming quality.', 10000);
+		}
 	}
 	Initialize();
 	perfMonInterval = setInterval(MeasurePerformance, 10000);
@@ -10544,7 +10645,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			$disablePnaclButton.css('margin-top', '10px');
 			$disablePnaclButton.on('click', function ()
 			{
-				settings.ui3_h264_choice = H264PlayerOptions.JavaScript;
+				settings.ui3_h264_choice2 = H264PlayerOptions.JavaScript;
 				location.reload();
 			});
 			$err.append($disablePnaclButton);
@@ -10622,10 +10723,11 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 
 	var Initialize = function ()
 	{
-		console.log("pnacl_player.Initialize()");
-		var $parent = $("#pnacl_wrapper");
+		if (developerMode)
+			console.log("pnacl_player.Initialize()");
+		var $parent = $("#videoElement_wrapper");
 		$parent.remove();
-		$parent = $('<div id="pnacl_wrapper" class="deactivated"></div>');
+		$parent = $('<div id="videoElement_wrapper" class="deactivated"></div>');
 		$startingContainer.append($parent);
 
 		var listenerDiv = $parent.get(0);
@@ -10635,9 +10737,9 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		listenerDiv.addEventListener('crash', handleCrash, true);
 
 		var hwva = "0";
-		if (settings.ui3_h264_choice === H264PlayerOptions.Native_HWVA_Auto)
+		if (settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Auto)
 			hwva = "1";
-		else if (settings.ui3_h264_choice === H264PlayerOptions.Native_HWVA_Yes)
+		else if (settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Yes)
 			hwva = "2";
 		var $player = $('<embed id="pnacl_player_module" name="pnacl_player_module" width="100%" height="100%" path="pnacl" src="ui3/pnacl/pnacl_player.nmf" type="application/x-pnacl" hwaccel="' + hwva + '" />');
 		$parent.append($player);
@@ -10646,7 +10748,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	this.Dispose = function ()
 	{
 		console.log("pnacl_player.Dispose()");
-		var $parent = $("#pnacl_wrapper");
+		var $parent = $("#videoElement_wrapper");
 		var listenerDiv = $parent.get(0);
 		listenerDiv.removeEventListener('load', moduleDidLoad, true);
 		listenerDiv.removeEventListener('message', handleMessage, true);
@@ -10721,9 +10823,9 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	this.Toggle = function ($wrapper, activate)
 	{
 		if (activate)
-			$("#pnacl_wrapper").removeClass('deactivated');
+			$("#videoElement_wrapper").removeClass('deactivated');
 		else
-			$("#pnacl_wrapper").addClass('deactivated');
+			$("#videoElement_wrapper").addClass('deactivated');
 	}
 	this.ClearDrawingSurface = function ()
 	{
@@ -10761,6 +10863,341 @@ function FrameMetadataCache()
 	{
 		cache = {};
 	}
+}
+function FrameMetadataQueue()
+{
+	var self = this;
+	var q = new Queue();
+	this.Add = function (frame)
+	{
+		q.enqueue(frame.meta);
+	}
+	this.Get = function ()
+	{
+		return q.peek();
+	}
+	this.Remove = function ()
+	{
+		return q.dequeue();
+	}
+	this.IsEmpty = function ()
+	{
+		return q.isEmpty();
+	}
+	this.GetLength = function ()
+	{
+		return q.getLength();
+	}
+	this.Reset = function ()
+	{
+		q = new Queue();
+	}
+}
+///////////////////////////////////////////////////////////////
+// HTML5 + Media Source Extensions Player /////////////////////
+///////////////////////////////////////////////////////////////
+function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNaturalEndCB, playerErrorHandler)
+{
+	var self = this;
+	var jmuxer;
+	var player;
+	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
+	var finishedFrameCount = 0; // Number of frames rendered or dropped.
+	var netDelayCalc = new NetDelayCalc();
+	var timestampLastAcceptedFrame = -1; // Frame timestamp (ms) of the last frame to be submitted to the decoder.
+	var timestampLastRenderedFrame = -1; // Frame timestamp (ms) of the last frame to be rendered.
+	var lastFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the last frame was received from the network.
+	var averageRenderTime = new RollingAverage();
+	var isLoaded = false;
+	var allFramesAccepted = false;
+	var frameMetadataQueue = new FrameMetadataQueue();
+
+	var lastFrame;
+	var lastFrameDuration = 0;
+	var hasToldPlayerToPlay = false;
+	var playerW;
+	var playerH;
+
+	var earlyFrames = new Queue();
+	var mseReady = false;
+
+	this.isMsePlayer = true;
+	this.MaxBufferedTime = 6500;
+
+	var timestampOffset = 0;
+	var inputRequiredOverlayIsActive = false;
+
+	var onTimeUpdate = function (e)
+	{
+		var currentTime = player.currentTime * 1000;
+		var w = player.videoWidth;
+		var h = player.videoHeight;
+		while (!frameMetadataQueue.IsEmpty())
+		{
+			var meta = frameMetadataQueue.Get();
+			if (meta.time > currentTime)
+				break;
+			frameMetadataQueue.Remove();
+			meta.width = w;
+			meta.height = h;
+			meta.timestamp = meta.time;
+			finishedFrameCount++;
+			timestampLastRenderedFrame = meta.timestamp;
+			frameRendered(meta);
+			CheckStreamEndCondition();
+		}
+	}
+	var onVideoError = function (e)
+	{
+		if (!inputRequiredOverlayIsActive)
+			playerErrorHandler(player.error.message);
+	}
+	var onPlayerPaused = function (e)
+	{
+		if (hasToldPlayerToPlay)
+			setTimeout(function ()
+			{
+				StartPlayback();
+			}, 1);
+	}
+	var dropFrame = function ()
+	{
+		finishedFrameCount++;
+		CheckStreamEndCondition();
+	}
+	var CheckStreamEndCondition = function ()
+	{
+		if (allFramesAccepted && (finishedFrameCount) >= acceptedFrameCount)
+		{
+			if (PlaybackReachedNaturalEndCB)
+				PlaybackReachedNaturalEndCB(finishedFrameCount);
+		}
+	}
+
+	var Initialize = function ()
+	{
+		if (developerMode)
+			console.log("HTML5_MSE_Player.Initialize()");
+		var $parent = $("#videoElement_wrapper");
+		$parent.remove();
+		$parent = $('<div id="videoElement_wrapper" class="deactivated"></div>');
+		$startingContainer.append($parent);
+
+		// If the video element is muted, browsers are more likely to let it play without user interaction.
+		var $player = $('<video id="html5MseVideoEle" muted></video>');
+		$parent.append($player);
+		player = $player.get(0);
+
+		//player.addEventListener('abort', function (e) { console.log("HTML5 video abort"); });
+		player.addEventListener('error', onVideoError);
+		player.addEventListener('timeupdate', onTimeUpdate);
+		player.addEventListener('loadedmetadata', onTimeUpdate);
+		player.addEventListener('pause', onPlayerPaused);
+		player.addEventListener('stalled', function (e) { console.log("HTML5 video stalled"); });
+		player.addEventListener('suspend', function (e) { console.log("HTML5 video suspended"); });
+
+		isLoaded = true;
+		loadingHelper.SetLoadedStatus("h264");
+	}
+	this.Dispose = function ()
+	{
+		console.log("pnacl_player.Dispose()");
+		var $parent = $("#videoElement_wrapper");
+		$parent.remove();
+		if (jmuxer)
+		{
+			jmuxer.destroy();
+			jmuxer = null;
+		}
+	}
+	this.IsLoaded = function ()
+	{
+		return isLoaded;
+	}
+	this.IsValid = function ()
+	{
+		return true;
+	}
+	this.GetRenderedFrameCount = function ()
+	{
+		return finishedFrameCount;
+	}
+	this.GetBufferedFrameCount = function ()
+	{
+		/// <summary>
+		/// Returns the number of buffered video frames that have not yet been rendered. 
+		/// If the system has sufficient computational power, this number should remain close to 0.
+		/// </summary>
+		return acceptedFrameCount - finishedFrameCount;
+	}
+	this.GetNetworkDelay = function ()
+	{
+		/// <summary>
+		/// Returns the approximate number of milliseconds of video delay caused by insufficient network speed.
+		/// If the system has sufficient network bandwidth, this number should remain close to 0.
+		/// One or two frames worth of delay is nothing to worry about.
+		/// </summary>
+		return netDelayCalc.Calc();
+	}
+	this.GetBufferedTime = function ()
+	{
+		/// <summary>
+		/// Returns the number of milliseconds of buffered video frames, calculated as timestampLastAcceptedFrame - timestampLastRenderedFrame.
+		/// If the system has sufficient computational power, this number should remain close to 0.
+		/// </summary>
+		return timestampLastAcceptedFrame - timestampLastRenderedFrame;
+	}
+	this.Flush = function ()
+	{
+		hasToldPlayerToPlay = false;
+		earlyFrames = new Queue();
+		mseReady = false;
+		if (jmuxer)
+		{
+			jmuxer.destroy();
+			jmuxer = null;
+		}
+		lastFrame = false;
+		lastFrameDuration = 0;
+		timestampOffset = 0;
+		acceptedFrameCount = 0;
+		finishedFrameCount = 0;
+		frameMetadataQueue.Reset();
+		netDelayCalc.Reset();
+		timestampLastAcceptedFrame = -1;
+		timestampLastRenderedFrame = -1;
+		var timeNow = performance.now();
+		lastFrameReceivedAt = timeNow;
+		allFramesAccepted = false;
+	}
+	var onMSEReady = function ()
+	{
+		mseReady = true;
+		while (!earlyFrames.isEmpty())
+			self.AcceptFrame(earlyFrames.dequeue());
+	}
+	var StartPlayback = function ()
+	{
+		var playPromise = document.getElementById('html5MseVideoEle').play();
+		if (playPromise && playPromise.catch)
+			playPromise.catch(function (ex)
+			{
+				if (ex.name === "NotAllowedError")
+				{
+					var $inputOverlay = $('<div class="inputRequiredToPlay"><div>Click anywhere to begin streaming.<br>The HTML5 player requires user input before playback can begin.</div></div>');
+					$inputOverlay.on('click', function ()
+					{
+						$inputOverlay.remove();
+						videoPlayer.RefreshVideoStream();
+					});
+					$('body').append($inputOverlay);
+					inputRequiredOverlayIsActive = true;
+					playerErrorHandler("INPUT REQUIRED");
+				}
+				else
+					toaster.Warning(ex.message, 15000);
+				//toaster.Warning(ex);
+				//if (ex.name === "DOMException")
+				//{
+				//}
+			});
+	}
+	this.AcceptFrame = function (frame)
+	{
+		if (!jmuxer)
+		{
+			jmuxer = new JMuxer({
+				node: 'html5MseVideoEle',
+				mode: 'video',
+				flushingTime: 1,
+				clearBuffer: true,
+				cleanOffset: 600, // This is an extension of the original jmuxer.
+				onReady: onMSEReady,
+				debug: developerMode
+			});
+		}
+		if (!mseReady)
+		{
+			earlyFrames.enqueue(frame);
+			return;
+		}
+
+		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
+		if (settings.ui3_html5_aggressive_delay_compensation === "1")
+		{
+			// This is this player's attempt to "catch up" if it falls behind in decoding.
+			var buffered = self.GetBufferedTime();
+			if (buffered > self.MaxBufferedTime)
+				timestampOffset -= Clamp(lastFrameDuration * 0.1, 1, 1000);
+			else if (buffered > self.MaxBufferedTime * 0.67)
+				timestampOffset -= Clamp(lastFrameDuration * 0.05, 1, 1000);
+			else if (buffered > self.MaxBufferedTime * 0.33)
+				timestampOffset -= Clamp(lastFrameDuration * 0.02, 0.75, 1000);
+			else if (buffered > self.MaxBufferedTime * 0.2)
+				timestampOffset -= Clamp(lastFrameDuration * 0.01, 0.5, 1000);
+			else if (buffered > self.MaxBufferedTime * 0.1)
+				timestampOffset -= Clamp(lastFrameDuration * 0.01, 0.25, 1000);
+			else if (buffered > self.MaxBufferedTime * 0.05)
+				timestampOffset -= Clamp(lastFrameDuration * 0.01, 0, 1000);
+			//console.log(timestampOffset);
+			frame.meta.time = frame.time = Math.round(frame.time + timestampOffset);
+		}
+
+		acceptedFrameCount++;
+		timestampLastAcceptedFrame = frame.time;
+		lastFrameReceivedAt = performance.now();
+
+		frame.meta.duration = lastFrameDuration;
+		frame.meta.expectedInterframe = lastFrameDuration;
+		frameMetadataQueue.Add(frame);
+
+		if (lastFrame)
+		{
+			lastFrameDuration = frame.time - lastFrame.time;
+			jmuxer.feed({
+				video: lastFrame.frameData,
+				duration: lastFrameDuration
+			});
+			if (!hasToldPlayerToPlay)
+			{
+				StartPlayback();
+				hasToldPlayerToPlay = true;
+			}
+			if (jmuxer.bufferControllers && jmuxer.bufferControllers.video)
+			{
+				jmuxer.bufferControllers.video.cleanOffset = 600;
+			}
+		}
+		lastFrame = frame;
+	}
+	this.Toggle = function ($wrapper, activate)
+	{
+		if (activate)
+			$("#videoElement_wrapper").removeClass('deactivated');
+		else
+			$("#videoElement_wrapper").addClass('deactivated');
+	}
+	this.ClearDrawingSurface = function ()
+	{
+	}
+	this.PreviousFrameIsLastFrame = function ()
+	{
+		if (jmuxer)
+		{
+			if (lastFrame)
+			{
+				jmuxer.feed({
+					video: lastFrame.frameData,
+					duration: lastFrameDuration
+				});
+			}
+			jmuxer.mediaSource.endOfStream();
+		}
+		allFramesAccepted = true;
+		CheckStreamEndCondition();
+	}
+
+	Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // Network Delay Calculator - An Imperfect Science ////////////
@@ -11806,25 +12243,25 @@ function CanvasContextMenu()
 	var optionLive =
 		{
 			alias: "cmroot_live", width: 200, items:
-			[
-				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
-				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
-				, { text: "Open HLS Stream", icon: "#svg_mio_ViewStream", iconClass: "noflip", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
-				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
-				, { type: "splitLine" }
-				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
-				, { type: "splitLine" }
-				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
-				, { type: "splitLine" }
-				, { text: "Trigger Now", icon: "#svg_x5F_Alert1", iconClass: "iconBlue", alias: "trigger", action: onLiveContextMenuAction }
-				, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
-				, { text: "Snapshot in Blue Iris", icon: "#svg_x5F_Snapshot", iconClass: "iconBlue", alias: "snapshot", tooltip: "Blue Iris will record a snapshot", action: onLiveContextMenuAction }
-				, { text: "Restart Camera", icon: "#svg_x5F_Restart", iconClass: "iconBlue", alias: "restart", action: onLiveContextMenuAction }
-				, { type: "splitLine" }
-				, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onLiveContextMenuAction }
-				, { type: "splitLine" }
-				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
-			]
+				[
+					{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
+					, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
+					, { text: "Open HLS Stream", icon: "#svg_mio_ViewStream", iconClass: "noflip", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
+					, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
+					, { type: "splitLine" }
+					, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
+					, { type: "splitLine" }
+					, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
+					, { type: "splitLine" }
+					, { text: "Trigger Now", icon: "#svg_x5F_Alert1", iconClass: "iconBlue", alias: "trigger", action: onLiveContextMenuAction }
+					, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
+					, { text: "Snapshot in Blue Iris", icon: "#svg_x5F_Snapshot", iconClass: "iconBlue", alias: "snapshot", tooltip: "Blue Iris will record a snapshot", action: onLiveContextMenuAction }
+					, { text: "Restart Camera", icon: "#svg_x5F_Restart", iconClass: "iconBlue", alias: "restart", action: onLiveContextMenuAction }
+					, { type: "splitLine" }
+					, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onLiveContextMenuAction }
+					, { type: "splitLine" }
+					, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
+				]
 			, onContextMenu: onTriggerLiveContextMenu
 			, onCancelContextMenu: onCancelLiveContextMenu
 			, onShow: onShowLiveContextMenu
@@ -11914,21 +12351,21 @@ function CanvasContextMenu()
 	var optionRecord =
 		{
 			alias: "cmroot_record", width: 200, items:
-			[
-				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
-				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
-				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
-				, exportListItem
-				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
-				, { type: "splitLine" }
-				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
-				, { type: "splitLine" }
-				, { text: "Close Clip", icon: "#svg_x5F_Error", alias: "closeclip", action: onRecordContextMenuAction }
-				, { type: "splitLine" }
-				, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onRecordContextMenuAction }
-				, { type: "splitLine" }
-				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onRecordContextMenuAction }
-			]
+				[
+					{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
+					, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
+					, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
+					, exportListItem
+					, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
+					, { type: "splitLine" }
+					, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
+					, { type: "splitLine" }
+					, { text: "Close Clip", icon: "#svg_x5F_Error", alias: "closeclip", action: onRecordContextMenuAction }
+					, { type: "splitLine" }
+					, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onRecordContextMenuAction }
+					, { type: "splitLine" }
+					, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onRecordContextMenuAction }
+				]
 			, onContextMenu: onTriggerRecordContextMenu
 			, onShow: onShowRecordContextMenu
 			, clickType: GetPreferredContextMenuTrigger()
@@ -11963,12 +12400,12 @@ function CalendarContextMenu()
 	var menuOptions =
 		{
 			alias: "cmroot_calendar", width: 200, items:
-			[
-				{ text: "Filter by Date Range", icon: "", alias: "select", action: onContextMenuAction }
-				, { text: "Today Only", icon: "", alias: "today", action: onContextMenuAction }
-				, { text: "Clear Filter", icon: "", alias: "clear", action: onContextMenuAction }
+				[
+					{ text: "Filter by Date Range", icon: "", alias: "select", action: onContextMenuAction }
+					, { text: "Today Only", icon: "", alias: "today", action: onContextMenuAction }
+					, { text: "Clear Filter", icon: "", alias: "clear", action: onContextMenuAction }
 
-			]
+				]
 			, clickType: GetPreferredContextMenuTrigger()
 		};
 	$("#dateRange").contextmenu(menuOptions);
@@ -12140,20 +12577,20 @@ function ClipListContextMenu()
 	var menuOptions =
 		{
 			alias: "cmroot_cliplist", width: 200, items:
-			[
-				{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
-				, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
-				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
-				, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
-				, { type: "splitLine" }
-				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
-				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
-				, exportListItemSplitline
-				, exportListItem
-				, { type: "splitLine" }
-				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
+				[
+					{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
+					, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
+					, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
+					, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
+					, { type: "splitLine" }
+					, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
+					, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
+					, exportListItemSplitline
+					, exportListItem
+					, { type: "splitLine" }
+					, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
 
-			]
+				]
 			, clickType: GetPreferredContextMenuTrigger()
 			, onContextMenu: onTriggerContextMenu
 			, onShow: onShowMenu
@@ -14291,8 +14728,10 @@ function PcmAudioPlayer()
 		}
 		else if (offset < -0.7)
 		{
+			CheckUserInputRequirement();
 			// We have received so many frames that we are queued at least 700ms ahead. Drop this frame.
-			console.log("Audio buffer is overfull at " + currentTime.toFixed(6) + " with " + offset.toFixed(6) + " milliseconds queued. Dropping audio frame to keep delay from growing too high.");
+			if (managedUserInputRequirement)
+				console.log("Audio buffer is overfull at " + currentTime.toFixed(6) + " with " + Math.abs(offset.toFixed(6)) + " seconds queued. Dropping audio frame to keep delay from growing too high.");
 			return;
 		}
 		pendingBufferQueue.enqueue(bufferSource);
@@ -14366,6 +14805,26 @@ function PcmAudioPlayer()
 		clearMuteStopTimeout();
 		if (videoPlayer)
 			videoPlayer.AudioToggleNotify(self.AudioEnabled());
+	}
+	var startedUserInputRequirement = false;
+	var managedUserInputRequirement = false;
+	var userInputRequirementEvents = ['keydown', 'click', 'mousedown'];
+	var CheckUserInputRequirement = function ()
+	{
+		if (!startedUserInputRequirement && context.currentTime === 0 && !suspended && context.state === "suspended")
+		{
+			startedUserInputRequirement = true;
+			for (var i = 0; i < userInputRequirementEvents.length; i++)
+				document.addEventListener(userInputRequirementEvents[i], HandleUserInputRequirement);
+			volumeIconHelper.setColorError();
+		}
+	}
+	var HandleUserInputRequirement = function (e)
+	{
+		managedUserInputRequirement = true;
+		for (var i = 0; i < userInputRequirementEvents.length; i++)
+			document.removeEventListener(userInputRequirementEvents[i], HandleUserInputRequirement);
+		self.Reset();
 	}
 	this.AudioEnabled = function ()
 	{
@@ -14625,9 +15084,9 @@ function HLSPlayer()
 	var optionHls =
 		{
 			alias: "cmroot_hls", width: 200, items:
-			[
-				{ text: "Open stream in New Tab", icon: "", alias: "newtab", action: onHlsContextMenuAction }
-			]
+				[
+					{ text: "Open stream in New Tab", icon: "", alias: "newtab", action: onHlsContextMenuAction }
+				]
 			, clickType: GetPreferredContextMenuTrigger()
 		};
 
@@ -17623,7 +18082,7 @@ function OnChange_ui3_time24hour()
 {
 	use24HourTime = settings.ui3_time24hour == "1";
 }
-function OnChange_ui3_h264_choice()
+function OnChange_ui3_h264_choice2()
 {
 	ui3_contextMenus_longPress_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
@@ -17631,9 +18090,9 @@ function OnChange_ui3_h264_choice()
 			location.reload();
 		});
 }
-function Precondition_ui3_h264_choice()
+function Precondition_ui3_h264_choice2()
 {
-	return h264_playback_supported && pnacl_player_supported;
+	return (pnacl_player_supported || mse_mp4_h264_supported);
 }
 function OnChange_ui3_icons_extraVisibility()
 {
@@ -17794,19 +18253,20 @@ function UIHelpTool()
 	var UI3_H264_Player_Options_Help = function ()
 	{
 		$('<div class="UIHelp">'
-			+ 'Congratulations! Your system is compatible with a Native H.264 player which is more efficient than the JavaScript player available in other browsers.<br><br>'
-			+ 'UI3 exposes 3 "Native" player options, each with different behavior regarding Hardware Accelerated Video Decoding.<br><br>'
-			+ '<ul>'
-			+ '<li><b>' + H264PlayerOptions.Native_HWVA_Auto + '</b><br>The player will try to use hardware decoding, but will fall back to software decoding if hardware decoding is unavailable. The fallback process may increase loading times.</li>'
-			+ '<li><b>' + H264PlayerOptions.Native_HWVA_No + '</b><br>The player will use software decoding only.</li>'
-			+ '<li><b>' + H264PlayerOptions.Native_HWVA_Yes + '</b><br>The player will use hardware decoding only, and may fail if hardware acceleration is unavailable.</li>'
-			+ '</ul>'
-			+ '<br>The Native player relies on a discontinued framework called NaCl.<br><br>'
-			+ '<ul>'
-			+ '<li>As of May 2018, NaCl is available only in ChromeOS and in the Chrome browser on a desktop OS (such as Windows or Mac).</li>'
-			+ '<li>Google plans to remove NaCl support from Chrome in 2018. Enjoy it while it lasts. Once NaCl support is gone, the Native player will be unavailable.</li>'
-			+ '<li>Google will likely remove NaCl support from ChromeOS too, though this may happen at a later date.</li>'
-			+ '</ul>'
+			+ 'UI3 has several H.264 player options. Not all options are available in all browsers.'
+			+ '<br><br><b>JavaScript</b> - ' + (h264_playback_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
+			+ '&nbsp; &nbsp; The JavaScript player is the most robust and compatible player option, but also the slowest.'
+			+ '<br><br><b>HTML5</b> - ' + (mse_mp4_h264_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
+			+ '&nbsp; &nbsp; The HTML5 player works by converting each frame into a fragmented MP4 which is played using Media Source Extensions.  This is usually the fastest option, but has compatibility problems with some browsers.'
+			+ '<br><br><b>NaCl</b> - ' + (pnacl_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
+			+ '&nbsp; &nbsp; The NaCl player is much faster than the JavaScript player. It is not quite as fast as the HTML5 player, and takes longer to load when you open UI3, but it is more stable. This player is only available in in ChromeOS and in the Chrome browser on a desktop OS (such as Windows or Mac).  It uses Google\'s "NaCl" technology, which is expected to be removed from Chrome in 2018.  ChromeOS may lose NaCl support around the same time, or it may remain supported for a while longer. '
+			+ (pnacl_player_supported ? ('<br><br>The NaCl player has 3 modes available, each with different behavior regarding Hardware Accelerated Video Decoding.<br>'
+				+ '<ul>'
+				+ '<li><b>' + H264PlayerOptions.NaCl_HWVA_Auto + '</b><br>The player will try to use hardware decoding, but will fall back to software decoding if hardware decoding is unavailable. The fallback process may increase loading times.</li>'
+				+ '<li><b>' + H264PlayerOptions.NaCl_HWVA_No + '</b><br>The player will use software decoding only.</li>'
+				+ '<li><b>' + H264PlayerOptions.NaCl_HWVA_Yes + '</b><br>The player will use hardware decoding only, and may fail if hardware acceleration is unavailable.</li>'
+				+ '</ul>'
+			) : '')
 			+ '</div>').modalDialog({ title: 'H.264 Player Options', closeOnOverlayClick: true });
 	}
 }
@@ -18503,20 +18963,6 @@ function BI_GetDevicePixelRatio()
 	if (returnValue <= 0)
 		returnValue = 1;
 	return returnValue;
-}
-var _browser_is_ie = -1;
-function BrowserIsIE()
-{
-	if (_browser_is_ie == -1)
-		_browser_is_ie = /MSIE \d|Trident.*rv:/.test(navigator.userAgent) ? 1 : 0;
-	return _browser_is_ie == 1;
-}
-var _browser_is_edge = -1;
-function BrowserIsEdge()
-{
-	if (_browser_is_edge == -1)
-		_browser_is_edge = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
-	return _browser_is_edge == 1;
 }
 function BrowserIsChrome()
 {
