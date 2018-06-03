@@ -388,6 +388,9 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: EDGE + HTML5: As a clip ends and Delayed Frames goes down, Network Delay goes up.
+// TODO: Chrome + HTML5: "video stalled" warnings appear in the console a moment after a clip ends.  Perhaps the player is not being reset/flushed.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -438,6 +441,12 @@ function GetDefaultH264PlayerOption()
 	if (BrowserIsEdge())
 		return H264PlayerOptions.JavaScript;
 	return GetH264PlayerOptions()[0];
+}
+var HTML5DelayCompensationOptions = {
+	None: "None",
+	Weak: "Weak",
+	Normal: "Normal",
+	Strong: "Strong"
 }
 var settings = null;
 var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Extra"];
@@ -494,10 +503,6 @@ var defaultSettings =
 		, {
 			key: "ui3_clip_export_withAudio"
 			, value: "1"
-		}
-		, {
-			key: "ui3_html5_aggressive_delay_compensation"
-			, value: "0" // Currently unlisted in options menu until it proves necessary.
 		}
 		, {
 			key: "bi_rememberMe"
@@ -665,6 +670,15 @@ var defaultSettings =
 			, label: 'H.264 Player <a href="javascript:UIHelp.LearnMore(\'H.264 Player Options\')">(learn more)</a>'
 			, onChange: OnChange_ui3_h264_choice2
 			, preconditionFunc: Precondition_ui3_h264_choice2
+			, category: "General Settings"
+		}
+		, {
+			key: "ui3_html5_delay_compensation"
+			, value: HTML5DelayCompensationOptions.Normal
+			, inputType: "select"
+			, options: [HTML5DelayCompensationOptions.None, HTML5DelayCompensationOptions.Weak, HTML5DelayCompensationOptions.Normal, HTML5DelayCompensationOptions.Strong]
+			, label: 'HTML5 Video Delay Compensation <a href="javascript:UIHelp.LearnMore(\'HTML5 Video Delay Compensation\')">(learn more)</a>'
+			, preconditionFunc: Precondition_ui3_html5_delay_compensation
 			, category: "General Settings"
 		}
 		, {
@@ -10116,6 +10130,8 @@ function FetchH264VideoModule()
 	}
 	var perf_warning_net = null;
 	var perf_warning_cpu = null;
+	var perf_warning_net_ticks = 0;
+	var perf_warning_cpu_ticks = 0;
 	var MeasurePerformance = function ()
 	{
 		var perfNow = performance.now();
@@ -10141,19 +10157,33 @@ function FetchH264VideoModule()
 			ReopenStreamAtCurrentSeekPosition();
 			return;
 		}
-		if (netDelay > 2000) // Blue Iris appears to drop frames when it detects the network buffer getting too large, so this needs to be fairly low.
-			perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime. Consider changing the streaming quality.', 10000);
+		if (netDelay > 2000)
+		{
+			if (perf_warning_net_ticks++ > 0)
+			{
+				// Blue Iris appears to drop frames when it detects the network buffer getting too large, so this needs to be fairly low.
+				perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime. Consider changing the streaming quality.', 10000);
+			}
+		}
+		else
+			perf_warning_net_ticks = 0;
 		if (h264_player.isMsePlayer)
 		{
 			if (bufferedTime > h264_player.MaxBufferedTime)
 			{
-				perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which probably indicates a compatibility issue with the browser you are using. Please try a different browser, or open UI Settings and change the H.264 player to a different option.', 10000);
+				if (perf_warning_cpu_ticks++ > 0)
+					perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which probably indicates a compatibility issue with the browser you are using. Please try a different browser, or open UI Settings and change the H.264 player to a different option.', 10000);
 			}
+			else
+				perf_warning_cpu_ticks = 0;
 		}
 		else if (bufferedTime > 3000)
 		{
-			perf_warning_cpu = toaster.Warning('This stream is becoming delayed because your CPU is not fast enough. Consider changing the streaming quality.', 10000);
+			if (perf_warning_cpu_ticks++ > 0)
+				perf_warning_cpu = toaster.Warning('This stream is becoming delayed because your CPU is not fast enough. Consider changing the streaming quality.', 10000);
 		}
+		else
+			perf_warning_cpu_ticks = 0;
 	}
 	Initialize();
 	perfMonInterval = setInterval(MeasurePerformance, 10000);
@@ -10924,8 +10954,9 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	this.isMsePlayer = true;
 	this.MaxBufferedTime = 6500;
 
-	var timestampOffset = 0;
 	var inputRequiredOverlayIsActive = false;
+
+	var delayCompensation;
 
 	var onTimeUpdate = function (e)
 	{
@@ -10946,6 +10977,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			frameRendered(meta);
 			CheckStreamEndCondition();
 		}
+		if (finishedFrameCount > 3)
+			delayCompensation.Tick(self.GetBufferedTime());
 	}
 	var onVideoError = function (e)
 	{
@@ -10987,6 +11020,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		var $player = $('<video id="html5MseVideoEle" muted></video>');
 		$parent.append($player);
 		player = $player.get(0);
+		delayCompensation = new HTML5DelayCompensationHelper(player);
 
 		//player.addEventListener('abort', function (e) { console.log("HTML5 video abort"); });
 		player.addEventListener('error', onVideoError);
@@ -11057,9 +11091,9 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			jmuxer.destroy();
 			jmuxer = null;
 		}
+		delayCompensation = new HTML5DelayCompensationHelper(player);
 		lastFrame = false;
 		lastFrameDuration = 0;
-		timestampOffset = 0;
 		acceptedFrameCount = 0;
 		finishedFrameCount = 0;
 		frameMetadataQueue.Reset();
@@ -11122,30 +11156,10 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			return;
 		}
 
-		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
-		if (settings.ui3_html5_aggressive_delay_compensation === "1")
-		{
-			// This is this player's attempt to "catch up" if it falls behind in decoding.
-			var buffered = self.GetBufferedTime();
-			if (buffered > self.MaxBufferedTime)
-				timestampOffset -= Clamp(lastFrameDuration * 0.1, 1, 1000);
-			else if (buffered > self.MaxBufferedTime * 0.67)
-				timestampOffset -= Clamp(lastFrameDuration * 0.05, 1, 1000);
-			else if (buffered > self.MaxBufferedTime * 0.33)
-				timestampOffset -= Clamp(lastFrameDuration * 0.02, 0.75, 1000);
-			else if (buffered > self.MaxBufferedTime * 0.2)
-				timestampOffset -= Clamp(lastFrameDuration * 0.01, 0.5, 1000);
-			else if (buffered > self.MaxBufferedTime * 0.1)
-				timestampOffset -= Clamp(lastFrameDuration * 0.01, 0.25, 1000);
-			else if (buffered > self.MaxBufferedTime * 0.05)
-				timestampOffset -= Clamp(lastFrameDuration * 0.01, 0, 1000);
-			//console.log(timestampOffset);
-			frame.meta.time = frame.time = Math.round(frame.time + timestampOffset);
-		}
-
 		acceptedFrameCount++;
 		timestampLastAcceptedFrame = frame.time;
 		lastFrameReceivedAt = performance.now();
+		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 
 		frame.meta.duration = lastFrameDuration;
 		frame.meta.expectedInterframe = lastFrameDuration;
@@ -11198,6 +11212,112 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 
 	Initialize();
+}
+function HTML5DelayCompensationHelper(player)
+{
+	var self = this;
+	var averager = new TimedAverage(3000, 10);
+	var nextPlaybackRateChangeAllowedAt = 0;
+	var aggressionLevel = 3;
+	var minSpeed = 1;
+	var maxSpeed = 1;
+	var tolerance = 1;
+	var lastSetRate = 0;
+	var setPlaybackRate = function (rate)
+	{
+		if (lastSetRate !== rate)
+		{
+			player.playbackRate = rate;
+			if (player.playbackRate !== rate)
+			{
+				console.log("HTML5 Delay Compensator failed to set playback rate to " + rate, player.playbackRate);
+				nextPlaybackRateChangeAllowedAt = performance.now() + 10000;
+			}
+			lastSetRate = rate;
+		}
+	}
+	this.Tick = function (delayedTime)
+	{
+		if (averager.done)
+		{
+			UpdateAggressionLevel();
+			if (aggressionLevel > 0)
+			{
+				var now = performance.now();
+				if (now >= nextPlaybackRateChangeAllowedAt)
+				{
+					var avg = averager.Get();
+					var adjustedTolerance = tolerance;
+					if (avg < 1000)
+					{
+						if (avg <= 0)
+							avg = 1;
+						var adjustmentStrength = 1000 / avg;
+						adjustedTolerance = adjustmentStrength * tolerance;
+					}
+					var toleranceOffset = (avg * adjustedTolerance);
+					var min = avg - toleranceOffset;
+					var max = avg + toleranceOffset;
+					var diff;
+					if (delayedTime < min)
+						diff = Math.max(delayedTime / min, minSpeed);
+					else if (delayedTime > max)
+						diff = Math.min(delayedTime / max, maxSpeed);
+					else
+						diff = 1;
+					setPlaybackRate(diff);
+					nextPlaybackRateChangeAllowedAt = now + 250;
+				}
+			}
+			else
+				setPlaybackRate(1);
+		}
+		else
+		{
+			averager.Add(delayedTime);
+			console.log("Average Delay: " + averager.Get());
+		}
+	}
+	var UpdateAggressionLevel = function ()
+	{
+		var value = settings.ui3_html5_delay_compensation;
+		var level;
+		if (value === HTML5DelayCompensationOptions.Weak)
+			level = 1;
+		else if (value === HTML5DelayCompensationOptions.Normal)
+			level = 2;
+		else if (value === HTML5DelayCompensationOptions.Strong)
+			level = 3;
+		else
+			level = 0;
+
+		if (aggressionLevel !== level)
+		{
+			aggressionLevel = level;
+
+			if (level == 1)
+			{
+				tolerance = 0.15;
+				minSpeed = 0.95;
+				maxSpeed = 1.05;
+			}
+			else if (level == 2)
+			{
+				tolerance = 0.1;
+				minSpeed = 0.75;
+				maxSpeed = 1.25;
+			}
+			else if (level == 3)
+			{
+				tolerance = 0.05;
+				minSpeed = 0.25;
+				maxSpeed = 2;
+			}
+			else
+				minSpeed = maxSpeed = tolerance = 1;
+		}
+	}
+	UpdateAggressionLevel();
 }
 ///////////////////////////////////////////////////////////////
 // Network Delay Calculator - An Imperfect Science ////////////
@@ -15956,6 +16076,40 @@ function RollingAverage(MAXSAMPLES)
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Efficient Timed Average Calculator ///////////////////////
+///////////////////////////////////////////////////////////////
+function TimedAverage(maxMs, minRecords)
+{
+	/// <summary>Calculates the average of values provided for a limited time. The timer starts upon the first Add operation.</summary>
+	var self = this;
+	var itemCount = 0;
+	var sum = 0;
+	var endTime = -1;
+	this.done = false;
+	this.Add = function (newValue)
+	{
+		if (!self.done && newValue !== null)
+		{
+			if (endTime == -1)
+				endTime = performance.now() + maxMs;
+			if (performance.now() < endTime || itemCount < minRecords)
+			{
+				sum += newValue;
+				itemCount++;
+				return true;
+			}
+			self.done = true;
+			return false;
+		}
+	}
+	this.Get = function ()
+	{
+		if (itemCount == 0)
+			return 0;
+		return (sum / itemCount);
+	}
+}
+///////////////////////////////////////////////////////////////
 // Failure Limiter ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function FailLimiter(maxFailsInTimePeriod, timePeriodMs)
@@ -18094,6 +18248,10 @@ function Precondition_ui3_h264_choice2()
 {
 	return (pnacl_player_supported || mse_mp4_h264_supported);
 }
+function Precondition_ui3_html5_delay_compensation()
+{
+	return (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5);
+}
 function OnChange_ui3_icons_extraVisibility()
 {
 	cornerStatusIcons.ReInitialize();
@@ -18179,6 +18337,9 @@ function UIHelpTool()
 				break;
 			case "H.264 Player Options":
 				UI3_H264_Player_Options_Help();
+				break;
+			case "HTML5 Video Delay Compensation":
+				UI3_HTML5_Delay_Compensation_Help();
 				break;
 		}
 	}
@@ -18268,6 +18429,12 @@ function UIHelpTool()
 				+ '</ul>'
 			) : '')
 			+ '</div>').modalDialog({ title: 'H.264 Player Options', closeOnOverlayClick: true });
+	}
+	var UI3_HTML5_Delay_Compensation_Help = function ()
+	{
+		$('<div class="UIHelp">'
+			+ 'HTML5 video was not designed for low-latency playback, so brief stream interruptions build up to a noticeable delay. UI3 is built with an experimental delay compensator which can speed up or slow down the video player to keep video delay at a consistent level. This delay compensator is configurable via the HTML5 Video Delay Compensation option.'
+			+ '</div>').modalDialog({ title: 'HTML5 Video Delay Compensation', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////

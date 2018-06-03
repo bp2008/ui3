@@ -2364,7 +2364,7 @@ var JMuxmer = function (_Event) {
     }, {
         key: 'createBuffer',
         value: function createBuffer() {
-            if (!this.mseReady || !this.remuxController.isReady() || this.bufferControllers) return;
+            if (!this.mseReady || !this.remuxController || !this.remuxController.isReady() || this.bufferControllers) return;
             this.bufferControllers = {};
             for (var type in this.remuxController.tracks) {
                 var track = this.remuxController.tracks[type];
