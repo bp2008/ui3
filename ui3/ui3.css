@@ -2707,6 +2707,7 @@ body + div
 {
 	float: right;
 	line-height: 18.4px;
+	margin-left: 10px;
 }
 
 .playbackSettingsRightArrow
@@ -2777,21 +2778,6 @@ body + div
 	right: 0px;
 	font-size: 8px;
 	padding: 0px 1px;
-}
-
-#playbackSettingsQualityMark.HD, #playbackSettingsQualityMark.S0
-{
-	background-color: #004882;
-}
-
-#playbackSettingsQualityMark.SD, #playbackSettingsQualityMark.S1
-{
-	background-color: #884400;
-}
-
-#playbackSettingsQualityMark.LD, #playbackSettingsQualityMark.S2
-{
-	background-color: #880000;
 }
 
 #pcButtonContainer.extraPadding
@@ -3628,9 +3614,12 @@ body + div
 .dialogOption_item_comment
 {
 	color: #66cd66;
+	padding-left: 12px;
+	padding-right: 12px;
 }
 
-	.dialogOption_item_comment .settingsCommentError
+	.dialogOption_item_comment .settingsCommentError,
+	.dialogOption_item_comment.settingsCommentError
 	{
 		color: #FF6666;
 	}
@@ -3685,6 +3674,7 @@ body + div
 
 .dialogOptionPanel select,
 .dialogOptionPanel input[type="number"],
+.dialogOptionPanel input[type="color"],
 .dialogOptionPanel input[type="text"],
 #uiSettingsPanel input[type="button"],
 #uiSettingsPanel a.input
@@ -3775,6 +3765,58 @@ body + div
 {
 	text-align: center;
 }
+/* Streaming Profiles */
+.streamingProfileUiPanel,
+.streamingProfileEditorPanel
+{
+	min-width: 210px;
+	max-width: 375px;
+}
+
+.streamingProfileUiPanelContent,
+.streamingProfileEditorPanelContent
+{
+	padding: 3px;
+}
+
+.profileList
+{
+	list-style: none;
+	margin: 0px;
+	padding: 0px;
+}
+
+.profileListItem
+{
+	min-height: 10px;
+	padding: 3px 6px;
+	margin: 3px 0px;
+	background-color: #424242;
+	border: 1px solid #5f5f5f;
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+	.profileListItem:hover
+	{
+		background-color: #525252;
+	}
+
+	.profileListItem.unsupportedProfile
+	{
+		background-color: #770000;
+	}
+
+		.profileListItem.unsupportedProfile:hover
+		{
+			background-color: #990000;
+		}
+
+	.profileListItem .profileCodec
+	{
+		float: right;
+		opacity: 0.7;
+	}
 /* Webkit custom scrollbar for modal dialogs */
 div::-webkit-scrollbar
 {
@@ -4159,12 +4201,14 @@ div::-webkit-scrollbar-corner
 			color: #8dc1f1;
 		}
 
-#uiSettingsPanel input[type="number"]
+#uiSettingsPanel input[type="number"],
+.streamingProfileEditorPanel input[type="number"]
 {
 	width: 80px;
 }
 
-#uiSettingsPanel input[type="text"]
+#uiSettingsPanel input[type="text"],
+.streamingProfileEditorPanel input[type="text"]
 {
 	width: 169px;
 }
@@ -4175,14 +4219,16 @@ div::-webkit-scrollbar-corner
 	margin: 0px 5%;
 }
 
-.uiSettingsRow
+.uiSettingsRow,
+.profileEditorRow
 {
 	margin: 1px 0px;
 }
 
-	.uiSettingsRow.everyOther
+	.uiSettingsRow.everyOther,
+	.profileEditorRow.everyOther
 	{
-		background-color: rgba(255,255,255,0.1);
+		background-color: rgba(255,255,255,0.05);
 	}
 
 /*#uiSettingsPanel input[type="button"]

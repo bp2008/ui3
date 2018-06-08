@@ -11,7 +11,7 @@ var developerMode = false;
 var _browser_is_ie = -1;
 function BrowserIsIE()
 {
-	if (_browser_is_ie == -1)
+	if (_browser_is_ie === -1)
 		_browser_is_ie = /MSIE \d|Trident.*rv:/.test(navigator.userAgent) ? 1 : 0;
 	return _browser_is_ie == 1;
 }
@@ -21,6 +21,13 @@ function BrowserIsEdge()
 	if (_browser_is_edge === -1)
 		_browser_is_edge = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
 	return _browser_is_edge === 1;
+}
+var _browser_is_firefox = -1;
+function BrowserIsFirefox()
+{
+	if (_browser_is_firefox === -1)
+		_browser_is_firefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1 ? 1 : 0;
+	return _browser_is_firefox === 1;
 }
 var h264_playback_supported = false;
 var audio_playback_supported = false;
@@ -309,7 +316,7 @@ var leftBarBools = null;
 var cornerStatusIcons = null;
 var genericQualityHelper = null;
 var jpegQualityHelper = null;
-var h264QualityHelper = null;
+var streamingProfileUI = null;
 var ptzButtons = null;
 var playbackHeader = null;
 var exportControls = null;
@@ -387,6 +394,10 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+
+// TODO: Scroll the dropdown / Quality popup automatically to the position of the selected element.
+// TODO: There should be an edit button in the Quality selector popup (in the playback controls area) which opens the encoder profiles panel.
+// TODO: Override keyframe interval in firefox when using HTML5 mode; set it equal to the camera's reported frame rate, or 10 if the frame rate is unknown.  Make this a global option just under the H264 player selector, conditional appearance similar to the delay compensator option.  Default: enabled.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -467,7 +478,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_streamingQuality"
-			, value: "S0"
+			, value: "720p^"
 		}
 		, {
 			key: "ui3_playback_reverse"
@@ -616,6 +627,10 @@ var defaultSettings =
 		, {
 			key: "ui3_cps_uiSettings_category_Extra_visible"
 			, value: "1"
+		}
+		, {
+			key: "ui3_streamingProfileArray"
+			, value: "[]"
 		}
 		, {
 			key: "ui3_clipPreviewEnabled"
@@ -1786,7 +1801,7 @@ $(function ()
 
 	jpegQualityHelper = new JpegQualityHelper();
 
-	h264QualityHelper = new H264QualityHelper();
+	streamingProfileUI = new StreamingProfileUI();
 
 	SetupCollapsibleTriggers();
 
@@ -2361,6 +2376,7 @@ function DropdownListItem(options)
 	var self = this;
 	// Default Options
 	this.text = "List Item";
+	this.isHtml = false;
 	this.autoSetLabelText = true;
 	// End options
 	this.GetTooltip = function ()
@@ -2452,68 +2468,14 @@ function DropdownBoxes()
 				}
 			}
 		});
-	var streamingQualityList = this.listDefs["streamingQuality"] = new DropdownListDefinition("streamingQuality",
+	this.listDefs["streamingQuality"] = new DropdownListDefinition("streamingQuality",
 		{
-			selectedIndex: -1
-			, items:
-				[
-					new DropdownListItem({ player: "jpeg", text: "Jpeg Best Quality", uniqueQualityId: "A", abbr: "Jpeg HD", shortAbbr: "HD" })
-					, new DropdownListItem({ player: "jpeg", text: "Jpeg SD (640)", uniqueQualityId: "B", abbr: "Jpeg SD", shortAbbr: "SD" })
-					, new DropdownListItem({ player: "jpeg", text: "Jpeg Low (320)", uniqueQualityId: "C", abbr: "Jpeg Low", shortAbbr: "LD" })
-				]
+			items: [new DropdownListItem({ text: "Not Loaded!" })]
 			, onItemClick: function (item)
 			{
-				settings.ui3_streamingQuality = item.uniqueQualityId;
-				videoPlayer.SelectedQualityChanged();
-			}
-			, getDefaultLabel: function ()
-			{
-				for (var i = 0; i < this.items.length; i++)
-					if (settings.ui3_streamingQuality == this.items[i].uniqueQualityId)
-						return this.items[i].text;
-				if (this.items.length > 0)
-					return this.items[0].text;
-				return "Error";
-			}
-			, getCurrentlySelectedItem: function ()
-			{
-				if (this.selectedIndex < 0 || this.selectedIndex >= this.items.length)
-					return null;
-				return this.items[this.selectedIndex];
-			}
-			, selectItemByIndex: function (index)
-			{
-				if (index >= 0 && index < this.items.length)
-				{
-					this.selectedIndex = index;
-					settings.ui3_streamingQuality = this.items[index].uniqueQualityId;
-				}
+				genericQualityHelper.QualityChoiceChanged(item.text);
 			}
 		});
-	if (h264_playback_supported)
-	{
-		streamingQualityList.items.splice(0, 0
-			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 0", uniqueQualityId: "S0", abbr: "H.264 0", shortAbbr: "S0", tooltip: GetTooltipForStreamQuality })
-			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 1", uniqueQualityId: "S1", abbr: "H.264 1", shortAbbr: "S1", tooltip: GetTooltipForStreamQuality })
-			, new DropdownListItem({ player: "h264", text: "H.264 Streaming 2", uniqueQualityId: "S2", abbr: "H.264 2", shortAbbr: "S2", tooltip: GetTooltipForStreamQuality })
-		);
-	}
-	var selectPreferredQuality = function ()
-	{
-		streamingQualityList.selectedIndex = 0;
-		for (var i = 0; i < streamingQualityList.items.length; i++)
-		{
-			if (settings.ui3_streamingQuality == streamingQualityList.items[i].uniqueQualityId)
-			{
-				streamingQualityList.selectedIndex = i;
-				return;
-			}
-		}
-		// The user is not explicitly choosing a quality option, so don't set the setting.
-		//if (streamingQualityList.items.length > 0)
-		//    settings.ui3_streamingQuality = streamingQualityList.items[0].uniqueQualityId;
-	}
-	selectPreferredQuality();
 	this.listDefs["mainMenu"] = new DropdownListDefinition("mainMenu",
 		{
 			selectedIndex: -1
@@ -2521,6 +2483,7 @@ function DropdownBoxes()
 				[
 					new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
 					, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
+					, new DropdownListItem({ cmd: "streaming_profiles", text: "Streaming Profiles", icon: "#svg_mio_VideoFilter", cssClass: "goldenLarger" })
 					, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
 					, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
 					, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
@@ -2539,6 +2502,9 @@ function DropdownBoxes()
 						break;
 					case "about_this_ui":
 						openAboutDialog();
+						break;
+					case "streaming_profiles":
+						streamingProfileUI.open();
 						break;
 					case "system_log":
 						systemLog.open();
@@ -2672,7 +2638,7 @@ function DropdownBoxes()
 			handleElements[name] = [];
 		handleElements[name].push(ele);
 	});
-	this.setLabelText = function (name, labelText)
+	this.setLabelText = function (name, labelText, isHtml)
 	{
 		var handleEles = handleElements[name];
 		if (handleEles)
@@ -2680,10 +2646,15 @@ function DropdownBoxes()
 			{
 				var ele = handleEles[i];
 				if (ele)
-					ele.$label.text(labelText);
+				{
+					if (isHtml)
+						ele.$label.html(labelText);
+					else
+						ele.$label.text(labelText);
+				}
 			}
 	};
-	this.getLabelText = function (name)
+	this.getLabelText = function (name, isHtml)
 	{
 		var handleEles = handleElements[name];
 		if (handleEles)
@@ -2691,7 +2662,12 @@ function DropdownBoxes()
 			{
 				var ele = handleEles[i];
 				if (ele)
-					return ele.$label.text();
+				{
+					if (isHtml)
+						return ele.$label.html();
+					else
+						return ele.$label.text();
+				}
 			}
 		return "";
 	}
@@ -2796,7 +2772,10 @@ function DropdownBoxes()
 	{
 		var item = listDef.items[i];
 		var $item = $("<div></div>");
-		$item.text(item.text);
+		if (item.isHtml)
+			$item.html(item.text);
+		else
+			$item.text(item.text);
 		if (selectedText == item.text)
 			$item.addClass("selected");
 		if (item.cssClass)
@@ -2804,7 +2783,7 @@ function DropdownBoxes()
 		$item.click(function ()
 		{
 			if (listDef.items[i].autoSetLabelText)
-				self.setLabelText(listDef.name, item.text);
+				self.setLabelText(listDef.name, item.text, item.isHtml);
 			listDef.selectedIndex = i;
 			listDef.onItemClick && listDef.onItemClick(listDef.items[i]); // run if not null
 			closeDropdownLists();
@@ -2851,16 +2830,12 @@ function DropdownBoxes()
 		});
 	}
 }
-function GetTooltipForStreamQuality(item)
+function GetTooltipForStreamQuality(index)
 {
-	if (item.uniqueQualityId == "S0")
-		return sessionManager.GetStreamsArray()[0];
-	else if (item.uniqueQualityId == "S1")
-		return sessionManager.GetStreamsArray()[1];
-	else if (item.uniqueQualityId == "S2")
-		return sessionManager.GetStreamsArray()[2];
-	else
-		return "";
+	var arr = sessionManager.GetStreamsArray();
+	if (arr && arr.length > 0 && index > -1 && index < arr.length)
+		return arr[index];
+	return "";
 }
 ///////////////////////////////////////////////////////////////
 // System Name Button /////////////////////////////////////////
@@ -4262,7 +4237,7 @@ function PlaybackControls()
 		$playbackSettings.append($speedBtn);
 		var $qualityBtn = $('<div class="playbackSettingsLine">'
 			+ 'Quality<div class="playbackSettingsFloatRight">'
-			+ genericQualityHelper.GetAbbr()
+			+ htmlEncode(genericQualityHelper.GetCurrentProfile().GetNameText())
 			+ '<div class="playbackSettingsRightArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalRight"></use></svg></div>'
 			+ '</div></div>');
 		$qualityBtn.click(OpenQualityPanel);
@@ -4310,24 +4285,19 @@ function PlaybackControls()
 			$backBtn.click(self.OpenSettingsPanel);
 		$playbackSettings.append($backBtn);
 
-		var qualityListDef = dropdownBoxes.listDefs["streamingQuality"];
-		for (var i = 0; i < qualityListDef.items.length; i++)
+		var currentProfile = genericQualityHelper.GetCurrentProfile();
+		for (var i = 0; i < genericQualityHelper.profiles.length; i++)
 		{
 			var $item = $('<div class="playbackSettingsLine alignRight"></div>');
-			$item.text(qualityListDef.items[i].text);
-			var tooltip = qualityListDef.items[i].GetTooltip();
-			if (tooltip)
-				$item.attr('title', tooltip);
-			if (i == qualityListDef.selectedIndex)
+			var name = $item.get(0).qualityName = genericQualityHelper.profiles[i].name;
+			$item.append(genericQualityHelper.profiles[i].GetNameEle());
+			if (name === currentProfile.name)
 				$item.addClass("selected");
-			$item.get(0).listItemIndex = i;
 			$item.click(function ()
 			{
-				SetQualityHint(qualityListDef.items[this.listItemIndex].shortAbbr);
-				dropdownBoxes.setLabelText("streamingQuality", qualityListDef.items[this.listItemIndex].text);
-				qualityListDef.selectItemByIndex(this.listItemIndex);
+				genericQualityHelper.QualityChoiceChanged(this.qualityName);
+				SetQualityHint();
 				CloseSettings();
-				videoPlayer.SelectedQualityChanged();
 			});
 			$playbackSettings.append($item);
 		}
@@ -4462,13 +4432,18 @@ function PlaybackControls()
 				$playbackSettings.find("div.speedBtn .playbackSettingsFloatRight").html((playSpeed == 1 ? "Normal" : playSpeed));
 		}
 	}
-	var SetQualityHint = function (hintText)
+	var SetQualityHint = function ()
 	{
-		if (!hintText)
-			hintText = genericQualityHelper.GetShortAbbr();
-		$("#playbackSettingsQualityMark").removeClass("HD SD LD S0 S1 S2");
-		$("#playbackSettingsQualityMark").addClass(hintText);
-		$("#playbackSettingsQualityMark").text(hintText);
+		var p = genericQualityHelper.GetCurrentProfile();
+		if (p.abbr)
+		{
+			var aClr = p.GetAbbrColor();
+			var bgColor = "#" + aClr;
+			var fgColor = "#" + GetReadableTextColorHexForBackgroundColorHex(aClr, "000000", "FFFFFF");
+			$("#playbackSettingsQualityMark").css("background-color", bgColor).css("color", fgColor).text(p.abbr.substr(0, 4)).show();
+		}
+		else
+			$("#playbackSettingsQualityMark").hide();
 	}
 	$(document).on("mousemove touchmove", function (e)
 	{
@@ -8453,15 +8428,20 @@ function VideoPlayerController()
 			playerModule.Deactivate();
 		}
 
-		if (moduleName == "jpeg")
+		if (moduleName === "jpeg")
 		{
 			playerModule = moduleHolder[moduleName];
 		}
-		else if (moduleName == "h264")
+		else if (moduleName === "h264")
 		{
 			playerModule = moduleHolder[moduleName];
 		}
-		if (refreshVideoNow)
+		else
+			toaster.Error("Video Player was asked to load unexpected module \"" + moduleName + "\".", 30000);
+
+		if (!playerModule)
+			toaster.Error("Video Player was asked to load module \"" + moduleName + "\" which does not exist.", 30000);
+		else if (refreshVideoNow)
 			playerModule.OpenVideo(currentlyLoadingImage, position, paused);
 	}
 	this.RefreshVideoStream = function ()
@@ -8489,7 +8469,7 @@ function VideoPlayerController()
 		isInitialized = true;
 
 		self.PreLoadPlayerModules();
-		self.SetPlayerModule(genericQualityHelper.GetPlayerID(), true);
+		self.SetPlayerModule(genericQualityHelper.GetCurrentProfile().vcodec, true);
 
 		var visProp = getHiddenProp();
 		if (visProp)
@@ -8900,7 +8880,7 @@ function VideoPlayerController()
 	}
 	this.SelectedQualityChanged = function ()
 	{
-		var requiredPlayer = genericQualityHelper.GetPlayerID();
+		var requiredPlayer = genericQualityHelper.GetCurrentProfile().vcodec;
 		if (requiredPlayer != self.CurrentPlayerModuleName())
 		{
 			// playerModule must change, no need to notify the new one of the quality change.
@@ -9399,7 +9379,7 @@ function JpegVideoModule()
 		var widthToRequest = imageRenderer.GetSizeToRequest(true).w;
 		$("#camimg").attr('loadingimg', loading.id);
 
-		var qualityArg = jpegQualityHelper.getQualityArg();
+		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight);
 
 		if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetRemoteSessionArg("&", true);
@@ -9735,7 +9715,7 @@ function FetchH264VideoModule()
 		var videoUrl;
 		if (loading.isLive)
 		{
-			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2";
+			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight) + "&extend=2";
 		}
 		else
 		{
@@ -9812,7 +9792,7 @@ function FetchH264VideoModule()
 				offsetArg = "&time=" + (currentSeekPositionPercent * (loading.msec + offsetMsec)).dropDecimals();
 				posArg = "";
 			}
-			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + "&stream=" + h264QualityHelper.getStreamArg() + "&extend=2" + offsetArg + widthAndQualityArg;
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight) + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -11499,13 +11479,13 @@ function ImageRenderer()
 		if (ciLoading.aspectratio < 1)
 		{
 			if (modifyForJpegQualitySetting)
-				imgDrawHeight = jpegQualityHelper.ModifyImageDimension(imgDrawHeight);
+				imgDrawHeight = jpegQualityHelper.ModifyImageDimension("h", imgDrawHeight);
 			imgDrawWidth = imgDrawHeight * ciLoading.aspectratio;
 		}
 		else
 		{
 			if (modifyForJpegQualitySetting)
-				imgDrawWidth = jpegQualityHelper.ModifyImageDimension(imgDrawWidth);
+				imgDrawWidth = jpegQualityHelper.ModifyImageDimension("w", imgDrawWidth);
 			imgDrawHeight = imgDrawWidth / ciLoading.aspectratio;
 		}
 		// Now we have the size we need.  Determine what argument we will send to Blue Iris
@@ -12124,34 +12104,608 @@ var biSoundPlayer = new (function ()
 	}
 })();
 ///////////////////////////////////////////////////////////////
+// Customizable Streaming Profiles ////////////////////////////
+///////////////////////////////////////////////////////////////
+function StreamingProfileUI()
+{
+	var self = this;
+	var initialized = false;
+	var dialog = null;
+	var $dlg = $();
+	var $content = $();
+	var $profileList = $();
+
+	this.open = function ()
+	{
+		CloseDialog();
+		$dlg = $('<div class="streamingProfileUiPanel dialogOptionPanel"></div>');
+		$content = $('<div class="streamingProfileUiPanelContent"></div>');
+		$dlg.append($content);
+
+		$content.append('<div class="dialogOption_item_info">These streaming profiles are unique to your browser. Changing them will not affect anyone else.</div>');
+
+		var $defaultBtn = $('<input type="button" value="Restore missing default profiles" />"');
+		$defaultBtn.on('click', function ()
+		{
+			genericQualityHelper.RestoreDefaultProfiles(false);
+			RepopulateProfileList();
+		});
+		$content.append($('<div class="dialogOption_item_info"></div>').append($defaultBtn));
+
+		var $addBtn = $('<input type="button" value="Create new profile" />"');
+		$addBtn.on('click', AddProfile);
+		$content.append($('<div class="dialogOption_item_info"></div>').append($addBtn));
+
+		$content.append('<div class="dialogOption_item_info">Click to edit, drag to reorder:</div>');
+
+		$profileList = $('<ol class="profileList"></ol>');
+		$content.append($profileList);
+
+		RepopulateProfileList();
+
+		dialog = $dlg.dialog({ title: "UI3 Streaming Profiles" });
+	}
+	var RepopulateProfileList = function ()
+	{
+		$profileList.empty();
+		for (var i = 0; i < genericQualityHelper.profiles.length; i++)
+		{
+			var $p = $('<li class="profileListItem"></li>');
+			$p.attr('name', genericQualityHelper.profiles[i].name);
+			$p.append(genericQualityHelper.profiles[i].GetNameEle());
+			$p.append($('<div class="profileCodec"></div>').text("(" + genericQualityHelper.profiles[i].vcodec + ")"))
+			$p.on('click', ProfileClicked);
+			if (!h264_playback_supported && genericQualityHelper.profiles[i].vcodec === "h264")
+				$p.addClass('unsupportedProfile');
+			$profileList.append($p);
+		}
+		$profileList.sortable({ forcePlaceholderSize: true }).bind('sortupdate', UserChangedOrder);
+	}
+	var ProfileClicked = function (e)
+	{
+		var name = this.getAttribute('name');
+		new StreamingProfileEditor(genericQualityHelper.GetProfileWithName(name), ProfileEditedCallback);
+	}
+	var AddProfile = function ()
+	{
+		var newProfileNumber = 0;
+		var newProfile = new StreamingProfile();
+		newProfile.name = name;
+		var validName = false;
+		while (!validName)
+		{
+			newProfileNumber++;
+			newProfile.name = "New Profile " + newProfileNumber;
+			validName = true;
+			for (var i = 0; i < genericQualityHelper.profiles.length; i++)
+				if (genericQualityHelper.profiles[i].name === newProfile.name)
+				{
+					validName = false;
+					break;
+				}
+		}
+		genericQualityHelper.profiles.splice(0, 0, newProfile);
+		genericQualityHelper.SaveProfiles();
+		RepopulateProfileList();
+		$profileList.children().eq(0).click();
+	}
+	var UserChangedOrder = function (e, ui)
+	{
+		var sortHelper = {};
+		$profileList.children().each(function (idx, ele)
+		{
+			sortHelper[ele.getAttribute('name')] = idx;
+		});
+		genericQualityHelper.profiles.sort(function (a, b)
+		{
+			return sortHelper[a.name] - sortHelper[b.name];
+		});
+		genericQualityHelper.SaveProfiles();
+	}
+	var ProfileEditedCallback = function ()
+	{
+		RepopulateProfileList();
+	}
+	var CloseDialog = function ()
+	{
+		if ($profileList.length > 0)
+			$profileList.sortable('destroy');
+		if (dialog != null)
+		{
+			dialog.close();
+			dialog = null;
+		}
+	}
+}
+function StreamingProfileEditor(srcProfile, profileEditedCallback)
+{
+	var self = this;
+	var p = srcProfile.Clone();
+	var dialog = null;
+	var $dlg = $();
+	var $content = $();
+	var rowIdx;
+
+	var Initialize = function ()
+	{
+		CloseDialog();
+		$dlg = $('<div class="streamingProfileEditorPanel dialogOptionPanel"></div>');
+		$content = $('<div class="streamingProfileEditorPanelContent"></div>');
+
+		ReRender();
+
+		$dlg.append($content);
+		dialog = $dlg.dialog({
+			title: '<span>Profile: ' + srcProfile.GetNameEle().html() + '</span>'
+			, onClosing: DialogClosing
+		});
+	}
+	var ReRender = function ()
+	{
+		$content.empty();
+		rowIdx = 0;
+		AddEditorField("Profile Name", "name", { max: 21 });
+		AddEditorField("Abbreviation (0-4 characters)", "abbr", { max: 4 });
+		AddEditorField("Abbreviation Color", "aClr", { type: "color" });
+		AddEditorField("Video Codec", "vcodec", { type: "select", options: ["jpeg", "h264"], onChange: ReRender });
+		if (!h264_playback_supported && p.vcodec === "h264")
+			AddEditorField("This browser does not support H.264 streaming in UI3. This profile will not be available.", "vcodec", { type: "errorComment" });
+		AddEditorField("Base Server Profile", "stream", { type: "select", options: ["Streaming 0", "Streaming 1", "Streaming 2"] });
+		AddEditorField("Each profile inherits encoding parameters from one of the server's streaming profiles. You may override individual parameters below.", "stream", { type: "comment" });
+		AddEditorField("Max Frame Width", "w", { preprocess: preGT0, min: 1, max: 99999 });
+		AddEditorField("Max Frame Height", "h", { preprocess: preGT0, min: 1, max: 99999 });
+		AddEditorField("Quality [0-100]", "q", { preprocess: preGTn1, min: 0, max: 100 });
+		if (p.vcodec === "h264")
+		{
+			AddEditorField("Frame Rate [0-60]", "fps", { preprocess: preGTn1, min: 0, max: 60 });
+			AddEditorField("Limit Bit Rate", "limitBitrate", { type: "select", options: ["inherit", "No Limit", "Yes Limit"] });
+			AddEditorField("Max Bit Rate (Kbps) [10-8192]", "kbps", { preprocess: preGT0, min: 10, max: 8192 });
+			AddEditorField("Keyframe Interval [1-99999]", "gop", { preprocess: preGT0, min: 1, max: 99999 });
+			AddEditorField("Preset", "pre", { type: "select", options: ["inherit", "ultrafast", "superfast", "veryfast"] });
+			AddEditorField("Profile", "pro", { type: "select", options: ["inherit", "default", "baseline", "main", "extended", "high", "high 10"] });
+			AddEditorField("Zero-Frame Latency", "zfl", { type: "select", options: ["inherit", "No", "Yes"] });
+		}
+		var $deleteBtn = $('<input type="button" value="Delete This Profile" />');
+		$deleteBtn.on('click', DeleteClicked);
+		var $cancelBtn = $('<input type="button" style="float:right; margin-right: 10px;" value="Cancel" />');
+		$cancelBtn.on('click', CloseDialog);
+		var $saveBtn = $('<input type="button" style="float:right;" value="Save" />');
+		$saveBtn.on('click', SaveAndClose);
+		$content.append($('<div class="dialogOption_item_info"></div>').append($deleteBtn).append($saveBtn).append($cancelBtn));
+	}
+	var preGTn1 = function (value)
+	{
+		return value > -1 ? value : "";
+	}
+	var preGT0 = function (value)
+	{
+		return value > 0 ? value : "";
+	}
+	var preOptBool = function (value)
+	{
+		if (value === 1)
+			return true;
+		else if (value === 0)
+			return false;
+		else
+			return "";
+	}
+	var postOptBool = function (value)
+	{
+		if (value === 1)
+			return true;
+		else if (value === 0)
+			return false;
+		else
+			return "";
+	}
+	var AddEditorField = function (label, key, options)
+	{
+		if (!options)
+			options = {};
+		var $row = $('<div class="profileEditorRow"></div>');
+		if (rowIdx++ % 2 === 1)
+			$row.addClass('everyOther');
+
+		var value = p[key];
+		var valueType = typeof value;
+		var type = options.type;
+		if (!type)
+			type = valueType;
+
+		if (typeof options.preprocess === "function")
+			value = options.preprocess(value);
+
+		var formFields = {
+			value: value
+			, label: label
+			, tag: key
+		};
+		if (type === "boolean")
+		{
+			formFields.inputType = "checkbox";
+			formFields.onChange = CheckboxChanged;
+		}
+		else if (type === "string")
+		{
+			formFields.inputType = "text";
+			formFields.onChange = TextChanged;
+			formFields.maxValue = options.max;
+		}
+		else if (type === "color")
+		{
+			formFields.inputType = "color";
+			formFields.onChange = TextChanged;
+			formFields.maxValue = 7;
+			if (formFields.value.length === 6)
+				formFields.value = "#" + formFields.value;
+		}
+		else if (type === "number")
+		{
+			formFields.inputType = "number";
+			formFields.onChange = NumberChanged;
+			formFields.minValue = options.min;
+			formFields.maxValue = options.max;
+		}
+		else if (type === "select")
+		{
+			formFields.inputType = "select";
+			formFields.onChange = SelectChanged
+			formFields.options = options.options;
+			if (valueType === "number")
+			{
+				if (valueType < 0 || valueType >= options.options.length)
+					toaster.Error("Profile Editor Error: invalid value for " + label + ": " + value, 30000);
+				else
+					formFields.value = options.options[value];
+			}
+		}
+		else if (type === "comment")
+		{
+			formFields.inputType = "commentText";
+		}
+		else if (type === "errorComment")
+		{
+			formFields.inputType = "errorCommentText";
+		}
+		else
+		{
+			formFields.inputType = "noteText";
+			formFields.label = "Unknown object type: '" + type + "' with value '" + value + "' and label '" + label + "'";
+		}
+		if (typeof options.onChange === "function")
+		{
+			// An extra onChange method was provided. Create a wrapper to see both applied.
+			var oldOnChange = formFields.onChange;
+			formFields.onChange = function ()
+			{
+				if (typeof oldOnChange === "function")
+					oldOnChange.apply(this, arguments);
+				options.onChange.apply(this, arguments);
+			}
+		}
+		$row.append(UIFormField(formFields));
+
+		$content.append($row);
+	}
+	var CheckboxChanged = function (key, checked)
+	{
+		p[key] = checked;
+	}
+	var TextChanged = function (e, key, $input)
+	{
+		p[key] = $input.val();
+	}
+	var SelectChanged = function (e, key, $select)
+	{
+		var type = typeof p[key];
+		if (type === "number")
+			$select.children('option').each(function (idx, ele)
+			{
+				if ($(ele).is(':selected'))
+				{
+					p[key] = idx;
+					return;
+				}
+			});
+		else
+			p[key] = $select.val();
+	}
+	var NumberChanged = function (e, key, $input)
+	{
+		var value = parseFloat($input.val());
+		p[key] = isNaN(value) ? -1 : value;
+	}
+	var SaveAndClose = function ()
+	{
+		if (isNullOrWhitespace(p.name))
+		{
+			SimpleDialog.Text("A profile must have at least one printable character in its name.");
+			return;
+		}
+		p.name = p.name.trim();
+		if (srcProfile.name !== p.name)
+			for (var i = 0; i < genericQualityHelper.profiles.length; i++)
+			{
+				if (genericQualityHelper.profiles[i].name === p.name)
+				{
+					SimpleDialog.Text("A profile with the name '" + p.name + "' already exists.");
+					return;
+				}
+			}
+		for (var i = 0; i < genericQualityHelper.profiles.length; i++)
+		{
+			if (genericQualityHelper.profiles[i].name === srcProfile.name)
+			{
+				genericQualityHelper.profiles[i] = p;
+				if (settings.ui3_streamingQuality === srcProfile.name)
+				{
+					// Current profile is changing
+					genericQualityHelper.QualityChoiceChanged(p.name);
+				}
+				genericQualityHelper.SaveProfiles();
+				if (typeof profileEditedCallback === "function")
+					profileEditedCallback(p.name);
+				CloseDialog();
+				toaster.Success("Saved Profile " + p.GetNameEle().html(), 1500);
+				return true;
+			}
+		}
+		SimpleDialog.Text("Unable to locate original profile to replace it. Name: '" + srcProfile.name + "'")
+	}
+	var DialogClosing = function ()
+	{
+		if (!p.Equals(srcProfile))
+		{
+			SimpleDialog.ConfirmText("Save changes to this profile?", function ()
+			{
+				SaveAndClose();
+			}, function ()
+				{
+					CloseDialog();
+				});
+			return true;
+		}
+	}
+	var DeleteClicked = function ()
+	{
+		SimpleDialog.ConfirmText("Delete this profile?", function ()
+		{
+			for (var i = 0; i < genericQualityHelper.profiles.length; i++)
+			{
+				if (genericQualityHelper.profiles[i].name === srcProfile.name)
+				{
+					genericQualityHelper.profiles.splice(i, 1);
+					genericQualityHelper.SaveProfiles();
+					if (typeof profileEditedCallback === "function")
+						profileEditedCallback();
+					CloseDialog();
+					return;
+				}
+			}
+		});
+	}
+	var CloseDialog = function ()
+	{
+		if (dialog != null)
+		{
+			dialog.close(true);
+			dialog = null;
+		}
+	}
+	Initialize();
+}
+function StreamingProfile()
+{
+	var self = this;
+	this.name = "Unnamed Streaming Profile";
+	this.abbr = "";
+	this.aClr = "#004882";
+	this.vcodec = "h264";
+	this.stream = 0;
+	// All the remaining options are "optional".  Values of -1 mean to inherit the argument from the server-side stream.
+	this.w = -1;
+	this.h = -1;
+	this.q = -1;
+	// Above values apply to H.264 and JPEG.
+	// Below values apply only to H.264.
+	this.limitBitrate = 0; // 0: Inherit, 1: No, 2: Yes
+	this.kbps = -1; // Only if limitBitrate === 2
+	this.fps = -1;
+	this.gop = -1;
+	this.zfl = -1;
+	this.pre = -1; // Preset
+	this.pro = -1; // Profile
+
+	this.GetNameText = function ()
+	{
+		return self.name.replace('^', '');
+	}
+	this.GetNameEle = function ()
+	{
+		var $ele = $('<span></span>');
+		if (self.name.indexOf('^') > -1)
+		{
+			$ele.text(self.GetNameText());
+			var $sup = $('<sup></sup>');
+			$sup.text(self.abbr);
+			var aClr = self.GetAbbrColor();
+			$sup.css('margin-left', '3px');
+			$sup.css('padding', '0px 2px');
+			$sup.css('background-color', "#" + aClr);
+			$sup.css('color', GetReadableTextColorHexForBackgroundColorHex(aClr, "000000", "FFFFFF"));
+			$ele.append($sup);
+		}
+		else
+			$ele.text(self.name);
+		return $ele;
+	}
+	this.GetAbbrColor = function ()
+	{
+		if (self.aClr && self.aClr.length === 6)
+			return self.aClr;
+		else if (self.aClr && self.aClr.length === 7)
+			return self.aClr.substr(1);
+		return "#004882";
+	}
+	this.Equals = function (other)
+	{
+		for (var prop in self)
+		{
+			var value = self[prop];
+			var type = typeof value;
+			if ((type === 'string' || type === 'number' || type === 'boolean') && value !== other[prop])
+				return false;
+		}
+		return true;
+	}
+	this.Clone = function ()
+	{
+		var newProfile = new StreamingProfile();
+		for (var prop in self)
+		{
+			var value = self[prop];
+			var type = typeof value;
+			if (type === 'string' || type === 'number' || type === 'boolean')
+				newProfile[prop] = value;
+		}
+		return newProfile;
+	}
+
+	this.GetUrlArgs = function (w, h)
+	{
+		var sb = new StringBuilder();
+
+		sb.Append("&stream=").Append(self.stream);
+
+		if (self.q > -1)
+			sb.Append("&q=").Append(self.q);
+
+		// Jpeg size arguments are handled elsewhere.
+		if (self.vcodec === "h264")
+		{
+			// function args w and h are the native resolution of the stream, and will help us determine what to request here.
+			// However this method should still work if w and h were omitted.
+			var nativePx = 0;
+			var aspect;
+			if (w && h)
+			{
+				aspect = w / h;
+				nativePx = w * h;
+			}
+			else
+				aspect = 16 / 9;
+			if (self.w > 0 && self.h > 0 && nativePx > 0)
+			{
+				// If both width and height are provided in the profile, UI3 treats them as just a total pixel count.
+				// This enables decent handling of rotated views and different aspect ratios.
+				var profilePx = self.w * self.h;
+				var reducer = Math.sqrt(profilePx / nativePx);
+				if (reducer < 1)
+					sb.Append("&h=").Append(Math.round(h * reducer)); // Profile requests fewer pixels than native
+				else if (self.h > h)
+					sb.Append("&h=").Append(self.h);
+				else
+					sb.Append("&h=").Append(h);
+			}
+			else if (self.h > 0)
+				sb.Append("&h=").Append(self.h);
+			else if (self.w > 0)
+				sb.Append("&h=").Append(Math.round(self.w / aspect));
+
+			if (self.limitBitrate === 1)
+				sb.Append("&kbps=0");
+			else if (self.limitBitrate === 2)
+				sb.Append("&kbps=").Append(Clamp(self.kbps, 10, 8192));
+
+			if (self.fps > 0)
+				sb.Append("&fps=").Append(self.fps);
+
+			if (self.gop > 0)
+				sb.Append("&gop=").Append(self.gop);
+
+			if (self.zfl > 0)
+				sb.Append("&zfl=").Append(self.zfl - 1);
+
+			if (self.pre > 0)
+				sb.Append("&preset=").Append(self.pre - 1);
+
+			if (self.pro > 0)
+				sb.Append("&profile=").Append(self.pro - 1);
+		}
+		return sb.ToString();
+	}
+}
+///////////////////////////////////////////////////////////////
 // Generic Quality Helper /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function GenericQualityHelper()
 {
 	var self = this;
-	this.GetID = function ()
+	self.profiles = new Array();
+
+	this.GetCurrentProfile = function ()
 	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().uniqueQualityId;
+		if (!self.profiles || self.profiles.length === 0)
+			self.RestoreDefaultProfiles();
+		for (var i = 0; i < self.profiles.length; i++)
+			if (self.profiles[i].name === settings.ui3_streamingQuality)
+			{
+				if (!h264_playback_supported && self.profiles[i].vcodec === "h264")
+					continue;
+				return self.profiles[i];
+			}
+		return self.GetFirstCompatibleProfile();
 	}
-	this.GetShortAbbr = function ()
+	this.GetFirstCompatibleProfile = function ()
 	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().shortAbbr;
+		for (var i = 0; i < self.profiles.length; i++)
+		{
+			if (self.profiles[i].vcodec === "jpeg" ||
+				(h264_playback_supported && self.profiles[i].vcodec === "h264"))
+				return self.profiles[i];
+		}
+		toaster.Info("Unable to locate a compatible streaming profile. Restoring default profiles.", 5000);
+		self.RestoreDefaultProfiles();
+		for (var i = 0; i < self.profiles.length; i++)
+		{
+			if (self.profiles[i].vcodec === "jpeg" ||
+				(h264_playback_supported && self.profiles[i].vcodec === "h264"))
+				return self.profiles[i];
+		}
+		toaster.Error("Unable to locate a compatible streaming profile even after restoring default profiles.", 30000);
+		return null;
 	}
-	this.GetAbbr = function ()
+	this.QualityChoiceChanged = function (name)
 	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().abbr;
+		var p = self.GetCurrentProfile();
+		for (var i = 0; i < self.profiles.length; i++)
+			if (self.profiles[i].name === name)
+			{
+				settings.ui3_streamingQuality = name;
+				dropdownBoxes.setLabelText("streamingQuality", self.profiles[i].GetNameText());
+				if (videoPlayer)
+					videoPlayer.SelectedQualityChanged();
+				return;
+			}
 	}
-	this.GetName = function ()
+	this.SetStreamingQualityDropdownBoxItems = function ()
 	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().text;
+		var arr = new Array();
+		for (var i = 0; i < self.profiles.length; i++)
+			arr.push(new DropdownListItem({ text: self.profiles[i].GetNameText() }));
+		dropdownBoxes.listDefs["streamingQuality"].items = arr;
 	}
-	this.GetPlayerID = function ()
+	this.GetProfileWithName = function (name)
 	{
-		return dropdownBoxes.listDefs["streamingQuality"].getCurrentlySelectedItem().player;
+		for (var i = 0; i < self.profiles.length; i++)
+			if (self.profiles[i].name === name)
+				return self.profiles[i];
+		return null;
 	}
 	this.getSeekPreviewQualityArgs = function (dimKey, dimValue)
 	{
-		var playerId = self.GetPlayerID();
+		var playerId = self.GetCurrentProfile().vcodec;
 		if (playerId == "h264")
 		{
 			var bitRate_Video = bitRateCalc_Video.GetBestGuess() * 8;
@@ -12192,8 +12746,206 @@ function GenericQualityHelper()
 			return "&" + dimKey + "=" + sizeLimit + "&q=" + quality;
 		}
 		else
-			return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimValue) + jpegQualityHelper.getQualityArg();
+			return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimKey, dimValue) + jpegQualityHelper.getQualityArg();
 	}
+
+	this.GenerateDefaultProfiles = function ()
+	{
+		var profiles = new Array();
+		{
+			var p = new StreamingProfile();
+			p.name = "2160p^";
+			p.abbr = "4K";
+			p.aClr = "#008248";
+			p.w = 3840;
+			p.h = 2160;
+			p.limitBitrate = 2;
+			p.kbps = 8192;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "1440p^";
+			p.abbr = "HD";
+			p.aClr = "#0048A2";
+			p.w = 2560;
+			p.h = 1440;
+			p.limitBitrate = 2;
+			p.kbps = 4096;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "1080p^";
+			p.abbr = "HD";
+			p.aClr = "#004882";
+			p.w = 1920;
+			p.h = 1080;
+			p.limitBitrate = 2;
+			p.kbps = 2048;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "720p^";
+			p.abbr = "HD";
+			p.aClr = "#003862";
+			p.w = 1280;
+			p.h = 720;
+			p.limitBitrate = 2;
+			p.kbps = 1024;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "480p";
+			p.w = 856;
+			p.h = 480;
+			p.limitBitrate = 2;
+			p.kbps = 456;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "360p";
+			p.w = 640;
+			p.h = 360;
+			p.limitBitrate = 2;
+			p.kbps = 256;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "240p";
+			p.w = 427;
+			p.h = 240;
+			p.limitBitrate = 2;
+			p.kbps = 114;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "144p";
+			p.w = 256;
+			p.h = 144;
+			p.limitBitrate = 2;
+			p.kbps = 41;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "Jpeg HD";
+			p.vcodec = "jpeg";
+			p.abbr = "HD";
+			p.aClr = "#004882";
+			p.w = 99999;
+			p.h = 99999;
+			p.q = 85;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "Jpeg SD";
+			p.vcodec = "jpeg";
+			p.abbr = "SD";
+			p.aClr = "#884400";
+			p.w = 640;
+			p.h = 640;
+			p.q = 50;
+			profiles.push(p);
+		}
+		{
+			var p = new StreamingProfile();
+			p.name = "Jpeg Low";
+			p.vcodec = "jpeg";
+			p.abbr = "LD";
+			p.aClr = "#880000";
+			p.w = 320;
+			p.h = 320;
+			p.q = 20;
+			profiles.push(p);
+		}
+		return profiles;
+	}
+	this.RestoreDefaultProfiles = function (replaceExisting)
+	{
+		var defaultProfiles = self.GenerateDefaultProfiles();
+		if (self.profiles && self.profiles.length > 0)
+		{
+			for (var i = 0; i < defaultProfiles.length; i++)
+			{
+				var foundExisting = false;
+				for (var n = 0; n < self.profiles.length; n++)
+				{
+					if (defaultProfiles[i].name === self.profiles[n].name)
+					{
+						foundExisting = true;
+						if (replaceExisting)
+							self.profiles[n] = defaultProfiles[i];
+						break;
+					}
+				}
+				if (!foundExisting)
+					self.profiles.push(defaultProfiles[i]);
+			}
+		}
+		else
+			self.profiles = defaultProfiles;
+		self.SaveProfiles();
+	}
+	this.LoadProfiles = function ()
+	{
+		try
+		{
+			self.profiles = new Array();
+			var profileData = JSON.parse(settings.ui3_streamingProfileArray);
+			for (var i = 0; i < profileData.length; i++)
+				self.profiles.push($.extend(new StreamingProfile(), profileData[i]));
+			self.SetStreamingQualityDropdownBoxItems();
+		}
+		catch (ex)
+		{
+			alert("Your streaming profiles could not be loaded, and will be restored to defaults.");
+		}
+	}
+	var isInSavingProfilesFunc = false;
+	this.SaveProfiles = function ()
+	{
+		try
+		{
+			settings.ui3_streamingProfileArray = JSON.stringify(self.profiles);
+
+			if (isInSavingProfilesFunc)
+				return; // Prevent infinitely looping here in case the default profiles don't have anything compatible.
+			try
+			{
+				isInSavingProfilesFunc = true;
+				for (var i = 0; i < self.profiles.length; i++)
+					if (self.profiles[i].name === settings.ui3_streamingQuality)
+					{
+						if (!h264_playback_supported && self.profiles[i].vcodec === "h264")
+							continue;
+						return;
+					}
+				var profile = self.GetFirstCompatibleProfile();
+				self.QualityChoiceChanged(profile.name);
+				toaster.Info("The active profile has changed to " + profile.GetNameEle().html(), 3000);
+			}
+			finally
+			{
+				isInSavingProfilesFunc = false;
+			}
+		}
+		finally
+		{
+			self.SetStreamingQualityDropdownBoxItems();
+		}
+	}
+
+	self.LoadProfiles();
+	if (!self.profiles || self.profiles.length === 0)
+		this.RestoreDefaultProfiles();
+	self.QualityChoiceChanged(self.GetCurrentProfile().name);
 }
 ///////////////////////////////////////////////////////////////
 // Jpeg Quality Helper ////////////////////////////////////////
@@ -12203,40 +12955,27 @@ function JpegQualityHelper()
 	var self = this;
 	this.getQualityArg = function ()
 	{
-		var currentQualityId = genericQualityHelper.GetID();
-		if (currentQualityId == "B") // Standard Definition
-			return "&q=50";
-		else if (currentQualityId == "C") // Low Definition
-			return "&q=20";
-		else // ("A" or other) High Definition
+		var p = genericQualityHelper.GetCurrentProfile();
+		if (p.q)
+			return "&q=" + p.q;
+		else
 			return "";
 	}
-	this.ModifyImageDimension = function (imgDimension)
+	this.ModifyImageDimension = function (dimKey, dimValue)
 	{
-		var currentQualityId = genericQualityHelper.GetID();
-		if (currentQualityId == "B") // Standard Definition
-			return Math.min(imgDimension, 640);
-		else if (currentQualityId == "C") // Low Definition
-			return Math.min(imgDimension, 320);
-		else // ("A" or other) High Definition
-			return imgDimension;
-	}
-}
-///////////////////////////////////////////////////////////////
-// H.264 Quality Helper ///////////////////////////////////////
-///////////////////////////////////////////////////////////////
-function H264QualityHelper()
-{
-	var self = this;
-	this.getStreamArg = function ()
-	{
-		var currentQualityId = genericQualityHelper.GetID();
-		if (currentQualityId == "S0") // Streaming 0 profile
-			return "0";
-		else if (currentQualityId == "S1") // Streaming 1 profile
-			return "1";
-		else // ("S2" or other) Streaming 2 profile
-			return "2";
+		var p = genericQualityHelper.GetCurrentProfile();
+		if (dimKey === "w")
+		{
+			if (p.w)
+				return Math.min(dimValue, p.w);
+			return dimValue;
+		}
+		else
+		{
+			if (p.h)
+				return Math.min(dimValue, p.h);
+			return dimValue;
+		}
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -15601,7 +16340,9 @@ function BI_Hotkeys()
 	$(document).keydown(function (e)
 	{
 		var charCode = e.which;
-		if ($("body").children(".dialog_overlay").length != 0 || !charCode)
+		if (!charCode
+			|| $("body").children(".dialog_overlay").length !== 0
+			|| $("body").children(".dialog_wrapper").children(".streamingProfileEditorPanel").length !== 0)
 			return;
 		var hotkeysBeingRepeated = currentlyDownKeys[charCode];
 		if (hotkeysBeingRepeated)
@@ -17817,7 +18558,6 @@ function UISettingsPanel()
 	var modal_dialog = null;
 	var $dlg = $();
 	var $content = $();
-	var inputs = {};
 
 	var Initialize = function ()
 	{
@@ -17881,6 +18621,12 @@ function UISettingsPanel()
 					$row.attr('title', s.hint);
 				if (rowIdx++ % 2 === 1)
 					$row.addClass('everyOther');
+				var formFields = {
+					inputType: s.inputType
+					, value: settings[s.key]
+					, label: s.label
+					, tag: s
+				};
 				if (s.hotkey)
 				{
 					var $input = $('<input type="text" />');
@@ -17905,66 +18651,36 @@ function UISettingsPanel()
 				}
 				else if (s.inputType === "checkbox")
 				{
-					$row.append(GetCustomCheckbox(s, s.label, settings[s.key] === "1", CheckboxChanged));
+					formFields.onChange = CheckboxChanged;
+					$row.append(UIFormField(formFields));
 				}
 				else if (s.inputType === "select")
 				{
-					var sb = [];
-					sb.push('<select>');
 					if ((s.options.length === 0 || s.alwaysRefreshOptions) && typeof s.getOptions === "function")
 						s.options = s.getOptions();
-					for (var n = 0; n < s.options.length; n++)
-						sb.push(GetHtmlOptionElementMarkup(s.options[n], s.options[n], settings[s.key]));
-					sb.push('</select>');
-					var $select = $(sb.join(''));
-					AddChangeEventToElement(SelectChanged, s, $select);
+
 					$row.addClass('dialogOption_item dialogOption_item_ddl');
-					$row.append($select);
-					$row.append(GetDialogOptionLabel(s.label));
+
+					formFields.options = s.options;
+					formFields.onChange = SelectChanged;
+					$row.append(UIFormField(formFields));
 				}
 				else if (s.inputType === "number" || s.inputType === "range")
 				{
-					var $input = $('<input type="' + s.inputType + '" />');
-					if (typeof s.minValue != "undefined")
-						$input.attr('min', s.minValue);
-					if (typeof s.maxValue != "undefined")
-						$input.attr('max', s.maxValue);
-					if (typeof s.step != "undefined")
-						$input.attr('step', s.step);
-					$input.val(settings[s.key]);
-					AddChangeEventToElement(NumberChanged, s, $input);
-					$row.addClass('dialogOption_item dialogOption_item_info');
-					var $label = $(GetDialogOptionLabel(s.label));
+					formFields.minValue = s.minValue;
+					formFields.maxValue = s.maxValue;
+					formFields.step = s.step;
+					formFields.onChange = NumberChanged;
 					if (s.inputType === "range")
 					{
 						if (s.changeOnStep)
-							AddInputEventToElement(NumberChanged, s, $input);
-						// Set up numeric output for range control
-						$label.append("<span>: </span>");
-						var $numericValue = $("<span></span>");
-						$numericValue.text($input.val());
-						$label.append($numericValue);
-						if (s.unitLabel)
-							$label.append($('<span></span>').text(s.unitLabel));
-						$input.on('input change', function ()
-						{
-							$numericValue.text($input.val());
-						});
-
-						// Add to row
-						$row.addClass('dialogOption_item_range');
-						$row.append($label);
-						$row.append($input);
+							formFields.onInput = NumberChanged;
+						formFields.unitLabel = s.unitLabel;
 					}
-					else
-					{
-						$row.append($input);
-						$row.append($label);
-					}
+					$row.append(UIFormField(formFields));
 				}
 				else if (s.inputType === "comment")
 				{
-					$row.addClass('dialogOption_item dialogOption_item_info dialogOption_item_comment');
 					var comment = typeof s.comment === "function" ? s.comment() : s.comment;
 					$row.append(GetDialogOptionLabel(comment));
 				}
@@ -18135,10 +18851,10 @@ function UISettingsPanel()
 		cat.$section.append($row);
 		return rowIdx;
 	}
-	var CheckboxChanged = function (defaultSetting, checked)
+	var CheckboxChanged = function (s, checked)
 	{
-		settings[defaultSetting.key] = checked ? "1" : "0";
-		CallOnChangeCallback(defaultSetting);
+		settings[s.key] = checked ? "1" : "0";
+		CallOnChangeCallback(s);
 	}
 	var SelectChanged = function (e, s, $select)
 	{
@@ -18147,12 +18863,12 @@ function UISettingsPanel()
 			settings[s.key] = selectedValue;
 		CallOnChangeCallback(s);
 	}
-	var NumberChanged = function (e, defaultSetting, $input)
+	var NumberChanged = function (e, s, $input)
 	{
-		settings[defaultSetting.key] = parseFloat($input.val());
-		CallOnChangeCallback(defaultSetting);
+		settings[s.key] = parseFloat($input.val());
+		CallOnChangeCallback(s);
 	}
-	var HandleHotkeyChange = function (e, defaultSetting, $input)
+	var HandleHotkeyChange = function (e, s, $input)
 	{
 		var charCode = e.which ? e.which : event.keyCode;
 
@@ -18169,19 +18885,9 @@ function UISettingsPanel()
 		$input.val(modifiers + keyName);
 
 		var hotkeyValue = (e.ctrlKey ? "1" : "0") + "|" + (e.altKey ? "1" : "0") + "|" + (e.shiftKey ? "1" : "0") + "|" + charCode + "|" + keyName;
-		settings.setItem(defaultSetting.key, hotkeyValue);
+		settings.setItem(s.key, hotkeyValue);
 
 		return false;
-	}
-	var AddChangeEventToElement = function (eventHandler, defaultSetting, $input)
-	{
-		/// <summary>Adds a change event handler to the input element.  Doing this in a separate function forces the creation of a new scope and that ensures the arguments to the event handler stay correct.</summary>
-		$input.on('change', function (e) { return eventHandler(e, defaultSetting, $input); });
-	}
-	var AddInputEventToElement = function (eventHandler, defaultSetting, $input)
-	{
-		/// <summary>Adds an input event handler to the input element.  Doing this in a separate function forces the creation of a new scope and that ensures the arguments to the event handler stay correct.</summary>
-		$input.on('input', function (e) { return eventHandler(e, defaultSetting, $input); });
 	}
 	var AddKeydownEventToElement = function (eventHandler, defaultSetting, $input)
 	{
@@ -18315,6 +19021,105 @@ function OnChange_ui3_ir_brightness_contrast()
 		$('#ptzIrBrightnessContrast').show();
 	else
 		$('#ptzIrBrightnessContrast').hide();
+}
+///////////////////////////////////////////////////////////////
+// Form Field Helpers /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function UIFormField(args)
+{
+	var o = $.extend({
+		inputType: "unset" // required
+		, value: null // required
+		, label: ""
+		, tag: null // Object passed through to event handlers
+		, onChange: null // Called when the input's value is changed
+		, onInput: null // Some inputs emit this rapidly while the user types or drags
+		, options: null // array of option strings for "select" inputs
+		, minValue: undefined // number / range types
+		, maxValue: undefined // number / range types
+	}, args);
+
+	if (o.inputType === "checkbox")
+		return GetCustomCheckbox(o.tag, o.label, o.value === true || o.value === "1", o.onChange);
+	else if (o.inputType === "select")
+	{
+		var sb = new StringBuilder();
+		sb.Append('<select>');
+		for (var i = 0; i < o.options.length; i++)
+			sb.Append(GetHtmlOptionElementMarkup(o.options[i], o.options[i], o.value));
+		sb.Append('</select>');
+		var $input = $(sb.ToString());
+		$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
+		return $('<div class="dialogOption_item dialogOption_item_ddl"></div>').append($input).append(GetDialogOptionLabel(o.label));
+	}
+	else if (o.inputType === "number" || o.inputType === "range")
+	{
+		var $input = $('<input type="' + o.inputType + '" />');
+		if (typeof o.minValue !== "undefined") $input.attr('min', o.minValue);
+		if (typeof o.maxValue !== "undefined") $input.attr('max', o.maxValue);
+		if (typeof o.step !== "undefined") $input.attr('step', o.step);
+		$input.val(o.value);
+		$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
+		var $label = $(GetDialogOptionLabel(o.label));
+		var classes = "dialogOption_item dialogOption_item_info";
+		if (o.inputType === "range")
+		{
+			if (typeof o.onInput === "function")
+				$input.on('input', function (e) { return o.onInput(e, o.tag, $input); });
+			// Set up numeric output for range control
+			$label.append('<span>: </span>');
+			var $numericValue = $('<span></span>');
+			$numericValue.text(o.value);
+			$label.append($numericValue);
+			if (o.unitLabel)
+				$label.append($('<span></span>').text(o.unitLabel));
+			$input.on('input change', function ()
+			{
+				$numericValue.text($input.val());
+			});
+			return $('<div class="' + classes + ' dialogOption_item_range"></div>').append($label).append($input);
+		}
+		else
+			return $('<div class="' + classes + '"></div>').append($input).append($label);
+	}
+	else if (o.inputType === "text" || o.inputType === "color")
+	{
+		var $input = $('<input type="' + o.inputType + '" data-lpignore="true" autocomplete="off" />');
+		if (o.maxValue)
+			$input.attr('maxlength', o.maxValue);
+		$input.val(o.value);
+		$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
+		return $('<div class="dialogOption_item dialogOption_item_info"></div>').append($input).append(GetDialogOptionLabel(o.label));
+	}
+	else if (o.inputType === "errorCommentText")
+	{
+		return $('<div class="dialogOption_item dialogOption_item_info dialogOption_item_comment settingsCommentError"></div>').text(o.label);
+	}
+	else if (o.inputType === "errorCommentHtml")
+	{
+		return $('<div class="dialogOption_item dialogOption_item_info dialogOption_item_comment settingsCommentError"></div>').html(o.label);
+	}
+	else if (o.inputType === "commentText")
+	{
+		return $('<div class="dialogOption_item dialogOption_item_info dialogOption_item_comment"></div>').text(o.label);
+	}
+	else if (o.inputType === "commentHtml")
+	{
+		return $('<div class="dialogOption_item dialogOption_item_info dialogOption_item_comment"></div>').html(o.label);
+	}
+	else if (o.inputType === "noteText")
+	{
+		return $('<div class="dialogOption_item dialogOption_item_info"></div>').text(o.label);
+	}
+	else if (o.inputType === "noteHtml")
+	{
+		return $('<div class="dialogOption_item dialogOption_item_info"></div>').html(o.label);
+	}
+	else
+	{
+		console.error("Invalid arguments sent to UIFormField", args);
+		return $('<div class="dialogOption_item dialogOption_item_info">Invalid arguments sent to UIFormField.</div>');
+	}
 }
 ///////////////////////////////////////////////////////////////
 // UI Help ////////////////////////////////////////////////////
@@ -18545,13 +19350,13 @@ function StringBuilder(lineBreakStr)
 		lineBreakStr = "\r\n";
 	this.Append = function (value)
 	{
-		if (value)
+		if (typeof value !== "undefined")
 			strings.push(value);
 		return this;
 	}
 	this.AppendLine = function (value)
 	{
-		if (value)
+		if (typeof value !== "undefined")
 			strings.push(value);
 		strings.push(lineBreakStr);
 		return this;
@@ -18688,6 +19493,10 @@ function AskYesNo(question, onYes, onNo, onError, yesText, noText, title)
 			, noText: noText
 		});
 }
+function isNullOrWhitespace(input)
+{
+	return !input || !input.trim();
+}
 String.prototype.padLeft = function (len, c)
 {
 	var pads = len - this.length;
@@ -18760,13 +19569,27 @@ function BlueIrisColorToCssColor(biColor)
 	var colorHex = biColor.toString(16).padLeft(8, '0').substr(2);
 	return colorHex.substr(4, 2) + colorHex.substr(2, 2) + colorHex.substr(0, 2);
 }
-function GetReadableTextColorHexForBackgroundColorHex(c)
+function GetReadableTextColorHexForBackgroundColorHex(c, dark, light)
 {
+	/// <summary>Returns a hex color not including "#", such as "222222" or "DDDDDD".</summary>
 	var r = parseInt(c.substr(0, 2), 16);
 	var g = parseInt(c.substr(2, 2), 16);
 	var b = parseInt(c.substr(4, 2), 16);
 	var o = Math.round(((r * 299) + (g * 587) + (b * 114)) / 1000);
-	return o > 125 ? "222222" : "DDDDDD";
+	if (o > 125)
+	{
+		if (dark)
+			return dark;
+		else
+			return "222222";
+	}
+	else
+	{
+		if (light)
+			return light;
+		else
+			return "DDDDDD";
+	}
 }
 function stopDefault(e)
 {

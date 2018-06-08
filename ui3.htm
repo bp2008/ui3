@@ -34,7 +34,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "28";
+		var ui_version = "29pre";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
@@ -341,7 +341,7 @@
 				<div id="clipExitFullscreenButton" class="pcButton rightSide fullscreenButtonHidden" title="Exit Full Screen"><svg class="icon"><use xlink:href="#svg_mio_FullscreenExit"></use></svg></div>
 				<a id="clipDownloadButton" class="pcButton rightSide hideWhenLive" href="javascript:void(0)" title="Download Clip" target="_blank"><svg class="icon"><use xlink:href="#svg_x5F_Download"></use></svg></a>
 				<div id="clipFlagButton" class="pcButton rightSide hideWhenLive" onclick="clipLoader.FlagCurrentClip()" title="Flag/Unflag"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>
-				<div id="playbackSettingsButton" class="pcButton rightSide" onclick="playbackControls.OpenSettingsPanel()"><svg class="icon"><use xlink:href="#svg_x5F_Settings"></use></svg><div id="playbackSettingsQualityMark" class="HD">HD</div></div>
+				<div id="playbackSettingsButton" class="pcButton rightSide" onclick="playbackControls.OpenSettingsPanel()"><svg class="icon"><use xlink:href="#svg_x5F_Settings"></use></svg><div id="playbackSettingsQualityMark"></div></div>
 				<div id="playbackSpeedText" class="pcText rightSide hideWhenLive" onclick="playbackControls.OpenSpeedPanel()" title="Playback Speed"></div>
 			</div>
 		</div>

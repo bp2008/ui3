@@ -143,11 +143,12 @@ var $DialogDefaults = { theme: "light" };
 		{
 			if (!isOpen)
 				return;
-			isOpen = false;
 
 			if (typeof self.settings.onClosing == "function" && !suppressCallback)
 				if (self.settings.onClosing())
 					return false;
+
+			isOpen = false;
 
 			$(window).unbind(".dialog" + myId);
 
@@ -342,11 +343,11 @@ var SimpleDialog = new function ()
 	var self = this;
 	this.text = this.Text = function (message)
 	{
-		return $('<div style="white-space: pre-wrap;"></div>').text(message).modalDialog();
+		return $('<div style="white-space: pre-wrap; padding: 10px;"></div>').text(message).modalDialog();
 	}
 	this.html = this.Html = function (message)
 	{
-		return $('<div></div>').html(message).modalDialog();
+		return $('<div style="padding: 10px;"></div>').html(message).modalDialog();
 	}
 	this.confirmText = this.ConfirmText = function (question, onYes, onNo, options)
 	{
@@ -373,7 +374,7 @@ var SimpleDialog = new function ()
 			options.onError = console.log;
 		if (!options.onError)
 			options.onError = function (ex) { };
-		var $dlg = $('<div></div>');
+		var $dlg = $('<div style="padding: 10px;"></div>');
 		$dlg.append(questionEle);
 
 		var $yes = $('<input type="button" value="Yes" style="margin-right:15px;" />');
@@ -382,7 +383,7 @@ var SimpleDialog = new function ()
 			$yes.val(options.yesText);
 		if (options.noText)
 			$no.val(options.noText);
-		$dlg.append($('<div style="margin: 20px 0px 10px 0px; text-align: center;"></div>').append($yes).append($no));
+		$dlg.append($('<div style="margin-top: 20px; text-align: center;"></div>').append($yes).append($no));
 
 		var dlg = $dlg.modalDialog({ title: options.title });
 		$yes.click(function ()
