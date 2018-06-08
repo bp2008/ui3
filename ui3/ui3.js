@@ -398,6 +398,7 @@ var togglableUIFeatures =
 // TODO: Scroll the dropdown / Quality popup automatically to the position of the selected element.
 // TODO: There should be an edit button in the Quality selector popup (in the playback controls area) which opens the encoder profiles panel.
 // TODO: Override keyframe interval in firefox when using HTML5 mode; set it equal to the camera's reported frame rate, or 10 if the frame rate is unknown.  Make this a global option just under the H264 player selector, conditional appearance similar to the delay compensator option.  Default: enabled.
+// TODO: Add tooltips for the streaming profiles in all menus.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -2470,10 +2471,10 @@ function DropdownBoxes()
 		});
 	this.listDefs["streamingQuality"] = new DropdownListDefinition("streamingQuality",
 		{
-			items: [new DropdownListItem({ text: "Not Loaded!" })]
+			items: [new DropdownListItem({ text: "Not Loaded!", uniqueId: "Not Loaded!" })]
 			, onItemClick: function (item)
 			{
-				genericQualityHelper.QualityChoiceChanged(item.text);
+				genericQualityHelper.QualityChoiceChanged(item.uniqueId);
 			}
 		});
 	this.listDefs["mainMenu"] = new DropdownListDefinition("mainMenu",
@@ -12250,7 +12251,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		AddEditorField("Video Codec", "vcodec", { type: "select", options: ["jpeg", "h264"], onChange: ReRender });
 		if (!h264_playback_supported && p.vcodec === "h264")
 			AddEditorField("This browser does not support H.264 streaming in UI3. This profile will not be available.", "vcodec", { type: "errorComment" });
-		AddEditorField("Base Server Profile", "stream", { type: "select", options: ["Streaming 0", "Streaming 1", "Streaming 2"] });
+		AddEditorField("Base Server Profile", "stream", { type: "select", options: [GetServerProfileString(0), GetServerProfileString(1), GetServerProfileString(2)] });
 		AddEditorField("Each profile inherits encoding parameters from one of the server's streaming profiles. You may override individual parameters below.", "stream", { type: "comment" });
 		AddEditorField("Max Frame Width", "w", { preprocess: preGT0, min: 1, max: 99999 });
 		AddEditorField("Max Frame Height", "h", { preprocess: preGT0, min: 1, max: 99999 });
@@ -12272,6 +12273,14 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		var $saveBtn = $('<input type="button" style="float:right;" value="Save" />');
 		$saveBtn.on('click', SaveAndClose);
 		$content.append($('<div class="dialogOption_item_info"></div>').append($deleteBtn).append($saveBtn).append($cancelBtn));
+	}
+	var GetServerProfileString = function (i)
+	{
+		var str = "Streaming " + i;
+		var desc = GetTooltipForStreamQuality(i);
+		if (desc)
+			str += " (" + desc + ")";
+		return str;
 	}
 	var preGTn1 = function (value)
 	{
@@ -12542,11 +12551,12 @@ function StreamingProfile()
 	}
 	this.GetAbbrColor = function ()
 	{
+		/// <summary>Returns the 6-digit hex string representing the abbreviation color.</summary>
 		if (self.aClr && self.aClr.length === 6)
 			return self.aClr;
 		else if (self.aClr && self.aClr.length === 7)
 			return self.aClr.substr(1);
-		return "#004882";
+		return "004882";
 	}
 	this.Equals = function (other)
 	{
@@ -12693,7 +12703,7 @@ function GenericQualityHelper()
 	{
 		var arr = new Array();
 		for (var i = 0; i < self.profiles.length; i++)
-			arr.push(new DropdownListItem({ text: self.profiles[i].GetNameText() }));
+			arr.push(new DropdownListItem({ text: self.profiles[i].GetNameText(), uniqueId: self.profiles[i].name }));
 		dropdownBoxes.listDefs["streamingQuality"].items = arr;
 	}
 	this.GetProfileWithName = function (name)
@@ -18658,9 +18668,6 @@ function UISettingsPanel()
 				{
 					if ((s.options.length === 0 || s.alwaysRefreshOptions) && typeof s.getOptions === "function")
 						s.options = s.getOptions();
-
-					$row.addClass('dialogOption_item dialogOption_item_ddl');
-
 					formFields.options = s.options;
 					formFields.onChange = SelectChanged;
 					$row.append(UIFormField(formFields));
