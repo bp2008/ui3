@@ -395,11 +395,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Scroll the dropdown / Quality popup automatically to the position of the selected element.
-// TODO: There should be an edit button in the Quality selector popup (in the playback controls area) which opens the encoder profiles panel.
-// TODO: Override keyframe interval in firefox when using HTML5 mode; set it equal to the camera's reported frame rate, or 10 if the frame rate is unknown.  Make this a global option just under the H264 player selector, conditional appearance similar to the delay compensator option.  Default: enabled.
-// TODO: Add tooltips for the streaming profiles in all menus.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -458,7 +453,7 @@ var HTML5DelayCompensationOptions = {
 	Strong: "Strong"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Extra"];
+var settingsCategoryList = ["General Settings", "Video Player", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Extra"];
 var defaultSettings =
 	[
 		{
@@ -660,20 +655,20 @@ var defaultSettings =
 			, category: "General Settings"
 		}
 		, {
-			key: "ui3_doubleClick_behavior"
-			, value: "Recordings"
-			, inputType: "select"
-			, options: ["None", "Live View", "Recordings", "Both"]
-			, label: 'Double-Click to Fullscreen<br><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a>'
-			, category: "General Settings"
-		}
-		, {
 			key: "ui3_time24hour"
 			, value: "0"
 			, inputType: "checkbox"
 			, label: '24-Hour Time'
 			, onChange: OnChange_ui3_time24hour
 			, category: "General Settings"
+		}
+		, {
+			key: "ui3_doubleClick_behavior"
+			, value: "Recordings"
+			, inputType: "select"
+			, options: ["None", "Live View", "Recordings", "Both"]
+			, label: 'Double-Click to Fullscreen<br><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a>'
+			, category: "Video Player"
 		}
 		, {
 			key: "ui3_h264_choice2"
@@ -683,7 +678,7 @@ var defaultSettings =
 			, label: 'H.264 Player <a href="javascript:UIHelp.LearnMore(\'H.264 Player Options\')">(learn more)</a>'
 			, onChange: OnChange_ui3_h264_choice2
 			, preconditionFunc: Precondition_ui3_h264_choice2
-			, category: "General Settings"
+			, category: "Video Player"
 		}
 		, {
 			key: "ui3_html5_delay_compensation"
@@ -692,7 +687,28 @@ var defaultSettings =
 			, options: [HTML5DelayCompensationOptions.None, HTML5DelayCompensationOptions.Weak, HTML5DelayCompensationOptions.Normal, HTML5DelayCompensationOptions.Strong]
 			, label: 'HTML5 Video Delay Compensation <a href="javascript:UIHelp.LearnMore(\'HTML5 Video Delay Compensation\')">(learn more)</a>'
 			, preconditionFunc: Precondition_ui3_html5_delay_compensation
-			, category: "General Settings"
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_force_gop_1sec"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<span style="color:#FF0000">Firefox Stutter Fix</span> <a href="javascript:UIHelp.LearnMore(\'Firefox Stutter Fix\')">(learn more)</a>'
+			, onChange: OnChange_ui3_force_gop_1sec
+			, preconditionFunc: Precondition_ui3_force_gop_1sec
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_jpegSupersampling"
+			, value: 1
+			, minValue: 0.01
+			, maxValue: 2
+			, step: 0.01
+			, inputType: "range"
+			, label: 'Jpeg Video Supersampling Factor'
+			, changeOnStep: true
+			, hint: "(Default: 1)\n\nJpeg video frames loaded by UI3 will have their dimensions scaled by this amount.\n\nLow values save bandwidth, while high values improve quality slightly."
+			, category: "Video Player"
 		}
 		, {
 			key: "ui3_clipicon_trigger_motion"
@@ -2768,6 +2784,17 @@ function DropdownBoxes()
 		preventDDLClose = true;
 		setTimeout(allowDDLClose, 0);
 		self.Resized();
+
+		var $selectedItem = $ddl.children('.selected');
+		if ($selectedItem.length > 0)
+		{
+			// Determine ideal scroll position
+			var eleCenter = $selectedItem.position().top + $selectedItem.outerHeight(true) / 2;
+			var visibleHeight = $ddl.innerHeight();
+			var idealScrollTop = eleCenter - (visibleHeight / 2);
+			if (idealScrollTop > 0)
+				$ddl.scrollTop(idealScrollTop);
+		}
 	}
 	var AddDropdownListItem = function ($ddl, listDef, i, selectedText)
 	{
@@ -4281,19 +4308,38 @@ function PlaybackControls()
 		var live = videoPlayer.Loading().image.isLive;
 		var $backBtn = $('<div class="playbackSettingsLine playbackSettingsHeading">'
 			+ (live ? '' : '<div class="playbackSettingsLeftArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div> ')
-			+ (live ? 'Streaming ' : '') + 'Quality</div>');
+			+ 'Quality</div>');
 		if (!live)
 			$backBtn.click(self.OpenSettingsPanel);
+		else
+			$backBtn.css('cursor', 'default');
+
+		var $editBtn = $('<div class="playbackSettingsEditProfiles" title="Edit Streaming Profiles"><svg class="icon noflip"><use xlink:href="#svg_mio_edit"></use></svg></div>');
+		$editBtn.on('click', function (e)
+		{
+			streamingProfileUI.open();
+			CloseSettings();
+			return false;
+		});
+		$backBtn.append($editBtn);
+
 		$playbackSettings.append($backBtn);
 
 		var currentProfile = genericQualityHelper.GetCurrentProfile();
+		var $selectedItem = $();
 		for (var i = 0; i < genericQualityHelper.profiles.length; i++)
 		{
+			var p = genericQualityHelper.profiles[i];
+			if (!p.IsCompatible())
+				continue;
 			var $item = $('<div class="playbackSettingsLine alignRight"></div>');
-			var name = $item.get(0).qualityName = genericQualityHelper.profiles[i].name;
-			$item.append(genericQualityHelper.profiles[i].GetNameEle());
+			var name = $item.get(0).qualityName = p.name;
+			$item.append(p.GetNameEle());
+			var tooltip = p.GetTooltipText();
+			if (tooltip)
+				$item.attr('title', tooltip);
 			if (name === currentProfile.name)
-				$item.addClass("selected");
+				$selectedItem = $item.addClass("selected");
 			$item.click(function ()
 			{
 				genericQualityHelper.QualityChoiceChanged(this.qualityName);
@@ -4304,6 +4350,16 @@ function PlaybackControls()
 		}
 
 		$layoutbody.append($playbackSettings);
+
+		if ($selectedItem.length > 0)
+		{
+			// Determine ideal scroll position
+			var eleCenter = $selectedItem.position().top + $selectedItem.outerHeight(true) / 2;
+			var visibleHeight = $playbackSettings.innerHeight();
+			var idealScrollTop = eleCenter - (visibleHeight / 2);
+			if (idealScrollTop > 0)
+				$playbackSettings.scrollTop(idealScrollTop);
+		}
 	}
 	var CloseSettings = function ()
 	{
@@ -11463,13 +11519,16 @@ function ImageRenderer()
 	{
 		// Calculate the size of the image we need
 		var ciLoading = videoPlayer.Loading().image;
-		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * (zoomTable[digitalZoom]);
-		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * (zoomTable[digitalZoom]);
+		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
+		if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
+			ssFactor = 1;
+		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * ssFactor * (zoomTable[digitalZoom]);
+		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * ssFactor * (zoomTable[digitalZoom]);
 		if (imgDrawWidth == 0)
 		{
 			// Image is supposed to scale to fit the screen (first zoom level)
-			imgDrawWidth = $layoutbody.width() * dpiScalingFactor;
-			imgDrawHeight = $layoutbody.height() * dpiScalingFactor;
+			imgDrawWidth = $layoutbody.width() * dpiScalingFactor * ssFactor;
+			imgDrawHeight = $layoutbody.height() * dpiScalingFactor * ssFactor;
 
 			var availableRatio = imgDrawWidth / imgDrawHeight;
 			if (availableRatio < ciLoading.aspectratio)
@@ -12151,12 +12210,14 @@ function StreamingProfileUI()
 		$profileList.empty();
 		for (var i = 0; i < genericQualityHelper.profiles.length; i++)
 		{
+			var p = genericQualityHelper.profiles[i];
 			var $p = $('<li class="profileListItem"></li>');
-			$p.attr('name', genericQualityHelper.profiles[i].name);
-			$p.append(genericQualityHelper.profiles[i].GetNameEle());
-			$p.append($('<div class="profileCodec"></div>').text("(" + genericQualityHelper.profiles[i].vcodec + ")"))
+			$p.attr('name', p.name);
+			$p.append(p.GetNameEle());
+			$p.append($('<div class="profileCodec"></div>').text("(" + p.vcodec + ")"))
+			$p.attr('title', p.GetTooltipText());
 			$p.on('click', ProfileClicked);
-			if (!h264_playback_supported && genericQualityHelper.profiles[i].vcodec === "h264")
+			if (!p.IsCompatible())
 				$p.addClass('unsupportedProfile');
 			$profileList.append($p);
 		}
@@ -12229,8 +12290,19 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 
 	var Initialize = function ()
 	{
-		CloseDialog();
+		var alreadyOpen = false;
+		$('.streamingProfileEditorPanel').each(function (idx, ele)
+		{
+			if (ele.getAttribute('profileName') === srcProfile.name)
+			{
+				alreadyOpen = true;
+				$(ele).parent().trigger('mousedown');
+			}
+		});
+		if (alreadyOpen)
+			return;
 		$dlg = $('<div class="streamingProfileEditorPanel dialogOptionPanel"></div>');
+		$dlg.attr('profileName', srcProfile.name);
 		$content = $('<div class="streamingProfileEditorPanelContent"></div>');
 
 		ReRender();
@@ -12249,19 +12321,19 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		AddEditorField("Abbreviation (0-4 characters)", "abbr", { max: 4 });
 		AddEditorField("Abbreviation Color", "aClr", { type: "color" });
 		AddEditorField("Video Codec", "vcodec", { type: "select", options: ["jpeg", "h264"], onChange: ReRender });
-		if (!h264_playback_supported && p.vcodec === "h264")
-			AddEditorField("This browser does not support H.264 streaming in UI3. This profile will not be available.", "vcodec", { type: "errorComment" });
+		if (!p.IsCompatible())
+			AddEditorField("UI3 can't play this codec in your current web browser. This profile will not be available.", "vcodec", { type: "errorComment" });
 		AddEditorField("Base Server Profile", "stream", { type: "select", options: [GetServerProfileString(0), GetServerProfileString(1), GetServerProfileString(2)] });
 		AddEditorField("Each profile inherits encoding parameters from one of the server's streaming profiles. You may override individual parameters below.", "stream", { type: "comment" });
-		AddEditorField("Max Frame Width", "w", { preprocess: preGT0, min: 1, max: 99999 });
-		AddEditorField("Max Frame Height", "h", { preprocess: preGT0, min: 1, max: 99999 });
-		AddEditorField("Quality [0-100]", "q", { preprocess: preGTn1, min: 0, max: 100 });
+		AddEditorField("Max Frame Width", "w", { min: 1, max: 99999 });
+		AddEditorField("Max Frame Height", "h", { min: 1, max: 99999 });
+		AddEditorField("Quality [0-100]", "q", { min: 0, max: 100 });
 		if (p.vcodec === "h264")
 		{
-			AddEditorField("Frame Rate [0-60]", "fps", { preprocess: preGTn1, min: 0, max: 60 });
+			AddEditorField("Frame Rate [0-60]", "fps", { min: 0, max: 60 });
 			AddEditorField("Limit Bit Rate", "limitBitrate", { type: "select", options: ["inherit", "No Limit", "Yes Limit"] });
-			AddEditorField("Max Bit Rate (Kbps) [10-8192]", "kbps", { preprocess: preGT0, min: 10, max: 8192 });
-			AddEditorField("Keyframe Interval [1-99999]", "gop", { preprocess: preGT0, min: 1, max: 99999 });
+			AddEditorField("Max Bit Rate (Kbps) [10-8192]", "kbps", { min: 10, max: 8192 });
+			AddEditorField("Keyframe Interval [1-99999]", "gop", { min: 1, max: 99999 });
 			AddEditorField("Preset", "pre", { type: "select", options: ["inherit", "ultrafast", "superfast", "veryfast"] });
 			AddEditorField("Profile", "pro", { type: "select", options: ["inherit", "default", "baseline", "main", "extended", "high", "high 10"] });
 			AddEditorField("Zero-Frame Latency", "zfl", { type: "select", options: ["inherit", "No", "Yes"] });
@@ -12282,32 +12354,6 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			str += " (" + desc + ")";
 		return str;
 	}
-	var preGTn1 = function (value)
-	{
-		return value > -1 ? value : "";
-	}
-	var preGT0 = function (value)
-	{
-		return value > 0 ? value : "";
-	}
-	var preOptBool = function (value)
-	{
-		if (value === 1)
-			return true;
-		else if (value === 0)
-			return false;
-		else
-			return "";
-	}
-	var postOptBool = function (value)
-	{
-		if (value === 1)
-			return true;
-		else if (value === 0)
-			return false;
-		else
-			return "";
-	}
 	var AddEditorField = function (label, key, options)
 	{
 		if (!options)
@@ -12322,8 +12368,24 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		if (!type)
 			type = valueType;
 
-		if (typeof options.preprocess === "function")
-			value = options.preprocess(value);
+		if (valueType === "number")
+		{
+			if (value < 0)
+			{
+				p[key] = -1;
+				value = "";
+			}
+			else if (typeof options.min === "number" && value < options.min)
+			{
+				p[key] = options.min;
+				value = options.min;
+			}
+			else if (typeof options.max === "number" && value > options.max)
+			{
+				p[key] = options.max;
+				value = options.max;
+			}
+		}
 
 		var formFields = {
 			value: value
@@ -12423,7 +12485,24 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 	var NumberChanged = function (e, key, $input)
 	{
 		var value = parseFloat($input.val());
-		p[key] = isNaN(value) ? -1 : value;
+		if (isNaN(value))
+			p[key] = -1;
+		else
+		{
+			var min = parseFloat($input.attr('min'));
+			var max = parseFloat($input.attr('max'));
+			if (min > max)
+			{
+				var tmp = min;
+				min = max;
+				max = tmp;
+			}
+			if (!isNaN(min) && value < min)
+				$input.val(value = min);
+			else if (!isNaN(max) && value > max)
+				$input.val(value = max);
+			p[key] = value;
+		}
 	}
 	var SaveAndClose = function ()
 	{
@@ -12588,7 +12667,7 @@ function StreamingProfile()
 
 		sb.Append("&stream=").Append(self.stream);
 
-		if (self.q > -1)
+		if (self.q >= 0)
 			sb.Append("&q=").Append(self.q);
 
 		// Jpeg size arguments are handled elsewhere.
@@ -12618,9 +12697,9 @@ function StreamingProfile()
 				else
 					sb.Append("&h=").Append(h);
 			}
-			else if (self.h > 0)
+			else if (self.h >= 1)
 				sb.Append("&h=").Append(self.h);
-			else if (self.w > 0)
+			else if (self.w >= 1)
 				sb.Append("&h=").Append(Math.round(self.w / aspect));
 
 			if (self.limitBitrate === 1)
@@ -12628,10 +12707,17 @@ function StreamingProfile()
 			else if (self.limitBitrate === 2)
 				sb.Append("&kbps=").Append(Clamp(self.kbps, 10, 8192));
 
-			if (self.fps > 0)
+			if (self.fps >= 0)
 				sb.Append("&fps=").Append(self.fps);
 
-			if (self.gop > 0)
+			if (Precondition_ui3_force_gop_1sec() && settings.ui3_force_gop_1sec === "1")
+			{
+				var forced_GOP = videoPlayer.Loading().cam.FPS || 10;
+				if (self.fps > 0 && self.fps < forced_GOP)
+					forced_GOP = self.fps;
+				sb.Append("&gop=").Append(Clamp(forced_GOP, 3, 60));
+			}
+			else if (self.gop >= 1)
 				sb.Append("&gop=").Append(self.gop);
 
 			if (self.zfl > 0)
@@ -12644,6 +12730,41 @@ function StreamingProfile()
 				sb.Append("&profile=").Append(self.pro - 1);
 		}
 		return sb.ToString();
+	}
+	this.GetTooltipText = function ()
+	{
+		var sb = new StringBuilder('\n');
+
+		sb.Append(self.vcodec + ' ');
+
+		if (self.w > 0 && self.h > 0)
+			sb.Append(self.w + 'x' + self.h + ' ');
+		else if (self.w > 0)
+			sb.Append(self.w + 'w ');
+		else if (self.h > 0)
+			sb.Append(self.h + 'h ');
+
+		if (self.fps >= 0)
+			sb.Append('@' + self.fps + 'fps ');
+
+		if (self.q > -1)
+			sb.Append('q' + self.q + ' ');
+
+		if (self.limitBitrate === 1)
+			sb.Append('no bitrate limit ');
+		else if (self.limitBitrate === 2 && self.kbps > -1)
+			sb.Append('<' + Clamp(self.kbps, 10, 8192) + ' Kbps ');
+
+		sb.AppendLine().AppendLine();
+
+		var streamDesc = GetTooltipForStreamQuality(self.stream);
+		sb.Append('Inherits from Streaming ' + self.stream + (streamDesc ? (' (' + GetTooltipForStreamQuality(self.stream) + ')') : ''));
+
+		return sb.ToString();
+	}
+	this.IsCompatible = function ()
+	{
+		return self.vcodec === "jpeg" || (h264_playback_supported && self.vcodec === "h264");
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -12661,34 +12782,81 @@ function GenericQualityHelper()
 		for (var i = 0; i < self.profiles.length; i++)
 			if (self.profiles[i].name === settings.ui3_streamingQuality)
 			{
-				if (!h264_playback_supported && self.profiles[i].vcodec === "h264")
+				if (!self.profiles[i].IsCompatible())
 					continue;
 				return self.profiles[i];
 			}
-		return self.GetFirstCompatibleProfile();
+		return self.GetAnyCompatibleProfile();
 	}
-	this.GetFirstCompatibleProfile = function ()
+	this.GetAnyCompatibleProfile = function (didRestoreDefaults)
 	{
-		for (var i = 0; i < self.profiles.length; i++)
+		// Try to find the best profile
+		// First, one with a max bit rate nearest 1000
+		var best = null;
+		if (h264_playback_supported)
 		{
-			if (self.profiles[i].vcodec === "jpeg" ||
-				(h264_playback_supported && self.profiles[i].vcodec === "h264"))
-				return self.profiles[i];
+			// Find one near 1400 Kbps
+			if (!best) best = self.FindBestProfile("h264", function (p)
+			{
+				if (p.limitBitrate === 2 && p.kbps > 0)
+					return Math.abs(p.kbps - 1400);
+				return -1;
+			});
+			// Then, one around 1 MP
+			if (!best) best = self.FindBestProfile("h264", function (p) { return p.w < 1 || p.h < 1 ? -1 : Math.abs((p.w * p.h) - 1000000); });
+			if (!best) best = self.FindBestProfile("h264", function (p) { return p.w < 1 ? -1 : Math.abs(p.w - 1000); });
+			if (!best) best = self.FindBestProfile("h264", function (p) { return p.h < 1 ? -1 : Math.abs(p.h - 1000); });
+			// Then, one with q near 25
+			if (!best) best = self.FindBestProfile("h264", function (p) { return p.q < 0 ? -1 : Math.abs(p.q - 25); });
+		}
+		// Fall back to the best jpeg profile
+		if (!best) best = self.FindBestProfile("jpeg", function (p)
+		{
+			return (p.w <= 1 && p.h <= 1) || (p.w > 2000 && p.h > 2000) ? 1 : -1;
+		});
+		// As a last resort, just pick one
+		if (!best) best = self.FindBestProfile("any", function (p) { return 1; });
+		if (best)
+			return best;
+
+		if (didRestoreDefaults)
+		{
+			toaster.Error("Unable to locate a compatible streaming profile even after restoring default profiles.", 30000);
+			return null;
 		}
 		toaster.Info("Unable to locate a compatible streaming profile. Restoring default profiles.", 5000);
 		self.RestoreDefaultProfiles();
+		return self.GetAnyCompatibleProfile(true);
+	}
+	this.FindBestProfile = function (vcodec, valuationFn)
+	{
+		/// <summary>Returns the compatible profile with the lowest non-negative output from valuationFn.</summary>
+		var bestProfile = null;
+		var valueOfBest = -1;
 		for (var i = 0; i < self.profiles.length; i++)
 		{
-			if (self.profiles[i].vcodec === "jpeg" ||
-				(h264_playback_supported && self.profiles[i].vcodec === "h264"))
-				return self.profiles[i];
+			var p = self.profiles[i];
+			if (p.IsCompatible() && (vcodec === "any" || vcodec === p.vcodec))
+			{
+				var valueOfP = valuationFn(p);
+				if (valueOfP >= 0 && (valueOfBest < 0 || valueOfP < valueOfBest))
+				{
+					bestProfile = p;
+					valueOfBest = valueOfP;
+				}
+			}
 		}
-		toaster.Error("Unable to locate a compatible streaming profile even after restoring default profiles.", 30000);
-		return null;
+		return bestProfile;
 	}
 	this.QualityChoiceChanged = function (name)
 	{
-		var p = self.GetCurrentProfile();
+		var p = self.GetProfileWithName(name);
+		if (!p || !p.IsCompatible())
+		{
+			p = self.GetAnyCompatibleProfile();
+			NotifyQualitySelectionChanged(p);
+			name = p.name;
+		}
 		for (var i = 0; i < self.profiles.length; i++)
 			if (self.profiles[i].name === name)
 			{
@@ -12699,11 +12867,19 @@ function GenericQualityHelper()
 				return;
 			}
 	}
+	var NotifyQualitySelectionChanged = function (p)
+	{
+		toaster.Info("The active streaming profile has changed to " + p.GetNameEle().html(), 3000);
+	}
 	this.SetStreamingQualityDropdownBoxItems = function ()
 	{
 		var arr = new Array();
 		for (var i = 0; i < self.profiles.length; i++)
-			arr.push(new DropdownListItem({ text: self.profiles[i].GetNameText(), uniqueId: self.profiles[i].name }));
+		{
+			var p = self.profiles[i];
+			if (p.IsCompatible())
+				arr.push(new DropdownListItem({ text: p.GetNameText(), uniqueId: p.name, GetTooltip: p.GetTooltipText }));
+		}
 		dropdownBoxes.listDefs["streamingQuality"].items = arr;
 	}
 	this.GetProfileWithName = function (name)
@@ -12933,13 +13109,13 @@ function GenericQualityHelper()
 				for (var i = 0; i < self.profiles.length; i++)
 					if (self.profiles[i].name === settings.ui3_streamingQuality)
 					{
-						if (!h264_playback_supported && self.profiles[i].vcodec === "h264")
+						if (!self.profiles[i].IsCompatible())
 							continue;
 						return;
 					}
-				var profile = self.GetFirstCompatibleProfile();
-				self.QualityChoiceChanged(profile.name);
-				toaster.Info("The active profile has changed to " + profile.GetNameEle().html(), 3000);
+				var p = self.GetAnyCompatibleProfile();
+				self.QualityChoiceChanged(p.name);
+				NotifyQualitySelectionChanged(p);
 			}
 			finally
 			{
@@ -12955,7 +13131,7 @@ function GenericQualityHelper()
 	self.LoadProfiles();
 	if (!self.profiles || self.profiles.length === 0)
 		this.RestoreDefaultProfiles();
-	self.QualityChoiceChanged(self.GetCurrentProfile().name);
+	self.QualityChoiceChanged(settings.ui3_streamingQuality);
 }
 ///////////////////////////////////////////////////////////////
 // Jpeg Quality Helper ////////////////////////////////////////
@@ -12976,13 +13152,13 @@ function JpegQualityHelper()
 		var p = genericQualityHelper.GetCurrentProfile();
 		if (dimKey === "w")
 		{
-			if (p.w)
+			if (p.w > 0)
 				return Math.min(dimValue, p.w);
 			return dimValue;
 		}
 		else
 		{
-			if (p.h)
+			if (p.h > 0)
 				return Math.min(dimValue, p.h);
 			return dimValue;
 		}
@@ -18678,6 +18854,7 @@ function UISettingsPanel()
 					formFields.maxValue = s.maxValue;
 					formFields.step = s.step;
 					formFields.onChange = NumberChanged;
+					formFields.defaultValue = s.value;
 					if (s.inputType === "range")
 					{
 						if (s.changeOnStep)
@@ -18975,6 +19152,14 @@ function Precondition_ui3_html5_delay_compensation()
 {
 	return (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5);
 }
+function Precondition_ui3_force_gop_1sec()
+{
+	return (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5 && BrowserIsFirefox());
+}
+function OnChange_ui3_force_gop_1sec()
+{
+	videoPlayer.SelectedQualityChanged();
+}
 function OnChange_ui3_icons_extraVisibility()
 {
 	cornerStatusIcons.ReInitialize();
@@ -19084,6 +19269,12 @@ function UIFormField(args)
 			{
 				$numericValue.text($input.val());
 			});
+			if (typeof o.defaultValue === 'number')
+				$input.on('dblclick', function ()
+				{
+					$input.val(o.defaultValue);
+					$input.trigger('change');
+				});
 			return $('<div class="' + classes + ' dialogOption_item_range"></div>').append($label).append($input);
 		}
 		else
@@ -19162,6 +19353,9 @@ function UIHelpTool()
 				break;
 			case "HTML5 Video Delay Compensation":
 				UI3_HTML5_Delay_Compensation_Help();
+				break;
+			case "Firefox Stutter Fix":
+				UI3_Firefox_Stuffer_fix_Help();
 				break;
 		}
 	}
@@ -19257,6 +19451,13 @@ function UIHelpTool()
 		$('<div class="UIHelp">'
 			+ 'HTML5 video was not designed for low-latency playback, so brief stream interruptions build up to a noticeable delay. UI3 is built with an experimental delay compensator which can speed up or slow down the video player to keep video delay at a consistent level. This delay compensator is configurable via the HTML5 Video Delay Compensation option.'
 			+ '</div>').modalDialog({ title: 'HTML5 Video Delay Compensation', closeOnOverlayClick: true });
+	}
+	var UI3_Firefox_Stuffer_fix_Help = function ()
+	{
+		$('<div class="UIHelp">'
+			+ "Firefox's HTML5 video player has trouble with low-latency streams. Basically, it requires frequent keyframes or else performance degrades rapidly.  The Firefox Stutter Fix option forces your keyframe interval to be equal to the camera\'s frame rate while you are using the HTML5 player for H.264 video.  This reduces video quality somewhat, but ensures relatively good decoding performance.<br><br>"
+			+ "If this bothers you, it is recommended to use a different H.264 player option."
+			+ '</div>').modalDialog({ title: 'Firefox Stutter Fix', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -19376,6 +19577,13 @@ function StringBuilder(lineBreakStr)
 	this.ToString = function ()
 	{
 		return strings.join("");
+	}
+	this.Length = function ()
+	{
+		var size = 0;
+		for (var i = 0; i < strings.length; i++)
+			size += strings[i].length;
+		return size;
 	}
 }
 ///////////////////////////////////////////////////////////////
