@@ -61,7 +61,7 @@ function DoUIFeatureDetection()
 		{
 			// All critical tests pass
 			// Non-critical tests can run here and store their results in global vars.
-			browser_is_ios = BrowserIsIOSSafari() || BrowserIsIOSChrome();
+			browser_is_ios = BrowserIsIOS();
 			browser_is_android = BrowserIsAndroid();
 			web_workers_supported = typeof Worker !== "undefined";
 			export_blob_supported = detectIfCanExportBlob();
@@ -12209,7 +12209,7 @@ function StreamingProfileUI()
 		$addBtn.on('click', AddProfile);
 		$content.append($('<div class="dialogOption_item_info"></div>').append($addBtn));
 
-		$content.append('<div class="dialogOption_item_info">Click to edit, drag to reorder:</div>');
+		$content.append('<div class="dialogOption_item_info">Click to edit, hold and drag to reorder:</div>');
 
 		$profileList = $('<ol class="profileList"></ol>');
 		$content.append($profileList);
@@ -18509,6 +18509,7 @@ function DragAndDropHelper($list, onItemMoved)
 	var down = false;
 	var drag = false;
 	var moved = false;
+	var $lastTouched = null;
 	var $drag = null;
 	var $blank = null;
 	var $ghost = null;
@@ -18527,6 +18528,7 @@ function DragAndDropHelper($list, onItemMoved)
 		$ele.on('touchstart.ddh mousedown.ddh', function (e)
 		{
 			OnStart(e, $ele);
+			return false;
 		});
 		$ele.on('contextmenu.ddh', function (e)
 		{
@@ -18552,6 +18554,7 @@ function DragAndDropHelper($list, onItemMoved)
 		offsetX = x - ofst.left;
 		offsetY = y - ofst.top;
 		ClearDragTimeout();
+		$lastTouched = $ele;
 		if (touchEvents.isTouchEvent(e))
 			startDragTimeout = setTimeout(function ()
 			{
@@ -18581,11 +18584,14 @@ function DragAndDropHelper($list, onItemMoved)
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e) || !down)
 			return;
-		if (!moved && Math.abs(e.pageX - x) > 5 || Math.abs(e.pageY - y) > 5)
+		var distance = Math.max(Math.abs(e.pageX - x), Math.abs(e.pageY - y));
+		if (!moved && distance > 5)
 		{
 			moved = true;
 			ClearDragTimeout();
 		}
+		if ($lastTouched && distance > 50)
+			$lastTouched = null;
 		if (drag)
 		{
 			$ghost.css('left', e.pageX - offsetX).css('top', e.pageY - offsetY);
@@ -18617,9 +18623,9 @@ function DragAndDropHelper($list, onItemMoved)
 		mouseCoordFixer.fix(e);
 		touchEvents.Gate(e);
 		if (down)
-			DragFinished(drag && pointInsideElementBorder($drag.parent(), e.pageX, e.pageY));
+			DragFinished(e, drag && pointInsideElementBorder($drag.parent(), e.pageX, e.pageY));
 	}
-	var DragFinished = function (success)
+	var DragFinished = function (e, success)
 	{
 		ClearDragTimeout();
 		if (drag)
@@ -18636,11 +18642,21 @@ function DragAndDropHelper($list, onItemMoved)
 				TimedClick($drag);
 			$drag = $blank = $ghost = null;
 		}
+		else
+		{
+			if ($lastTouched && $lastTouched.length > 0 && pointInsideElement($lastTouched, e.pageX, e.pageY))
+			{
+				TimedClick($lastTouched);
+				$lastTouched = null;
+			}
+		}
 		down = drag = moved = false;
 	}
 	var OnCancel = function (e)
 	{
-		DragFinished();
+		mouseCoordFixer.fix(e);
+		touchEvents.Gate(e);
+		DragFinished(e, false);
 	}
 	var TimedClick = function ($ele)
 	{

@@ -82,9 +82,9 @@ var $DialogDefaults = { theme: "light" };
 						self.$title = $('<div class="dialog_title"></div>');
 						self.$title.html(self.settings.title);
 						self.$title.on('mousedown touchstart', dragStart);
-						$(document).on('mousemove touchmove', dragMove);
-						$(document).on('mouseup touchend mouseleave', dragEnd);
-						$(document).on('touchcancel', dragCancel);
+						$(document).on('mousemove.dialog' + myId + ' touchmove.dialog' + myId, dragMove);
+						$(document).on('mouseup.dialog' + myId + ' touchend.dialog' + myId + ' mouseleave.dialog' + myId, dragEnd);
+						$(document).on('touchcancel.dialog' + myId, dragCancel);
 						self.$titlebar.append(self.$title);
 					}
 					if (typeof self.settings.onRefresh == "function")
@@ -151,6 +151,12 @@ var $DialogDefaults = { theme: "light" };
 			isOpen = false;
 
 			$(window).unbind(".dialog" + myId);
+			$(document).off('mousemove.dialog' + myId
+				+ ' touchmove.dialog' + myId
+				+ ' mouseup.dialog' + myId
+				+ ' touchend.dialog' + myId
+				+ ' mouseleave.dialog' + myId
+				+ ' touchcancel.dialog' + myId);
 
 			self.$overlay.remove();
 
@@ -235,6 +241,7 @@ var $DialogDefaults = { theme: "light" };
 			mouseMem.originalY = pos.top;
 			mouseMem.offsetX = pos.left - e.pageX;
 			mouseMem.offsetY = pos.top - e.pageY;
+			return false;
 		}
 		var dragMove = function (e)
 		{
