@@ -18527,9 +18527,6 @@ function DragAndDropHelper($list, onItemMoved)
 		$ele.on('touchstart.ddh mousedown.ddh', function (e)
 		{
 			OnStart(e, $ele);
-			// Prevent default swipe gestures (e.g. browser back, pinch zoom)
-			e.preventDefault();
-			return false;
 		});
 		$ele.on('contextmenu.ddh', function (e)
 		{
