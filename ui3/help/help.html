@@ -75,17 +75,31 @@
 						<h2>Video Codecs <small>(Streaming Quality)</small></h2>
 						<p>UI3 can stream video using two different compression methods: <b>H.264</b> and <b>Jpeg</b>.  H.264 is more efficient with network bandwidth, and usually achieves a higher frame rate, making it the most desirable choice in most circumstances.  H.264 is the default streaming method in browsers which support it.  Jpeg streaming is simpler and can be used in all browsers capable of running UI3.</p>
 						<h3>H.264</h3>
-						<p>UI3 can stream H.264 video if your browser supports it, otherwise you won't even see the option.  You can check for H.264 compatibility by looking for H.264 items in the Streaming Quality dropdown list.  If it is available, it often provides a much smoother video stream.</p>
-						<p>H.264 streaming has several drawbacks, however.</p>
+						<p>UI3 can stream H.264 video if your browser supports it.  You can check for H.264 compatibility by looking in the Streaming Quality dropdown list.  If the only options there are "Jpeg" then your browser is not compatible.  If H.264 is available, it often provides a much smoother video stream.</p>
 						<ul>
-							<li>Due to limitations of modern web technology, UI3 can't take advantage of hardware acceleration for H.264 playback without causing video delay to go through the roof.  Therefore, H.264 playback in UI3 requires quite a bit more CPU than you are probably used to.</li>
-							<li>If your viewing device has insufficient CPU or network speed, the video will become increasingly delayed.  If this happens, UI3 will warn you and suggest that you try a different Streaming Quality option.  UI3 does not know which of your Streaming Quality options require fewer resources, so it cannot automatically change to a more efficient stream.</li>
+							<li>If your viewing device has insufficient CPU or network speed, H.264 video will become increasingly delayed.  If this happens, UI3 will warn you and suggest that you try a different Streaming Quality option.</li>
 						</ul>
 						<h3>H.264 Streaming Profiles</h3>
-						<p>You can control the H.264 encoder parameters by configuring the three encoder profiles "Streaming 0", "Streaming 1", and "Streaming 2" in Blue Iris.  These profiles are not configurable in UI3 directly.  In Blue Iris's console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
-						<p class="bg-warning padded-info">The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm page.</p>
+						<h4>Server-side profiles</h4>
+						<p>Blue Iris provides three streaming profiles called simply "Streaming 0", "Streaming 1", and "Streaming 2".  To find these in Blue Iris's local console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
+						<p class="bg-info padded-info">The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm and jpegpull.htm pages.</p>
+						<h4>Client-side profiles</h4>
+						
+						<div class="row">
+							<div class="col-sm-5">
+								<p>Prior to June 2018, UI3 simply exposed the three server-side profiles as choices in the Streaming Quality menu, and that was that.</p>
+								<p>Thanks to improvements in Blue Iris, UI3 is now able to provide more-intuitive quality choices such as "1080p", "720p", and "480p".  These quality choices each represent a fully-configurable streaming profile, which you can edit by opening the <b>Main Menu</b> and choosing the <b>Streaming Profiles</b> option.</p>
+								<p>Each of UI3's streaming profiles must be based on one of the server-side profiles.  All encoding parameters are inherited from this profile unless otherwise specified in UI3.  UI3's default profiles are all based on <b>Streaming 0</b>, but they override the <b>Max Frame Width</b>, <b>Max Frame Height</b>, and <b>Max Bit Rate</b> parameters.  Other parameters, such as <b>Quality</b>, are intentionally left blank so their values will be inherited from <b>Streaming 0</b>.</p>
+								<p>UI3 no longer includes <b>Streaming 0</b> or <b>Streaming 1</b> or <b>Streaming 2</b> as default quality choices.  If they are desired, they can be restored easily.  Simply create a new profile in UI3, give it a name, and base it on the desired server-side profile. Leave all the encoding parameters alone, and their values will be inherited from your chosen <b>Base Server Profile</b>.</p>
+								<p class="bg-info padded-info">If you want to share your profile changes with all browsers and devices, <a href="#extensions">see the "Quick Start" section of UI Extensions</a>.</p>
+							</div>
+							<div class="col-sm-7">
+								<img class="img-responsive" src="img/ProfileEditor.png" alt="Screenshot of the UI3 profile editor" style="margin-bottom: 5px;" />
+							</div>
+						</div>
+						<h3>H.264 Profile Configuration Tips</h3>
 						<h4>Audio</h4>
-						<p>The audio codec setting has no effect on UI3.  UI3 only knows how to decode "mu-law" and that is what Blue Iris provides no matter what you set here.</p>
+						<p>The audio codec setting has no effect on UI3.  UI3 only knows how to decode "mu-law" and that is what Blue Iris provides no matter what you set here.  It is therefore not an option in UI3's streaming profile system, but can be configured in Blue Iris's server-side profiles.</p>
 						<h4>Quality vs Bit Rate</h4>
 						<p>Blue Iris will encode up to your specified <b>Quality</b> level, automatically reducing quality if necessary to stay within the bit rate limit. For streaming, it is recommended to always use the <b>Limit bitrate</b> setting, otherwise the actual bit rate can get excessively high and in extreme cases this can cause decoding errors.</p>
 						<p>Lower bit rates work better with devices that have a slow CPU or slow network connection.</p>
@@ -104,7 +118,7 @@
 						<h4>Zero frame latency</h4>
 						<p>Recommended to be enabled for best UI responsiveness. In testing, no perceptible difference was seen with this enabled or disabled.</p>
 						<h4>Resize output frame width x height</h4>
-						<p>This setting doesn't work as of March 2018 :(</p>
+						<p>This depends entirely on your personal preference for quality vs efficiency.  Lower resolutions are more efficient to work with.</p>
 						<h3>Jpeg Streaming</h3>
 						<p>Jpeg streaming is done by requesting Jpeg-compressed snapshots as quickly as possible.  It is not very efficient with network bandwidth and it can't achieve high frame rates over the internet.  However, being a simpler streaming method, it tends to "just work".  Jpeg streaming is capable of extremely high resolutions and excellent image quality.</p>
 						<p class="bg-warning padded-info"><b>Audio playback</b> is <b>not available</b> while streaming Jpeg snapshots.</p>
@@ -152,7 +166,7 @@
 					<div class="tab-pane" id="hlsstreams" role="tabpanel" aria-labelledby="nav-hlsstreams">
 						<h1>HLS Streams</h1>
 						<p>Blue Iris can stream any camera or group using the <abbr title="HTTP Live Stream">HLS</abbr> protocol.  Though it is not core functionality, UI3 provides the ability to consume these streams.</p>
-						<p>HLS streaming uses HTML5 video APIs, which deliver greater efficiency and compatibility than UI3's default H.264 streaming method.  Unfortunately, this induces video delay of at least several seconds, so HLS streaming is not used as a primary video streaming method.</p>
+						<p>HLS has significant video delay, but that is configurable to some extent in Blue Iris's streaming profile configuration.</p>
 						<p>HLS streaming is only available for live video, but it works with individual cameras and groups alike.</p>
 						<h2>Streaming with HLS in UI3</h2>
 						<p>Right-click on any video stream and choose "Open HLS Stream".  A special video player called <a href="https://github.com/clappr/clappr">Clappr</a> will open in a dialog window.</p>

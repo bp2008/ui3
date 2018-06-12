@@ -47,6 +47,7 @@ var browser_is_android = false;
 var pnacl_player_supported = false;
 var mse_mp4_h264_supported = false;
 var mse_mp4_aac_supported = false;
+var vibrate_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -68,6 +69,7 @@ function DoUIFeatureDetection()
 			readable_stream_supported = typeof ReadableStream === "function";
 			webgl_supported = detectWebGLContext();
 			detectAudioSupport();
+			vibrate_supported = detectVibrateSupport();
 			fullscreen_supported = ((document.documentElement.requestFullscreen || document.documentElement.msRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.webkitRequestFullscreen) && (document.exitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen || document.webkitExitFullscreen)) ? true : false;
 			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported && webgl_supported;
 			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported && web_audio_buffer_copyToChannel_supported;
@@ -291,6 +293,15 @@ function detectAudioSupport()
 		}
 		catch (ex) { }
 	}
+}
+function detectVibrateSupport()
+{
+	try
+	{
+		return typeof window.navigator.vibrate === "function";
+	}
+	catch (ex) { }
+	return false;
 }
 
 DoUIFeatureDetection();
@@ -627,6 +638,7 @@ var defaultSettings =
 		, {
 			key: "ui3_streamingProfileArray"
 			, value: "[]"
+			, category: "Streaming Profiles" // This category isn't shown in UI Settings, but has special-case logic in ui3-local-overrides.js export.
 		}
 		, {
 			key: "ui3_clipPreviewEnabled"
@@ -12174,6 +12186,7 @@ function StreamingProfileUI()
 	var $dlg = $();
 	var $content = $();
 	var $profileList = $();
+	var dragDropHelper;
 
 	this.open = function ()
 	{
@@ -12200,6 +12213,7 @@ function StreamingProfileUI()
 
 		$profileList = $('<ol class="profileList"></ol>');
 		$content.append($profileList);
+		dragDropHelper = new DragAndDropHelper($profileList, UserChangedOrder);
 
 		RepopulateProfileList();
 
@@ -12221,7 +12235,7 @@ function StreamingProfileUI()
 				$p.addClass('unsupportedProfile');
 			$profileList.append($p);
 		}
-		$profileList.sortable({ forcePlaceholderSize: true }).bind('sortupdate', UserChangedOrder);
+		dragDropHelper.Rebind();
 	}
 	var ProfileClicked = function (e)
 	{
@@ -12270,8 +12284,11 @@ function StreamingProfileUI()
 	}
 	var CloseDialog = function ()
 	{
-		if ($profileList.length > 0)
-			$profileList.sortable('destroy');
+		if (dragDropHelper)
+		{
+			dragDropHelper.Destroy();
+			dragDropHelper = null;
+		}
 		if (dialog != null)
 		{
 			dialog.close();
@@ -18479,6 +18496,172 @@ function SimpleGraph()
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Drag and Drop //////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function DragAndDropHelper($list, onItemMoved)
+{
+	var self = this;
+	var $items = $();
+	var x = 0;
+	var y = 0;
+	var offsetX = 0;
+	var offsetY = 0;
+	var down = false;
+	var drag = false;
+	var moved = false;
+	var $drag = null;
+	var $blank = null;
+	var $ghost = null;
+	var startDragTimeout = null;
+	var startDragHoldTimeMs = 500;
+
+	this.Rebind = function ()
+	{
+		$items = $list.children();
+		$items.each(RebindItem);
+	}
+	var RebindItem = function (idx, ele)
+	{
+		var $ele = $(ele);
+		$ele.off('touchstart.ddh mousedown.ddh contextmenu.ddh');
+		$ele.on('touchstart.ddh mousedown.ddh', function (e)
+		{
+			OnStart(e, $ele);
+			// Prevent default swipe gestures (e.g. browser back, pinch zoom)
+			e.preventDefault();
+			return false;
+		});
+		$ele.on('contextmenu.ddh', function (e)
+		{
+			return false;
+		});
+	}
+	var ClearDragTimeout = function ()
+	{
+		if (startDragTimeout)
+		{
+			clearTimeout(startDragTimeout);
+		}
+	}
+	var OnStart = function (e, $ele)
+	{
+		mouseCoordFixer.fix(e);
+		if (touchEvents.Gate(e) || e.which === 3)
+			return;
+		down = true;
+		x = e.pageX;
+		y = e.pageY;
+		var ofst = $ele.offset();
+		offsetX = x - ofst.left;
+		offsetY = y - ofst.top;
+		ClearDragTimeout();
+		if (touchEvents.isTouchEvent(e))
+			startDragTimeout = setTimeout(function ()
+			{
+				DragStart($ele);
+			}, startDragHoldTimeMs);
+		else
+			DragStart($ele);
+	}
+	var DragStart = function ($ele)
+	{
+		if (vibrate_supported)
+			navigator.vibrate(25);
+		drag = true;
+		$drag = $ele;
+		$ghost = $ele.clone();
+		$blank = $ele.clone().css('opacity', 0);
+		$ghost.addClass('ghost');
+		$ghost.css('left', mouseCoordFixer.last.x - offsetX).css('top', mouseCoordFixer.last.y - offsetY);
+		$ghost.css('width', $ele.width() + 'px').css('height', $ele.height() + 'px');
+		$('body').append($ghost);
+		$drag.hide();
+		$drag.after($blank);
+	}
+
+	var OnMove = function (e)
+	{
+		mouseCoordFixer.fix(e);
+		if (touchEvents.Gate(e) || !down)
+			return;
+		if (!moved && Math.abs(e.pageX - x) > 5 || Math.abs(e.pageY - y) > 5)
+		{
+			moved = true;
+			ClearDragTimeout();
+		}
+		if (drag)
+		{
+			$ghost.css('left', e.pageX - offsetX).css('top', e.pageY - offsetY);
+			if (pointInsideElementBorder($drag.parent(), e.pageX, e.pageY))
+			{
+				$ghost.css("cursor", "move");
+				for (var i = 0; i < $items.length; i++)
+				{
+					var $item = $items.eq(i);
+					if (pointInsideElementBorder($item, e.pageX, e.pageY))
+					{
+						moved = true;
+						if ($blank.position().top > $item.position().top)
+							$item.before($blank);
+						else
+							$item.after($blank);
+					}
+				}
+			}
+			else
+			{
+				$ghost.css("cursor", "no-drop");
+				$drag.after($blank);
+			}
+		}
+	}
+	var OnEnd = function (e)
+	{
+		mouseCoordFixer.fix(e);
+		touchEvents.Gate(e);
+		if (down)
+			DragFinished(drag && pointInsideElementBorder($drag.parent(), e.pageX, e.pageY));
+	}
+	var DragFinished = function (success)
+	{
+		ClearDragTimeout();
+		if (drag)
+		{
+			if (success)
+			{
+				$blank.after($drag);
+				onItemMoved($drag);
+			}
+			$drag.show();
+			$blank.remove();
+			$ghost.remove();
+			if (!moved)
+				TimedClick($drag);
+			$drag = $blank = $ghost = null;
+		}
+		down = drag = moved = false;
+	}
+	var OnCancel = function (e)
+	{
+		DragFinished();
+	}
+	var TimedClick = function ($ele)
+	{
+		setTimeout(function ()
+		{
+			$ele.trigger('click');
+		}, 0);
+	}
+	this.Destroy = function ()
+	{
+		// Only one DragAndDropHelper can be active at a time; calling Destroy deactivates previous helpers.
+		$(document).off('touchmove.ddh mousemove.ddh touchend.ddh mouseup.ddh touchcancel.ddh');
+	}
+	$(document).on('touchmove.ddh mousemove.ddh', OnMove);
+	$(document).on('touchend.ddh mouseup.ddh', OnEnd);
+	$(document).on('touchcancel.ddh', OnCancel);
+}
+///////////////////////////////////////////////////////////////
 // Mouse Event Helper / Double Click Helper ///////////////////
 ///////////////////////////////////////////////////////////////
 function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, cbOnSingleClick, cbOnDoubleClick, cbDragStart, cbDragMove, cbDragEnd, doubleClickTimeMS, mouseMoveTolerance)
@@ -18924,6 +19107,7 @@ function UISettingsPanel()
 			for (var i = 0; i < settingsCategoryList.length; i++)
 				BuildLocalOverridesTemplate_Category(sb, settingsCategoryList[i]);
 			BuildLocalOverridesTemplate_Category(sb, null);
+			BuildLocalOverridesTemplate_Category(sb, "Streaming Profiles"); // This category isn't shown in UI Settings
 			return sb.ToString();
 		}
 		catch (ex)
@@ -19777,6 +19961,15 @@ function pointInsideElement($ele, pX, pY)
 	var o = $ele.offset();
 	var w = $ele.outerWidth(true);
 	var h = $ele.outerHeight(true);
+	return pX >= o.left && pX < o.left + w && pY >= o.top && pY < o.top + h;
+}
+function pointInsideElementBorder($ele, pX, pY)
+{
+	if ($ele.length == 0)
+		return false;
+	var o = $ele.offset();
+	var w = $ele.outerWidth();
+	var h = $ele.outerHeight();
 	return pX >= o.left && pX < o.left + w && pY >= o.top && pY < o.top + h;
 }
 function BlueIrisColorToCssColor(biColor)
