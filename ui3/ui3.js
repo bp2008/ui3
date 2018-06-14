@@ -15269,7 +15269,11 @@ function DeleteAlert(path, isClip, cbSuccess, cbFailure)
 	{
 		if (typeof response.result != "undefined" && response.result == "fail")
 		{
-			var msg = "Failed to delete " + clipOrAlert + ".<br/>" + (sessionManager.IsAdministratorSession() ? ("The " + clipOrAlert + " may be still recording.") : ("You need administrator permission to delete " + clipOrAlert + "s."));
+			var msg = "Failed to delete " + clipOrAlert + ".<br/>";
+			if (response.data && response.data.reason)
+				msg += response.data.reason;
+			else
+				msg += (sessionManager.IsAdministratorSession() ? ("The " + clipOrAlert + " may be still recording.") : ("You need administrator permission to delete " + clipOrAlert + "s."));
 			if (typeof cbFailure == "function")
 				cbFailure(msg);
 			else
