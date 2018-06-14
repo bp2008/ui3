@@ -15271,7 +15271,7 @@ function DeleteAlert(path, isClip, cbSuccess, cbFailure)
 		{
 			var msg = "Failed to delete " + clipOrAlert + ".<br/>";
 			if (response.data && response.data.reason)
-				msg += response.data.reason;
+				msg += htmlEncode(response.data.reason);
 			else
 				msg += (sessionManager.IsAdministratorSession() ? ("The " + clipOrAlert + " may be still recording.") : ("You need administrator permission to delete " + clipOrAlert + "s."));
 			if (typeof cbFailure == "function")
