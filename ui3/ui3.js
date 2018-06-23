@@ -4090,6 +4090,10 @@ function PlaybackControls()
 	{
 		$progressText.text(text);
 	}
+	this.IsVisible = function ()
+	{
+		return isVisible;
+	}
 	this.Show = function ()
 	{
 		if (!isVisible)
@@ -12559,6 +12563,11 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 				{
 					// Current profile is changing
 					genericQualityHelper.QualityChoiceChanged(p.name);
+					if (playbackControls.IsVisible())
+					{
+						playbackControls.FadeOut();
+						playbackControls.Show();
+					}
 				}
 				genericQualityHelper.SaveProfiles();
 				if (typeof profileEditedCallback === "function")
@@ -12744,7 +12753,7 @@ function StreamingProfile()
 				if (max >= 10)
 					kbps = Math.min(kbps, max);
 			}
-			if(kbps === 0 || kbps >= 10)
+			if (kbps === 0 || kbps >= 10)
 				sb.Append("&kbps=").Append(Clamp(kbps, 10, 8192));
 
 			if (self.fps >= 0)
