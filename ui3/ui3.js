@@ -13105,8 +13105,8 @@ function GenericQualityHelper()
 	{
 		var upgradeMap = {
 			"1440p^": { abbr: "4MP", aClr: "#0048A2" },
-			"1080^": { abbr: "2MP", aClr: "#004882" },
-			"720^": { abbr: "1MP", aClr: "#003862" },
+			"1080p^": { abbr: "2MP", aClr: "#004882" },
+			"720p^": { abbr: "1MP", aClr: "#003862" },
 			"480p": { abbr: "480p", aClr: "#884400" },
 			"360p": { abbr: "360p", aClr: "#883000" },
 			"240p": { abbr: "240p", aClr: "#882000" },
