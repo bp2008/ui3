@@ -693,6 +693,18 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
+			key: "ui3_streamingProfileBitRateMax"
+			, value: -1
+			, inputType: "number"
+			, minValue: -1
+			, maxValue: 8192
+			, label: "Maximum H.264 Kbps (10-8192, disabled if less than 10)"
+			, hint: "Useful for slow connections. Audio streams are not affected by this setting."
+			, onChange: OnChange_ui3_streamingProfileBitRateMax
+			, preconditionFunc: Precondition_ui3_streamingProfileBitRateMax
+			, category: "Video Player"
+		}
+		, {
 			key: "ui3_html5_delay_compensation"
 			, value: HTML5DelayCompensationOptions.Normal
 			, inputType: "select"
@@ -12603,6 +12615,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 function StreamingProfile()
 {
 	var self = this;
+	this.dv = 2; // default version
 	this.name = "Unnamed Streaming Profile";
 	this.abbr = "";
 	this.aClr = "#004882";
@@ -12638,7 +12651,7 @@ function StreamingProfile()
 			$sup.css('margin-left', '3px');
 			$sup.css('padding', '0px 2px');
 			$sup.css('background-color', "#" + aClr);
-			$sup.css('color', GetReadableTextColorHexForBackgroundColorHex(aClr, "000000", "FFFFFF"));
+			$sup.css('color', "#" + GetReadableTextColorHexForBackgroundColorHex(aClr, "000000", "FFFFFF"));
 			$ele.append($sup);
 		}
 		else
@@ -12719,10 +12732,20 @@ function StreamingProfile()
 			else if (self.w >= 1)
 				sb.Append("&h=").Append(Math.round(self.w / aspect));
 
+			var kbps = -1;
 			if (self.limitBitrate === 1)
-				sb.Append("&kbps=0");
+				kbps = 0; // Sentinel value instructing Blue Iris to use no limit
 			else if (self.limitBitrate === 2)
-				sb.Append("&kbps=").Append(Clamp(self.kbps, 10, 8192));
+				kbps = Clamp(self.kbps, 10, 8192);
+			var max = settings.ui3_streamingProfileBitRateMax;
+			if (max)
+			{
+				max = Clamp(parseInt(max), -1, 8192);
+				if (max >= 10)
+					kbps = Math.min(kbps, max);
+			}
+			if(kbps === 0 || kbps >= 10)
+				sb.Append("&kbps=").Append(Clamp(kbps, 10, 8192));
 
 			if (self.fps >= 0)
 				sb.Append("&fps=").Append(self.fps);
@@ -12969,7 +12992,7 @@ function GenericQualityHelper()
 		{
 			var p = new StreamingProfile();
 			p.name = "1440p^";
-			p.abbr = "HD";
+			p.abbr = "4MP";
 			p.aClr = "#0048A2";
 			p.w = 2560;
 			p.h = 1440;
@@ -12980,7 +13003,7 @@ function GenericQualityHelper()
 		{
 			var p = new StreamingProfile();
 			p.name = "1080p^";
-			p.abbr = "HD";
+			p.abbr = "2MP";
 			p.aClr = "#004882";
 			p.w = 1920;
 			p.h = 1080;
@@ -12991,7 +13014,7 @@ function GenericQualityHelper()
 		{
 			var p = new StreamingProfile();
 			p.name = "720p^";
-			p.abbr = "HD";
+			p.abbr = "1MP";
 			p.aClr = "#003862";
 			p.w = 1280;
 			p.h = 720;
@@ -13002,6 +13025,8 @@ function GenericQualityHelper()
 		{
 			var p = new StreamingProfile();
 			p.name = "480p";
+			p.abbr = "480p";
+			p.aClr = "#884400";
 			p.w = 856;
 			p.h = 480;
 			p.limitBitrate = 2;
@@ -13011,6 +13036,8 @@ function GenericQualityHelper()
 		{
 			var p = new StreamingProfile();
 			p.name = "360p";
+			p.abbr = "360p";
+			p.aClr = "#883000";
 			p.w = 640;
 			p.h = 360;
 			p.limitBitrate = 2;
@@ -13020,6 +13047,8 @@ function GenericQualityHelper()
 		{
 			var p = new StreamingProfile();
 			p.name = "240p";
+			p.abbr = "240p";
+			p.aClr = "#882000";
 			p.w = 427;
 			p.h = 240;
 			p.limitBitrate = 2;
@@ -13029,6 +13058,8 @@ function GenericQualityHelper()
 		{
 			var p = new StreamingProfile();
 			p.name = "144p";
+			p.abbr = "144p";
+			p.aClr = "#880000";
 			p.w = 256;
 			p.h = 144;
 			p.limitBitrate = 2;
@@ -13070,6 +13101,32 @@ function GenericQualityHelper()
 		}
 		return profiles;
 	}
+	var upgradeDefaultProfileData = function (profileData)
+	{
+		var upgradeMap = {
+			"1440p^": { abbr: "4MP", aClr: "#0048A2" },
+			"1080^": { abbr: "2MP", aClr: "#004882" },
+			"720^": { abbr: "1MP", aClr: "#003862" },
+			"480p": { abbr: "480p", aClr: "#884400" },
+			"360p": { abbr: "360p", aClr: "#883000" },
+			"240p": { abbr: "240p", aClr: "#882000" },
+			"144p": { abbr: "144p", aClr: "#880000" }
+		};
+		var upgradeMade = false;
+		for (var i = 0; i < profileData.length; i++)
+		{
+			if (profileData[i].dv && profileData[i].dv >= 2)
+				continue;
+			var u = upgradeMap[profileData[i].name];
+			if (u)
+			{
+				for (var key in u)
+					profileData[i][key] = u[key];
+				upgradeMade = true;
+			}
+		}
+		return upgradeMade;
+	}
 	this.RestoreDefaultProfiles = function (replaceExisting)
 	{
 		var defaultProfiles = self.GenerateDefaultProfiles();
@@ -13102,9 +13159,12 @@ function GenericQualityHelper()
 		{
 			self.profiles = new Array();
 			var profileData = JSON.parse(settings.ui3_streamingProfileArray);
+			var upgradeMade = upgradeDefaultProfileData(profileData);
 			for (var i = 0; i < profileData.length; i++)
 				self.profiles.push($.extend(new StreamingProfile(), profileData[i]));
 			self.SetStreamingQualityDropdownBoxItems();
+			if (upgradeMade)
+				self.SaveProfiles();
 		}
 		catch (ex)
 		{
@@ -19348,6 +19408,14 @@ function OnChange_ui3_h264_choice2()
 function Precondition_ui3_h264_choice2()
 {
 	return (pnacl_player_supported || mse_mp4_h264_supported);
+}
+function OnChange_ui3_streamingProfileBitRateMax()
+{
+	videoPlayer.RefreshVideoStream();
+}
+function Precondition_ui3_streamingProfileBitRateMax()
+{
+	return h264_playback_supported;
 }
 function Precondition_ui3_html5_delay_compensation()
 {
