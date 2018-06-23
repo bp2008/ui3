@@ -12741,7 +12741,7 @@ function StreamingProfile()
 			else if (self.w >= 1)
 				sb.Append("&h=").Append(Math.round(self.w / aspect));
 
-			var kbps = -1;
+			var kbps = -1; // -1: inherit, 0: no limit, 10-8192: limit
 			if (self.limitBitrate === 1)
 				kbps = 0; // Sentinel value instructing Blue Iris to use no limit
 			else if (self.limitBitrate === 2)
@@ -12750,11 +12750,11 @@ function StreamingProfile()
 			if (max)
 			{
 				max = Clamp(parseInt(max), -1, 8192);
-				if (max >= 10)
-					kbps = Math.min(kbps, max);
+				if (max >= 10 && (max < kbps || kbps === -1 || kbps === 0))
+					kbps = max;
 			}
 			if (kbps === 0 || kbps >= 10)
-				sb.Append("&kbps=").Append(Clamp(kbps, 10, 8192));
+				sb.Append("&kbps=").Append(kbps);
 
 			if (self.fps >= 0)
 				sb.Append("&fps=").Append(self.fps);
