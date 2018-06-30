@@ -18774,7 +18774,21 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		cbOnDoubleClick = function () { };
 	if (typeof cbDragStart != "function")
 		cbDragStart = function () { };
-
+	if (typeof cbDragMove != "function")
+		cbDragMove = function () { };
+	if (typeof cbDragEnd != "function")
+		cbDragEnd = function () { };
+	var callCB = function (cb)
+	{
+		var saveArgs = new Array(arguments.length - 1);
+		for (var i = 1; i < arguments.length; i++)
+			saveArgs[i - 1] = arguments[i];
+		setTimeout(function ()
+		{
+			if (!lastMouseUp1.Excluded)
+				cb.apply(self, saveArgs);
+		}, 0);
+	}
 	if (!doubleClickTimeMS || doubleClickTimeMS < 0)
 		doubleClickTimeMS = 300;
 
@@ -18867,7 +18881,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			return;
 		// A single click has occurred.
 		if (!fakeMouseDown)
-			cbOnSingleClick(e, false);
+			callCB(cbOnSingleClick, e, false);
 		if (lastMouseUp1.Time - lastMouseUp2.Time < doubleClickTimeMS
 			&& lastMouseUp1.Time - lastMouseDown2.Time < doubleClickTimeMS
 			&& lastMouseUp2.Time - lastMouseDown2.Time < doubleClickTimeMS
@@ -18879,7 +18893,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		{
 			clearTimeout(singleClickTimeout);
 			singleClickTimeout = null;
-			cbOnDoubleClick(e);
+			callCB(cbOnDoubleClick, e);
 		}
 		else if (!fakeMouseDown)
 		{
