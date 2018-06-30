@@ -1791,6 +1791,7 @@ div.invisibleLabel
 	padding: 10px;
 	font-size: 16px;
 	white-space: normal;
+	box-sizing: border-box;
 }
 
 #clipsbody
@@ -1921,7 +1922,7 @@ div.invisibleLabel
 	background-color: #383E47;
 }
 
-.cliptile, .datetile
+.cliptile, .datetile, .clipListText
 {
 	position: absolute;
 	overflow: hidden;
@@ -1966,14 +1967,16 @@ div.invisibleLabel
 	}
 
 .sizeMedium .cliptile,
-.sizeMedium .datetile
+.sizeMedium .datetile,
+.sizeMedium .clipListText
 {
 	left: 2px;
 	width: 183px;
 }
 
 .sizeSmall .cliptile,
-.sizeSmall .datetile
+.sizeSmall .datetile,
+.sizeSmall .clipListText
 {
 	left: 1px;
 	width: 135px;
