@@ -5073,7 +5073,6 @@ function ExportControls()
 			videoPlayer.Playback_Pause();
 
 		$exportControlsWrapper.show();
-		$layoutBottom.show();
 
 		if (clipData.isClip)
 			ClipStatsLoaded();
@@ -5153,7 +5152,6 @@ function ExportControls()
 		clipData = null;
 
 		$exportOffsetWrapper.hide();
-		$layoutBottom.hide();
 		$exportControlsWrapper.hide();
 
 		// call global resized

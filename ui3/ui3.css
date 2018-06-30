@@ -180,7 +180,6 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	left: 256px;
 	bottom: 0px;
 	overflow: hidden;
-	display: none;
 }
 /* Top Bar / Tabs */
 #topbar_vertical_align_helper
