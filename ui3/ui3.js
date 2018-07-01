@@ -9355,6 +9355,8 @@ function JpegVideoModule()
 		if (loading.isLive)
 			startPaused = false;
 		Activate();
+		if (playbackControls.GetPlayReverse())
+			offsetPercent = 1;
 		clipPlaybackPosition = Clamp(offsetPercent, 0, 1) * (loading.msec - 1);
 		timeLastClipFrame = Date.now();
 		if (startPaused)
@@ -9432,7 +9434,11 @@ function JpegVideoModule()
 
 			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
 			if (honorAlertOffset && clipData != null)
+			{
 				clipPlaybackPosition = clipData.offsetMs; // This offset is where the alert begins within the clip.
+				if (playbackControls.GetPlayReverse()) // If playing in reverse, lets start at the end of the alert's bounds.
+					clipPlaybackPosition += clipData.roughLengthMs;
+			}
 			honorAlertOffset = false;
 
 			if (clipPlaybackPosition < 0)
@@ -9785,6 +9791,8 @@ function FetchH264VideoModule()
 			startPaused = false;
 		Activate();
 		lastStatusBlock = null;
+		if (playbackControls.GetPlayReverse())
+			offsetPercent = 1;
 		currentSeekPositionPercent = Clamp(offsetPercent, 0, 1);
 		lastFrameAt = performance.now();
 		currentImageDateMs = Date.now();
