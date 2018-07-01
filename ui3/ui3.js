@@ -4948,7 +4948,7 @@ function SeekBar()
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		self.mouseDown(e);
+		return self.mouseDown(e);
 	});
 	wrapper.on("mouseenter", function (e)
 	{
