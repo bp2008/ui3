@@ -464,7 +464,7 @@ var HTML5DelayCompensationOptions = {
 	Strong: "Strong"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Extra"];
+var settingsCategoryList = ["General Settings", "Video Player", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"];
 var defaultSettings =
 	[
 		{
@@ -1461,6 +1461,35 @@ var defaultSettings =
 			, category: "Camera Labels"
 		}
 		, {
+			key: "ui3_wheelZoomMethod"
+			, value: "Adjustable"
+			, inputType: "select"
+			, options: ["Adjustable", "Legacy"]
+			, label: "Digital Zoom Method"
+			, onChange: OnChange_ui3_wheelZoomMethod
+			, category: "Digital Zoom"
+		}
+		, {
+			key: "ui3_wheelAdjustableSpeed"
+			, value: 400
+			, minValue: 0
+			, maxValue: 2000
+			, step: 1
+			, inputType: "range"
+			, label: 'Digital Zoom Speed<br/>(Requires zoom method "Adjustable")'
+			, changeOnStep: true
+			, hint: "Default: 400"
+			, category: "Digital Zoom"
+		}
+		, {
+			key: "ui3_wheelZoomReverse"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Reverse Mouse Wheel Zoom'
+			, hint: "By default, UI3 follows the de-facto standard for mouse wheel zoom, where up zooms in."
+			, category: "Digital Zoom"
+		}
+		, {
 			key: "ui3_fullscreen_videoonly"
 			, value: "1"
 			, inputType: "checkbox"
@@ -1530,14 +1559,6 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Show Session Status at Startup'
 			, hint: 'If enabled, session status is shown in the lower-right corner when the UI loads.'
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_wheelZoomReverse"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Reverse Mouse Wheel Zoom'
-			, hint: "By default, UI3 follows the de-facto standard for mouse wheel zoom, where up zooms in."
 			, category: "Extra"
 		}
 		, {
@@ -8809,7 +8830,7 @@ function VideoPlayerController()
 	}
 	this.LoadLiveCamera = function (camData)
 	{
-		imageRenderer.SetDigitalZoom(0);
+		imageRenderer.zoomHandler.ZoomToFit();
 		var cli = currentlyLoadingImage;
 		var clc = currentlyLoadingCamera = camData;
 		cli.id = clc.optionValue;
@@ -8846,7 +8867,7 @@ function VideoPlayerController()
 		var cam = cameraListLoader.GetCameraWithId(clipData.camera);
 		if (cam)
 		{
-			imageRenderer.SetDigitalZoom(0);
+			imageRenderer.zoomHandler.ZoomToFit();
 			var cli = currentlyLoadingImage;
 			var clc = currentlyLoadingCamera = cam;
 			cli.id = clc.optionValue;
@@ -8990,7 +9011,7 @@ function VideoPlayerController()
 	// Callback methods for a player module to inform the VideoPlayerController of state changes.
 	this.CameraOrResolutionChange = function ()
 	{
-		imageRenderer.SetDigitalZoom(0);
+		imageRenderer.zoomHandler.ZoomToFit();
 		currentlyLoadedImage.CopyValuesFrom(currentlyLoadingImage);
 		currentlyLoadedCamera = currentlyLoadingCamera;
 		resized();
@@ -11524,12 +11545,6 @@ function ImageRenderer()
 	var dpiScalingFactor = BI_GetDevicePixelRatio();
 	var zoomHintTimeout = null;
 	var zoomHintIsVisible = false;
-	var digitalZoom = 0;
-	this.SetDigitalZoom = function (newZoom)
-	{
-		digitalZoom = newZoom;
-	}
-	var zoomTable = [0, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 45, 50];
 	var imageIsDragging = false;
 	var imageIsLargerThanAvailableSpace = false;
 	var mouseX = 0;
@@ -11549,6 +11564,8 @@ function ImageRenderer()
 	var $camimg_wrapper = $("#camimg_wrapper");
 	var sccc_outerObjs = $('#layoutbody,#camimg_wrapper,#zoomhint');
 
+	this.zoomHandler = null;
+
 	this.GetSizeToRequest = function (modifyForJpegQualitySetting)
 	{
 		// Calculate the size of the image we need
@@ -11556,8 +11573,8 @@ function ImageRenderer()
 		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
 		if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
 			ssFactor = 1;
-		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * ssFactor * (zoomTable[digitalZoom]);
-		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * ssFactor * (zoomTable[digitalZoom]);
+		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * ssFactor * self.zoomHandler.GetZoomFactor();
+		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * ssFactor * self.zoomHandler.GetZoomFactor();
 		if (imgDrawWidth == 0)
 		{
 			// Image is supposed to scale to fit the screen (first zoom level)
@@ -11603,8 +11620,8 @@ function ImageRenderer()
 
 		// Calculate new size based on zoom levels
 		var imgForSizing = videoPlayer.Loaded().image;
-		var imgDrawWidth = imgForSizing.fullwidth * (zoomTable[digitalZoom]);
-		var imgDrawHeight = imgForSizing.fullheight * (zoomTable[digitalZoom]);
+		var imgDrawWidth = imgForSizing.fullwidth * self.zoomHandler.GetZoomFactor();
+		var imgDrawHeight = imgForSizing.fullheight * self.zoomHandler.GetZoomFactor();
 		if (imgDrawWidth == 0)
 		{
 			imgDrawWidth = imgAvailableWidth;
@@ -11620,7 +11637,7 @@ function ImageRenderer()
 
 		imageIsLargerThanAvailableSpace = imgDrawWidth > imgAvailableWidth || imgDrawHeight > imgAvailableHeight;
 
-		if (previousImageDraw.z > -1 && previousImageDraw.z != digitalZoom)
+		if (previousImageDraw.z > -1 && previousImageDraw.z != self.zoomHandler.GetZoomFactor())
 		{
 			// We just experienced a zoom change
 			// Find the mouse position percentage relative to the center of the image at its old size
@@ -11674,25 +11691,20 @@ function ImageRenderer()
 		previousImageDraw.x = proposedY;
 		previousImageDraw.w = imgDrawWidth;
 		previousImageDraw.h = imgDrawHeight;
-		previousImageDraw.z = digitalZoom;
+		previousImageDraw.z = self.zoomHandler.GetZoomFactor();
 
 		BI_CustomEvent.Invoke("ImageResized");
 	}
 	this.DigitalZoomNow = function (deltaY, isFromKeyboard)
 	{
-		if (deltaY < 0)
-			digitalZoom -= 1;
-		else if (deltaY > 0)
-			digitalZoom += 1;
-		if (digitalZoom < 0)
-			digitalZoom = 0;
-		else if (digitalZoom >= zoomTable.length)
-			digitalZoom = zoomTable.length - 1;
+		self.setZoomHandler();
+		self.zoomHandler.OffsetZoom(deltaY);
 
 		$("#zoomhint").stop(true, true);
 		$("#zoomhint").show();
 		zoomHintIsVisible = true;
-		$("#zoomhint").html(digitalZoom == 0 ? "Fit" : (zoomTable[digitalZoom] + "x"))
+		var zoomFactor = self.zoomHandler.GetZoomFactor();
+		$("#zoomhint").html(zoomFactor === 0 ? "Fit" : ((Math.round(zoomFactor * 10) / 10) + "x"));
 		RepositionZoomHint(isFromKeyboard);
 		if (zoomHintTimeout != null)
 			clearTimeout(zoomHintTimeout);
@@ -11786,17 +11798,118 @@ function ImageRenderer()
 		mouseX = e.pageX;
 		mouseY = e.pageY;
 	}
+	$layoutbody.on('wheel', function (e)
+	{
+		if (settings.ui3_wheelZoomMethod !== "Adjustable")
+			return;
+		if (typeof e.deltaY === "undefined")
+		{
+			e.deltaX = e.originalEvent.deltaX;
+			e.deltaY = -e.originalEvent.deltaY;
+			e.deltaMode = e.originalEvent.deltaMode;
+		}
+		handleMouseWheelEvent(e, e.delta, e.deltaX, e.deltaY, e.deltaMode);
+	});
 	$layoutbody.mousewheel(function (e, delta, deltaX, deltaY)
 	{
+		if (settings.ui3_wheelZoomMethod !== "Legacy")
+			return;
+		handleMouseWheelEvent(e, delta, deltaX, deltaY, 2);
+	});
+	var handleMouseWheelEvent = function (e, delta, deltaX, deltaY, deltaMode)
+	{
 		mouseCoordFixer.fix(e);
+		self.SetMousePos(e.pageX, e.pageY);
 		if (playbackControls.MouseInSettingsPanel(e))
 			return;
 		e.preventDefault();
+		if (deltaMode === 1)
+			deltaY *= 33.333;
+		else if (deltaMode === 2)
+			deltaY *= 100;
 		if (settings.ui3_wheelZoomReverse === "1")
 			deltaY *= -1;
 		self.DigitalZoomNow(deltaY, false);
-	});
+	}
+	this.setZoomHandler = function ()
+	{
+		if (settings.ui3_wheelZoomMethod === "Adjustable")
+			self.zoomHandler = zoomHandler_Adjustable;
+		else
+			self.zoomHandler = zoomHandler_Legacy;
+	}
+	self.setZoomHandler();
 }
+///////////////////////////////////////////////////////////////
+// Digital Zoom ///////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var zoomHandler_Adjustable = new (function ()
+{
+	var self = this;
+	var zoomIndex = 0; // All values less than 1 are treated as "zoom to fit".
+	var maxZoomFactor = Math.sqrt(Math.sqrt(50));
+	this.OffsetZoom = function (deltaY)
+	{
+		if (deltaY > 100)
+			deltaY = 100;
+		else if (deltaY < -100)
+			deltaY = -100;
+		var speed = Clamp(2001 - parseFloat(settings.ui3_wheelAdjustableSpeed), 0, 2000);
+		var delta = deltaY / speed;
+		if (delta > 0 && zoomIndex < 1)
+			zoomIndex = 1; // This ensures we always hit "1x" zoom precisely when zooming in.
+		else
+		{
+			var wasGreaterThan1 = zoomIndex > 1;
+			zoomIndex += delta;
+			if (zoomIndex < 1 && wasGreaterThan1)
+				zoomIndex = 1; // This ensures we always hit "1x" zoom precisely when zooming out.
+			var zoomFactor = self.GetZoomFactor();
+			if (zoomIndex < 1)
+				zoomIndex = 0;
+			if (zoomIndex > maxZoomFactor)
+				zoomIndex = maxZoomFactor;
+		}
+	}
+	this.GetZoomFactor = function ()
+	{
+		var zoomFactor = Math.pow(zoomIndex, 4);
+		if (zoomFactor < 1)
+			zoomFactor = 0;
+		else if (zoomFactor > 50)
+			zoomFactor = 50;
+		return zoomFactor;
+	}
+	this.ZoomToFit = function ()
+	{
+		zoomIndex = 0;
+	}
+})();
+var zoomHandler_Legacy = new (function ()
+{
+	var self = this;
+	var zoomTable = [0, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 45, 50];
+	var digitalZoom = 0;
+	this.OffsetZoom = function (deltaY)
+	{
+		if (deltaY < 0)
+			digitalZoom -= 1;
+		else if (deltaY > 0)
+			digitalZoom += 1;
+		if (digitalZoom < 0)
+			digitalZoom = 0;
+		else if (digitalZoom >= zoomTable.length)
+			digitalZoom = zoomTable.length - 1;
+	}
+	this.GetZoomFactor = function ()
+	{
+		return zoomTable[digitalZoom];
+	}
+	this.ZoomToFit = function ()
+	{
+		digitalZoom = 0;
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // Camera Name Labels /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -16543,11 +16656,11 @@ function BI_Hotkey_CloseCamera()
 }
 function BI_Hotkey_DigitalZoomIn()
 {
-	imageRenderer.DigitalZoomNow(1, true);
+	imageRenderer.DigitalZoomNow(100, true);
 }
 function BI_Hotkey_DigitalZoomOut()
 {
-	imageRenderer.DigitalZoomNow(-1, true);
+	imageRenderer.DigitalZoomNow(-100, true);
 }
 function BI_Hotkey_DigitalPanUp()
 {
@@ -19461,6 +19574,12 @@ function OnChange_ui3_force_gop_1sec()
 function OnChange_ui3_icons_extraVisibility()
 {
 	cornerStatusIcons.ReInitialize();
+}
+function OnChange_ui3_wheelZoomMethod()
+{
+	zoomHandler_Adjustable.ZoomToFit();
+	zoomHandler_Legacy.ZoomToFit();
+	imageRenderer.ImgResized();
 }
 function OnChange_ui3_fullscreen_videoonly()
 {
