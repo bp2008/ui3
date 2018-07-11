@@ -11074,7 +11074,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var onVideoError = function (e)
 	{
 		if (!inputRequiredOverlayIsActive)
-			playerErrorHandler(player.error.message);
+			playerErrorHandler(player.error.message + ": " + GetMediaErrorMessage(player.error.code));
 	}
 	var onPlayerPaused = function (e)
 	{
@@ -11131,7 +11131,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	this.Dispose = function ()
 	{
-		console.log("pnacl_player.Dispose()");
+		if (developerMode)
+			console.log("HTML5_MSE_Player.Dispose()");
 		var $parent = $("#videoElement_wrapper");
 		$parent.remove();
 		if (jmuxer)
@@ -11181,14 +11182,15 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	this.Flush = function ()
 	{
-		hasToldPlayerToPlay = false;
 		earlyFrames = new Queue();
-		mseReady = false;
-		if (jmuxer)
+		if (jmuxer && hasToldPlayerToPlay)
 		{
+			console.log("destroy jmuxer");
+			mseReady = false;
 			jmuxer.destroy();
 			jmuxer = null;
 		}
+		hasToldPlayerToPlay = false;
 		player.pause();
 		delayCompensation = new HTML5DelayCompensationHelper(player);
 		lastFrame = false;
@@ -11211,7 +11213,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	var StartPlayback = function ()
 	{
-		var playPromise = document.getElementById('html5MseVideoEle').play();
+		var playPromise = player.play();
 		if (playPromise && playPromise.catch)
 			playPromise.catch(function (ex)
 			{
@@ -11420,6 +11422,7 @@ function HTML5DelayCompensationHelper(player)
 		}
 	}
 	UpdateAggressionLevel();
+	setPlaybackRate(1);
 }
 ///////////////////////////////////////////////////////////////
 // Network Delay Calculator - An Imperfect Science ////////////
@@ -12260,21 +12263,7 @@ function BISoundEffect()
 				sb.Append("code ");
 				sb.Append(htmlEncode(error.code));
 				sb.Append(" (");
-				if (MediaError)
-				{
-					if (error.code == MediaError.MEDIA_ERR_ABORTED)
-						sb.Append("MEDIA_ERR_ABORTED");
-					else if (error.code == MediaError.MEDIA_ERR_NETWORK)
-						sb.Append("MEDIA_ERR_NETWORK");
-					else if (error.code == MediaError.MEDIA_ERR_DECODE)
-						sb.Append("MEDIA_ERR_DECODE");
-					else if (error.code == MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
-						sb.Append("MEDIA_ERR_SRC_NOT_SUPPORTED");
-					else
-						sb.Append("unknown error code");
-				}
-				else
-					sb.Append("unknown error code");
+				sb.Append(GetMediaErrorMessage(error.code));
 				sb.AppendLine(")");
 				sb.Append(htmlEncode(error.message));
 			}
@@ -16978,7 +16967,12 @@ function Toaster()
 			message = htmlEncode(message.message + ": " + message.stack);
 		}
 		else
-			bilog.info(type + " toast: ", message);
+		{
+			if (type === "error")
+				bilog.debug(type + " toast: ", message);
+			else
+				bilog.info(type + " toast: ", message);
+		}
 		var overrideOptions = {};
 
 		if (showTime)
@@ -20696,4 +20690,19 @@ function InsertSpacesInBinary(binaryString, maxLength)
 		output.push(binaryString[i]);
 	}
 	return output.join("");
+}
+function GetMediaErrorMessage(code)
+{
+	if (MediaError)
+	{
+		if (code === MediaError.MEDIA_ERR_ABORTED)
+			return "MEDIA_ERR_ABORTED";
+		else if (code === MediaError.MEDIA_ERR_NETWORK)
+			return "MEDIA_ERR_NETWORK";
+		else if (code === MediaError.MEDIA_ERR_DECODE)
+			return "MEDIA_ERR_DECODE";
+		else if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
+			return "MEDIA_ERR_SRC_NOT_SUPPORTED";
+	}
+	return "unknown error code (" + code + ")";
 }

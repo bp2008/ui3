@@ -1,4 +1,5 @@
 ﻿// This class is a crude AVI encoder written for UI3.  It requires the custom JavaScript "Queue" class to be defined.
+// Available under the same license as UI3: GNU LESSER GENERAL PUBLIC LICENSE, Version 3
 function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* WaveFormatEx header */)
 {
 	var self = this;
