@@ -2075,28 +2075,24 @@ var BufferController = function (_Event) {
         }
     }, {
         key: 'initCleanup',
-        value: function initCleanup(currentTime) {
-            try {
-                if (this.sourceBuffer.updating) {
-                    this.pendingCleaning = currentTime;
-                    return;
-                }
-                if (this.sourceBuffer.buffered && this.sourceBuffer.buffered.length && !this.cleaning) {
-                    for (var i = 0; i < this.sourceBuffer.buffered.length; ++i) {
-                        var start = this.sourceBuffer.buffered.start(i);
-                        var end = this.sourceBuffer.buffered.end(i);
+        value: function initCleanup(cleanMaxLimit) {
+            if (this.sourceBuffer.updating) {
+                this.pendingCleaning = cleanMaxLimit;
+                return;
+            }
+            if (this.sourceBuffer.buffered && this.sourceBuffer.buffered.length && !this.cleaning) {
+                for (var i = 0; i < this.sourceBuffer.buffered.length; ++i) {
+                    var start = this.sourceBuffer.buffered.start(i);
+                    var end = this.sourceBuffer.buffered.end(i);
 
-                        if (currentTime - start > this.cleanOffset) {
-                            end = currentTime - this.cleanOffset;
-                            if (start < end) {
-                                this.cleanRanges.push([start, end]);
-                            }
+                    if (cleanMaxLimit - start > this.cleanOffset) {
+                        end = cleanMaxLimit - this.cleanOffset;
+                        if (start < end) {
+                            this.cleanRanges.push([start, end]);
                         }
                     }
-                    this.doCleanup();
                 }
-            } catch (e) {
-                error('Error occured in initCleanup of ' + this.type + ' buffer -  ' + e.name + ': ' + e.message);
+                this.doCleanup();
             }
         }
     }, {
@@ -2153,7 +2149,6 @@ var JMuxmer = function (_Event) {
             mode: 'both', // both, audio, video
             flushingTime: 1500,
             clearBuffer: true,
-            cleanOffset: 2, // when clearing buffers, go back this many seconds
             onReady: null, // function called when MSE is ready to accept frames
             fps: 30,
             debug: false
@@ -2188,6 +2183,8 @@ var JMuxmer = function (_Event) {
 
         _this.mseReady = false;
         _this.lastCleaningTime = Date.now();
+        _this.keyframeCache = [];
+        _this.frameCounter = 0;
 
         /* events callback */
         _this.remuxController.on('buffer', _this.onBuffer.bind(_this));
@@ -2219,9 +2216,7 @@ var JMuxmer = function (_Event) {
             };
 
             if (!data) return;
-
             duration = data.duration ? parseInt(data.duration) : 0;
-
             if (data.video) {
                 nalus = H264Parser.extractNALu(data.video);
                 if (nalus.length > 0) {
@@ -2237,7 +2232,7 @@ var JMuxmer = function (_Event) {
                 }
             }
             if (!remux) {
-                error('No video element found to feed. Input object must have audio and/or video property');
+                error('Input object must have video and/or audio property. Make sure it is not empty and valid typed array');
                 return;
             }
             this.remuxController.remux(chunks);
@@ -2250,7 +2245,8 @@ var JMuxmer = function (_Event) {
                 samples = [],
                 naluObj = void 0,
                 sampleDuration = void 0,
-                adjustDuration = 0;
+                adjustDuration = 0,
+                numberOfFrames = [];
 
             var _iteratorNormalCompletion = true;
             var _didIteratorError = false;
@@ -2265,6 +2261,12 @@ var JMuxmer = function (_Event) {
                     if (naluObj.type() === NALU.IDR || naluObj.type() === NALU.NDR) {
                         samples.push({ units: units });
                         units = [];
+                        if (this.options.clearBuffer) {
+                            if (naluObj.type() === NALU.IDR) {
+                                numberOfFrames.push(this.frameCounter);
+                            }
+                            this.frameCounter++;
+                        }
                     }
                 }
             } catch (err) {
@@ -2294,6 +2296,14 @@ var JMuxmer = function (_Event) {
                     adjustDuration--;
                 }
             });
+
+            /* cache keyframe times if clearBuffer set true */
+            if (this.options.clearBuffer) {
+                numberOfFrames = numberOfFrames.map(function (total) {
+                    return total * sampleDuration / 1000;
+                });
+                this.keyframeCache = this.keyframeCache.concat(numberOfFrames);
+            }
             return samples;
         }
     }, {
@@ -2349,15 +2359,51 @@ var JMuxmer = function (_Event) {
             this.stopInterval();
             if (this.mediaSource) {
                 try {
-                    this.mediaSource.endOfStream();
+                    var sbs = this.mediaSource.sourceBuffers;
+                    var _iteratorNormalCompletion3 = true;
+                    var _didIteratorError3 = false;
+                    var _iteratorError3 = undefined;
+
+                    try {
+                        for (var _iterator3 = sbs[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+                            var sb = _step3.value;
+
+                            this.mediaSource.removeSourceBuffer(sb);
+                        }
+                    } catch (err) {
+                        _didIteratorError3 = true;
+                        _iteratorError3 = err;
+                    } finally {
+                        try {
+                            if (!_iteratorNormalCompletion3 && _iterator3.return) {
+                                _iterator3.return();
+                            }
+                        } finally {
+                            if (_didIteratorError3) {
+                                throw _iteratorError3;
+                            }
+                        }
+                    }
+
+                    if (this.bufferControllers) {
+                        this.mediaSource.endOfStream();
+                    }
                 } catch (e) {
-                    error('mediasource is not available to end');
+                    error('mediasource is not available to end ' + e.message);
                 }
+                this.mediaSource = null;
             }
             if (this.remuxController) {
                 this.remuxController.destroy();
                 this.remuxController = null;
             }
+            if (this.bufferControllers) {
+                for (var type in this.bufferControllers) {
+                    this.bufferControllers[type].destroy();
+                }
+                this.bufferControllers = null;
+            }
+            this.node = false;
             this.mseReady = false;
             this.videoStarted = false;
         }
@@ -2374,7 +2420,6 @@ var JMuxmer = function (_Event) {
                 }
                 var sb = this.mediaSource.addSourceBuffer(type + '/mp4; codecs="' + track.mp4track.codec + '"');
                 this.bufferControllers[type] = new BufferController(sb, type);
-                this.bufferControllers[type].cleanOffset = this.options.cleanOffset;
                 this.sourceBuffers[type] = sb;
                 this.bufferControllers[type].on('error', this.onBufferError.bind(this));
             }
@@ -2406,11 +2451,33 @@ var JMuxmer = function (_Event) {
             }
         }
     }, {
+        key: 'getSafeBufferClearLimit',
+        value: function getSafeBufferClearLimit(offset) {
+            var maxLimit = offset,
+                adjacentOffset = void 0;
+
+            for (var i = 0; i < this.keyframeCache.length; i++) {
+                if (this.keyframeCache[i] >= offset) {
+                    break;
+                }
+                adjacentOffset = this.keyframeCache[i];
+            }
+
+            this.keyframeCache = this.keyframeCache.filter(function (keyframePoint) {
+                if (keyframePoint < adjacentOffset) {
+                    maxLimit = keyframePoint;
+                }
+                return keyframePoint >= adjacentOffset;
+            });
+            return maxLimit;
+        }
+    }, {
         key: 'clearBuffer',
         value: function clearBuffer() {
             if (this.options.clearBuffer && Date.now() - this.lastCleaningTime > 10000) {
                 for (var type in this.bufferControllers) {
-                    this.bufferControllers[type].initCleanup(this.node.currentTime);
+                    var cleanMaxLimit = this.getSafeBufferClearLimit(this.node.currentTime);
+                    this.bufferControllers[type].initCleanup(cleanMaxLimit);
                 }
                 this.lastCleaningTime = Date.now();
             }
@@ -2418,7 +2485,6 @@ var JMuxmer = function (_Event) {
     }, {
         key: 'onBuffer',
         value: function onBuffer(data) {
-
             if (this.bufferControllers && this.bufferControllers[data.type]) {
                 this.bufferControllers[data.type].feed(data.payload);
             }

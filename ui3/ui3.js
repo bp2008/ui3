@@ -11024,6 +11024,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var player;
 	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
 	var finishedFrameCount = 0; // Number of frames rendered or dropped.
+	var fedFrameCount = 0; // Number of frames fed to jmuxer
 	var netDelayCalc = new NetDelayCalc();
 	var timestampLastAcceptedFrame = -1; // Frame timestamp (ms) of the last frame to be submitted to the decoder.
 	var timestampLastRenderedFrame = -1; // Frame timestamp (ms) of the last frame to be rendered.
@@ -11183,9 +11184,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	this.Flush = function ()
 	{
 		earlyFrames = new Queue();
-		if (jmuxer && hasToldPlayerToPlay)
+		if (jmuxer && fedFrameCount > 0)
 		{
-			console.log("destroy jmuxer");
 			mseReady = false;
 			jmuxer.destroy();
 			jmuxer = null;
@@ -11197,6 +11197,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		lastFrameDuration = 16;
 		acceptedFrameCount = 0;
 		finishedFrameCount = 0;
+		fedFrameCount = 0;
 		frameMetadataQueue.Reset();
 		netDelayCalc.Reset();
 		timestampLastAcceptedFrame = -1;
@@ -11219,10 +11220,14 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			{
 				if (ex.name === "NotAllowedError")
 				{
+					hasToldPlayerToPlay = false;
+					$(".inputRequiredToPlay").remove();
 					var $inputOverlay = $('<div class="inputRequiredToPlay"><div>Click anywhere to begin streaming.<br>The HTML5 player requires user input before playback can begin.</div></div>');
 					$inputOverlay.on('click', function ()
 					{
 						$inputOverlay.remove();
+						inputRequiredOverlayIsActive = false;
+						player.play().then(player.pause);
 						videoPlayer.RefreshVideoStream();
 					});
 					$('body').append($inputOverlay);
@@ -11250,7 +11255,6 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				mode: 'video',
 				flushingTime: 1,
 				clearBuffer: true,
-				cleanOffset: 600, // This is an extension of the original jmuxer.
 				onReady: onMSEReady,
 				debug: developerMode
 			});
@@ -11277,14 +11281,11 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				video: lastFrame.frameData,
 				duration: lastFrameDuration
 			});
+			fedFrameCount++;
 			if (!hasToldPlayerToPlay)
 			{
 				StartPlayback();
 				hasToldPlayerToPlay = true;
-			}
-			if (jmuxer.bufferControllers && jmuxer.bufferControllers.video)
-			{
-				jmuxer.bufferControllers.video.cleanOffset = 600;
 			}
 		}
 		lastFrame = frame;
