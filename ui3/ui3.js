@@ -11187,6 +11187,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		if (jmuxer && fedFrameCount > 0)
 		{
 			mseReady = false;
+			player.pause();
 			jmuxer.destroy();
 			jmuxer = null;
 		}
@@ -11255,6 +11256,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				mode: 'video',
 				flushingTime: 1,
 				clearBuffer: true,
+				cleanOffset: 600, // This is an extension of the original jmuxer.
 				onReady: onMSEReady,
 				debug: developerMode
 			});
@@ -11286,6 +11288,10 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			{
 				StartPlayback();
 				hasToldPlayerToPlay = true;
+			}
+			if (jmuxer.bufferControllers && jmuxer.bufferControllers.video)
+			{
+				jmuxer.bufferControllers.video.cleanOffset = 600;
 			}
 		}
 		lastFrame = frame;
