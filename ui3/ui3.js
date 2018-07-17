@@ -6858,6 +6858,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 		var timeToWait = Clamp(200 - timeWaited, 0, 1000);
 		if (timeToWait > 0)
 		{
+			clearTimeout(thumbVideoTimeout);
 			thumbVideoTimeout = setTimeout(function ()
 			{
 				self.Start($clip, clipData, camName, frameNum, loopNum);
