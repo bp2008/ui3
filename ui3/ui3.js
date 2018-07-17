@@ -8217,7 +8217,7 @@ function CameraListLoader()
 	{
 		if (cameraListUpdateTimeout != null)
 			clearTimeout(cameraListUpdateTimeout);
-		if (documentIsHidden())
+		if (documentIsHidden() && lastResponse !== null && typeof successCallbackFunc !== "function")
 		{
 			cameraListUpdateTimeout = setTimeout(function ()
 			{
@@ -9797,11 +9797,6 @@ function FetchH264VideoModule()
 			}, 5);
 			return;
 		}
-		if (documentIsHidden())
-		{
-			console.log("Denying OpenVideo command because the page is believed to be inactive.");
-			return;
-		}
 		if (developerMode)
 			console.log("h264.OpenVideo");
 		var isSameClipAsBefore = AreSameClip(loading.uniqueId, videoData.uniqueId);
@@ -9936,6 +9931,12 @@ function FetchH264VideoModule()
 	}
 	var acceptFrame = function (frame, streams)
 	{
+		if (documentIsHidden())
+		{
+			console.log("Stopping H.264 stream because the page is believed to be inactive.");
+			StopStreaming();
+			return;
+		}
 		if (streamHasAudio === 0 && didRequestAudio && streams !== 2)
 		{
 			// We requested audio, but the stream says it doesn't contain any.
@@ -10806,12 +10807,12 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			//}
 			else
 			{
-				console.log(message_event.data);
+				console.log("NaCl Player Message: " + message_event.data);
 			}
 		}
 		else
 		{
-			console.log("Pnacl_Player Message of unhandled type " + (typeof message_event.data));
+			console.log("NaCl Player Message of unhandled type: " + (typeof message_event.data));
 			console.log(message_event.data);
 		}
 	}
