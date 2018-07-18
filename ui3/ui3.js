@@ -406,6 +406,12 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// TODO: Properly handle playback and stream reloads of clips that are still being recorded.
+// * non-BVR should refuse to open
+// * when we get new clip length data for the playing clip, handle it correctly. don't just throw out the new data.
+// * reloading the stream (change playback speed) should not cause the current position to change suddenly.
+// * don't forget jpeg streams
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -464,7 +470,7 @@ var HTML5DelayCompensationOptions = {
 	Strong: "Strong"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"];
+var settingsCategoryList = ["General Settings", "Video Player", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -612,6 +618,10 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_uiSettings_category_Video_Player_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_uiSettings_category_Clip___Alert_Icons_visible"
 			, value: "1"
 		}
@@ -629,6 +639,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_cps_uiSettings_category_Camera_Labels_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_Digital_Zoom_visible"
 			, value: "1"
 		}
 		, {
@@ -1601,7 +1615,7 @@ function OverrideDefaultSetting(key, value, IncludeInOptionsWindow, AlwaysReload
 function LoadDefaultSettings()
 {
 	if (settings == null) // This null check allows local overrides to replace the settings object.
-		settings = GetLocalStorageWrapper();
+		settings = SetupStorageSniffing(GetLocalStorageWrapper());
 	for (var i = 0; i < defaultSettings.length; i++)
 	{
 		if (settings.getItem(defaultSettings[i].key) == null
@@ -1661,7 +1675,7 @@ function GetLocalStorageWrapper()
 		else
 			return GetLocalStorage();
 	}
-	return GetDummyLocalStorage()
+	return GetDummyLocalStorage();
 }
 function GetRemoteServerLocalStorage()
 {
@@ -1677,29 +1691,13 @@ function GetRemoteServerLocalStorage()
 	{
 		return (myLocalStorage[serverNamePrefix + key] = value);
 	};
-	for (var i = 0; i < defaultSettings.length; i++)
-	{
-		var tmp = function (key)
-		{
-			Object.defineProperty(wrappedStorage, key,
-				{
-					get: function ()
-					{
-						return wrappedStorage.getItem(key);
-					},
-					set: function (value)
-					{
-						return wrappedStorage.setItem(key, value);
-					}
-				});
-		}(defaultSettings[i].key);
-	}
+	AttachDefaultSettingsProperties(wrappedStorage);
 	return wrappedStorage;
 }
 var localStorageDummy = null;
 function GetDummyLocalStorage()
 {
-	if (localStorageDummy == null)
+	if (localStorageDummy === null)
 	{
 		var dummy = new Object();
 		dummy.getItem = function (key)
@@ -1710,9 +1708,64 @@ function GetDummyLocalStorage()
 		{
 			return (dummy[key] = value);
 		};
+		AttachDefaultSettingsProperties(dummy);
 		localStorageDummy = dummy;
 	}
 	return localStorageDummy;
+}
+function SetupStorageSniffing(storageObj)
+{
+	if (typeof Object.defineProperty === "function")
+	{
+		var isInvokingChangedEvent = {};
+		var storageWrapper = new Object();
+		storageWrapper.getItem = function (key)
+		{
+			return storageObj.getItem(key);
+		};
+		storageWrapper.setItem = function (key, value)
+		{
+			if (isInvokingChangedEvent[key])
+				storageObj.setItem(key, value);
+			else
+			{
+				var oldValue = storageObj.getItem(key);
+				storageObj.setItem(key, value);
+				isInvokingChangedEvent[key] = true;
+				BI_CustomEvent.Invoke("SettingChanged", { key: key, value: value, oldValue: oldValue });
+				isInvokingChangedEvent[key] = false;
+			}
+		};
+		AttachDefaultSettingsProperties(storageWrapper);
+		return storageWrapper;
+	}
+	else
+	{
+		console.log('The custom event "SettingChanged" requires Object.defineProperty which is not available.');
+		return storageObj;
+	}
+}
+function AttachDefaultSettingsProperties(storageWrapper)
+{
+	if (typeof Object.defineProperty !== "function")
+		return;
+	for (var i = 0; i < defaultSettings.length; i++)
+	{
+		var tmp = function (key)
+		{
+			Object.defineProperty(storageWrapper, key,
+				{
+					get: function ()
+					{
+						return storageWrapper.getItem(key);
+					},
+					set: function (value)
+					{
+						return storageWrapper.setItem(key, value);
+					}
+				});
+		}(defaultSettings[i].key);
+	}
 }
 ///////////////////////////////////////////////////////////////
 // UI Loading /////////////////////////////////////////////////
@@ -1964,7 +2017,7 @@ function SetupCollapsibleTriggers()
 	{
 		var $ele = $(ele);
 		var collapsibleid = $ele.attr('collapsibleid');
-		if (collapsibleid && collapsibleid.length > 0 && settings["ui3_collapsible_" + collapsibleid] != "1")
+		if (collapsibleid && collapsibleid.length > 0 && settings.getItem("ui3_collapsible_" + collapsibleid) != "1")
 			$ele.next().hide();
 		if ($ele.next().is(":visible"))
 			$ele.removeClass("collapsed");
@@ -1982,7 +2035,7 @@ function SetupCollapsibleTriggers()
 					else
 						$ele.addClass("collapsed");
 					if (collapsibleid && collapsibleid.length > 0)
-						settings["ui3_collapsible_" + collapsibleid] = vis ? "1" : "0";
+						settings.setItem("ui3_collapsible_" + collapsibleid, vis ? "1" : "0");
 					if ($ele.hasClass("serverStatusLabel") || $ele.attr("id") == "recordingsFilterByHeading")
 						resized();
 				}
@@ -13246,6 +13299,7 @@ function GenericQualityHelper()
 			var u = upgradeMap[profileData[i].name];
 			if (u)
 			{
+				profileData[i].dv = 2;
 				for (var key in u)
 					profileData[i][key] = u[key];
 				upgradeMade = true;
@@ -16745,7 +16799,7 @@ function BI_Hotkeys()
 				var s = hotkeysBeingRepeated[i];
 				if (s.allowRepeatKey)
 				{
-					var val = settings[s.key];
+					var val = settings.getItem(s.key);
 					if (!val)
 						continue;
 					var parts = val.split("|");
@@ -16773,7 +16827,7 @@ function BI_Hotkeys()
 			{
 				if (typeof s.actionDown == "function")
 				{
-					var val = settings[s.key];
+					var val = settings.getItem(s.key);
 					if (!val)
 						continue;
 					var parts = val.split("|");
@@ -18825,7 +18879,7 @@ function DragAndDropHelper($list, onItemMoved)
 		ClearDragTimeout();
 		if (drag)
 		{
-			if (success)
+			if (success && moved)
 			{
 				$blank.after($drag);
 				onItemMoved($drag);
@@ -19214,7 +19268,7 @@ function UISettingsPanel()
 					$row.addClass('everyOther');
 				var formFields = {
 					inputType: s.inputType
-					, value: settings[s.key]
+					, value: settings.getItem(s.key)
 					, label: s.label
 					, tag: s
 				};
@@ -19222,7 +19276,7 @@ function UISettingsPanel()
 				{
 					var $input = $('<input type="text" />');
 					AddKeydownEventToElement(HandleHotkeyChange, s, $input);
-					var val = settings[s.key];
+					var val = settings.getItem(s.key);
 					if (!val)
 						val = "";
 					var parts = val.split("|");
@@ -19353,7 +19407,7 @@ function UISettingsPanel()
 			var s = defaultSettings[i];
 			if (s.category != category || !s.key)
 				continue;
-			var value = settings[s.key];
+			var value = settings.getItem(s.key);
 			if (typeof value == "string")
 				value = JavaScriptStringEncode(value, true);
 			else
@@ -19374,7 +19428,7 @@ function UISettingsPanel()
 			var key = s.key;
 			if (!key || key === "bi_rememberMe" || key === "bi_username" || key === "bi_password")
 				continue; // Don't write these to the file!
-			var value = settings[key];
+			var value = settings.getItem(key);
 			sb.Append('OverrideDefaultSetting(');
 			sb.Append((JavaScriptStringEncode(key, true) + ",").padRight(max_key, ' '));
 			sb.Append(' ')
@@ -19443,19 +19497,19 @@ function UISettingsPanel()
 	}
 	var CheckboxChanged = function (s, checked)
 	{
-		settings[s.key] = checked ? "1" : "0";
+		settings.setItem(s.key, checked ? "1" : "0");
 		CallOnChangeCallback(s);
 	}
 	var SelectChanged = function (e, s, $select)
 	{
 		var selectedValue = $select.val();
 		if (s.options.indexOf(selectedValue) != -1)
-			settings[s.key] = selectedValue;
+			settings.setItem(s.key, selectedValue);
 		CallOnChangeCallback(s);
 	}
 	var NumberChanged = function (e, s, $input)
 	{
-		settings[s.key] = parseFloat($input.val());
+		settings.setItem(s.key, parseFloat($input.val()));
 		CallOnChangeCallback(s);
 	}
 	var HandleHotkeyChange = function (e, s, $input)
@@ -19490,7 +19544,7 @@ function UISettingsPanel()
 		{
 			try
 			{
-				s.onChange(settings[s.key]);
+				s.onChange(settings.getItem(s.key));
 			}
 			catch (ex)
 			{
@@ -20107,6 +20161,8 @@ function Clamp(i, min, max)
 		return min;
 	if (i > max)
 		return max;
+	if (isNaN(i))
+		return min;
 	return i;
 }
 function getDistanceBetweenPointAndElementCenter(x, y, $ele)
