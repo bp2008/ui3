@@ -48,6 +48,7 @@ var pnacl_player_supported = false;
 var mse_mp4_h264_supported = false;
 var mse_mp4_aac_supported = false;
 var vibrate_supported = false;
+var web_audio_autoplay_disabled = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -268,16 +269,18 @@ function detectMSESupport()
 }
 function detectAudioSupport()
 {
-	var AudioContext = window.AudioContext || window.webkitAudioContext;
-	if (AudioContext)
+	try
 	{
-		try
+		// Web Audio (camera sound)
+		var AudioContext = window.AudioContext || window.webkitAudioContext;
+		if (AudioContext)
 		{
 			var context = new AudioContext();
 
 			if (typeof context.createGain === "function")
 			{
 				web_audio_supported = true;
+				web_audio_autoplay_disabled = context.state === "suspended";
 
 				if (typeof context.createBuffer === "function" && typeof context.createBufferSource === "function")
 				{
@@ -291,8 +294,8 @@ function detectAudioSupport()
 				}
 			}
 		}
-		catch (ex) { }
 	}
+	catch (ex) { }
 }
 function detectVibrateSupport()
 {
@@ -746,6 +749,14 @@ var defaultSettings =
 			, label: 'Jpeg Video Supersampling Factor'
 			, changeOnStep: true
 			, hint: "(Default: 1)\n\nJpeg video frames loaded by UI3 will have their dimensions scaled by this amount.\n\nLow values save bandwidth, while high values improve quality slightly."
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_web_audio_autoplay_warning"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Warn if audio playback requires user input'
+			, hint: 'When set to "Yes", a full-page overlay will appear if camera audio playback requires user input. Otherwise, the audio icon will simply turn red.'
 			, category: "Video Player"
 		}
 		, {
@@ -1812,6 +1823,8 @@ $(function ()
 	HandlePreLoadUrlParameters();
 
 	LoadDefaultSettings();
+
+	biSoundPlayer.TestUserInputRequirement();
 
 	currentPrimaryTab = ValidateTabName(settings.ui3_defaultTab);
 
@@ -11101,8 +11114,6 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	this.isMsePlayer = true;
 	this.MaxBufferedTime = 6500;
 
-	var inputRequiredOverlayIsActive = false;
-
 	var delayCompensation;
 
 	var onTimeUpdate = function (e)
@@ -11129,7 +11140,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	var onVideoError = function (e)
 	{
-		if (!inputRequiredOverlayIsActive)
+		if (!inputRequiredOverlay.IsActive())
 			playerErrorHandler(player.error.message + ": " + GetMediaErrorMessage(player.error.code));
 	}
 	var onPlayerPaused = function (e)
@@ -11277,17 +11288,11 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				if (ex.name === "NotAllowedError")
 				{
 					hasToldPlayerToPlay = false;
-					$(".inputRequiredToPlay").remove();
-					var $inputOverlay = $('<div class="inputRequiredToPlay"><div>Click anywhere to begin streaming.<br>The HTML5 player requires user input before playback can begin.</div></div>');
-					$inputOverlay.on('click', function ()
+					inputRequiredOverlay.Show("HTML5 player", function ()
 					{
-						$inputOverlay.remove();
-						inputRequiredOverlayIsActive = false;
 						player.play().then(player.pause);
 						videoPlayer.RefreshVideoStream();
 					});
-					$('body').append($inputOverlay);
-					inputRequiredOverlayIsActive = true;
 					playerErrorHandler("INPUT REQUIRED");
 				}
 				else if (acceptedFrameCount === 0)
@@ -12359,6 +12364,90 @@ var biSoundPlayer = new (function ()
 			var player = playerCache[event];
 			player.AdjustVolume(settings.ui3_eventSoundVolume);
 		}
+	}
+	this.TestUserInputRequirement = function ()
+	{
+		if ((settings.ui3_sound_motion !== "None" || settings.ui3_sound_trigger !== "None")
+			&& settings.ui3_eventSoundVolume > 0)
+		{
+			try
+			{
+				// HTML5 audio (sound effect player)
+				if (typeof Audio === "function")
+				{
+					var audio = new Audio();
+					audio.play().catch(function (ex)
+					{
+						if (ex.name === "NotAllowedError")
+						{
+							inputRequiredOverlay.Show("event-triggered sound player");
+						}
+					});
+				}
+			}
+			catch (ex) { }
+		}
+	}
+})();
+///////////////////////////////////////////////////////////////
+// Input Required Overlay /////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var inputRequiredOverlay = new (function ()
+{
+	var self = this;
+	var $inputOverlay = $('<div class="inputRequiredToPlay"><div>Click anywhere to begin streaming.<br>The <span class="inputRequiredBy">HTML5 player</span> requires user input before playback can begin.</div></div>');
+	var $inputRequiredBy = $inputOverlay.find('.inputRequiredBy');
+	var listeners = [];
+
+	var isActive = false;
+	var isCallingListeners = false;
+
+	var overlayClicked = function ()
+	{
+		self.Hide();
+		isCallingListeners = true;
+		for (var i = 0; i < listeners.length; i++)
+		{
+			try
+			{
+				listeners[i]();
+			}
+			catch (ex)
+			{
+				toaster.Warning(ex);
+			}
+		}
+		isCallingListeners = false;
+		listeners = [];
+	}
+
+	$inputOverlay.on('click', overlayClicked);
+
+	this.AddListener = function (callbackFn)
+	{
+		if (isCallingListeners)
+			return;
+		if (typeof callbackFn === "function")
+			listeners.push(callbackFn);
+	}
+	this.Show = function (name, callbackFn)
+	{
+		self.Hide();
+		self.AddListener(callbackFn);
+		$inputRequiredBy.text(name);
+		$('body').append($inputOverlay);
+		$inputOverlay.on('click', overlayClicked);
+		isActive = true;
+	}
+	this.Hide = function ()
+	{
+		$inputOverlay.off('click', overlayClicked);
+		$inputOverlay.remove();
+		isActive = false;
+	}
+	this.IsActive = function ()
+	{
+		return isActive;
 	}
 })();
 ///////////////////////////////////////////////////////////////
@@ -16130,6 +16219,8 @@ function PcmAudioPlayer()
 		if (!startedUserInputRequirement && context.currentTime === 0 && !suspended && context.state === "suspended")
 		{
 			startedUserInputRequirement = true;
+			if (settings.ui3_web_audio_autoplay_warning === "1")
+				inputRequiredOverlay.Show("audio player", HandleUserInputRequirement);
 			for (var i = 0; i < userInputRequirementEvents.length; i++)
 				document.addEventListener(userInputRequirementEvents[i], HandleUserInputRequirement);
 			volumeIconHelper.setColorError();
@@ -17024,10 +17115,16 @@ function Toaster()
 		}
 	var showToastInternal = function (type, message, showTime, closeButton, onClick)
 	{
-		if (typeof message == "object" && typeof message.message == "string" && typeof message.stack == "string")
+		if (typeof message === "object" && typeof message.message === "string" && typeof message.stack === "string")
 		{
 			console.error(type + " toast", message);
 			message = htmlEncode(message.message + ": " + message.stack);
+		}
+		else if (typeof message === "object" && typeof message.name === "string" && typeof message.message === "string" && typeof message.code === "number")
+		{
+			message = message.name + " (code " + message.code + "): " + message.message, message;
+			console.error(type + " toast", message);
+			message = htmlEncode(message);
 		}
 		else
 		{
@@ -17554,6 +17651,11 @@ function LoadingHelper()
 		for (var i = 0; i < things.length; i++)
 			if (!things[i][2])
 				return;
+		if (inputRequiredOverlay.IsActive())
+		{
+			inputRequiredOverlay.AddListener(FinishLoadingIfConditionsMet);
+			return;
+		}
 		ajaxHistoryManager = new AjaxHistoryManager();
 		loadingFinished = true;
 		$("#loadingmsgwrapper").remove();
