@@ -9443,7 +9443,7 @@ function JpegVideoModule()
 		if (loading.isLive)
 			startPaused = false;
 		Activate();
-		if (playbackControls.GetPlayReverse())
+		if (playbackControls.GetPlayReverse() && offsetPercent === 0)
 			offsetPercent = 1;
 		clipPlaybackPosition = Clamp(offsetPercent, 0, 1) * (loading.msec - 1);
 		timeLastClipFrame = Date.now();
@@ -9874,7 +9874,7 @@ function FetchH264VideoModule()
 			startPaused = false;
 		Activate();
 		lastStatusBlock = null;
-		if (playbackControls.GetPlayReverse())
+		if (playbackControls.GetPlayReverse() && offsetPercent === 0)
 			offsetPercent = 1;
 		currentSeekPositionPercent = Clamp(offsetPercent, 0, 1);
 		lastFrameAt = performance.now();
