@@ -1486,6 +1486,14 @@ var defaultSettings =
 			, category: "Camera Labels"
 		}
 		, {
+			key: "ui3_cameraLabels_singleCameras"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Show when only one camera visible'
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
 			key: "ui3_wheelZoomMethod"
 			, value: "Adjustable"
 			, inputType: "select"
@@ -8400,17 +8408,10 @@ function CameraListLoader()
 	{
 		return $.extend({}, cameraObj, {
 			optionDisplay: "+" + cameraObj.optionDisplay
-			, optionValue: cameraObj.optionValue
-			, isMotion: false
-			, isTriggered: false
 			, xsize: 1
 			, ysize: 1
-			, width: cameraObj.width
-			, height: cameraObj.height
-			, ptz: cameraObj.ptz
 			, group: []
 			, rects: []
-			, audio: cameraObj.audio
 			, isFakeGroup: true
 		});
 	}
@@ -12012,8 +12013,8 @@ function CameraNameLabels()
 			showName = showShortName = true;
 		if (!showName && !showShortName)
 			return;
-
-		if (loaded.image.isGroup)
+		
+		if (loaded.image.isGroup || settings.ui3_cameraLabels_singleCameras === "1")
 		{
 			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.actualwidth;
 			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.actualheight;
@@ -12030,10 +12031,17 @@ function CameraNameLabels()
 				fontSizePt = minScaledFontSize;
 
 			var imgPos = $camimg_wrapper.position();
-			for (var i = 0; i < loaded.cam.group.length; i++)
+			var group = loaded.cam.group;
+			var rects = loaded.cam.rects;
+			if (!group || group.length === 0)
 			{
-				var cam = cameraListLoader.GetCameraWithId(loaded.cam.group[i]);
-				var rect = loaded.cam.rects[i];
+				group = [loaded.cam.optionValue];
+				rects = [[0, 0, loaded.cam.width, loaded.cam.height]];
+			}
+			for (var i = 0; i < group.length; i++)
+			{
+				var cam = cameraListLoader.GetCameraWithId(group[i]);
+				var rect = rects[i];
 
 				// Calculate scaled/adjusted rectangle boundaries
 				var adjX = rect[0] * scaleX;
@@ -12044,9 +12052,9 @@ function CameraNameLabels()
 				// Create and style labels.
 				var $label = $('<div class="cameraNameLabel"></div>');
 				if (showName && showShortName)
-					$label.text(cam.optionDisplay + " (" + cam.optionValue + ")");
+					$label.text(CleanUpGroupName(cam.optionDisplay) + " (" + cam.optionValue + ")");
 				else if (showName)
-					$label.text(cam.optionDisplay);
+					$label.text(CleanUpGroupName(cam.optionDisplay));
 				else
 					$label.text(cam.optionValue);
 				$label.css("width", adjW + "px");
