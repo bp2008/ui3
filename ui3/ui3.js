@@ -8398,7 +8398,7 @@ function CameraListLoader()
 	}
 	var MakeFakeGroup = function (cameraObj)
 	{
-		return {
+		return $.extend({}, cameraObj, {
 			optionDisplay: "+" + cameraObj.optionDisplay
 			, optionValue: cameraObj.optionValue
 			, isMotion: false
@@ -8412,7 +8412,7 @@ function CameraListLoader()
 			, rects: []
 			, audio: cameraObj.audio
 			, isFakeGroup: true
-		};
+		});
 	}
 	this.HideWebcastingWarning = function ()
 	{
@@ -8524,6 +8524,10 @@ function CameraListLoader()
 	this.CameraIsGroupOrCamera = function (cameraObj)
 	{
 		return cameraObj.group || !cameraObj.optionValue.startsWith("@");
+	}
+	this.CameraIsAlone = function (cameraObj)
+	{
+		return cameraObj.isFakeGroup || !self.CameraIsGroupOrCycle(cameraObj);
 	}
 	this.GetLastResponse = function ()
 	{
@@ -8797,7 +8801,7 @@ function VideoPlayerController()
 		var camData = currentlyLoadedCamera;
 		if (camData)
 		{
-			if (camData.group)
+			if (camData.group && camData.rects.length > 0)
 			{
 				for (var j = 0; j < camData.rects.length; j++)
 				{
@@ -13522,7 +13526,7 @@ function CanvasContextMenu()
 	var onShowLiveContextMenu = function (menu)
 	{
 		var itemsToDisable = ["cameraname"];
-		if (lastLiveContextMenuSelectedCamera == null || cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
+		if (lastLiveContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
 		{
 			itemsToDisable = itemsToDisable.concat(["trigger", "record", "snapshot", "maximize", "restart", "properties"]);
 			menu.applyrule(
@@ -13534,6 +13538,8 @@ function CanvasContextMenu()
 		}
 		else
 		{
+			if (lastLiveContextMenuSelectedCamera.isFakeGroup)
+				itemsToDisable.push("maximize");
 			menu.applyrule(
 				{
 					name: "disable_cameraname",
@@ -13581,37 +13587,37 @@ function CanvasContextMenu()
 		switch (this.data.alias)
 		{
 			case "maximize":
-				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
 					toaster.Warning("Function is unavailable.");
 				else
 					videoPlayer.ImgClick_Camera(lastLiveContextMenuSelectedCamera);
 				break;
 			case "trigger":
-				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
 					toaster.Warning("You cannot trigger cameras that are part of an auto-cycle.");
 				else
 					TriggerCamera(lastLiveContextMenuSelectedCamera.optionValue);
 				break;
 			case "record":
-				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
 					toaster.Warning("You cannot toggle recording of cameras that are part of an auto-cycle.");
 				else
 					ManualRecordCamera(lastLiveContextMenuSelectedCamera.optionValue, $("#manRecBtnLabel").attr("start"));
 				break;
 			case "snapshot":
-				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
 					toaster.Warning("You cannot save a snapshot of cameras that are part of an auto-cycle.");
 				else
 					SaveSnapshotInBlueIris(lastLiveContextMenuSelectedCamera.optionValue);
 				break;
 			case "restart":
-				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
 					toaster.Warning("You cannot restart cameras that are part of an auto-cycle.");
 				else
 					ResetCamera(lastLiveContextMenuSelectedCamera.optionValue);
 				break;
 			case "properties":
-				if (cameraListLoader.CameraIsGroupOrCycle(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
 					toaster.Warning("You cannot view properties of cameras that are part of an auto-cycle.");
 				else
 					new CameraProperties(lastLiveContextMenuSelectedCamera.optionValue);
@@ -14570,7 +14576,7 @@ function CameraProperties(camId)
 						$camprop.append(collapsible.$heading);
 						var $infoSection = collapsible.$section;
 						$infoSection.append(GetInfo("ID", cam.optionValue));
-						$infoSection.append(GetInfo("Name", cam.optionDisplay));
+						$infoSection.append(GetInfo("Name", CleanUpGroupName(cam.optionDisplay)));
 						$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
 						$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + " @ " + cam.FPS + " FPS"));
 						$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
@@ -15509,7 +15515,7 @@ function LoadDynamicManualRecordingButtonState(camData)
 	$("#manRecBtnLabel").text("Toggle Recording");
 	$("#manRecBtnLabel").removeAttr("start");
 
-	if (!cameraListLoader.CameraIsGroupOrCycle(camData))
+	if (cameraListLoader.CameraIsAlone(camData))
 	{
 		UpdateManRecButtonState(camData.optionValue);
 		cameraListLoader.LoadCameraList(function (camList)
