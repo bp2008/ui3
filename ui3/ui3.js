@@ -12020,8 +12020,8 @@ function CameraNameLabels()
 
 		if (loaded.image.isGroup || settings.ui3_cameraLabels_singleCameras === "1")
 		{
-			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.actualwidth;
-			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.actualheight;
+			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.fullwidth;
+			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.fullheight;
 			var offsetCamHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Below;
 			var offsetNegativeLabelHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Above || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom;
 
