@@ -956,6 +956,14 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_hotkey_toggleMute"
+			, value: "1|0|0|77" // 77: M
+			, hotkey: true
+			, label: "Toggle Camera Mute"
+			, actionDown: BI_Hotkey_ToggleMute
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_hotkey_nextCamera"
 			, value: "0|0|0|190" // 190: . (period)
 			, hotkey: true
@@ -1920,11 +1928,7 @@ $(function ()
 		}
 		pcmPlayer.SetVolume(newVolume);
 	});
-	statusBars.addLabelClickHandler("volume", function ()
-	{
-		settings.ui3_audioMute = (settings.ui3_audioMute == "1" ? "0" : "1");
-		pcmPlayer.SetAudioVolumeFromSettings();
-	});
+	statusBars.addLabelClickHandler("volume", CameraAudioMuteToggle);
 	pcmPlayer.SetAudioVolumeFromSettings();
 
 	dropdownBoxes = new DropdownBoxes();
@@ -12013,7 +12017,7 @@ function CameraNameLabels()
 			showName = showShortName = true;
 		if (!showName && !showShortName)
 			return;
-		
+
 		if (loaded.image.isGroup || settings.ui3_cameraLabels_singleCameras === "1")
 		{
 			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.actualwidth;
@@ -16282,6 +16286,14 @@ function FakeAudioContext_Dummy()
 	this.suspend = function () { }
 	this.resume = function () { }
 }
+function CameraAudioMuteToggle()
+{
+	settings.ui3_audioMute = (settings.ui3_audioMute == "1" ? "0" : "1");
+	if (settings.ui3_audioMute === "0" && parseFloat(settings.ui3_audioVolume) === 0)
+		settings.ui3_audioVolume = 1;
+	if (pcmPlayer)
+		pcmPlayer.SetAudioVolumeFromSettings();
+}
 ///////////////////////////////////////////////////////////////
 // Volume Icon Helper /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -16658,6 +16670,10 @@ function BI_Hotkey_Toggle_Camera_Labels()
 function BI_Hotkey_DownloadFrame()
 {
 	$("#save_snapshot_btn").get(0).click();
+}
+function BI_Hotkey_ToggleMute()
+{
+	CameraAudioMuteToggle();
 }
 function BI_Hotkey_NextCamera()
 {
