@@ -25,7 +25,14 @@
 				if (typeof bi_version != "undefined")
 					biVersionStr = bi_version;
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
-				alert("An unexpected error has occurred in " + location.pathname + " (v " + uiVersionStr + " / " + biVersionStr + "). A full refresh may solve the problem (CTRL + F5). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent);
+				var errStr = "An unexpected error has occurred in " + location.pathname + " (v " + uiVersionStr + " / " + biVersionStr + "). A full refresh may solve the problem (CTRL + F5). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent;
+				try
+				{
+					if (toaster)
+						toaster.Error(errStr, 600000);
+				}
+				catch (ex) { }
+				alert(errStr);
 			}
 			catch (ex)
 			{
@@ -34,7 +41,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "50";
+		var ui_version = "51";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))

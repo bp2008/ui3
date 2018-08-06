@@ -3689,6 +3689,11 @@ body + div
 	padding: 4px 10px;
 }
 
+.settingDesc
+{
+	font-size: 0.85em;
+}
+
 .dialogOptionPanel .customCheckboxWrapper label
 {
 	display: block;

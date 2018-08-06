@@ -358,7 +358,6 @@ var nerdStats = null;
 var sessionTimeout = null;
 
 var currentPrimaryTab = "";
-var skipTabLoadClipLoad = false;
 
 var togglableUIFeatures =
 	[
@@ -715,7 +714,7 @@ var defaultSettings =
 			, inputType: "number"
 			, minValue: -1
 			, maxValue: 8192
-			, label: "Maximum H.264 Kbps (10-8192, disabled if less than 10)"
+			, label: 'Maximum H.264 Kbps<div class="settingDesc">(10-8192, disabled if less than 10)</div>'
 			, hint: "Useful for slow connections. Audio streams are not affected by this setting."
 			, onChange: OnChange_ui3_streamingProfileBitRateMax
 			, preconditionFunc: Precondition_ui3_streamingProfileBitRateMax
@@ -1611,6 +1610,13 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
+			key: "ui3_openFirstRecording"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Automatically Open First Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
+			, category: "Extra"
+		}
+		, {
 			key: "ui3_system_name_button"
 			, value: "About This UI"
 			, inputType: "select"
@@ -1735,7 +1741,6 @@ function GetDummyLocalStorage()
 		{
 			return (dummy[key] = value);
 		};
-		AttachDefaultSettingsProperties(dummy);
 		localStorageDummy = dummy;
 	}
 	return localStorageDummy;
@@ -1887,10 +1892,12 @@ $(function ()
 			//$("#layoutbottom").show();
 			$("#recordingsFilterByHeading").text("Filter " + tabDisplayName + " by:");
 		}
-		if (skipTabLoadClipLoad)
-			skipTabLoadClipLoad = false;
-		else
-			BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
+
+		if (settings.ui3_openFirstRecording === "1")
+			clipLoader.OpenFirstRecordingAfterNextClipListLoad();
+
+		BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
+
 		resized();
 	});
 	BI_CustomEvent.AddListener("TabLoaded_live", function () { videoPlayer.goLive(); });
@@ -2024,8 +2031,6 @@ $(function ()
 	sessionManager.Initialize();
 
 	$(window).resize(resized);
-	if (currentPrimaryTab == "alerts" || currentPrimaryTab == "clips")
-		skipTabLoadClipLoad = true; // Prevent one clip load, to keep from loading twice.
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
 
 	BI_CustomEvent.Invoke("UI_Loading_End");
@@ -5659,6 +5664,8 @@ function ClipLoader(clipsBodySelector)
 	}
 	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly)
 	{
+		if (!videoPlayer.Loading().cam)
+			return; // UI hasn't loaded far enough yet.
 		if ((currentPrimaryTab != "clips" && currentPrimaryTab != "alerts") || self.suppressClipListLoad)
 		{
 			QueuedClipListLoad = null;
@@ -6389,6 +6396,37 @@ function ClipLoader(clipsBodySelector)
 			return true;
 		}
 		return false;
+	}
+	this.OpenFirstRecordingAfterNextClipListLoad = function ()
+	{
+		BI_CustomEvent.AddListener("ClipList_Loaded", openFirstRecordingCallback);
+	}
+	var openFirstRecordingCallback = function (response)
+	{
+		BI_CustomEvent.RemoveListener("ClipList_Loaded", openFirstRecordingCallback);
+		self.OpenFirstRecording();
+	}
+	var openFirstRecordingAfterUILoadCallback = function (response)
+	{
+		BI_CustomEvent.RemoveListener("FinishedLoading", openFirstRecordingAfterUILoadCallback);
+		self.OpenFirstRecording();
+	}
+	this.OpenFirstRecording = function ()
+	{
+		if (!loadingHelper.DidLoadingFinish())
+		{
+			BI_CustomEvent.AddListener("FinishedLoading", openFirstRecordingAfterUILoadCallback);
+			return;
+		}
+		if (loadedClipIds.length === 0)
+			return;
+
+		var recId = loadedClipIds[0];
+		var clipData = self.GetClipFromId(recId);
+		self.ScrollClipList(clipData.y, getClipTileHeight());
+		var $ele = $("#c" + recId);
+		if ($ele.length > 0)
+			self.OpenClip($ele.get(0), recId, true);
 	}
 	this.OpenClip = function (clipEle, recId, alsoLoadClip)
 	{
@@ -8927,10 +8965,7 @@ function VideoPlayerController()
 		ptzButtons.UpdatePtzControlDisplayState();
 		dropdownBoxes.setLabelText("currentGroup", CleanUpGroupName(clc.optionDisplay));
 
-		if (skipTabLoadClipLoad)
-			skipTabLoadClipLoad = false;
-		else
-			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
+		clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
 
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (playerModule)
