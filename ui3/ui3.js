@@ -8622,9 +8622,9 @@ function VideoPlayerController()
 
 	this.CurrentPlayerModuleName = function ()
 	{
-		if (playerModule == moduleHolder["jpeg"])
+		if (playerModule === moduleHolder["jpeg"])
 			return "jpeg";
-		else if (playerModule == moduleHolder["h264"])
+		else if (playerModule === moduleHolder["h264"])
 			return "h264";
 		return "none";
 	}
@@ -8639,7 +8639,7 @@ function VideoPlayerController()
 		var paused = false;
 		if (playerModule != null)
 		{
-			if (playerModule == moduleHolder[moduleName])
+			if (playerModule === moduleHolder[moduleName])
 				return;
 			position = playerModule.GetSeekPercent();
 			paused = playerModule.Playback_IsPaused();
@@ -8669,11 +8669,11 @@ function VideoPlayerController()
 	}
 	this.PreLoadPlayerModules = function ()
 	{
-		if (moduleHolder["jpeg"] == null)
+		if (!moduleHolder["jpeg"])
 			moduleHolder["jpeg"] = new JpegVideoModule();
 		if (h264_playback_supported)
 		{
-			if (moduleHolder["h264"] == null)
+			if (!moduleHolder["h264"])
 				moduleHolder["h264"] = new FetchH264VideoModule();
 		}
 		else
@@ -8697,9 +8697,9 @@ function VideoPlayerController()
 			{
 				// Called when page visibility changes.
 				var visibleNow = !documentIsHidden();
-				if (moduleHolder["jpeg"] != null)
+				if (moduleHolder["jpeg"])
 					moduleHolder["jpeg"].VisibilityChanged(visibleNow);
-				if (moduleHolder["h264"] != null)
+				if (moduleHolder["h264"])
 					moduleHolder["h264"].VisibilityChanged(visibleNow);
 			});
 		}
@@ -8762,12 +8762,12 @@ function VideoPlayerController()
 	}
 	var IsDoubleClickFullscreenEnabled = function ()
 	{
-		if (settings.ui3_doubleClick_behavior == "Both")
+		if (settings.ui3_doubleClick_behavior === "Both")
 			return true;
 		if (currentlyLoadingImage.isLive)
-			return settings.ui3_doubleClick_behavior == "Live View"
+			return settings.ui3_doubleClick_behavior === "Live View"
 		else
-			return settings.ui3_doubleClick_behavior == "Recordings"
+			return settings.ui3_doubleClick_behavior === "Recordings"
 	}
 	// Methods for querying what is currently playing
 	this.Loading = function ()
@@ -8780,7 +8780,7 @@ function VideoPlayerController()
 	}
 	this.GetExpectedFrameIntervalOfCurrentCamera = function ()
 	{
-		if (typeof currentlyLoadingCamera.FPS == "number")
+		if (typeof currentlyLoadingCamera.FPS === "number")
 			return 1000 / currentlyLoadingCamera.FPS;
 		else
 			return 100;
@@ -12135,13 +12135,19 @@ var videoOverlayHelper = new (function ()
 	var loadingAnimHidden = true;
 	var falseLoadingOverlayHidden = true;
 	var overlayIsLessIntense = false;
+	var $loadingOverlay = $("#camimg_loading");
+	var $loadingAnim = $("#camimg_loading_anim");
+	var $falseLoadingOverlay = $("#camimg_false_loading");
+	var $tempPlayIcon = $("#camimg_playIcon,#camimg_centerIconBackground");
+	var $tempPauseIcon = $("#camimg_pauseIcon,#camimg_centerIconBackground");
+	var $temporaryIcons = $("#camimg_playIcon,#camimg_pauseIcon,#camimg_centerIconBackground");
 
 	this.HideLoadingOverlay = function ()
 	{
 		if (!loadingOverlayHidden)
 		{
 			loadingOverlayHidden = true;
-			$("#camimg_loading").addClass('hidden').removeClass('visible');
+			$loadingOverlay.addClass('hidden').removeClass('visible');
 		}
 		self.HideLoadingAnimation();
 	}
@@ -12150,7 +12156,7 @@ var videoOverlayHelper = new (function ()
 		if (!loadingAnimHidden)
 		{
 			loadingAnimHidden = true;
-			$("#camimg_loading_anim").addClass('hidden').removeClass('visible');
+			$loadingAnim.addClass('hidden').removeClass('visible');
 		}
 	}
 	this.ShowLoadingOverlay = function (showAnimation, lessIntenseOverlay)
@@ -12158,12 +12164,12 @@ var videoOverlayHelper = new (function ()
 		if (loadingOverlayHidden)
 		{
 			loadingOverlayHidden = false;
-			$("#camimg_loading").removeClass('hidden').addClass('visible');
+			$loadingOverlay.removeClass('hidden').addClass('visible');
 		}
 		if (lessIntenseOverlay && !overlayIsLessIntense)
-			$("#camimg_loading").addClass("lessIntense");
+			$loadingOverlay.addClass("lessIntense");
 		else if (!lessIntenseOverlay && overlayIsLessIntense)
-			$("#camimg_loading").removeClass("lessIntense");
+			$loadingOverlay.removeClass("lessIntense");
 		if (showAnimation)
 			self.ShowLoadingAnimation();
 		else
@@ -12174,7 +12180,7 @@ var videoOverlayHelper = new (function ()
 		if (loadingAnimHidden)
 		{
 			loadingAnimHidden = false;
-			$("#camimg_loading_anim").removeClass('hidden').addClass('visible');
+			$loadingAnim.removeClass('hidden').addClass('visible');
 		}
 	}
 	this.HideFalseLoadingOverlay = function ()
@@ -12182,7 +12188,7 @@ var videoOverlayHelper = new (function ()
 		if (!falseLoadingOverlayHidden)
 		{
 			falseLoadingOverlayHidden = true;
-			$("#camimg_false_loading").addClass('hidden').removeClass('visible');
+			$falseLoadingOverlay.addClass('hidden').removeClass('visible');
 		}
 	}
 	this.ShowFalseLoadingOverlay = function ()
@@ -12190,18 +12196,18 @@ var videoOverlayHelper = new (function ()
 		if (falseLoadingOverlayHidden)
 		{
 			falseLoadingOverlayHidden = false;
-			$("#camimg_false_loading").removeClass('hidden').addClass('visible');
+			$falseLoadingOverlay.removeClass('hidden').addClass('visible');
 		}
 	}
 	this.ShowTemporaryPlayIcon = function (duration)
 	{
 		self.HideTemporaryIcons();
-		fadeIcons($("#camimg_playIcon,#camimg_centerIconBackground"), duration);
+		fadeIcons($tempPlayIcon, duration);
 	}
 	this.ShowTemporaryPauseIcon = function (duration)
 	{
 		self.HideTemporaryIcons();
-		fadeIcons($("#camimg_pauseIcon,#camimg_centerIconBackground"), duration);
+		fadeIcons($tempPauseIcon, duration);
 	}
 	var fadeIcons = function ($icons, duration)
 	{
@@ -12211,7 +12217,7 @@ var videoOverlayHelper = new (function ()
 	}
 	this.HideTemporaryIcons = function ()
 	{
-		$("#camimg_playIcon,#camimg_pauseIcon,#camimg_centerIconBackground").stop(true, true);
+		$temporaryIcons.stop(true, true);
 	}
 })();
 ///////////////////////////////////////////////////////////////
@@ -13601,6 +13607,7 @@ function CanvasContextMenu()
 			return false;
 
 		videoPlayer.suppressMouseHelper();
+		videoOverlayHelper.HideFalseLoadingOverlay();
 
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
@@ -13737,6 +13744,8 @@ function CanvasContextMenu()
 			return false;
 
 		videoPlayer.suppressMouseHelper();
+		videoOverlayHelper.HideFalseLoadingOverlay();
+		videoOverlayHelper.HideTemporaryIcons();
 
 		var clipData = lastRecordContextMenuSelectedClip = clipLoader.GetClipFromId(videoPlayer.Loading().image.uniqueId);
 		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
@@ -19123,16 +19132,27 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		cbDragMove = function () { };
 	if (typeof cbDragEnd != "function")
 		cbDragEnd = function () { };
-	var callCB = function (cb)
+	var callCBTimeout = null;
+	var callCB = function (cb, delay, e, confirmed)
 	{
-		var saveArgs = new Array(arguments.length - 1);
-		for (var i = 1; i < arguments.length; i++)
-			saveArgs[i - 1] = arguments[i];
-		setTimeout(function ()
+		var saveArgs = new Array(arguments.length - 2);
+		for (var i = 2; i < arguments.length; i++)
+			saveArgs[i - 2] = arguments[i];
+		var execute = function ()
 		{
+			callCBTimeout = null;
 			if (!lastMouseUp1.Excluded)
 				cb.apply(self, saveArgs);
-		}, 0);
+		};
+		if (callCBTimeout)
+		{
+			clearTimeout(callCBTimeout);
+			callCBTimeout = null;
+		}
+		if (delay)
+			callCBTimeout = setTimeout(execute, 0);
+		else
+			execute();
 	}
 	if (!doubleClickTimeMS || doubleClickTimeMS < 0)
 		doubleClickTimeMS = 300;
@@ -19199,10 +19219,10 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		if (e.which == 3)
+		if (e.which === 3)
 			return;
 		handleExcludeFunc(e);
-		if (lastEvent == 1)
+		if (lastEvent === 1)
 			RecordMouseEvent(2, e); // Inject mouse up event that the browser likely missed.
 		RecordMouseEvent(1, e);
 		if (!excludeDragStart)
@@ -19213,7 +19233,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		if (e.which == 3)
+		if (e.which === 3)
 			return;
 		handleExcludeFunc(e);
 		var fakeMouseDown = lastEvent == 2;
@@ -19226,7 +19246,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			return;
 		// A single click has occurred.
 		if (!fakeMouseDown)
-			callCB(cbOnSingleClick, e, false);
+			callCB(cbOnSingleClick, touchEvents.isTouchEvent(e), e, false);
 		if (lastMouseUp1.Time - lastMouseUp2.Time < doubleClickTimeMS
 			&& lastMouseUp1.Time - lastMouseDown2.Time < doubleClickTimeMS
 			&& lastMouseUp2.Time - lastMouseDown2.Time < doubleClickTimeMS
@@ -19238,7 +19258,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		{
 			clearTimeout(singleClickTimeout);
 			singleClickTimeout = null;
-			callCB(cbOnDoubleClick, e);
+			callCB(cbOnDoubleClick, false, e);
 		}
 		else if (!fakeMouseDown)
 		{
@@ -19248,6 +19268,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 				// In this case, the previously unconfirmed click gets confirmed early.
 				// A typical way this could happen is if the mouse moved between clicks.
 				clearTimeout(singleClickTimeout);
+				singleClickTimeout = null;
 				if (singleClickFunction)
 					singleClickFunction();
 			}
@@ -19291,12 +19312,12 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	var RecordMouseEvent = function (eventType, e)
 	{
 		var src, dst;
-		if (eventType == 1)
+		if (eventType === 1)
 		{
 			src = lastMouseDown1;
 			dst = lastMouseDown2;
 		}
-		else if (eventType == 2)
+		else if (eventType === 2)
 		{
 			src = lastMouseUp1;
 			dst = lastMouseUp2;
@@ -19332,6 +19353,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		/// <summary>Sets the Excluded flag on all logged mouse events, causing them to not count toward clicks or double clicks.</summary>
 		lastMouseUp1.Excluded = lastMouseUp2.Excluded = lastMouseDown1.Excluded = lastMouseDown2.Excluded = true;
 		excludeNextEvent = invalidateNextEvent;
+		clearTimeout(singleClickTimeout);
+		singleClickTimeout = null;
 	}
 	this.getDoubleClickTime = function ()
 	{
