@@ -5662,6 +5662,16 @@ function ClipLoader(clipsBodySelector)
 		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
 		loadClipsInternal(null, lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true);
 	}
+	this.LoadClipsRange = function (listName, camFilter, dateBegin, dateEnd)
+	{
+		if (!camFilter)
+		{
+			var loading = videoPlayer.Loading();
+			if (loading.image && loading.image.isLive)
+				camFilter = loading.image.id;
+		}
+		loadClipsInternal(listName, camFilter, dateBegin, dateEnd, false, false, null, false);
+	}
 	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly)
 	{
 		if (!videoPlayer.Loading().cam)
@@ -5890,7 +5900,12 @@ function ClipLoader(clipsBodySelector)
 						self.LoadClips();
 						return;
 					}
-					myDateEnd = response.data[response.data.length - 1].date;
+					for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
+						if (typeof response.data[i].newalerts === "undefined")
+						{
+							myDateEnd = response.data[i].date;
+							break;
+						}
 					$("#clipListDateRange").html("&nbsp;Remaining to load:<br/>&nbsp;&nbsp;&nbsp;" + parseInt((myDateEnd - myDateStart) / 86400) + " days");
 					$.CustomScroll.callMeOnContainerResize();
 					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate, flaggedOnly);
