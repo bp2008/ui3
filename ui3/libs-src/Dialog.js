@@ -32,7 +32,7 @@ var $DialogDefaults = { theme: "light" };
 		this.$closebtn = $("");
 		this.$refreshbtn = $("");
 
-		var myId = idAutoIncrement;
+		var myId = idAutoIncrement++;
 		var isOpen = false;
 		var mouseMem = { offsetX: 0, offsetY: 0, down: false, originalX: 0, originalY: 0 };
 		this.settings = $.extend(
