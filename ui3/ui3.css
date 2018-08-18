@@ -1781,8 +1781,6 @@ div.invisibleLabel
 	position: absolute;
 	text-align: center;
 	pointer-events: none;
-	background-color: #000000;
-	color: #FFFFFF;
 }
 /* Clips */
 .clipListText

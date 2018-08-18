@@ -1446,6 +1446,22 @@ var defaultSettings =
 			, category: "Camera Labels"
 		}
 		, {
+			key: "ui3_cameraLabels_multiCameras"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Label multi-camera streams'
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_singleCameras"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Label single-camera streams'
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
 			key: "ui3_cameraLabels_text"
 			, value: CameraLabelTextValues.Name
 			, inputType: "select"
@@ -1485,19 +1501,53 @@ var defaultSettings =
 			, category: "Camera Labels"
 		}
 		, {
-			key: "ui3_cameraLabels_cameraColor"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: 'Use Camera Color'
+			key: "ui3_cameraLabels_backgroundColor"
+			, value: "#000000"
+			, inputType: "color"
+			, label: 'Background Color'
 			, onChange: onui3_cameraLabelsChanged
 			, category: "Camera Labels"
 		}
 		, {
-			key: "ui3_cameraLabels_singleCameras"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Show when only one camera visible'
+			key: "ui3_cameraLabels_textColor"
+			, value: "#FFFFFF"
+			, inputType: "color"
+			, label: 'Text Color'
 			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_cameraColor"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Use Camera Color<div class="settingDesc">(ignore colors set above)</div>'
+			, onChange: onui3_cameraLabelsChanged
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_backgroundOpacity"
+			, value: 100
+			, minValue: 0
+			, maxValue: 100
+			, step: 1
+			, unitLabel: "%"
+			, inputType: "range"
+			, label: 'Background Opacity'
+			, onChange: onui3_cameraLabelsChanged
+			, changeOnStep: true
+			, category: "Camera Labels"
+		}
+		, {
+			key: "ui3_cameraLabels_textOpacity"
+			, value: 100
+			, minValue: 0
+			, maxValue: 100
+			, step: 1
+			, unitLabel: "%"
+			, inputType: "range"
+			, label: 'Text Opacity'
+			, onChange: onui3_cameraLabelsChanged
+			, changeOnStep: true
 			, category: "Camera Labels"
 		}
 		, {
@@ -12068,7 +12118,7 @@ function CameraNameLabels()
 		if (!showName && !showShortName)
 			return;
 
-		if (loaded.image.isGroup || settings.ui3_cameraLabels_singleCameras === "1")
+		if ((loaded.image.isGroup && settings.ui3_cameraLabels_multiCameras === "1") || (!loaded.image.isGroup && settings.ui3_cameraLabels_singleCameras === "1"))
 		{
 			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.fullwidth;
 			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.fullheight;
@@ -12112,11 +12162,22 @@ function CameraNameLabels()
 				else
 					$label.text(cam.optionValue);
 				$label.css("width", adjW + "px");
+				var bgOpacity = PercentTo01Float(settings.ui3_cameraLabels_backgroundOpacity);
+				var textOpacity = PercentTo01Float(settings.ui3_cameraLabels_textOpacity);
 				if (settings.ui3_cameraLabels_cameraColor == "1")
 				{
 					var colorHex = BlueIrisColorToCssColor(cam.color);
-					$label.css("background-color", "#" + colorHex);
-					$label.css("color", "#" + GetReadableTextColorHexForBackgroundColorHex(colorHex));
+					var colorRgba = HexColorToRgbaColor(colorHex, bgOpacity);
+					$label.css("background-color", colorRgba);
+					colorRgba = HexColorToRgbaColor(GetReadableTextColorHexForBackgroundColorHex(colorHex), textOpacity);
+					$label.css("color", colorRgba);
+				}
+				else
+				{
+					var bg = HexColorToRgbObj(settings.ui3_cameraLabels_backgroundColor);
+					var tx = HexColorToRgbObj(settings.ui3_cameraLabels_textColor);
+					$label.css("background-color", "rgba(" + bg.r + "," + bg.g + "," + bg.b + "," + bgOpacity + ")");
+					$label.css("color", "rgba(" + tx.r + "," + tx.g + "," + tx.b + "," + textOpacity + ")");
 				}
 				$label.css("font-size", fontSizePt + "pt");
 				$label.css("left", (adjX + imgPos.left) + "px");
@@ -19532,6 +19593,11 @@ function UISettingsPanel()
 					var comment = typeof s.comment === "function" ? s.comment() : s.comment;
 					$row.append(GetDialogOptionLabel(comment));
 				}
+				else if (s.inputType === "text" || s.inputType === "color")
+				{
+					formFields.onChange = TextChanged;
+					$row.append(UIFormField(formFields));
+				}
 				cat.$section.append($row);
 			}
 		}
@@ -19715,6 +19781,11 @@ function UISettingsPanel()
 	var NumberChanged = function (e, s, $input)
 	{
 		settings.setItem(s.key, parseFloat($input.val()));
+		CallOnChangeCallback(s);
+	}
+	var TextChanged = function (e, s, $input)
+	{
+		settings.setItem(s.key, $input.val());
 		CallOnChangeCallback(s);
 	}
 	var HandleHotkeyChange = function (e, s, $input)
@@ -20474,13 +20545,22 @@ function BlueIrisColorToCssColor(biColor)
 	var colorHex = biColor.toString(16).padLeft(8, '0').substr(2);
 	return colorHex.substr(4, 2) + colorHex.substr(2, 2) + colorHex.substr(0, 2);
 }
+function HexColorToRgbObj(c)
+{
+	if (c.startsWith('#'))
+		c = c.substr(1);
+	return { r: parseInt(c.substr(0, 2), 16), g: parseInt(c.substr(2, 2), 16), b: parseInt(c.substr(4, 2), 16) };
+}
+function HexColorToRgbaColor(c, alpha)
+{
+	c = HexColorToRgbObj(c);
+	return "rgba(" + c.r + "," + c.g + "," + c.b + "," + alpha + ")";
+}
 function GetReadableTextColorHexForBackgroundColorHex(c, dark, light)
 {
 	/// <summary>Returns a hex color not including "#", such as "222222" or "DDDDDD".</summary>
-	var r = parseInt(c.substr(0, 2), 16);
-	var g = parseInt(c.substr(2, 2), 16);
-	var b = parseInt(c.substr(4, 2), 16);
-	var o = Math.round(((r * 299) + (g * 587) + (b * 114)) / 1000);
+	c = HexColorToRgbObj(c);
+	var o = Math.round(((c.r * 299) + (c.g * 587) + (c.b * 114)) / 1000);
 	if (o > 125)
 	{
 		if (dark)
@@ -20495,6 +20575,14 @@ function GetReadableTextColorHexForBackgroundColorHex(c, dark, light)
 		else
 			return "DDDDDD";
 	}
+}
+function hslToRgb(h, s, l) { if (0 == s) l = s = h = l; else { var f = function (l, s, c) { 0 > c && (c += 1); 1 < c && --c; return c < 1 / 6 ? l + 6 * (s - l) * c : .5 > c ? s : c < 2 / 3 ? l + (s - l) * (2 / 3 - c) * 6 : l }, e = .5 > l ? l * (1 + s) : l + s - l * s, g = 2 * l - e; l = f(g, e, h + 1 / 3); s = f(g, e, h); h = f(g, e, h - 1 / 3) } return [255 * l, 255 * s, 255 * h] };
+function PercentTo01Float(s, defaultValue)
+{
+	s = parseFloat(s) / 100;
+	if (typeof s === 'undefined' || isNaN(s))
+		s = defaultValue;
+	return Clamp(s, 0, 1);
 }
 function stopDefault(e)
 {
