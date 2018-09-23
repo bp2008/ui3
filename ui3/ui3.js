@@ -11744,7 +11744,6 @@ function ClearCanvas(canvas)
 			contextGl.clear(contextGl.COLOR_BUFFER_BIT);
 	}
 }
-var TESTVAR = false;
 function ImageRenderer()
 {
 	var self = this;
@@ -11841,9 +11840,6 @@ function ImageRenderer()
 		var imgDrawWidth = widthForSizing * self.zoomHandler.GetZoomFactor();
 		var imgDrawHeight = heightForSizing * self.zoomHandler.GetZoomFactor();
 		var aspectRatio = imgForSizing.actualwidth / imgForSizing.actualheight;
-		console.log("ImgResized", aspectRatio, imgForSizing.aspectratio);
-		if (TESTVAR)
-			aspectRatio = imgForSizing.aspectratio;
 		if (imgDrawWidth === 0)
 		{
 			imgDrawWidth = imgAvailableWidth;
