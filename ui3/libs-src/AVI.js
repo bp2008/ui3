@@ -1,4 +1,5 @@
-﻿// This class is a crude AVI encoder written for UI3.  It requires the custom JavaScript "Queue" class to be defined.
+﻿/* eslint no-extra-parens: 0 */
+// This class is a crude AVI encoder written for UI3.  It requires the custom JavaScript "Queue" class to be defined.
 // Available under the same license as UI3: GNU LESSER GENERAL PUBLIC LICENSE, Version 3
 function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* WaveFormatEx header */)
 {
@@ -47,7 +48,7 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 
 			if (this.data)
 			{
-				if (typeof this.data.SerializeToGhettoStream == "function")
+				if (typeof this.data.SerializeToGhettoStream === "function")
 				{
 					// Now we need to count how big our size is.
 					var initialStreamSize = stream.Count();
@@ -63,9 +64,9 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 				WriteUInt32LE(sizeArray, this.dwSize, { offset: 0 });
 			}
 
-			if (this.dwSize % 2 == 1)
+			if (this.dwSize % 2 === 1)
 				stream.Write(new Uint8Array(1));
-		}
+		};
 	}
 	// LIST is just a chunk where the first 4 bytes of the data section are kept separately from the byte array.
 	function LIST(fourCC, listType)
@@ -136,9 +137,9 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 			this.dwSize = stream.Count() - initialStreamSize;
 			WriteUInt32LE(sizeArray, this.dwSize, { offset: 0 });
 
-			if (this.dwSize % 2 == 1)
+			if (this.dwSize % 2 === 1)
 				stream.Write(new Uint8Array(1));
-		}
+		};
 	}
 
 	function MainAVIHeader() // This object represents a chunk with fourCC 'avih'
@@ -179,18 +180,18 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 			WriteUInt32LE(buf, this.dwReserved2, offsetWrapper);
 			WriteUInt32LE(buf, this.dwReserved3, offsetWrapper);
 			stream.Write(buf);
-		}
+		};
 	}
 	var HeaderFlags =
-		{
-			AVIF_HASINDEX: 16  // The file has an index
-			, AVIF_MUSTUSEINDEX: 32 // The order of video and audio chunks must be replayed in the order specified by the index (which may differ from the order in the file).
-			, AVIF_ISINTERLEAVED: 256 // The streams are interleaved into each other
-			, AVIF_WASCAPTUREFILE: 65536 // The file was captured (significance unknown).
-			, AVIF_COPYRIGHTED: 131072 // Ignore
-			, AVIF_TRUSTCKTYPE: 2048 // This flag indicates that the keyframe flags in the index are reliable. If this flag is not set in an Open-DML file, the keyframe flags could be defective without technically rendering the file invalid.
+	{
+		AVIF_HASINDEX: 16  // The file has an index
+		, AVIF_MUSTUSEINDEX: 32 // The order of video and audio chunks must be replayed in the order specified by the index (which may differ from the order in the file).
+		, AVIF_ISINTERLEAVED: 256 // The streams are interleaved into each other
+		, AVIF_WASCAPTUREFILE: 65536 // The file was captured (significance unknown).
+		, AVIF_COPYRIGHTED: 131072 // Ignore
+		, AVIF_TRUSTCKTYPE: 2048 // This flag indicates that the keyframe flags in the index are reliable. If this flag is not set in an Open-DML file, the keyframe flags could be defective without technically rendering the file invalid.
 
-		};
+	};
 	function AVIStreamHeader() // 'strh'
 	{
 		// Prefix 'fcc' is FOURCC (4 bytes)
@@ -241,13 +242,13 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 			WriteUInt16LE(buf, this.rcFrameRight, offsetWrapper);
 			WriteUInt16LE(buf, this.rcFrameBottom, offsetWrapper);
 			stream.Write(buf);
-		}
+		};
 	}
 	var StreamHeaderFlags =
-		{
-			AVISF_DISABLED: 1 // Stream should not be activated by default (I guess for foreign languages and stuff).  Not used by this encoder.
-			, AVISF_VIDEO_PALCHANGES: 65536 // Stream is a video stream using palettes where the palette is changing during playback.  Not used by this encoder.
-		}
+	{
+		AVISF_DISABLED: 1 // Stream should not be activated by default (I guess for foreign languages and stuff).  Not used by this encoder.
+		, AVISF_VIDEO_PALCHANGES: 65536 // Stream is a video stream using palettes where the palette is changing during playback.  Not used by this encoder.
+	};
 	//function RECT()
 	//{
 	//	// Each field in this structure is 16 bit signed integer, despite being a 32 bit signed "LONG" types in the original RECT struct. Idiocy.
@@ -277,7 +278,7 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 				item.SerializeToUint8Array(buf, offsetWrapper);
 			}
 			stream.Write(buf);
-		}
+		};
 	}
 	function AVIINDEXENTRY() // Each instance of this object is one entry in the old-style AVI index.  Each index entry is 16 bytes.
 	{
@@ -291,14 +292,14 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 			WriteUInt32LE(buf, this.dwFlags, offsetWrapper);
 			WriteUInt32LE(buf, this.dwChunkOffset, offsetWrapper);
 			WriteUInt32LE(buf, this.dwChunkLength, offsetWrapper);
-		}
+		};
 	}
 	var IndexFlags =
-		{
-			AVIIF_LIST: 1
-			, AVIIF_KEYFRAME: 16
-			, AVIIF_NO_TIME: 256
-		};
+	{
+		AVIIF_LIST: 1
+		, AVIIF_KEYFRAME: 16
+		, AVIIF_NO_TIME: 256
+	};
 
 	//function AVISTDINDEX()
 	//{
@@ -348,13 +349,13 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 		this.Count = function ()
 		{
 			return totalCachedBytes;
-		}
+		};
 		this.Write = function (newArray)
 		{
 			/// <summary>Writes the specified Uint8Array to the stream so it can be read later.</summary>
 			dataQueue.enqueue(newArray);
 			totalCachedBytes += newArray.length;
-		}
+		};
 		this.Read = function (byteCount)
 		{
 			/// <summary>Reads the specified number of bytes from the stream, returning null if not enough bytes are available yet.</summary>
@@ -386,7 +387,7 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 			}
 			totalCachedBytes -= readBuf.length;
 			return readBuf;
-		}
+		};
 	}
 	///////////////////////////////////////////////////////////////
 	// Binary Writing /////////////////////////////////////////////
@@ -466,11 +467,12 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 
 			// After MainAVIHeader comes one AVIStreamHeader Wrapper List for each stream
 			// In the wrapper goes an AVIStreamHeader and a stream format object which varies by stream type.
+			var streamList, strh, sh;
 			if (videoFourCC)
 			{
-				var streamList = new LIST("LIST", "strl");
-				var strh = new CHUNK("strh");
-				var sh = strh.data = videoStreamHeader = new AVIStreamHeader();
+				streamList = new LIST("LIST", "strl");
+				strh = new CHUNK("strh");
+				sh = strh.data = videoStreamHeader = new AVIStreamHeader();
 				{
 					sh.fccType = "vids";
 					sh.fccHandler = videoFourCC; // e.g. "H264"
@@ -488,9 +490,9 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 			}
 			if (audioFourCC)
 			{
-				var streamList = new LIST("LIST", "strl");
-				var strh = new CHUNK("strh");
-				var sh = strh.data = audioStreamHeader = new AVIStreamHeader();
+				streamList = new LIST("LIST", "strl");
+				strh = new CHUNK("strh");
+				sh = strh.data = audioStreamHeader = new AVIStreamHeader();
 				{
 					sh.fccType = "auds";
 					sh.fccHandler = audioFourCC; // e.g. "ulaw"
@@ -537,7 +539,7 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 		sh.dwScale = aviHeader.dwMicroSecPerFrame;
 		sh.dwRate = 1000000;
 		// Really dumb, imperfect algorithm for simplifying the fraction:
-		while (sh.dwScale > 1 && sh.dwRate > 1 && sh.dwScale % 2 == 0 && sh.dwRate % 2 == 0)
+		while (sh.dwScale > 1 && sh.dwRate > 1 && sh.dwScale % 2 === 0 && sh.dwRate % 2 === 0)
 		{
 			sh.dwScale /= 2;
 			sh.dwRate /= 2;
@@ -550,7 +552,7 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 		var stream = new GhettoStream();
 		aviRiff.SerializeToGhettoStream(stream);
 		return stream.Read(stream.Count());
-	}
+	};
 	///////////////////////////////////////////////////////////////
 	// Public Methods /////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////
@@ -559,11 +561,11 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 		var chunk = new CHUNK(TagAsKeyframe ? "00db" : "00dc");
 		chunk.TagAsKeyframe = TagAsKeyframe;
 		chunk.data = frameData;
-		movi.children.push(chunk)
+		movi.children.push(chunk);
 		videoFrameCount++;
 		if (aviHeader.dwSuggestedBufferSize < frameData.length + 8)
 			aviHeader.dwSuggestedBufferSize = frameData.length + 8;
-	}
+	};
 	this.AddAudioFrame = function (frameData, TagAsKeyframe)
 	{
 		if (!wf)
@@ -571,12 +573,12 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 		var chunk = new CHUNK("01wb");
 		chunk.TagAsKeyframe = TagAsKeyframe;
 		chunk.data = frameData;
-		movi.children.push(chunk)
+		movi.children.push(chunk);
 		audioSampleCount += frameData.length / wf.wBitsPerSample.dwSampleSize;
-	}
+	};
 	this.FinishAndGetUint8Array = function (FPS)
 	{
 		// <summary>Finishes the AVI structure in memory and serializes it to a Uint8Array, which is returned.</summary>
 		return SerializeAVIStructure(FPS);
-	}
+	};
 }

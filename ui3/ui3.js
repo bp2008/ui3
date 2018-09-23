@@ -1,5 +1,6 @@
-﻿/// <reference path="ui3-local-overrides.js" />
-/// <reference path="libs-src/jquery-1.11.3.js" />
+﻿/* eslint eqeqeq: 0, no-extra-parens: 0, semi: 0, no-redeclare: 0, no-empty: 0 */
+/// <reference path="ui3-local-overrides.js" />
+/// <reference path="libs-src/jquery-1.12.4.js" />
 /// <reference path="libs-ui3.js" />
 /// This web interface is licensed under the GNU LGPL Version 3
 "use strict";
@@ -10905,7 +10906,7 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError, onC
 		params: {},
 		packet: null
 	});
-};
+}
 ///////////////////////////////////////////////////////////////
 // pnacl_player ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -13795,10 +13796,10 @@ function CanvasContextMenu()
 				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
 				break;
 			case "opennewtab":
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85"); /* LOC0 */
 				break;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */;
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85"; /* LOC0 */
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -13899,7 +13900,7 @@ function CanvasContextMenu()
 				break;
 			case "opennewtab":
 				videoPlayer.Playback_Pause();
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85"); /* LOC0 */
 				break;
 			case "saveas":
 				return true;
@@ -13915,7 +13916,7 @@ function CanvasContextMenu()
 				nerdStats.Open();
 				return;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */;
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85"; /* LOC0 */
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -18245,9 +18246,10 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 			{
 				if (typeof message == "object" && typeof message.stack == "string")
 					message = message.stack;
-				if (typeof e == "object" && typeof e.stack == "string")
-					e = e.stack;
-				toaster.Error("An unhandled error occurred while handling the end-of-stream event: " + htmlEncode(e) + "<br>The stream ended because: " + htmlEncode(message));
+				var e2 = e;
+				if (typeof e2 == "object" && typeof e2.stack == "string")
+					e2 = e2.stack;
+				toaster.Error("An unhandled error occurred while handling the end-of-stream event: " + htmlEncode(e2) + "<br>The stream ended because: " + htmlEncode(message));
 			}
 		}
 		streamEnded = null;
@@ -18293,7 +18295,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 
 				myStream.Write(result.value);
 
-				while (true)
+				while (myStream) // was "while (true)" but eslint doesn't like that.
 				{
 					if (cancel_streaming)
 					{
@@ -20560,7 +20562,7 @@ function makeUnselectable($target)
 		.find('*:not(.selectable)')
 		.attr('draggable', 'false')
 		.attr('unselectable', 'on');
-};
+}
 function pointInsideElement($ele, pX, pY)
 {
 	if ($ele.length == 0)
@@ -20615,7 +20617,7 @@ function GetReadableTextColorHexForBackgroundColorHex(c, dark, light)
 			return "DDDDDD";
 	}
 }
-function hslToRgb(h, s, l) { if (0 == s) l = s = h = l; else { var f = function (l, s, c) { 0 > c && (c += 1); 1 < c && --c; return c < 1 / 6 ? l + 6 * (s - l) * c : .5 > c ? s : c < 2 / 3 ? l + (s - l) * (2 / 3 - c) * 6 : l }, e = .5 > l ? l * (1 + s) : l + s - l * s, g = 2 * l - e; l = f(g, e, h + 1 / 3); s = f(g, e, h); h = f(g, e, h - 1 / 3) } return [255 * l, 255 * s, 255 * h] };
+function hslToRgb(h, s, l) { if (0 == s) l = s = h = l; else { var f = function (l, s, c) { 0 > c && (c += 1); 1 < c && --c; return c < 1 / 6 ? l + 6 * (s - l) * c : .5 > c ? s : c < 2 / 3 ? l + (s - l) * (2 / 3 - c) * 6 : l }, e = .5 > l ? l * (1 + s) : l + s - l * s, g = 2 * l - e; l = f(g, e, h + 1 / 3); s = f(g, e, h); h = f(g, e, h - 1 / 3) } return [255 * l, 255 * s, 255 * h] }
 function PercentTo01Float(s, defaultValue)
 {
 	s = parseFloat(s) / 100;

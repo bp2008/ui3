@@ -6,7 +6,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "17";
+		var login_version = "18";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 	</script>
@@ -16,10 +16,10 @@
 			try
 			{
 				var versionStr = "unknown";
-				if (typeof login_version != "undefined")
+				if (typeof login_version !== "undefined")
 					versionStr = login_version;
 				var biVersionStr = "unknown";
-				if (typeof bi_version != "undefined")
+				if (typeof bi_version !== "undefined")
 					biVersionStr = bi_version;
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
 				alert("An unexpected error has occurred in Blue Iris Login (v " + versionStr + " / " + biVersionStr + "). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent);
@@ -73,12 +73,12 @@
 	<div id="login">
 		<h1>%%SYSNAME%%</h1>
 		<input id="txtUn" type="text" class="text" placeholder="Username" autocapitalize="off" autocorrect="off" />
-		<input id="txtPw" type="password" class="text" placeholder="Password" onkeypress="return pwKeypress(this,event)" autocapitalize="off" autocorrect="off" />
+		<input id="txtPw" type="password" class="text" placeholder="Password" onkeypress="return pwKeypress(this, event);" autocapitalize="off" autocorrect="off" />
 		<div class="checkboxWrapper">
-			<input id="cbLoginAutomatically" type="checkbox" class="checkbox" onchange="cbLoginAutomaticallyClicked()" /><label for="cbLoginAutomatically" id="lblLoginAutomatically"><span class="ui"></span>Log in automatically:</label>
+			<input id="cbLoginAutomatically" type="checkbox" class="checkbox" onchange="cbLoginAutomaticallyClicked();" /><label for="cbLoginAutomatically" id="lblLoginAutomatically"><span class="ui"></span>Log in automatically:</label>
 		</div>
 		<div id="status_wrapper_upper"></div>
-		<input id="btnLogin" type="button" class="btn" value="Log in" onclick="login()" />
+		<input id="btnLogin" type="button" class="btn" value="Log in" onclick="login();" />
 		<div id="status_wrapper_lower"><div id="status"></div></div>
 	</div>
 	<script type="text/javascript">
@@ -100,6 +100,7 @@
 			+ '<script src="applet/loginScripts.js?v=' + combined_version + '"><\/script>');
 	</script>
 	<script type="text/javascript">
+		/* eslint no-extra-parens: 0 */
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
 		var existingSession = "";
@@ -137,14 +138,14 @@
 				windowUnloading = true;
 				cbLoginAutomaticallyClicked();
 				return;
-			}
-			var skipAutoLogin = GetPersistedValue("bi_override_disable_auto_login_once") == "1";
+			};
+			var skipAutoLogin = GetPersistedValue("bi_override_disable_auto_login_once") === "1";
 			if (skipAutoLogin)
 			{
 				SetPersistedValue("bi_override_disable_auto_login_once", "0");
 			}
 			// Handle automatic login
-			if (GetPersistedValue("bi_rememberMe") == "1")
+			if (GetPersistedValue("bi_rememberMe") === "1")
 			{
 				$("#cbLoginAutomatically").attr('checked', 'checked');
 				$("#txtUn").val(Base64.decode(GetPersistedValue("bi_username")));
@@ -152,7 +153,7 @@
 
 				if (!skipAutoLogin)
 				{
-					if ($("#txtUn").val() != "" && $("#txtPw").val() != "")
+					if ($("#txtUn").val() !== "" && $("#txtPw").val() !== "")
 					{
 						if (GetAutoLoginInstantly())
 						{
@@ -182,7 +183,7 @@
 			// Check for existing session
 			ExecJSON({ cmd: "login", session: $.cookie("session") }, function (response)
 			{
-				if (response.result == "fail")
+				if (response.result === "fail")
 				{
 					// No existing session.
 					var anonymousAvailable = response.data && response.data["auth-exempt"];
@@ -192,7 +193,7 @@
 						var myResponse = md5("Anonymous:" + response.session + ":");
 						ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
 						{
-							if (response.result == "success")
+							if (response.result === "success")
 							{
 								existingSession = response.session;
 								SetStatus("An anonymous " + (response.data.admin ? "administrator" : "user") + ' session is available. <a href="javascript:LeaveLoginPage()">Click here to use it.</a>');
@@ -204,7 +205,7 @@
 							});
 					}
 				}
-				else if (response.result == "success")
+				else if (response.result === "success")
 				{
 					existingSession = response.session;
 					SetStatus("An existing " + (response.data.admin ? "administrator" : "user") + ' session is available. <a href="javascript:LeaveLoginPage()">Click here to use it.</a>');
@@ -235,7 +236,7 @@
 				var myResponse = md5($("#txtUn").val() + ":" + response.session + ":" + $("#txtPw").val());
 				ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
 				{
-					if (response.result == "success")
+					if (response.result === "success")
 					{
 						$("#btnLogin").attr("disabled", "disabled").val("Redirecting...");
 						existingSession = response.session;
@@ -266,7 +267,7 @@
 		function LeaveLoginPage()
 		{
 			var page = UrlParameters.Get("page");
-			if (page == "")
+			if (page === "")
 				page = "/";
 			if (cookiesEnabled)
 				$.cookie("session", existingSession, { path: "/" });
@@ -276,12 +277,12 @@
 		}
 		function cancelAutoLogin()
 		{
-			if (autologin_timeout_1 != null)
+			if (autologin_timeout_1 !== null)
 			{
 				clearTimeout(autologin_timeout_1);
 				autologin_timeout_1 = null;
 			}
-			if (autologin_timeout_2 != null)
+			if (autologin_timeout_2 !== null)
 			{
 				clearTimeout(autologin_timeout_2);
 				autologin_timeout_2 = null;
@@ -320,10 +321,10 @@
 		{
 			var keycode;
 			if (window.event) keycode = window.event.keyCode;
-			else if (typeof e != "undefined" && e) keycode = e.which;
+			else if (typeof e !== "undefined" && e) keycode = e.which;
 			else return true;
 
-			if (keycode == 13)
+			if (keycode === 13)
 			{
 				login();
 				return false;
@@ -348,30 +349,30 @@
 			});
 			if (heightTotal > $(window).height())
 			{
-				if ($("#status").parent().attr("id") != "status_wrapper_upper")
+				if ($("#status").parent().attr("id") !== "status_wrapper_upper")
 					$("#status_wrapper_upper").append($("#status"));
 			}
 			else
 			{
-				if ($("#status").parent().attr("id") != "status_wrapper_lower")
+				if ($("#status").parent().attr("id") !== "status_wrapper_lower")
 					$("#status_wrapper_lower").append($("#status"));
 			}
 			$("#lblLoginAutomatically").parent().css("padding-left", (($('#login').outerWidth() - $("#lblLoginAutomatically").outerWidth(true)) / 2) + "px");
-		};
+		}
 		function HandleError(error)
 		{
 			SetStatus(error, "#FF6262");
 		}
 		function SetStatus(html, color)
 		{
-			if (typeof html == "undefined" || html == null || html == "")
+			if (typeof html === "undefined" || html === null || html === "")
 			{
 				html = "";
 				$("#status").hide();
 			}
 			else
 				$("#status").show();
-			if (typeof color == "undefined" || color == null || color == "")
+			if (typeof color === "undefined" || color === null || color === "")
 				color = "#FFFFFF";
 			$("#status").html(html);
 			$("#status").css("color", color);
@@ -379,11 +380,11 @@
 		}
 		function GetAutoLoginInstantly()
 		{
-			return GetPersistedValue("bi_autoLoginInstant") == "1";
+			return GetPersistedValue("bi_autoLoginInstant") === "1";
 		}
 		function GetPreferredContextMenuTrigger()
 		{
-			return GetPersistedValue("ui3_contextMenus_longPress") == "1" ? "longpress" : "right";
+			return GetPersistedValue("ui3_contextMenus_longPress") === "1" ? "longpress" : "right";
 		}
 		function SetupLoginContextMenu()
 		{
@@ -394,12 +395,12 @@
 				else
 					$("#autoLoginNoDelay").text("Auto Login: Delayed (click to change)");
 				return true;
-			}
+			};
 			var onContextMenuAction = function ()
 			{
-				if (this.data.alias == "autoLoginNoDelay")
+				if (this.data.alias === "autoLoginNoDelay")
 					SetPersistedValue("bi_autoLoginInstant", GetAutoLoginInstantly() ? "0" : "1");
-			}
+			};
 			var menuOptions =
 				{
 					alias: "cmroot_login", width: "300px", items:

@@ -1,8 +1,9 @@
-﻿/*
+﻿/* eslint no-extra-parens: 0 */
+/*
  * Dialog - jQuery Plugin for creating simple dialog boxes
  * MIT License - https://opensource.org/licenses/MIT
  */
-/// <reference path="jquery-3.1.1.js" />
+/// <reference path="jquery-1.12.4.js" />
 "use strict";
 var $DialogDefaults = { theme: "light" };
 (function ($)
@@ -12,7 +13,7 @@ var $DialogDefaults = { theme: "light" };
 	$.fn.dialog = function (options)
 	{
 		return new Dialog(this, options);
-	}
+	};
 	$.fn.modalDialog = function (options)
 	{
 		if (!options)
@@ -20,7 +21,7 @@ var $DialogDefaults = { theme: "light" };
 		if (!options.overlayOpacity)
 			options.overlayOpacity = 0.3;
 		return new Dialog(this, options);
-	}
+	};
 	function Dialog($content, options)
 	{
 		var self = this;
@@ -73,7 +74,7 @@ var $DialogDefaults = { theme: "light" };
 				self.$dialog = $('<div class="dialog_wrapper"></div>');
 				if (self.settings.cssClass)
 					self.$dialog.addClass(self.settings.cssClass);
-				if (self.settings.theme == "dark")
+				if (self.settings.theme === "dark")
 					self.$dialog.addClass("darkTheme");
 				self.$dialog.on('mousedown touchstart', focusSelf);
 				{
@@ -87,7 +88,7 @@ var $DialogDefaults = { theme: "light" };
 						$(document).on('touchcancel.dialog' + myId, dragCancel);
 						self.$titlebar.append(self.$title);
 					}
-					if (typeof self.settings.onRefresh == "function")
+					if (typeof self.settings.onRefresh === "function")
 					{
 						self.$refreshbtn = $('<div class="dialog_refresh">'
 							+ '<div class="dialog_refresh_icon"><svg viewBox="4 4 16 16">'
@@ -134,17 +135,17 @@ var $DialogDefaults = { theme: "light" };
 			$(window).bind("resize.dialog" + myId + " orientationchange.dialog" + myId + " scroll.dialog" + myId, onResize);
 
 			onResize();
-		}
+		};
 		this.bringToTop = function ()
 		{
 			self.$dialog.css("z-index", zIndexAutoIncrement++);
-		}
+		};
 		this.close = function (suppressCallback)
 		{
 			if (!isOpen)
 				return;
 
-			if (typeof self.settings.onClosing == "function" && !suppressCallback)
+			if (typeof self.settings.onClosing === "function" && !suppressCallback)
 				if (self.settings.onClosing())
 					return false;
 
@@ -168,7 +169,7 @@ var $DialogDefaults = { theme: "light" };
 
 
 			return true;
-		}
+		};
 		this.contentChanged = function (reCenter, setFullyOnScreen)
 		{
 			if (reCenter)
@@ -181,19 +182,19 @@ var $DialogDefaults = { theme: "light" };
 			{
 				var offset = self.$dialog.offset();
 				var coords = keepOnScreen(offset.left, offset.top, setFullyOnScreen);
-				if (offset.left != coords.X)
+				if (offset.left !== coords.X)
 					self.$dialog.css("left", coords.X + "px");
-				if (offset.top != coords.Y)
+				if (offset.top !== coords.Y)
 					self.$dialog.css("top", coords.Y + "px");
 			}
-		}
+		};
 		this.setLoadingState = function (loading)
 		{
 			if (loading)
 				self.$dialog.addClass("loading");
 			else
 				self.$dialog.removeClass("loading");
-		}
+		};
 		var positionCentered = function ()
 		{
 			var windowW = $(window).width();
@@ -212,26 +213,24 @@ var $DialogDefaults = { theme: "light" };
 
 			self.$dialog.css("left", left + "px");
 			self.$dialog.css("top", top + "px");
-		}
+		};
 		var onResize = function ()
 		{
 			if (!isOpen)
 				return;
 			var offset = self.$dialog.offset();
-
-			var offset = self.$dialog.offset();
 			var coords = keepOnScreen(offset.left, offset.top, false);
-			if (offset.left != coords.X)
+			if (offset.left !== coords.X)
 				self.$dialog.css("left", coords.X + "px");
-			if (offset.top != coords.Y)
+			if (offset.top !== coords.Y)
 				self.$dialog.css("top", coords.Y + "px");
 
 			self.$overlay.css('width', $(document).width()).css('height', $(document).height());
-		}
+		};
 		var focusSelf = function (e)
 		{
 			self.bringToTop();
-		}
+		};
 		var dragStart = function (e)
 		{
 			mouseCoordFixer.fix(e);
@@ -242,7 +241,7 @@ var $DialogDefaults = { theme: "light" };
 			mouseMem.offsetX = pos.left - e.pageX;
 			mouseMem.offsetY = pos.top - e.pageY;
 			return false;
-		}
+		};
 		var dragMove = function (e)
 		{
 			mouseCoordFixer.fix(e);
@@ -255,12 +254,12 @@ var $DialogDefaults = { theme: "light" };
 				self.$dialog.css("left", coords.X + "px");
 				self.$dialog.css("top", coords.Y + "px");
 			}
-		}
+		};
 		var dragEnd = function (e)
 		{
 			dragMove(e);
 			mouseMem.down = false;
-		}
+		};
 		var dragCancel = function (e)
 		{
 			mouseCoordFixer.fix(e);
@@ -270,7 +269,7 @@ var $DialogDefaults = { theme: "light" };
 				self.$dialog.css("left", mouseMem.originalX + "px");
 				self.$dialog.css("top", mouseMem.originalY + "px");
 			}
-		}
+		};
 		var keepOnScreen = function (newX, newY, keepFullyOnScreen)
 		{
 			var windowW = $(window).width();
@@ -313,7 +312,7 @@ var $DialogDefaults = { theme: "light" };
 			}
 
 			return { X: newX, Y: newY };
-		}
+		};
 		var mouseCoordFixer =
 			{
 				last: {
@@ -321,7 +320,7 @@ var $DialogDefaults = { theme: "light" };
 				}
 				, fix: function (e)
 				{
-					if (typeof e.pageX == "undefined")
+					if (typeof e.pageX === "undefined")
 					{
 						if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 						{
@@ -351,19 +350,19 @@ var SimpleDialog = new function ()
 	this.text = this.Text = function (message)
 	{
 		return $('<div style="white-space: pre-wrap; padding: 10px;"></div>').text(message).modalDialog();
-	}
+	};
 	this.html = this.Html = function (message)
 	{
 		return $('<div style="padding: 10px;"></div>').html(message).modalDialog();
-	}
+	};
 	this.confirmText = this.ConfirmText = function (question, onYes, onNo, options)
 	{
 		return Confirm($('<div></div>').text(question), onYes, onNo, GetConfirmOptions(options));
-	}
+	};
 	this.confirmHtml = this.ConfirmHtml = function (question, onYes, onNo, options)
 	{
 		return Confirm($('<div></div>').html(question), onYes, onNo, GetConfirmOptions(options));
-	}
+	};
 	var GetConfirmOptions = function (options)
 	{
 		return $.extend(
@@ -374,7 +373,7 @@ var SimpleDialog = new function ()
 				, yesText: "Yes"
 				, noText: "No"
 			}, options);
-	}
+	};
 	var Confirm = function (questionEle, onYes, onNo, options)
 	{
 		if (!options.onError && console)
@@ -396,15 +395,15 @@ var SimpleDialog = new function ()
 		$yes.click(function ()
 		{
 			dlg.close();
-			if (typeof onYes == "function")
+			if (typeof onYes === "function")
 				try { onYes(); } catch (ex) { options.onError(ex); }
 		});
 		$no.click(function ()
 		{
 			dlg.close();
-			if (typeof onNo == "function")
+			if (typeof onNo === "function")
 				try { onNo(); } catch (ex) { options.onError(ex); }
 		});
 		return dlg;
-	}
+	};
 }();
