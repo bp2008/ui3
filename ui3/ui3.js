@@ -414,6 +414,8 @@ var togglableUIFeatures =
 // * reloading the stream (change playback speed) should not cause the current position to change suddenly.
 // * don't forget jpeg streams
 
+// TODO: Re-evaluate the ui3_zoom1x_mode setting behavior with jpegs.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -470,6 +472,10 @@ var HTML5DelayCompensationOptions = {
 	Weak: "Weak",
 	Normal: "Normal",
 	Strong: "Strong"
+}
+var Zoom1xOptions = {
+	Camera: "Camera",
+	Stream: "Stream"
 }
 var settings = null;
 var settingsCategoryList = ["General Settings", "Video Player", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
@@ -1580,6 +1586,15 @@ var defaultSettings =
 			, category: "Digital Zoom"
 		}
 		, {
+			key: "ui3_zoom1x_mode"
+			, value: Zoom1xOptions.Camera
+			, inputType: "select"
+			, options: [Zoom1xOptions.Camera, Zoom1xOptions.Stream]
+			, label: 'At 1x zoom, match resolution of: '
+			, hint: 'Choose "' + Zoom1xOptions.Stream + '" if clip playback has the wrong aspect ratio.'
+			, category: "Digital Zoom"
+		}
+		, {
 			key: "ui3_fullscreen_videoonly"
 			, value: "1"
 			, inputType: "checkbox"
@@ -2450,107 +2465,107 @@ function StatusBars()
 	};
 }
 var ProgressBar =
+{
+	initialize: function ($ele)
 	{
-		initialize: function ($ele)
-		{
-			if ($ele.children().length == 0)
-			{
-				var ele = $ele.get(0);
-				ele.$progressBarInner = $('<div class="progressBarInner"></div>');
-				$ele.append(ele.$progressBarInner);
-				$ele.addClass("progressBarOuter");
-				ele.defaultColor = ele.$progressBarInner.css("background-color");
-				ele.defaultBackgroundColor = $ele.css("background-color");
-			}
-		}
-		, setProgress: function ($ele, progressAmount)
+		if ($ele.children().length == 0)
 		{
 			var ele = $ele.get(0);
-			progressAmount = Clamp(progressAmount, 0, 1);
-			var changed = typeof ele.pbValue == "undefined" || ele.pbValue != progressAmount;
-			ele.pbValue = progressAmount;
-			ele.$progressBarInner.css("width", (progressAmount * 100) + "%");
-			if (typeof ele.moveDragHandleElements == "function")
-				ele.moveDragHandleElements();
-			if (changed && typeof ele.onProgressChanged == "function")
-				ele.onProgressChanged(progressAmount);
+			ele.$progressBarInner = $('<div class="progressBarInner"></div>');
+			$ele.append(ele.$progressBarInner);
+			$ele.addClass("progressBarOuter");
+			ele.defaultColor = ele.$progressBarInner.css("background-color");
+			ele.defaultBackgroundColor = $ele.css("background-color");
 		}
-		, addDragHandle: function ($ele, onDrag)
-		{
-			$ele.addClass("withDragHandle");
-			var ele = $ele.get(0);
-			ele.$dragHandle = $('<div class="statusBarDragHandle"><div class="statusBarDragHandleInner"></div></div>');
-			var dragHandleWidth = ele.$dragHandle.width();
-			$ele.prepend(ele.$dragHandle);
-
-			ele.onDragHandleDragged = function (pageX)
-			{
-				var relX = pageX - $ele.offset().left;
-				var progressPercentage = Clamp(relX / $ele.width(), 0, 1);
-				onDrag(progressPercentage);
-			};
-			ele.moveDragHandleElements = function ()
-			{
-				ele.$dragHandle.css("left", (ele.pbValue * $ele.width()) - (ele.$dragHandle.width() / 2) + "px");
-			};
+	}
+	, setProgress: function ($ele, progressAmount)
+	{
+		var ele = $ele.get(0);
+		progressAmount = Clamp(progressAmount, 0, 1);
+		var changed = typeof ele.pbValue == "undefined" || ele.pbValue != progressAmount;
+		ele.pbValue = progressAmount;
+		ele.$progressBarInner.css("width", (progressAmount * 100) + "%");
+		if (typeof ele.moveDragHandleElements == "function")
 			ele.moveDragHandleElements();
-			BI_CustomEvent.AddListener("afterResize", ele.moveDragHandleElements);
+		if (changed && typeof ele.onProgressChanged == "function")
+			ele.onProgressChanged(progressAmount);
+	}
+	, addDragHandle: function ($ele, onDrag)
+	{
+		$ele.addClass("withDragHandle");
+		var ele = $ele.get(0);
+		ele.$dragHandle = $('<div class="statusBarDragHandle"><div class="statusBarDragHandleInner"></div></div>');
+		var dragHandleWidth = ele.$dragHandle.width();
+		$ele.prepend(ele.$dragHandle);
 
-			// Set up input events
-			$ele.on("mousedown touchstart", function (e)
-			{
-				mouseCoordFixer.fix(e);
-				if (e.which != 3)
-				{
-					if ($ele.hasClass("disabled"))
-						return;
-					ele.isDragging = true;
-					ele.onDragHandleDragged(e.pageX);
-				}
-			});
-			$(document).on("mouseup touchend touchcancel", function (e)
-			{
-				mouseCoordFixer.fix(e);
-				ele.isDragging = false;
-			});
-			$(document).on("mousemove touchmove", function (e)
-			{
-				mouseCoordFixer.fix(e);
-				if (ele.isDragging)
-					ele.onDragHandleDragged(e.pageX);
-			});
-		}
-		, getValue: function ($ele)
+		ele.onDragHandleDragged = function (pageX)
 		{
-			return $ele.get(0).pbValue;
-		}
-		, addOnProgressChangedListener: function ($ele, onProgressChanged)
+			var relX = pageX - $ele.offset().left;
+			var progressPercentage = Clamp(relX / $ele.width(), 0, 1);
+			onDrag(progressPercentage);
+		};
+		ele.moveDragHandleElements = function ()
 		{
-			$ele.get(0).onProgressChanged = onProgressChanged;
-		}
-		, setColor: function ($ele, progressColor, progressBackgroundColor)
+			ele.$dragHandle.css("left", (ele.pbValue * $ele.width()) - (ele.$dragHandle.width() / 2) + "px");
+		};
+		ele.moveDragHandleElements();
+		BI_CustomEvent.AddListener("afterResize", ele.moveDragHandleElements);
+
+		// Set up input events
+		$ele.on("mousedown touchstart", function (e)
 		{
-			if (progressColor)
+			mouseCoordFixer.fix(e);
+			if (e.which != 3)
 			{
-				if (progressColor == "default")
-					progressColor = $ele.get(0).defaultColor;
-				$ele.get(0).$progressBarInner.css("background-color", progressColor);
+				if ($ele.hasClass("disabled"))
+					return;
+				ele.isDragging = true;
+				ele.onDragHandleDragged(e.pageX);
 			}
-			if (progressBackgroundColor)
-			{
-				if (progressBackgroundColor == "default")
-					progressBackgroundColor = $ele.get(0).Background;
-				$ele.css("background-color", progressBackgroundColor);
-			}
-		}
-		, setEnabled: function ($ele, enabled)
+		});
+		$(document).on("mouseup touchend touchcancel", function (e)
 		{
-			if (enabled)
-				$ele.removeClass("disabled");
-			else
-				$ele.addClass("disabled");
+			mouseCoordFixer.fix(e);
+			ele.isDragging = false;
+		});
+		$(document).on("mousemove touchmove", function (e)
+		{
+			mouseCoordFixer.fix(e);
+			if (ele.isDragging)
+				ele.onDragHandleDragged(e.pageX);
+		});
+	}
+	, getValue: function ($ele)
+	{
+		return $ele.get(0).pbValue;
+	}
+	, addOnProgressChangedListener: function ($ele, onProgressChanged)
+	{
+		$ele.get(0).onProgressChanged = onProgressChanged;
+	}
+	, setColor: function ($ele, progressColor, progressBackgroundColor)
+	{
+		if (progressColor)
+		{
+			if (progressColor == "default")
+				progressColor = $ele.get(0).defaultColor;
+			$ele.get(0).$progressBarInner.css("background-color", progressColor);
 		}
-	};
+		if (progressBackgroundColor)
+		{
+			if (progressBackgroundColor == "default")
+				progressBackgroundColor = $ele.get(0).Background;
+			$ele.css("background-color", progressBackgroundColor);
+		}
+	}
+	, setEnabled: function ($ele, enabled)
+	{
+		if (enabled)
+			$ele.removeClass("disabled");
+		else
+			$ele.addClass("disabled");
+	}
+};
 ///////////////////////////////////////////////////////////////
 // Dropdown Boxes /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -9214,9 +9229,14 @@ function VideoPlayerController()
 			lastCycleWidth = lastCycleHeight = 0;
 		}
 
+		var imageSizeIsChanging = currentlyLoadedImage.actualwidth !== width || currentlyLoadedImage.actualheight !== height;
+
 		// actualwidth and actualheight must be set after [CameraOrResolutionChange]
 		currentlyLoadedImage.actualwidth = width;
 		currentlyLoadedImage.actualheight = height;
+
+		if (imageSizeIsChanging)
+			imageRenderer.ImgResized(false);
 
 		RefreshFps(lastFrameLoadingTime);
 
@@ -10050,22 +10070,19 @@ function FetchH264VideoModule()
 				}
 				currentImageDateMs = clipData.date.getTime() + (currentSeekPositionPercent * lastMs);
 			}
-			var widthAndQualityArg = "";
-			if (speed == 0) // speed == 0 means we'll get a jpeg, so we should include w and q arguments.
-				widthAndQualityArg = "&w=" + imageRenderer.GetSizeToRequest(false).w + "&q=50";
-			if (speed != 100)
+			if (speed !== 100)
 			{
 				canRequestAudio = false; // We won't receive audio if speed isn't exactly 100
 				didRequestAudio = false;
 				audioArg = "";
 			}
 			var posInt = parseInt(currentSeekPositionPercent * 10000);
-			if (speed == 0 && posInt >= 10000)
+			if (speed === 0 && posInt >= 10000)
 				posInt = 9999;
 			var posArg = "&pos=" + posInt;
 			if (honorAlertOffset)
 				posArg = "";
-			if (isSameClipAsBefore && offsetArg == "")
+			if (isSameClipAsBefore && offsetArg === "")
 			{
 				// Another hack to work around API limitations.
 				// This allows us to seek frame-by-frame with millisecond precision 
@@ -10075,7 +10092,16 @@ function FetchH264VideoModule()
 				offsetArg = "&time=" + (currentSeekPositionPercent * (loading.msec + offsetMsec)).dropDecimals();
 				posArg = "";
 			}
-			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight) + "&extend=2" + offsetArg + widthAndQualityArg;
+			var urlArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight);
+			var widthAndQualityArg = "";
+			if (speed === 0)
+			{
+				// speed == 0 means we'll get a jpeg, so we should include w and q arguments.
+				if (urlArgs.indexOf("&h=") === -1)
+					widthAndQualityArg += "&w=" + imageRenderer.GetSizeToRequest(false).w;
+				widthAndQualityArg += "&q=50";
+			}
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -11718,6 +11744,7 @@ function ClearCanvas(canvas)
 			contextGl.clear(contextGl.COLOR_BUFFER_BIT);
 	}
 }
+var TESTVAR = false;
 function ImageRenderer()
 {
 	var self = this;
@@ -11754,7 +11781,7 @@ function ImageRenderer()
 			ssFactor = 1;
 		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * ssFactor * self.zoomHandler.GetZoomFactor();
 		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * ssFactor * self.zoomHandler.GetZoomFactor();
-		if (imgDrawWidth == 0)
+		if (imgDrawWidth === 0)
 		{
 			// Image is supposed to scale to fit the screen (first zoom level)
 			imgDrawWidth = $layoutbody.width() * dpiScalingFactor * ssFactor;
@@ -11799,24 +11826,40 @@ function ImageRenderer()
 
 		// Calculate new size based on zoom levels
 		var imgForSizing = videoPlayer.Loaded().image;
-		var imgDrawWidth = imgForSizing.fullwidth * self.zoomHandler.GetZoomFactor();
-		var imgDrawHeight = imgForSizing.fullheight * self.zoomHandler.GetZoomFactor();
-		if (imgDrawWidth == 0)
+		var widthForSizing;
+		var heightForSizing;
+		if (settings.ui3_zoom1x_mode === "Stream")
+		{
+			widthForSizing = imgForSizing.actualwidth;
+			heightForSizing = imgForSizing.actualheight;
+		}
+		else
+		{
+			widthForSizing = imgForSizing.fullwidth;
+			heightForSizing = imgForSizing.fullheight;
+		}
+		var imgDrawWidth = widthForSizing * self.zoomHandler.GetZoomFactor();
+		var imgDrawHeight = heightForSizing * self.zoomHandler.GetZoomFactor();
+		var aspectRatio = imgForSizing.actualwidth / imgForSizing.actualheight;
+		console.log("ImgResized", aspectRatio, imgForSizing.aspectratio);
+		if (TESTVAR)
+			aspectRatio = imgForSizing.aspectratio;
+		if (imgDrawWidth === 0)
 		{
 			imgDrawWidth = imgAvailableWidth;
 			imgDrawHeight = imgAvailableHeight;
 
 			var newRatio = imgDrawWidth / imgDrawHeight;
-			if (newRatio < imgForSizing.aspectratio)
-				imgDrawHeight = imgDrawWidth / imgForSizing.aspectratio;
+			if (newRatio < aspectRatio)
+				imgDrawHeight = imgDrawWidth / aspectRatio;
 			else
-				imgDrawWidth = imgDrawHeight * imgForSizing.aspectratio;
+				imgDrawWidth = imgDrawHeight * aspectRatio;
 		}
 		$camimg_wrapper.css("width", imgDrawWidth + "px").css("height", imgDrawHeight + "px");
 
 		imageIsLargerThanAvailableSpace = imgDrawWidth > imgAvailableWidth || imgDrawHeight > imgAvailableHeight;
 
-		if (previousImageDraw.z > -1 && previousImageDraw.z != self.zoomHandler.GetZoomFactor())
+		if (previousImageDraw.z > -1 && previousImageDraw.z !== self.zoomHandler.GetZoomFactor())
 		{
 			// We just experienced a zoom change
 			// Find the mouse position percentage relative to the center of the image at its old size
@@ -11885,7 +11928,7 @@ function ImageRenderer()
 		var zoomFactor = self.zoomHandler.GetZoomFactor();
 		$("#zoomhint").html(zoomFactor === 0 ? "Fit" : ((Math.round(zoomFactor * 10) / 10) + "x"));
 		RepositionZoomHint(isFromKeyboard);
-		if (zoomHintTimeout != null)
+		if (zoomHintTimeout !== null)
 			clearTimeout(zoomHintTimeout);
 		zoomHintTimeout = setTimeout(function ()
 		{
@@ -13778,32 +13821,32 @@ function CanvasContextMenu()
 	{
 	}
 	var optionLive =
-		{
-			alias: "cmroot_live", width: 200, items:
-				[
-					{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
-					, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
-					, { text: "Open HLS Stream", icon: "#svg_mio_ViewStream", iconClass: "noflip", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
-					, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
-					, { type: "splitLine" }
-					, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
-					, { type: "splitLine" }
-					, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
-					, { type: "splitLine" }
-					, { text: "Trigger Now", icon: "#svg_x5F_Alert1", iconClass: "iconBlue", alias: "trigger", action: onLiveContextMenuAction }
-					, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
-					, { text: "Snapshot in Blue Iris", icon: "#svg_x5F_Snapshot", iconClass: "iconBlue", alias: "snapshot", tooltip: "Blue Iris will record a snapshot", action: onLiveContextMenuAction }
-					, { text: "Restart Camera", icon: "#svg_x5F_Restart", iconClass: "iconBlue", alias: "restart", action: onLiveContextMenuAction }
-					, { type: "splitLine" }
-					, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onLiveContextMenuAction }
-					, { type: "splitLine" }
-					, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
-				]
-			, onContextMenu: onTriggerLiveContextMenu
-			, onCancelContextMenu: onCancelLiveContextMenu
-			, onShow: onShowLiveContextMenu
-			, clickType: GetPreferredContextMenuTrigger()
-		};
+	{
+		alias: "cmroot_live", width: 200, items:
+			[
+				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
+				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
+				, { text: "Open HLS Stream", icon: "#svg_mio_ViewStream", iconClass: "noflip", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
+				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Trigger Now", icon: "#svg_x5F_Alert1", iconClass: "iconBlue", alias: "trigger", action: onLiveContextMenuAction }
+				, { text: "<span id=\"manRecBtnLabel\">Toggle Recording</span>", icon: "#svg_x5F_Stoplight", iconClass: "iconBlue", alias: "record", tooltip: "Toggle Manual Recording", action: onLiveContextMenuAction }
+				, { text: "Snapshot in Blue Iris", icon: "#svg_x5F_Snapshot", iconClass: "iconBlue", alias: "snapshot", tooltip: "Blue Iris will record a snapshot", action: onLiveContextMenuAction }
+				, { text: "Restart Camera", icon: "#svg_x5F_Restart", iconClass: "iconBlue", alias: "restart", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
+			]
+		, onContextMenu: onTriggerLiveContextMenu
+		, onCancelContextMenu: onCancelLiveContextMenu
+		, onShow: onShowLiveContextMenu
+		, clickType: GetPreferredContextMenuTrigger()
+	};
 	$("#layoutbody").contextmenu(optionLive);
 	var onShowRecordContextMenu = function (menu)
 	{
@@ -13888,27 +13931,27 @@ function CanvasContextMenu()
 	}
 	var exportListItem = exporting_clips_to_avi_supported ? { text: 'Export as AVI', icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "exportavi", action: onRecordContextMenuAction } : { type: "skip" };
 	var optionRecord =
-		{
-			alias: "cmroot_record", width: 200, items:
-				[
-					{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
-					, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
-					, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
-					, exportListItem
-					, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
-					, { type: "splitLine" }
-					, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
-					, { type: "splitLine" }
-					, { text: "Close Clip", icon: "#svg_x5F_Error", alias: "closeclip", action: onRecordContextMenuAction }
-					, { type: "splitLine" }
-					, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onRecordContextMenuAction }
-					, { type: "splitLine" }
-					, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onRecordContextMenuAction }
-				]
-			, onContextMenu: onTriggerRecordContextMenu
-			, onShow: onShowRecordContextMenu
-			, clickType: GetPreferredContextMenuTrigger()
-		};
+	{
+		alias: "cmroot_record", width: 200, items:
+			[
+				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
+				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
+				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
+				, exportListItem
+				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
+				, { type: "splitLine" }
+				, { text: "Close Clip", icon: "#svg_x5F_Error", alias: "closeclip", action: onRecordContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onRecordContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onRecordContextMenuAction }
+			]
+		, onContextMenu: onTriggerRecordContextMenu
+		, onShow: onShowRecordContextMenu
+		, clickType: GetPreferredContextMenuTrigger()
+	};
 	$("#layoutbody").contextmenu(optionRecord);
 }
 ///////////////////////////////////////////////////////////////
@@ -13937,16 +13980,16 @@ function CalendarContextMenu()
 		}
 	}
 	var menuOptions =
-		{
-			alias: "cmroot_calendar", width: 200, items:
-				[
-					{ text: "Filter by Date Range", icon: "", alias: "select", action: onContextMenuAction }
-					, { text: "Today Only", icon: "", alias: "today", action: onContextMenuAction }
-					, { text: "Clear Filter", icon: "", alias: "clear", action: onContextMenuAction }
+	{
+		alias: "cmroot_calendar", width: 200, items:
+			[
+				{ text: "Filter by Date Range", icon: "", alias: "select", action: onContextMenuAction }
+				, { text: "Today Only", icon: "", alias: "today", action: onContextMenuAction }
+				, { text: "Clear Filter", icon: "", alias: "clear", action: onContextMenuAction }
 
-				]
-			, clickType: GetPreferredContextMenuTrigger()
-		};
+			]
+		, clickType: GetPreferredContextMenuTrigger()
+	};
 	$("#dateRange").contextmenu(menuOptions);
 }
 ///////////////////////////////////////////////////////////////
@@ -14114,26 +14157,26 @@ function ClipListContextMenu()
 	var exportListItemSplitline = exporting_clips_to_avi_supported ? { type: "splitLine" } : { type: "skip" };
 	var exportListItem = exporting_clips_to_avi_supported ? { text: "Export as AVI", icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "exportavi", action: onContextMenuAction } : { type: "skip" };
 	var menuOptions =
-		{
-			alias: "cmroot_cliplist", width: 200, items:
-				[
-					{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
-					, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
-					, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
-					, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
-					, { type: "splitLine" }
-					, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
-					, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
-					, exportListItemSplitline
-					, exportListItem
-					, { type: "splitLine" }
-					, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
+	{
+		alias: "cmroot_cliplist", width: 200, items:
+			[
+				{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
+				, { type: "splitLine" }
+				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
+				, exportListItemSplitline
+				, exportListItem
+				, { type: "splitLine" }
+				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
 
-				]
-			, clickType: GetPreferredContextMenuTrigger()
-			, onContextMenu: onTriggerContextMenu
-			, onShow: onShowMenu
-		};
+			]
+		, clickType: GetPreferredContextMenuTrigger()
+		, onContextMenu: onTriggerContextMenu
+		, onShow: onShowMenu
+	};
 	this.AttachContextMenu = function ($ele)
 	{
 		$ele.contextmenu(menuOptions);
@@ -14231,14 +14274,14 @@ function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onT
 			menuItemArray.push({ text: '<span id="' + uniqueSettingsId + '_extra_' + i + '">Extra ' + i + '</span>', icon: "", alias: uniqueSettingsId + '_extra_alias_' + i, action: onContextMenuAction });
 		}
 	var menuOptions =
-		{
-			alias: "cmroot_" + uniqueSettingsId
-			, width: "auto"
-			, items: menuItemArray
-			, onContextMenu: onTriggerContextMenu
-			, onShow: onShowContextMenu
-			, clickType: GetPreferredContextMenuTrigger()
-		};
+	{
+		alias: "cmroot_" + uniqueSettingsId
+		, width: "auto"
+		, items: menuItemArray
+		, onContextMenu: onTriggerContextMenu
+		, onShow: onShowContextMenu
+		, clickType: GetPreferredContextMenuTrigger()
+	};
 	$(selector).contextmenu(menuOptions);
 	if (onToggle)
 		onToggle(GetUi3FeatureEnabled(uniqueSettingsId));
@@ -16635,13 +16678,13 @@ function HLSPlayer()
 		}
 	}
 	var optionHls =
-		{
-			alias: "cmroot_hls", width: 200, items:
-				[
-					{ text: "Open stream in New Tab", icon: "", alias: "newtab", action: onHlsContextMenuAction }
-				]
-			, clickType: GetPreferredContextMenuTrigger()
-		};
+	{
+		alias: "cmroot_hls", width: 200, items:
+			[
+				{ text: "Open stream in New Tab", icon: "", alias: "newtab", action: onHlsContextMenuAction }
+			]
+		, clickType: GetPreferredContextMenuTrigger()
+	};
 
 	var registerHlsContextMenu = function ($ele)
 	{
@@ -17591,111 +17634,111 @@ function FailLimiter(maxFailsInTimePeriod, timePeriodMs)
 // Incomplete / Placeholder ///////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var currentServer =
+{
+	remoteBaseURL: ""
+	, remoteSession: ""
+	, remoteServerName: ""
+	, remoteServerUser: ""
+	, remoteServerPass: ""
+	, isLoggingOut: false
+	, isUsingRemoteServer: false
+	, GetRemoteSessionArg: function (prefix, overrideRemoteRequirement)
 	{
-		remoteBaseURL: ""
-		, remoteSession: ""
-		, remoteServerName: ""
-		, remoteServerUser: ""
-		, remoteServerPass: ""
-		, isLoggingOut: false
-		, isUsingRemoteServer: false
-		, GetRemoteSessionArg: function (prefix, overrideRemoteRequirement)
+		if (currentServer.isUsingRemoteServer || overrideRemoteRequirement)
+			return prefix + "session=" + sessionManager.GetSession();
+		else
+			return "";
+	}
+	, SetRemoteServer: function (serverName, baseUrl, user, pass)
+	{
+		if (!currentServer.ValidateRemoteServerNameSimpleRules(serverName))
 		{
-			if (currentServer.isUsingRemoteServer || overrideRemoteRequirement)
-				return prefix + "session=" + sessionManager.GetSession();
-			else
-				return "";
+			toaster.Error("Unable to validate remote server name. Connecting to local server instead.", 10000);
+			serverName = "";
 		}
-		, SetRemoteServer: function (serverName, baseUrl, user, pass)
+		if (serverName == "")
 		{
-			if (!currentServer.ValidateRemoteServerNameSimpleRules(serverName))
-			{
-				toaster.Error("Unable to validate remote server name. Connecting to local server instead.", 10000);
-				serverName = "";
-			}
-			if (serverName == "")
-			{
-				currentServer.remoteBaseURL = "";
-				currentServer.remoteSession = "";
-				currentServer.remoteServerName = "";
-				currentServer.remoteServerUser = "";
-				currentServer.remoteServerPass = "";
-				currentServer.isUsingRemoteServer = false;
-			}
-			else
-			{
-				currentServer.remoteBaseURL = baseUrl;
-				currentServer.remoteSession = "";
-				currentServer.remoteServerName = serverName;
-				currentServer.remoteServerUser = user;
-				currentServer.remoteServerPass = pass;
-				currentServer.isUsingRemoteServer = true;
-			}
+			currentServer.remoteBaseURL = "";
+			currentServer.remoteSession = "";
+			currentServer.remoteServerName = "";
+			currentServer.remoteServerUser = "";
+			currentServer.remoteServerPass = "";
+			currentServer.isUsingRemoteServer = false;
 		}
-		, ValidateRemoteServerNameSimpleRules: function (val)
+		else
 		{
-			if (val.length == 0)
+			currentServer.remoteBaseURL = baseUrl;
+			currentServer.remoteSession = "";
+			currentServer.remoteServerName = serverName;
+			currentServer.remoteServerUser = user;
+			currentServer.remoteServerPass = pass;
+			currentServer.isUsingRemoteServer = true;
+		}
+	}
+	, ValidateRemoteServerNameSimpleRules: function (val)
+	{
+		if (val.length == 0)
+			return false;
+		if (val.length > 16)
+			return false;
+		for (var i = 0; i < val.length; i++)
+		{
+			var c = val.charAt(i);
+			if ((c < "a" || c > "z") && (c < "A" || c > "Z") && (c < "0" || c > "9") && c != " ")
 				return false;
-			if (val.length > 16)
-				return false;
-			for (var i = 0; i < val.length; i++)
-			{
-				var c = val.charAt(i);
-				if ((c < "a" || c > "z") && (c < "A" || c > "Z") && (c < "0" || c > "9") && c != " ")
-					return false;
-			}
-			return true;
 		}
-	};
+		return true;
+	}
+};
 ///////////////////////////////////////////////////////////////
 // Custom Events //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var BI_CustomEvent =
+{
+	customEventRegistry: new Object(),
+	AddListener: function (eventName, eventHandler)
 	{
-		customEventRegistry: new Object(),
-		AddListener: function (eventName, eventHandler)
+		if (typeof this.customEventRegistry[eventName] == "undefined")
+			this.customEventRegistry[eventName] = new Array();
+		this.customEventRegistry[eventName].push(eventHandler);
+	},
+	RemoveListener: function (eventName, eventHandler)
+	{
+		if (typeof this.customEventRegistry[eventName] == "undefined")
+			return;
+		var handlers = this.customEventRegistry[eventName];
+		var idx = handlers.indexOf(eventHandler);
+		if (idx > -1)
 		{
-			if (typeof this.customEventRegistry[eventName] == "undefined")
-				this.customEventRegistry[eventName] = new Array();
-			this.customEventRegistry[eventName].push(eventHandler);
-		},
-		RemoveListener: function (eventName, eventHandler)
-		{
-			if (typeof this.customEventRegistry[eventName] == "undefined")
-				return;
-			var handlers = this.customEventRegistry[eventName];
-			var idx = handlers.indexOf(eventHandler);
-			if (idx > -1)
-			{
-				var handler = handlers[idx];
-				if (handler.isExecutingEventHandlerNow)
-					handler.removeEventHandlerWhenFinished = true;
-				else
-					handlers.splice(idx, 1);
-			}
-		},
-		Invoke: function (eventName, args)
-		{
-			if (typeof this.customEventRegistry[eventName] != "undefined")
-				for (var i = 0; i < this.customEventRegistry[eventName].length; i++)
-					try
-					{
-						var handler = this.customEventRegistry[eventName][i];
-						handler.isExecutingEventHandlerNow = true;
-						handler(args);
-						handler.isExecutingEventHandlerNow = false;
-						if (handler.removeEventHandlerWhenFinished)
-						{
-							this.customEventRegistry[eventName].splice(i, 1);
-							i--;
-						}
-					}
-					catch (ex)
-					{
-						toaster.Error(ex);
-					}
+			var handler = handlers[idx];
+			if (handler.isExecutingEventHandlerNow)
+				handler.removeEventHandlerWhenFinished = true;
+			else
+				handlers.splice(idx, 1);
 		}
-	};
+	},
+	Invoke: function (eventName, args)
+	{
+		if (typeof this.customEventRegistry[eventName] != "undefined")
+			for (var i = 0; i < this.customEventRegistry[eventName].length; i++)
+				try
+				{
+					var handler = this.customEventRegistry[eventName][i];
+					handler.isExecutingEventHandlerNow = true;
+					handler(args);
+					handler.isExecutingEventHandlerNow = false;
+					if (handler.removeEventHandlerWhenFinished)
+					{
+						this.customEventRegistry[eventName].splice(i, 1);
+						i--;
+					}
+				}
+				catch (ex)
+				{
+					toaster.Error(ex);
+				}
+	}
+};
 ///////////////////////////////////////////////////////////////
 // Session Timeout ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -20788,39 +20831,39 @@ function StripIdAttributesRecursive($ele)
 	});
 }
 var UrlParameters =
+{
+	loaded: false,
+	parsed_url_params: {},
+	Get: function (key)
 	{
-		loaded: false,
-		parsed_url_params: {},
-		Get: function (key)
+		if (!this.loaded)
 		{
-			if (!this.loaded)
-			{
-				var params = this.parsed_url_params;
-				window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value)
-				{
-					params[key.toLowerCase()] = decodeURIComponent(value);
-				})
-				this.loaded = true;
-			}
-			if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
-				return this.parsed_url_params[key.toLowerCase()];
-			return "";
-		}
-	};
-var UrlHashParameters =
-	{
-		Get: function (key)
-		{
-			var params = {};
-			window.location.hash.replace(/[?#&]+([^=&]+)=([^&]*)/gi, function (str, key, value)
+			var params = this.parsed_url_params;
+			window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value)
 			{
 				params[key.toLowerCase()] = decodeURIComponent(value);
 			})
-			if (typeof params[key.toLowerCase()] != 'undefined')
-				return params[key.toLowerCase()];
-			return "";
+			this.loaded = true;
 		}
-	};
+		if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
+			return this.parsed_url_params[key.toLowerCase()];
+		return "";
+	}
+};
+var UrlHashParameters =
+{
+	Get: function (key)
+	{
+		var params = {};
+		window.location.hash.replace(/[?#&]+([^=&]+)=([^&]*)/gi, function (str, key, value)
+		{
+			params[key.toLowerCase()] = decodeURIComponent(value);
+		})
+		if (typeof params[key.toLowerCase()] != 'undefined')
+			return params[key.toLowerCase()];
+		return "";
+	}
+};
 function htmlEncode(value)
 {
 	return $('<div/>').text(value).html();
@@ -20916,35 +20959,35 @@ function formatBitsPerSecond(bits)
 	return (negative ? '-' : '') + (bits / Math.pow(k, i)).toFloat(decimals[i]) + ' ' + sizes[i];
 }
 var mouseCoordFixer =
+{
+	last: {
+		x: 0, y: 0
+	}
+	, fix: function (e)
 	{
-		last: {
-			x: 0, y: 0
-		}
-		, fix: function (e)
+		if (e.alreadyMouseCoordFixed)
+			return;
+		e.alreadyMouseCoordFixed = true;
+		if (typeof e.pageX == "undefined")
 		{
-			if (e.alreadyMouseCoordFixed)
-				return;
-			e.alreadyMouseCoordFixed = true;
-			if (typeof e.pageX == "undefined")
+			if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 			{
-				if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
-				{
-					mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
-					mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY + $(window).scrollTop();
-				}
-				else
-				{
-					e.pageX = mouseCoordFixer.last.x;
-					e.pageY = mouseCoordFixer.last.y;
-				}
+				mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
+				mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY + $(window).scrollTop();
 			}
 			else
 			{
-				mouseCoordFixer.last.x = e.pageX = e.pageX + $(window).scrollLeft();
-				mouseCoordFixer.last.y = e.pageY = e.pageY + $(window).scrollTop();
+				e.pageX = mouseCoordFixer.last.x;
+				e.pageY = mouseCoordFixer.last.y;
 			}
 		}
-	};
+		else
+		{
+			mouseCoordFixer.last.x = e.pageX = e.pageX + $(window).scrollLeft();
+			mouseCoordFixer.last.y = e.pageY = e.pageY + $(window).scrollTop();
+		}
+	}
+};
 function IE_GetDevicePixelRatio()
 {
 	return Math.sqrt(screen.deviceXDPI * screen.deviceYDPI) / 96;
