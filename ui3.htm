@@ -12,6 +12,7 @@
 	<link rel="manifest" href="ui3/manifest.json">
 	<title>UI3 - Blue Iris</title>
 	<script type="text/javascript">
+		var html5PlayFunc; try { html5PlayFunc = HTMLMediaElement.prototype.play; } catch (e) { }
 		// If messages stating "An unexpected error has occurred" become troublesome, you can disable it by deleting this script block!
 		// Also, be sure to report the problem so I can fix it!
 		window.onerror = function (msg, url, line, charIdx)

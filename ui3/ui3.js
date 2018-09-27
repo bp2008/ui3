@@ -11417,7 +11417,11 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	var StartPlayback = function ()
 	{
-		var playPromise = player.play();
+		var playPromise;
+		if (typeof html5PlayFunc === "function")
+			playPromise = html5PlayFunc.call(player);
+		else
+			playPromise = player.play();
 		if (playPromise && playPromise.catch)
 			playPromise.catch(function (ex)
 			{
