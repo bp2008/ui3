@@ -10206,6 +10206,8 @@ function FetchH264VideoModule()
 	}
 	var streamInfoCallback = function (bitmapInfoHeader, waveFormatEx)
 	{
+		if (typeof h264_player.streamInfoCallback === "function")
+			h264_player.streamInfoCallback(bitmapInfoHeader, waveFormatEx);
 	}
 	this.GetSeekPercent = function ()
 	{
@@ -11237,6 +11239,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var isLoaded = false;
 	var allFramesAccepted = false;
 	var frameMetadataQueue = new FrameMetadataQueue();
+	var currentStreamBitmapInfo = null;
 
 	var lastFrame;
 	var lastFrameDuration = 16;
@@ -11408,6 +11411,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		var timeNow = performance.now();
 		lastFrameReceivedAt = timeNow;
 		allFramesAccepted = false;
+		currentStreamBitmapInfo = null;
 	}
 	var onMSEReady = function ()
 	{
@@ -11483,6 +11487,14 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				video: lastFrame.frameData,
 				duration: lastFrameDuration
 			});
+			if (currentStreamBitmapInfo)
+			{
+				var startMeta = $.extend({}, frame.meta);
+				startMeta.width = currentStreamBitmapInfo.biWidth;
+				startMeta.height = currentStreamBitmapInfo.biHeight;
+				startMeta.timestamp = startMeta.time;
+				frameRendered(startMeta);
+			}
 			fedFrameCount++;
 			if (!hasToldPlayerToPlay)
 			{
@@ -11521,6 +11533,11 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		}
 		allFramesAccepted = true;
 		CheckStreamEndCondition();
+	}
+	this.streamInfoCallback = function (bitmapInfoHeader, waveFormatEx)
+	{
+		if (bitmapInfoHeader)
+			currentStreamBitmapInfo = bitmapInfoHeader;
 	}
 
 	Initialize();
