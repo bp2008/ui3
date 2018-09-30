@@ -11487,8 +11487,9 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				video: lastFrame.frameData,
 				duration: lastFrameDuration
 			});
-			if (currentStreamBitmapInfo)
+			if (finishedFrameCount === 0 && currentStreamBitmapInfo)
 			{
+				// Some browsers started having a noticeable delay before their first onTimeUpdate call, so we call frameRendered early for the first frame, causing the video element to be resized at a more appropriate time.
 				var startMeta = $.extend({}, frame.meta);
 				startMeta.width = currentStreamBitmapInfo.biWidth;
 				startMeta.height = currentStreamBitmapInfo.biHeight;
