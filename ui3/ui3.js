@@ -18168,9 +18168,13 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 			if (cancelPromise && cancelPromise["catch"])
 				cancelPromise["catch"](function (e)
 				{
-					if (DOMException && DOMException.ABORT_ERR && e && e.code == DOMException.ABORT_ERR)
+					if (DOMException && DOMException.ABORT_ERR && e && e.code === DOMException.ABORT_ERR)
 					{
 						// Expected result. Don't spam console.
+					}
+					else if (DOMException && DOMException.INVALID_STATE_ERR && e && e.code === DOMException.INVALID_STATE_ERR)
+					{
+						// Expected result in MS Edge.
 					}
 					else
 						console.error(e);
