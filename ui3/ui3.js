@@ -415,8 +415,6 @@ var togglableUIFeatures =
 // * reloading the stream (change playback speed) should not cause the current position to change suddenly.
 // * don't forget jpeg streams
 
-// TODO: Re-evaluate the ui3_zoom1x_mode setting behavior with jpegs.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -5841,6 +5839,7 @@ function ClipLoader(clipsBodySelector)
 					clipData.camera = clip.camera;
 					clipData.recId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
 					clipData.thumbPath = clip.path; // Path used for loading the thumbnail
+					clipData.res = clip.res;
 					if (isClipList)
 					{
 						clipData.isSnapshot = clipData.roughLength == "Snapshot"
@@ -7005,6 +7004,27 @@ function ClipLoader(clipsBodySelector)
 	setInterval(self.UpdateClipList, 6000);
 	BI_CustomEvent.AddListener("ClipList_Updated", ClipList_Updated);
 	$clipsbody.on('scroll', ClipsBodyScroll);
+}
+///////////////////////////////////////////////////////////////
+// Clip Res Parser ////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipRes(res)
+{
+	this.width = 0;
+	this.height = 0;
+	this.valid = false;
+
+	if (typeof res === "string" && res.length >= 3)
+	{
+		let idxX = res.indexOf('x');
+		if (idxX > 0 && idxX + 1 < res.length)
+		{
+			this.width = parseInt(res.substr(0, idxX));
+			this.height = parseInt(res.substr(idxX + 1));
+			if (!isNaN(this.width) && !isNaN(this.height) && this.width > 0 && this.height > 0)
+				this.valid = true;
+		}
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Clip Thumbnail Video Preview ///////////////////////////////
@@ -9065,6 +9085,12 @@ function VideoPlayerController()
 			cli.id = clc.optionValue;
 			cli.fullwidth = cli.actualwidth = clc.width;
 			cli.fullheight = cli.actualheight = clc.height;
+			var clipRes = new ClipRes(clipData.res);
+			if (clipRes.valid)
+			{
+				cli.fullwidth = clipRes.width;
+				cli.fullheight = clipRes.height;
+			}
 			cli.aspectratio = clc.width / clc.height;
 			cli.path = clipData.path;
 			cli.uniqueId = clipData.recId;
@@ -11862,12 +11888,12 @@ function ImageRenderer()
 		}
 		var imgDrawWidth = widthForSizing * self.zoomHandler.GetZoomFactor();
 		var imgDrawHeight = heightForSizing * self.zoomHandler.GetZoomFactor();
-		var aspectRatio = imgForSizing.actualwidth / imgForSizing.actualheight;
 		if (imgDrawWidth === 0)
 		{
 			imgDrawWidth = imgAvailableWidth;
 			imgDrawHeight = imgAvailableHeight;
 
+			var aspectRatio = imgForSizing.actualwidth / imgForSizing.actualheight;
 			var newRatio = imgDrawWidth / imgDrawHeight;
 			if (newRatio < aspectRatio)
 				imgDrawHeight = imgDrawWidth / aspectRatio;
