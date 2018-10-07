@@ -11280,6 +11280,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	this.MaxBufferedTime = 6500;
 
 	var delayCompensation;
+	var badAutoplay = new BadAutoplayPreventionDetector();
 
 	var onTimeUpdate = function (e)
 	{
@@ -11300,6 +11301,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			frameRendered(meta);
 			CheckStreamEndCondition();
 		}
+		if (finishedFrameCount > 1)
+			badAutoplay.Reset();
 		if (finishedFrameCount > 3)
 			delayCompensation.Tick(self.GetBufferedTime());
 	}
@@ -11311,10 +11314,20 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var onPlayerPaused = function (e)
 	{
 		if (hasToldPlayerToPlay)
-			setTimeout(function ()
+		{
+			if (badAutoplay.NotifyPause())
 			{
-				StartPlayback();
-			}, 1);
+				// This is a sign that playback is being prevented without the courtesy of telling us explicitly.
+				InputIsRequiredToPlay();
+			}
+			else
+			{
+				setTimeout(function ()
+				{
+					StartPlayback();
+				}, 1);
+			}
+		}
 	}
 	var onPlayerStalled = function (e)
 	{
@@ -11438,6 +11451,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		lastFrameReceivedAt = timeNow;
 		allFramesAccepted = false;
 		currentStreamBitmapInfo = null;
+		badAutoplay.Reset();
 	}
 	var onMSEReady = function ()
 	{
@@ -11447,35 +11461,41 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	var StartPlayback = function ()
 	{
-		var playPromise;
-		if (typeof html5PlayFunc === "function")
-			playPromise = html5PlayFunc.call(player);
-		else
-			playPromise = player.play();
+		hasToldPlayerToPlay = true;
+		var playPromise = badAutoplay.Play(player);
 		if (playPromise && playPromise.catch)
 			playPromise.catch(function (ex)
 			{
 				if (ex.name === "NotAllowedError")
 				{
-					hasToldPlayerToPlay = false;
-					inputRequiredOverlay.Show("HTML5 player", function ()
-					{
-						player.play().then(player.pause);
-						videoPlayer.RefreshVideoStream();
-					});
-					playerErrorHandler("INPUT REQUIRED");
+					InputIsRequiredToPlay();
 				}
 				else if (acceptedFrameCount === 0)
 				{
 					// Probably we just Flushed the player.
 				}
 				else
-					toaster.Warning(ex.message, 15000);
+					toaster.Warning("HTML5 Player: " + ex.message, 15000);
 				//toaster.Warning(ex);
 				//if (ex.name === "DOMException")
 				//{
 				//}
 			});
+	}
+	var InputIsRequiredToPlay = function ()
+	{
+		hasToldPlayerToPlay = false;
+		inputRequiredOverlay.Show("HTML5 player", function ()
+		{
+			var playPromise = player.play();
+			if (playPromise && typeof playPromise.then === "function")
+				playPromise.then(function ()
+				{
+					player.pause()
+				});
+			videoPlayer.RefreshVideoStream();
+		});
+		playerErrorHandler("INPUT REQUIRED");
 	}
 	this.AcceptFrame = function (frame)
 	{
@@ -11524,10 +11544,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			}
 			fedFrameCount++;
 			if (!hasToldPlayerToPlay)
-			{
 				StartPlayback();
-				hasToldPlayerToPlay = true;
-			}
 			if (jmuxer.bufferControllers && jmuxer.bufferControllers.video)
 			{
 				jmuxer.bufferControllers.video.cleanOffset = 600;
@@ -11674,6 +11691,69 @@ function HTML5DelayCompensationHelper(player)
 	}
 	UpdateAggressionLevel();
 	setPlaybackRate(1);
+}
+/**
+ * Tries to detect when HTML5 autoplay is being prevented without the courtesy of a "NotAllowedError".
+ * This class also circumvents several browser extensions which use non-standard methods to prevent autoplay, some of which are really incompatible with UI3!
+ */
+function BadAutoplayPreventionDetector()
+{
+	var self = this;
+	var q = new Queue();
+	var pauseLimit = 5;
+	var timeIntervalMs = 1000;
+	var circ1 = 0;
+	var circ2 = 0;
+	/**
+	 * Call this to reset the detector.
+	 */
+	this.Reset = function ()
+	{
+		if (q.getLength() > 0)
+			q = new Queue();
+		if (circ2 < 1)
+		{
+			// This action circumvents the Chrome extension "Disable HTML5 Autoplay (Reloaded)".
+			circ2++;
+			postMessage({ msg: 'dh5a:send-msg-to-frames', msgToSend: { msg: 'input-recieved', event: "mousedown", value: true } }, '*');
+		}
+	};
+	/**
+	 * Call this when the player gets paused.
+	 * @returns {Boolean} true if it appears that the player is being prevented from playing.
+	 */
+	this.NotifyPause = function ()
+	{
+		var now = performance.now();
+		q.enqueue(now);
+		while (!q.isEmpty() && now - q.peek() >= timeIntervalMs)
+			q.dequeue();
+		return q.getLength() >= pauseLimit;
+	};
+	/**
+	 * Call this to begin media playback.
+	 * @param player {Object} the video player instance
+	 * @returns {Promise} the promise returned by calling player.play()
+	 */
+	this.Play = function (player)
+	{
+		if (circ1 < 2)
+		{
+			// This action circumvents the Chrome extension "HTML5 Video Autoplay Blocker"
+			circ1++;
+			var $ele = $("body > .video-blocker-overlay-btn");
+			if ($ele.length > 0)
+			{
+				$ele.click();
+				$ele.remove();
+				circ1 = 1000;
+			}
+		}
+		if (typeof html5PlayFunc === "function")
+			return html5PlayFunc.call(player); // This action circumvents the Chrome extension "Disable HTML5 Autoplay"
+		else
+			return player.play();
+	};
 }
 ///////////////////////////////////////////////////////////////
 // Network Delay Calculator - An Imperfect Science ////////////
