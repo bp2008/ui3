@@ -9222,6 +9222,11 @@ function VideoPlayerController()
 		if (typeof playerModule.PlaybackDirectionChanged == "function")
 			playerModule.PlaybackDirectionChanged(playReverse);
 	}
+	this.ShowDelayWarning = function ()
+	{
+		if (typeof playerModule.ShowDelayWarning === "function")
+			playerModule.ShowDelayWarning();
+	}
 	this.NotifyClipMetadataChanged = function (clipData)
 	{
 		// <summary>Tells the video player about a clip's new duration.  As of BI 4.6.5.2, this currently should not be called as it will make UI3 and Blue Iris disagree about the clip duration.</summary>
@@ -10457,23 +10462,23 @@ function FetchH264VideoModule()
 	var perf_warning_cpu = null;
 	var perf_warning_net_ticks = 0;
 	var perf_warning_cpu_ticks = 0;
-	var MeasurePerformance = function ()
+	var MeasurePerformance = function (showCommonWarnings)
 	{
 		var perfNow = performance.now();
 		if (!h264_player || !isCurrentlyActive || !safeFetch.IsActive() || isLoadingRecordedSnapshot || perfNow - lastActivatedAt < 1000)
 			return;
 		if (perfNow - lastNerdStatsUpdate > 3000 && perfNow - lastActivatedAt > 3000)
 			writeNerdStats(lastFrameMetadata, perfNow);
-		if (perf_warning_net)
-		{
-			perf_warning_net.remove();
-			perf_warning_net = null;
-		}
-		if (perf_warning_cpu)
-		{
-			perf_warning_cpu.remove();
-			perf_warning_cpu = null;
-		}
+		//if (perf_warning_net)
+		//{
+		//	perf_warning_net.remove();
+		//	perf_warning_net = null;
+		//}
+		//if (perf_warning_cpu)
+		//{
+		//	perf_warning_cpu.remove();
+		//	perf_warning_cpu = null;
+		//}
 		var bufferedTime = h264_player.GetBufferedTime();
 		var netDelay = h264_player.GetNetworkDelay();
 		if (netDelay + bufferedTime > 60000)
@@ -10482,12 +10487,16 @@ function FetchH264VideoModule()
 			ReopenStreamAtCurrentSeekPosition();
 			return;
 		}
+		var delayed = false;
+
 		if (netDelay > 2000)
 		{
+			delayed = true;
 			if (perf_warning_net_ticks++ > 0)
 			{
-				// Blue Iris appears to drop frames when it detects the network buffer getting too large, so this needs to be fairly low.
-				perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime. Consider changing the streaming quality.', 10000);
+				// Blue Iris appears to drop frames when it detects the network buffer getting too large, so this delay limit needs to be fairly low.
+				if (showCommonWarnings)
+					perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime. Consider changing the streaming quality.', 10000);
 			}
 		}
 		else
@@ -10496,22 +10505,36 @@ function FetchH264VideoModule()
 		{
 			if (bufferedTime > h264_player.MaxBufferedTime)
 			{
+				delayed = true;
 				if (perf_warning_cpu_ticks++ > 0)
-					perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which probably indicates a compatibility issue with the browser you are using. Please try a different browser, or open UI Settings and change the H.264 player to a different option.', 10000);
+				{
+					if (showCommonWarnings)
+						perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which probably indicates a compatibility issue with the browser you are using. Please try a different browser, or open UI Settings and change the H.264 player to a different option.', 10000);
+				}
 			}
 			else
 				perf_warning_cpu_ticks = 0;
 		}
 		else if (bufferedTime > 3000)
 		{
+			delayed = true;
 			if (perf_warning_cpu_ticks++ > 0)
 				perf_warning_cpu = toaster.Warning('This stream is becoming delayed because your CPU is not fast enough. Consider changing the streaming quality.', 10000);
 		}
 		else
 			perf_warning_cpu_ticks = 0;
+
+		if (delayed)
+			cornerStatusIcons.Show("streamDelay");
+		else
+			cornerStatusIcons.Hide("streamDelay");
+	}
+	this.ShowDelayWarning = function ()
+	{
+		MeasurePerformance(true);
 	}
 	Initialize();
-	perfMonInterval = setInterval(MeasurePerformance, 10000);
+	perfMonInterval = setInterval(MeasurePerformance, 2500);
 }
 ///////////////////////////////////////////////////////////////
 // openh264_player ////////////////////////////////////////////
@@ -11547,7 +11570,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			fedFrameCount++;
 			if (!hasToldPlayerToPlay)
 				StartPlayback();
-			if (jmuxer.bufferControllers && jmuxer.bufferControllers.video)
+			// Evidently jmuxer can be set to null by some callback method by the time we get to here.
+			if (jmuxer && jmuxer.bufferControllers && jmuxer.bufferControllers.video)
 			{
 				jmuxer.bufferControllers.video.cleanOffset = 600;
 			}
@@ -12477,6 +12501,14 @@ function CornerStatusIcons()
 	// Icon names should be unique and alphanumeric ([0-9A-Za-z_]) because they are used to build the name of a setting.
 	self.iconList = new Array();
 	self.iconList.push({
+		name: "streamDelay",
+		iconHtml: '<svg class="icon noflip"><use xlink:href="#svg_mio_clock"></use></svg>',
+		rgb: "255,128,0",
+		class: "big",
+		title: "This stream is delayed. Click for more details.",
+		click: ShowStreamDelayDetails
+	});
+	self.iconList.push({
 		name: "recording",
 		iconHtml: '<svg class="icon"><use xlink:href="#svg_x5F_Stoplight"></use></svg>',
 		rgb: "255,0,0",
@@ -12547,13 +12579,16 @@ function CornerStatusIcons()
 			icon.$ele.attr('iconName', icon.name);
 			icon.$ele.attr('title', icon.title);
 			icon.$ele.html(icon.iconHtml);
+			if (icon.class)
+				icon.$ele.addClass(icon.class);
 			if (icon.rgb)
 			{
-				icon.$ele.css("color", "rgba(" + icon.rgb + ",1)");
+				var a = typeof icon.a === "number" ? icon.a : 1;
+				icon.$ele.css("color", "rgba(" + icon.rgb + "," + a + ")");
 				if (settings.ui3_icons_extraVisibility === "1")
 				{
-					icon.$ele.css("border-color", "rgba(" + icon.rgb + ",0.5)");
-					icon.$ele.css("background-color", "rgba(" + icon.rgb + ",0.3)");
+					icon.$ele.css("border-color", "rgba(" + icon.rgb + "," + (a * 0.5) + ")");
+					icon.$ele.css("background-color", "rgba(" + icon.rgb + "," + (a * 0.3) + ")");
 				}
 			}
 			if (icon.visible)
@@ -12561,10 +12596,26 @@ function CornerStatusIcons()
 				icon.visible = false;
 				self.Show(icon.name);
 			}
+			if (typeof icon.click === "function")
+			{
+				icon.$ele.on('mousedown touchstart', function (e)
+				{
+					e.stopPropagation();
+					videoPlayer.suppressMouseHelper();
+				});
+				icon.$ele.on('click', icon.click);
+				icon.$ele.addClass('click');
+			}
+			else
+				icon.$ele.addClass('noClick');
 			$container.append(icon.$ele);
 		}
 	}
 	this.ReInitialize();
+}
+function ShowStreamDelayDetails(e)
+{
+	videoPlayer.ShowDelayWarning();
 }
 ///////////////////////////////////////////////////////////////
 // Sound Effect Player ////////////////////////////////////////
