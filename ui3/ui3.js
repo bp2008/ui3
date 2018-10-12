@@ -415,6 +415,8 @@ var togglableUIFeatures =
 // * reloading the stream (change playback speed) should not cause the current position to change suddenly.
 // * don't forget jpeg streams
 
+// TODO: Use something less annoying than toasts to report streaming problems to the user.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -7016,7 +7018,7 @@ function ClipRes(res)
 
 	if (typeof res === "string" && res.length >= 3)
 	{
-		let idxX = res.indexOf('x');
+		var idxX = res.indexOf('x');
 		if (idxX > 0 && idxX + 1 < res.length)
 		{
 			this.width = parseInt(res.substr(0, idxX));
@@ -11715,7 +11717,8 @@ function BadAutoplayPreventionDetector()
 		{
 			// This action circumvents the Chrome extension "Disable HTML5 Autoplay (Reloaded)".
 			circ2++;
-			postMessage({ msg: 'dh5a:send-msg-to-frames', msgToSend: { msg: 'input-recieved', event: "mousedown", value: true } }, '*');
+			if (typeof postMessage === "function")
+				postMessage({ msg: 'dh5a:send-msg-to-frames', msgToSend: { msg: 'input-recieved', event: "mousedown", value: true } }, '*');
 		}
 	};
 	/**
@@ -11732,7 +11735,7 @@ function BadAutoplayPreventionDetector()
 	};
 	/**
 	 * Call this to begin media playback.
-	 * @param player {Object} the video player instance
+	 * @param {Object} player the video player instance
 	 * @returns {Promise} the promise returned by calling player.play()
 	 */
 	this.Play = function (player)
@@ -18744,13 +18747,13 @@ function GhettoStream()
 	this.Count = function ()
 	{
 		return totalCachedBytes;
-	}
+	};
 	this.Write = function (newArray)
 	{
 		/// <summary>Writes the specified Uint8Array to the stream so it can be read later.</summary>
 		dataQueue.enqueue(newArray);
 		totalCachedBytes += newArray.length;
-	}
+	};
 	this.Read = function (byteCount)
 	{
 		/// <summary>Reads the specified number of bytes from the stream, returning null if not enough bytes are available yet.</summary>
@@ -18782,7 +18785,7 @@ function GhettoStream()
 		}
 		totalCachedBytes -= readBuf.length;
 		return readBuf;
-	}
+	};
 }
 ///////////////////////////////////////////////////////////////
 // Binary Reading /////////////////////////////////////////////
