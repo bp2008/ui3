@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Reset UI3 Settings</title>
+	<style type="text/css">
+		body
+		{
+			font-family: Consolas, monospace;
+		}
+	</style>
+</head>
+<body>
+	<h2>Reset UI3 Settings</h2>
+	<p>UI3 stores its settings in your browser using <a href="https://www.google.com/search?q=local+storage+Web+API">Local Storage</a>.</p>
+	<p>The button below will clear all items in Local Storage for the origin "<span id="domain">[ERROR]</span>"</p>
+	<p><input type="button" onclick="resetAllUi3Settings_Click()" value="Reset All Settings" /></p>
+	<p>This affects only the web browser you are currently accessing this page with.</p>
+	<p><a href="../ui3.htm">Go to UI3</a></p>
+	<script type="text/javascript">
+		function isLocalStorageEnabled()
+		{
+			try // May throw exception if local storage is disabled by browser settings!
+			{
+				var key = "local_storage_test_item";
+				localStorage.setItem(key, key);
+				localStorage.removeItem(key);
+				return true;
+			} catch (e)
+			{
+				return false;
+			}
+		}
+		function resetAllUi3Settings_Click()
+		{
+			if (isLocalStorageEnabled())
+			{
+				if (confirm("All of UI3's settings will be cleared on this device, including saved credentials. Continue?"))
+				{
+					try
+					{
+						localStorage.clear();
+					}
+					catch (ex)
+					{
+						alert("An error occurred. Settings could not be cleared!\n\n" + ex);
+						return;
+					}
+					alert("All settings have been cleared.");
+				}
+			}
+			else
+			{
+				alert("Local Storage is not available. Unable to clear settings (there probably were not any to start with).");
+			}
+		}
+		try
+		{
+			document.getElementById("domain").innerText = location.origin.trim();
+		}
+		catch (ex) { }
+	</script>
+</body>
+</html>
