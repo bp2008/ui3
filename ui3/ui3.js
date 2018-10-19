@@ -6,6 +6,10 @@
 "use strict";
 var developerMode = false;
 
+if (navigator.cookieEnabled)
+{
+	console.log("removeUrlParams", NavRemoveUrlParams("session"));
+}
 ///////////////////////////////////////////////////////////////
 // Feature Detect /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -50,6 +54,7 @@ var mse_mp4_h264_supported = false;
 var mse_mp4_aac_supported = false;
 var vibrate_supported = false;
 var web_audio_autoplay_disabled = false;
+var cookies_accessible = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -57,12 +62,11 @@ function DoUIFeatureDetection()
 		requestAnimationFramePolyFill();
 		if (!isCanvasSupported())
 			MissingRequiredFeature("HTML5 Canvas"); // Excludes IE 8
-		else if (!areCookiesEnabled())
-			MissingRequiredFeature("Cookies", "Cookies are required for UI3's session management.");
 		else
 		{
 			// All critical tests pass
 			// Non-critical tests can run here and store their results in global vars.
+			cookies_accessible = testCookieFunctionality();
 			browser_is_ios = BrowserIsIOS();
 			browser_is_android = BrowserIsAndroid();
 			web_workers_supported = typeof Worker !== "undefined";
@@ -114,6 +118,14 @@ function DoUIFeatureDetection()
 						ul.append('<li>AudioBuffer.copyToChannel</li>');
 					ul_root.append($('<li>The audio player requires these unsupported features:</li>').append(ul));
 				}
+				if (!isLocalStorageEnabled())
+				{
+					ul_root.append('<li>Local Storage is disabled or unavailable in your browser. Settings will not be saved between sessions.</li>');
+				}
+				if (!navigator.cookieEnabled)
+				{
+					ul_root.append('<li>Cookies are disabled in this browser. The browser cache will be less effective, making UI3 load at sub-optimal speed.</li>');
+				}
 				if (!fullscreen_supported)
 				{
 					ul_root.append('<li>Fullscreen mode is not supported.</li>');
@@ -149,7 +161,7 @@ function DoUIFeatureDetection()
 			return;
 		}
 		// A critical test failed
-		location.href = "/jpegpull.htm";
+		location.href = "/jpegpull.htm" + currentServer.GetLocalSessionArg("?");
 	}
 	catch (ex)
 	{
@@ -172,10 +184,12 @@ function isCanvasSupported()
 	var elem = document.createElement('canvas');
 	return !!(elem.getContext && elem.getContext('2d'));
 }
-function areCookiesEnabled()
+function testCookieFunctionality()
 {
 	try
 	{
+		if (!navigator.cookieEnabled)
+			return false;
 		var session = $.cookie("session");
 		if (session)
 			return true;
@@ -414,8 +428,6 @@ var togglableUIFeatures =
 // * when we get new clip length data for the playing clip, handle it correctly. don't just throw out the new data.
 // * reloading the stream (change playback speed) should not cause the current position to change suddenly.
 // * don't forget jpeg streams
-
-// TODO: Use something less annoying than toasts to report streaming problems to the user.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -1870,7 +1882,7 @@ function AttachDefaultSettingsProperties(storageWrapper)
 ///////////////////////////////////////////////////////////////
 // Load svg before document.ready, to give it a head-start.
 $.ajax({
-	url: "ui3/icons.svg?v=" + combined_version,
+	url: "ui3/icons.svg?v=" + combined_version + local_bi_session_arg,
 	dataType: "html",
 	cache: true,
 	success: function (data)
@@ -2736,7 +2748,7 @@ function DropdownBoxes()
 						statusLoader.diskUsageClick();
 						break;
 					case "help":
-						window.open("ui3/help/help.html#overview");
+						window.open("ui3/help/help.html" + currentServer.GetLocalSessionArg("?") + "#overview");
 						break;
 					case "logout":
 						logout();
@@ -3839,7 +3851,7 @@ var ptzPresetThumbLoader = new (function ()
 	{
 		if (presetNumber < 1 || presetNumber > 20)
 			return "";
-		var sessionArg = currentServer.GetRemoteSessionArg("?");
+		var sessionArg = currentServer.GetAPISessionArg("?");
 		var cacheArg = overrideCache ? ((sessionArg ? "&" : "?") + "cache=" + Date.now()) : "";
 		return currentServer.remoteBaseURL + "image/" + cameraId + "/preset_" + presetNumber + ".jpg" + sessionArg + cacheArg;
 	}
@@ -6137,7 +6149,7 @@ function ClipLoader(clipsBodySelector)
 	this.GetDownloadClipInfo = function (clipData)
 	{
 		var retVal = {};
-		retVal.href = currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetRemoteSessionArg("?");
+		retVal.href = currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetAPISessionArg("?");
 		var date = GetDateStr(clipData.displayDate);
 		date = date.replace(/\//g, '-').replace(/:/g, '.');
 		retVal.fileNameNoExt = cameraListLoader.GetCameraName(clipData.camera) + " " + date;
@@ -6284,7 +6296,7 @@ function ClipLoader(clipsBodySelector)
 			console.error("ThumbOnAppear called with undefined ele");
 			return;
 		}
-		var path = currentServer.remoteBaseURL + "thumbs/" + ele.thumbPath + currentServer.GetRemoteSessionArg("?");
+		var path = currentServer.remoteBaseURL + "thumbs/" + ele.thumbPath + currentServer.GetAPISessionArg("?");
 		if (ele.getAttribute('src') != path)
 			asyncThumbnailDownloader.Enqueue(ele, path);
 	}
@@ -6337,7 +6349,7 @@ function ClipLoader(clipsBodySelector)
 				+ '<div class="clipimghelper">'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipdur"' + clipDurTitle + '>' + clipDur + '</div>'
-				+ '<img id="t' + clipData.recId + '" src="ui3/LoadingImage.png" />'
+				+ '<img id="t' + clipData.recId + '" src="ui3/LoadingImage.png' + currentServer.GetLocalSessionArg("?") + '" />'
 				+ '</div>'
 				+ '<div class="clipcolorbar" style="background-color: #' + clipData.colorHex + ';"></div>'
 				+ '<div class="clipdesc"><div class="cliptime">' + timeStr + '</div><div class="clipcam">' + camName + '</div></div>'
@@ -6358,7 +6370,7 @@ function ClipLoader(clipsBodySelector)
 
 				if (getMouseoverClipThumbnails())
 				{
-					var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetRemoteSessionArg("?");
+					var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetAPISessionArg("?");
 					if (thumbEle.getAttribute("src") == thumbPath)
 						thumbPath = thumbEle;
 					bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight);
@@ -7096,7 +7108,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 		var expectedWidth = expectedHeight * aspectRatio;
 		clipThumbPlaybackActive = true;
 		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * duration;
-		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&cache=1&h=" + expectedHeight + currentServer.GetRemoteSessionArg("&", true);
+		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&cache=1&h=" + expectedHeight + currentServer.GetAPISessionArg("&");
 		var thumbLabel = camName + " " + GetTimeStr(new Date(clipData.displayDate.getTime() + timeValue));
 		bigThumbHelper.Show($clip, $clip, thumbLabel, thumbPath, expectedWidth, expectedHeight, function ($img, userContext, success)
 		{
@@ -7141,7 +7153,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 function AsyncClipThumbnailDownloader()
 {
 	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, onLoad, onError, loadCondition);
-	var fallbackImg = 'ui3/noimage.png';
+	var fallbackImg = 'ui3/noimage.png' + currentServer.GetLocalSessionArg("?");
 	this.Stop = function ()
 	{
 		asyncThumbnailDownloader.Stop();
@@ -7171,7 +7183,7 @@ function AsyncClipThumbnailDownloader()
 	function loadCondition(obj)
 	{
 		var src = obj.img.getAttribute('src');
-		return !src || src.length == 0 || src == "ui3/LoadingImage.png" || (src != obj.path && src != fallbackImg);
+		return !src || src.length == 0 || src == "ui3/LoadingImage.png" + currentServer.GetLocalSessionArg("?") || (src != obj.path && src != fallbackImg);
 	}
 }
 function AsyncPresetThumbnailDownloader(thumbLoaded, thumbError)
@@ -7300,7 +7312,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 			if (currentlyLoadingImages[i].img == img)
 			{
 				clearTimeout(currentlyLoadingImages[i].loadTimeout);
-				$(img).unbind("load.asyncimage error.asyncimage").attr('src', 'ui3/LoadingImage.png');
+				$(img).unbind("load.asyncimage error.asyncimage").attr('src', 'ui3/LoadingImage.png' + currentServer.GetLocalSessionArg("?"));
 				currentlyLoadingImages.splice(i, 1);
 				setTimeout(AsyncDownloadQueuedImage, 250);
 				return;
@@ -8042,7 +8054,7 @@ function SessionManager()
 	var self = this;
 	var isAdministratorSession = false;
 	var lastResponse = null;
-	var latestAPISession = null;
+	var remoteServerSession = null;
 	var permission_ptz = true;
 	var permission_audio = true;
 	var permission_clips = true;
@@ -8062,7 +8074,12 @@ function SessionManager()
 		else
 		{
 			// First, check the current session status
-			var oldSession = self.GetSession();
+			var oldSession = self.GetAPISession();
+			if (!oldSession)
+			{
+				loadingHelper.SetErrorStatus("login", "Blue Iris did not provide the expected session data. This version of UI3 requires Blue Iris 4.8.2.3 or newer.");
+				return;
+			}
 			ExecJSON({ cmd: "login", session: oldSession }, function (response)
 			{
 				lastResponse = response;
@@ -8126,7 +8143,7 @@ function SessionManager()
 	}
 	var LogInWithCredentials = function (user, pass, onFail, isAutomatic)
 	{
-		var oldSession = self.GetSession();
+		var oldSession = self.GetAPISession();
 		var args = { cmd: "login" };
 		ExecJSON(args, function (response)
 		{
@@ -8174,8 +8191,7 @@ function SessionManager()
 		lastResponse = response;
 		var user = response && response.data && response.data.user ? response.data.user : "";
 		loadingHelper.SetLoadedStatus("login");
-		latestAPISession = lastResponse.session;
-		self.ApplyLatestAPISessionIfNecessary();
+		self.SetAPISession(lastResponse.session);
 
 		$("#systemname").text(lastResponse.data["system name"]);
 		if (lastResponse.data && lastResponse.data.profiles && lastResponse.data.profiles.length > 0)
@@ -8317,31 +8333,62 @@ function SessionManager()
 				$("#topbar_tab_live").click();
 		}
 	}
-	this.ApplyLatestAPISessionIfNecessary = function ()
-	{
-		if (latestAPISession == null || currentServer.isUsingRemoteServer)
-			return;
-		if (self.GetSession() != latestAPISession)
-		{
-			// If this happens a lot, usually the cause is another window with a web UI open that has a different latestAPISession value
-			bilog.verbose("SessionManager changing session from " + self.GetSession() + " to " + latestAPISession);
-			this.SetSession(latestAPISession);
-		}
-	}
-	this.GetSession = function ()
-	{
-		return currentServer.isUsingRemoteServer ? latestAPISession : $.cookie("session");
-	}
-	this.SetSession = function (session)
-	{
-		if (currentServer.isUsingRemoteServer)
-			latestAPISession = session;
-		else
-			$.cookie("session", session, { path: "/" });
-	}
+	/**
+	 * Gets the session ID that is currently used for API and video access.
+	 * @returns {String} Session ID currently used for api and video access.
+	 */
 	this.GetAPISession = function ()
 	{
-		return latestAPISession;
+		return currentServer.isUsingRemoteServer ? remoteServerSession : local_bi_session;
+	}
+	/**
+	 * Sets the session ID that is currently used for API and video access.
+	 * @param {String} session Session ID currently used for api and video access.
+	 */
+	this.SetAPISession = function (session)
+	{
+		var oldSession = self.GetAPISession();
+		if (oldSession !== session)
+		{
+			console.log("SessionManager changing API session from " + self.GetAPISession() + " to " + session);
+			if (currentServer.isUsingRemoteServer)
+				remoteServerSession = session;
+			else
+			{
+				local_bi_session = session;
+				if (cookies_accessible)
+					$.cookie("session", session, { path: "/" });
+				else
+				{
+					if (navigator.cookieEnabled)
+					{
+						// Cookies are enabled, but not accessible by script (HttpOnly flag is probably present).
+						// The only way we can update our session cookie is to reload the page and add the new session string as an argument.
+						// Doing this lets us continue suppressing the session argument on a lot of requests, which is good for caching.
+						var url = RemoveUrlParams("session");
+						if (location.hash)
+							url = url.substr(0, url.length - location.hash.length);
+						url += currentServer.GetLocalSessionArg(url.indexOf("?") === -1 ? "?" : "&", true) + location.hash;
+						location.href = url;
+					}
+				}
+			}
+		}
+	}
+	/**
+	 * Gets the session ID that is used for static resource requests. It may be different from the one used for API requests, if we are using UI3 as a client app for a different server.
+	 * @returns {String} Session ID used for static resource requests.
+	 */
+	this.GetLocalSession = function ()
+	{
+		// Right now we're trusting that BI doesn't spontaneously change the s
+		//if (cookies_accessible)
+		//{
+		//	var cookieSession = $.cookie("session");
+		//	if (cookieSession)
+		//		return cookieSession;
+		//}
+		return local_bi_session;
 	}
 
 	this.AdminLoginRememberMeChanged = function ()
@@ -9667,7 +9714,6 @@ function JpegVideoModule()
 		ClearGetNewImageTimeout();
 		if (currentServer.isLoggingOut || !isCurrentlyActive)
 			return;
-		sessionManager.ApplyLatestAPISessionIfNecessary();
 		var timeValue = currentImageTimestampMs = currentImageRequestedAtMs = new Date().getTime();
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
@@ -9721,10 +9767,11 @@ function JpegVideoModule()
 
 		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight);
 
+		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isLive)
-			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetRemoteSessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
-			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetRemoteSessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + "&w=" + widthToRequest + qualityArg;
 
 		if ($("#camimg").attr('src') == imgSrcPath)
@@ -9866,7 +9913,7 @@ function JpegVideoModule()
 		ClearImageLoadTimeout();
 		imgLoadTimeout = setTimeout(function ()
 		{
-			bilog.debug("Image load timed out");
+			console.error("Image load timed out");
 			GetNewImage();
 		}, 15000);
 	}
@@ -10052,7 +10099,7 @@ function FetchH264VideoModule()
 		var videoUrl;
 		if (loading.isLive)
 		{
-			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetRemoteSessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight) + "&extend=2";
+			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight) + "&extend=2";
 		}
 		else
 		{
@@ -10135,7 +10182,7 @@ function FetchH264VideoModule()
 					widthAndQualityArg += "&w=" + imageRenderer.GetSizeToRequest(false).w;
 				widthAndQualityArg += "&q=50";
 			}
-			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + posArg + "&speed=" + speed + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg;
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -10249,9 +10296,9 @@ function FetchH264VideoModule()
 	this.GetLastSnapshotUrl = function ()
 	{
 		if (loading.isLive)
-			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + currentServer.GetRemoteSessionArg("&", true);
+			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + currentServer.GetAPISessionArg("&", true);
 		else
-			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetRemoteSessionArg("&", true);
+			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true);
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
@@ -10877,7 +10924,7 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError, onC
 	// each decoded frame because I don't need them.  I'm not sure how significant 
 	// this optimization is (each removed field was a new Uint8ClampedArray of 
 	// significant size, but maybe data didn't have to be copied to make them).
-	var worker = new Worker("ui3/openh264_decoder.js?v=" + combined_version);
+	var worker = new Worker("ui3/openh264_decoder.js?v=" + combined_version + currentServer.GetLocalSessionArg("&"));
 	var encodedFrameQueue = new Queue();
 	var is_decoding = false;
 	var dropNextDecodedFrame = false;
@@ -11119,7 +11166,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			hwva = "1";
 		else if (settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Yes)
 			hwva = "2";
-		var $player = $('<embed id="pnacl_player_module" name="pnacl_player_module" width="100%" height="100%" path="pnacl" src="ui3/pnacl/pnacl_player.nmf" type="application/x-pnacl" hwaccel="' + hwva + '" />');
+		var $player = $('<embed id="pnacl_player_module" name="pnacl_player_module" width="100%" height="100%" path="pnacl" src="ui3/pnacl/pnacl_player.nmf' + currentServer.GetLocalSessionArg("?") + '" type="application/x-pnacl" hwaccel="' + hwva + '" />');
 		$parent.append($player);
 		player = document.getElementById("pnacl_player_module");
 	}
@@ -14824,7 +14871,7 @@ function CameraListDialog()
 					var sizeArg = "&w=160";
 					if (parseFloat($ele.attr("aspectratio")) < (160 / 120))
 						sizeArg = "&h=120";
-					var tmpImgSrc = currentServer.remoteBaseURL + "image/" + camId + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetRemoteSessionArg("&", true);
+					var tmpImgSrc = currentServer.remoteBaseURL + "image/" + camId + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetAPISessionArg("&", true);
 					PersistImageFromUrl(settingsKey, tmpImgSrc, function (imgAsDataURL)
 					{
 						settings.setItem(settingsKey + "_date", new Date().getTime())
@@ -15036,7 +15083,7 @@ function CameraProperties(camId)
 				}
 				, function ()
 				{
-					self.open(camId);
+					initialize();
 				});
 		}
 	}
@@ -15261,7 +15308,7 @@ function ClipProperties()
 		try
 		{
 			var $thumb = $('<img class="clipPropertiesThumb" src="" alt="clip thumbnail"></img>');
-			var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetRemoteSessionArg("?");
+			var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetAPISessionArg("?");
 			$thumb.attr('src', thumbPath);
 			$thumb.css("border-color", "#" + clipData.colorHex);
 			$camprop.append($thumb);
@@ -15664,7 +15711,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 	{
 		var recordArg = useTranscodeMethod ? "" : "&record=1";
 		var audioArg = "&audio=" + (includeAudio ? "1" : "0");
-		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + recordArg + audioArg + "&speed=100&stream=0&extend=2&time=" + startTimeMs;
+		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + recordArg + audioArg + "&speed=100&stream=0&extend=2&time=" + startTimeMs;
 		safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 	}
 	if (recordingOffsetWorkaround)
@@ -15684,7 +15731,7 @@ function DoExportRecordingOffsetWorkaround(callbackMethod, path, startTimeMs)
 			callbackMethod = null;
 		}
 	}
-	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetRemoteSessionArg("?", true) + "&speed=0&audio=0&stream=0&extend=2&w=160&q=10&time=" + startTimeMs;
+	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + "&speed=0&audio=0&stream=0&extend=2&w=160&q=10&time=" + startTimeMs;
 	safeFetch.OpenStream(videoUrl, anyCallback, anyCallback, anyCallback, anyCallback);
 }
 ///////////////////////////////////////////////////////////////
@@ -15784,14 +15831,14 @@ var objectVisualizer = new (function ObjectVisualizer()
 			else
 			{
 				isLoading = true;
-				$('<style type="text/css">@import url("ui3/libs-src/jsonview/jsonview.min.css?v=' + combined_version + '")</style>').appendTo("head");
-				$.getScript("ui3/libs-src/jsonview/jsonview.min.js?v=" + combined_version)
+				$('<style type="text/css">@import url("ui3/libs-src/jsonview/jsonview.min.css?v=' + combined_version + currentServer.GetLocalSessionArg("&") + '")</style>').appendTo("head");
+				$.getScript("ui3/libs-src/jsonview/jsonview.min.js?v=" + combined_version + currentServer.GetLocalSessionArg("&"))
 					.done(function ()
 					{
 						isLoaded = true;
 						self.open(obj, title);
 					})
-					.fail(function (jqxhr, settings, exception)
+					.fail(function (jqXHR, settings, exception)
 					{
 						isLoaded = isLoading = false;
 						toaster.Error("Unable to load jsonview library.<br>" + jqXHR.ErrorMessageHtml, 5000);
@@ -16262,7 +16309,7 @@ function SaveSnapshotInBlueIris(camId)
 {
 	if (currentServer.isLoggingOut)
 		return;
-	$.ajax(currentServer.remoteBaseURL + "cam/" + camId + "/pos=100" + currentServer.GetRemoteSessionArg("?"))
+	$.ajax(currentServer.remoteBaseURL + "cam/" + camId + "/pos=100" + currentServer.GetAPISessionArg("?", true))
 		.done(function (response)
 		{
 			if (response.indexOf(">Ok<") != -1)
@@ -16733,14 +16780,14 @@ function HLSPlayer()
 			return;
 		$(window).resize(resizeHlsPlayer);
 		initStarted = true;
-		$.getScript("clappr/clappr.min.js?v=" + combined_version)
+		$.getScript("clappr/clappr.min.js?v=" + combined_version + currentServer.GetLocalSessionArg("&"))
 			.done(function (script, textStatus)
 			{
 				initFinished = true;
 				initSucceeded = true;
 				BeginHlsPlayback(camId);
 			})
-			.fail(function (jqxhr, settings, exception)
+			.fail(function (jqXHR, settings, exception)
 			{
 				initFinished = true;
 				self.CloseDialog();
@@ -16793,7 +16840,7 @@ function HLSPlayer()
 			container.empty();
 			container.append('<div id="hlsPlayer"></div>');
 
-			var src = currentServer.remoteBaseURL + "h264/" + camId + "/temp.m3u8" + currentServer.GetRemoteSessionArg("?", true);
+			var src = currentServer.remoteBaseURL + "h264/" + camId + "/temp.m3u8" + currentServer.GetAPISessionArg("?", true);
 			playerObj = new Clappr.Player({ source: src, parentId: "#hlsPlayer", autoPlay: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 });
 			playerObj.on('error', onHlsError);
 			playerObj.on('fullscreen', function ()
@@ -16849,7 +16896,8 @@ function HLSPlayer()
 		{
 			case "newtab":
 				self.CloseDialog();
-				window.open("livestream.htm?cam=" + encodeURIComponent(hlsPlayerLastCamId));
+				var sessionArg = currentServer.GetAPISessionArg("&");
+				window.open("livestream.htm?cam=" + encodeURIComponent(hlsPlayerLastCamId) + sessionArg);
 				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
@@ -17501,9 +17549,9 @@ function Toaster()
 		else
 		{
 			if (type === "error")
-				bilog.debug(type + " toast: ", message);
+				console.error(type + " toast: ", message);
 			else
-				bilog.info(type + " toast: ", message);
+				console.log(type + " toast: ", message);
 		}
 		var overrideOptions = {};
 
@@ -17565,13 +17613,9 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 {
 	if (currentServer.isLoggingOut && args.cmd != "logout")
 		return;
-	sessionManager.ApplyLatestAPISessionIfNecessary();
 	var isLogin = args.cmd == "login";
-	var oldSession = sessionManager.GetSession();
 	if (typeof args.session == "undefined" && !isLogin)
-	{
-		args.session = oldSession;
-	}
+		args.session = sessionManager.GetAPISession();
 	var eventArgs = { id: execJsonCounter++, args: args };
 	BI_CustomEvent.Invoke("ExecJSON_Start", eventArgs);
 	var reqUrl = currentServer.remoteBaseURL + "json";
@@ -17586,14 +17630,6 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 		{
 			eventArgs.data = data;
 			BI_CustomEvent.Invoke("ExecJSON_Success", eventArgs);
-			if (isLogin)
-				sessionManager.SetSession(oldSession);
-			else if (!currentServer.isUsingRemoteServer && typeof data.session != "undefined" && data.session != sessionManager.GetSession())
-			{
-				// If this happens a lot, usually the cause is another window with a web UI open that has a different latestAPISession value
-				bilog.verbose('ExecJSON("' + args.cmd + '").success changing session from ' + sessionManager.GetSession() + ' to ' + data.session);
-				sessionManager.SetSession(data.session);
-			}
 			if (callbackSuccess)
 				callbackSuccess(data);
 		},
@@ -17815,18 +17851,22 @@ function FailLimiter(maxFailsInTimePeriod, timePeriodMs)
 var currentServer =
 {
 	remoteBaseURL: ""
-	, remoteSession: ""
 	, remoteServerName: ""
 	, remoteServerUser: ""
 	, remoteServerPass: ""
 	, isLoggingOut: false
 	, isUsingRemoteServer: false
-	, GetRemoteSessionArg: function (prefix, overrideRemoteRequirement)
+	, GetAPISessionArg: function (prefix, forceAddArg)
 	{
-		if (currentServer.isUsingRemoteServer || overrideRemoteRequirement)
-			return prefix + "session=" + sessionManager.GetSession();
-		else
-			return "";
+		if (currentServer.isUsingRemoteServer || !navigator.cookieEnabled || forceAddArg)
+			return prefix + "session=" + sessionManager.GetAPISession();
+		return "";
+	}
+	, GetLocalSessionArg: function (prefix, forceAddArg)
+	{
+		if (!navigator.cookieEnabled || forceAddArg)
+			return prefix + "session=" + sessionManager.GetLocalSession();
+		return "";
 	}
 	, SetRemoteServer: function (serverName, baseUrl, user, pass)
 	{
@@ -17838,7 +17878,6 @@ var currentServer =
 		if (serverName == "")
 		{
 			currentServer.remoteBaseURL = "";
-			currentServer.remoteSession = "";
 			currentServer.remoteServerName = "";
 			currentServer.remoteServerUser = "";
 			currentServer.remoteServerPass = "";
@@ -17847,7 +17886,6 @@ var currentServer =
 		else
 		{
 			currentServer.remoteBaseURL = baseUrl;
-			currentServer.remoteSession = "";
 			currentServer.remoteServerName = serverName;
 			currentServer.remoteServerUser = user;
 			currentServer.remoteServerPass = pass;
@@ -17932,7 +17970,10 @@ function SessionTimeout()
 		if (getTimeoutMs() > 0)
 		{
 			currentServer.isLoggingOut = true;
-			location.href = 'timeout.htm?path=' + encodeURIComponent(location.pathname + location.search);
+			var path = RemoveUrlParams("session");
+			if (path.length > location.origin.length)
+				path = path.substr(location.origin.length);
+			location.href = 'timeout.htm?path=' + encodeURIComponent(path) + currentServer.GetAPISessionArg("&");
 		}
 	}
 
@@ -18047,33 +18088,12 @@ function LoadingHelper()
 ///////////////////////////////////////////////////////////////
 // Logging ////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-var BILogger = function ()
-{
-	var logInner = function (msg)
-	{
-		try
-		{
-			console.log.apply(null, arguments);
-		}
-		catch (ex)
-		{
-		}
-	}
-	var errorInner = function (msg)
-	{
-		try
-		{
-			console.error.apply(null, arguments);
-		}
-		catch (ex)
-		{
-		}
-	}
-	this.verbose = logInner;
-	this.info = logInner;
-	this.debug = errorInner;
-}
-var bilog = new BILogger();
+if (!console)
+	console = {};
+if (typeof console.log !== "function")
+	console.log = function () { };
+if (typeof console.error !== "function")
+	console.error = function () { };
 ///////////////////////////////////////////////////////////////
 // Object To Html Table ///////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -19522,7 +19542,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		if (e.which === 3)
+		if (e.which !== 1 && e.which !== 2) // Mustn't allow 4 and 5 (back and forward)
 			return;
 		handleExcludeFunc(e);
 		if (lastEvent === 1)
@@ -19536,7 +19556,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		if (e.which === 3)
+		if (e.which !== 1 && e.which !== 2)
 			return;
 		handleExcludeFunc(e);
 		var fakeMouseDown = lastEvent == 2;
@@ -20375,7 +20395,7 @@ function UIHelpTool()
 			+ 'This interface is easier to use when all your camera groups have webcasting enabled.<br><br>'
 			+ 'Enable webcasting for your groups using the group settings panel.  This panel is found in the lower-left corner of the Blue Iris console (only when PTZ controls are enabled):<br><br>'
 			+ '</div>');
-		var $img = $('<img src="ui3/help/img/GroupProperties.png" style="width:400px; height:320px;" />');
+		var $img = $('<img src="ui3/help/img/GroupProperties.png' + currentServer.GetLocalSessionArg("?") + '" style="width:400px; height:320px;" />');
 		$root.append($img);
 		$img.lightbox();
 		$root.modalDialog({ title: 'Camera Group Webcasting', closeOnOverlayClick: true });
@@ -20393,7 +20413,7 @@ function UIHelpTool()
 		$('<div class="UIHelp">'
 			+ 'Click "Download" to download a ui3-local-overrides.js file which is pre-configured to change the defaults for all of UI3\'s settings to match your current configuration.<br><br>'
 			+ 'The ui3-local-overrides system allows you to override default UI3 behavior for all your users.<br><br>'
-			+ '<a href="ui3/help/help.html#extensions" target="_blank">Click here to learn more about ui3-local-overrides.</a>'
+			+ '<a href="ui3/help/help.html' + currentServer.GetLocalSessionArg("?") + '#extensions" target="_blank">Click here to learn more about ui3-local-overrides.</a>'
 			+ '</div>').modalDialog({ title: 'ui3-local-overrides', closeOnOverlayClick: true });
 	}
 	var UI3_Export_Types_Help = function ()
@@ -20599,7 +20619,7 @@ function isCanvasSupported()
 function logout()
 {
 	currentServer.isLoggingOut = true;
-	var fallbackLogoutUrl = currentServer.remoteBaseURL + 'logout.htm' + currentServer.GetRemoteSessionArg("?");
+	var fallbackLogoutUrl = currentServer.remoteBaseURL + 'logout.htm' + currentServer.GetAPISessionArg("?");
 	if (currentServer.isUsingRemoteServer)
 	{
 		ExecJSON({ cmd: "logout" }, function (response)
@@ -20636,7 +20656,7 @@ function logoutOldSession(oldSession)
 	// As long as cookies are sharing sessions between multiple browser tabs, this code should not be enabled.
 	// With the user name in the session data, we avoid creating most unnecessary new sessions in the first place, but it does not make this feature safe to turn on.
 	// NOTE: Blue Iris fails to log out the session anyway if it is currently in use by an active connection.
-	//if (oldSession != null && oldSession != sessionManager.GetSession())
+	//if (oldSession != null && oldSession != sessionManager.GetAPISession())
 	//	ExecJSON({ cmd: "logout", session: oldSession });
 }
 function GetDialogOptionLabel(text)
@@ -21290,4 +21310,34 @@ function GetMediaErrorMessage(code)
 			return "MEDIA_ERR_SRC_NOT_SUPPORTED";
 	}
 	return "unknown error code (" + code + ")";
+}
+
+/**
+ * Changes the current URL by removing the specified query string parameter(s) from it.
+ * @returns {String} Returns null if successful, otherwise returns the new URL if changing the history state failed.
+ */
+function NavRemoveUrlParams()
+{
+	var url = RemoveUrlParams.apply(this, arguments);
+	try { history.replaceState(history.state, "", url); return null; } catch (ex) { return url; }
+}
+function RemoveUrlParams()
+{
+	var s = location.search;
+	for (var i = 0; i < arguments.length; i++)
+	{
+		var param = arguments[i];
+		var rx = new RegExp('(&|\\?)' + param + '=[^&?#%]+', 'gi');
+		s = s.replace(rx, "");
+		while (s.indexOf("&") === 0)
+		{
+			if (s.length > 1)
+				s = s.substr(1);
+			else
+				s = "";
+		}
+		if (s.length > 0 && s.indexOf("?") === -1)
+			s = "?" + s;
+	}
+	return location.origin + location.pathname + s + location.hash;
 }

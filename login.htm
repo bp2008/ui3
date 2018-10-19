@@ -6,7 +6,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "18";
+		var login_version = "19";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 	</script>
@@ -63,6 +63,11 @@
 		{
 			display: none;
 		}
+
+		.checkboxWrapper
+		{
+			max-width: 488px;
+		}
 	</style>
 </head>
 <body>
@@ -103,20 +108,63 @@
 		/* eslint no-extra-parens: 0 */
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
-		var existingSession = "";
+		var existingSession = "%%SESSION%%";
 		var isStoredDataLoaded = false;
 		var windowUnloading = false;
 		var cookiesEnabled;
 		var localStorageEnabled;
+
+		/**
+		 * Changes the current URL by removing the specified query string parameter(s) from it.
+		 * @returns {String} Returns null if successful, otherwise returns the new URL if changing the history state failed.
+		 */
+		function NavRemoveUrlParams()
+		{
+			var url = RemoveUrlParams.apply(this, arguments);
+			try { history.replaceState(history.state, "", url); return null; } catch (ex) { return url; }
+		}
+		function RemoveUrlParams()
+		{
+			var s = location.search;
+			for (var i = 0; i < arguments.length; i++)
+			{
+				var param = arguments[i];
+				var rx = new RegExp('(&|\\?)' + param + '=[^&?#%]+', 'gi');
+				s = s.replace(rx, "");
+				while (s.indexOf("&") === 0)
+				{
+					if (s.length > 1)
+						s = s.substr(1);
+					else
+						s = "";
+				}
+				if (s.length > 0 && s.indexOf("?") === -1)
+					s = "?" + s;
+			}
+			return location.origin + location.pathname + s + location.hash;
+		}
+
+		NavRemoveUrlParams("session");
+
 		$(function ()
 		{
-			cookiesEnabled = areCookiesEnabled();
+			cookiesEnabled = testCookieFunctionality();
 			localStorageEnabled = isLocalStorageEnabled();
+			var skipAutoLogin = GetPersistedValue("bi_override_disable_auto_login_once") === "1";
 			if (UrlParameters.Get("autologin") === "0")
 			{
-				SetPersistedValue("bi_override_disable_auto_login_once", "1");
-				location.href = location.href.replace(/autologin=0&?/gi, '');
-				return;
+				skipAutoLogin = true;
+				var url = NavRemoveUrlParams("session", "autologin");
+				if (url)
+				{
+					SetPersistedValue("bi_override_disable_auto_login_once", "1");
+					location.href = url;
+					return;
+				}
+			}
+			if (skipAutoLogin)
+			{
+				SetPersistedValue("bi_override_disable_auto_login_once", "0");
 			}
 			clearTimeout(showLoadingMessageTimeout);
 			$("#loginLoading").hide();
@@ -127,8 +175,14 @@
 				$("#login").css("color", "#EEEEEE").css("margin", "8px");
 				return;
 			}
-			if (!cookiesEnabled && !localStorageEnabled)
-				$("#cbLoginAutomatically").parent().text("Note: Cookies and Local Storage are disabled in your browser.").css("color", "#EEEEEE");
+			if (!existingSession || (existingSession.length === 11 && existingSession.startsWith("%") && existingSession.endsWith("%") && existingSession.indexOf("SESSION") === 2))
+			{
+				$("#login").html("<div>Session data was not provided as expected. This login page only works when served by Blue Iris 4.8.2.3 or newer.</div>");
+				$("#login").css("color", "#EEEEEE").css("margin", "8px");
+				return;
+			}
+			if (!localStorageEnabled)
+				$("#cbLoginAutomatically").parent().text("Note: Local Storage is disabled in your browser, so credentials can not be saved.").css("color", "#EEEEEE");
 			SetupLoginContextMenu();
 			SetStatus();
 			$(window).resize(resized);
@@ -139,11 +193,6 @@
 				cbLoginAutomaticallyClicked();
 				return;
 			};
-			var skipAutoLogin = GetPersistedValue("bi_override_disable_auto_login_once") === "1";
-			if (skipAutoLogin)
-			{
-				SetPersistedValue("bi_override_disable_auto_login_once", "0");
-			}
 			// Handle automatic login
 			if (GetPersistedValue("bi_rememberMe") === "1")
 			{
@@ -181,7 +230,7 @@
 			}
 
 			// Check for existing session
-			ExecJSON({ cmd: "login", session: $.cookie("session") }, function (response)
+			ExecJSON({ cmd: "login", session: existingSession }, function (response)
 			{
 				if (response.result === "fail")
 				{
@@ -269,10 +318,11 @@
 			var page = UrlParameters.Get("page");
 			if (page === "")
 				page = "/";
+			page = page.replace(/&session=[^&?#%]+/gi, '');
+			page = page.replace(/\?session=[^&?#%]+/gi, '?');
+			page += (page.indexOf("?") < 0 ? "?" : "&") + "session=" + existingSession;
 			if (cookiesEnabled)
 				$.cookie("session", existingSession, { path: "/" });
-			else
-				page += (page.indexOf("?") < 0 ? "?" : "&") + "session=" + existingSession;
 			location.href = page + location.hash;
 		}
 		function cancelAutoLogin()
@@ -304,8 +354,6 @@
 			var value;
 			if (localStorageEnabled)
 				value = localStorage.getItem(key);
-			else if (cookiesEnabled)
-				value = $.cookie(key);
 			if (!value)
 				value = "";
 			return value;
@@ -314,8 +362,6 @@
 		{
 			if (localStorageEnabled)
 				return localStorage.setItem(key, value);
-			else if (cookiesEnabled)
-				return $.cookie(key, value, { expires: 365 });
 		}
 		function pwKeypress(ele, e)
 		{
@@ -402,14 +448,14 @@
 					SetPersistedValue("bi_autoLoginInstant", GetAutoLoginInstantly() ? "0" : "1");
 			};
 			var menuOptions =
-				{
-					alias: "cmroot_login", width: "300px", items:
+			{
+				alias: "cmroot_login", width: "300px", items:
 					[
 						{ text: '<span id="autoLoginNoDelay"></span>', icon: "", alias: "autoLoginNoDelay", action: onContextMenuAction }
 					]
-					, onContextMenu: onTriggerContextMenu
-					, clickType: GetPreferredContextMenuTrigger()
-				};
+				, onContextMenu: onTriggerContextMenu
+				, clickType: GetPreferredContextMenuTrigger()
+			};
 			$(".checkboxWrapper,#btnLogin").contextmenu(menuOptions);
 		}
 	</script>

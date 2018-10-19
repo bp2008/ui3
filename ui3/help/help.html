@@ -10,8 +10,13 @@
 
 	<title>UI3 Help</title>
 
-	<link href="css/bootstrap.min.css" rel="stylesheet">
-	<link href="css/help.css" rel="stylesheet">
+	<script type="text/javascript">
+		var local_bi_session = "%%SESSION%%";
+		var local_bi_session_arg = navigator.cookieEnabled ? "" : "&session=" + local_bi_session;
+		var bi_version = "%%VERSION%%";
+		document.write('<link href="css/bootstrap.min.css?v=' + bi_version + local_bi_session_arg + '" rel="stylesheet" />'
+			+ '<link href="css/help.css?v=' + bi_version + local_bi_session_arg + '" rel="stylesheet" />');
+	</script>
 </head>
 
 <body>
@@ -84,7 +89,7 @@
 						<p>Blue Iris provides three streaming profiles called simply "Streaming 0", "Streaming 1", and "Streaming 2".  To find these in Blue Iris's local console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
 						<p class="bg-info padded-info">The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm and jpegpull.htm pages.</p>
 						<h4>Client-side profiles</h4>
-						
+
 						<div class="row">
 							<div class="col-sm-5">
 								<p>Prior to June 2018, UI3 simply exposed the three server-side profiles as choices in the Streaming Quality menu, and that was that.</p>
@@ -94,7 +99,7 @@
 								<p class="bg-info padded-info">If you want to share your profile changes with all browsers and devices, <a href="#extensions">see the "Quick Start" section of UI Extensions</a>.</p>
 							</div>
 							<div class="col-sm-7">
-								<img class="img-responsive" src="img/ProfileEditor.png" alt="Screenshot of the UI3 profile editor" style="margin-bottom: 5px;" />
+								<img class="img-responsive" mysrc="img/ProfileEditor.png" alt="Screenshot of the UI3 profile editor" style="margin-bottom: 5px;" />
 							</div>
 						</div>
 						<h3>H.264 Profile Configuration Tips</h3>
@@ -126,7 +131,7 @@
 						<p>If you right click (long-press on touchscreens) on a camera, a context menu appears.  The first 4 actions are specific to the current video stream, while most other options are specific to the camera you clicked on.  Here, blue icons indicate actions that take effect on the Blue Iris server and require <span class="label label-primary">Admin</span> privilege, while black icons indicate actions that occur in the web UI.</p>
 						<div class="row">
 							<div class="col-sm-3">
-								<img class="img-responsive" src="img/CameraContextMenu.png" alt="Screenshot of clip list context menu" style="margin-bottom: 5px;" />
+								<img class="img-responsive" mysrc="img/CameraContextMenu.png" alt="Screenshot of clip list context menu" style="margin-bottom: 5px;" />
 							</div>
 							<div class="col-sm-9">
 								<div class="panel panel-info">
@@ -179,7 +184,7 @@
 						<h1>Stats for Nerds</h1>
 						<p>Inspired by YouTube's feature with the same name, UI3 has a "Stats for nerds" panel which shows an assortment of details about the video player.  This information can be useful for troubleshooting, but otherwise it is just fun to look at.</p>
 						<p>To access this panel, right-click on UI3's video player and choose the "Stats for nerds" option.</p>
-						<p><img class="img-responsive" src="img/StatsForNerds.png" alt="Stats for nerds" /></p>
+						<p><img class="img-responsive" mysrc="img/StatsForNerds.png" alt="Stats for nerds" /></p>
 						<div class="panel panel-info">
 							<div class="panel-heading">"Stats for nerds" item descriptions</div>
 							<div class="panel-body">
@@ -299,7 +304,7 @@
 						<p>UI3 is unable to control your camera layout.  To change the camera layout, you must drag cameras around in Blue Iris's local console.</p>
 						<h2>Optimizing Group Frames</h2>
 						<p>The default group frame size may have a lot of empty black area, or the resolution may be lower than you would like. You can change the resolution of each group in Blue Iris's local console.</p>
-						<p><img class="img-responsive" src="img/GroupProperties.png" alt="Screenshot of Group Properties" /></p>
+						<p><img class="img-responsive" mysrc="img/GroupProperties.png" alt="Screenshot of Group Properties" /></p>
 						<p>For best results, you should use frame dimensions that are multiples of 16.  For convenience, here is a list of suitable multiples of 16 that you can copy from:</p>
 						<div class="panel panel-info">
 							<div class="panel-heading">Multiples of 16</div>
@@ -310,11 +315,11 @@
 						<h3>Group Optimization Example</h3>
 						<div style="display: inline-block;">
 							<h4>Before Optimization</h4>
-							<p><img class="img-responsive" src="img/PoorLayout.jpg" alt="Example of poor layout" /></p>
+							<p><img class="img-responsive" mysrc="img/PoorLayout.jpg" alt="Example of poor layout" /></p>
 						</div>
 						<div style="display: inline-block;">
 							<h4>After Optimization</h4>
-							<p><img class="img-responsive" src="img/BetterLayout.jpg" alt="Example of better layout" /></p>
+							<p><img class="img-responsive" mysrc="img/BetterLayout.jpg" alt="Example of better layout" /></p>
 						</div>
 					</div>
 					<div class="tab-pane" id="recordings" role="tabpanel" aria-labelledby="nav-recordings">
@@ -325,14 +330,14 @@
 						<h2>Filters</h2>
 						<p>You can filter the Alerts/Clips list by camera, group, date, and flag state.</p>
 						<p>To filter by camera, simply maximize that camera by clicking on it in the main video area.  To filter by other criteria, use the filter controls above the Alert/Clip list.</p>
-						<p><img class="img-responsive" src="img/RecordingFilters.png" alt="Screenshot of recording filters" /></p>
+						<p><img class="img-responsive" mysrc="img/RecordingFilters.png" alt="Screenshot of recording filters" /></p>
 						<h3>Expanding the Filters</h3>
 						<p>If you don't see the filter controls, that means you have collapsed them by clicking on the "Filter Clips by:" text.  Click the "Filter Clips by:" text again to expand the filter controls section.</p>
 						<h3>Context Menu</h3>
 						<p>If you right click (long-press on touchscreens) on an alert or clip, a context menu appears.</p>
 						<div class="row">
 							<div class="col-sm-3">
-								<img class="img-responsive" src="img/ClipContextMenu.png" alt="Screenshot of clip list context menu" />
+								<img class="img-responsive" mysrc="img/ClipContextMenu.png" alt="Screenshot of clip list context menu" />
 							</div>
 							<div class="col-sm-9">
 								<div class="panel panel-info">
@@ -389,7 +394,7 @@
 						<p>The Camera Properties panel is accessible from the context menu that appears when you right click on a camera (long-press on touchscreens).  This panel contains some information about the camera and provides a set of common administrative controls, such as the ability to reconfigure the motion sensor.  You can also disable a camera from here.  If you disable a camera, you can re-enable it from the Full Camera List in the <a href="#mainmenu">Main Menu</a>.</p>
 					</div><!--/.tab-pane -->
 					<div class="tab-pane" id="mainmenu" role="tabpanel" aria-labelledby="nav-mainmenu">
-						<h1><img src="img/MainMenuIcon.png" /> Main Menu</h1>
+						<h1><img mysrc="img/MainMenuIcon.png" /> Main Menu</h1>
 						<p>To open the Main Menu, click the three dots in the upper right corner of UI3.</p>
 						<div class="panel panel-info">
 							<div class="panel-heading">Main Menu Actions - Items marked with <span class="label label-primary">Admin</span> can only be accessed by Admin users.</div>
@@ -431,10 +436,22 @@
 	================================================== -->
 	<!-- Placed at the end of the document so the pages load faster -->
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-	<script>window.jQuery || document.write('<script src="js/jquery-1.12.4.min.js"><\/script>')</script>
-	<!--<script src="js/popper.min.js"></script>-->
-	<script src="js/bootstrap.min.js"></script>
-	<script src="js/jquery.stickytabs.js"></script>
-	<script src="js/help.js"></script>
+	<script type="text/javascript">
+		document.write(
+			(window.jQuery ? '' : '<script src="js/jquery-1.12.4.min.js?v=' + bi_version + local_bi_session_arg + '"><\/script>')
+			+ '<script src="js/bootstrap.min.js?v=' + bi_version + local_bi_session_arg + '"><\/script>'
+			+ '<script src="js/jquery.stickytabs.js?v=' + bi_version + local_bi_session_arg + '"><\/script>'
+			+ '<script src="js/help.js?v=' + bi_version + local_bi_session_arg + '"><\/script>');
+		(function ()
+		{
+			var imgs = document.getElementsByTagName("img");
+			for (var i = 0; i < imgs.length; i++)
+			{
+				var src = imgs[i].getAttribute("mysrc");
+				if (src)
+					imgs[i].src = src + (navigator.cookieEnabled ? "" : "?session=" + local_bi_session);
+			}
+		})();
+	</script>
 </body>
 </html>

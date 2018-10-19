@@ -2,33 +2,73 @@
 <html>
 <head>
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-	<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 	<title>Timeout - Blue Iris</title>
 	<script type="text/javascript">
+		var local_bi_session = "%%SESSION%%";
+		if (!local_bi_session || (local_bi_session.length === 11 && local_bi_session.startsWith("%") && local_bi_session.endsWith("%") && local_bi_session.indexOf("SESSION") === 2))
+			local_bi_session = "";
+		if (navigator.cookieEnabled)
+			NavRemoveUrlParams("session");
 		var UrlParameters =
+		{
+			loaded: false,
+			parsed_url_params: {},
+			Get: function (key)
 			{
-				loaded: false,
-				parsed_url_params: {},
-				Get: function (key)
+				if (!this.loaded)
 				{
-					if (!this.loaded)
-					{
-						var params = this.parsed_url_params;
-						window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value) { params[key.toLowerCase()] = decodeURIComponent(value); })
-						this.loaded = true;
-					}
-					if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
-						return this.parsed_url_params[key.toLowerCase()];
-					return "";
+					var params = this.parsed_url_params;
+					window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value) { params[key.toLowerCase()] = decodeURIComponent(value); })
+					this.loaded = true;
 				}
-			};
+				if (typeof this.parsed_url_params[key.toLowerCase()] !== 'undefined')
+					return this.parsed_url_params[key.toLowerCase()];
+				return "";
+			}
+		};
 		window.onload = function ()
 		{
 			var path = UrlParameters.Get("path");
-			if (path == "")
+			if (path === "")
 				path = "/";
+			// Remove any existing sessions from the path
+			path = path.replace(/&session=[^&?#%]+/gi, '');
+			path = path.replace(/\?session=[^&?#%]+/gi, '?');
+			// Add the current session to the path if necessary
+			if (local_bi_session && !navigator.cookieEnabled)
+				path += (path.indexOf("?") < 0 ? "?" : "&") + "session=" + local_bi_session;
 			document.getElementById("reconnect").setAttribute("href", path);
 		};
+		/**
+		 * Changes the current URL by removing the specified query string parameter(s) from it.
+		 * @returns {String} Returns null if successful, otherwise returns the new URL if changing the history state failed.
+		 */
+		function NavRemoveUrlParams()
+		{
+			var url = RemoveUrlParams.apply(this, arguments);
+			try { history.replaceState(history.state, "", url); return null; } catch (ex) { return url; }
+		}
+		function RemoveUrlParams()
+		{
+			var s = location.search;
+			for (var i = 0; i < arguments.length; i++)
+			{
+				var param = arguments[i];
+				var rx = new RegExp('(&|\\?)' + param + '=[^&?#%]+', 'gi');
+				s = s.replace(rx, "");
+				while (s.indexOf("&") === 0)
+				{
+					if (s.length > 1)
+						s = s.substr(1);
+					else
+						s = "";
+				}
+				if (s.length > 0 && s.indexOf("?") === -1)
+					s = "?" + s;
+			}
+			return location.origin + location.pathname + s + location.hash;
+		}
 	</script>
 	<style type="text/css">
 		body

@@ -2,14 +2,14 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-	<link rel="icon" href="ui3/launcher-icon.png">
-	<link rel="apple-touch-icon" href="ui3/launcher-icon.png">
+	<link rel="icon" id="ui3launcher1">
+	<link rel="apple-touch-icon" id="ui3launcher2">
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="apple-mobile-web-app-capable" content="yes"> <!--iOS Safari-->
 	<meta name="apple-mobile-web-app-status-bar-style" content="black">
 	<meta name="mobile-web-app-capable" content="yes"><!--Android Chrome-->
 	<meta name="theme-color" content="#000000">
-	<link rel="manifest" href="ui3/manifest.json">
+	<link rel="manifest" id="ui3manifest">
 	<title>UI3 - Blue Iris</title>
 	<script type="text/javascript">
 		var html5PlayFunc; try { html5PlayFunc = HTMLMediaElement.prototype.play; } catch (e) { }
@@ -42,14 +42,22 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "59";
+		var ui_version = "60";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
 		//	combined_version += "-" + Date.now();
-		document.write('<link href="ui3/libs-ui3.css?v=' + combined_version + '" rel="stylesheet" />'
-			+ '<link href="ui3/ui3.css?v=' + combined_version + '" rel="stylesheet" />'
-			+ '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + '" rel="stylesheet" />');
+		var local_bi_session = "%%SESSION%%";
+		if (!local_bi_session || (local_bi_session.length === 11 && local_bi_session.startsWith("%") && local_bi_session.endsWith("%") && local_bi_session.indexOf("SESSION") === 2))
+			local_bi_session = "";
+		var local_bi_session_arg = navigator.cookieEnabled ? "" : (local_bi_session ? "&session=" + local_bi_session : "");
+		var local_bi_session_argQ = navigator.cookieEnabled ? "" : (local_bi_session ? "?session=" + local_bi_session : "");
+		document.getElementById("ui3manifest").href = "ui3/manifest.json" + local_bi_session_argQ;
+		document.getElementById("ui3launcher1").href = "ui3/launcher-icon.png" + local_bi_session_argQ;
+		document.getElementById("ui3launcher2").href = "ui3/launcher-icon.png" + local_bi_session_argQ;
+		document.write('<link href="ui3/libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
+			+ '<link href="ui3/ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
+			+ '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />');
 	</script>
 </head>
 <body>
@@ -58,7 +66,7 @@
 		<div style="position: absolute;left:50%;top:50%;overflow:visible;white-space:nowrap;">
 			<div style="position:relative;transform: translate(-50%, -50%);border:2px solid #444444;color:#666666;background-color:#212325;padding:5px;text-align:center;border-radius:10px;">
 				<div style="margin-bottom:5px;">
-					<img src="ui3/ajax-loader-big.gif" alt="Loading ..." />
+					<img mysrc="ui3/ajax-loader-big.gif" alt="Loading ..." />
 				</div>
 				<div>
 					<div class="loadinglabel">
@@ -378,8 +386,8 @@
 		</div>
 	</div>
 	<div id="preloadcontainer" style="display: none">
-		<img src="ui3/LoadingImage.png" />
-		<img src="ui3/noimage.png" />
+		<img mysrc="ui3/LoadingImage.png" />
+		<img mysrc="ui3/noimage.png" />
 	</div>
 	<div id="zoomhint" style="display: none">
 	</div>
@@ -398,7 +406,7 @@
 	<div id="aboutDialog" class="selectable" style="display: none">
 		<div>
 			UI3 version <span id="ui_version_label"></span>, Blue Iris version: <span id="bi_version_label"></span>
-			<img class="about_icon" src="ui3/launcher-icon.png" alt="Blue Iris" />
+			<img class="about_icon" mysrc="ui3/launcher-icon.png" alt="Blue Iris" />
 		</div>
 		<div class="section">UI3 is a web interface for <a target="_blank" href="http://blueirissoftware.com/">Blue Iris</a></div>
 		<div id="optionalFeaturesNotSupported" class="section">
@@ -439,9 +447,19 @@
 		</div>
 	</div>
 	<script>
-		document.write('<script src="ui3/libs-ui3.js?v=' + combined_version + '"><\/script>'
-			+ '<script src="ui3/ui3.js?v=' + combined_version + '"><\/script>'
-			+ '<script src="ui3/ui3-local-overrides.js?v=' + combined_version + '"><\/script>');
+		(function ()
+		{
+			var imgs = document.getElementsByTagName("img");
+			for (var i = 0; i < imgs.length; i++)
+			{
+				var src = imgs[i].getAttribute("mysrc");
+				if (src)
+					imgs[i].src = src + local_bi_session_argQ;
+			}
+		})();
+		document.write('<script src="ui3/libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'
+			+ '<script src="ui3/ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'
+			+ '<script src="ui3/ui3-local-overrides.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 	</script>
 </body>
 </html>

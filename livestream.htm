@@ -3,29 +3,32 @@
 <head>
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 	<title>Live Video - Blue Iris</title>
-	<script type="text/javascript" src="clappr/clappr.min.js"></script>
 	<script type="text/javascript">
+		var local_bi_session = "%%SESSION%%";
+		var local_bi_session_arg = navigator.cookieEnabled ? "" : "&session=" + local_bi_session;
+		var bi_version = "%%VERSION%%";
+		var badsession = !local_bi_session || (local_bi_session.length === 11 && local_bi_session.startsWith("%") && local_bi_session.endsWith("%") && local_bi_session.indexOf("SESSION") === 2);
 		var UrlParameters =
+		{
+			loaded: false,
+			parsed_url_params: {},
+			Get: function (key)
 			{
-				loaded: false,
-				parsed_url_params: {},
-				Get: function (key)
+				if (!this.loaded)
 				{
-					if (!this.loaded)
-					{
-						var params = this.parsed_url_params;
-						window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value) { params[key.toLowerCase()] = decodeURIComponent(value); })
-						this.loaded = true;
-					}
-					if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
-						return this.parsed_url_params[key.toLowerCase()];
-					return "";
+					var params = this.parsed_url_params;
+					window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function (str, key, value) { params[key.toLowerCase()] = decodeURIComponent(value); });
+					this.loaded = true;
 				}
-			};
+				if (typeof this.parsed_url_params[key.toLowerCase()] !== 'undefined')
+					return this.parsed_url_params[key.toLowerCase()];
+				return "";
+			}
+		};
 		function onResize()
 		{
 			var dataplayer = getElementWithAttribute("data-player");
-			if (dataplayer != null)
+			if (dataplayer !== null)
 			{
 				dataplayer.style.width = window.innerWidth + "px";
 				dataplayer.style.height = window.innerHeight + "px";
@@ -45,13 +48,13 @@
 			try
 			{
 				var code = obj.error.code;
-				if (code == 1)
+				if (code === 1)
 					description = "Aborted";
-				else if (code == 2)
+				else if (code === 2)
 					description = "Network Error";
-				else if (code == 3)
+				else if (code === 3)
 					description = "Decoding Error";
-				else if (code == 4)
+				else if (code === 4)
 					description = "Source Not Supported";
 			}
 			catch (ex)
@@ -79,10 +82,49 @@
 			errorDiv.onclick = function ()
 			{
 				errorDiv.remove();
-			}
+			};
 			document.body.appendChild(errorDiv);
 		}
+		/**
+		 * Changes the current URL by removing the specified query string parameter(s) from it.
+		 * @returns {String} Returns null if successful, otherwise returns the new URL if changing the history state failed.
+		 */
+		function NavRemoveUrlParams()
+		{
+			var url = RemoveUrlParams.apply(this, arguments);
+			try { history.replaceState(history.state, "", url); return null; } catch (ex) { return url; }
+		}
+		function RemoveUrlParams()
+		{
+			var s = location.search;
+			for (var i = 0; i < arguments.length; i++)
+			{
+				var param = arguments[i];
+				var rx = new RegExp('(&|\\?)' + param + '=[^&?#%]+', 'gi');
+				s = s.replace(rx, "");
+				while (s.indexOf("&") === 0)
+				{
+					if (s.length > 1)
+						s = s.substr(1);
+					else
+						s = "";
+				}
+				if (s.length > 0 && s.indexOf("?") === -1)
+					s = "?" + s;
+			}
+			return location.origin + location.pathname + s + location.hash;
+		}
 		window.onresize = onResize;
+		if (badsession)
+		{
+			alert("This page can only be loaded from the Blue Iris web server and requires Blue Iris 4.8.2.3 or newer");
+		}
+		else
+		{
+			if (navigator.cookieEnabled)
+				NavRemoveUrlParams("session");
+			document.write('<script src="clappr/clappr.min.js?v=' + bi_version + local_bi_session_arg + '"><\/script>');
+		}
 	</script>
 	<style type="text/css">
 		body
@@ -98,25 +140,28 @@
 		<div id="player"></div>
 	</div>
 	<script type="text/javascript">
-		var camId = (UrlParameters.Get("cam") == "" ? "index" : UrlParameters.Get("cam"));
-		var src = "/h264/" + camId + "/temp.m3u8";
-		var mode = UrlParameters.Get("mode");
-		var args = { source: src, parentId: "#player", autoPlay: false, chromeless: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 };
-		if (mode == 2 || mode == 3)
+		if (!badsession)
 		{
-			args.chromeless = true;
-			args.disableVideoTagContextMenu = false;
-		}
-		var player = new Clappr.Player(args);
-		player.on('error', onStreamingError);
-		player.on('fullscreen', function () { setTimeout(onResize, 0); setTimeout(onResize, 100); });
-		player.play();
-		onResize();
-		if (mode == 3)
-		{
-			var ele = document.getElementById("player");
-			if (ele.querySelector)
-				ele.querySelector("video").setAttribute("controls", "controls");
+			var camId = (UrlParameters.Get("cam") === "" ? "index" : UrlParameters.Get("cam"));
+			var src = "/h264/" + camId + "/temp.m3u8?session=" + local_bi_session;
+			var mode = UrlParameters.Get("mode");
+			var args = { source: src, parentId: "#player", autoPlay: false, chromeless: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 };
+			if (mode === 2 || mode === 3)
+			{
+				args.chromeless = true;
+				args.disableVideoTagContextMenu = false;
+			}
+			var player = new Clappr.Player(args);
+			player.on('error', onStreamingError);
+			player.on('fullscreen', function () { setTimeout(onResize, 0); setTimeout(onResize, 100); });
+			player.play();
+			onResize();
+			if (mode === 3)
+			{
+				var ele = document.getElementById("player");
+				if (ele.querySelector)
+					ele.querySelector("video").setAttribute("controls", "controls");
+			}
 		}
 	</script>
 </body>
