@@ -19542,7 +19542,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		if (e.which !== 1 && e.which !== 2) // Mustn't allow 4 and 5 (back and forward)
+		if (e.which !== 0 && e.which !== 1 && e.which !== 2) // Mustn't allow 4 and 5 (back and forward)
 			return;
 		handleExcludeFunc(e);
 		if (lastEvent === 1)
@@ -19556,7 +19556,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
-		if (e.which !== 1 && e.which !== 2)
+		if (e.which !== 0 && e.which !== 1 && e.which !== 2)
 			return;
 		handleExcludeFunc(e);
 		var fakeMouseDown = lastEvent == 2;
