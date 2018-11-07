@@ -429,6 +429,8 @@ var togglableUIFeatures =
 // * reloading the stream (change playback speed) should not cause the current position to change suddenly.
 // * don't forget jpeg streams
 
+// TODO: Add an optional "maximize" button next to the full-screen button.  UI3 should remember maximize state between loads.  The toggle button will always be present in maximized mode, but only appear in un-maximized mode if a settings flag is on.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -1894,7 +1896,7 @@ $.ajax({
 	},
 	error: function (jqXHR, textStatus, errorThrown)
 	{
-		loadingHelper.SetErrorStatus("svg", "Error trying to load icons.svg<br/>" + jqXHR.ErrorMessageHtml);
+		loadingHelper.SetErrorStatus("svg", 'Error trying to load icons.svg<br/>Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '<br>Status: ' + textStatus + '<br>Error: ' + errorThrown);
 	}
 });
 $(function ()
@@ -10566,7 +10568,10 @@ function FetchH264VideoModule()
 		{
 			delayed = true;
 			if (perf_warning_cpu_ticks++ > 0)
-				perf_warning_cpu = toaster.Warning('This stream is becoming delayed because your CPU is not fast enough. Consider changing the streaming quality.', 10000);
+			{
+				if (showCommonWarnings)
+					perf_warning_cpu = toaster.Warning('This stream is becoming delayed because your CPU is not fast enough. Consider changing the streaming quality.', 10000);
+			}
 		}
 		else
 			perf_warning_cpu_ticks = 0;
