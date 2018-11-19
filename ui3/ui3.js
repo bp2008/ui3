@@ -430,8 +430,6 @@ var togglableUIFeatures =
 // * reloading the stream (change playback speed) should not cause the current position to change suddenly.
 // * don't forget jpeg streams
 
-// TODO: Add an optional "maximize" button next to the full-screen button.  UI3 should remember maximize state between loads.  The toggle button will always be present in maximized mode, but only appear in un-maximized mode if a settings flag is on.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
