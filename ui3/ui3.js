@@ -355,6 +355,7 @@ var clipTimeline = null;
 var hotkeys = null;
 var dateFilter = null;
 var hlsPlayer = null;
+var maximizedModeController = null;
 var fullScreenModeController = null;
 var canvasContextMenu = null;
 var calendarContextMenu = null;
@@ -1613,10 +1614,23 @@ var defaultSettings =
 			key: "ui3_fullscreen_videoonly"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: 'Full Screen: "Video Only"'
-			, hint: 'If "yes", then the left and top control bars are hidden when the UI enters fullscreen mode.'
+			, label: 'Maximize Video in Full Screen Mode'
+			, hint: 'If "yes", toggling Full Screen mode automatically toggles the video player\'s maximize state.'
 			, onChange: OnChange_ui3_fullscreen_videoonly
 			, category: "Extra"
+		}
+		, {
+			key: "ui3_show_maximize_button"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Always Show Maximize Button<div class="settingDesc">by Full Screen button</div>'
+			, hint: 'If "no", the Maximize button only appears while the video player is maximized, to allow you to un-maximize.'
+			, onChange: OnChange_ui3_show_maximize_button
+			, category: "Extra"
+		}
+		, {
+			key: "ui3_is_maximized"
+			, value: "0"
 		}
 		, {
 			key: "ui3_pc_next_prev_buttons"
@@ -1921,9 +1935,9 @@ $(function ()
 	$("#ui_version_label").text(ui_version);
 	$("#bi_version_label").text(bi_version);
 
-	HandlePreLoadUrlParameters();
-
 	LoadDefaultSettings();
+
+	HandlePreLoadUrlParameters();
 
 	biSoundPlayer.TestUserInputRequirement();
 
@@ -2048,6 +2062,8 @@ $(function ()
 
 	hlsPlayer = new HLSPlayer();
 
+	maximizedModeController = new MaximizedModeController();
+
 	fullScreenModeController = new FullScreenModeController();
 
 	canvasContextMenu = new CanvasContextMenu();
@@ -2163,12 +2179,12 @@ function HandlePreLoadUrlParameters()
 	// Parameter "tab"
 	var tab = UrlParameters.Get("tab");
 	if (tab != '')
-		OverrideDefaultSetting("ui3_defaultTab", tab, true, true, 0);
+		settings.ui3_defaultTab = tab;
 
 	// Parameter "group"
 	var group = UrlParameters.Get("group");
 	if (group != '')
-		OverrideDefaultSetting("ui3_defaultCameraGroupId", group, true, true, 0);
+		settings.ui3_defaultCameraGroupId = group;
 
 	// Parameter "cam"
 	var cam = UrlParameters.Get("cam");
@@ -2183,7 +2199,9 @@ function HandlePreLoadUrlParameters()
 	}
 	var maximize = UrlParameters.Get("maximize");
 	if (maximize == "1" || maximize.toLowerCase() == "true")
-		BI_Hotkey_MaximizeVideoArea();
+		settings.ui3_is_maximized = "1";
+	else if (maximize == "0" || maximize.toLowerCase() == "false")
+		settings.ui3_is_maximized = "0";
 }
 ///////////////////////////////////////////////////////////////
 // UI Resize //////////////////////////////////////////////////
@@ -8588,10 +8606,11 @@ function CameraListLoader()
 			{
 				self.LoadCameraList();
 			}, 5000);
-		}, function ()
+		}, function (jqXHR, textStatus, errorThrown)
 			{
 				if (cameraListUpdateTimeout != null)
 					clearTimeout(cameraListUpdateTimeout);
+				toaster.Error("An error occurred loading the camera list.<br>" + jqXHR.ErrorMessageHtml);
 				setTimeout(function ()
 				{
 					self.LoadCameraList(successCallbackFunc);
@@ -16924,6 +16943,61 @@ function HLSPlayer()
 	};
 }
 ///////////////////////////////////////////////////////////////
+// Maximized Mode /////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function MaximizedModeController()
+{
+	var self = this;
+	$("#clipMaximizeButton")
+		.on("click", function () { self.toggleMaximize(); })
+		.on("mousedown touchstart", function (e)
+		{
+			// Prevents the button click from causing camera maximize actions.
+			// Do not use touchEvents.Gate(e) here, otherwise events sneak through on touchscreens.
+			// stopPropagation prevents the event from reaching videoPlayer.
+			e.stopPropagation();
+			// And [suppressMouseHelper] clears the state in case the event got there before we stopped propagation.
+			videoPlayer.suppressMouseHelper();
+		});
+	this.updateMaximizeButtonState = function ()
+	{
+		if (settings.ui3_is_maximized === "1" || settings.ui3_show_maximize_button === "1")
+			$("#clipMaximizeButton").removeClass('maximizeButtonHidden');
+		else
+			$("#clipMaximizeButton").addClass('maximizeButtonHidden');
+		if (loadingHelper.DidLoadingFinish())
+			resized();
+	};
+	this.toggleMaximize = function ()
+	{
+		if (settings.ui3_is_maximized === "1")
+			settings.ui3_is_maximized = "0";
+		else
+			settings.ui3_is_maximized = "1";
+		this.loadMaximizeState();
+	};
+	this.loadMaximizeState = function ()
+	{
+		if (settings.ui3_is_maximized === "1")
+			$("#layoutleft,#layouttop").hide();
+		else
+			$("#layoutleft,#layouttop").show();
+		this.updateMaximizeButtonState();
+	}
+	this.EnableMaximizedMode = function ()
+	{
+		if (settings.ui3_is_maximized !== "1")
+			this.toggleMaximize();
+	};
+	this.DisableMaximizedMode = function ()
+	{
+		if (settings.ui3_is_maximized === "1")
+			this.toggleMaximize();
+	};
+
+	this.loadMaximizeState();
+}
+///////////////////////////////////////////////////////////////
 // FullScreen Mode ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function FullScreenModeController()
@@ -16932,11 +17006,13 @@ function FullScreenModeController()
 	var isFullScreen_cached = false;
 	$(document).on("webkitfullscreenchange mozfullscreenchange fullscreenchange MSFullscreenChange", function (event)
 	{
-		if (self.isFullScreen() && settings.ui3_fullscreen_videoonly == "1")
-			$("#layoutleft,#layouttop").hide();
-		else
-			$("#layoutleft,#layouttop").show();
-		resized();
+		if (settings.ui3_fullscreen_videoonly == "1")
+		{
+			if (self.isFullScreen())
+				maximizedModeController.EnableMaximizedMode();
+			else
+				maximizedModeController.DisableMaximizedMode();
+		}
 		self.updateFullScreenButtonState();
 	});
 	$("#clipFullscreenButton,#clipExitFullscreenButton")
@@ -16962,7 +17038,8 @@ function FullScreenModeController()
 			$("#clipFullscreenButton").removeClass('fullscreenButtonHidden');
 			$("#clipExitFullscreenButton").addClass('fullscreenButtonHidden');
 		}
-		resized();
+		if (loadingHelper.DidLoadingFinish())
+			resized();
 	}
 	this.toggleFullScreen = function ()
 	{
@@ -17034,12 +17111,7 @@ function AjaxHistoryManager()
 //////////////////////////////////////////////////////////////////////
 function BI_Hotkey_MaximizeVideoArea()
 {
-	if ($("#layoutleft").is(":visible"))
-		$("#layoutleft,#layouttop").hide();
-	else
-		$("#layoutleft,#layouttop").show();
-	if (loadingHelper.DidLoadingFinish())
-		resized();
+	maximizedModeController.toggleMaximize();
 }
 function BI_Hotkey_FullScreen()
 {
@@ -17650,6 +17722,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 				jqXHR = { status: 0, statusText: "No jqXHR object was created" };
 			jqXHR.OriginalURL = reqUrl;
 			jqXHR.ErrorMessageHtml = 'Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '<br>Status: ' + textStatus + '<br>Error: ' + errorThrown + '<br>URL: ' + reqUrl;
+			console.error('Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '\nStatus: ' + textStatus + '\nError: ' + errorThrown + '\nURL: ' + reqUrl);
 			BI_CustomEvent.Invoke("ExecJSON_Fail", eventArgs);
 			if (callbackFail)
 				callbackFail(jqXHR, textStatus, errorThrown);
@@ -20171,11 +20244,14 @@ function OnChange_ui3_fullscreen_videoonly()
 	if (fullScreenModeController.isFullScreen())
 	{
 		if (settings.ui3_fullscreen_videoonly == "1")
-			$("#layoutleft,#layouttop").hide();
+			maximizedModeController.EnableMaximizedMode();
 		else
-			$("#layoutleft,#layouttop").show();
-		resized();
+			maximizedModeController.DisableMaximizedMode();
 	}
+}
+function OnChange_ui3_show_maximize_button()
+{
+	maximizedModeController.updateMaximizeButtonState();
 }
 function OnChange_ui3_skipAmount()
 {
