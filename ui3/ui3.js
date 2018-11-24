@@ -8,7 +8,7 @@ var developerMode = false;
 
 if (navigator.cookieEnabled)
 {
-	console.log("removeUrlParams", NavRemoveUrlParams("session"));
+	NavRemoveUrlParams("session");
 }
 ///////////////////////////////////////////////////////////////
 // Feature Detect /////////////////////////////////////////////
@@ -3794,7 +3794,7 @@ var ptzPresetThumbLoader = new (function ()
 				var img = camCache[i] = $img[0];
 				// Unfortunately, we can't allow the browser cache to be used for these, or the cached images become stale when updated and reloading the page doesn't fix it.
 				img.imgData = {
-					src: UrlForPreset(cameraId, i, true),
+					src: self.UrlForPreset(cameraId, i, true),
 					w: 0,
 					h: 0,
 					imgEle: img
@@ -3823,7 +3823,7 @@ var ptzPresetThumbLoader = new (function ()
 		if (camCache)
 		{
 			var img = camCache[presetNumber];
-			img.imgData.src = UrlForPreset(cameraId, presetNumber, true);
+			img.imgData.src = self.UrlForPreset(cameraId, presetNumber, true);
 			asyncThumbLoader.Enqueue(img, img.imgData.src);
 		}
 		else
@@ -3865,7 +3865,7 @@ var ptzPresetThumbLoader = new (function ()
 	{
 		img.imgData.error = true;
 	}
-	var UrlForPreset = function (cameraId, presetNumber, overrideCache)
+	this.UrlForPreset = function (cameraId, presetNumber, overrideCache)
 	{
 		if (presetNumber < 1 || presetNumber > 20)
 			return "";
