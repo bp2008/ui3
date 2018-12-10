@@ -27,6 +27,16 @@ function BrowserIsEdge()
 		_browser_is_edge = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
 	return _browser_is_edge === 1;
 }
+function BrowserEdgeVersion()
+{
+	if (BrowserIsEdge())
+	{
+		var m = window.navigator.userAgent.match(/ Edge\/([0-9\.,]+)/);
+		if (m)
+			return m[1];
+	}
+	return null;
+}
 var _browser_is_firefox = -1;
 function BrowserIsFirefox()
 {
@@ -55,6 +65,7 @@ var mse_mp4_aac_supported = false;
 var vibrate_supported = false;
 var web_audio_autoplay_disabled = false;
 var cookies_accessible = false;
+var fetch_streams_cant_close_bug = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -72,6 +83,12 @@ function DoUIFeatureDetection()
 			web_workers_supported = typeof Worker !== "undefined";
 			export_blob_supported = detectIfCanExportBlob();
 			fetch_supported = typeof fetch == "function";
+			if (fetch && BrowserIsEdge())
+			{
+				var edgeVersion = BrowserEdgeVersion();
+				if (edgeVersion && parseInt(edgeVersion) >= 17)
+					fetch_streams_cant_close_bug = true;
+			}
 			readable_stream_supported = typeof ReadableStream === "function";
 			webgl_supported = detectWebGLContext();
 			detectAudioSupport();
@@ -141,6 +158,10 @@ function DoUIFeatureDetection()
 				if (!exporting_clips_to_avi_supported)
 				{
 					ul_root.append('<li>Exporting clips to AVI is not supported.</li>');
+				}
+				if (fetch_streams_cant_close_bug)
+				{
+					ul_root.append('<li>This browser has a compatibility issue which makes H.264 streams not close properly, leading to stability problems.  H.264 playback is disabled by default, but may be re-enabled in UI Settings -&gt; Video Player.</li>');
 				}
 				if (ul_root.children().length > 0)
 				{
@@ -716,6 +737,15 @@ var defaultSettings =
 			, inputType: "select"
 			, options: ["None", "Live View", "Recordings", "Both"]
 			, label: 'Double-Click to Fullscreen<br><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a>'
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_edge_fetch_bug_h264_enable"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<span style="color:#FF0000;font-weight:bold">Enable H.264 Player</span><div class="settingDesc">This browser has known compatiblity issues. <a href="javascript:UIHelp.LearnMore(\'Edge Fetch Bug\')">(learn more)</a></div>'
+			, onChange: OnChange_ui3_edge_fetch_bug_h264_enable
+			, preconditionFunc: Precondition_ui3_edge_fetch_bug_h264_enable
 			, category: "Video Player"
 		}
 		, {
@@ -1934,6 +1964,9 @@ $(function ()
 	$("#bi_version_label").text(bi_version);
 
 	LoadDefaultSettings();
+
+	if (fetch_streams_cant_close_bug && settings.ui3_edge_fetch_bug_h264_enable !== "1")
+		h264_playback_supported = false; // Affects Edge 17.x, 18.x, and possibly newer versions.
 
 	HandlePreLoadUrlParameters();
 
@@ -18447,6 +18480,8 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 		if (typeof AbortController == "function")
 		{
 			// FF 57+, Edge 16+ (in theory)
+			// Broken in Edge 17.x and 18.x (connection stays open)
+			// Unknown when it will be fixed
 			abort_controller = new AbortController();
 			fetchArgs.signal = abort_controller.signal;
 		}
@@ -20197,6 +20232,8 @@ function OnChange_ui3_time24hour()
 }
 function OnChange_ui3_h264_choice2()
 {
+	if (ui3_contextMenus_longPress_toast)
+		ui3_contextMenus_longPress_toast.remove();
 	ui3_contextMenus_longPress_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
@@ -20206,6 +20243,21 @@ function OnChange_ui3_h264_choice2()
 function Precondition_ui3_h264_choice2()
 {
 	return (pnacl_player_supported || mse_mp4_h264_supported);
+}
+function Precondition_ui3_edge_fetch_bug_h264_enable()
+{
+	return fetch_streams_cant_close_bug;
+}
+var ui3_edge_fetch_bug_h264_enable_toast = null;
+function OnChange_ui3_edge_fetch_bug_h264_enable()
+{
+	if (ui3_edge_fetch_bug_h264_enable_toast)
+		ui3_edge_fetch_bug_h264_enable_toast.remove();
+	ui3_edge_fetch_bug_h264_enable_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
+		, function ()
+		{
+			location.reload();
+		});
 }
 function OnChange_ui3_streamingProfileBitRateMax()
 {
@@ -20433,6 +20485,9 @@ function UIHelpTool()
 			case "Firefox Stutter Fix":
 				UI3_Firefox_Stuffer_fix_Help();
 				break;
+			case "Edge Fetch Bug":
+				UI3_Edge_Fetch_Bug_Help();
+				break;
 		}
 	}
 	var Context_Menu_On_Long_Press = function ()
@@ -20534,6 +20589,12 @@ function UIHelpTool()
 			+ "Firefox's HTML5 video player has trouble with low-latency streams. Basically, it requires frequent keyframes or else performance degrades rapidly.  The Firefox Stutter Fix option forces your keyframe interval to be equal to the camera\'s frame rate while you are using the HTML5 player for H.264 video.  This reduces video quality somewhat, but ensures relatively good decoding performance.<br><br>"
 			+ "If this bothers you, it is recommended to use a different H.264 player option."
 			+ '</div>').modalDialog({ title: 'Firefox Stutter Fix', closeOnOverlayClick: true });
+	}
+	var UI3_Edge_Fetch_Bug_Help = function ()
+	{
+		$('<div class="UIHelp">'
+			+ "Beginning with EdgeHTML 17.x and continuing through 18.x (newest at the time of this writing), Microsoft Edge fails to close the network connections used to stream H.264 video (and audio) in UI3.  Instability and poor performance may result as multiple unused video streams remain open until the browser tab is closed.  For this reason, it is recommended to disable the H.264 player and only use Jpeg streaming methods in this browser."
+			+ '</div>').modalDialog({ title: 'Edge Fetch Bug', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
