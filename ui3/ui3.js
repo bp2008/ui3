@@ -83,7 +83,7 @@ function DoUIFeatureDetection()
 			web_workers_supported = typeof Worker !== "undefined";
 			export_blob_supported = detectIfCanExportBlob();
 			fetch_supported = typeof fetch == "function";
-			if (fetch && BrowserIsEdge())
+			if (fetch_supported && BrowserIsEdge())
 			{
 				var edgeVersion = BrowserEdgeVersion();
 				if (edgeVersion && parseInt(edgeVersion) >= 17)
@@ -186,7 +186,7 @@ function DoUIFeatureDetection()
 	}
 	catch (ex)
 	{
-		alert("Unknown error during feature detection. This web browser is likely incompatible.");
+		alert("Unknown error during feature detection. This web browser is likely incompatible.\n" + ex);
 		try
 		{
 			console.log(ex);
