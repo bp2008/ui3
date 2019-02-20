@@ -4364,3 +4364,8 @@ div::-webkit-scrollbar-corner
 {
 	display: none !important;
 }
+
+.nonMatchingNativeRes
+{
+	color: #e6e660;
+}

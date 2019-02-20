@@ -445,12 +445,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Properly handle playback and stream reloads of clips that are still being recorded.
-// * non-BVR should refuse to open
-// * when we get new clip length data for the playing clip, handle it correctly. don't just throw out the new data.
-// * reloading the stream (change playback speed) should not cause the current position to change suddenly.
-// * don't forget jpeg streams
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -6304,9 +6298,6 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (oldClipData.recId != newClipData.recId)
 			return;
-		var loading = videoPlayer.Loading().image;
-		if (loading.uniqueId == newClipData.recId)
-			return; // If Blue Iris is currently playing this clip, it has cached a copy of the metadata and if we refresh it clientside it will be out of sync.
 		var $clip = $("#c" + oldClipData.recId);
 
 		if (oldClipData.roughLength != newClipData.roughLength)
@@ -6324,20 +6315,21 @@ function ClipLoader(clipsBodySelector)
 			oldClipData.flags = newClipData.flags;
 			self.RepairClipFlagState(oldClipData);
 		}
-		if (oldClipData.msec != newClipData.msec)
+		if (oldClipData.isClip && oldClipData.msec != newClipData.msec)
 		{
+			// Do not update alert duration (msec). We override it with the clip's duration when opening alerts.
 			oldClipData.msec = newClipData.msec;
 
-			//var loaded = videoPlayer.Loaded().image;
-			//if (loaded.uniqueId == newClipData.recId)
-			//	loaded.msec = newClipData.msec;
+			var loaded = videoPlayer.Loaded().image;
+			if (loaded.uniqueId == newClipData.recId)
+				loaded.msec = newClipData.msec;
 
-			//var loading = videoPlayer.Loading().image;
-			//if (loading.uniqueId == newClipData.recId)
-			//{
-			//	loading.msec = newClipData.msec;
-			//	videoPlayer.NotifyClipMetadataChanged(newClipData);
-			//}
+			var loading = videoPlayer.Loading().image;
+			if (loading.uniqueId == newClipData.recId)
+			{
+				loading.msec = newClipData.msec;
+				videoPlayer.NotifyClipMetadataChanged(newClipData);
+			}
 		}
 	}
 	var ThumbOnAppear = function (ele)
@@ -7027,6 +7019,19 @@ function ClipLoader(clipsBodySelector)
 		return -1;
 	}
 	// End of Helpers
+	this.GetClipFileTypeInfo = function (clipData)
+	{
+		var info = { isBVR: false, isH264: false };
+		if (clipData && clipData.rawClipData.filetype)
+		{
+			var fileTypeParts = clipData.rawClipData.filetype.split(' ');
+			for (var i = 0; i < fileTypeParts.length; i++)
+				fileTypeParts[i] = fileTypeParts[i].toLowerCase();
+			info.isBVR = fileTypeParts.indexOf("bvr") > -1;
+			info.isH264 = fileTypeParts.indexOf("h264") > -1;
+		}
+		return info;
+	};
 	var ClipList_Updated = function (response)
 	{
 		if ($clipsbody.scrollTop() > 30)
@@ -9177,6 +9182,13 @@ function VideoPlayerController()
 	}
 	this.LoadClip = function (clipData)
 	{
+		var fileTypeInfo = clipLoader.GetClipFileTypeInfo(clipData);
+		if ((clipData.flags & clip_flag_is_recording) > 0 && !fileTypeInfo.isBVR)
+		{
+			toaster.Info("Unable to open this " + (clipData.isClip ? "clip" : "alert") + " because the clip is still recording and the file type is not bvr.");
+			return;
+		}
+
 		var cam = cameraListLoader.GetCameraWithId(clipData.camera);
 		if (cam)
 		{
@@ -9329,7 +9341,7 @@ function VideoPlayerController()
 	this.NotifyClipMetadataChanged = function (clipData)
 	{
 		// <summary>Tells the video player about a clip's new duration.  As of BI 4.6.5.2, this currently should not be called as it will make UI3 and Blue Iris disagree about the clip duration.</summary>
-		if (videoPlayer.Loading().image.uniqueId == clipData.recId && typeof playerModule.NotifyClipMetadataChanged == "function")
+		if (videoPlayer.Loading().image.uniqueId === clipData.recId && typeof playerModule.NotifyClipMetadataChanged === "function")
 			playerModule.NotifyClipMetadataChanged(clipData);
 	}
 	// Callback methods for a player module to inform the VideoPlayerController of state changes.
@@ -9628,12 +9640,14 @@ function JpegVideoModule()
 				if (nerdStats.IsOpen())
 				{
 					var loaded = videoPlayer.Loaded().image;
+					let nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
+					if (loading.fullwidth !== loaded.actualwidth || loading.fullheight !== loaded.actualheight)
+						nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
+
 					nerdStats.BeginUpdate();
 					nerdStats.UpdateStat("Viewport", $layoutbody.width() + "x" + $layoutbody.height());
-					nerdStats.UpdateStat("Stream Resolution", loaded.actualwidth + "x" + loaded.actualheight);
-					nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
-					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "%"));
-					nerdStats.UpdateStat("Frame Offset", loading.isLive ? "LIVE" : Math.floor(clipPlaybackPosition) + "ms");
+					nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
+					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "% (Frame Offset: " + Math.floor(clipPlaybackPosition) + "ms)"));
 					nerdStats.UpdateStat("Codecs", "jpeg");
 					nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, msLoadingTime + "ms", true);
 					nerdStats.EndUpdate();
@@ -10161,7 +10175,7 @@ function FetchH264VideoModule()
 			if (startPaused)
 				speed = 0;
 			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
-			var offsetArg = "";
+			var reqMs = null;
 			var path = loading.path;
 			if (clipData)
 			{
@@ -10192,7 +10206,7 @@ function FetchH264VideoModule()
 						// We are starting the alert at a specific offset that was provided in milliseconds.
 						if (speed < 0) // If playing in reverse, lets start at the end of the alert's bounds.
 							offsetMs += clipData.roughLengthMs;
-						offsetArg = "&time=" + offsetMs;
+						reqMs = offsetMs;
 					}
 					// The "pos" argument must be provided alongside "kbseek", even though "pos" will be ignored by Blue Iris.
 					// We recalculate the seek position here anyway because it helps with UI accuracy before the first frame arrives.
@@ -10215,14 +10229,14 @@ function FetchH264VideoModule()
 			var posArg = "&pos=" + posInt;
 			if (honorAlertOffset)
 				posArg = "";
-			if (isSameClipAsBefore && offsetArg === "")
+			if (isSameClipAsBefore && reqMs === null)
 			{
 				// Another hack to work around API limitations.
 				// This allows us to seek frame-by-frame with millisecond precision 
 				// instead of precision equalling 1/10000th of the clip's duration.
 				// isSameClipAsBefore helps ensure we have an accurate msec value.
 				var offsetMsec = currentSeekPositionPercent === 1 && !startPaused ? 0 : -1;
-				offsetArg = "&time=" + (currentSeekPositionPercent * (loading.msec + offsetMsec)).dropDecimals();
+				reqMs = (currentSeekPositionPercent * (loading.msec + offsetMsec)).dropDecimals();
 				posArg = "";
 			}
 			var urlArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight);
@@ -10233,6 +10247,13 @@ function FetchH264VideoModule()
 				if (urlArgs.indexOf("&h=") === -1)
 					widthAndQualityArg += "&w=" + imageRenderer.GetSizeToRequest(false).w;
 				widthAndQualityArg += "&q=50";
+			}
+			let offsetArg = "";
+			if (reqMs !== null)
+			{
+				reqMs = Clamp(reqMs, 0, loading.msec - 1);
+				offsetArg = "&time=" + reqMs;
+				loading.requestedMs = reqMs;
 			}
 			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg;
 		}
@@ -10293,7 +10314,17 @@ function FetchH264VideoModule()
 				jpegPreviewModule.RenderDataURI(frame.startTime, loading.uniqueId, frame.jpeg);
 			}
 			else
+			{
+				// If the clip is currently recording, frame.pos provided by the server will likely be calculated 
+				// against the new length of the clip, which UI3 has no way of reliably knowing!
+				// As a workaround, we will recalculate the pos using the length we know.
+				if (typeof loading.requestedMs !== "undefined")
+				{
+					if (loading.requestedMs < loading.msec) // In case msec somehow gets lower when being updated.
+						frame.pos = frame.meta.pos = (((loading.requestedMs + frame.time) / loading.msec) * 10000).dropDecimals();
+				}
 				h264_player.AcceptFrame(frame);
+			}
 		}
 		else if (frame.isAudio)
 		{
@@ -10532,16 +10563,15 @@ function FetchH264VideoModule()
 			var netDelay = h264_player.GetNetworkDelay().toFloat();
 			var decoderDelay = h264_player.GetBufferedTime().toFloat();
 			if (h264_player.isMsePlayer)
-			{
 				interFrame = frame.duration ? frame.duration : 0;
-				interFrameError = 0;
-			}
+			let nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
+			if (loading.fullwidth !== frame.width || loading.fullheight !== frame.height)
+				nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
+
 			nerdStats.BeginUpdate();
 			nerdStats.UpdateStat("Viewport", $layoutbody.width() + "x" + $layoutbody.height());
-			nerdStats.UpdateStat("Stream Resolution", frame.width + "x" + frame.height);
-			nerdStats.UpdateStat("Native Resolution", loading.fullwidth + "x" + loading.fullheight);
-			nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%"));
-			nerdStats.UpdateStat("Frame Offset", frame.timestamp + "ms");
+			nerdStats.UpdateStat("Stream Resolution", null, frame.width + "x" + frame.height + nativeRes);
+			nerdStats.UpdateStat("Seek Position", (loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%")) + " (Frame Offset: " + frame.timestamp + "ms)");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
 			nerdStats.UpdateStat("Codecs", codecs);
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
@@ -10549,7 +10579,8 @@ function FetchH264VideoModule()
 			nerdStats.UpdateStat("Audio Buffer", bufferSize, bufferSize.toFixed(0) + "ms", true);
 			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
-			nerdStats.UpdateStat("Frame Timing Error", interFrameError, interFrameError.toFixed() + "ms", true);
+			if (!h264_player.isMsePlayer)
+				nerdStats.UpdateStat("Frame Timing Error", interFrameError, interFrameError.toFixed() + "ms", true);
 			nerdStats.UpdateStat("Network Delay", netDelay, netDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Player Delay", decoderDelay, decoderDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Delayed Frames", h264_player.GetBufferedFrameCount(), h264_player.GetBufferedFrameCount(), true);
@@ -11700,8 +11731,22 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 					video: lastFrame.frameData,
 					duration: lastFrameDuration
 				});
+				fedFrameCount++;
+				if (fedFrameCount === 1 && currentStreamBitmapInfo)
+				{
+					// Hack to force the single frame to get rendered.
+					jmuxer.feed({
+						video: lastFrame.frameData,
+						duration: lastFrameDuration
+					});
+					var startMeta = $.extend({}, lastFrame.meta);
+					startMeta.width = currentStreamBitmapInfo.biWidth;
+					startMeta.height = currentStreamBitmapInfo.biHeight;
+					startMeta.timestamp = startMeta.time;
+					frameRendered(startMeta);
+				}
 			}
-			jmuxer.mediaSource.endOfStream();
+			// jmuxer.mediaSource.endOfStream(); // This was causing MEDIA_ERR_SRC_NOT_SUPPORTED when few frames were submitted before ending the stream.
 		}
 		allFramesAccepted = true;
 		CheckStreamEndCondition();
@@ -15515,16 +15560,8 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 	var durationMs = endTimeMs - startTimeMs;
 	var userHasDownloadedAVI = false;
 
-	var fastExport = false;
-	if (clipData.rawClipData.filetype)
-	{
-		var fileTypeParts = clipData.rawClipData.filetype.split(' ');
-		for (var i = 0; i < fileTypeParts.length; i++)
-			fileTypeParts[i] = fileTypeParts[i].toLowerCase();
-		var isBVR = fileTypeParts.indexOf("bvr") > -1;
-		var isH264 = fileTypeParts.indexOf("h264") > -1;
-		fastExport = isBVR && isH264;
-	}
+	var fileTypeInfo = clipLoader.GetClipFileTypeInfo(clipData);
+	var fastExport = fileTypeInfo.isBVR && fileTypeInfo.isH264;
 
 	var $dlg = $('<div class="activeExportDialog"></div>');
 	var $content = $('<div class="campropcontent"></div>');
@@ -18476,7 +18513,6 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 		var startTime = performance.now();
 
 		var fetchArgs = { credentials: "same-origin" };
-		var fetchPromise;
 		if (typeof AbortController == "function")
 		{
 			// FF 57+, Edge 16+ (in theory)
@@ -18485,9 +18521,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 			abort_controller = new AbortController();
 			fetchArgs.signal = abort_controller.signal;
 		}
-		fetchPromise = fetch(url, fetchArgs);
-
-		fetchPromise.then(function (res)
+		fetch(url, fetchArgs).then(function (res)
 		{
 			try
 			{
@@ -18498,8 +18532,9 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 					{
 						try
 						{
-							if (parseInt(res.headers.get("Content-Length")) != jpegBlob.size)
+							if (!currentServer.isUsingRemoteServer && parseInt(res.headers.get("Content-Length")) != jpegBlob.size)
 							{
+								// Apparently we aren't allowed to read the Content-Length header if this is a remote server.
 								CallStreamEnded("fetch graceful exit (jpeg incomplete)", true, true);
 								return;
 							}
@@ -18538,8 +18573,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 			{
 				toaster.Error(e);
 			}
-		});
-		fetchPromise["catch"](function (e)
+		})["catch"](function (e)
 		{
 			try
 			{
@@ -18553,7 +18587,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 	}
 	function CallStreamEnded(message, naturalEndOfStream, wasJpeg)
 	{
-		if (typeof streamEnded == "function")
+		if (typeof streamEnded === "function")
 		{
 			try
 			{
@@ -18803,7 +18837,14 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 		});
 	}
 
-	Start();
+	try
+	{
+		Start();
+	}
+	catch (e)
+	{
+		toaster.Error(e);
+	}
 }
 function StatusBlock(buf)
 {
@@ -19068,9 +19109,7 @@ function UI3NerdStats()
 		[
 			"Viewport"
 			, "Stream Resolution"
-			, "Native Resolution"
 			, "Seek Position"
-			, "Frame Offset"
 			, "Frame Time"
 			, "Codecs"
 			, "Jpeg Loading Time"
