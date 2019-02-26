@@ -9640,12 +9640,12 @@ function JpegVideoModule()
 				if (nerdStats.IsOpen())
 				{
 					var loaded = videoPlayer.Loaded().image;
-					let nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
+					var nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
 					if (loading.fullwidth !== loaded.actualwidth || loading.fullheight !== loaded.actualheight)
 						nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
 
 					nerdStats.BeginUpdate();
-					nerdStats.UpdateStat("Viewport", $layoutbody.width() + "x" + $layoutbody.height());
+					nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
 					nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
 					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "% (Frame Offset: " + Math.floor(clipPlaybackPosition) + "ms)"));
 					nerdStats.UpdateStat("Codecs", "jpeg");
@@ -10248,7 +10248,7 @@ function FetchH264VideoModule()
 					widthAndQualityArg += "&w=" + imageRenderer.GetSizeToRequest(false).w;
 				widthAndQualityArg += "&q=50";
 			}
-			let offsetArg = "";
+			var offsetArg = "";
 			if (reqMs !== null)
 			{
 				reqMs = Clamp(reqMs, 0, loading.msec - 1);
@@ -10564,12 +10564,12 @@ function FetchH264VideoModule()
 			var decoderDelay = h264_player.GetBufferedTime().toFloat();
 			if (h264_player.isMsePlayer)
 				interFrame = frame.duration ? frame.duration : 0;
-			let nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
+			var nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
 			if (loading.fullwidth !== frame.width || loading.fullheight !== frame.height)
 				nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
 
 			nerdStats.BeginUpdate();
-			nerdStats.UpdateStat("Viewport", $layoutbody.width() + "x" + $layoutbody.height());
+			nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
 			nerdStats.UpdateStat("Stream Resolution", null, frame.width + "x" + frame.height + nativeRes);
 			nerdStats.UpdateStat("Seek Position", (loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%")) + " (Frame Offset: " + frame.timestamp + "ms)");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
@@ -21382,6 +21382,11 @@ function BI_GetDevicePixelRatio()
 	if (returnValue <= 0)
 		returnValue = 1;
 	return returnValue;
+}
+function GetDevicePixelRatioTag()
+{
+	var dpr = BI_GetDevicePixelRatio();
+	return dpr === 1 ? "" : ('<span class="dprTag">*' + dpr.toFloat(2) + '</span>');
 }
 function BrowserIsChrome()
 {
