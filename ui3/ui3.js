@@ -10142,6 +10142,7 @@ function FetchH264VideoModule()
 		if (developerMode)
 			console.log("h264.OpenVideo");
 		var isSameClipAsBefore = AreSameClip(loading.uniqueId, videoData.uniqueId);
+		loading = new BICameraData();
 		loading.CopyValuesFrom(videoData);
 		var honorAlertOffset = offsetPercent === -1;
 		if (!offsetPercent)
