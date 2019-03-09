@@ -4943,6 +4943,11 @@ function SeekBar()
 	{
 		if (!seekHintVisible)
 			return;
+		if (videoPlayer.Loading().image.isLive)
+		{
+			console.log("Cannot update seek hint while loading live video");
+			return;
+		}
 		// Update seek hint text and location
 		var msec = videoPlayer.Loading().image.msec;
 		var bodyO = $layoutbody.offset();
@@ -4972,7 +4977,11 @@ function SeekBar()
 			setSeekHintCanvasVisibility(false);
 			setSeekHintHelperVisibility(true);
 		}
-		seekhint_label.html(msToTime(seekHintMs, msec < 30000 ? 1 : 0));
+		var seekhintLabelHtml = msToTime(seekHintMs, msec < 30000 ? 1 : 0);
+		var clipData = clipLoader.GetClipFromId(videoPlayer.Loading().image.uniqueId);
+		if (!clipLoader.ClipLikelyHasGaps(clipData))
+			seekhintLabelHtml = seekhintLabelHtml + '<div class="seekTimeReal">' + GetTimeStr(new Date(clipData.clipStartDate.getTime() + seekHintMs)) + '</div>';
+		seekhint_label.html(seekhintLabelHtml);
 		seekhint.css("top", ((barO.top - 10) - seekhint.outerHeight(true) - bodyO.top) + "px");
 		highlight.css("width", hintX + "px");
 	}
@@ -5936,6 +5945,8 @@ function ClipLoader(clipsBodySelector)
 					else
 						clipData.msec = clipData.offsetMs + clipData.roughLengthMs;
 
+					clipData.clipStartDate = clipData.displayDate;
+					clipData.clipCoverMs = clipData.roughLengthMs;
 
 					if (!clipListCache[clipData.camera])
 						clipListCache[clipData.camera] = new Object();
@@ -6244,6 +6255,8 @@ function ClipLoader(clipsBodySelector)
 		clipData.hasLoadedClipStats = true;
 		clipData.msec = stats.msec;
 		clipData.fileSize = GetFileSize(stats.filesize);
+		clipData.clipStartDate = new Date((stats.date * 1000) + GetServerTimeOffset());
+		clipData.clipCoverMs = GetClipLengthMs(CleanUpFileSize(stats.filesize));
 		clipData.rawClipData = stats;
 		return true;
 	}
@@ -6980,6 +6993,12 @@ function ClipLoader(clipsBodySelector)
 	this.GetCurrentClipEle = function ()
 	{
 		return lastOpenedClipEle;
+	}
+	this.ClipLikelyHasGaps = function (clipData)
+	{
+		var diff = Math.abs(clipData.clipCoverMs - clipData.msec);
+		var allowedDiff = Math.sqrt(clipData.msec) * 25;
+		return diff > allowedDiff;
 	}
 	// Next / Previous Clip Helpers
 	var GetClipIdFromClip = function ($clip)
