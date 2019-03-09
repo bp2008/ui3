@@ -6332,6 +6332,7 @@ function ClipLoader(clipsBodySelector)
 		{
 			// Do not update alert duration (msec). We override it with the clip's duration when opening alerts.
 			oldClipData.msec = newClipData.msec;
+			oldClipData.clipCoverMs = newClipData.clipCoverMs;
 
 			var loaded = videoPlayer.Loaded().image;
 			if (loaded.uniqueId == newClipData.recId)
