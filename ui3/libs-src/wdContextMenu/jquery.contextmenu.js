@@ -267,6 +267,11 @@
 				{
 					return clickHandler(e, this);
 				});
+			else if (option.clickType == "double")
+				return $(this).bind('dblclick', function (e)
+				{
+					return clickHandler(e, this);
+				});
 			else
 				return $(this).longpress(function (e)
 				{

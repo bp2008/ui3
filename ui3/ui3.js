@@ -1718,11 +1718,12 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
-			key: "ui3_contextMenus_longPress"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Context Menu On Long-Press<br><a href="javascript:UIHelp.LearnMore(\'Context Menu On Long-Press\')">(learn more)</a>'
-			, onChange: OnChange_ui3_contextMenus_longPress
+			key: "ui3_contextMenus_trigger"
+			, value: "Right-Click"
+			, options: ["Right-Click", "Long-Press", "Double-Click"]
+			, inputType: "select"
+			, label: 'Context Menu Trigger<br><a href="javascript:UIHelp.LearnMore(\'Context Menu Trigger\')">(learn more)</a>'
+			, onChange: OnChange_ui3_contextMenus_trigger
 			, category: "Extra"
 		}
 		, {
@@ -1958,6 +1959,17 @@ $(function ()
 	$("#bi_version_label").text(bi_version);
 
 	LoadDefaultSettings();
+
+	try
+	{
+		if (typeof localStorage.ui3_contextMenus_longPress !== "undefined")
+		{
+			if (localStorage.ui3_contextMenus_longPress === "1" && settings.ui3_contextMenus_trigger === "Right-Click")
+				settings.ui3_contextMenus_trigger = "Long-Press"; // one-time transition
+			delete localStorage.ui3_contextMenus_longPress;
+		}
+	}
+	catch (e) { }
 
 	if (fetch_streams_cant_close_bug && settings.ui3_edge_fetch_bug_h264_enable !== "1")
 		h264_playback_supported = false; // Affects Edge 17.x, 18.x, and possibly newer versions.
@@ -3487,7 +3499,7 @@ function PtzButtons()
 			bigThumbHelper.Hide();
 			self.PTZ_goto_preset(ele.presetnum);
 		});
-		if (settings.ui3_contextMenus_longPress != "1")
+		if (settings.ui3_contextMenus_trigger !== "Long-Press")
 			$ele.longpress(function (e) { self.PresetSet($ele.attr("presetnum")); });
 		$ele.on("mouseenter touchstart", function (e)
 		{
@@ -13496,32 +13508,37 @@ function StreamingProfile()
 		{
 			// function args w and h are the native resolution of the stream, and will help us determine what to request here.
 			// However this method should still work if w and h were omitted.
-			var nativePx = 0;
 			var aspect;
-			if (w && h)
+			if (!w || !h)
 			{
-				aspect = w / h;
-				nativePx = w * h;
+				w = 1280;
+				h = 720;
 			}
-			else
-				aspect = 16 / 9;
-			if (self.w > 0 && self.h > 0 && nativePx > 0)
+			aspect = w / h;
+			if (self.w > 0 && self.h > 0)
 			{
-				// If both width and height are provided in the profile, UI3 treats them as just a total pixel count.
+				// If both width and height are provided in the profile, UI3 will allow the 90-degree rotated form of this. Otherwise the width or height arguments will be strict limits.
 				// This enables decent handling of rotated views and different aspect ratios.
-				var profilePx = self.w * self.h;
-				var reducer = Math.sqrt(profilePx / nativePx);
-				if (reducer < 1)
-					sb.Append("&h=").Append(Math.round(h * reducer)); // Profile requests fewer pixels than native
-				else if (self.h > h)
-					sb.Append("&h=").Append(self.h);
+				var profileIsPortrait = self.w < self.h;
+				var nativeIsPortrait = w < h;
+				var maxW = self.w;
+				var maxH = self.h;
+				if (profileIsPortrait !== nativeIsPortrait)
+				{
+					// Aspect ratio of profile is different from aspect ratio of camera, so we should swap the limits.
+					maxW = self.h;
+					maxH = self.w;
+				}
+				var profileAspect = maxW / maxH;
+				if (profileAspect >= aspect)
+					sb.Append("&h=").Append(maxH);
 				else
-					sb.Append("&h=").Append(h);
+					sb.Append("&h=").Append(~~(maxW / aspect)); // ~~ is like casting to int
 			}
 			else if (self.h >= 1)
 				sb.Append("&h=").Append(self.h);
 			else if (self.w >= 1)
-				sb.Append("&h=").Append(Math.round(self.w / aspect));
+				sb.Append("&h=").Append(~~(self.w / aspect));
 
 			var kbps = -1; // -1: inherit, 0: no limit, 10-8192: limit
 			if (self.limitBitrate === 1)
@@ -20271,12 +20288,12 @@ function OnChange_ui3_preferred_ui_scale(newValue)
 {
 	uiSizeHelper.SetUISizeByName(newValue);
 }
-var ui3_contextMenus_longPress_toast = null;
-function OnChange_ui3_contextMenus_longPress(newValue)
+var ui3_contextMenus_trigger_toast = null;
+function OnChange_ui3_contextMenus_trigger(newValue)
 {
-	if (ui3_contextMenus_longPress_toast)
-		ui3_contextMenus_longPress_toast.remove();
-	ui3_contextMenus_longPress_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Context menus will open on " + (settings.ui3_contextMenus_longPress == "1" ? "long-press" : "right click") + ".<br><br>Clicking this message will reload the page.", 60000, false
+	if (ui3_contextMenus_trigger_toast)
+		ui3_contextMenus_trigger_toast.remove();
+	ui3_contextMenus_trigger_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Context menus will open on " + settings.ui3_contextMenus_trigger + ".<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
 			location.reload();
@@ -20284,7 +20301,12 @@ function OnChange_ui3_contextMenus_longPress(newValue)
 }
 function GetPreferredContextMenuTrigger()
 {
-	return settings.ui3_contextMenus_longPress == "1" ? "longpress" : "right";
+	if (settings.ui3_contextMenus_trigger === "Long-Press")
+		return "longpress";
+	else if (settings.ui3_contextMenus_trigger === "Double-Click")
+		return "double";
+	else
+		return "right";
 }
 function OnChange_ui3_time24hour()
 {
@@ -20292,9 +20314,9 @@ function OnChange_ui3_time24hour()
 }
 function OnChange_ui3_h264_choice2()
 {
-	if (ui3_contextMenus_longPress_toast)
-		ui3_contextMenus_longPress_toast.remove();
-	ui3_contextMenus_longPress_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
+	if (ui3_contextMenus_trigger_toast)
+		ui3_contextMenus_trigger_toast.remove();
+	ui3_contextMenus_trigger_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
 			location.reload();
@@ -20521,8 +20543,8 @@ function UIHelpTool()
 			case 'Double-Click to Fullscreen':
 				Double_Click_to_Fullscreen();
 				break;
-			case 'Context Menu On Long-Press':
-				Context_Menu_On_Long_Press();
+			case 'Context Menu Trigger':
+				Context_Menu_Trigger();
 				break;
 			case 'Camera Group Webcasting':
 				Camera_Group_Webcasting();
@@ -20550,20 +20572,21 @@ function UIHelpTool()
 				break;
 		}
 	}
-	var Context_Menu_On_Long_Press = function ()
+	var Context_Menu_Trigger = function ()
 	{
 		$('<div class="UIHelp" style="max-width:500px;">'
 			+ 'Many useful functions in this interface are accessed by context menus (a.k.a. "Right-click menus").<br><br>'
 			+ 'Context menus are normally opened by right clicking.  On most touchscreen devices, instead you must press and hold.<br><br>'
 			+ 'However on some devices it is impossible to open context menus the normal way.  If this applies to you,'
-			+ ' enable "Context Menu On Long-Press".  This will change how context menus'
-			+ ' are triggered so they should open when the left mouse button is held down for a moment.'
+			+ ' try different values for the "Context Menu Trigger" option.<br><br>* The "Long-Press" method causes context menus to open'
+			+ ' when the left mouse button is held down for a moment.<br><br>* For devices which cannot perform a "Long-Press" due to technical limitations, the "Double-Click" method causes context menus to open'
+			+ ' when the left mouse button is pressed twice in rapid succession. In some cases, each click also performs other actions such as selecting a camera, so this method is best used only as a last-resort.'
 			+ (browser_is_ios
 				? ('<br><br>Your operating system was detected as iOS, where there is a known compatibility issue with context menus.'
 					+ '  You may be unable to access the context menu regardless of this setting.')
 				: '')
 			+ '</div>')
-			.modalDialog({ title: "Context Menu On Long-Press", closeOnOverlayClick: true });
+			.modalDialog({ title: "Context Menu Trigger", closeOnOverlayClick: true });
 	}
 	var Double_Click_to_Fullscreen = function ()
 	{
