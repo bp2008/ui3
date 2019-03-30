@@ -494,6 +494,8 @@ function GetDefaultH264PlayerOption()
 {
 	if (BrowserIsEdge())
 		return H264PlayerOptions.JavaScript;
+	else if (BrowserIsFirefox())
+		return H264PlayerOptions.JavaScript;
 	return GetH264PlayerOptions()[0];
 }
 var HTML5DelayCompensationOptions = {
@@ -6219,7 +6221,7 @@ function ClipLoader(clipsBodySelector)
 		var retVal = {};
 		retVal.href = currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetAPISessionArg("?");
 		var date = GetDateStr(clipData.displayDate);
-		date = date.replace(/\//g, '-').replace(/:/g, '.');
+		date = FormatFileName(date);
 		retVal.fileNameNoExt = cameraListLoader.GetCameraName(clipData.camera) + " " + date;
 		var extensionIdx = clipData.path.indexOf(".");
 		if (extensionIdx == -1)
@@ -10354,7 +10356,10 @@ function FetchH264VideoModule()
 				if (typeof loading.requestedMs !== "undefined")
 				{
 					if (loading.requestedMs < loading.msec) // In case msec somehow gets lower when being updated.
-						frame.pos = frame.meta.pos = (((loading.requestedMs + frame.time) / loading.msec) * 10000).dropDecimals();
+					{
+						var realmsec = loading.requestedMs + (frame.time * playbackControls.GetPlaybackSpeed());
+						frame.pos = frame.meta.pos = ((realmsec / loading.msec) * 10000).dropDecimals();
+					}
 				}
 				h264_player.AcceptFrame(frame);
 			}
@@ -15594,7 +15599,6 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 {
 	// <summary>This dialog controls the actual export operation and lacks a normal close button.</summary>
 	var self = this;
-	var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 	var durationMs = endTimeMs - startTimeMs;
 	var userHasDownloadedAVI = false;
 
@@ -15633,11 +15637,11 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 	{
 		$status.text(message);
 	}
-	var exportComplete = function (dataUri, finishedSuccessfully)
+	var exportComplete = function (dataUri, finishedSuccessfully, firstFrameTimeUTC)
 	{
 		if (dataUri)
 		{
-			$status.after(GetLink(dataUri));
+			$status.after(GetLink(dataUri, firstFrameTimeUTC));
 			$status.remove();
 			if (finishedSuccessfully)
 				$linkLabel.text("Click the link below to save!");
@@ -15654,12 +15658,15 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 		$closeBtn.attr('iscancel', '0');
 	}
 
-	var GetLink = function (dataUri)
+	var GetLink = function (dataUri, firstFrameTimeUTC)
 	{
 		var $link = $('<a href=""></a>');
 		$link.attr("href", dataUri);
-		$link.text(clipInfo.fileNameNoExt + ".avi");
-		$link.attr("download", clipInfo.fileNameNoExt + ".avi");
+		var camName = cameraListLoader.GetCameraName(clipData.camera);
+		var date = firstFrameTimeUTC ? GetDateStr(new Date(firstFrameTimeUTC)) : GetDateStr(clipData.displayDate);
+		var fileName = camName + " " + FormatFileName(date) + ".avi";
+		$link.text(fileName);
+		$link.attr("download", fileName);
 		$link.on('click', function ()
 		{
 			userHasDownloadedAVI = true;
@@ -15712,6 +15719,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 	var dataUri = null;
 	var totalVideoFrames = 0;
 	var totalExportedTimeMs = 0;
+	var firstFrameTimeUTC = 0;
 
 	this.Dispose = function ()
 	{
@@ -15746,6 +15754,8 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 			aviEncoder.AddVideoFrame(frame.frameData, frame.isKeyframe());
 			totalVideoFrames++;
 			totalExportedTimeMs = frame.time;
+			if (firstFrameTimeUTC === 0)
+				firstFrameTimeUTC = frame.utc;
 			if (frame.time >= durationMs)
 			{
 				HandleAviReady(true, -1);
@@ -15812,7 +15822,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 					// frameCountOffset accounts for the fact that sometimes our totalExportedTimeMs value will not include the duration of the last frame.  In theory this results in a more accurate FPS calculation.
 					fps = ((totalVideoFrames + frameCountOffset) / totalExportedTimeMs) * 1000;
 				}
-				exportCompleteCb(Uint8ArrayToDataURI(aviEncoder.FinishAndGetUint8Array(fps)), finishedSuccessfully);
+				exportCompleteCb(Uint8ArrayToDataURI(aviEncoder.FinishAndGetUint8Array(fps)), finishedSuccessfully, firstFrameTimeUTC);
 			}
 			else
 				HandleExportFailure("Export failed because no stream metadata was received.");
@@ -16881,7 +16891,7 @@ function saveSnapshot(btnSelector)
 		btnSelector = "#save_snapshot_btn";
 	var camName = cameraListLoader.GetCameraName(videoPlayer.Loading().image.id);
 	var date = GetDateStr(new Date(videoPlayer.GetCurrentImageTimeMs() + GetServerTimeOffset()), true);
-	date = date.replace(/\//g, '-').replace(/:/g, '.');
+	date = FormatFileName(date);
 	var fileName = camName + " " + date + ".jpg";
 	$(btnSelector).attr("download", fileName);
 	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
@@ -21568,4 +21578,8 @@ function RemoveUrlParams()
 			s = "?" + s;
 	}
 	return location.origin + location.pathname + s + location.hash;
+}
+function FormatFileName(str)
+{
+	return str.replace(/\//g, '-').replace(/:/g, '.');
 }
