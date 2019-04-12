@@ -1964,6 +1964,17 @@ div.invisibleLabel
 		color: #95C7FC;
 	}
 
+.clipIconWrapper .clipicon.icon_trigger_sentry_occupied
+{
+	color: #F66476;
+}
+
+.cliptile.selected .clipIconWrapper .clipicon.icon_trigger_sentry_occupied,
+.cliptile.selected:hover .clipIconWrapper .clipicon.icon_trigger_sentry_occupied
+{
+	color: #ff98a5;
+}
+
 .sizeMedium .cliptile,
 .sizeMedium .datetile,
 .sizeMedium .clipListText
@@ -3248,6 +3259,7 @@ body + div
 	border-radius: 50%;
 	display: none;
 }
+
 	.cornerStatusIconWrapper.big
 	{
 		width: 64px;
@@ -3273,7 +3285,7 @@ body + div
 	{
 		pointer-events: none;
 	}
-	
+
 @media all and (min-width: 800px) and (min-height: 600px)
 {
 	.cornerStatusIconWrapper
@@ -3281,11 +3293,12 @@ body + div
 		width: 30px;
 		height: 30px;
 	}
-	.cornerStatusIconWrapper.big
-	{
-		width: 96px;
-		height: 96px;
-	}
+
+		.cornerStatusIconWrapper.big
+		{
+			width: 96px;
+			height: 96px;
+		}
 }
 
 @media all and (min-width: 600px) and (min-height: 800px)
@@ -3295,12 +3308,14 @@ body + div
 		width: 30px;
 		height: 30px;
 	}
-	.cornerStatusIconWrapper.big
-	{
-		width: 96px;
-		height: 96px;
-	}
+
+		.cornerStatusIconWrapper.big
+		{
+			width: 96px;
+			height: 96px;
+		}
 }
+
 @media all and (min-width: 1600px) and (min-height: 1200px)
 {
 	.cornerStatusIconWrapper
@@ -3308,11 +3323,12 @@ body + div
 		width: 40px;
 		height: 40px;
 	}
-	.cornerStatusIconWrapper.big
-	{
-		width: 128px;
-		height: 128px;
-	}
+
+		.cornerStatusIconWrapper.big
+		{
+			width: 128px;
+			height: 128px;
+		}
 }
 
 @media all and (min-width: 1200px) and (min-height: 1600px)
@@ -3322,11 +3338,12 @@ body + div
 		width: 40px;
 		height: 40px;
 	}
-	.cornerStatusIconWrapper.big
-	{
-		width: 128px;
-		height: 128px;
-	}
+
+		.cornerStatusIconWrapper.big
+		{
+			width: 128px;
+			height: 128px;
+		}
 }
 
 /* Question Dialog */

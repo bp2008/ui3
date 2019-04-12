@@ -833,6 +833,20 @@ var defaultSettings =
 			, category: "Clip / Alert Icons"
 		}
 		, {
+			key: "ui3_clipicon_trigger_sentry"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_logo"></use></svg> for Sentry-verified alerts'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_trigger_sentry_occupied"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_human"></use></svg> for Sentry-verified alerts that continue a previous alert'
+			, category: "Clip / Alert Icons"
+		}
+		, {
 			key: "ui3_clipicon_clip_audio"
 			, value: "1"
 			, inputType: "checkbox"
@@ -6712,6 +6726,10 @@ function ClipLoader(clipsBodySelector)
 	var GetClipIcons = function (clipData)
 	{
 		var icons = [];
+		if ((clipData.flags & alert_flag_sentry_trigger) > 0 && settings.ui3_clipicon_trigger_sentry == "1")
+			icons.push(self.GetClipIcon("trigger_sentry"));
+		if ((clipData.flags & alert_flag_sentry_occupied) > 0 && settings.ui3_clipicon_trigger_sentry_occupied == "1")
+			icons.push(self.GetClipIcon("trigger_sentry_occupied"));
 		if ((clipData.flags & alert_flag_trigger_motion) > 0 && settings.ui3_clipicon_trigger_motion == "1")
 			icons.push(self.GetClipIcon("trigger_motion"));
 		if ((clipData.flags & alert_flag_trigger_audio) > 0 && settings.ui3_clipicon_trigger_audio == "1")
@@ -6734,8 +6752,12 @@ function ClipLoader(clipsBodySelector)
 	{
 		switch (name)
 		{
+			case "trigger_sentry":
+				return GetClipIcon_Internal(name, "#sentry_logo", true, "Sentry-verified alert");
+			case "trigger_sentry_occupied":
+				return GetClipIcon_Internal(name, "#sentry_human", true, "Sentry-verified continuation of a previous alert");
 			case "trigger_motion":
-				return GetClipIcon_Internal(name, "#svg_mio_run", true, "Triggered by motion detection")
+				return GetClipIcon_Internal(name, "#svg_mio_run", true, "Triggered by motion detection");
 			case "trigger_audio":
 				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Triggered by audio");
 			case "trigger_external":
@@ -15465,6 +15487,10 @@ function ClipProperties()
 			else
 				$camprop.append(GetInfo("Zones", clipData.rawData.zones));
 
+			if ((clipData.flags & alert_flag_sentry_trigger) > 0)
+				$camprop.append(GetIcon("trigger_sentry", "Sentry-verified alert"));
+			if ((clipData.flags & alert_flag_sentry_occupied) > 0)
+				$camprop.append(GetIcon("trigger_sentry_occupied", "Sentry-verified continuation of a previous alert"));
 			if ((clipData.flags & alert_flag_trigger_motion) > 0)
 				$camprop.append(GetIcon("trigger_motion", "Triggered by motion detection"));
 			if ((clipData.flags & alert_flag_trigger_audio) > 0)
@@ -20757,6 +20783,8 @@ var b0010_0000 = 32;
 var b0100_0000 = 64;
 var b1000_0000 = 128;
 var b0001_0000_0000 = 256;
+var b0000_0000_0100_0000_0000_0000 = 16384;
+var b0000_0000_1000_0000_0000_0000 = 32768;
 var b0000_0001_0000_0000_0000_0000 = 65536;
 var b0000_0010_0000_0000_0000_0000 = 131072;
 var b0000_0100_0000_0000_0000_0000 = 262144;
@@ -20771,6 +20799,8 @@ var clip_flag_protect = b0000_0100;
 var clip_flag_backingup = b0100_0000;
 var clip_flag_backedup = b1000_0000;
 var clip_flag_is_recording = b0001_0000_0000;
+var alert_flag_sentry_trigger = b0000_0000_0100_0000_0000_0000;
+var alert_flag_sentry_occupied = b0000_0000_1000_0000_0000_0000;
 var alert_flag_offsetMs = b0000_0001_0000_0000_0000_0000;
 var alert_flag_trigger_motion = b0000_0010_0000_0000_0000_0000;
 var alert_flag_nosignal = b0000_0100_0000_0000_0000_0000;
