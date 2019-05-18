@@ -18693,6 +18693,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 	function protocolError(error)
 	{
 		stopStreaming_Internal();
+		toaster.Error("Protocol Error: " + error);
 		CallStreamEnded("/video/ Protocol Error: " + error);
 	}
 
