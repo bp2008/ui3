@@ -47,6 +47,11 @@
 	--streaming-profile-item-ghost-bg-color: rgba(255,255,255,0.1);
 	/* Clip List */
 	--datetile-bg-color: #383E47;
+	--badge-color: var(--main-highlight-color);
+	--badge-hover-color: var(--dropdown-item-blue-color);
+	--badge-selected-color: #bad8ff;
+	--badge-sentry-color: #d04959;
+	--badge-sentry-hover-color: #F66476;
 	/* Context Menus */
 	--context-menu-icon-highlight-color: #0097F0;
 }
@@ -1743,7 +1748,7 @@ div.invisibleLabel
 	vertical-align: middle;
 	width: 16px;
 	height: 16px;
-	color: #2b4bc6;
+	color: var(--badge-color);
 	padding-top: 1px;
 }
 
@@ -1763,7 +1768,7 @@ div.invisibleLabel
 
 .leftBarBool:hover .smallFlagIcon
 {
-	color: #6d8bff;
+	color: var(--badge-hover-color);
 }
 /* Calendar */
 #datePickerDialog
@@ -1909,7 +1914,7 @@ div.invisibleLabel
 	right: 0px;
 	width: auto;
 	height: 21px;
-	color: #2b4bc6;
+	color: var(--badge-color);
 	text-align: right;
 }
 
@@ -2025,24 +2030,24 @@ div.invisibleLabel
 
 	.cliptile:hover .clipIconWrapper
 	{
-		color: #0035ff;
+		color: var(--badge-hover-color);
 	}
 
 	.cliptile.selected .clipIconWrapper,
 	.cliptile.selected:hover .clipIconWrapper
 	{
-		color: #95C7FC;
+		color: var(--badge-selected-color);
 	}
 
 .clipIconWrapper .clipicon.icon_trigger_sentry_occupied
 {
-	color: #F66476;
+	color: var(--badge-sentry-color);
 }
 
 .cliptile.selected .clipIconWrapper .clipicon.icon_trigger_sentry_occupied,
 .cliptile.selected:hover .clipIconWrapper .clipicon.icon_trigger_sentry_occupied
 {
-	color: #ff98a5;
+	color: var(--badge-sentry-hover-color);
 }
 
 .sizeMedium .cliptile,
