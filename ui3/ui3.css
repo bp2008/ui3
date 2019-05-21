@@ -1,3 +1,55 @@
+:root
+{
+	/* Main / Misc */
+	--main-highlight-color: #3E5F8A;
+	--panel-bg-color: #181818;
+	--cliplist-bg-color: #101010;
+	--contextmenu-server-icon-color: #444E4F;
+	/* Dropdowns, Calendar, SquareButtons */
+	--uicontrol-bg-color: #101010;
+	--uicontrol-hover-bg-color: #303030;
+	--uicontrol-active-bg-color: #505050;
+	/* Dropdowns */
+	--dropdown-item-bg-color: #000000;
+	--dropdown-item-hover-bg-color: #303030;
+	--dropdown-item-active-bg-color: #505050;
+	--dropdown-item-color: #DDDDDD;
+	--dropdown-item-hover-color: #EEEEEE;
+	--dropdown-item-active-color: #FFFFFF;
+	--dropdown-item-blue-color: #618dc7;
+	--dropdown-item-blue-hover-color: #7db0f3;
+	--dropdown-item-blue-active-color: #8fbefd;
+	--dropdown-item-golden-color: #C8B11C;
+	--dropdown-item-golden-hover-color: #e6cf35;
+	--dropdown-item-golden-active-color: #ffe84e;
+	--dropdown-item-red-color: #F09700;
+	--dropdown-item-red-hover-color: #ffa919;
+	--dropdown-item-red-active-color: #ffb944;
+	/* Dialogs */
+	--dialog-bg-color: var(--panel-bg-color);
+	--dialog-border-color: #404040;
+	--dialog-color: #cdcdcd;
+	--dialog-titlebar-bg-color: var(--main-highlight-color);
+	--dialog-titlebar-bottom-border-color: #2b405d;
+	--dialog-titlebar-color: #cdcdcd;
+	/* Collapsible headings in dialogs */
+	--collapsible-heading-bg-color: var(--panel-bg-color);
+	--collapsible-heading-hover-bg-color: #333333;
+	--collapsible-heading-active-bg-color: #404040;
+	--collapsible-heading-color: #808080;
+	--collapsible-heading-expanded-bg-color: #404040;
+	--collapsible-heading-expanded-hover-bg-color: #4a4a4a;
+	--collapsible-heading-expanded-active-bg-color: #505050;
+	--collapsible-heading-expanded-color: #cdcdcd;
+	/* Streaming Profile List */
+	--streaming-profile-item-bg-color: #272727;
+	--streaming-profile-item-hover-bg-color: #404040;
+	--streaming-profile-item-ghost-bg-color: rgba(255,255,255,0.1);
+	/* Clip List */
+	--datetile-bg-color: #383E47;
+	/* Context Menus */
+	--context-menu-icon-highlight-color: #0097F0;
+}
 /* SVG */
 svg.icon
 {
@@ -52,7 +104,7 @@ svg.stroke
 body
 {
 	margin: 0px;
-	background-color: #15171B;
+	background-color: var(--panel-bg-color);
 	overflow: hidden;
 	font-family: Arial, Sans-Serif;
 	font-size: 0px;
@@ -104,7 +156,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	position: absolute;
 	width: 100%;
 	height: 64px;
-	background-color: #15171B;
+	background-color: var(--panel-bg-color);
 	overflow: hidden;
 	z-index: 100;
 }
@@ -136,7 +188,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	top: 64px;
 	height: 500px;
 	width: 256px;
-	background-color: #15171B;
+	background-color: var(--panel-bg-color);
 }
 
 #layoutleftLive, #layoutleftRecordings, #layoutleftFlasher, #layoutleftLiveScrollable, #layoutleftLiveScrollableWrapper
@@ -176,7 +228,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 #layoutbottom
 {
 	position: absolute;
-	background-color: #15171B;
+	background-color: var(--panel-bg-color);
 	left: 256px;
 	bottom: 0px;
 	overflow: hidden;
@@ -224,7 +276,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 #systemnamewrapper
 {
 	height: 100%;
-	background-color: #0097F0;
+	background-color: var(--main-highlight-color);
 	color: #FFFFFF;
 }
 
@@ -249,7 +301,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	.topbar_tab.selected
 	{
 		color: #FFFFFF;
-		border-bottom: 8px solid #0097F0;
+		border-bottom: 8px solid var(--main-highlight-color);
 		cursor: default;
 	}
 
@@ -375,7 +427,7 @@ div.icon, a.icon
 .layoutleft-track
 {
 	width: 8px;
-	background-color: #15171B;
+	background-color: var(--panel-bg-color);
 }
 
 .sizeLarge .layoutleft-track
@@ -454,16 +506,17 @@ div.icon, a.icon
 	font-size: 16px;
 	text-align: center;
 	cursor: pointer;
+	background-color: var(--uicontrol-bg-color);
 }
 
 	.squareButton:hover, .oneByTwoSquareButton:hover
 	{
-		background-color: rgba(255,255,255,0.1);
+		background-color: var(--uicontrol-hover-bg-color);
 	}
 
 	.squareButton:active, .oneByTwoSquareButton:active
 	{
-		background-color: rgba(255,255,255,0.3);
+		background-color: var(--uicontrol-active-bg-color);
 	}
 
 	.squareButton.disabled, .oneByTwoSquareButton.disabled
@@ -477,14 +530,14 @@ div.icon, a.icon
 		.squareButton.spacer:hover,
 		.oneByTwoSquareButton.disabled:hover
 		{
-			background-color: transparent;
+			background-color: var(--uicontrol-bg-color);
 		}
 
 		.squareButton.disabled:active,
 		.squareButton.spacer:active,
 		.oneByTwoSquareButton.disabled:active
 		{
-			background-color: transparent;
+			background-color: var(--uicontrol-bg-color);
 		}
 
 	.squareButton.spacer
@@ -645,7 +698,7 @@ div.invisibleLabel
 
 	.collapsibleTrigger:hover
 	{
-		background-color: #1F2026;
+		background-color: rgba(255,255,255,0.067);
 	}
 
 	.collapsibleTrigger.collapsed .collapsibleTriggerIcon
@@ -946,7 +999,7 @@ div.invisibleLabel
 
 .progressBarInner
 {
-	background-color: #0097F0;
+	background-color: var(--main-highlight-color);
 	width: 0%;
 	height: 100%;
 }
@@ -1028,7 +1081,7 @@ div.invisibleLabel
 	padding-bottom: 0px;
 	position: absolute;
 	bottom: 0px;
-	background-color: #15171B;
+	background-color: var(--panel-bg-color);
 	z-index: 50;
 	overflow: visible;
 	white-space: nowrap;
@@ -1383,6 +1436,7 @@ div.invisibleLabel
 	padding-left: 10px;
 	cursor: pointer;
 	overflow: hidden;
+	background-color: var(--uicontrol-bg-color);
 }
 
 	.dropdownBox.disabled
@@ -1393,13 +1447,23 @@ div.invisibleLabel
 
 	#stoplightBtn:hover, .dropdownBox:hover, #dateRange:hover
 	{
-		background-color: rgba(255,255,255,0.1);
+		background-color: var(--uicontrol-hover-bg-color);
 	}
 
-	#stoplightBtn.disabled:hover, .dropdownBox.disabled:hover
+	#stoplightBtn:active, .dropdownBox:active, #dateRange:active
 	{
-		background-color: transparent;
+		background-color: var(--uicontrol-active-bg-color);
 	}
+
+	.dropdownBox.disabled:hover, #dateRange
+	{
+		background-color: var(--uicontrol-bg-color);
+	}
+
+#stoplightBtn, #stoplightBtn.disabled, #stoplightBtn.disabled:hover
+{
+	background-color: transparent;
+}
 
 .sizeMedium .dropdownBox
 {
@@ -1482,12 +1546,12 @@ div.invisibleLabel
 .dropdown_list
 {
 	font-size: 16px;
-	background-color: #2C2E31;
+	background-color: var(--dropdown-item-bg-color);
 	display: inline-block;
 	position: absolute;
 	border: 1px solid #969BA7;
 	z-index: 9999999; /* Same z-index as playback settings panels. Toasts are at 999999 (one less 9)*/
-	color: #DDDDDD;
+	color: var(--dropdown-item-color);
 	overflow: auto;
 }
 
@@ -1499,14 +1563,14 @@ div.invisibleLabel
 
 		.dropdown_list > div:hover, .dropdown_list > div.selected
 		{
-			background-color: #666666;
-			color: #EEEEEE;
+			background-color: var(--dropdown-item-hover-bg-color);
+			color: var(--dropdown-item-hover-color);
 		}
 
 		.dropdown_list > div:active
 		{
-			background-color: #999999;
-			color: #FFFFFF;
+			background-color: var(--dropdown-item-active-bg-color);
+			color: var(--dropdown-item-active-color);
 		}
 
 .sizeMedium .dropdown_list
@@ -1538,53 +1602,53 @@ div.invisibleLabel
 
 .dropdown_list > div.blueLarger
 {
-	color: #0097F0;
+	color: var(--dropdown-item-blue-color);
 }
 
 	.dropdown_list > div.blueLarger:hover
 	{
-		background-color: #444444;
-		color: #4dbeff;
+		background-color: var(--dropdown-item-hover-bg-color);
+		color: var(--dropdown-item-blue-hover-color);
 	}
 
 	.dropdown_list > div.blueLarger:active
 	{
-		background-color: #666666;
-		color: #99daff;
+		background-color: var(--dropdown-item-active-bg-color);
+		color: var(--dropdown-item-blue-active-color);
 	}
 
 .dropdown_list > div.goldenLarger
 {
-	color: #BBBB00;
+	color: var(--dropdown-item-golden-color);
 }
 
 	.dropdown_list > div.goldenLarger:hover
 	{
-		background-color: #444444;
-		color: #DDDD00;
+		background-color: var(--dropdown-item-hover-bg-color);
+		color: var(--dropdown-item-golden-hover-color);
 	}
 
 	.dropdown_list > div.goldenLarger:active
 	{
-		background-color: #666666;
-		color: #FFFF00;
+		background-color: var(--dropdown-item-active-bg-color);
+		color: var(--dropdown-item-golden-active-color);
 	}
 
 .dropdown_list > div.redLarger
 {
-	color: #F09700;
+	color: var(--dropdown-item-red-color);
 }
 
 	.dropdown_list > div.redLarger:hover
 	{
-		background-color: #444444;
-		color: #ffa919;
+		background-color: var(--dropdown-item-hover-bg-color);
+		color: var(--dropdown-item-red-hover-color);
 	}
 
 	.dropdown_list > div.redLarger:active
 	{
-		background-color: #666666;
-		color: #ffb944;
+		background-color: var(--dropdown-item-active-bg-color);
+		color: var(--dropdown-item-red-active-color);
 	}
 
 .mainMenuIcon
@@ -1705,7 +1769,7 @@ div.invisibleLabel
 #datePickerDialog
 {
 	font-size: 16px;
-	background-color: #15171B;
+	background-color: var(--panel-bg-color);
 	display: inline-block;
 	position: absolute;
 	border: 1px solid #969BA7;
@@ -1803,6 +1867,7 @@ div.invisibleLabel
 	white-space: nowrap;
 	/*height: 500px;*/
 	font-size: 16px; /* Firefox relies on font-size to calculate mousewheel scroll distance */
+	background-color: var(--cliplist-bg-color);
 }
 
 	#clipsbody.largerThumbs
@@ -1819,6 +1884,11 @@ div.invisibleLabel
 {
 	height: 500px;
 	width: 100%;
+}
+
+.clipListTopDateWrapper
+{
+	background-color: var(--datetile-bg-color);
 }
 
 #clipListTopDate
@@ -1917,7 +1987,7 @@ div.invisibleLabel
 	line-height: 18px;
 	font-size: 12px;
 	color: #FFFFFF;
-	background-color: #383E47;
+	background-color: var(--datetile-bg-color);
 }
 
 .cliptile, .datetile, .clipListText
@@ -2447,6 +2517,9 @@ body + div
 .b-m-mpanel
 {
 	font-family: Consolas, Arial, sans-serif;
+	box-sizing: border-box;
+	max-height: 100vh;
+	overflow-y: auto;
 }
 
 	.b-m-mpanel a
@@ -2454,6 +2527,16 @@ body + div
 		text-decoration: none;
 		color: #000000;
 		cursor: default;
+	}
+
+	.b-m-mpanel::-webkit-scrollbar-thumb
+	{
+		background-color: #BBBBBB;
+	}
+
+	.b-m-mpanel::-webkit-scrollbar-track
+	{
+		background-color: #E0E0E0;
 	}
 /* Playback Controls */
 #seekhint
@@ -2972,7 +3055,7 @@ body + div
 	display: inline-block;
 	width: 0px;
 	height: 100%;
-	background-color: #0097F0;
+	background-color: var(--main-highlight-color);
 }
 
 #seekBarHighlight
@@ -3160,7 +3243,7 @@ body + div
 .about_icon
 {
 	float: right;
-	width: 48px;
+	width: 150.5px;
 	height: 48px;
 }
 
@@ -3475,7 +3558,7 @@ body + div
 /* Context Menu Icon Classes */
 .iconBlue
 {
-	color: #0097F0;
+	color: var(--context-menu-icon-highlight-color);
 }
 /* Disk Usage Dialog */
 .pieLegend
@@ -3909,7 +3992,7 @@ body + div
 	min-height: 10px;
 	padding: 3px 6px;
 	margin: 3px 0px;
-	background-color: #424242;
+	background-color: var(--streaming-profile-item-bg-color);
 	border: 1px solid #5f5f5f;
 	border-radius: 5px;
 	cursor: pointer;
@@ -3919,12 +4002,12 @@ body + div
 
 	.profileListItem:hover
 	{
-		background-color: #525252;
+		background-color: var(--streaming-profile-item-hover-bg-color);
 	}
 
 	.profileListItem.ghost
 	{
-		background-color: rgba(255,255,255,0.1) !important;
+		background-color: var(--streaming-profile-item-ghost-bg-color) !important;
 		margin: 0px !important;
 		display: block !important;
 		position: absolute;
@@ -3957,28 +4040,33 @@ div::-webkit-scrollbar
 
 div::-webkit-scrollbar-thumb
 {
-	background: #5e5e5e;
+	background-color: #5e5e5e;
 	border-left: 0px solid #393939;
 }
 
 	div::-webkit-scrollbar-thumb:hover
 	{
-		background: #6c6c6c;
+		background-color: #6c6c6c;
 	}
 
 	div::-webkit-scrollbar-thumb:active
 	{
-		background: #7a7a7a;
+		background-color: #7a7a7a;
 	}
 
 div::-webkit-scrollbar-track
 {
-	background: #393939;
+	background-color: var(--panel-bg-color);
 }
 
 div::-webkit-scrollbar-corner
 {
 	background: #222222;
+}
+
+#clipsbodyWrapper .layoutleft-track
+{
+	background-color: var(--cliplist-bg-color);
 }
 /* For IE */
 /*.dialog_content
@@ -4008,7 +4096,7 @@ div::-webkit-scrollbar-corner
 {
 	width: 0%;
 	height: 100%;
-	background-color: #0097F0;
+	background-color: var(--main-highlight-color);
 }
 /* Export Dialog */
 .activeExportDialog
@@ -4204,7 +4292,8 @@ div::-webkit-scrollbar-corner
 /* Stats for nerds */
 .statsForNerds
 {
-	margin-bottom: 6px;
+	padding-bottom: 6px;
+	box-sizing: border-box;
 }
 
 .statsRow
@@ -4267,34 +4356,34 @@ div::-webkit-scrollbar-corner
 	margin-top: 8px;
 	padding: 7px 0px;
 	cursor: pointer;
-	background-color: #424242;
-	color: #808080;
+	background-color: var(--collapsible-heading-bg-color);
+	color: var(--collapsible-heading-color);
 }
 
 	.collapsible_section_heading:hover
 	{
-		background-color: #4a4a4a;
+		background-color: var(--collapsible-heading-hover-bg-color);
 	}
 
 	.collapsible_section_heading:active
 	{
-		background-color: #505050;
+		background-color: var(--collapsible-heading-active-bg-color);
 	}
 
 	.collapsible_section_heading.expanded
 	{
-		background-color: #626262;
-		color: #cdcdcd;
+		background-color: var(--collapsible-heading-expanded-bg-color);
+		color: var(--collapsible-heading-expanded-color);
 	}
 
 		.collapsible_section_heading.expanded:hover
 		{
-			background-color: #6a6a6a;
+			background-color: var(--collapsible-heading-expanded-hover-bg-color);
 		}
 
 		.collapsible_section_heading.expanded:active
 		{
-			background-color: #707070;
+			background-color: var(--collapsible-heading-expanded-active-bg-color);
 		}
 
 .collapsible_section
@@ -4386,3 +4475,28 @@ div::-webkit-scrollbar-corner
 {
 	color: #e6e660;
 }
+/* Dialog Theme */
+.dialog_wrapper.darkTheme
+{
+	border-color: var(--dialog-border-color);
+	background-color: var(--dialog-bg-color);
+	color: var(--dialog-color);
+}
+
+	.dialog_wrapper.darkTheme .dialog_titlebar
+	{
+		border-bottom-color: var(--dialog-titlebar-bottom-border-color);
+		background-color: var(--dialog-titlebar-bg-color);
+	}
+
+	.dialog_wrapper.darkTheme .dialog_close,
+	.dialog_wrapper.darkTheme .dialog_refresh
+	{
+		background-color: var(--dialog-titlebar-bg-color);
+		color: var(--dialog-titlebar-color);
+	}
+
+	.dialog_wrapper.darkTheme div::-webkit-scrollbar-track
+	{
+		background: var(--dialog-bg-color);
+	}

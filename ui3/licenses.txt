@@ -161,3 +161,6 @@ AVI.js
 
 jmuxer
 The MIT License - https://github.com/samirkumardas/jmuxer/blob/master/LICENSE
+
+css-vars-ponyfill
+The MIT License - https://github.com/jhildenbiddle/css-vars-ponyfill/blob/master/LICENSE

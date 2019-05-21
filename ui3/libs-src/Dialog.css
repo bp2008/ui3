@@ -143,6 +143,7 @@
 	overflow: auto;
 	max-width: 90vw;
 	max-height: 85vh;
+	max-height: calc(100vh - 31px);
 }
 
 	.dialog_content a, .dialog_content a:visited
