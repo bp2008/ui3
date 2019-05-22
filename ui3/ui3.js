@@ -3219,6 +3219,12 @@ function PtzButtons()
 {
 	var self = this;
 
+	var panelBgColor = GetCssVar("--panel-bg-color", "#181818");
+	var ptzpadColor = GetCssVar("--ptzpad-color", "#6d6868");
+	var ptzpadDisabledColor = GetCssVar("--ptzpad-disabled-color", "#2d2c2c");
+	var textHoverColor = GetCssVar("--text-hover-color", "#D9DBDF");
+	var textActiveColor = GetCssVar("--text-active-color", "#FFFFFF");
+
 	var ptzControlsEnabled = false;
 	var $hoveredEle = null;
 	var $activeEle = null;
@@ -3315,7 +3321,7 @@ function PtzButtons()
 		$ele.css("height", ele.layout.h + "px");
 
 		$ele.append('<svg class="icon"><use xlink:href="#svg_x5F_' + ele.svgid + '"></use></svg>');
-		ele.defaultColor = $ele.hasClass("ptzBackground") ? "#363B46" : "#15171B";
+		ele.defaultColor = $ele.hasClass("ptzBackground") ? ptzpadColor : panelBgColor;
 		$ele.css('color', ele.defaultColor);
 		ele.parentNode.graphicObjects[ele.svgid] = ele;
 	});
@@ -3327,7 +3333,7 @@ function PtzButtons()
 	{
 		$ptzButtons.attr("title", btn.tooltipText);
 		$hoveredEle = $(btn);
-		$hoveredEle.css("color", "#969BA7");
+		$hoveredEle.css("color", textHoverColor);
 	}
 	// onHoverLeave called whenever a mouse pointer leaves any button or a mouse up event is triggered
 	var onHoverLeave = function ()
@@ -3349,7 +3355,7 @@ function PtzButtons()
 	{
 		self.SendOrQueuePtzCommand(videoPlayer.Loading().image.id, btn.ptzcmd, false);
 		$activeEle = $(btn);
-		$activeEle.css("color", "#FFFFFF");
+		$activeEle.css("color", textActiveColor);
 	}
 	var onPointerMove = function (e)
 	{
@@ -3477,7 +3483,7 @@ function PtzButtons()
 			$ptzPresets.addClass("disabled");
 			$ptzButtons.addClass("disabled");
 			$ptzExtraDropdowns.addClass("disabled");
-			$ptzBackgroundGraphics.css("color", "#20242b");
+			$ptzBackgroundGraphics.css("color", ptzpadDisabledColor);
 		}
 	}
 	this.isEnabledNow = function ()
@@ -11592,7 +11598,13 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		player.addEventListener('loadedmetadata', onTimeUpdate);
 		player.addEventListener('pause', onPlayerPaused);
 		player.addEventListener('stalled', onPlayerStalled);
-		player.addEventListener('suspend', function (e) { console.log("HTML5 video suspended"); });
+		player.addEventListener('suspend', function (e)
+		{
+			if (developerMode)
+				toaster.Error("HTML5 video suspended", 60000);
+			else
+				console.log("HTML5 video suspended");
+		});
 
 		isLoaded = true;
 		loadingHelper.SetLoadedStatus("h264");
@@ -16866,7 +16878,7 @@ var volumeIconHelper = new (function ()
 	this.setColorError = function () { setColor("#F00000"); }
 	this.setColorLoading = function () { setColor("#F0F000"); }
 	this.setColorPlaying = function () { setColor("#00F000"); }
-	this.setColorIdle = function () { setColor("#969BA7"); }
+	this.setColorIdle = function () { setColor("inherit"); }
 	var setColor = function (color)
 	{
 		$("#volumeBar").css("color", color);
@@ -21618,4 +21630,8 @@ function RemoveUrlParams()
 function FormatFileName(str)
 {
 	return str.replace(/\//g, '-').replace(/:/g, '.');
+}
+function GetCssVar(varName, fallback)
+{
+	return getComputedStyle(document.body).getPropertyValue(varName) || fallback;
 }

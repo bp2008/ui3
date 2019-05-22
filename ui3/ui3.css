@@ -5,6 +5,14 @@
 	--panel-bg-color: #181818;
 	--cliplist-bg-color: #101010;
 	--contextmenu-server-icon-color: #444E4F;
+	--button-color: #BBB1B0;
+	--ptzpad-color: #6d6868;
+	--ptzpad-disabled-color: #2d2c2c;
+	--pctext-color: #E8E8E8;
+	--pctext-hover-color: #FFFFFF;
+	--text-color: #BFBFBF;
+	--text-hover-color: #D9DBDF;
+	--text-active-color: #FFFFFF;
 	/* Dropdowns, Calendar, SquareButtons */
 	--uicontrol-bg-color: #101010;
 	--uicontrol-hover-bg-color: #303030;
@@ -113,7 +121,7 @@ body
 	overflow: hidden;
 	font-family: Arial, Sans-Serif;
 	font-size: 0px;
-	color: #969BA7;
+	color: var(--text-color);
 }
 
 body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
@@ -282,7 +290,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 {
 	height: 100%;
 	background-color: var(--main-highlight-color);
-	color: #FFFFFF;
+	color: var(--text-active-color);
 }
 
 	#systemnamewrapper.hot
@@ -299,20 +307,20 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 
 	.topbar_tab:hover
 	{
-		color: #d6d7dc;
+		color: var(--text-hover-color);
 		background-color: rgba(255,255,255,0.2);
 	}
 
 	.topbar_tab.selected
 	{
-		color: #FFFFFF;
+		color: var(--text-active-color);
 		border-bottom: 8px solid var(--main-highlight-color);
 		cursor: default;
 	}
 
 		.topbar_tab.selected:hover
 		{
-			color: #FFFFFF;
+			color: var(--text-active-color);
 			background-color: rgba(255,255,255,0);
 		}
 
@@ -415,17 +423,17 @@ div.icon, a.icon
 
 	div.icon, div.icon a, .squareButton, .oneByTwoSquareButton, a.icon
 	{
-		color: #969BA7;
+		color: var(--button-color);
 	}
 
 		div.icon:hover, div.icon:hover a, .squareButton:hover, .oneByTwoSquareButton:hover, a.icon:hover
 		{
-			color: #D9DBDF;
+			color: var(--text-hover-color);
 		}
 
 		div.icon:active, div.icon:active a, .squareButton:active, .oneByTwoSquareButton:active, a.icon:active
 		{
-			color: #FFFFFF;
+			color: var(--text-active-color);
 		}
 
 /* Left Bar Scrolling */
@@ -504,7 +512,7 @@ div.icon, a.icon
 {
 	display: inline-block;
 	vertical-align: top;
-	border: 1px solid #969BA7;
+	border: 1px solid var(--button-color);
 	width: 36px;
 	height: 36px;
 	line-height: 36px;
@@ -1004,6 +1012,7 @@ div.invisibleLabel
 
 .progressBarInner
 {
+	background-color: #3E5F8A; /* IE hack */
 	background-color: var(--main-highlight-color);
 	width: 0%;
 	height: 100%;
@@ -1014,7 +1023,7 @@ div.invisibleLabel
 	margin-top: 9px;
 	padding: 6px 7px 6px 10px;
 	font-size: 16px;
-	border: 1px solid #969BA7;
+	border: 1px solid var(--button-color);
 	line-height: 17px;
 	cursor: pointer;
 }
@@ -1037,7 +1046,7 @@ div.invisibleLabel
 
 #dateRangeLabel
 {
-	color: #FFFFFF;
+	color: var(--text-active-color);
 	white-space: nowrap;
 	overflow: hidden;
 }
@@ -1292,7 +1301,7 @@ div.invisibleLabel
 	margin-left: 37.5%;
 	width: 25%;
 	height: 100%;
-	background-color: #969BA7;
+	background-color: var(--button-color);
 }
 
 .progressBarOuter.withDragHandle
@@ -1313,7 +1322,7 @@ div.invisibleLabel
 	display: inline-block;
 	vertical-align: top;
 	padding: 8px;
-	color: #969BA7;
+	color: var(--button-color);
 }
 
 .sizeMedium #volumeBar
@@ -1436,7 +1445,7 @@ div.invisibleLabel
 {
 	box-sizing: border-box;
 	margin-top: 16px;
-	border: 1px solid #969BA7;
+	border: 1px solid var(--button-color);
 	height: 39px;
 	padding-left: 10px;
 	cursor: pointer;
@@ -1504,7 +1513,7 @@ div.invisibleLabel
 	display: inline-block;
 	font-size: 16px;
 	line-height: 39px;
-	color: #FFFFFF;
+	color: var(--text-active-color);
 	white-space: nowrap;
 }
 
@@ -1554,7 +1563,7 @@ div.invisibleLabel
 	background-color: var(--dropdown-item-bg-color);
 	display: inline-block;
 	position: absolute;
-	border: 1px solid #969BA7;
+	border: 1px solid var(--button-color);
 	z-index: 9999999; /* Same z-index as playback settings panels. Toasts are at 999999 (one less 9)*/
 	color: var(--dropdown-item-color);
 	overflow: auto;
@@ -1777,7 +1786,7 @@ div.invisibleLabel
 	background-color: var(--panel-bg-color);
 	display: inline-block;
 	position: absolute;
-	border: 1px solid #969BA7;
+	border: 1px solid var(--button-color);
 	z-index: 100;
 	box-shadow: 0px 0px 80px rgba(0,0,0,0.8);
 	padding: 15px;
@@ -1991,7 +2000,7 @@ div.invisibleLabel
 	padding: 1px 6px;
 	line-height: 18px;
 	font-size: 12px;
-	color: #FFFFFF;
+	color: var(--text-active-color);
 	background-color: var(--datetile-bg-color);
 }
 
@@ -2175,7 +2184,7 @@ div.invisibleLabel
 .clipdur
 {
 	font-size: 9px;
-	color: #FFFFFF;
+	color: var(--text-active-color);
 	position: absolute;
 	bottom: 2px;
 	right: 2px;
@@ -2284,7 +2293,7 @@ div.invisibleLabel
 {
 	font-size: 14px;
 	line-height: 17px;
-	color: #FFFFFF;
+	color: var(--text-active-color);
 }
 
 .sizeSmall .cliptime
@@ -2414,7 +2423,7 @@ body + div
 {
 	position: absolute;
 	background-color: #000000;
-	color: #FFFFFF;
+	color: var(--text-active-color);
 	padding: 3px;
 	opacity: 1;
 	margin: 0px 5px 5px 0px;
@@ -2649,7 +2658,7 @@ body + div
 {
 	display: inline-block;
 	vertical-align: top;
-	color: #E8E8E8;
+	color: var(--pctext-color);
 	font-size: 16px;
 	line-height: 42px;
 	padding: 0px 8px;
@@ -2662,7 +2671,7 @@ body + div
 
 	#playbackSpeedText:hover
 	{
-		color: #FFFFFF;
+		color: var(--pctext-hover-color);
 	}
 
 .sizeMedium .pcText
@@ -2686,13 +2695,13 @@ body + div
 	width: 26px;
 	height: 26px;
 	padding: 8px;
-	color: #E8E8E8;
+	color: var(--pctext-color);
 	cursor: pointer;
 }
 
 	.pcButton:hover
 	{
-		color: #FFFFFF;
+		color: var(--pctext-hover-color);
 	}
 
 .rightSide
@@ -2728,7 +2737,7 @@ body + div
 {
 	position: absolute;
 	background-color: rgba(0,0,0,0.85);
-	color: #FFFFFF;
+	color: var(--text-active-color);
 	right: 20px;
 	bottom: 120px;
 	padding: 10px 0px;
@@ -2994,7 +3003,7 @@ body + div
 		bottom: 0px;
 		right: 0px;
 		font-size: 14px;
-		color: #FFFFFF;
+		color: var(--pctext-hover-color);
 	}
 
 .sizeMedium .skipbtn div.centerText
