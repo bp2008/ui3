@@ -8,11 +8,15 @@
 	--button-color: #BBB1B0;
 	--ptzpad-color: #6d6868;
 	--ptzpad-disabled-color: #2d2c2c;
-	--pctext-color: #E8E8E8;
-	--pctext-hover-color: #FFFFFF;
 	--text-color: #BFBFBF;
 	--text-hover-color: #D9DBDF;
 	--text-active-color: #FFFFFF;
+	--pctext-color: #E8E8E8;
+	--pctext-hover-color: #FFFFFF;
+	--audio-playing-color: #63C35B;
+	--audio-loading-color: #F0F000;
+	--audio-error-color: #F00000;
+	--audio-idle-color: var(--button-color);
 	/* Dropdowns, Calendar, SquareButtons */
 	--uicontrol-bg-color: #101010;
 	--uicontrol-hover-bg-color: #303030;
@@ -21,9 +25,9 @@
 	--dropdown-item-bg-color: #000000;
 	--dropdown-item-hover-bg-color: #303030;
 	--dropdown-item-active-bg-color: #505050;
-	--dropdown-item-color: #DDDDDD;
-	--dropdown-item-hover-color: #EEEEEE;
-	--dropdown-item-active-color: #FFFFFF;
+	--dropdown-item-color: var(--text-color);
+	--dropdown-item-hover-color: var(--text-hover-color);
+	--dropdown-item-active-color: var(--text-active-color);
 	--dropdown-item-blue-color: #618dc7;
 	--dropdown-item-blue-hover-color: #7db0f3;
 	--dropdown-item-blue-active-color: #8fbefd;
@@ -62,6 +66,31 @@
 	--badge-sentry-hover-color: #F66476;
 	/* Context Menus */
 	--context-menu-icon-highlight-color: #0097F0;
+}
+
+.panel-bg-color
+{
+	color: var(--panel-bg-color);
+}
+
+.ptzpad-color
+{
+	color: var(--ptzpad-color);
+}
+
+.ptzpad-disabled-color
+{
+	color: var(--ptzpad-disabled-color);
+}
+
+.text-hover-color
+{
+	color: var(--text-hover-color);
+}
+
+.text-active-color
+{
+	color: var(--text-active-color);
 }
 /* SVG */
 svg.icon
@@ -856,7 +885,6 @@ div.invisibleLabel
 .ptzGraphic
 {
 	position: absolute;
-	color: #000000;
 }
 
 #ptzGraphicWrapper
@@ -1322,7 +1350,7 @@ div.invisibleLabel
 	display: inline-block;
 	vertical-align: top;
 	padding: 8px;
-	color: var(--button-color);
+	color: var(--audio-idle-color);
 }
 
 .sizeMedium #volumeBar
@@ -1333,6 +1361,21 @@ div.invisibleLabel
 .sizeSmall #volumeBar
 {
 	padding: 4px;
+}
+
+#volumeBar.playing
+{
+	color: var(--audio-playing-color);
+}
+
+#volumeBar.loading
+{
+	color: var(--audio-loading-color);
+}
+
+#volumeBar.error
+{
+	color: var(--audio-error-color);
 }
 
 #volumeBar.disabled
@@ -1513,7 +1556,7 @@ div.invisibleLabel
 	display: inline-block;
 	font-size: 16px;
 	line-height: 39px;
-	color: var(--text-active-color);
+	color: var(--text-color);
 	white-space: nowrap;
 }
 
@@ -1527,6 +1570,16 @@ div.invisibleLabel
 {
 	font-size: 13px;
 	line-height: 19px;
+}
+
+.dropdownBox:hover .dropdownLabel
+{
+	color: var(--text-hover-color);
+}
+
+.dropdownBox:active .dropdownLabel
+{
+	color: var(--text-active-color);
 }
 
 .dropdownBox.disabled .dropdownLabel

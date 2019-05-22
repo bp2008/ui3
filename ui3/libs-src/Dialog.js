@@ -176,6 +176,7 @@ var $DialogDefaults = { theme: "light" };
 			{
 				self.$dialog.css("left", "0px");
 				self.$dialog.css("top", "0px");
+				limitContentHeight(0);
 				positionCentered();
 			}
 			else
@@ -186,6 +187,7 @@ var $DialogDefaults = { theme: "light" };
 					self.$dialog.css("left", coords.X + "px");
 				if (offset.top !== coords.Y)
 					self.$dialog.css("top", coords.Y + "px");
+				limitContentHeight(coords.Y);
 			}
 		};
 		this.setLoadingState = function (loading)
@@ -213,6 +215,7 @@ var $DialogDefaults = { theme: "light" };
 
 			self.$dialog.css("left", left + "px");
 			self.$dialog.css("top", top + "px");
+			limitContentHeight(top);
 		};
 		var onResize = function ()
 		{
@@ -224,6 +227,7 @@ var $DialogDefaults = { theme: "light" };
 				self.$dialog.css("left", coords.X + "px");
 			if (offset.top !== coords.Y)
 				self.$dialog.css("top", coords.Y + "px");
+			limitContentHeight(coords.Y);
 
 			self.$overlay.css('width', $(document).width()).css('height', $(document).height());
 		};
@@ -253,6 +257,7 @@ var $DialogDefaults = { theme: "light" };
 				var coords = keepOnScreen(newX, newY, false);
 				self.$dialog.css("left", coords.X + "px");
 				self.$dialog.css("top", coords.Y + "px");
+				limitContentHeight(coords.Y);
 			}
 		};
 		var dragEnd = function (e)
@@ -268,6 +273,7 @@ var $DialogDefaults = { theme: "light" };
 				mouseMem.down = false;
 				self.$dialog.css("left", mouseMem.originalX + "px");
 				self.$dialog.css("top", mouseMem.originalY + "px");
+				limitContentHeight(mouseMem.originalY);
 			}
 		};
 		var keepOnScreen = function (newX, newY, keepFullyOnScreen)
@@ -313,33 +319,39 @@ var $DialogDefaults = { theme: "light" };
 
 			return { X: newX, Y: newY };
 		};
+		var limitContentHeight = function (dialogY, windowH)
+		{
+			if (typeof windowH === "undefined")
+				windowH = $(window).height();
+			$content.css("max-height", windowH - dialogY - 31 + "px");
+		};
 		var mouseCoordFixer =
+		{
+			last: {
+				x: 0, y: 0
+			}
+			, fix: function (e)
 			{
-				last: {
-					x: 0, y: 0
-				}
-				, fix: function (e)
+				if (typeof e.pageX === "undefined")
 				{
-					if (typeof e.pageX === "undefined")
+					if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 					{
-						if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
-						{
-							mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX;
-							mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY;
-						}
-						else
-						{
-							e.pageX = mouseCoordFixer.last.x;
-							e.pageY = mouseCoordFixer.last.y;
-						}
+						mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX;
+						mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY;
 					}
 					else
 					{
-						mouseCoordFixer.last.x = e.pageX;
-						mouseCoordFixer.last.y = e.pageY;
+						e.pageX = mouseCoordFixer.last.x;
+						e.pageY = mouseCoordFixer.last.y;
 					}
 				}
-			};
+				else
+				{
+					mouseCoordFixer.last.x = e.pageX;
+					mouseCoordFixer.last.y = e.pageY;
+				}
+			}
+		};
 
 		open();
 	}

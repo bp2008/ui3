@@ -445,9 +445,7 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Change color scheme to match BI 5
 // TODO: Expandable clip list. ("Show more clips")
-// TODO: Determine cause of pause / play cycle in inactive UI3 tab after switching between two UI3 tabs.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -3217,12 +3215,18 @@ function LeftBarBooleans()
 function PtzButtons()
 {
 	var self = this;
-
-	var panelBgColor = GetCssVar("--panel-bg-color", "#181818");
-	var ptzpadColor = GetCssVar("--ptzpad-color", "#6d6868");
-	var ptzpadDisabledColor = GetCssVar("--ptzpad-disabled-color", "#2d2c2c");
-	var textHoverColor = GetCssVar("--text-hover-color", "#D9DBDF");
-	var textActiveColor = GetCssVar("--text-active-color", "#FFFFFF");
+	
+	var panelBgColor = "panel-bg-color";
+	var ptzpadColor = "ptzpad-color";
+	var ptzpadDisabledColor = "ptzpad-disabled-color";
+	var textHoverColor = "text-hover-color";
+	var textActiveColor = "text-active-color";
+	var allColors = panelBgColor + " " + ptzpadColor + " " + ptzpadDisabledColor + " " + textHoverColor + " " + textActiveColor;
+	var setColor = function ($ele, colorClass)
+	{
+		$ele.removeClass(allColors);
+		$ele.addClass(colorClass);
+	};
 
 	var ptzControlsEnabled = false;
 	var $hoveredEle = null;
@@ -3321,7 +3325,7 @@ function PtzButtons()
 
 		$ele.append('<svg class="icon"><use xlink:href="#svg_x5F_' + ele.svgid + '"></use></svg>');
 		ele.defaultColor = $ele.hasClass("ptzBackground") ? ptzpadColor : panelBgColor;
-		$ele.css('color', ele.defaultColor);
+		setColor($ele, ele.defaultColor);
 		ele.parentNode.graphicObjects[ele.svgid] = ele;
 	});
 
@@ -3332,7 +3336,7 @@ function PtzButtons()
 	{
 		$ptzButtons.attr("title", btn.tooltipText);
 		$hoveredEle = $(btn);
-		$hoveredEle.css("color", textHoverColor);
+		setColor($hoveredEle, textHoverColor);
 	}
 	// onHoverLeave called whenever a mouse pointer leaves any button or a mouse up event is triggered
 	var onHoverLeave = function ()
@@ -3340,13 +3344,13 @@ function PtzButtons()
 		if ($hoveredEle != null)
 		{
 			$ptzButtons.removeAttr("title");
-			$hoveredEle.css('color', $hoveredEle.get(0).defaultColor);
+			setColor($hoveredEle, $hoveredEle.get(0).defaultColor);
 			$hoveredEle = null;
 		}
 		if ($activeEle != null)
 		{
 			self.SendOrQueuePtzCommand(null, null, true);
-			$activeEle.css('color', $activeEle.get(0).defaultColor);
+			setColor($activeEle, $activeEle.get(0).defaultColor);
 			$activeEle = null;
 		}
 	}
@@ -3354,7 +3358,7 @@ function PtzButtons()
 	{
 		self.SendOrQueuePtzCommand(videoPlayer.Loading().image.id, btn.ptzcmd, false);
 		$activeEle = $(btn);
-		$activeEle.css("color", textActiveColor);
+		setColor($activeEle, textActiveColor);
 	}
 	var onPointerMove = function (e)
 	{
@@ -3474,7 +3478,7 @@ function PtzButtons()
 			$ptzPresets.removeClass("disabled");
 			$ptzButtons.removeClass("disabled");
 			$ptzExtraDropdowns.removeClass("disabled");
-			$ptzBackgroundGraphics.css("color", $ptzBackgroundGraphics.get(0).defaultColor);
+			setColor($ptzBackgroundGraphics, $ptzBackgroundGraphics.get(0).defaultColor);
 		}
 		else
 		{
@@ -3482,7 +3486,7 @@ function PtzButtons()
 			$ptzPresets.addClass("disabled");
 			$ptzButtons.addClass("disabled");
 			$ptzExtraDropdowns.addClass("disabled");
-			$ptzBackgroundGraphics.css("color", ptzpadDisabledColor);
+			setColor($ptzBackgroundGraphics, ptzpadDisabledColor);
 		}
 	}
 	this.isEnabledNow = function ()
@@ -16887,13 +16891,15 @@ var volumeIconHelper = new (function ()
 	var isEnabled = false;
 	var iconName = "off";
 
-	this.setColorError = function () { setColor("#F00000"); }
-	this.setColorLoading = function () { setColor("#F0F000"); }
-	this.setColorPlaying = function () { setColor("#00F000"); }
-	this.setColorIdle = function () { setColor("inherit"); }
-	var setColor = function (color)
+	this.setColorError = function () { setColorClass("error"); }
+	this.setColorLoading = function () { setColorClass("loading"); }
+	this.setColorPlaying = function () { setColorClass("playing"); }
+	this.setColorIdle = function () { setColorClass(""); }
+	var setColorClass = function (c)
 	{
-		$("#volumeBar").css("color", color);
+		$("#volumeBar").removeClass("error loading playing");
+		if (c)
+			$("#volumeBar").addClass(c);
 	}
 
 	this.setEnabled = function (enabled)
