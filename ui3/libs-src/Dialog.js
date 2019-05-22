@@ -323,7 +323,7 @@ var $DialogDefaults = { theme: "light" };
 		{
 			if (typeof windowH === "undefined")
 				windowH = $(window).height();
-			$content.css("max-height", windowH - dialogY - 31 + "px");
+			$content.css("max-height", windowH - dialogY - 27 + "px");
 		};
 		var mouseCoordFixer =
 		{
