@@ -8971,6 +8971,8 @@ function VideoPlayerController()
 			{
 				// Called when page visibility changes.
 				var visibleNow = !documentIsHidden();
+				if (developerMode)
+					console.log("Tab is " + (visibleNow ? "visible now" : "hidden"));
 				if (moduleHolder["jpeg"])
 					moduleHolder["jpeg"].VisibilityChanged(visibleNow);
 				if (moduleHolder["h264"])
@@ -11561,7 +11563,12 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var onPlayerStalled = function (e)
 	{
 		if (acceptedFrameCount > 0)
-			console.log("HTML5 video stalled");
+		{
+			if (developerMode)
+				toaster.Error("HTML5 video stalled", 60000);
+			else
+				console.log("HTML5 video stalled");
+		}
 	}
 	var dropFrame = function ()
 	{
@@ -11696,6 +11703,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	var StartPlayback = function ()
 	{
+		if (documentIsHidden())
+			return;
 		hasToldPlayerToPlay = true;
 		var playPromise = badAutoplay.Play(player);
 		if (playPromise && playPromise.catch)
@@ -11778,8 +11787,12 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				frameRendered(startMeta);
 			}
 			fedFrameCount++;
-			if (!hasToldPlayerToPlay)
+			if (!hasToldPlayerToPlay || player.paused)
+			{
+				if (hasToldPlayerToPlay && player.paused)
+					console.log("Detected that the video player is paused when it should not be. Instructing to play.");
 				StartPlayback();
+			}
 			// Evidently jmuxer can be set to null by some callback method by the time we get to here.
 			if (jmuxer && jmuxer.bufferControllers && jmuxer.bufferControllers.video)
 			{
