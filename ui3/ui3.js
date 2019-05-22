@@ -447,7 +447,6 @@ var togglableUIFeatures =
 
 // TODO: Change color scheme to match BI 5
 // TODO: Expandable clip list. ("Show more clips")
-// TODO: Detect HTML5 video player suspend and automatically play.
 // TODO: Determine cause of pause / play cycle in inactive UI3 tab after switching between two UI3 tabs.
 
 ///////////////////////////////////////////////////////////////
