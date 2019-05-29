@@ -3,18 +3,8 @@
     "name": "Blue Iris UI3",
     "icons": [
         {
-            "src": "logos/launcher-icon48.webp",
-            "sizes": "48x48",
-            "type": "image/webp"
-        },
-        {
-            "src": "logos/launcher-icon72.webp",
-            "sizes": "72x72",
-            "type": "image/webp"
-        },
-        {
-            "src": "logos/launcher-icon96.webp",
-            "sizes": "96x96",
+            "src": "logos/launcher-icon128.webp",
+            "sizes": "128x128",
             "type": "image/webp"
         },
         {
@@ -45,6 +35,11 @@
         {
             "src": "logos/launcher-icon96.png",
             "sizes": "96x96",
+            "type": "image/png"
+        },
+        {
+            "src": "logos/launcher-icon128.png",
+            "sizes": "128x128",
             "type": "image/png"
         },
         {

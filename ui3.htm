@@ -42,7 +42,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "73";
+		var ui_version = "74";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
@@ -51,10 +51,9 @@
 		if (!local_bi_session || (local_bi_session.length === 11 && local_bi_session.startsWith("%") && local_bi_session.endsWith("%") && local_bi_session.indexOf("SESSION") === 2))
 			local_bi_session = "";
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : (local_bi_session ? "&session=" + local_bi_session : "");
-		var local_bi_session_argQ = navigator.cookieEnabled ? "" : (local_bi_session ? "?session=" + local_bi_session : "");
-		document.getElementById("ui3manifest").href = "ui3/manifest.json" + local_bi_session_argQ;
-		document.getElementById("ui3launcher1").href = "ui3/logos/launcher-icon48.png" + local_bi_session_argQ;
-		document.getElementById("ui3launcher2").href = "ui3/launcher-icon.png" + local_bi_session_argQ;
+		document.getElementById("ui3manifest").href = 'ui3/manifest.json?v=' + combined_version + local_bi_session_arg;
+		document.getElementById("ui3launcher1").href = 'ui3/logos/launcher-icon48.png?v=' + combined_version + local_bi_session_arg;
+		document.getElementById("ui3launcher2").href = 'ui3/launcher-icon.png?v=' + combined_version + local_bi_session_arg;
 		document.write('<link href="ui3/libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
 			+ '<link href="ui3/ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
 			+ '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />');
@@ -461,7 +460,7 @@
 			{
 				var src = imgs[i].getAttribute("mysrc");
 				if (src)
-					imgs[i].src = src + local_bi_session_argQ;
+					imgs[i].src = src + '?v=' + combined_version + local_bi_session_arg;
 			}
 		})();
 		document.write('<script src="ui3/libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'

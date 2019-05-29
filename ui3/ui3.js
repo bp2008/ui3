@@ -20,21 +20,20 @@ function BrowserIsIE()
 		_browser_is_ie = /MSIE \d|Trident.*rv:/.test(navigator.userAgent) ? 1 : 0;
 	return _browser_is_ie == 1;
 }
-var _browser_is_edge = -1;
-function BrowserIsEdge()
+var _browser_is_edge_legacy = -1;
+function BrowserIsEdgeLegacy()
 {
-	if (_browser_is_edge === -1)
-		_browser_is_edge = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
-	return _browser_is_edge === 1;
+	if (_browser_is_edge_legacy === -1)
+		_browser_is_edge_legacy = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
+	return _browser_is_edge_legacy === 1;
 }
 function BrowserEdgeVersion()
 {
-	if (BrowserIsEdge())
-	{
-		var m = window.navigator.userAgent.match(/ Edge\/([0-9\.,]+)/);
-		if (m)
-			return m[1];
-	}
+	var m = window.navigator.userAgent.match(/ Edge\/([0-9\.,]+)/);
+	if (!m)
+		m = window.navigator.userAgent.match(/ Edg\/([0-9\.,]+)/);
+	if (m)
+		return m[1];
 	return null;
 }
 var _browser_is_firefox = -1;
@@ -83,10 +82,10 @@ function DoUIFeatureDetection()
 			web_workers_supported = typeof Worker !== "undefined";
 			export_blob_supported = detectIfCanExportBlob();
 			fetch_supported = typeof fetch == "function";
-			if (fetch_supported && BrowserIsEdge())
+			if (fetch_supported && BrowserIsEdgeLegacy())
 			{
 				var edgeVersion = BrowserEdgeVersion();
-				if (edgeVersion && parseInt(edgeVersion) >= 17)
+				if (edgeVersion && parseInt(edgeVersion) >= 17 && parseInt(edgeVersion) < 19)
 					fetch_streams_cant_close_bug = true;
 			}
 			readable_stream_supported = typeof ReadableStream === "function";
@@ -494,7 +493,7 @@ function GetH264PlayerOptions()
 }
 function GetDefaultH264PlayerOption()
 {
-	if (BrowserIsEdge())
+	if (BrowserIsEdgeLegacy())
 		return H264PlayerOptions.JavaScript;
 	else if (BrowserIsFirefox())
 		return H264PlayerOptions.JavaScript;
@@ -3043,7 +3042,7 @@ function DropdownBoxes()
 		if (ele.extendLeft)
 		{
 			left = (left + $ele.outerWidth()) - width;
-			if ((BrowserIsIE() || BrowserIsEdge()) && height > windowH)
+			if ((BrowserIsIE() || BrowserIsEdgeLegacy()) && height > windowH)
 				left -= 20; // Workaround for Edge/IE bug that renders scroll bar offscreen
 		}
 
@@ -17921,18 +17920,8 @@ function FPSCounter1()
 		while (!queue.isEmpty() && now - queue.peek() >= 1000)
 			queue.dequeue();
 		queue.enqueue(now);
-		if (queue.getLength == 1)
-		{
-			// No history. Return predicted FPS based on last frame loading time.
-			if (lastFrameLoadingTime <= 0)
-				lastFrameLoadingTime = 10000;
-			var newFps = 1000.0 / lastFrameLoadingTime;
-			if (newFps > 2)
-				newFps = 2;
-			return newFps.toFloat(1);
-		}
 		return queue.getLength();
-	}
+	};
 }
 function FPSCounter2()
 {
@@ -17955,11 +17944,11 @@ function FPSCounter2()
 		}
 		/* return average */
 		return (ticksum / MAXSAMPLES);
-	}
+	};
 	this.getFPS = function (newtick)
 	{
 		return (1000 / CalcAverageTick(newtick)).toFloat(1);
-	}
+	};
 }
 ///////////////////////////////////////////////////////////////
 // Bit rate calculator ////////////////////////////////////////
@@ -21508,6 +21497,9 @@ function GetDevicePixelRatioTag()
 	var dpr = BI_GetDevicePixelRatio();
 	return dpr === 1 ? "" : ('<span class="dprTag">*' + dpr.toFloat(2) + '</span>');
 }
+/**
+ * @returns {Boolean} Returns true if the user agent suggests this browser is Chrome.  Browsers may pretend to be chrome (MS Edge).
+ */
 function BrowserIsChrome()
 {
 	return navigator.appVersion.indexOf(" Chrome/") > -1;
