@@ -578,6 +578,10 @@ var defaultSettings =
 			, value: ""
 		}
 		, {
+			key: "bi_lastunload"
+			, value: 0
+		}
+		, {
 			key: "ui3_webcasting_disabled_dontShowAgain"
 			, value: "0"
 		}
@@ -2183,6 +2187,11 @@ $(function ()
 	$(window).resize(resized);
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
 
+	window.addEventListener("beforeunload", function ()
+	{
+		settings.bi_lastunload = Date.now();
+	});
+
 	BI_CustomEvent.Invoke("UI_Loading_End");
 });
 function ValidateTabName(tabName)
@@ -3688,7 +3697,7 @@ function PtzButtons()
 		}
 	}
 	// PTZ Actions //
-	window.onbeforeunload = function ()
+	window.addEventListener("beforeunload", function ()
 	{
 		if (unsafePtzActionNeedsStopped)
 		{
@@ -3698,7 +3707,7 @@ function PtzButtons()
 				self.PTZ_unsafe_sync_guarantee(currentPtzCamId, currentPtz, 1);
 		}
 		return;
-	}
+	});
 	this.SendOrQueuePtzCommand = function (ptzCamId, ptzCmd, isStopCommand)
 	{
 		ptzCmd = parseInt(ptzCmd);
@@ -20193,7 +20202,7 @@ function UISettingsPanel()
 			if (s.category != category)
 				continue;
 			var key = s.key;
-			if (!key || key === "bi_rememberMe" || key === "bi_username" || key === "bi_password")
+			if (!key || key === "bi_rememberMe" || key === "bi_username" || key === "bi_password" || key === "bi_lastunload")
 				continue; // Don't write these to the file!
 			var value = settings.getItem(key);
 			sb.Append('OverrideDefaultSetting(');

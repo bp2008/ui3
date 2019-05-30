@@ -6,7 +6,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "19";
+		var login_version = "20";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 	</script>
@@ -166,6 +166,11 @@
 			{
 				SetPersistedValue("bi_override_disable_auto_login_once", "0");
 			}
+			var lastUnload = GetPersistedValue("bi_lastunload");
+			if (lastUnload > Date.now())
+				SetPersistedValue("bi_lastunload", 0);
+			else if (!skipAutoLogin)
+				skipAutoLogin = Date.now() - lastUnload < 5000;
 			clearTimeout(showLoadingMessageTimeout);
 			$("#loginLoading").hide();
 			$("#login").show();
