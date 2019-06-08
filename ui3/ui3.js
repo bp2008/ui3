@@ -4199,10 +4199,24 @@ function DateFilter(dateRangeLabelSelector)
 		{
 			var $ele = $(ele);
 			var offset = $ele.offset();
+			var wW = $(window).width();
+			var minW = 195; // 192 plus some wiggle room
 			if (settings.ui3_sideBarPosition === "Right")
-				$datePickerDialog.css("right", $(window).width() - offset.left + "px");
+			{
+				var right = wW - offset.left;
+				if (wW - right < minW)
+					right = wW - minW;
+				$datePickerDialog.css("left", "");
+				$datePickerDialog.css("right", right + "px");
+			}
 			else
-				$datePickerDialog.css("left", offset.left + $ele.outerWidth(true) + "px");
+			{
+				var left = offset.left + $ele.outerWidth(true);
+				if (wW - left < minW)
+					left = wW - minW;
+				$datePickerDialog.css("left", left + "px");
+				$datePickerDialog.css("right", "");
+			}
 			$datePickerDialog.css("top", offset.top + "px");
 			$datePickerDialog.show();
 			isVisible = true;
@@ -5749,7 +5763,7 @@ function BigThumbHelper()
 			top = 0;
 		if (settings.ui3_sideBarPosition === "Right")
 		{
-			var right = $(window).width() - ($hAlign.offset().left - 3);
+			var right = $(window).width() - $hAlign.offset().left;
 			$thumb.css("left", "");
 			$thumb.css("right", right + "px");
 		}
