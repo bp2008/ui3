@@ -42,7 +42,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "75";
+		var ui_version = "76";
 		var bi_version = "%%VERSION%%";
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
@@ -118,7 +118,7 @@
 			</div>
 		</div>
 	</div>
-	<div id="layouttop" class="resizable">
+	<div id="layouttop">
 		<div id="topbar_vertical_align_helper"></div>
 		<div id="systemnamewrapper" onclick="systemNameButtonClick()"><span id="systemname">%%SYSNAME%%</span></div>
 		<div class="topbar_tab selected" name="live" id="topbar_tab_live"><span class="topbar_tab_label">Live View</span></div>
@@ -128,7 +128,7 @@
 		<div id="btn_main_menu" class="topbar_right_floating icon" name="mainMenu" extendLeft="1"><svg class="icon"><use xlink:href="#svg_x5F_Menu"></use></svg></div>
 		<a id="save_snapshot_btn" class="topbar_right_floating icon" href="javascript:void(0)" onclick="saveSnapshot()" target="_blank"><svg class="icon"><use xlink:href="#svg_x5F_Snapshot"></use></svg></a>
 	</div>
-	<div id="layoutleft" class="resizable">
+	<div id="layoutleft">
 		<div id="layoutleftLive">
 			<div id="layoutleftLiveScrollableWrapper">
 				<div id="layoutleftLiveScrollable">
@@ -441,7 +441,7 @@
 			GitHub: <a target="_blank" href="https://github.com/bp2008/ui3">https://github.com/bp2008/ui3</a>
 		</div>
 	</div>
-	<div id="datePickerDialog" class="resizable" style="display: none;">
+	<div id="datePickerDialog" style="display: none;">
 		<div style="margin-bottom:15px;">Filter by start and end dates below:</div>
 		<div class="calendarWrapper">
 			<div class="calendarTitle">Start Date</div>

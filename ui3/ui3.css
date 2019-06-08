@@ -17,6 +17,7 @@
 	--audio-loading-color: #F0F000;
 	--audio-error-color: #F00000;
 	--audio-idle-color: var(--button-color);
+	--seek-bar-color: #2C82C9;
 	/* Dropdowns, Calendar, SquareButtons */
 	--uicontrol-bg-color: #101010;
 	--uicontrol-hover-bg-color: #303030;
@@ -275,6 +276,18 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	bottom: 0px;
 	overflow: hidden;
 }
+
+.sideBarRight #layoutleft
+{
+	right: 0px;
+}
+
+.sideBarRight #layoutbody,
+.sideBarRight #layoutbottom
+{
+	left: 0px;
+}
+
 /* Top Bar / Tabs */
 #topbar_vertical_align_helper
 {
@@ -326,6 +339,11 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	{
 		cursor: pointer;
 	}
+
+.sideBarRight #systemnamewrapper
+{
+	float: right;
+}
 
 .topbar_tab
 {
@@ -3122,7 +3140,7 @@ body + div
 	display: inline-block;
 	width: 0px;
 	height: 100%;
-	background-color: var(--main-highlight-color);
+	background-color: var(--seek-bar-color);
 }
 
 #seekBarHighlight
@@ -3185,6 +3203,7 @@ body + div
 	text-overflow: ellipsis;
 	color: #EEEEEE;
 	width: 100%;
+	display: flex;
 }
 
 .sizeSmall #playbackHeader
@@ -3197,14 +3216,18 @@ body + div
 	height: 54px;
 }
 
+.sideBarRight #playbackHeader
+{
+	flex-direction: row-reverse;
+}
+
 #closeClipLeft
 {
-	display: inline-block;
-	vertical-align: top;
 	margin: 12px 16px;
 	width: 32px;
 	height: 32px;
 	cursor: pointer;
+	filter: drop-shadow(2px 2px 2px rgba(0,0,0,1));
 }
 
 	#closeClipLeft:hover
@@ -3233,11 +3256,10 @@ body + div
 
 #clipNameHeading
 {
-	display: inline-block;
-	vertical-align: top;
+	flex: 1 1 auto;
 	font-size: 24px;
 	line-height: 42px;
-	text-shadow: 0px 0px 7px rgba(0,0,0,0.5);
+	text-shadow: 2px 2px 2px rgba(0,0,0,1);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	padding-right: 20px;
@@ -3248,25 +3270,25 @@ body + div
 {
 	font-size: 18px;
 	line-height: 32px;
-	text-shadow: 0px 0px 6px rgba(0,0,0,0.5);
 }
 
 .sizeSmall #clipNameHeading
 {
 	font-size: 12px;
 	line-height: 20px;
-	text-shadow: 0px 0px 5px rgba(0,0,0,0.5);
 }
 
 .sizeSmaller #clipNameHeading
 {
 	font-size: 10px;
 	line-height: 16px;
-	text-shadow: 0px 0px 5px rgba(0,0,0,0.5);
 }
 
+.sideBarRight #clipNameHeading
+{
+	text-align: right;
+}
 /* About / Login Dialogs */
-
 .monospace
 {
 	font-family: Consolas, monospace;

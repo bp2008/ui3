@@ -445,6 +445,7 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // TODO: Expandable clip list. ("Show more clips")
+// TODO: Option to move clip list to right side.  Place in context menu?  Options panel?  Both?
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -722,6 +723,15 @@ var defaultSettings =
 			, options: ["Auto", "Large", "Medium", "Small", "Smaller"]
 			, label: "Preferred UI Scale"
 			, onChange: OnChange_ui3_preferred_ui_scale
+			, category: "General Settings"
+		}
+		, {
+			key: "ui3_sideBarPosition"
+			, value: "Left"
+			, inputType: "select"
+			, options: ["Left", "Right"]
+			, label: "Side Bar Position"
+			, onChange: OnChange_ui3_sideBarPosition
 			, category: "General Settings"
 		}
 		, {
@@ -2178,6 +2188,7 @@ $(function ()
 	OnChange_ui3_pc_seek_1frame_buttons();
 	OnChange_ui3_extra_playback_controls_padding();
 	OnChange_ui3_ir_brightness_contrast();
+	OnChange_ui3_sideBarPosition();
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -2273,6 +2284,7 @@ function resized()
 {
 	var windowW = $(window).width();
 	var windowH = $(window).height();
+	var sideBarRight = settings.ui3_sideBarPosition === "Right";
 
 	// Adjust UI style presets based on window size
 	uiSizeHelper.SetMostAppropriateSize(windowW, windowH);
@@ -2350,7 +2362,10 @@ function resized()
 
 	// Size layoutbody
 	layoutbody.css("top", topH + "px");
-	layoutbody.css("left", leftW + "px");
+	if (sideBarRight)
+		layoutbody.css("left", "0px");
+	else
+		layoutbody.css("left", leftW + "px");
 	var bodyW = windowW - leftW;
 	var bodyH = windowH - topH - botH;
 	layoutbody.css("width", bodyW + "px");
@@ -2382,7 +2397,10 @@ function resized()
 	playbackHeader.resized();
 
 	// Size layoutbottom
-	layoutbottom.css("left", leftW + "px");
+	if (sideBarRight)
+		layoutbottom.css("left", "0px");
+	else
+		layoutbottom.css("left", leftW + "px");
 	layoutbottom.css("width", windowW - leftW + "px");
 
 	clipTimeline.Resized();
@@ -3223,7 +3241,7 @@ function LeftBarBooleans()
 function PtzButtons()
 {
 	var self = this;
-	
+
 	var panelBgColor = "panel-bg-color";
 	var ptzpadColor = "ptzpad-color";
 	var ptzpadDisabledColor = "ptzpad-disabled-color";
@@ -4182,7 +4200,10 @@ function DateFilter(dateRangeLabelSelector)
 		{
 			var $ele = $(ele);
 			var offset = $ele.offset();
-			$datePickerDialog.css("left", offset.left + $ele.outerWidth(true) + "px");
+			if (settings.ui3_sideBarPosition === "Right")
+				$datePickerDialog.css("right", $(window).width() - offset.left + "px");
+			else
+				$datePickerDialog.css("left", offset.left + $ele.outerWidth(true) + "px");
 			$datePickerDialog.css("top", offset.top + "px");
 			$datePickerDialog.show();
 			isVisible = true;
@@ -4842,7 +4863,6 @@ function PlaybackHeader()
 	});
 	this.resized = function ()
 	{
-		$clipNameHeading.css("width", $ph.width() - $closeBtnL.outerWidth(true));
 	}
 	this.Show = function ()
 	{
@@ -5722,14 +5742,24 @@ function BigThumbHelper()
 		var shrinkBy = assumedWidth ? bW / assumedWidth : 0;
 		if (shrinkBy > 0 && shrinkBy < 1)
 			assumedHeight = assumedHeight * shrinkBy;
-		var left = $hAlign.offset().left + $hAlign.width() + 3;
 		var wH = $(window).height();
 		var top = ($vAlign.offset().top + ($vAlign.height() / 2)) - (assumedHeight / 2) - 20; // 20 for the description
 		if (top + (assumedHeight + 20) > wH)
 			top = (wH - (assumedHeight + 20));
 		if (top < 0)
 			top = 0;
-		$thumb.css("left", left + "px");
+		if (settings.ui3_sideBarPosition === "Right")
+		{
+			var right = $(window).width() - ($hAlign.offset().left - 3);
+			$thumb.css("left", "");
+			$thumb.css("right", right + "px");
+		}
+		else
+		{
+			var left = $hAlign.offset().left + $hAlign.width() + 3;
+			$thumb.css("left", left + "px");
+			$thumb.css("right", "");
+		}
 		$thumb.css("top", top + "px");
 		$thumb.css("max-width", bW + "px");
 		$thumb.show();
@@ -20357,6 +20387,14 @@ function GenerateH264RequirementString()
 function OnChange_ui3_preferred_ui_scale(newValue)
 {
 	uiSizeHelper.SetUISizeByName(newValue);
+}
+function OnChange_ui3_sideBarPosition()
+{
+	if (settings.ui3_sideBarPosition === "Right")
+		$('body').addClass("sideBarRight");
+	else
+		$('body').removeClass("sideBarRight");
+	resized();
 }
 var ui3_contextMenus_trigger_toast = null;
 function OnChange_ui3_contextMenus_trigger(newValue)
