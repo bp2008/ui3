@@ -445,6 +445,7 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // TODO: Expandable clip list. ("Show more clips")
+// TODO: Replace screenshots in UI3 Help.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -5855,6 +5856,8 @@ function ClipLoader(clipsBodySelector)
 	var selectedClipsMap = new Object();
 	var lastSelectedClipId = null;
 
+	var disabledClipIds = new Object();
+
 	var bulkOperationInProgress = false;
 
 	// Too many clip tiles bogs down the UI, and clip tiles must exist to be selected.
@@ -6292,7 +6295,8 @@ function ClipLoader(clipsBodySelector)
 			idxFirst = tmp;
 		}
 		for (var i = idxFirst; i <= idxLast; i++)
-			between.push(loadedClipIds[i]);
+			if (!disabledClipIds[loadedClipIds[i]])
+				between.push(loadedClipIds[i]);
 		return between;
 	}
 	this.GetDownloadClipInfo = function (clipData)
@@ -6490,11 +6494,14 @@ function ClipLoader(clipsBodySelector)
 			$clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 		{
+			var isDeleting = disabledClipIds[clipData.recId];
+			var enabledOrDisabled = isDeleting ? "disabled" : "enabled";
+			var clipTitle = isDeleting ? ' title="This item was queued for deletion. Refresh list to update status."' : '';
 			var timeStr = GetTimeStr(clipData.displayDate);
 			var clipDur = GetClipDurStrFromMs(clipData.roughLength);
 			var clipDurTitle = clipDur == 'S' ? ' title="Snapshot"' : '';
 			var camName = cameraListLoader.GetCameraName(clipData.camera);
-			$clip = $('<div id="c' + clipData.recId + '" class="cliptile" style="top:' + clipData.y + 'px">'
+			$clip = $('<div id="c' + clipData.recId + '" class="cliptile ' + enabledOrDisabled + '" style="top:' + clipData.y + 'px"' + clipTitle + '>'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipimghelper">'
 				+ '<div class="verticalAlignHelper"></div>'
@@ -6509,33 +6516,37 @@ function ClipLoader(clipsBodySelector)
 				+ '</div>');
 			$clipsbody.append($clip);
 
+			$clip.get(0).clipData = clipData;
+
 			var thumbEle = $("#t" + clipData.recId).get(0);
 			thumbEle.thumbPath = clipData.thumbPath;
 
-			$clip.click(ClipClicked);
-			$clip.on("mouseenter touchstart touchmove", function (e)
+			if (!isDeleting)
 			{
-				if (touchEvents.Gate(e) || touchEvents.isTouchEvent(e))
-					return;
-
-				if (getMouseoverClipThumbnails())
+				$clip.on('click', ClipClicked);
+				$clip.on("mouseenter touchstart touchmove", function (e)
 				{
-					var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetAPISessionArg("?");
-					if (thumbEle.getAttribute("src") == thumbPath)
-						thumbPath = thumbEle;
-					bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight);
-					if (!clipData.isSnapshot)
-						clipThumbnailVideoPreview.Start($clip, clipData, camName);
-				}
-			});
-			$clip.on("mouseleave touchend touchcancel", function (e)
-			{
-				touchEvents.Gate(e);
-				self.HideBigClipThumb();
-			});
-			var clipEle = $clip.get(0).clipData = clipData;
+					if (touchEvents.Gate(e) || touchEvents.isTouchEvent(e))
+						return;
 
-			clipListContextMenu.AttachContextMenu($clip);
+					if (getMouseoverClipThumbnails())
+					{
+						var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetAPISessionArg("?");
+						if (thumbEle.getAttribute("src") == thumbPath)
+							thumbPath = thumbEle;
+						bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight);
+						if (!clipData.isSnapshot)
+							clipThumbnailVideoPreview.Start($clip, clipData, camName);
+					}
+				});
+				$clip.on("mouseleave touchend touchcancel", function (e)
+				{
+					touchEvents.Gate(e);
+					self.HideBigClipThumb();
+				});
+
+				clipListContextMenu.AttachContextMenu($clip);
+			}
 
 			if (self.ClipDataIndicatesFlagged(clipData))
 				self.ShowClipFlag(clipData);
@@ -6732,6 +6743,16 @@ function ClipLoader(clipsBodySelector)
 
 		for (var i = 0; i < unselectedOffscreen.length; i++)
 			ClipOnDisappear(self.GetClipFromId(unselectedOffscreen[i]));
+	}
+	this.DisableClipTileById = function (clipId)
+	{
+		disabledClipIds[clipId] = true;
+		var clipData = self.GetClipFromId(clipId);
+		if (clipData && clipVisibilityMap[clipId])
+		{
+			ClipOnDisappear(clipData);
+			ClipOnAppear(clipData);
+		}
 	}
 	var DateTileOnAppear = function (dateTileData)
 	{
@@ -6949,9 +6970,31 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.Multi_Delete = function (allSelectedClipIDs)
 	{
+		if (allSelectedClipIDs.length === 0)
+			return;
 		if (!sessionManager.IsAdministratorSession())
 			return openLoginDialog(function () { self.Multi_Delete(allSelectedClipIDs); });
-		Multi_Operation("delete", allSelectedClipIDs, null, 0, null, 0);
+
+		// Close current clip if it is among those being deleted.
+		var loadingClipId = videoPlayer.Loading().image.uniqueId;
+		for (var i = 0; i < allSelectedClipIDs.length; i++)
+			if (loadingClipId === allSelectedClipIDs[i])
+				self.CloseCurrentClip();
+
+		var allIdsCommaSeparated = '@' + allSelectedClipIDs.join(',@'); // Separated by ';' or ','
+		console.log("Deleting ", allIdsCommaSeparated);
+		var clipData = self.GetClipFromId(allSelectedClipIDs[0]);
+		DeleteAlert(allIdsCommaSeparated, clipData.isClip,
+			function ()
+			{
+				self.UnselectAllClips();
+				for (var i = 0; i < allSelectedClipIDs.length; i++)
+					self.DisableClipTileById(allSelectedClipIDs[i]);
+			},
+			function (message)
+			{
+				toaster.Warning(message, 10000);
+			});
 	}
 	var Multi_Operation = function (operation, allSelectedClipIDs, args, idx, myToast, errorCount)
 	{
@@ -6994,8 +7037,6 @@ function ClipLoader(clipsBodySelector)
 				verb = args.flagEnable ? "Flagging" : "Unflagging";
 			else if (operation == "protect")
 				verb = args.protectEnable ? "Protecting" : "Unprotecting";
-			else if (operation == "delete")
-				verb = "Deleting";
 			myToast = toaster.Info('<div id="multi_' + operation + '_status_toast" class="multi_operation_status_toast">'
 				+ '<div>' + verb + ' ' + (currentPrimaryTab == "clips" ? "clip" : "alert") + ' <span class="multi_operation_count">' + (idx + 1) + '</span> / ' + allSelectedClipIDs.length + '</div>'
 				+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
@@ -7035,29 +7076,6 @@ function ClipLoader(clipsBodySelector)
 					return;
 				}
 			}
-			else if (operation == "delete")
-			{
-				if (videoPlayer.Loading().image.uniqueId == clipData.recId)
-				{
-					self.CloseCurrentClip();
-					setTimeout(function ()
-					{
-						bulkOperationInProgress = false; // This prevents error message if idx is 0
-						Multi_Operation(operation, allSelectedClipIDs, args, idx, myToast, errorCount);
-					}, 500);
-					return;
-				}
-				DeleteAlert("@" + clipData.recId, clipData.isClip, function ()
-				{
-					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
-				},
-					function (message)
-					{
-						toaster.Warning(message, 10000);
-						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
-					});
-				return;
-			}
 		}
 		else
 		{
@@ -7075,22 +7093,7 @@ function ClipLoader(clipsBodySelector)
 		if (myToast)
 			myToast.remove();
 		if (errorCount > 0)
-		{
-			if (totalItems == 1 && operation == "delete")
-			{
-				// Deletion errors are already reported, and since this was a single deletion, there is no reason to create another error toast.
-			}
-			else
-				toaster.Error("Bulk " + operation + " operation failed on<br/> " + errorCount + " / " + totalItems + " items.", 15000);
-		}
-		if (totalItems - errorCount > 0)
-		{
-			if (operation == "delete")
-			{
-				// Some deletions were successful, so reload.
-				self.LoadClips();
-			}
-		}
+			toaster.Error("Bulk " + operation + " operation failed on<br/> " + errorCount + " / " + totalItems + " items.", 15000);
 	}
 	this.GetCurrentClipEle = function ()
 	{

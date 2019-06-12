@@ -2087,34 +2087,44 @@ div.invisibleLabel
 .cliptile
 {
 	height: 53px;
-	cursor: pointer;
 }
 
-	.cliptile:hover
+	.cliptile.enabled
+	{
+		cursor: pointer;
+	}
+
+	.cliptile.disabled
+	{
+		opacity: 0.2;
+		background-color: #660000;
+	}
+
+	.cliptile.enabled:hover
 	{
 		background-color: #006ec5;
 		color: #DDDDDD;
 	}
 
-	.cliptile.selected
+	.cliptile.enabled.selected
 	{
 		background-color: #2196F3;
 		color: #000000;
 	}
 
-		.cliptile.selected:hover
+		.cliptile.enabled.selected:hover
 		{
 			background-color: #59b3f9;
 			color: #000000;
 		}
 
-	.cliptile:hover .clipIconWrapper
+	.cliptile.enabled:hover .clipIconWrapper
 	{
 		color: var(--badge-hover-color);
 	}
 
-	.cliptile.selected .clipIconWrapper,
-	.cliptile.selected:hover .clipIconWrapper
+	.cliptile.enabled.selected .clipIconWrapper,
+	.cliptile.enabled.selected:hover .clipIconWrapper
 	{
 		color: var(--badge-selected-color);
 	}
@@ -2124,8 +2134,8 @@ div.invisibleLabel
 	color: var(--badge-sentry-color);
 }
 
-.cliptile.selected .clipIconWrapper .clipicon.icon_trigger_sentry_occupied,
-.cliptile.selected:hover .clipIconWrapper .clipicon.icon_trigger_sentry_occupied
+.cliptile.enabled.selected .clipIconWrapper .clipicon.icon_trigger_sentry_occupied,
+.cliptile.enabled.selected:hover .clipIconWrapper .clipicon.icon_trigger_sentry_occupied
 {
 	color: var(--badge-sentry-hover-color);
 }
