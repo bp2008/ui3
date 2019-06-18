@@ -8723,9 +8723,9 @@ function CameraListLoader()
 
 				if (!firstCameraListLoaded && numCameras > 1 && settings.ui3_webcasting_disabled_dontShowAgain != "1")
 				{
-					webcastingWarning = toaster.Info('Webcasting may not be enabled for some of your camera groups.<br><br>'
-						+ camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
-						+ ' been individually added to the Current Group dropdown list.<br><br>'
+					webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
+						+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
+						+ ' not found in any group that has webcasting enabled.<br><br>'
 						+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
 						+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
 						, 60000, true);
@@ -9092,6 +9092,23 @@ function VideoPlayerController()
 			, imageRenderer.CamImgDragMove
 			, imageRenderer.CamImgDragEnd
 		);
+
+		BI_CustomEvent.AddListener("CameraListLoaded", UpdatedCurrentCameraData);
+	}
+	var UpdatedCurrentCameraData = function ()
+	{
+		currentlyLoadingCamera = GetUpdatedCameraData(currentlyLoadingCamera);
+		currentlyLoadedCamera = GetUpdatedCameraData(currentlyLoadedCamera);
+	}
+	var GetUpdatedCameraData = function (currentCameraData)
+	{
+		if (currentCameraData)
+		{
+			var updatedCameraData = cameraListLoader.GetCameraWithId(currentCameraData.optionValue);
+			if (updatedCameraData)
+				return updatedCameraData;
+		}
+		return currentCameraData;
 	}
 	var IsDoubleClickFullscreenEnabled = function ()
 	{
@@ -20735,8 +20752,9 @@ function UIHelpTool()
 		var $root = $('<div class="UIHelp">'
 			+ 'This interface is easier to use when all your camera groups have webcasting enabled.<br><br>'
 			+ 'Enable webcasting for your groups using the group settings panel.  This panel is found in the lower-left corner of the Blue Iris console (only when PTZ controls are enabled):<br><br>'
+			+ 'Some other configurations may also lead to this message being shown.<br><br>'
 			+ '</div>');
-		var $img = $('<img src="ui3/help/img/GroupProperties.png' + currentServer.GetLocalSessionArg("?") + '" style="width:400px; height:320px;" />');
+		var $img = $('<img src="ui3/help/img/GroupProperties.png' + currentServer.GetLocalSessionArg("?") + '" style="width:380px; height:255px;" />');
 		$root.append($img);
 		$img.lightbox();
 		$root.modalDialog({ title: 'Camera Group Webcasting', closeOnOverlayClick: true });
