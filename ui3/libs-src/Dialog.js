@@ -262,12 +262,10 @@ var $DialogDefaults = { theme: "light" };
 		};
 		var dragEnd = function (e)
 		{
-			dragMove(e);
 			mouseMem.down = false;
 		};
 		var dragCancel = function (e)
 		{
-			mouseCoordFixer.fix(e);
 			if (mouseMem.down)
 			{
 				mouseMem.down = false;

@@ -10464,9 +10464,12 @@ function FetchH264VideoModule()
 				// As a workaround, we will recalculate the pos using the length we know.
 				if (typeof loading.requestedMs !== "undefined")
 				{
-					if (loading.requestedMs < loading.msec) // In case msec somehow gets lower when being updated.
+					if (loading.msec < loading.requestedMs) // In case msec somehow gets lower when being updated.
 					{
-						var realmsec = loading.requestedMs + (frame.time * playbackControls.GetPlaybackSpeed());
+						var offset = frame.time * playbackControls.GetPlaybackSpeed();
+						if (playbackControls.GetPlayReverse())
+							offset *= -1;
+						var realmsec = loading.requestedMs + offset;
 						frame.pos = frame.meta.pos = ((realmsec / loading.msec) * 10000).dropDecimals();
 					}
 				}
@@ -11562,6 +11565,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
 	var finishedFrameCount = 0; // Number of frames rendered or dropped.
 	var fedFrameCount = 0; // Number of frames fed to jmuxer
+	var earlyFrameRenderCalled = false;
 	var netDelayCalc = new NetDelayCalc();
 	var timestampLastAcceptedFrame = -1; // Frame timestamp (ms) of the last frame to be submitted to the decoder.
 	var timestampLastRenderedFrame = -1; // Frame timestamp (ms) of the last frame to be rendered.
@@ -11758,6 +11762,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		lastFrameDuration = 16;
 		acceptedFrameCount = 0;
 		finishedFrameCount = 0;
+		earlyFrameRenderCalled = false;
 		fedFrameCount = 0;
 		frameMetadataQueue.Reset();
 		netDelayCalc.Reset();
@@ -11851,9 +11856,10 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				video: lastFrame.frameData,
 				duration: lastFrameDuration
 			});
-			if (finishedFrameCount === 0 && currentStreamBitmapInfo)
+			if (finishedFrameCount === 0 && !earlyFrameRenderCalled && currentStreamBitmapInfo)
 			{
 				// Some browsers started having a noticeable delay before their first onTimeUpdate call, so we call frameRendered early for the first frame, causing the video element to be resized at a more appropriate time.
+				earlyFrameRenderCalled = true;
 				var startMeta = $.extend({}, frame.meta);
 				startMeta.width = currentStreamBitmapInfo.biWidth;
 				startMeta.height = currentStreamBitmapInfo.biHeight;
@@ -20447,7 +20453,12 @@ function GetPreferredContextMenuTrigger()
 	else if (settings.ui3_contextMenus_trigger === "Double-Click")
 		return "double";
 	else
-		return "right";
+	{
+		if (BrowserIsIOS())
+			return "longpress";
+		else
+			return "right";
+	}
 }
 function OnChange_ui3_time24hour()
 {
@@ -21725,4 +21736,10 @@ function FormatFileName(str)
 function GetCssVar(varName, fallback)
 {
 	return getComputedStyle(document.body).getPropertyValue(varName) || fallback;
+}
+function InjectStyleBlock(cssText)
+{
+	var styleBlock = $('<style type="text/css"></style>');
+	styleBlock.text(cssText);
+	$("body").append(styleBlock);
 }

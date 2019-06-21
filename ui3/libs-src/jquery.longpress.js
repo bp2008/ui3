@@ -30,23 +30,24 @@
 			var $this = $(this);
 
 			// to keep track of how long something was pressed
-			var mouse_down_time;
-			var timeout;
+			var timeout = null;
 			var mouse_down_x = 0;
 			var mouse_down_y = 0;
 			var mouseMoveTolerance = 5;
 			// mousedown or touchstart callback
 			function mousedown_callback(e)
 			{
-				if (e.which != 1)
+				if (e.which != 1 && e.which != 0)
 					return;
-				mouse_down_time = new Date().getTime();
 				var context = this;
+				mouseCoordFixer.fix(e);
 				mouse_down_x = e.pageX;
 				mouse_down_y = e.pageY;
 				// set a timeout to call the longpress callback when time elapses
+				clearTimeout(timeout);
 				timeout = setTimeout(function ()
 				{
+					timeout = null;
 					if (typeof longCallback === "function")
 					{
 						longCallback.call(context, e);
@@ -60,13 +61,15 @@
 			// mouseup or touchend callback
 			function mouseup_callback(e)
 			{
-				if (e.which != 1)
+				if (e.which != 1 && e.which != 0)
 					return;
-				var press_time = new Date().getTime() - mouse_down_time;
-				if (press_time < duration)
+				if (timeout == null && e.type.indexOf('touch') == 0)
+					e.preventDefault();
+				if (timeout != null)
 				{
 					// cancel the timeout
 					clearTimeout(timeout);
+					timeout = null;
 
 					// call the shortCallback if provided
 					if (typeof shortCallback === "function")
@@ -85,11 +88,12 @@
 			// cancel long press event if the finger or mouse was moved
 			function move_callback(e)
 			{
+				mouseCoordFixer.fix(e);
 				if (Math.abs(mouse_down_x - e.pageX) > mouseMoveTolerance
 					|| Math.abs(mouse_down_y - e.pageY) > mouseMoveTolerance)
 				{
-					if (timeout != null)
-						clearTimeout(timeout);
+					clearTimeout(timeout);
+					timeout = null;
 				}
 			}
 
@@ -103,5 +107,35 @@
 			$this.on('touchend', mouseup_callback);
 			$this.on('touchmove', move_callback);
 		});
+	};
+	var mouseCoordFixer =
+	{
+		last: {
+			x: 0, y: 0
+		}
+		, fix: function (e)
+		{
+			if (e.alreadyMouseCoordFixed)
+				return;
+			e.alreadyMouseCoordFixed = true;
+			if (typeof e.pageX == "undefined")
+			{
+				if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
+				{
+					mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
+					mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY + $(window).scrollTop();
+				}
+				else
+				{
+					e.pageX = mouseCoordFixer.last.x;
+					e.pageY = mouseCoordFixer.last.y;
+				}
+			}
+			else
+			{
+				mouseCoordFixer.last.x = e.pageX = e.pageX + $(window).scrollLeft();
+				mouseCoordFixer.last.y = e.pageY = e.pageY + $(window).scrollTop();
+			}
+		}
 	};
 } (jQuery));

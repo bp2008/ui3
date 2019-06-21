@@ -28,6 +28,7 @@
 		var sTemplet = $("<div/>").addClass("b-m-split");
 		var nTemplet = $('<div style="display:none"/>').addClass("b-m-none");
 		var suppressCloseByDocClick = false;
+		var iOSClickTimer = -10000;
 		function preventCloseByDocClick()
 		{
 			suppressCloseByDocClick = true;
@@ -268,10 +269,30 @@
 					return clickHandler(e, this);
 				});
 			else if (option.clickType == "double")
-				return $(this).bind('dblclick', function (e)
+			{
+				if (BrowserIsIOS())
 				{
-					return clickHandler(e, this);
-				});
+					return $(this).on('touchend', function (e)
+					{
+						var now = performance.now();
+						if (now - iOSClickTimer < 500)
+						{
+							iOSClickTimer = -10000;
+							clickHandler(e, this);
+							e.preventDefault();
+						}
+						else
+							iOSClickTimer = now;
+					});
+				}
+				else
+				{
+					return $(this).bind('dblclick', function (e)
+					{
+						return clickHandler(e, this);
+					});
+				}
+			}
 			else
 				return $(this).longpress(function (e)
 				{
@@ -292,5 +313,9 @@
 		allJQContextMenus.push(me);
 		//CollectGarbage();
 		return me;
+	}
+	function BrowserIsIOS()
+	{
+		return !!navigator.userAgent.match(/iPad|iPhone|iPod/);
 	}
 })(jQuery);
