@@ -446,6 +446,7 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace screenshots in UI3 Help.
+// TODO: Allow login page to log in automatically if UI3 has just tried to refresh itself (e.g. session lost).
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
