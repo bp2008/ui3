@@ -12492,8 +12492,6 @@ function ImageRenderer()
 	}
 	$layoutbody.on('wheel', function (e)
 	{
-		if (settings.ui3_wheelZoomMethod !== "Adjustable")
-			return;
 		if (typeof e.deltaY === "undefined")
 		{
 			e.deltaX = e.originalEvent.deltaX;
@@ -12502,18 +12500,12 @@ function ImageRenderer()
 		}
 		handleMouseWheelEvent(e, e.delta, e.deltaX, e.deltaY, e.deltaMode);
 	});
-	$layoutbody.mousewheel(function (e, delta, deltaX, deltaY)
-	{
-		if (settings.ui3_wheelZoomMethod !== "Legacy")
-			return;
-		handleMouseWheelEvent(e, delta, deltaX, deltaY, 2);
-	});
 	var handleMouseWheelEvent = function (e, delta, deltaX, deltaY, deltaMode)
 	{
-		mouseCoordFixer.fix(e);
-		self.SetMousePos(e.pageX, e.pageY);
 		if (playbackControls.MouseInSettingsPanel(e))
 			return;
+		mouseCoordFixer.fix(e);
+		self.SetMousePos(e.pageX, e.pageY);
 		e.preventDefault();
 		if (deltaMode === 1)
 			deltaY *= 33.333;
