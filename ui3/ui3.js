@@ -21578,7 +21578,6 @@ var mouseCoordFixer =
 			mouseCoordFixer.last.x = e.mouseX = e.pageX + $(window).scrollLeft();
 			mouseCoordFixer.last.y = e.mouseY = e.pageY + $(window).scrollTop();
 		}
-		console.log("MouseCoordFixer", e.mouseX, e.mouseY, e.pageX, e.pageY);
 	}
 };
 function IE_GetDevicePixelRatio()
