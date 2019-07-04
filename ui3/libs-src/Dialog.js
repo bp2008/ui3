@@ -337,6 +337,11 @@ var $DialogDefaults = { theme: "light" };
 						mouseCoordFixer.last.x = e.mouseX = e.originalEvent.touches[0].pageX;
 						mouseCoordFixer.last.y = e.mouseY = e.originalEvent.touches[0].pageY;
 					}
+					else if (e.touches && e.touches.length > 0)
+					{
+						mouseCoordFixer.last.x = e.mouseX = e.touches[0].pageX;
+						mouseCoordFixer.last.y = e.mouseY = e.touches[0].pageY;
+					}
 					else
 					{
 						e.mouseX = mouseCoordFixer.last.x;
