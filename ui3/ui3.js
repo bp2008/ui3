@@ -2613,9 +2613,9 @@ var ProgressBar =
 		var dragHandleWidth = ele.$dragHandle.width();
 		$ele.prepend(ele.$dragHandle);
 
-		ele.onDragHandleDragged = function (pageX)
+		ele.onDragHandleDragged = function (mouseX)
 		{
-			var relX = pageX - $ele.offset().left;
+			var relX = mouseX - $ele.offset().left;
 			var progressPercentage = Clamp(relX / $ele.width(), 0, 1);
 			onDrag(progressPercentage);
 		};
@@ -2635,7 +2635,7 @@ var ProgressBar =
 				if ($ele.hasClass("disabled"))
 					return;
 				ele.isDragging = true;
-				ele.onDragHandleDragged(e.pageX);
+				ele.onDragHandleDragged(e.mouseX);
 			}
 		});
 		$(document).on("mouseup touchend touchcancel", function (e)
@@ -2647,7 +2647,7 @@ var ProgressBar =
 		{
 			mouseCoordFixer.fix(e);
 			if (ele.isDragging)
-				ele.onDragHandleDragged(e.pageX);
+				ele.onDragHandleDragged(e.mouseX);
 		});
 	}
 	, getValue: function ($ele)
@@ -3389,14 +3389,14 @@ function PtzButtons()
 	}
 	var onPointerMove = function (e)
 	{
-		if (pointInsideElement($ptzGraphicWrapper, e.pageX, e.pageY))
+		if (pointInsideElement($ptzGraphicWrapper, e.mouseX, e.mouseY))
 		{
 			// Hovering near buttons, maybe over one
 			if ($activeEle == null && !touchEvents.isTouchEvent(e))
 			{
 				var offset = $ptzGraphicWrapper.offset();
-				var x = e.pageX - offset.left;
-				var y = e.pageY - offset.top;
+				var x = e.mouseX - offset.left;
+				var y = e.mouseY - offset.top;
 				var btn = GetHoveredPTZButton(x, y);
 				if (btn == null)
 				{
@@ -3428,8 +3428,8 @@ function PtzButtons()
 		if (e.which != 3)
 		{
 			var offset = $ptzGraphicWrapper.offset();
-			var x = e.pageX - offset.left;
-			var y = e.pageY - offset.top;
+			var x = e.mouseX - offset.left;
+			var y = e.mouseY - offset.top;
 			var btn = GetHoveredPTZButton(x, y);
 			if (btn != null)
 			{
@@ -4001,7 +4001,7 @@ function ClipTimeline()
 	{
 		mouseCoordFixer.fix(e);
 		isDragging = true;
-		currentGhostRelativePosition = pageXToRelativePosition(e.pageX);
+		currentGhostRelativePosition = mouseXToRelativePosition(e.mouseX);
 		self.Draw();
 	});
 	$(document).on("mouseup touchend touchcancel", function (e)
@@ -4010,7 +4010,7 @@ function ClipTimeline()
 		if (isDragging)
 		{
 			isDragging = false;
-			var newPosition = pageXToRelativePosition(e.pageX);
+			var newPosition = mouseXToRelativePosition(e.mouseX);
 			if (newPosition != -1)
 				currentSelectedRelativePosition = newPosition;
 			currentGhostRelativePosition = -1;
@@ -4021,13 +4021,13 @@ function ClipTimeline()
 	{
 		mouseCoordFixer.fix(e);
 		var newSoftGhost = -1;
-		if (pointInsideElement($canvas, e.pageX, e.pageY))
-			newSoftGhost = pageXToRelativePosition(e.pageX);
+		if (pointInsideElement($canvas, e.mouseX, e.mouseY))
+			newSoftGhost = mouseXToRelativePosition(e.mouseX);
 		var changedGhost = currentSoftGhostRelativePosition != newSoftGhost;
 		currentSoftGhostRelativePosition = newSoftGhost;
 		if (isDragging)
 		{
-			currentGhostRelativePosition = pageXToRelativePosition(e.pageX);
+			currentGhostRelativePosition = mouseXToRelativePosition(e.mouseX);
 			self.Draw();
 		}
 		else if (changedGhost)
@@ -4133,10 +4133,10 @@ function ClipTimeline()
 		ctx.lineTo(handleX, handleTopY);
 		ctx.stroke();
 	};
-	var pageXToRelativePosition = function (pageX)
+	var mouseXToRelativePosition = function (mouseX)
 	{
 		var timelineBorder = getTimelineBorder();
-		var position = (pageX - timelineBorder.startX - $canvas.offset().left) / timelineBorder.width;
+		var position = (mouseX - timelineBorder.startX - $canvas.offset().left) / timelineBorder.width;
 		if (position < -0.1 || position > 1.1)
 			return -1;
 		position = Clamp(position, 0, 1);
@@ -4538,21 +4538,21 @@ function PlaybackControls()
 	$layoutbody.on("mouseleave", function (e)
 	{
 		mouseCoordFixer.fix(e);
-		if (pointInsideElement($layoutbody, e.pageX, e.pageY))
+		if (pointInsideElement($layoutbody, e.mouseX, e.mouseY))
 			return;
 		CloseSettings();
 		clearHideTimout();
 		self.FadeOut();
 	});
-	$layoutbody.on("mouseenter mousemove mousedown mouseup touchstart touchmove touchend touchcancel", function (e)
+	BindEventsPassive($layoutbody.get(0), "mouseenter mousemove mousedown mouseup touchstart touchmove touchend touchcancel", function (e)
 	{
 		mouseCoordFixer.fix(e);
 		var wasHidden = !isVisible;
 		self.FadeIn();
 		clearHideTimout();
-		if (!pointInsideElement($pc, e.pageX, e.pageY)
-			&& !pointInsideElement($playbackSettings, e.pageX, e.pageY)
-			&& !pointInsideElement(playbackHeader.Get$Ref(), e.pageX, e.pageY))
+		if (!pointInsideElement($pc, e.mouseX, e.mouseY)
+			&& !pointInsideElement($playbackSettings, e.mouseX, e.mouseY)
+			&& !pointInsideElement(playbackHeader.Get$Ref(), e.mouseX, e.mouseY))
 			hideAfterTimeout();
 		else
 		{
@@ -4563,7 +4563,7 @@ function PlaybackControls()
 				// On one hand, this might be more intuitive (maybe the touch was meant to reveal those controls).
 				// On the other hand, maybe the touch was meant to affect the video view.  There is no perfect solution.
 				e.stopPropagation();
-				e.preventDefault();
+				//e.preventDefault(); // Can't do this from passive listener
 			}
 		}
 	});
@@ -4761,7 +4761,8 @@ function PlaybackControls()
 	}
 	this.MouseInSettingsPanel = function (e)
 	{
-		return pointInsideElement($playbackSettings, e.pageX, e.pageY);
+		mouseCoordFixer.fix(e);
+		return pointInsideElement($playbackSettings, e.mouseX, e.mouseY);
 	}
 	this.SettingsPanelIsOpen = function (e)
 	{
@@ -5039,7 +5040,7 @@ function SeekBar()
 		var barO = bar.offset();
 		var barW = bar.width();
 
-		var hintX = Clamp(e.pageX - barO.left, 0, barW);
+		var hintX = Clamp(e.mouseX - barO.left, 0, barW);
 		var seekHintW = seekhint.outerWidth();
 		var seekHintL = (hintX + barO.left) - (seekHintW / 2) - bodyO.left;
 		var barMarginL = barO.left - bodyO.left;
@@ -5211,7 +5212,7 @@ function SeekBar()
 
 		var barO = bar.offset();
 		var barW = bar.width();
-		var x = (e.pageX - barO.left);
+		var x = (e.mouseX - barO.left);
 		x = Clamp(x, 0, barW);
 		var msec = videoPlayer.Loading().image.msec;
 		if (msec <= 1)
@@ -5225,7 +5226,7 @@ function SeekBar()
 
 		isTouchDragging = false;
 		isDragging = false;
-		if (touchEvents.isTouchEvent(e) || !pointInsideElement(wrapper, e.pageX, e.pageY))
+		if (touchEvents.isTouchEvent(e) || !pointInsideElement(wrapper, e.mouseX, e.mouseY))
 			SetBarState(0);
 		updateSeekHint(e);
 	}
@@ -5236,7 +5237,7 @@ function SeekBar()
 		{
 			var barO = bar.offset();
 			var barW = bar.width();
-			var x = (e.pageX - barO.left);
+			var x = (e.mouseX - barO.left);
 			x = Clamp(x, 0, barW);
 			left.css("width", x + "px");
 			handle.css("left", x + "px");
@@ -5597,8 +5598,8 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 	var FakeMouseEventForSeekBar = function (e)
 	{
 		return {
-			pageX: e.pageX - dragOffset,
-			pageY: e.pageY,
+			mouseX: e.mouseX - dragOffset,
+			mouseY: e.mouseY,
 			type: e.type,
 			noSeekHint: true,
 			which: e.which,
@@ -5633,7 +5634,7 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 
 	this.mouseDown = function (e)
 	{
-		dragOffset = (e.pageX - $handle.offset().left) - (w * polePosition);
+		dragOffset = (e.mouseX - $handle.offset().left) - (w * polePosition);
 		isDragging = true;
 		if (!videoPlayer.Playback_IsPaused())
 			videoPlayer.Playback_Pause();
@@ -5642,7 +5643,7 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 	{
 		if (isDragging)
 		{
-			var newPosX = (e.pageX - seekBarO.left) - dragOffset;
+			var newPosX = (e.mouseX - seekBarO.left) - dragOffset;
 			self.setPosition(newPosX / seekBarWm1);
 			seekBar.mouseMove(FakeMouseEventForSeekBar(e), true);
 			return true;
@@ -9183,12 +9184,12 @@ function VideoPlayerController()
 	this.GetCameraUnderMousePointer = function (event)
 	{
 		// Find out which camera is under the mouse pointer, if any.
-		imageRenderer.SetMousePos(event.pageX, event.pageY);
+		imageRenderer.SetMousePos(event.mouseX, event.mouseY);
 
 		var imgPos = $camimg_wrapper.position();
 		var layoutbodyOffset = $layoutbody.offset();
-		var mouseRelX = parseFloat((event.pageX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
-		var mouseRelY = parseFloat((event.pageY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
+		var mouseRelX = parseFloat((event.mouseX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
+		var mouseRelY = parseFloat((event.mouseY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
 
 		var x = currentlyLoadedImage.fullwidth * mouseRelX;
 		var y = currentlyLoadedImage.fullheight * mouseRelY;
@@ -12455,8 +12456,8 @@ function ImageRenderer()
 	}
 	this.CamImgDragStart = function (e)
 	{
-		mouseX = e.pageX;
-		mouseY = e.pageY;
+		mouseX = e.mouseX;
+		mouseY = e.mouseY;
 		imageIsDragging = true;
 		SetCamCellCursor();
 	}
@@ -12468,13 +12469,13 @@ function ImageRenderer()
 		var requiresImgResize = false;
 		if (imageIsDragging && imageIsLargerThanAvailableSpace)
 		{
-			imgDigitalZoomOffsetX += (e.pageX - mouseX);
-			imgDigitalZoomOffsetY += (e.pageY - mouseY);
+			imgDigitalZoomOffsetX += (e.mouseX - mouseX);
+			imgDigitalZoomOffsetY += (e.mouseY - mouseY);
 			requiresImgResize = true;
 		}
 
-		mouseX = e.pageX;
-		mouseY = e.pageY;
+		mouseX = e.mouseX;
+		mouseY = e.mouseY;
 
 		if (requiresImgResize)
 			self.ImgResized(false);
@@ -12487,8 +12488,8 @@ function ImageRenderer()
 		imageIsDragging = false;
 		SetCamCellCursor();
 
-		mouseX = e.pageX;
-		mouseY = e.pageY;
+		mouseX = e.mouseX;
+		mouseY = e.mouseY;
 	}
 	$layoutbody.on('wheel', function (e)
 	{
@@ -12505,7 +12506,7 @@ function ImageRenderer()
 		if (playbackControls.MouseInSettingsPanel(e))
 			return;
 		mouseCoordFixer.fix(e);
-		self.SetMousePos(e.pageX, e.pageY);
+		self.SetMousePos(e.mouseX, e.mouseY);
 		e.preventDefault();
 		if (deltaMode === 1)
 			deltaY *= 33.333;
@@ -19616,8 +19617,8 @@ function DragAndDropHelper($list, onItemMoved)
 		if (touchEvents.Gate(e) || e.which === 3)
 			return;
 		down = true;
-		x = e.pageX;
-		y = e.pageY;
+		x = e.mouseX;
+		y = e.mouseY;
 		var ofst = $ele.offset();
 		offsetX = x - ofst.left;
 		offsetY = y - ofst.top;
@@ -19652,7 +19653,7 @@ function DragAndDropHelper($list, onItemMoved)
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e) || !down)
 			return;
-		var distance = Math.max(Math.abs(e.pageX - x), Math.abs(e.pageY - y));
+		var distance = Math.max(Math.abs(e.mouseX - x), Math.abs(e.mouseY - y));
 		if (!moved && distance > 5)
 		{
 			moved = true;
@@ -19662,14 +19663,14 @@ function DragAndDropHelper($list, onItemMoved)
 			$lastTouched = null;
 		if (drag)
 		{
-			$ghost.css('left', e.pageX - offsetX).css('top', e.pageY - offsetY);
-			if (pointInsideElementBorder($drag.parent(), e.pageX, e.pageY))
+			$ghost.css('left', e.mouseX - offsetX).css('top', e.mouseY - offsetY);
+			if (pointInsideElementBorder($drag.parent(), e.mouseX, e.mouseY))
 			{
 				$ghost.css("cursor", "move");
 				for (var i = 0; i < $items.length; i++)
 				{
 					var $item = $items.eq(i);
-					if (pointInsideElementBorder($item, e.pageX, e.pageY))
+					if (pointInsideElementBorder($item, e.mouseX, e.mouseY))
 					{
 						moved = true;
 						if ($blank.position().top > $item.position().top)
@@ -19691,7 +19692,7 @@ function DragAndDropHelper($list, onItemMoved)
 		mouseCoordFixer.fix(e);
 		touchEvents.Gate(e);
 		if (down)
-			DragFinished(e, drag && pointInsideElementBorder($drag.parent(), e.pageX, e.pageY));
+			DragFinished(e, drag && pointInsideElementBorder($drag.parent(), e.mouseX, e.mouseY));
 	}
 	var DragFinished = function (e, success)
 	{
@@ -19712,7 +19713,7 @@ function DragAndDropHelper($list, onItemMoved)
 		}
 		else
 		{
-			if ($lastTouched && $lastTouched.length > 0 && pointInsideElement($lastTouched, e.pageX, e.pageY))
+			if ($lastTouched && $lastTouched.length > 0 && pointInsideElement($lastTouched, e.mouseX, e.mouseY))
 			{
 				TimedClick($lastTouched);
 				$lastTouched = null;
@@ -19824,14 +19825,14 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 
 	if ($excludeRecordings)
 	{
-		$excludeRecordings.on("mousedown touchstart", function (e)
+		BindEventsPassive($excludeRecordings.get(0), "mousedown touchstart", function (e)
 		{
 			if (videoPlayer.Loading().image.isLive)
 				return;
 			exclude = true;
 			setTimeout(clearExclusion, 0);
 		});
-		$excludeRecordings.on("mouseup touchend touchcancel", function (e)
+		BindEventsPassive($excludeRecordings.get(0), "mouseup touchend touchcancel", function (e)
 		{
 			if (videoPlayer.Loading().image.isLive)
 				return;
@@ -19841,14 +19842,14 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	}
 	if ($excludeLive)
 	{
-		$excludeLive.on("mousedown touchstart", function (e)
+		BindEventsPassive($excludeLive.get(0), "mousedown touchstart", function (e)
 		{
 			if (videoPlayer.Loading().image.isLive)
 				exclude = true;
 			excludeDragStart = true;
 			setTimeout(clearExclusion, 0);
 		});
-		$excludeLive.on("mouseup touchend touchcancel", function (e)
+		BindEventsPassive($excludeLive.get(0), "mouseup touchend touchcancel", function (e)
 		{
 			if (videoPlayer.Loading().image.isLive)
 				exclude = true;
@@ -19857,7 +19858,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		});
 	}
 
-	$ele.on("mousedown touchstart", function (e)
+	BindEventsPassive($ele.get(0), "mousedown touchstart", function (e)
 	{
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
@@ -19871,7 +19872,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		if (!excludeDragStart)
 			cbDragStart(e);
 	});
-	$ele.on("mouseup touchend touchcancel", function (e)
+	BindEventsPassive($ele.get(0), "mouseup touchend touchcancel", function (e)
 	{
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
@@ -19924,7 +19925,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			singleClickTimeout = setTimeout(singleClickFunction, doubleClickTimeMS);
 		}
 	});
-	$(document).on("mousemove touchmove", function (e)
+	BindEventsPassive(document, "mousemove touchmove", function (e)
 	{
 		mouseCoordFixer.fix(e);
 		// Determine if this move event starts a drag.
@@ -19935,7 +19936,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			if (!lastMouseDown1.Excluded)
 			{
 				// Has the curser moved far enough to start drag?
-				if (!positionsAreWithinTolerance(lastMouseDown1, { X: e.pageX, Y: e.pageY }))
+				if (!positionsAreWithinTolerance(lastMouseDown1, { X: e.mouseX, Y: e.mouseY }))
 				{
 					lastMouseDown1.Excluded = true; // Cursor has moved far enough to start a drag.
 				}
@@ -19947,7 +19948,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			cbDragMove(e, false, lastMouseDown1.Excluded);
 		}
 	});
-	$(document).on("mouseup mouseleave touchend touchcancel", function (e)
+	BindEventsPassive(document, "mouseup mouseleave touchend touchcancel", function (e)
 	{
 		mouseCoordFixer.fix(e);
 		cbDragEnd(e);
@@ -19971,8 +19972,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 		dst.Y = src.Y;
 		dst.Time = src.Time;
 		dst.Excluded = src.Excluded;
-		src.X = e.pageX;
-		src.Y = e.pageY;
+		src.X = e.mouseX;
+		src.Y = e.mouseY;
 		src.Time = performance.now();
 		src.Excluded = exclude || excludeNextEvent;
 		lastEvent = eventType;
@@ -21549,19 +21550,19 @@ var mouseCoordFixer =
 		{
 			if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 			{
-				mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
-				mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY + $(window).scrollTop();
+				mouseCoordFixer.last.x = e.mouseX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
+				mouseCoordFixer.last.y = e.mouseY = e.originalEvent.touches[0].pageY + $(window).scrollTop();
 			}
 			else
 			{
-				e.pageX = mouseCoordFixer.last.x;
-				e.pageY = mouseCoordFixer.last.y;
+				e.mouseX = mouseCoordFixer.last.x;
+				e.mouseY = mouseCoordFixer.last.y;
 			}
 		}
 		else
 		{
-			mouseCoordFixer.last.x = e.pageX = e.pageX + $(window).scrollLeft();
-			mouseCoordFixer.last.y = e.pageY = e.pageY + $(window).scrollTop();
+			mouseCoordFixer.last.x = e.mouseX = e.pageX + $(window).scrollLeft();
+			mouseCoordFixer.last.y = e.mouseY = e.pageY + $(window).scrollTop();
 		}
 	}
 };
@@ -21735,4 +21736,14 @@ function InjectStyleBlock(cssText)
 	var styleBlock = $('<style type="text/css"></style>');
 	styleBlock.text(cssText);
 	$("body").append(styleBlock);
+}
+function BindEvents(ele, events, handler, options)
+{
+	var eventArray = events.split(' ');
+	for (var i = 0; i < eventArray.length; i++)
+		ele.addEventListener(eventArray[i], handler, options);
+}
+function BindEventsPassive(ele, events, handler)
+{
+	BindEvents(ele, events, handler, { passive: true });
 }

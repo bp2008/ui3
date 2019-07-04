@@ -242,8 +242,8 @@ var $DialogDefaults = { theme: "light" };
 			var pos = self.$dialog.position();
 			mouseMem.originalX = pos.left;
 			mouseMem.originalY = pos.top;
-			mouseMem.offsetX = pos.left - e.pageX;
-			mouseMem.offsetY = pos.top - e.pageY;
+			mouseMem.offsetX = pos.left - e.mouseX;
+			mouseMem.offsetY = pos.top - e.mouseY;
 			return false;
 		};
 		var dragMove = function (e)
@@ -251,8 +251,8 @@ var $DialogDefaults = { theme: "light" };
 			mouseCoordFixer.fix(e);
 			if (mouseMem.down)
 			{
-				var newX = e.pageX + mouseMem.offsetX;
-				var newY = e.pageY + mouseMem.offsetY;
+				var newX = e.mouseX + mouseMem.offsetX;
+				var newY = e.mouseY + mouseMem.offsetY;
 
 				var coords = keepOnScreen(newX, newY, false);
 				self.$dialog.css("left", coords.X + "px");
@@ -334,19 +334,19 @@ var $DialogDefaults = { theme: "light" };
 				{
 					if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 					{
-						mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX;
-						mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY;
+						mouseCoordFixer.last.x = e.mouseX = e.originalEvent.touches[0].pageX;
+						mouseCoordFixer.last.y = e.mouseY = e.originalEvent.touches[0].pageY;
 					}
 					else
 					{
-						e.pageX = mouseCoordFixer.last.x;
-						e.pageY = mouseCoordFixer.last.y;
+						e.mouseX = mouseCoordFixer.last.x;
+						e.mouseY = mouseCoordFixer.last.y;
 					}
 				}
 				else
 				{
-					mouseCoordFixer.last.x = e.pageX;
-					mouseCoordFixer.last.y = e.pageY;
+					mouseCoordFixer.last.x = e.mouseX = e.pageX;
+					mouseCoordFixer.last.y = e.mouseY = e.pageY;
 				}
 			}
 		};

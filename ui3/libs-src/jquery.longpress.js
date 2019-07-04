@@ -41,8 +41,8 @@
 					return;
 				var context = this;
 				mouseCoordFixer.fix(e);
-				mouse_down_x = e.pageX;
-				mouse_down_y = e.pageY;
+				mouse_down_x = e.mouseX;
+				mouse_down_y = e.mouseY;
 				// set a timeout to call the longpress callback when time elapses
 				clearTimeout(timeout);
 				timeout = setTimeout(function ()
@@ -89,8 +89,8 @@
 			function move_callback(e)
 			{
 				mouseCoordFixer.fix(e);
-				if (Math.abs(mouse_down_x - e.pageX) > mouseMoveTolerance
-					|| Math.abs(mouse_down_y - e.pageY) > mouseMoveTolerance)
+				if (Math.abs(mouse_down_x - e.mouseX) > mouseMoveTolerance
+					|| Math.abs(mouse_down_y - e.mouseY) > mouseMoveTolerance)
 				{
 					clearTimeout(timeout);
 					timeout = null;
@@ -122,19 +122,19 @@
 			{
 				if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 				{
-					mouseCoordFixer.last.x = e.pageX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
-					mouseCoordFixer.last.y = e.pageY = e.originalEvent.touches[0].pageY + $(window).scrollTop();
+					mouseCoordFixer.last.x = e.mouseX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
+					mouseCoordFixer.last.y = e.mouseY = e.originalEvent.touches[0].pageY + $(window).scrollTop();
 				}
 				else
 				{
-					e.pageX = mouseCoordFixer.last.x;
-					e.pageY = mouseCoordFixer.last.y;
+					e.mouseX = mouseCoordFixer.last.x;
+					e.mouseY = mouseCoordFixer.last.y;
 				}
 			}
 			else
 			{
-				mouseCoordFixer.last.x = e.pageX = e.pageX + $(window).scrollLeft();
-				mouseCoordFixer.last.y = e.pageY = e.pageY + $(window).scrollTop();
+				mouseCoordFixer.last.x = e.mouseX = e.pageX + $(window).scrollLeft();
+				mouseCoordFixer.last.y = e.mouseY = e.pageY + $(window).scrollTop();
 			}
 		}
 	};
