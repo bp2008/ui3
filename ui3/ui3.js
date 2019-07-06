@@ -147,10 +147,6 @@ function DoUIFeatureDetection()
 				{
 					ul_root.append('<li>Fullscreen mode is not supported.</li>');
 				}
-				if (browser_is_ios)
-				{
-					ul_root.append('<li>Context menus are not supported.</li>');
-				}
 				if (!isHtml5HistorySupported())
 				{
 					ul_root.append('<li>The back button will not close the current clip or camera, like it does on most other platforms.</li>');
@@ -20736,10 +20732,6 @@ function UIHelpTool()
 			+ ' try different values for the "Context Menu Trigger" option.<br><br>* The "Long-Press" method causes context menus to open'
 			+ ' when the left mouse button is held down for a moment.<br><br>* For devices which cannot perform a "Long-Press" due to technical limitations, the "Double-Click" method causes context menus to open'
 			+ ' when the left mouse button is pressed twice in rapid succession. In some cases, each click also performs other actions such as selecting a camera, so this method is best used only as a last-resort.'
-			+ (browser_is_ios
-				? ('<br><br>Your operating system was detected as iOS, where there is a known compatibility issue with context menus.'
-					+ '  You may be unable to access the context menu regardless of this setting.')
-				: '')
 			+ '</div>')
 			.modalDialog({ title: "Context Menu Trigger", closeOnOverlayClick: true });
 	}
