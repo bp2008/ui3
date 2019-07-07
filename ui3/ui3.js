@@ -443,6 +443,9 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace screenshots in UI3 Help.
+// TODO: Fix bug where exiting fullscreen mode causes the clip list to render incorrectly if the clip list is un-hidden as part of leaving full screen mode.
+// TODO: Fix bug where clip H.264 stream ends gracefully shortly before the expected end.  UI3 re-requests from the stopping point, but that request fails and UI3 doesn't apparently notice.  Autoplay fails.
+// TODO: Fix bug where playback controls do not prevent the video player from receiving click events, and vice-versa.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -14220,6 +14223,8 @@ function CanvasContextMenu()
 	{
 		if (!videoPlayer.Loading().image.isLive)
 			return false;
+
+		mouseCoordFixer.fix(e);
 
 		videoPlayer.suppressMouseHelper();
 		videoOverlayHelper.HideFalseLoadingOverlay();
