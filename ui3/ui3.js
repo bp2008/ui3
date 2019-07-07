@@ -444,7 +444,6 @@ var togglableUIFeatures =
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace screenshots in UI3 Help.
 // TODO: Fix bug where exiting fullscreen mode causes the clip list to render incorrectly if the clip list is un-hidden as part of leaving full screen mode.
-// TODO: Fix bug where clip H.264 stream ends gracefully shortly before the expected end.  UI3 re-requests from the stopping point, but that request fails and UI3 doesn't apparently notice.  Autoplay fails.
 // TODO: Fix bug where playback controls do not prevent the video player from receiving click events, and vice-versa.
 
 ///////////////////////////////////////////////////////////////
@@ -4564,8 +4563,8 @@ function PlaybackControls()
 				// stopImmediatePropagation (instead of stopPropagation) would prevent it from reaching MouseEventHelper too.
 				// On one hand, this might be more intuitive (maybe the touch was meant to reveal those controls).
 				// On the other hand, maybe the touch was meant to affect the video view.  There is no perfect solution.
-				e.stopPropagation();
-				//e.preventDefault(); // Can't do this from passive listener
+				// e.stopPropagation(); // Does not work from passive listener
+				// e.preventDefault(); // Can't do this from passive listener
 			}
 		}
 	});
@@ -11559,6 +11558,10 @@ function FrameMetadataQueue()
 	{
 		q = new Queue();
 	}
+	this.ToArray = function ()
+	{
+		return q.toArray();
+	}
 }
 ///////////////////////////////////////////////////////////////
 // HTML5 + Media Source Extensions Player /////////////////////
@@ -11599,7 +11602,10 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 
 	var onTimeUpdate = function (e)
 	{
-		var currentTime = player.currentTime * 1000;
+		finishFramesToTime(player.currentTime * 1000);
+	}
+	var finishFramesToTime = function (currentTime)
+	{
 		var w = player.videoWidth;
 		var h = player.videoHeight;
 		while (!frameMetadataQueue.IsEmpty())
@@ -11654,6 +11660,12 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				console.log("HTML5 video stalled");
 		}
 	}
+	var onPlayerWaiting = function (e)
+	{
+		var allQueuedFrames = frameMetadataQueue.ToArray();
+		if (allQueuedFrames.length > 0)
+			finishFramesToTime(allQueuedFrames[allQueuedFrames.length - 1].time);
+	}
 	var dropFrame = function ()
 	{
 		finishedFrameCount++;
@@ -11689,6 +11701,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		player.addEventListener('loadedmetadata', onTimeUpdate);
 		player.addEventListener('pause', onPlayerPaused);
 		player.addEventListener('stalled', onPlayerStalled);
+		player.addEventListener('waiting', onPlayerWaiting);
 		player.addEventListener('suspend', function (e)
 		{
 			if (developerMode)
