@@ -253,3 +253,6 @@ paket-files/
 # JetBrains Rider
 .idea/
 *.sln.iml
+
+# Manual Additions
+Thumbs.db

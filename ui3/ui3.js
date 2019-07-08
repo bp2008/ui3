@@ -442,7 +442,7 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // TODO: Expandable clip list. ("Show more clips")
-// TODO: Replace screenshots in UI3 Help.
+// TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
