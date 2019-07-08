@@ -5863,7 +5863,7 @@ function ClipLoader(clipsBodySelector)
 		var loading = videoPlayer.Loading();
 		if (loading.image && loading.image.isLive)
 			lastLoadedCameraFilter = loading.image.id;
-		loadClipsInternal(listName, lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false, false, null, settings.ui3_recordings_flagged_only == "1");
+		loadClipsInternal(listName, lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false, false, null, settings.ui3_recordings_flagged_only == "1" ? "flagged" : null);
 	}
 	this.UpdateClipList = function ()
 	{
@@ -5879,8 +5879,6 @@ function ClipLoader(clipsBodySelector)
 			return;
 		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
 			return;
-		if (settings.ui3_recordings_flagged_only == "1")
-			return;
 		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
 		loadClipsInternal(null, lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true);
 	}
@@ -5894,7 +5892,7 @@ function ClipLoader(clipsBodySelector)
 		}
 		loadClipsInternal(listName, camFilter, dateBegin, dateEnd, false, false, null, false);
 	}
-	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly)
+	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView)
 	{
 		if (!videoPlayer.Loading().cam)
 			return; // UI hasn't loaded far enough yet.
@@ -5913,7 +5911,7 @@ function ClipLoader(clipsBodySelector)
 			{
 				QueuedClipListLoad = function ()
 				{
-					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly);
+					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
 				};
 				return;
 			}
@@ -5955,6 +5953,8 @@ function ClipLoader(clipsBodySelector)
 			args.startdate = myDateStart;
 			args.enddate = myDateEnd;
 		}
+		if (dbView)
+			args.view = dbView;
 
 		var isClipList = listName == "cliplist";
 
@@ -6021,8 +6021,6 @@ function ClipLoader(clipsBodySelector)
 					clipData.alertPath = clip.path; // Alert path if this is an alert, otherwise just another copy of the clip path.
 					clipData.offsetMs = clip.offset ? clip.offset : 0;
 					clipData.flags = clip.flags;
-					if (flaggedOnly && (clip.flags & clip_flag_flag) == 0)
-						continue;
 					clipData.audio = (clip.flags & clip_flag_audio) > 0;
 					clipData.date = new Date(clip.date * 1000);
 					clipData.displayDate = GetServerDate(clipData.date);
@@ -6133,7 +6131,7 @@ function ClipLoader(clipsBodySelector)
 						}
 					$("#clipListDateRange").html("&nbsp;Remaining to load:<br/>&nbsp;&nbsp;&nbsp;" + parseInt((myDateEnd - myDateStart) / 86400) + " days");
 					$.CustomScroll.callMeOnContainerResize();
-					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate, flaggedOnly);
+					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate, dbView);
 				}
 			}
 
@@ -6190,7 +6188,7 @@ function ClipLoader(clipsBodySelector)
 					setTimeout(function ()
 					{
 						isLoadingAClipList = false;
-						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, flaggedOnly);
+						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
 					}, 1000);
 				}
 				else
@@ -9038,7 +9036,7 @@ function VideoPlayerController()
 		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint")
 			, $("#playbackHeader,#playbackControls") // Excludes clicks while viewing recordings
 			, $("#playbackControls .pcButton,#volumeBar,#closeClipLeft") // Excludes clicks while viewing live and excludes dragging always
-			, function (e) { return playbackControls.MouseInSettingsPanel(e) ||  playbackControls.MouseInPlaybackControls(e); } // exclude click if returns true
+			, function (e) { return playbackControls.MouseInSettingsPanel(e) || playbackControls.MouseInPlaybackControls(e); } // exclude click if returns true
 			, function (e, confirmed) // Single Click
 			{
 				videoOverlayHelper.HideFalseLoadingOverlay();
