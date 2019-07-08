@@ -443,8 +443,6 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace screenshots in UI3 Help.
-// TODO: Fix bug where exiting fullscreen mode causes the clip list to render incorrectly if the clip list is un-hidden as part of leaving full screen mode.
-// TODO: Fix bug where playback controls do not prevent the video player from receiving click events, and vice-versa.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -7187,6 +7185,10 @@ function ClipLoader(clipsBodySelector)
 			$clipListTopDate.attr("title", ele.defaultTitle);
 			$clipListTopDate.off('click', self.ScrollToTop);
 		}
+	}
+	this.RedrawClipList = function ()
+	{
+		tileLoader.appearDisappearCheck();
 	}
 	// Some things must be initialized after methods are defined ...
 	lastClipTileSize = getClipTileSize();
@@ -17248,6 +17250,7 @@ function MaximizedModeController()
 		else
 			$("#layoutleft,#layouttop").show();
 		this.updateMaximizeButtonState();
+		clipLoader && clipLoader.RedrawClipList();
 	}
 	this.EnableMaximizedMode = function ()
 	{
@@ -17314,6 +17317,7 @@ function FullScreenModeController()
 				requestFullScreen();
 			else
 				exitFullScreen();
+			clipLoader.RedrawClipList();
 		}
 		else
 		{
