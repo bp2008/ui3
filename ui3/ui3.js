@@ -2199,7 +2199,7 @@ $(function ()
 
 	window.addEventListener("beforeunload", function ()
 	{
-		if(isReloadingUi3)
+		if (isReloadingUi3)
 			settings.bi_lastunload = 0;
 		else
 			settings.bi_lastunload = Date.now();
@@ -4545,29 +4545,22 @@ function PlaybackControls()
 		clearHideTimout();
 		self.FadeOut();
 	});
-	BindEventsPassive($layoutbody.get(0), "mouseenter mousemove mousedown mouseup touchstart touchmove touchend touchcancel", function (e)
+	BindEventsPassive($layoutbody.get(0), "mouseenter mousemove mouseup touchmove touchend touchcancel", function (e)
 	{
 		mouseCoordFixer.fix(e);
-		var wasHidden = !isVisible;
-		self.FadeIn();
+		setTimeout(self.FadeIn, 30); // This is carefully tuned to prevent accidental clicks on playback controls that were invisible when the touch began.  Prior to v81 we did this by stopping/preventing the click event, but due to a chrome pinch zooming bug we must use a passive listener for this, which can't cancel the click event.
 		clearHideTimout();
-		if (!pointInsideElement($pc, e.mouseX, e.mouseY)
-			&& !pointInsideElement($playbackSettings, e.mouseX, e.mouseY)
-			&& !pointInsideElement(playbackHeader.Get$Ref(), e.mouseX, e.mouseY))
+
+		if (!self.MouseInPlaybackControls(e))
 			hideAfterTimeout();
-		else
-		{
-			if (wasHidden && (e.type == "mousedown" || e.type == "touchstart"))
-			{
-				// Playback controls were invisible before this event.  This code prevents the event from triggering playback button actions.
-				// stopImmediatePropagation (instead of stopPropagation) would prevent it from reaching MouseEventHelper too.
-				// On one hand, this might be more intuitive (maybe the touch was meant to reveal those controls).
-				// On the other hand, maybe the touch was meant to affect the video view.  There is no perfect solution.
-				// e.stopPropagation(); // Does not work from passive listener
-				// e.preventDefault(); // Can't do this from passive listener
-			}
-		}
 	});
+	this.MouseInPlaybackControls = function (e)
+	{
+		mouseCoordFixer.fix(e);
+		return pointInsideElement($pc, e.mouseX, e.mouseY)
+			|| pointInsideElement($playbackSettings, e.mouseX, e.mouseY)
+			|| pointInsideElement(playbackHeader.Get$Ref(), e.mouseX, e.mouseY)
+	}
 	$(document).mouseup(function (e)
 	{
 		if (!self.MouseInSettingsPanel(e))
@@ -9043,7 +9036,7 @@ function VideoPlayerController()
 		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint")
 			, $("#playbackHeader,#playbackControls") // Excludes clicks while viewing recordings
 			, $("#playbackControls .pcButton,#volumeBar,#closeClipLeft") // Excludes clicks while viewing live and excludes dragging always
-			, function (e) { return playbackControls.MouseInSettingsPanel(e); } // exclude click if returns true
+			, function (e) { return playbackControls.MouseInSettingsPanel(e) ||  playbackControls.MouseInPlaybackControls(e); } // exclude click if returns true
 			, function (e, confirmed) // Single Click
 			{
 				videoOverlayHelper.HideFalseLoadingOverlay();
@@ -11662,9 +11655,14 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	var onPlayerWaiting = function (e)
 	{
-		var allQueuedFrames = frameMetadataQueue.ToArray();
-		if (allQueuedFrames.length > 0)
-			finishFramesToTime(allQueuedFrames[allQueuedFrames.length - 1].time);
+		// Sometimes at the end of a clip, we don't get the final progress update.  This works around an issue where UI3 thinks the clip never finished.
+		// This event can be raised before the video player knows the video resolution, so we shouldn't announce finished frames based on this.
+		if (allFramesAccepted)
+		{
+			var allQueuedFrames = frameMetadataQueue.ToArray();
+			if (allQueuedFrames.length > 0)
+				finishFramesToTime(allQueuedFrames[allQueuedFrames.length - 1].time);
+		}
 	}
 	var dropFrame = function ()
 	{
@@ -19844,14 +19842,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 
 	if ($excludeRecordings)
 	{
-		BindEventsPassive($excludeRecordings.get(0), "mousedown touchstart", function (e)
-		{
-			if (videoPlayer.Loading().image.isLive)
-				return;
-			exclude = true;
-			setTimeout(clearExclusion, 0);
-		});
-		BindEventsPassive($excludeRecordings.get(0), "mouseup touchend touchcancel", function (e)
+		BindEventsPassive($excludeRecordings.get(0), "mousedown touchstart mouseup touchend touchcancel", function (e)
 		{
 			if (videoPlayer.Loading().image.isLive)
 				return;
@@ -19861,14 +19852,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	}
 	if ($excludeLive)
 	{
-		BindEventsPassive($excludeLive.get(0), "mousedown touchstart", function (e)
-		{
-			if (videoPlayer.Loading().image.isLive)
-				exclude = true;
-			excludeDragStart = true;
-			setTimeout(clearExclusion, 0);
-		});
-		BindEventsPassive($excludeLive.get(0), "mouseup touchend touchcancel", function (e)
+		BindEventsPassive($excludeLive.get(0), "mousedown touchstart mouseup touchend touchcancel", function (e)
 		{
 			if (videoPlayer.Loading().image.isLive)
 				exclude = true;
