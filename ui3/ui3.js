@@ -5880,7 +5880,7 @@ function ClipLoader(clipsBodySelector)
 		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
 			return;
 		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
-		loadClipsInternal(null, lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true);
+		loadClipsInternal(null, lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true, null, settings.ui3_recordings_flagged_only == "1" ? "flagged" : null);
 	}
 	this.LoadClipsRange = function (listName, camFilter, dateBegin, dateEnd)
 	{
@@ -5954,9 +5954,13 @@ function ClipLoader(clipsBodySelector)
 			args.enddate = myDateEnd;
 		}
 		if (dbView)
+		{
 			args.view = dbView;
+			if (dbView === "flagged")
+				args.cmd = "cliplist"; // [flagged hack] The "flagged" view only works on cliplist commands and it returns alerts/clips both.
+		}
 
-		var isClipList = listName == "cliplist";
+		var isClipListRequest = listName == "cliplist"; // We can't rely on this anymore to tell us if response items are clips or alerts.
 
 		ExecJSON(args, function (response)
 		{
@@ -5969,7 +5973,7 @@ function ClipLoader(clipsBodySelector)
 			var clipTileHeight = getClipTileHeight();
 			var previouslyOpenedClip = null;
 			var loadingImage = videoPlayer.Loading().image;
-			if (typeof (response.data) != "undefined")
+			if (typeof response.data !== "undefined")
 			{
 				var newUpdateClipIds = [];
 				var newUpdateClips = [];
@@ -5991,14 +5995,16 @@ function ClipLoader(clipsBodySelector)
 					var clipData = new Object();
 					clipData.rawData = clip;
 					clipData.rawClipData = clip;
-					clipData.isClip = isClipList;
+					clipData.isClip = !clip.clip; // Only alert items have a clip property.
+					if (isClipListRequest !== clipData.isClip)
+						continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
 					clipData.roughLength = CleanUpFileSize(clip.filesize);
 					clipData.roughLengthMs = GetClipLengthMs(clipData.roughLength);
 					clipData.camera = clip.camera;
 					clipData.recId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
 					clipData.thumbPath = clip.path; // Path used for loading the thumbnail
 					clipData.res = clip.res;
-					if (isClipList)
+					if (clipData.isClip)
 					{
 						clipData.isSnapshot = clipData.roughLength == "Snapshot"
 						clipData.clipId = clipData.recId; // Unique ID of the underlying clip.
@@ -6087,8 +6093,8 @@ function ClipLoader(clipsBodySelector)
 						if (!isUpdateOfExistingList && previouslyOpenedClip == null && !loadingImage.isLive && loadingImage.uniqueId == clipData.recId)
 							previouslyOpenedClip = clipData;
 					}
-
 				}
+
 				if (isUpdateOfExistingList && newUpdateClipIds.length > 0)
 				{
 					var oldestOfNewClipIds = newUpdateClipIds[newUpdateClipIds.length - 1];
@@ -6126,6 +6132,8 @@ function ClipLoader(clipsBodySelector)
 					for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
 						if (typeof response.data[i].newalerts === "undefined")
 						{
+							if (isClipListRequest !== !response.data[i].clip)
+								continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
 							myDateEnd = response.data[i].date;
 							break;
 						}
