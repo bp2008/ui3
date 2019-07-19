@@ -443,6 +443,8 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
+// TODO: Review system log colors with regard to Blue Iris's new color policy.
+// TODO: Change warning toasts to yellow.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -453,6 +455,7 @@ var togglableUIFeatures =
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
 // CONSIDER: Stop using ImageToDataUrl for the clip thumbnail mouseover popup, now that clip thumbnails are cacheable.  I'm not sure there is a point though.
 // CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
+// CONSIDER: Firefox on Android has trouble with switching cameras and seeking.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -8566,7 +8569,7 @@ function SessionManager()
 	 */
 	this.GetLocalSession = function ()
 	{
-		// Right now we're trusting that BI doesn't spontaneously change the s
+		// Right now we're trusting that BI doesn't spontaneously change the session
 		//if (cookies_accessible)
 		//{
 		//	var cookieSession = $.cookie("session");
