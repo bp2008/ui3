@@ -2458,6 +2458,17 @@ div.invisibleLabel
 {
 	bottom: 36px;
 }
+
+#toast-container > .toast-warning > div
+{
+	color: #000000;
+}
+
+#toast-container > .toast-warning
+{
+	background-color: #E0E000;
+	background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABXElEQVRIx+WVoU7DUBSG/y+ZqEBMTFRMTCAgQUwgKhA8AAKJIMHsERATEyQ8AWoCMYFA8ACTExWTiIqJiQkEAjFRMTFxMYfkUrq2GW1CwkmuuOfk/n/P+c85lf6VAaeSLpskiIGlpKAJ8CtJzs6wbvwAeAPmwAuQSgrrJLgDtsCJpBBYA5O6wHvABrj3yjWQ5ICojto/A4ussMAMmP8W/8xEPc+JHVlm1/uCt4BX4NG7T6z2HctiBLxLOtinNAN73PbcX23a80gTX5+q1gY+rPd90tQIOp4vAjYeaaWvHwNxjn9lBFn/EzCtCh4BW0n9nNjSYll/F0izGe8SNvGEzWvZeEdslKPZDxsC64I1EBbUOgBWwLhsYm8LhE9tgg+LFmLuhANTW8WtkoWXAt0CDWdA8g3HY74o26oVhqpvjTCUJCz1haTAOfdQ07/jRlLonDuWieKaOJVn40/bJ5sEYUYnrJHQAAAAAElFTkSuQmCC) !important
+}
 /* camimg */
 #camimg_wrapper
 {
