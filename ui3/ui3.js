@@ -443,8 +443,6 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
-// TODO: Review system log colors with regard to Blue Iris's new color policy.
-// TODO: Change warning toasts to yellow.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -511,7 +509,7 @@ var Zoom1xOptions = {
 	Stream: "Stream"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -818,6 +816,68 @@ var defaultSettings =
 			, label: 'Warn if audio playback requires user input'
 			, hint: 'When set to "Yes", a full-page overlay will appear if camera audio playback requires user input. Otherwise, the audio icon will simply turn red.'
 			, category: "Video Player"
+		}
+		, {
+			key: "ui3_pc_next_prev_buttons"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Next/Previous'
+			, onChange: OnChange_ui3_pc_next_prev_buttons
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_pc_seek_buttons"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Skip Buttons'
+			, onChange: OnChange_ui3_pc_seek_buttons
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_pc_seek_1frame_buttons"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Skip 1 Frame Buttons'
+			, onChange: OnChange_ui3_pc_seek_1frame_buttons
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_extra_playback_controls_padding"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Extra Padding'
+			, onChange: OnChange_ui3_extra_playback_controls_padding
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_extra_playback_controls_timestamp"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Real Timestamp<br>When Streaming H.264'
+			, hint: 'Adds a real-world timestamp to the playback controls, available only when streaming .bvr recordings with an H.264 streaming method.'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_extra_playback_controls_alwaysVisible"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Always Visible'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_openFirstRecording"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Automatically Open First Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_clipDownloadOriginalName"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Preserve Original File Names<div class="settingDesc">when downloading clips</div>'
+			, hint: 'Does not affect AVI export'
+			, category: "Clips / Alerts"
 		}
 		, {
 			key: "ui3_clipicon_trigger_motion"
@@ -1686,53 +1746,6 @@ var defaultSettings =
 			, value: "0"
 		}
 		, {
-			key: "ui3_pc_next_prev_buttons"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: 'Playback Controls: Next/Previous'
-			, onChange: OnChange_ui3_pc_next_prev_buttons
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_pc_seek_buttons"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Playback Controls: Skip Buttons'
-			, onChange: OnChange_ui3_pc_seek_buttons
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_pc_seek_1frame_buttons"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Playback Controls: Skip 1 Frame Buttons'
-			, onChange: OnChange_ui3_pc_seek_1frame_buttons
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_extra_playback_controls_padding"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Playback Controls: Extra Padding'
-			, onChange: OnChange_ui3_extra_playback_controls_padding
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_extra_playback_controls_timestamp"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Playback Controls: Real Timestamp<br>When Streaming H.264'
-			, hint: 'Adds a real-world timestamp to the playback controls, available only when streaming .bvr recordings with an H.264 streaming method.'
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_extra_playback_controls_alwaysVisible"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Playback Controls: Always Visible'
-			, category: "Extra"
-		}
-		, {
 			key: "ui3_ir_brightness_contrast"
 			, value: "0"
 			, inputType: "checkbox"
@@ -1755,13 +1768,6 @@ var defaultSettings =
 			, inputType: "select"
 			, label: 'Context Menu Trigger<br><a href="javascript:UIHelp.LearnMore(\'Context Menu Trigger\')">(learn more)</a>'
 			, onChange: OnChange_ui3_contextMenus_trigger
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_openFirstRecording"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Automatically Open First Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
 			, category: "Extra"
 		}
 		, {
@@ -6304,9 +6310,18 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.GetDownloadClipInfo = function (clipData)
 	{
+		var query = currentServer.GetAPISessionArg("?");
+		if (settings.ui3_clipDownloadOriginalName === "1")
+		{
+			if (query)
+				query += '&';
+			else
+				query = '?';
+			query += 'original_name=1';
+		}
 		var retVal = {};
-		retVal.href = currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetAPISessionArg("?");
-		var date = GetDateStr(clipData.displayDate);
+		retVal.href = currentServer.remoteBaseURL + "clips/" + clipData.path + query;
+		var date = GetPaddedDateStr(clipData.displayDate);
 		date = FormatFileName(date);
 		retVal.fileNameNoExt = cameraListLoader.GetCameraName(clipData.camera) + " " + date;
 		var extensionIdx = clipData.path.indexOf(".");
@@ -15821,7 +15836,7 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 		var $link = $('<a href=""></a>');
 		$link.attr("href", dataUri);
 		var camName = cameraListLoader.GetCameraName(clipData.camera);
-		var date = firstFrameTimeUTC ? GetDateStr(new Date(firstFrameTimeUTC)) : GetDateStr(clipData.displayDate);
+		var date = firstFrameTimeUTC ? GetPaddedDateStr(new Date(firstFrameTimeUTC)) : GetPaddedDateStr(clipData.displayDate);
 		var fileName = camName + " " + FormatFileName(date) + ".avi";
 		$link.text(fileName);
 		$link.attr("download", fileName);
@@ -16523,7 +16538,7 @@ function GetLevelImageMarkup(level)
 	if (level == 0)
 		return GetSysLogIcon("#svg_x5F_Info", "#0088FF");
 	if (level == 1)
-		return GetSysLogIcon("#svg_x5F_Warning", "#FFFF00");
+		return GetSysLogIcon("#svg_mio_warning", "#FFFF00");
 	if (level == 2)
 		return GetSysLogIcon("#svg_x5F_Error", "#FF0000");
 	if (level == 3)
@@ -16536,7 +16551,10 @@ function GetLevelImageMarkup(level)
 }
 function GetSysLogIcon(iconId, color)
 {
-	return '<div class="logicon" style="color: ' + color + '"><svg class="icon"><use xlink:href="' + iconId + '"></use></svg></div>';
+	var classes = ["icon"];
+	if (iconId.indexOf("_x5F_") < 0)
+		classes.push("noflip");
+	return '<div class="logicon" style="color: ' + color + '"><svg class="' + classes.join(' ') + '"><use xlink:href="' + iconId + '"></use></svg></div>';
 }
 ///////////////////////////////////////////////////////////////
 // System Log /////////////////////////////////////////////////
@@ -17050,7 +17068,7 @@ function saveSnapshot(btnSelector)
 	if (typeof btnSelector == "undefined")
 		btnSelector = "#save_snapshot_btn";
 	var camName = cameraListLoader.GetCameraName(videoPlayer.Loading().image.id);
-	var date = GetDateStr(new Date(videoPlayer.GetCurrentImageTimeMs() + GetServerTimeOffset()), true);
+	var date = GetPaddedDateStr(new Date(videoPlayer.GetCurrentImageTimeMs() + GetServerTimeOffset()), true);
 	date = FormatFileName(date);
 	var fileName = camName + " " + date + ".jpg";
 	$(btnSelector).attr("download", fileName);
@@ -21390,6 +21408,11 @@ function GetDateDisplayStr(date)
 {
 	var sameDay = isSameDay(date, GetServerDate(new Date()));
 	return (sameDay ? "Today, " : "") + date.getMonthName() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear());
+}
+function GetPaddedDateStr(date, includeMilliseconds)
+{
+	var str = date.getFullYear() + "/" + (date.getMonth() + 1).toString().padLeft(2, '0') + "/" + date.getDate().toString().padLeft(2, '0') + " " + GetTimeStr(date, includeMilliseconds);
+	return str;
 }
 Date.prototype.getMonthName = function (lang)
 {
