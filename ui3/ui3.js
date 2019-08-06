@@ -1,4 +1,4 @@
-/* eslint eqeqeq: 0, no-extra-parens: 0, semi: 0, no-redeclare: 0, no-empty: 0 */
+/* eslint eqeqeq: 0, no-extra-parens: 0, semi: 0, no-redeclare: 0, no-empty: 0, valid-jsdoc: 0 */
 /// <reference path="ui3-local-overrides.js" />
 /// <reference path="libs-src/jquery-1.12.4.js" />
 /// <reference path="libs-ui3.js" />
@@ -865,18 +865,19 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
-			key: "ui3_openFirstRecording"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Automatically Open First Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
-			, category: "Clips / Alerts"
-		}
-		, {
 			key: "ui3_clipDownloadOriginalName"
 			, value: "0"
 			, inputType: "checkbox"
 			, label: 'Preserve Original File Names<div class="settingDesc">when downloading clips</div>'
 			, hint: 'Does not affect AVI export'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_openARecording"
+			, value: "No"
+			, inputType: "select"
+			, options: ["No", "First", "Last"]
+			, label: 'Automatically Open a Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
 			, category: "Clips / Alerts"
 		}
 		, {
@@ -1783,13 +1784,17 @@ var defaultSettings =
 		}
 	];
 
+let obsoleteSettings = { ui3_openFirstRecording: true, ui3_contextMenus_longPress: true };
+
+/**
+ * Overrides a default setting. This method is intended to be called by the ui3_local_overrides.js file.
+ */
 function OverrideDefaultSetting(key, value, IncludeInOptionsWindow, AlwaysReload, Generation)
 {
-	/// <summary>
-	/// Overrides a default setting. This method is intended to be called by the ui3_local_overrides.js file.
-	/// </summary>
+	if (obsoleteSettings[key])
+		return;
 	for (var i = 0; i < defaultSettings.length; i++)
-		if (defaultSettings[i].key == key)
+		if (defaultSettings[i].key === key)
 		{
 			defaultSettings[i].value = value;
 			defaultSettings[i].AlwaysReload = AlwaysReload;
@@ -1816,12 +1821,12 @@ function RevertSettingsToDefault()
 	for (var i = 0; i < defaultSettings.length; i++)
 		settings.setItem(defaultSettings[i].key, defaultSettings[i].value);
 }
+/**
+ * Returns the localStorage object, or a dummy localStorage object if the localStorage object is not available.
+ * This method should be used only when the wrapped localStorage object is not desired (e.g. when using settings that are persisted globally, not specific to a Blue Iris server).
+ */
 function GetLocalStorage()
 {
-	/// <summary>
-	/// Returns the localStorage object, or a dummy localStorage object if the localStorage object is not available.
-	/// This method should be used only when the wrapped localStorage object is not desired (e.g. when using settings that are persisted globally, not specific to a Blue Iris server).
-	/// </summary>
 	if (isLocalStorageEnabled())
 		return localStorage;
 	return GetDummyLocalStorage();
@@ -1843,9 +1848,11 @@ function IsNewGeneration(key, gen)
 		settings.setItem("ui3_gen_" + key, gen);
 	return isNewGen;
 }
+/**
+ * Returns the local storage object or a wrapper suitable for the current Blue Iris server. The result of this should be stored in the settings variable.
+ */
 function GetLocalStorageWrapper()
 {
-	/// <summary>Returns the local storage object or a wrapper suitable for the current Blue Iris server. The result of this should be stored in the settings variable.</summary>
 	if (isLocalStorageEnabled())
 	{
 		if (currentServer.isUsingRemoteServer)
@@ -2005,6 +2012,12 @@ $(function ()
 				settings.ui3_contextMenus_trigger = "Long-Press"; // one-time transition
 			delete localStorage.ui3_contextMenus_longPress;
 		}
+		if (typeof localStorage.ui3_openFirstRecording !== "undefined")
+		{
+			if (localStorage.ui3_openFirstRecording === "1")
+				settings.ui3_openARecording = "First"; // one-time transition
+			delete localStorage.ui3_openFirstRecording;
+		}
 	}
 	catch (e) { }
 
@@ -2061,8 +2074,8 @@ $(function ()
 			$("#recordingsFilterByHeading").text("Filter " + tabDisplayName + " by:");
 		}
 
-		if (settings.ui3_openFirstRecording === "1")
-			clipLoader.OpenFirstRecordingAfterNextClipListLoad();
+		if (settings.ui3_openARecording === "First" || settings.ui3_openARecording === "Last")
+			clipLoader.OpenARecordingAfterNextClipListLoad();
 
 		BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
 
@@ -6670,36 +6683,46 @@ function ClipLoader(clipsBodySelector)
 		}
 		return false;
 	}
-	this.OpenFirstRecordingAfterNextClipListLoad = function ()
+	this.OpenARecordingAfterNextClipListLoad = function ()
 	{
-		BI_CustomEvent.AddListener("ClipList_Loaded", openFirstRecordingCallback);
+		BI_CustomEvent.AddListener("ClipList_Loaded", openARecordingCallback);
 	}
-	var openFirstRecordingCallback = function (response)
+	var openARecordingCallback = function (response)
 	{
-		BI_CustomEvent.RemoveListener("ClipList_Loaded", openFirstRecordingCallback);
-		self.OpenFirstRecording();
+		BI_CustomEvent.RemoveListener("ClipList_Loaded", openARecordingCallback);
+		self.OpenARecording();
 	}
-	var openFirstRecordingAfterUILoadCallback = function (response)
+	var openARecordingAfterUILoadCallback = function (response)
 	{
-		BI_CustomEvent.RemoveListener("FinishedLoading", openFirstRecordingAfterUILoadCallback);
-		self.OpenFirstRecording();
+		BI_CustomEvent.RemoveListener("FinishedLoading", openARecordingAfterUILoadCallback);
+		self.OpenARecording();
 	}
-	this.OpenFirstRecording = function ()
+	this.OpenARecording = function ()
 	{
 		if (!loadingHelper.DidLoadingFinish())
 		{
-			BI_CustomEvent.AddListener("FinishedLoading", openFirstRecordingAfterUILoadCallback);
+			BI_CustomEvent.AddListener("FinishedLoading", openARecordingAfterUILoadCallback);
 			return;
 		}
 		if (loadedClipIds.length === 0)
 			return;
 
-		var recId = loadedClipIds[0];
+		var idx;
+		if (settings.ui3_openARecording === "First")
+			idx = 0;
+		else if (settings.ui3_openARecording === "Last")
+			idx = loadedClipIds.length - 1;
+		else
+			return;
+		var recId = loadedClipIds[idx];
 		var clipData = self.GetClipFromId(recId);
 		self.ScrollClipList(clipData.y, getClipTileHeight());
-		var $ele = $("#c" + recId);
-		if ($ele.length > 0)
-			self.OpenClip($ele.get(0), recId, true);
+		setTimeout(function ()
+		{
+			var $ele = $("#c" + recId);
+			if ($ele.length > 0)
+				self.OpenClip($ele.get(0), recId, true);
+		}, 0);
 	}
 	this.OpenClip = function (clipEle, recId, alsoLoadClip)
 	{
