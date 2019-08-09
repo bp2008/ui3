@@ -20489,7 +20489,7 @@ function UISettingsPanel()
 }
 function GenerateEventTriggeredSoundsComment()
 {
-	return GenerateH264RequirementString() + "<br/>Sounds are loaded from Blue Iris's \"sounds\" directory. Supported extensions: " + sessionManager.supportedHTML5AudioFormats.join(", ");
+	return GenerateH264RequirementString() + "<br/>Sounds are loaded from Blue Iris's \"www/sounds\" directory. Supported extensions: " + sessionManager.supportedHTML5AudioFormats.join(", ");
 }
 function GenerateEventTriggeredIconsComment()
 {
