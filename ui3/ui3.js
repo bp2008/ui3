@@ -11306,11 +11306,13 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	var isLoaded = false;
 	var allFramesAccepted = false;
 	var frameMetadataCache = new FrameMetadataCache();
+	var loadingTimeout = null;
 
 	var moduleDidLoad = function ()
 	{
 		if (developerMode)
 			console.log("NACL Module loaded");
+		clearTimeout(loadingTimeout);
 	}
 	var onLoadFail = function ()
 	{
@@ -11345,11 +11347,27 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		{
 			loadingHelper.SetErrorStatus("h264");
 			$err.append($disablePnaclButton);
-			var $explanation = $('<div>This button will disable the native player and allow you to load UI3:</div>');
+			var $explanation = $('<div>You can load UI3 by changing to a different H.264 player:</div>');
 			$explanation.css('margin-top', '12px');
 			$err.append($explanation);
-			var $disablePnaclButton = $('<input type="button" value="Fall back to JavaScript player" />');
+			if (mse_mp4_h264_supported)
+			{
+				var $disablePnaclButton2 = $('<input type="button" value="HTML5 (fast)" />');
+				$disablePnaclButton2.css('margin-top', '10px');
+				$disablePnaclButton2.css('padding', '6px');
+				$disablePnaclButton2.css('display', 'block');
+				$disablePnaclButton2.on('click', function ()
+				{
+					settings.ui3_h264_choice2 = H264PlayerOptions.HTML5;
+					isReloadingUi3 = true;
+					location.reload();
+				});
+				$err.append($disablePnaclButton2);
+			}
+			var $disablePnaclButton = $('<input type="button" value="JavaScript (slow)" />');
 			$disablePnaclButton.css('margin-top', '10px');
+			$disablePnaclButton.css('padding', '6px');
+			$disablePnaclButton.css('display', 'block');
 			$disablePnaclButton.on('click', function ()
 			{
 				settings.ui3_h264_choice2 = H264PlayerOptions.JavaScript;
@@ -11358,7 +11376,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			});
 			$err.append($disablePnaclButton);
 		}
-		toaster.Error($err, isCrash || !isLoaded ? 99999 : 15000, true);
+		toaster.Error($err, isCrash || !isLoaded ? 9999999 : 60000, true);
 	}
 	var handleMessage = function (message_event)
 	{
@@ -11452,6 +11470,11 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		var $player = $('<embed id="pnacl_player_module" name="pnacl_player_module" width="100%" height="100%" path="pnacl" src="ui3/pnacl/pnacl_player.nmf' + currentServer.GetLocalSessionArg("?") + '" type="application/x-pnacl" hwaccel="' + hwva + '" />');
 		$parent.append($player);
 		player = document.getElementById("pnacl_player_module");
+		loadingTimeout = setTimeout(function ()
+		{
+			player.lastError = "The PNaCl module did not load.";
+			checkErrorBeforeLoad(false);
+		}, 5000);
 	}
 	this.Dispose = function ()
 	{
@@ -12613,7 +12636,6 @@ var zoomHandler_Adjustable = new (function ()
 			zoomIndex += delta;
 			if (zoomIndex < 1 && wasGreaterThan1)
 				zoomIndex = 1; // This ensures we always hit "1x" zoom precisely when zooming out.
-			var zoomFactor = self.GetZoomFactor();
 			if (zoomIndex < 1)
 				zoomIndex = 0;
 			if (zoomIndex > maxZoomFactor)
@@ -12627,6 +12649,8 @@ var zoomHandler_Adjustable = new (function ()
 			zoomFactor = 0;
 		else if (zoomFactor > 50)
 			zoomFactor = 50;
+		if (isNaN(zoomFactor))
+			zoomFactor = 0;
 		return zoomFactor;
 	}
 	this.ZoomToFit = function ()
