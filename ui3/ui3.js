@@ -5771,7 +5771,11 @@ function BigThumbHelper()
 		var bW = $('#layoutbody').width();
 		var shrinkBy = assumedWidth ? bW / assumedWidth : 0;
 		if (shrinkBy > 0 && shrinkBy < 1)
+		{
+			var aspectRatio = assumedWidth / assumedHeight;
 			assumedHeight = assumedHeight * shrinkBy;
+			assumedWidth = assumedHeight * aspectRatio;
+		}
 		var wH = $(window).height();
 		var top = ($vAlign.offset().top + ($vAlign.height() / 2)) - (assumedHeight / 2) - 20; // 20 for the description
 		if (top + (assumedHeight + 20) > wH)
@@ -5791,7 +5795,7 @@ function BigThumbHelper()
 			$thumb.css("right", "");
 		}
 		$thumb.css("top", top + "px");
-		$thumb.css("max-width", bW + "px");
+		$thumb.css("width", assumedWidth + "px");
 		$thumb.show();
 	}
 	this.Hide = function ()
@@ -6565,7 +6569,10 @@ function ClipLoader(clipsBodySelector)
 						var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetAPISessionArg("?");
 						if (thumbEle.getAttribute("src") == thumbPath)
 							thumbPath = thumbEle;
-						bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, thumbEle.naturalWidth, thumbEle.naturalHeight);
+						var aspectRatio = thumbEle.naturalWidth / thumbEle.naturalHeight;
+						var renderH = 240;
+						var renderW = renderH * aspectRatio;
+						bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, renderW, renderH);
 						if (!clipData.isSnapshot)
 							clipThumbnailVideoPreview.Start($clip, clipData, camName);
 					}
