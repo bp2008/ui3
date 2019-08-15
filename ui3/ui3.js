@@ -1784,7 +1784,7 @@ var defaultSettings =
 		}
 	];
 
-let obsoleteSettings = { ui3_openFirstRecording: true, ui3_contextMenus_longPress: true };
+var obsoleteSettings = { ui3_openFirstRecording: true, ui3_contextMenus_longPress: true };
 
 /**
  * Overrides a default setting. This method is intended to be called by the ui3_local_overrides.js file.
