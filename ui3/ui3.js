@@ -5983,7 +5983,10 @@ function ClipLoader(clipsBodySelector)
 		{
 			args.view = dbView;
 			if (dbView === "flagged")
+			{
 				args.cmd = "cliplist"; // [flagged hack] The "flagged" view only works on cliplist commands and it returns alerts/clips both.
+				// Only when dbView === "flagged", alert items have an msec value indicating the length of the alert. Prior to version 91, UI3 handled it incorrectly, believing it to be the clip length.
+			}
 		}
 
 		var isClipListRequest = listName == "cliplist"; // We can't rely on this anymore to tell us if response items are clips or alerts.
@@ -6060,7 +6063,7 @@ function ClipLoader(clipsBodySelector)
 					clipData.fileSize = GetFileSize(clip.filesize);
 					if (clipData.isSnapshot)
 						clipData.msec = clipData.roughLengthMs = 2000;
-					else if (typeof clip.msec != "undefined" && !isNaN(clip.msec))
+					else if (clipData.isClip && typeof clip.msec != "undefined" && !isNaN(clip.msec))
 						clipData.msec = clip.msec;
 					else
 						clipData.msec = clipData.offsetMs + clipData.roughLengthMs;
