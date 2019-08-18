@@ -3449,14 +3449,19 @@ function LeftBarBooleans()
 ///////////////////////////////////////////////////////////////
 // PTZ Pad Buttons ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var currentPtzPresetShowCount = -1;
 function GetPtzPresetShowCount()
 {
-	var count = settings.ui3_ptzPresetShowCount;
-	if (count === "0") return 0;
-	else if (count === "10") return 10;
-	else if (count === "30") return 30;
-	else if (count === "40") return 40;
-	else return 20;
+	if (currentPtzPresetShowCount < 0)
+	{
+		var count = settings.ui3_ptzPresetShowCount;
+		if (count === "0") currentPtzPresetShowCount = 0;
+		else if (count === "10") currentPtzPresetShowCount = 10;
+		else if (count === "30") currentPtzPresetShowCount = 30;
+		else if (count === "40") currentPtzPresetShowCount = 40;
+		else currentPtzPresetShowCount = 20;
+	}
+	return currentPtzPresetShowCount;
 }
 function PtzButtons()
 {
@@ -3918,7 +3923,7 @@ function PtzButtons()
 	this.GetPresetDescription = function (presetNum, asAnnotation)
 	{
 		presetNum = parseInt(presetNum);
-		if (presetNum < 0 || presetNum > 40)
+		if (presetNum < 0 || presetNum > GetPtzPresetShowCount())
 			return asAnnotation ? "" : ("Preset " + presetNum);
 		var desc = null;
 		if (currentPtzData && currentPtzData.cameraId == videoPlayer.Loading().image.id && currentPtzData.presets && currentPtzData.presets.length > presetNum - 1)
@@ -3937,7 +3942,7 @@ function PtzButtons()
 	var RememberPresetDescription = function (cameraId, presetNum, description)
 	{
 		presetNum = parseInt(presetNum);
-		if (presetNum < 0 || presetNum > 40)
+		if (presetNum < 0 || presetNum > GetPtzPresetShowCount())
 			return;
 		if (currentPtzData && currentPtzData.cameraId == cameraId)
 		{
@@ -4147,7 +4152,7 @@ var ptzPresetThumbLoader = new (function ()
 		if (currentServer.isLoggingOut)
 			return false;
 
-		if (presetNumber < 1 || presetNumber > 40)
+		if (presetNumber < 1 || presetNumber > GetPtzPresetShowCount())
 			return;
 		var camCache = cache[cameraId];
 		if (camCache)
@@ -4161,7 +4166,7 @@ var ptzPresetThumbLoader = new (function ()
 	}
 	this.GetImgData = function (cameraId, presetNumber)
 	{
-		if (presetNumber >= 1 && presetNumber <= 40)
+		if (presetNumber >= 1 && presetNumber <= GetPtzPresetShowCount())
 		{
 			var camCache = cache[cameraId];
 			if (camCache)
@@ -4197,7 +4202,7 @@ var ptzPresetThumbLoader = new (function ()
 	}
 	this.UrlForPreset = function (cameraId, presetNumber, overrideCache)
 	{
-		if (presetNumber < 1 || presetNumber > 40)
+		if (presetNumber < 1 || presetNumber > GetPtzPresetShowCount())
 			return "";
 		var sessionArg = currentServer.GetAPISessionArg("?");
 		var cacheArg = overrideCache ? ((sessionArg ? "&" : "?") + "cache=" + Date.now()) : "";
