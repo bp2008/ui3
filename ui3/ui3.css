@@ -972,6 +972,12 @@ div.invisibleLabel
 {
 }
 
+.ptzPresets30,
+.ptzPresets40
+{
+	display: none;
+}
+
 .ptzpreset
 {
 	position: relative;

@@ -1574,6 +1574,186 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_hotkey_ptzPreset21"
+			, value: "0|0|1|49" // 49: 1
+			, hotkey: true
+			, label: "Load Preset 21"
+			, hint: "If the current live camera is PTZ, loads preset 1."
+			, actionDown: function () { BI_Hotkey_PtzPreset(21); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset22"
+			, value: "0|0|1|50" // 50: 2
+			, hotkey: true
+			, label: "Load Preset 22"
+			, hint: "If the current live camera is PTZ, loads preset 22."
+			, actionDown: function () { BI_Hotkey_PtzPreset(22); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset23"
+			, value: "0|0|1|51" // 51: 3
+			, hotkey: true
+			, label: "Load Preset 23"
+			, hint: "If the current live camera is PTZ, loads preset 23."
+			, actionDown: function () { BI_Hotkey_PtzPreset(23); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset24"
+			, value: "0|0|1|52" // 52: 4
+			, hotkey: true
+			, label: "Load Preset 24"
+			, hint: "If the current live camera is PTZ, loads preset 24."
+			, actionDown: function () { BI_Hotkey_PtzPreset(24); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset25"
+			, value: "0|0|1|53" // 53: 5
+			, hotkey: true
+			, label: "Load Preset 25"
+			, hint: "If the current live camera is PTZ, loads preset 25."
+			, actionDown: function () { BI_Hotkey_PtzPreset(25); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset26"
+			, value: "0|0|1|54" // 54: 6
+			, hotkey: true
+			, label: "Load Preset 26"
+			, hint: "If the current live camera is PTZ, loads preset 26."
+			, actionDown: function () { BI_Hotkey_PtzPreset(26); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset27"
+			, value: "0|0|1|55" // 55: 7
+			, hotkey: true
+			, label: "Load Preset 27"
+			, hint: "If the current live camera is PTZ, loads preset 27."
+			, actionDown: function () { BI_Hotkey_PtzPreset(27); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset28"
+			, value: "0|0|1|56" // 56: 8
+			, hotkey: true
+			, label: "Load Preset 28"
+			, hint: "If the current live camera is PTZ, loads preset 28."
+			, actionDown: function () { BI_Hotkey_PtzPreset(28); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset29"
+			, value: "0|0|1|57" // 57: 9
+			, hotkey: true
+			, label: "Load Preset 29"
+			, hint: "If the current live camera is PTZ, loads preset 29."
+			, actionDown: function () { BI_Hotkey_PtzPreset(29); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset30"
+			, value: "0|0|1|48" // 48: 0
+			, hotkey: true
+			, label: "Load Preset 30"
+			, hint: "If the current live camera is PTZ, loads preset 30."
+			, actionDown: function () { BI_Hotkey_PtzPreset(30); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset31"
+			, value: "1|0|1|49" // 49: 1
+			, hotkey: true
+			, label: "Load Preset 31"
+			, hint: "If the current live camera is PTZ, loads preset 31."
+			, actionDown: function () { BI_Hotkey_PtzPreset(31); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset32"
+			, value: "1|0|1|50" // 50: 2
+			, hotkey: true
+			, label: "Load Preset 32"
+			, hint: "If the current live camera is PTZ, loads preset 32."
+			, actionDown: function () { BI_Hotkey_PtzPreset(32); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset33"
+			, value: "1|0|1|51" // 51: 3
+			, hotkey: true
+			, label: "Load Preset 33"
+			, hint: "If the current live camera is PTZ, loads preset 33."
+			, actionDown: function () { BI_Hotkey_PtzPreset(33); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset34"
+			, value: "1|0|1|52" // 52: 4
+			, hotkey: true
+			, label: "Load Preset 34"
+			, hint: "If the current live camera is PTZ, loads preset 34."
+			, actionDown: function () { BI_Hotkey_PtzPreset(34); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset35"
+			, value: "1|0|1|53" // 53: 5
+			, hotkey: true
+			, label: "Load Preset 35"
+			, hint: "If the current live camera is PTZ, loads preset 35."
+			, actionDown: function () { BI_Hotkey_PtzPreset(35); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset36"
+			, value: "1|0|1|54" // 54: 6
+			, hotkey: true
+			, label: "Load Preset 36"
+			, hint: "If the current live camera is PTZ, loads preset 36."
+			, actionDown: function () { BI_Hotkey_PtzPreset(36); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset37"
+			, value: "1|0|1|55" // 55: 7
+			, hotkey: true
+			, label: "Load Preset 37"
+			, hint: "If the current live camera is PTZ, loads preset 37."
+			, actionDown: function () { BI_Hotkey_PtzPreset(37); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset38"
+			, value: "1|0|1|56" // 56: 8
+			, hotkey: true
+			, label: "Load Preset 38"
+			, hint: "If the current live camera is PTZ, loads preset 38."
+			, actionDown: function () { BI_Hotkey_PtzPreset(38); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset39"
+			, value: "1|0|1|57" // 57: 9
+			, hotkey: true
+			, label: "Load Preset 39"
+			, hint: "If the current live camera is PTZ, loads preset 39."
+			, actionDown: function () { BI_Hotkey_PtzPreset(39); }
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzPreset40"
+			, value: "1|0|1|48" // 48: 0
+			, hotkey: true
+			, label: "Load Preset 40"
+			, hint: "If the current live camera is PTZ, loads preset 40."
+			, actionDown: function () { BI_Hotkey_PtzPreset(40); }
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_cameraLabels_enabled"
 			, value: "0"
 			, inputType: "checkbox"
@@ -1752,6 +1932,15 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'PTZ: IR, Brightness, Contrast<br><a href="javascript:UIHelp.LearnMore(\'IR Brightness Contrast\')">(learn more)</a>'
 			, onChange: OnChange_ui3_ir_brightness_contrast
+			, category: "Extra"
+		}
+		, {
+			key: "ui3_ptzPresetShowCount"
+			, value: "20"
+			, inputType: "select"
+			, options: ["0", "10", "20", "30", "40"]
+			, label: 'PTZ Preset Count'
+			, onChange: OnChange_ui3_ptzPresetShowCount
 			, category: "Extra"
 		}
 		, {
@@ -3260,6 +3449,15 @@ function LeftBarBooleans()
 ///////////////////////////////////////////////////////////////
 // PTZ Pad Buttons ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+function GetPtzPresetShowCount()
+{
+	var count = settings.ui3_ptzPresetShowCount;
+	if (count === "0") return 0;
+	else if (count === "10") return 10;
+	else if (count === "30") return 30;
+	else if (count === "40") return 40;
+	else return 20;
+}
 function PtzButtons()
 {
 	var self = this;
@@ -3286,6 +3484,20 @@ function PtzButtons()
 	var unsafePtzActionQueued = null;
 	var unsafePtzActionInProgress = false;
 	var currentPtzData = null;
+
+	var count = GetPtzPresetShowCount();
+	if (count < 40)
+		$("#ptzPresetsContent .ptzPresets40").remove();
+	else
+		$("#ptzPresetsContent .ptzPresets40").show()
+	if (count < 30)
+		$("#ptzPresetsContent .ptzPresets30").remove();
+	else
+		$("#ptzPresetsContent .ptzPresets30").show()
+	if (count < 20)
+		$("#ptzPresetsContent .ptzPresets20").remove();
+	if (count < 10)
+		$("#ptzPresetsContent .ptzPresets10").remove();
 
 	var $ptzGraphicWrapper = $("#ptzGraphicWrapper");
 	var $ptzGraphics = $("#ptzGraphicWrapper div.ptzGraphic");
@@ -3706,12 +3918,12 @@ function PtzButtons()
 	this.GetPresetDescription = function (presetNum, asAnnotation)
 	{
 		presetNum = parseInt(presetNum);
-		if (presetNum < 0 || presetNum > 20)
+		if (presetNum < 0 || presetNum > 40)
 			return asAnnotation ? "" : ("Preset " + presetNum);
 		var desc = null;
 		if (currentPtzData && currentPtzData.cameraId == videoPlayer.Loading().image.id && currentPtzData.presets && currentPtzData.presets.length > presetNum - 1)
 			desc = currentPtzData.presets[presetNum - 1];
-		if (desc == null || desc == "")
+		if (desc === null || desc === "" || desc === "(undefined)")
 			desc = "Preset " + presetNum;
 		if (asAnnotation)
 		{
@@ -3725,7 +3937,7 @@ function PtzButtons()
 	var RememberPresetDescription = function (cameraId, presetNum, description)
 	{
 		presetNum = parseInt(presetNum);
-		if (presetNum < 0 || presetNum > 20)
+		if (presetNum < 0 || presetNum > 40)
 			return;
 		if (currentPtzData && currentPtzData.cameraId == cameraId)
 		{
@@ -3904,7 +4116,8 @@ var ptzPresetThumbLoader = new (function ()
 		if (!camCache)
 		{
 			camCache = cache[cameraId] = {}; // Note: cache and camCache are maps, not arrays.
-			for (var i = 1; i <= 20; i++)
+			var count = GetPtzPresetShowCount();
+			for (var i = 1; i <= count; i++)
 			{
 				var $img = $('<img src="" alt="' + i + '" class="presetThumb" />');
 				$img.hide();
@@ -3934,7 +4147,7 @@ var ptzPresetThumbLoader = new (function ()
 		if (currentServer.isLoggingOut)
 			return false;
 
-		if (presetNumber < 1 || presetNumber > 20)
+		if (presetNumber < 1 || presetNumber > 40)
 			return;
 		var camCache = cache[cameraId];
 		if (camCache)
@@ -3948,7 +4161,7 @@ var ptzPresetThumbLoader = new (function ()
 	}
 	this.GetImgData = function (cameraId, presetNumber)
 	{
-		if (presetNumber >= 1 && presetNumber <= 20)
+		if (presetNumber >= 1 && presetNumber <= 40)
 		{
 			var camCache = cache[cameraId];
 			if (camCache)
@@ -3984,7 +4197,7 @@ var ptzPresetThumbLoader = new (function ()
 	}
 	this.UrlForPreset = function (cameraId, presetNumber, overrideCache)
 	{
-		if (presetNumber < 1 || presetNumber > 20)
+		if (presetNumber < 1 || presetNumber > 40)
 			return "";
 		var sessionArg = currentServer.GetAPISessionArg("?");
 		var cacheArg = overrideCache ? ((sessionArg ? "&" : "?") + "cache=" + Date.now()) : "";
@@ -5795,7 +6008,10 @@ function BigThumbHelper()
 			$thumb.css("right", "");
 		}
 		$thumb.css("top", top + "px");
-		$thumb.css("width", assumedWidth + "px");
+		if (assumedWidth)
+			$thumb.css("width", assumedWidth + "px");
+		else
+			$thumb.css("width", "");
 		$thumb.show();
 	}
 	this.Hide = function ()
@@ -20527,6 +20743,18 @@ function OnChange_ui3_contextMenus_trigger(newValue)
 	if (ui3_contextMenus_trigger_toast)
 		ui3_contextMenus_trigger_toast.remove();
 	ui3_contextMenus_trigger_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Context menus will open on " + settings.ui3_contextMenus_trigger + ".<br><br>Clicking this message will reload the page.", 60000, false
+		, function ()
+		{
+			isReloadingUi3 = true;
+			location.reload();
+		});
+}
+var ui3_ptzPresetShowCount_toast = null;
+function OnChange_ui3_ptzPresetShowCount(newValue)
+{
+	if (ui3_ptzPresetShowCount_toast)
+		ui3_ptzPresetShowCount_toast.remove();
+	ui3_ptzPresetShowCount_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>" + settings.ui3_ptzPresetShowCount + " PTZ presets will be shown.<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
 			isReloadingUi3 = true;
