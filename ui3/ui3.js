@@ -9002,7 +9002,7 @@ function CameraListLoader()
 				{
 					webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
 						+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
-						+ ' not found in any group that has webcasting enabled.<br><br>'
+						+ ' not visible in any group streams.<br><br>'
 						+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
 						+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
 						, 60000, true);
@@ -21079,9 +21079,8 @@ function UIHelpTool()
 	var Camera_Group_Webcasting = function ()
 	{
 		var $root = $('<div class="UIHelp">'
-			+ 'This interface is easier to use when all your camera groups have webcasting enabled.<br><br>'
-			+ 'Enable webcasting for your groups using the group settings panel.  This panel is found in the lower-left corner of the Blue Iris console (only when PTZ controls are enabled):<br><br>'
-			+ 'Some other configurations may also lead to this message being shown.<br><br>'
+			+ 'One or more of the cameras you have access to was not found in any group streams.  UI3 has added these cameras individually to the Current Group dropdown list so that you may access them for live viewing and alert/clip filtering.  This may happen if any cameras are flagged as "hidden" or if some of your groups do not have webcasting enabled.  UI3 is easier to use when all your camera groups have webcasting enabled.<br><br>'
+			+ 'Enable webcasting for your groups using the group settings panel.  This panel is found near the top of the Blue Iris console:<br><br>'
 			+ '</div>');
 		var $img = $('<img src="ui3/help/img/GroupProperties.png' + currentServer.GetLocalSessionArg("?") + '" style="width:380px; height:255px;" />');
 		$root.append($img);
