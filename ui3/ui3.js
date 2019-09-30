@@ -8146,6 +8146,7 @@ function StatusLoader()
 			{
 				if (statusUpdateTimeout != null)
 					clearTimeout(statusUpdateTimeout);
+				toaster.Error("An error occurred loading the server status.<br>" + jqXHR.ErrorMessageHtml);
 				statusUpdateTimeout = setTimeout(function ()
 				{
 					self.LoadStatus();
