@@ -665,6 +665,10 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_uiSettings_category_Clips___Alerts_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_uiSettings_category_Clip___Alert_Icons_visible"
 			, value: "1"
 		}
