@@ -823,6 +823,14 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
+			key: "ui3_pause_when_hidden"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Pause when tab is inactive'
+			, hint: 'When set to "Yes", video playback will pause when the tab is inactive.\nSelect "No" to allow audio and event-triggered sounds to play while the browser tab is inactive.\nRecommended: "Yes"'
+			, category: "Video Player"
+		}
+		, {
 			key: "ui3_pc_next_prev_buttons"
 			, value: "1"
 			, inputType: "checkbox"
@@ -10533,6 +10541,8 @@ function FetchH264VideoModule()
 	}
 	this.VisibilityChanged = function (visible)
 	{
+		if (settings.ui3_pause_when_hidden !== "1")
+			return;
 		if (visible && isCurrentlyActive)
 		{
 			if (loading.isLive)
@@ -12128,6 +12138,10 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				else if (acceptedFrameCount === 0)
 				{
 					// Probably we just Flushed the player.
+				}
+				else if (ex.code === 20)
+				{
+					// The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22
 				}
 				else
 					toaster.Warning("HTML5 Player: " + ex.message, 15000);
@@ -21970,6 +21984,9 @@ function getHiddenProp()
 }
 function documentIsHidden()
 {
+	if (settings.ui3_pause_when_hidden !== "1")
+		return false;
+
 	var prop = getHiddenProp();
 	if (!prop) return false;
 
