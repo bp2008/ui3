@@ -11045,7 +11045,11 @@ function FetchH264VideoModule()
 	{
 		var perfNow = performance.now();
 		if (!h264_player || !isCurrentlyActive || !safeFetch.IsActive() || isLoadingRecordedSnapshot || perfNow - lastActivatedAt < 1000)
+		{
+			if (showCommonWarnings)
+				toaster.Warning('The video player is not currently active.', 10000);
 			return;
+		}
 		if (perfNow - lastNerdStatsUpdate > 3000 && perfNow - lastActivatedAt > 3000)
 			writeNerdStats(lastFrameMetadata, perfNow);
 		//if (perf_warning_net)
