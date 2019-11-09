@@ -448,6 +448,7 @@ var togglableUIFeatures =
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// CONSIDER: Advanced canvas-based clip list viewer.  It should use the entire video playback area (maybe hide the left bar too), be zoomable, and very responsive.  Navigate by keyboard or click-and-drag with inertia. Clips arranged like a timeline, with thumbnails moving across the screen horizontally (left = older, right = newer) with dotted vertical lines every minute/hour etc.  Each camera its own row.
 // CONSIDER: Android Chrome > Back button can't close the browser if there is no history, so the back button override is disabled on Android.  Also disabled on iOS for similar bugs.
 // CONSIDER: Seeking while paused in Chrome, the canvas sometimes shows the image scaled using nearest-neighbor.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
@@ -4602,6 +4603,7 @@ function PlaybackControls()
 	var buttonContainer = $("#pcButtonContainer");
 	var $progressText = $("#playbackProgressText");
 	var hideTimeout = null;
+	var showTimeouts = [];
 	var isVisible = $pc.is(":visible");
 	var settingsClosedAt = 0;
 	var playReverse = settings.ui3_playback_reverse == "1";
@@ -4714,6 +4716,11 @@ function PlaybackControls()
 			self.resized();
 			seekBar.onHide();
 		}
+
+		for (let i = 0; i < showTimeouts.length; i++)
+			clearTimeout(showTimeouts[i]);
+		showTimeouts = [];
+
 		playbackHeader.FadeOut();
 	}
 	var clearHideTimout = function ()
@@ -4790,7 +4797,7 @@ function PlaybackControls()
 	BindEventsPassive($layoutbody.get(0), "mouseenter mousemove mouseup touchmove touchend touchcancel", function (e)
 	{
 		mouseCoordFixer.fix(e);
-		setTimeout(self.FadeIn, 30); // This is carefully tuned to prevent accidental clicks on playback controls that were invisible when the touch began.  Prior to v81 we did this by stopping/preventing the click event, but due to a chrome pinch zooming bug we must use a passive listener for this, which can't cancel the click event.
+		showTimeouts.push(setTimeout(self.FadeIn, 30)); // This is carefully tuned to prevent accidental clicks on playback controls that were invisible when the touch began.  Prior to v81 we did this by stopping/preventing the click event, but due to a chrome pinch zooming bug we must use a passive listener for this, which can't cancel the click event.
 		clearHideTimout();
 
 		if (!self.MouseInPlaybackControls(e))
@@ -15458,7 +15465,7 @@ function CameraListDialog()
 			}
 			if ($ele.attr('isEnabled') == '1')
 			{
-				var imgDate = settings.getItem(settingsKey + "_date");
+				var imgDate = parseInt(settings.getItem(settingsKey + "_date"));
 				if (!imgDate)
 					imgDate = 0;
 				if (imgDate + timeBetweenCameraListThumbUpdates < new Date().getTime() || overrideImgDate)
