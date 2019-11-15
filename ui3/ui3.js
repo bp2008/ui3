@@ -4725,7 +4725,7 @@ function PlaybackControls()
 			seekBar.onHide();
 		}
 
-		for (let i = 0; i < showTimeouts.length; i++)
+		for (var i = 0; i < showTimeouts.length; i++)
 			clearTimeout(showTimeouts[i]);
 		showTimeouts = [];
 
