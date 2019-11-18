@@ -8161,7 +8161,7 @@ function StatusLoader()
 			{
 				self.LoadStatus();
 			}, nextStatusUpdateDelay);
-		}, function ()
+		}, function (jqXHR, textStatus, errorThrown)
 			{
 				if (statusUpdateTimeout != null)
 					clearTimeout(statusUpdateTimeout);
