@@ -16378,7 +16378,7 @@ function CameraPauseDialog(camId)
 		$camprop.append(GetButton(camId, "Add 1 hour", 4));
 		$camprop.append(GetButton(camId, "Add 2 hours", 5));
 		$camprop.append(GetButton(camId, "Add 3 hours", 6));
-		$camprop.append(GetButton(camId, "Add 4 hours", 7));
+		$camprop.append(GetButton(camId, "Add 5 hours", 7));
 		$camprop.append(GetButton(camId, "Add 10 hours", 8));
 		$camprop.append(GetButton(camId, "Add 24 hours", 9));
 		$camprop.append(GetButton(camId, "Indefinitely", -1));
