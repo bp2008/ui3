@@ -3889,9 +3889,9 @@ function PtzButtons()
 				UpdatePresetImage(cameraId, presetNumber);
 			}
 		}, function ()
-			{
-				toaster.Error("Unable to save preset");
-			});
+		{
+			toaster.Error("Unable to save preset");
+		});
 	}
 	var UpdatePresetImage = function (cameraId, presetNumber)
 	{
@@ -3928,10 +3928,10 @@ function PtzButtons()
 				self.SetContrastButtonState();
 			}
 		}, function ()
-			{
-				if (videoPlayer.Loading().image.id == cameraId)
-					toaster.Warning("Unable to load PTZ metadata for camera: " + cameraId);
-			});
+		{
+			if (videoPlayer.Loading().image.id == cameraId)
+				toaster.Warning("Unable to load PTZ metadata for camera: " + cameraId);
+		});
 	}
 	this.GetPresetDescription = function (presetNum, asAnnotation)
 	{
@@ -4022,8 +4022,8 @@ function PtzButtons()
 		ExecJSON(args, function (response)
 		{
 		}, function ()
-			{
-			});
+		{
+		});
 	}
 	this.PTZ_unsafe_async_guarantee = function (cameraId, ptzCmd, updown)
 	{
@@ -4042,12 +4042,12 @@ function PtzButtons()
 				unsafePtzActionQueued = null;
 			}
 		}, function ()
+		{
+			setTimeout(function ()
 			{
-				setTimeout(function ()
-				{
-					self.PTZ_unsafe_async_guarantee(cameraId, ptzCmd, updown);
-				}, 100);
-			});
+				self.PTZ_unsafe_async_guarantee(cameraId, ptzCmd, updown);
+			}, 100);
+		});
 	}
 	this.PTZ_unsafe_sync_guarantee = function (cameraId, ptzCmd, updown)
 	{
@@ -4066,9 +4066,9 @@ function PtzButtons()
 				unsafePtzActionQueued = null;
 			}
 		}, function ()
-			{
-				self.PTZ_unsafe_sync_guarantee(cameraId, ptzCmd, updown);
-			}, true);
+		{
+			self.PTZ_unsafe_sync_guarantee(cameraId, ptzCmd, updown);
+		}, true);
 	}
 	this.Get$PtzPresets = function ()
 	{
@@ -7346,9 +7346,9 @@ function ClipLoader(clipsBodySelector)
 					{
 						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
 					}, function ()
-						{
-							Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
-						});
+					{
+						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
+					});
 					return;
 				}
 			}
@@ -7361,9 +7361,9 @@ function ClipLoader(clipsBodySelector)
 					{
 						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
 					}, function ()
-						{
-							Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
-						});
+					{
+						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
+					});
 					return;
 				}
 			}
@@ -8162,15 +8162,15 @@ function StatusLoader()
 				self.LoadStatus();
 			}, nextStatusUpdateDelay);
 		}, function (jqXHR, textStatus, errorThrown)
+		{
+			if (statusUpdateTimeout != null)
+				clearTimeout(statusUpdateTimeout);
+			toaster.Error("An error occurred loading the server status.<br>" + jqXHR.ErrorMessageHtml);
+			statusUpdateTimeout = setTimeout(function ()
 			{
-				if (statusUpdateTimeout != null)
-					clearTimeout(statusUpdateTimeout);
-				toaster.Error("An error occurred loading the server status.<br>" + jqXHR.ErrorMessageHtml);
-				statusUpdateTimeout = setTimeout(function ()
-				{
-					self.LoadStatus();
-				}, updateDelay);
-			});
+				self.LoadStatus();
+			}, updateDelay);
+		});
 	}
 	var HandleChangesInStatus = function (oldStatus, newStatus)
 	{
@@ -8613,9 +8613,9 @@ function SessionManager()
 					}
 				}
 			}, function (jqXHR, textStatus, errorThrown)
-				{
-					loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.ErrorMessageHtml);
-				});
+			{
+				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.ErrorMessageHtml);
+			});
 		}
 	}
 	var LogInWithCredentials = function (user, pass, onFail, isAutomatic)
@@ -8645,16 +8645,16 @@ function SessionManager()
 						onFail(response, 'Failed to log in. ' + GetFailReason(response));
 					}
 				}, function (jqXHR, textStatus, errorThrown)
-					{
-						onFail(null, 'Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.ErrorMessageHtml);
-					});
+				{
+					onFail(null, 'Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.ErrorMessageHtml);
+				});
 			}
 			else
 				onFail(response, 'Failed to log in. ' + GetFailReason(response));
 		}, function (jqXHR, textStatus, errorThrown)
-			{
-				onFail(null, 'Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.ErrorMessageHtml);
-			});
+		{
+			onFail(null, 'Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.ErrorMessageHtml);
+		});
 	}
 	var GetFailReason = function (response)
 	{
@@ -9003,7 +9003,7 @@ function CameraListLoader()
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
 				var obj = lastResponse.data[i];
-				if (!self.CameraIsGroupOrCycle(obj) && obj.isEnabled)
+				if (!self.CameraIsGroupOrCycle(obj) && obj.isEnabled && obj.webcast)
 				{
 					if (!camIdsInGroups[obj.optionValue])
 						camsNotInGroup.push(obj);
@@ -9012,13 +9012,16 @@ function CameraListLoader()
 			if (camsNotInGroup.length > 0)
 			{
 				// Create a fake group for each of these cameras.
+				var anyFakeGroupsNotHidden = false;
 				for (var i = 0; i < camsNotInGroup.length; i++)
 				{
 					var fakeGroup = MakeFakeGroup(camsNotInGroup[i]);
 					lastResponse.data.push(fakeGroup);
+					if (!camsNotInGroup[i].hidden)
+						anyFakeGroupsNotHidden = true;
 				}
 
-				if (!firstCameraListLoaded && numCameras > 1 && settings.ui3_webcasting_disabled_dontShowAgain != "1")
+				if (!firstCameraListLoaded && numCameras > 1 && anyFakeGroupsNotHidden && settings.ui3_webcasting_disabled_dontShowAgain != "1")
 				{
 					webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
 						+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
@@ -9064,15 +9067,15 @@ function CameraListLoader()
 				self.LoadCameraList();
 			}, 5000);
 		}, function (jqXHR, textStatus, errorThrown)
+		{
+			if (cameraListUpdateTimeout != null)
+				clearTimeout(cameraListUpdateTimeout);
+			toaster.Error("An error occurred loading the camera list.<br>" + jqXHR.ErrorMessageHtml);
+			setTimeout(function ()
 			{
-				if (cameraListUpdateTimeout != null)
-					clearTimeout(cameraListUpdateTimeout);
-				toaster.Error("An error occurred loading the camera list.<br>" + jqXHR.ErrorMessageHtml);
-				setTimeout(function ()
-				{
-					self.LoadCameraList(successCallbackFunc);
-				}, 1000);
-			});
+				self.LoadCameraList(successCallbackFunc);
+			}, 1000);
+		});
 	}
 	var MakeFakeGroup = function (cameraObj)
 	{
@@ -9570,6 +9573,18 @@ function VideoPlayerController()
 		if (typeof groupId == "undefined")
 			groupId = currentlySelectedHomeGroupId;
 		self.LoadLiveCamera(cameraListLoader.GetGroupCamera(groupId));
+	}
+	this.LoadFirstAvailableCameraGroup = function ()
+	{
+		var camList = cameraListLoader.GetLastResponse();
+		for (var i = 0; i < camList.data.length; i++)
+		{
+			if (cameraListLoader.CameraIsGroup(camList.data[i]))
+			{
+				self.SelectCameraGroup(camList.data[i].optionValue);
+				break;
+			}
+		}
 	}
 	this.SelectCameraGroup = function (groupId)
 	{
@@ -13861,9 +13876,9 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			{
 				SaveAndClose();
 			}, function ()
-				{
-					CloseDialog();
-				});
+			{
+				CloseDialog();
+			});
 			return true;
 		}
 	}
@@ -15176,10 +15191,10 @@ function ClipStatsLoader()
 				activeLoad = null;
 				processQueuedLoad();
 			}, function ()
-				{
-					activeLoad = null;
-					processQueuedLoad();
-				});
+			{
+				activeLoad = null;
+				processQueuedLoad();
+			});
 		}
 	}
 	var processQueuedLoad = function ()
@@ -15212,11 +15227,11 @@ function ClipStatsLoader()
 					onSuccess(response.data, clipId);
 			}
 		}, function (jqXHR, textStatus, errorThrown)
-			{
-				toaster.Error("Error response when getting clip stats from server: " + jqXHR.status + " " + jqXHR.statusText + "<br>This alert may have an inaccurate duration.");
-				if (onFail)
-					onFail(clipId);
-			});
+		{
+			toaster.Error("Error response when getting clip stats from server: " + jqXHR.status + " " + jqXHR.statusText + "<br>This alert may have an inaccurate duration.");
+			if (onFail)
+				onFail(clipId);
+		});
 	}
 }
 function CachedClipStats(stats)
@@ -15258,10 +15273,10 @@ function CameraConfig()
 			if (successCallbackFunc)
 				successCallbackFunc(response, camId);
 		}, function (jqXHR, textStatus, errorThrown)
-			{
-				if (failCallbackFunc)
-					failCallbackFunc(camId);
-			});
+		{
+			if (failCallbackFunc)
+				failCallbackFunc(camId);
+		});
 	}
 	this.set = function (camId, key, value, successCallbackFunc, failCallbackFunc)
 	{
@@ -15342,12 +15357,12 @@ function CameraConfig()
 			if (successCallbackFunc)
 				successCallbackFunc(response, camId, key, value);
 		}, function (jqXHR, textStatus, errorThrown)
-			{
-				if (failCallbackFunc)
-					failCallbackFunc(camId, key, value);
-				else
-					toaster.Warning("Failed to set camera configuration!");
-			});
+		{
+			if (failCallbackFunc)
+				failCallbackFunc(camId, key, value);
+			else
+				toaster.Error("Failed to set camera configuration! (" + htmlEncode(key) + ")<br>" + jqXHR.ErrorMessageHtml, 8000);
+		});
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -15608,6 +15623,8 @@ function CameraProperties(camId)
 					var collapsible = new CollapsibleSection('gs', "General Settings", modal_cameraPropDialog);
 					$camprop.append(collapsible.$heading);
 					var $generalSection = collapsible.$section;
+					$generalSection.append(GetCamPropCheckbox("webcast|" + camId, "Webcasting Enabled", cam.webcast, camPropAdminCommandOnOffBtnClick));
+					$generalSection.append(GetCamPropCheckbox("hide|" + camId, "Hidden", cam.hidden, camPropAdminCommandOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
 					$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
@@ -15812,6 +15829,45 @@ function CameraProperties(camId)
 		var camId = parts[1];
 		cameraConfig.set(camId, settingName, buttonStateIsOn);
 	}
+	var camPropAdminCommandOnOffBtnClick = function (mysetting, buttonStateIsOn)
+	{
+		var parts = mysetting.split('|');
+		var key = parts[0];
+		var camId = parts[1];
+		var args;
+		var restartCameraAfter = false;
+		if (key === "webcast")
+		{
+			args = "webcast=" + (buttonStateIsOn ? "1" : "0");
+			restartCameraAfter = true;
+		}
+		else if (key === "hide")
+		{
+			args = "hide=" + (buttonStateIsOn ? "1" : "0");
+			restartCameraAfter = true;
+		}
+		else
+		{
+			toaster.Error('Unknown admin command key: ' + htmlEncode(key), 3000);
+			return;
+		}
+		ExecAdminCall(camId, args,
+			function (response)
+			{
+				if (restartCameraAfter)
+					ResetCamera(camId);
+				cameraListLoader.LoadCameraList();
+				if (key === "webcast" && !buttonStateIsOn && videoPlayer.Loading().cam.optionValue === camId)
+					videoPlayer.LoadFirstAvailableCameraGroup();
+			},
+			function (jqXHR, textStatus, errorThrown)
+			{
+				if (jqXHR && jqXHR.status == 403)
+					openLoginDialog(function () { camPropAdminCommandOnOffBtnClick(mysetting, buttonStateIsOn); });
+				else
+					toaster.Error("Failed to set camera configuration! (" + htmlEncode(key) + ")<br>" + jqXHR.ErrorMessageHtml, 8000);
+			});
+	}
 	var camPropSliderChanged = function (tag, value)
 	{
 		var parts = tag.split('|');
@@ -15904,9 +15960,9 @@ function Camera_OpenRaw(camId)
 		var cam = cameraListLoader.GetCameraWithId(camId);
 		objectVisualizer.open({ data: cam, config: response.data }, cam.optionDisplay + " Properties (Raw)");
 	}, function ()
-		{
-			toaster.Warning("Unable to load camera properties for " + camId);
-		});
+	{
+		toaster.Warning("Unable to load camera properties for " + camId);
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Clip Properties Dialog /////////////////////////////////////
@@ -16492,9 +16548,9 @@ function ResetCamera(camId)
 	{
 		toaster.Success("Camera " + camName + " is restarting");
 	}, function ()
-		{
-			toaster.Error("Camera " + camName + " could not be restarted");
-		});
+	{
+		toaster.Error("Camera " + camName + " could not be restarted");
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Manual Recording Start / Stop //////////////////////////////
@@ -16528,9 +16584,9 @@ function ManualRecordCamera(camId, start, successCallback)
 			});
 		}, 250);
 	}, function ()
-		{
-			toaster.Error("Failed to toggle manual recording for " + camId);
-		});
+	{
+		toaster.Error("Failed to toggle manual recording for " + camId);
+	});
 }
 function LoadDynamicManualRecordingButtonState(camData)
 {
@@ -16582,9 +16638,9 @@ function TriggerCamera(camId)
 		else
 			toaster.Error("Failed to trigger camera " + camId);
 	}, function ()
-		{
-			toaster.Error("Failed to contact Blue Iris server to trigger camera " + camId);
-		});
+	{
+		toaster.Error("Failed to contact Blue Iris server to trigger camera " + camId);
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Change Clip Flags State ////////////////////////////////////
@@ -16610,11 +16666,11 @@ function UpdateClipFlags(path, flags, cbSuccess, cbFailure)
 				toaster.Success("Clip properties updated");
 		}
 	}, function ()
-		{
-			toaster.Warning("Failed to update clip properties because of a connection failure");
-			if (typeof cbFailure == "function")
-				cbFailure();
-		});
+	{
+		toaster.Warning("Failed to update clip properties because of a connection failure");
+		if (typeof cbFailure == "function")
+			cbFailure();
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Delete Alert/Clip //////////////////////////////////////////
@@ -16647,13 +16703,13 @@ function DeleteAlert(path, isClip, cbSuccess, cbFailure)
 				toaster.Success(clipOrAlert + " deleted");
 		}
 	}, function ()
-		{
-			var msg = 'Unable to contact Blue Iris server.';
-			if (typeof cbFailure == "function")
-				cbFailure(msg);
-			else
-				toaster.Error(msg, 3000);
-		});
+	{
+		var msg = 'Unable to contact Blue Iris server.';
+		if (typeof cbFailure == "function")
+			cbFailure(msg);
+		else
+			toaster.Error(msg, 3000);
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Custom Checkboxes //////////////////////////////////////////
@@ -16712,10 +16768,10 @@ function SystemConfig()
 			if (modal_systemconfigdialog != null)
 				modal_systemconfigdialog.contentChanged(true);
 		}, function ()
-			{
-				toaster.Error('Unable to contact Blue Iris server.', 3000);
-				CloseSysConfigDialog();
-			});
+		{
+			toaster.Error('Unable to contact Blue Iris server.', 3000);
+			CloseSysConfigDialog();
+		});
 	}
 	var CloseSysConfigDialog = function ()
 	{
@@ -16748,9 +16804,9 @@ function SystemConfig()
 			}
 			toaster.Success('Set configuration field "' + htmlEncode(key) + '" = "' + htmlEncode(value) + '"');
 		}, function ()
-			{
-				toaster.Error('Unable to contact Blue Iris server to set ' + htmlEncode(key) + ' value.', 3000);
-			});
+		{
+			toaster.Error('Unable to contact Blue Iris server to set ' + htmlEncode(key) + ' value.', 3000);
+		});
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -16830,10 +16886,10 @@ function ListDialog(options_arg)
 			dialog.contentChanged(!loadedOnce);
 			loadedOnce = true;
 		}, function ()
-			{
-				toaster.Error('Unable to contact Blue Iris server.', 3000);
-				CloseListDialog();
-			});
+		{
+			toaster.Error('Unable to contact Blue Iris server.', 3000);
+			CloseListDialog();
+		});
 	}
 	var CloseListDialog = function ()
 	{
@@ -18285,6 +18341,23 @@ function showWarningToast(message, showTime, closeButton)
 function showErrorToast(message, showTime, closeButton)
 {
 	return toaster.Error(message, showTime, closeButton);
+}
+///////////////////////////////////////////////////////////////
+// /admin API Calls ///////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ExecAdminCall(camId, args, callbackSuccess, callbackFail)
+{
+	$.ajax(currentServer.remoteBaseURL + "admin?camera=" + camId + "&" + args + currentServer.GetAPISessionArg("&", true))
+		.done(function (response)
+		{
+			if (typeof callbackSuccess === "function")
+				callbackSuccess(response);
+		})
+		.fail(function (jqXHR, textStatus, errorThrown)
+		{
+			if (typeof callbackFail === "function")
+				callbackFail(jqXHR, textStatus, errorThrown);
+		});
 }
 ///////////////////////////////////////////////////////////////
 // JSON ///////////////////////////////////////////////////////
@@ -21359,9 +21432,9 @@ function logout()
 			else
 				location.href = fallbackLogoutUrl;
 		}, function ()
-			{
-				location.href = fallbackLogoutUrl;
-			});
+		{
+			location.href = fallbackLogoutUrl;
+		});
 	}
 	else
 	{
@@ -21372,9 +21445,9 @@ function logout()
 			else
 				location.href = fallbackLogoutUrl;
 		}, function ()
-			{
-				location.href = fallbackLogoutUrl;
-			});
+		{
+			location.href = fallbackLogoutUrl;
+		});
 	}
 }
 function logoutOldSession(oldSession)
