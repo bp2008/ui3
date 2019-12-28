@@ -6073,6 +6073,18 @@ function TouchEventHelper()
 	{
 		return e.type.startsWith("touch");
 	}
+	this.isMultiTouch = function (e)
+	{
+		if (e.changedTouches)
+		{
+			for (var i = 0; i < e.changedTouches.length; i++)
+			{
+				if (e.changedTouches[i].identifier !== 0)
+					return true;
+			}
+		}
+		return false;
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Load Clip List /////////////////////////////////////////////
@@ -20256,6 +20268,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	{
 		BindEventsPassive($excludeRecordings.get(0), "mousedown touchstart mouseup touchend touchcancel", function (e)
 		{
+			if (touchEvents.isMultiTouch(e))
+				return;
 			if (videoPlayer.Loading().image.isLive)
 				return;
 			exclude = true;
@@ -20266,6 +20280,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	{
 		BindEventsPassive($excludeLive.get(0), "mousedown touchstart mouseup touchend touchcancel", function (e)
 		{
+			if (touchEvents.isMultiTouch(e))
+				return;
 			if (videoPlayer.Loading().image.isLive)
 				exclude = true;
 			excludeDragStart = true;
@@ -20275,6 +20291,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 
 	BindEventsPassive($ele.get(0), "mousedown touchstart", function (e)
 	{
+		if (touchEvents.isMultiTouch(e))
+			return;
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
@@ -20289,6 +20307,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	});
 	BindEventsPassive($ele.get(0), "mouseup touchend touchcancel", function (e)
 	{
+		if (touchEvents.isMultiTouch(e))
+			return;
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
@@ -20342,6 +20362,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	});
 	BindEventsPassive(document, "mousemove touchmove", function (e)
 	{
+		if (touchEvents.isMultiTouch(e))
+			return;
 		mouseCoordFixer.fix(e);
 		// Determine if this move event starts a drag.
 		// When a drag starts, the MouseDown event becomes excluded from further consideration by this helper.
@@ -20365,6 +20387,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	});
 	BindEventsPassive(document, "mouseup mouseleave touchend touchcancel", function (e)
 	{
+		if (touchEvents.isMultiTouch(e))
+			return;
 		mouseCoordFixer.fix(e);
 		cbDragEnd(e);
 	});
@@ -20419,6 +20443,22 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	{
 		return doubleClickTimeMS;
 	}
+}
+function DumpTouchInfo(e, label)
+{
+	if (!touchEvents.isTouchEvent(e))
+		return;
+	var str = e.type + " (" + e.mouseX + "," + e.mouseY + "): ";
+	var arr = [];
+	if (e.changedTouches)
+		for (var i = 0; i < e.changedTouches.length; i++)
+		{
+			arr.push(e.changedTouches[i].identifier);
+		}
+	str += '[' + arr.join(',') + ']';
+	if (label)
+		str = label + " " + str;
+	toaster.Info(str, 1000);
 }
 ///////////////////////////////////////////////////////////////
 // Clipboard Helper ///////////////////////////////////////////
@@ -21977,8 +22017,26 @@ var mouseCoordFixer =
 		if (e.alreadyMouseCoordFixed)
 			return;
 		e.alreadyMouseCoordFixed = true;
-		if (typeof e.pageX === "undefined")
+		if (e.type.startsWith("touch") || typeof e.pageX === "undefined")
 		{
+			//if (e.changedTouches && e.changedTouches.length > 0)
+			//{
+			//	var t = null;
+			//	for (var i = 0; i < e.changedTouches.length; i++)
+			//	{
+			//		if (e.changedTouches[i].identifier === 0)
+			//		{
+			//			t = e.changedTouches[i];
+			//			break;
+			//		}
+			//	}
+			//	if (!t)
+			//		t = e.changedTouches[0];
+			//	mouseCoordFixer.last.x = e.mouseX = t.pageX + $(window).scrollLeft();
+			//	mouseCoordFixer.last.y = e.mouseY = t.pageY + $(window).scrollTop();
+
+			//}
+			//else
 			if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 			{
 				mouseCoordFixer.last.x = e.mouseX = e.originalEvent.touches[0].pageX + $(window).scrollLeft();
