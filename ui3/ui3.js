@@ -6075,14 +6075,15 @@ function TouchEventHelper()
 	}
 	this.isMultiTouch = function (e)
 	{
-		if (e.changedTouches)
-		{
-			for (var i = 0; i < e.changedTouches.length; i++)
-			{
-				if (e.changedTouches[i].identifier !== 0)
-					return true;
-			}
-		}
+		// iOS (and maybe other browsers) don't use the identifier field for the finger number, so this code is broken
+		//if (e.changedTouches)
+		//{
+		//	for (var i = 0; i < e.changedTouches.length; i++)
+		//	{
+		//		if (e.changedTouches[i].identifier !== 0)
+		//			return true;
+		//	}
+		//}
 		return false;
 	}
 }
@@ -22086,7 +22087,20 @@ function BrowserIsChrome()
 }
 function BrowserIsIOS()
 {
-	return !!navigator.userAgent.match(/iPad|iPhone|iPod/);
+	if (window.MSStream)
+		return false;
+	if (navigator.userAgent.match(/iPad|iPhone|iPod/))
+		return true;
+	else
+	{
+		if (navigator.platform)
+		{
+			if (/iPad|iPhone|iPod/.test(navigator.platform) ||
+				(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+				return true;
+		}
+		return false;
+	}
 }
 function BrowserIsIOSSafari()
 {

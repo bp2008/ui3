@@ -213,7 +213,15 @@
 		function showMenu(e, menutarget)
 		{
 			target = menutarget;
-			showMenuGroup.call(groups[option.alias], { left: e.pageX, top: e.pageY }, 0);
+			var coords = { left: e.pageX, top: e.pageY };
+			if (!coords.left && !coords.top)
+			{
+				if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
+					coords = { left: e.originalEvent.touches[0].pageX, top: e.originalEvent.touches[0].pageY };
+				else if (e.touches && e.touches.length > 0)
+					coords = { left: e.touches[0].pageX, top: e.touches[0].pageY };
+			}
+			showMenuGroup.call(groups[option.alias], coords, 0);
 			$(document).one('mousedown touchstart', docClickHideMenuPane);
 		}
 		function docClickHideMenuPane(e)
@@ -316,6 +324,19 @@
 	}
 	function BrowserIsIOS()
 	{
-		return !!navigator.userAgent.match(/iPad|iPhone|iPod/);
+		if (window.MSStream)
+			return false;
+		if (navigator.userAgent.match(/iPad|iPhone|iPod/))
+			return true;
+		else
+		{
+			if (navigator.platform)
+			{
+				if (/iPad|iPhone|iPod/.test(navigator.platform) ||
+					(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+					return true;
+			}
+			return false;
+		}
 	}
 })(jQuery);
