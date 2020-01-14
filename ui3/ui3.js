@@ -6075,6 +6075,9 @@ function TouchEventHelper()
 	}
 	this.isMultiTouch = function (e)
 	{
+		if (e.touches && e.touches.length > 1)
+			return true;
+
 		// iOS (and maybe other browsers) don't use the identifier field for the finger number, so this code is broken
 		//if (e.changedTouches)
 		//{
@@ -20246,7 +20249,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	if (!mouseMoveTolerance || mouseMoveTolerance < 0)
 		mouseMoveTolerance = 5;
 
-	var lastMouseDown1 = { X: -1000, Y: -1000, Time: performance.now() - 600000, Excluded: false };
+	var lastMouseDown1 = { X: -1000, Y: -1000, Time: performance.now() - 600000, Excluded: false, screenX, screenY };
 	var lastMouseDown2 = $.extend({}, lastMouseDown1);
 	var lastMouseUp1 = $.extend({}, lastMouseDown1);
 	var lastMouseUp2 = $.extend({}, lastMouseDown1);
@@ -20293,7 +20296,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	BindEventsPassive($ele.get(0), "mousedown touchstart", function (e)
 	{
 		if (touchEvents.isMultiTouch(e))
-			return;
+			return self.Invalidate();
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
@@ -20309,7 +20312,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	BindEventsPassive($ele.get(0), "mouseup touchend touchcancel", function (e)
 	{
 		if (touchEvents.isMultiTouch(e))
-			return;
+			return self.Invalidate();
 		mouseCoordFixer.fix(e);
 		if (touchEvents.Gate(e))
 			return;
@@ -20364,7 +20367,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	BindEventsPassive(document, "mousemove touchmove", function (e)
 	{
 		if (touchEvents.isMultiTouch(e))
-			return;
+			return self.Invalidate();
 		mouseCoordFixer.fix(e);
 		// Determine if this move event starts a drag.
 		// When a drag starts, the MouseDown event becomes excluded from further consideration by this helper.
@@ -20374,7 +20377,8 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			if (!lastMouseDown1.Excluded)
 			{
 				// Has the curser moved far enough to start drag?
-				if (!positionsAreWithinTolerance(lastMouseDown1, { X: e.mouseX, Y: e.mouseY }))
+				if (!positionsAreWithinTolerance(lastMouseDown1, { X: e.mouseX, Y: e.mouseY })
+					|| !positionWithinTouchScreenTolerance(lastMouseDown1, e))
 				{
 					lastMouseDown1.Excluded = true; // Cursor has moved far enough to start a drag.
 				}
@@ -20389,7 +20393,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	BindEventsPassive(document, "mouseup mouseleave touchend touchcancel", function (e)
 	{
 		if (touchEvents.isMultiTouch(e))
-			return;
+			return self.Invalidate();
 		mouseCoordFixer.fix(e);
 		cbDragEnd(e);
 	});
@@ -20410,10 +20414,14 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			return;
 		dst.X = src.X;
 		dst.Y = src.Y;
+		dst.screenX = src.screenX;
+		dst.screenY = src.screenY;
 		dst.Time = src.Time;
 		dst.Excluded = src.Excluded;
 		src.X = e.mouseX;
 		src.Y = e.mouseY;
+		src.screenX = e.screenX;
+		src.screenY = e.screenY;
 		src.Time = performance.now();
 		src.Excluded = exclude || excludeNextEvent;
 		lastEvent = eventType;
@@ -20422,6 +20430,15 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	var positionsAreWithinTolerance = function (positionA, positionB)
 	{
 		return Math.abs(positionA.X - positionB.X) <= mouseMoveTolerance && Math.abs(positionA.Y - positionB.Y) <= mouseMoveTolerance;
+	}
+	var positionWithinTouchScreenTolerance = function (positionA, e)
+	{
+		if (e.touches && e.touches.length)
+		{
+			var positionB = e.touches[0];
+			return Math.abs(positionA.screenX - positionB.screenX) <= mouseMoveTolerance && Math.abs(positionA.screenY - positionB.screenY) <= mouseMoveTolerance;
+		}
+		return true;
 	}
 	var handleExcludeFunc = function (e)
 	{
