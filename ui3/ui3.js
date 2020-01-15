@@ -8969,6 +8969,7 @@ function CameraListLoader()
 	var self = this;
 	var lastResponse = null;
 	var cameraIdToCameraMap = new Object();
+	this.cameraIdToCameraMap = cameraIdToCameraMap;
 	var firstCameraListLoaded = false;
 	var cameraListUpdateTimeout = null;
 	var webcastingWarning;
@@ -9052,7 +9053,10 @@ function CameraListLoader()
 			cameraIdToCameraMap = new Object();
 			for (var i = 0; i < lastResponse.data.length; i++)
 				cameraIdToCameraMap[lastResponse.data[i].optionValue] = lastResponse.data[i];
-			if (!firstCameraListLoaded || self.GetCameraWithId(videoPlayer.Loading().image.id) == null)
+			if (!firstCameraListLoaded
+				|| (self.GetCameraWithId(videoPlayer.Loading().image.id) == null
+					&& videoPlayer.Loading().image
+					&& videoPlayer.Loading().image.isLive)) // isLive check allows recordings to continue playing if their camera instance is missing
 			{
 				if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId) == null)
 					videoPlayer.SelectCameraGroup(lastResponse.data[0].optionValue);
@@ -9155,6 +9159,36 @@ function CameraListLoader()
 	this.GetCameraWithId = function (cameraId)
 	{
 		return cameraIdToCameraMap[cameraId];
+	}
+	this.FindCameraWithSimilarId = function (cameraId)
+	{
+		var cameraIdLower = cameraId.toLowerCase();
+		for (var id in cameraIdToCameraMap)
+		{
+			if (id.toLowerCase() === cameraIdLower && cameraIdToCameraMap.hasOwnProperty(id))
+				return cameraIdToCameraMap[id];
+		}
+		return null;
+	}
+	this.MakeFakeCamBasedOnClip = function (clipData)
+	{
+		var clipRes = new ClipRes(clipData.res);
+		if (!clipRes.valid)
+		{
+			clipRes.width = 1920;
+			clipRes.height = 1080;
+		}
+		var fake = {
+			optionDisplay: clipData.camera,
+			optionValue: clipData.camera,
+			active: true,
+			FPS: 15,
+			color: 16744448,
+			audio: true,
+			width: clipRes.width,
+			height: clipRes.height
+		};
+		return fake;
 	}
 	this.GetCameraName = function (cameraId)
 	{
@@ -9661,6 +9695,10 @@ function VideoPlayerController()
 		}
 
 		var cam = cameraListLoader.GetCameraWithId(clipData.camera);
+		if (!cam)
+			cam = cameraListLoader.FindCameraWithSimilarId(clipData.camera);
+		if (!cam)
+			cam = cameraListLoader.MakeFakeCamBasedOnClip(clipData);
 		if (cam)
 		{
 			imageRenderer.zoomHandler.ZoomToFit();
