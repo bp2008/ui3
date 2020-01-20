@@ -5684,7 +5684,7 @@ function ExportControls()
 				ClipStatsLoaded(); // We have
 			else // We have not, so our clip duration and size values need updated.
 			{
-				$exportControlsStatus.text('Loading�');
+				$exportControlsStatus.text('Loading...');
 				$exportControlsExportBtn.attr('disabled', 'disabled');
 				// call global resized
 				resized();
@@ -16267,7 +16267,7 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 	var $linkLabel = $('<div class="dialogOption_item clipprop_item_info">Your AVI file is being generated.</div>');
 	$content.append($linkLabel);
 
-	var $status = $('<div class="dialogOption_item clipprop_item_info">Starting export�</div>');
+	var $status = $('<div class="dialogOption_item clipprop_item_info">Starting export...</div>');
 	$content.append($status);
 
 	var $closeBtn = $('<input type="button" value="Cancel" style="display:block;margin:40px auto 0px auto;" iscancel="1" />');
