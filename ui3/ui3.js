@@ -855,6 +855,14 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
+			key: "ui3_pc_delete_button"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Playback Controls: Delete Button'
+			, onChange: OnChange_ui3_pc_delete_button
+			, category: "Clips / Alerts"
+		}
+		, {
 			key: "ui3_extra_playback_controls_padding"
 			, value: "0"
 			, inputType: "checkbox"
@@ -891,6 +899,16 @@ var defaultSettings =
 			, inputType: "select"
 			, options: ["No", "First", "Last"]
 			, label: 'Automatically Open a Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_askForDelete"
+			, value: "All"
+			, inputType: "select"
+			, options: ["All", // All is the original default, will ask to confirm any delete
+				"Multiple", // Multiple will only ask to confirm when multiple items are to be deleted
+				"None"] // Will not ask to confirm deletions
+			, label: 'Confirm deletes for'
 			, category: "Clips / Alerts"
 		}
 		, {
@@ -1154,6 +1172,15 @@ var defaultSettings =
 			, label: "Play/Pause"
 			, hint: "Plays or pauses the current recording."
 			, actionDown: BI_Hotkey_PlayPause
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_delete"
+			, value: "0|0|0|46" // 46: delete
+			, hotkey: true
+			, label: "Delete"
+			, hint: "Deletes the current recording."
+			, actionDown: BI_Hotkey_Delete
 			, category: "Hotkeys"
 		}
 		, {
@@ -2407,6 +2434,7 @@ $(function ()
 	OnChange_ui3_pc_next_prev_buttons();
 	OnChange_ui3_pc_seek_buttons();
 	OnChange_ui3_pc_seek_1frame_buttons();
+	OnChange_ui3_pc_delete_button();
 	OnChange_ui3_extra_playback_controls_padding();
 	OnChange_ui3_ir_brightness_contrast();
 	OnChange_ui3_sideBarPosition();
@@ -5656,7 +5684,7 @@ function ExportControls()
 				ClipStatsLoaded(); // We have
 			else // We have not, so our clip duration and size values need updated.
 			{
-				$exportControlsStatus.text('Loading…');
+				$exportControlsStatus.text('Loading...');
 				$exportControlsExportBtn.attr('disabled', 'disabled');
 				// call global resized
 				resized();
@@ -7302,6 +7330,27 @@ function ClipLoader(clipsBodySelector)
 			{
 				toaster.Warning(message, 10000);
 			});
+	}
+	this.DeleteCurrentClip = function ()
+	{
+		if (!videoPlayer.Loading().image.isLive)
+		{
+			var clip_to_delete = videoPlayer.Loading().image.uniqueId;
+			var deleter = function ()
+			{
+				videoPlayer.Playback_PreviousClip();
+				clipLoader.Multi_Delete([clip_to_delete]);
+			};
+			if (settings.ui3_askForDelete === "All")
+			{
+				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert");
+				AskYesNo("Confirm deletion of 1 " + whichKind + "?", deleter);
+			}
+			else
+			{
+				deleter();
+			}
+		}
 	}
 	var Multi_Operation = function (operation, allSelectedClipIDs, args, idx, myToast, errorCount)
 	{
@@ -15038,10 +15087,19 @@ function ClipListContextMenu()
 				break;
 			case "delete":
 				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s");
-				AskYesNo("Confirm deletion of " + allSelectedClipIDs.length + " " + whichKind + "?", function ()
+				var deleter = function ()
 				{
 					clipLoader.Multi_Delete(allSelectedClipIDs);
-				});
+				};
+				if (settings.ui3_askForDelete === "All" ||
+					settings.ui3_askForDelete === "Multiple" && allSelectedClipIDs.length > 1)
+				{
+					AskYesNo("Confirm deletion of " + allSelectedClipIDs.length + " " + whichKind + "?", deleter);
+				}
+				else
+				{
+					deleter();
+				}
 				break;
 			case "larger_thumbnails":
 				toggleLargerClipThumbnails();
@@ -16209,7 +16267,7 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 	var $linkLabel = $('<div class="dialogOption_item clipprop_item_info">Your AVI file is being generated.</div>');
 	$content.append($linkLabel);
 
-	var $status = $('<div class="dialogOption_item clipprop_item_info">Starting export…</div>');
+	var $status = $('<div class="dialogOption_item clipprop_item_info">Starting export...</div>');
 	$content.append($status);
 
 	var $closeBtn = $('<input type="button" value="Cancel" style="display:block;margin:40px auto 0px auto;" iscancel="1" />');
@@ -17939,6 +17997,10 @@ function BI_Hotkey_PlayPause()
 			videoOverlayHelper.ShowTemporaryPauseIcon();
 		videoPlayer.Playback_PlayPause();
 	}
+}
+function BI_Hotkey_Delete()
+{
+	clipLoader.DeleteCurrentClip();
 }
 function BI_Hotkey_ToggleReverse()
 {
@@ -21082,6 +21144,13 @@ function OnChange_ui3_pc_seek_1frame_buttons()
 		$('#pcSkipBack1Frame,#pcSkipAhead1Frame').removeClass("hidden");
 	else
 		$('#pcSkipBack1Frame,#pcSkipAhead1Frame').addClass("hidden");
+}
+function OnChange_ui3_pc_delete_button()
+{
+	if (settings.ui3_pc_delete_button == "1")
+		$('#clipDeleteButton').removeClass("hidden");
+	else
+		$('#clipDeleteButton').addClass("hidden");
 }
 function OnChange_ui3_extra_playback_controls_padding()
 {
