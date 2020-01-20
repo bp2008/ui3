@@ -7333,11 +7333,11 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.DeleteCurrentClip = function ()
 	{
-		if (lastOpenedClipEle)
+		if (!videoPlayer.Loading().image.isLive)
 		{
+			var clip_to_delete = videoPlayer.Loading().image.uniqueId;
 			var deleter = function ()
 			{
-				var clip_to_delete = videoPlayer.Loading().image.uniqueId;
 				videoPlayer.Playback_PreviousClip();
 				clipLoader.Multi_Delete([clip_to_delete]);
 			};
