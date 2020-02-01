@@ -20349,7 +20349,7 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 	if (!mouseMoveTolerance || mouseMoveTolerance < 0)
 		mouseMoveTolerance = 5;
 
-	var lastMouseDown1 = { X: -1000, Y: -1000, Time: performance.now() - 600000, Excluded: false, screenX, screenY };
+	var lastMouseDown1 = { X: -1000, Y: -1000, Time: performance.now() - 600000, Excluded: false, screenX: 0, screenY: 0 };
 	var lastMouseDown2 = $.extend({}, lastMouseDown1);
 	var lastMouseUp1 = $.extend({}, lastMouseDown1);
 	var lastMouseUp2 = $.extend({}, lastMouseDown1);
