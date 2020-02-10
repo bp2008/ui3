@@ -67,8 +67,10 @@ function Queue()
 		// Remove the item from the queue so it can be garbage collected.
 		queue[offset] = undefined;
 
+
 		// increment the offset and remove the free space if necessary
-		if (queue.length > 16 && ++offset * 2 >= queue.length)
+		offset++;
+		if (queue.length > 16 && offset * 2 >= queue.length)
 		{
 			queue = queue.slice(offset);
 			offset = 0;
@@ -85,7 +87,7 @@ function Queue()
 	 */
 	this.peek = function ()
 	{
-		return (queue.length > 0 ? queue[offset] : undefined);
+		return queue.length === offset ? undefined : queue[offset];
 	};
 
 	/**
