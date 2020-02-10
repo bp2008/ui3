@@ -21,6 +21,7 @@ other modifications made by bp2008
 function Queue()
 {
 	// initialise the queue and offset
+	var self = this;
 	var queue = [];
 	var offset = 0;
 
@@ -59,7 +60,7 @@ function Queue()
 	{
 
 		// if the queue is empty, return immediately
-		if (queue.length === 0) return undefined;
+		if (self.isEmpty()) return undefined;
 
 		// store the item at the front of the queue
 		var item = queue[offset];
@@ -87,7 +88,7 @@ function Queue()
 	 */
 	this.peek = function ()
 	{
-		return queue.length === offset ? undefined : queue[offset];
+		return self.isEmpty() ? undefined : queue[offset];
 	};
 
 	/**
@@ -96,10 +97,10 @@ function Queue()
 	 */
 	this.replaceFront = function (newFront)
 	{
-		if (queue.length > 0)
-			queue[offset] = newFront;
-		else
+		if (self.isEmpty())
 			queue.push(newFront);
+		else
+			queue[offset] = newFront;
 	};
 
 	/**
@@ -108,8 +109,7 @@ function Queue()
 	 */
 	this.toArray = function ()
 	{
-		var len = queue.length - offset;
-		var arr = new Array(len);
+		var arr = new Array(self.getLength());
 		for (var i = offset, n = 0; i < queue.length; i++, n++)
 			arr[n] = queue[i];
 		return arr;
