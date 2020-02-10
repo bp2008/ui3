@@ -68,7 +68,6 @@ function Queue()
 		// Remove the item from the queue so it can be garbage collected.
 		queue[offset] = undefined;
 
-
 		// increment the offset and remove the free space if necessary
 		offset++;
 		if (queue.length > 16 && offset * 2 >= queue.length)
@@ -98,7 +97,7 @@ function Queue()
 	this.replaceFront = function (newFront)
 	{
 		if (self.isEmpty())
-			queue.push(newFront);
+			self.enqueue(newFront);
 		else
 			queue[offset] = newFront;
 	};
