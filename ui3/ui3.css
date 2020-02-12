@@ -3970,6 +3970,12 @@ body + div
 		display: block;
 	}
 
+.dialogOption_item.disabled,
+.customCheckboxWrapper.disabled label
+{
+	color: #666666;
+}
+
 .dialogOption_label
 {
 	font-size: 16px;
@@ -4001,6 +4007,11 @@ body + div
 	margin: 0px 10px;
 	float: right;
 	max-width: 35%;
+}
+
+.clipExportDialog select
+{
+	max-width: 60%;
 }
 
 #uiSettingsPanel a.input
@@ -4215,6 +4226,11 @@ div::-webkit-scrollbar-corner
 	background-color: var(--main-highlight-color);
 }
 /* Export Dialog */
+.clipExportDialogContent
+{
+	padding: 3px;
+}
+
 .activeExportDialog
 {
 	padding: 10px;
@@ -4353,27 +4369,6 @@ div::-webkit-scrollbar-corner
 	border-radius: 3px;
 	cursor: pointer;
 }
-
-#exportControlsAudioButton
-{
-	display: inline-block;
-	vertical-align: bottom;
-	margin: 2px 10px 2px 4px;
-	height: 21px;
-	width: 21px;
-	cursor: pointer;
-}
-
-	#exportControlsAudioButton .audioDisabled
-	{
-		color: rgba(240,0,0,1);
-		display: none;
-	}
-
-	#exportControlsAudioButton .audioEnabled
-	{
-		color: rgba(0,240,0,1);
-	}
 
 #exportControlsExportBtn
 {

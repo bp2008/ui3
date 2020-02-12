@@ -9,7 +9,7 @@
 	.sliderCb[type="checkbox"]:checked + label
 	{
 		position: relative;
-		padding-right: 75px;
+		padding-right: 80px;
 		cursor: pointer;
 	}
 
@@ -94,4 +94,20 @@
 {
 	border: 1px dashed #777;
 	margin-top: -1px;
+}
+
+.sliderCb[type="checkbox"]:disabled + label:before
+{
+	background-color: #4a4c4e;
+}
+
+.sliderCb[type="checkbox"]:disabled + label:after
+{
+	background-color: #7a7c7e;
+}
+
+.sliderCb[type="checkbox"]:disabled + label .ui:before,
+.sliderCb[type="checkbox"]:disabled + label .ui:after
+{
+	color: #7a7c7e;
 }

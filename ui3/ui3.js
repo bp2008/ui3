@@ -153,7 +153,7 @@ function DoUIFeatureDetection()
 				}
 				if (!exporting_clips_to_avi_supported)
 				{
-					ul_root.append('<li>Exporting clips to AVI is not supported.</li>');
+					ul_root.append('<li>Exporting clips to AVI in-browser is not supported.</li>');
 				}
 				if (fetch_streams_cant_close_bug)
 				{
@@ -443,6 +443,12 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
+// TODO: Export API
+// * Integrate new export API.
+// * New export API should not be locked behind any particular browser features.
+// * Legacy avi export should remain an option in supported browsers.
+// * Reuse setting ui3_clip_export_withAudio
+// * Fix bug where you can try to export snapshots.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -562,8 +568,36 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_clip_export_format"
+			, value: 1
+		}
+		, {
+			key: "ui3_clip_export_profile"
+			, value: 0
+		}
+		, {
 			key: "ui3_clip_export_withAudio"
 			, value: "1"
+		}
+		, {
+			key: "ui3_clip_export_reencode"
+			, value: "0"
+		}
+		, {
+			key: "ui3_clip_export_overlay"
+			, value: "0"
+		}
+		, {
+			key: "ui3_clip_export_timelapse"
+			, value: "0"
+		}
+		, {
+			key: "ui3_clip_export_timelapseMultiplier"
+			, value: 10
+		}
+		, {
+			key: "ui3_clip_export_timelapseFps"
+			, value: 30
 		}
 		, {
 			key: "bi_rememberMe"
@@ -890,7 +924,7 @@ var defaultSettings =
 			, value: "0"
 			, inputType: "checkbox"
 			, label: 'Preserve Original File Names<div class="settingDesc">when downloading clips</div>'
-			, hint: 'Does not affect AVI export'
+			, hint: 'Does not affect clip "exports"'
 			, category: "Clips / Alerts"
 		}
 		, {
@@ -5573,9 +5607,6 @@ function ExportControls()
 	var $layoutBottom = $('#layoutbottom');
 	var $exportOffsetWrapper = $("#exportOffsetWrapper");
 	var $exportControlsWrapper = $("#exportControlsWrapper");
-	var $exportControlsAudioButton = $("#exportControlsAudioButton");
-	var $audioDisabled = $exportControlsAudioButton.children(".audioDisabled");
-	var $audioEnabled = $exportControlsAudioButton.children(".audioEnabled");
 	var exportOffsetStart;
 	var exportOffsetEnd;
 	var $exportControlsStatus = $("#exportControlsStatus");
@@ -5598,29 +5629,6 @@ function ExportControls()
 		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
 		$exportControlsExportBtn.on('click', beginExport);
 		$exportControlsCancelBtn.on('click', self.Disable);
-		$exportControlsAudioButton.on('click', ToggleAudioButtonState);
-		SetAudioButtonState();
-	}
-	var ToggleAudioButtonState = function ()
-	{
-		settings.ui3_clip_export_withAudio = settings.ui3_clip_export_withAudio === "1" ? "0" : "1";
-		SetAudioButtonState();
-	}
-	var SetAudioButtonState = function ()
-	{
-		var not = "";
-		if (settings.ui3_clip_export_withAudio === "1")
-		{
-			$exportControlsAudioButton.attr("title", "Audio will be included in the export, if available.");
-			$audioDisabled.hide();
-			$audioEnabled.show();
-		}
-		else
-		{
-			$exportControlsAudioButton.attr("title", "Audio will NOT be included in the export.");
-			$audioDisabled.show();
-			$audioEnabled.hide();
-		}
 	}
 	this.resized = function ()
 	{
@@ -5659,11 +5667,6 @@ function ExportControls()
 	}
 	this.Enable = function (recId)
 	{
-		if (!exporting_clips_to_avi_supported)
-		{
-			toaster.Warning("This browser does not support the necessary features to export clips to AVI.", 15000);
-			return;
-		}
 		if (controlsEnabled)
 			return;
 		controlsEnabled = true;
@@ -5797,25 +5800,10 @@ function ExportControls()
 			startTimeMs = endTimeMs;
 			endTimeMs = tmp;
 		}
-		var percentOfClip = durationMs / fileDuration;
-		var estimatedSize = percentOfClip * fileSizeBytes;
-		var proceedFunc = function ()
+		new ClipExportDialog([clipData.recId], startTimeMs, endTimeMs, function (exportOptions)
 		{
-			new ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, settings.ui3_clip_export_withAudio === "1");
 			self.Disable();
-		}
-		if (estimatedSize >= 950000000)
-		{
-			// 1 GB is the supposed limit for AVI files produced by UI3 at this time.
-			SimpleDialog.ConfirmText("Your selection size is very large, approximately " + formatBytes2(estimatedSize, 1) + ", and the export will probably fail.  Do you wish to try anyway?", proceedFunc);
-		}
-		else if (estimatedSize >= 450000000)
-		{
-			// 500-600 MB is the supposed limit for Blobs / Data URIs in some browsers.
-			SimpleDialog.ConfirmText("Your selection size is very large, approximately " + formatBytes2(estimatedSize, 1) + ", and the export may fail.  Do you wish to try anyway?", proceedFunc);
-		}
-		else
-			proceedFunc();
+		});
 	}
 
 	Initialize();
@@ -7208,6 +7196,57 @@ function ClipLoader(clipsBodySelector)
 			+ (title ? (' title="' + title + '"') : '')
 			+ '><svg class="icon' + (noflip ? ' noflip' : '') + '"><use xlink:href="' + svgId + '"></use></svg></div>'
 	}
+	this.QueueExportViaAPI = function (clipData, exportOptions, onSuccess, onFailure)
+	{
+		var args = { cmd: "export", path: clipData.path };
+		if (exportOptions.startTimeMs > 0 && exportOptions.endTimeMs > exportOptions.startTimeMs)
+		{
+			args.startms = exportOptions.startTimeMs;
+			args.msec = exportOptions.endTimeMs - exportOptions.startTimeMs;
+		}
+		else if (!clipData.isClip)
+		{
+			// This is an alert we're trying to export.  We can probably set a range.
+			if ((clipData.flags & alert_flag_offsetMs) !== 0)
+			{
+				args.startms = clipData.offsetMs;
+				args.msec = clipData.roughLengthMs;
+			}
+		}
+		args.format = exportOptions.format;
+		args.profile = exportOptions.profile;
+		args.audio = exportOptions.audio;
+		args.reencode = exportOptions.reencode;
+		args.overlay = exportOptions.overlay;
+		if (exportOptions.timelapse && exportOptions.timelapseMultiplier && exportOptions.timelapseFps)
+			args.timelapse = exportOptions.timelapseMultiplier + "@" + exportOptions.timelapseFps;
+
+		ExecJSON(args, function (response)
+		{
+			if (response.result === "success")
+			{
+				if (typeof onSuccess === "function")
+					onSuccess(response);
+			}
+			else
+			{
+				console.log("export command failed: ", response);
+				if (typeof onFailure === "function")
+				{
+					if (response.result === "fail" && response.status)
+						onFailure(response.status);
+					else
+						onFailure("No reason was given for the failure.");
+				}
+			}
+		}
+			, function (jqXHR, textStatus, errorThrown)
+			{
+				console.log("export command failed: " + jqXHR.ErrorMessageHtml);
+				if (typeof onFailure === "function")
+					onFailure(jqXHR.ErrorMessageHtml);
+			});
+	}
 	this.ToggleClipProtect = function (clipData, onSuccess, onFailure)
 	{
 		ToggleFlag(clipData, clip_flag_protect, function (clipData, flagIsSet)
@@ -7303,6 +7342,10 @@ function ClipLoader(clipsBodySelector)
 			return openLoginDialog(function () { self.Multi_Protect(allSelectedClipIDs, protectEnable, idx, myToast); });
 		Multi_Operation("protect", allSelectedClipIDs, { protectEnable: protectEnable }, 0, null, 0);
 	}
+	this.Multi_Export = function (allSelectedClipIDs, exportOptions)
+	{
+		Multi_Operation("export", allSelectedClipIDs, exportOptions, 0, null, 0);
+	}
 	this.Multi_Delete = function (allSelectedClipIDs)
 	{
 		if (allSelectedClipIDs.length === 0)
@@ -7393,6 +7436,8 @@ function ClipLoader(clipsBodySelector)
 				verb = args.flagEnable ? "Flagging" : "Unflagging";
 			else if (operation == "protect")
 				verb = args.protectEnable ? "Protecting" : "Unprotecting";
+			else if (operation == "export")
+				verb = "Queueing export of";
 			myToast = toaster.Info('<div id="multi_' + operation + '_status_toast" class="multi_operation_status_toast">'
 				+ '<div>' + verb + ' ' + (currentPrimaryTab == "clips" ? "clip" : "alert") + ' <span class="multi_operation_count">' + (idx + 1) + '</span> / ' + allSelectedClipIDs.length + '</div>'
 				+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
@@ -7431,6 +7476,17 @@ function ClipLoader(clipsBodySelector)
 					});
 					return;
 				}
+			}
+			else if (operation == "export")
+			{
+				self.QueueExportViaAPI(clipData, args, function ()
+				{
+					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
+				}, function ()
+				{
+					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
+				});
+				return;
 			}
 		}
 		else
@@ -13711,7 +13767,6 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 	var dialog = null;
 	var $dlg = $();
 	var $content = $();
-	var rowIdx;
 
 	var Initialize = function ()
 	{
@@ -13741,7 +13796,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 	var ReRender = function ()
 	{
 		$content.empty();
-		rowIdx = 0;
+		var AddEditorField = MakeAddEditorFieldFn("Profile Editor", $content, p);
 		AddEditorField("Profile Name", "name", { max: 21 });
 		AddEditorField("Abbreviation (0-4 characters)", "abbr", { max: 4 });
 		AddEditorField("Abbreviation Color", "aClr", { type: "color" });
@@ -13778,156 +13833,6 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		if (desc)
 			str += " (" + desc + ")";
 		return str;
-	}
-	var AddEditorField = function (label, key, options)
-	{
-		if (!options)
-			options = {};
-		var $row = $('<div class="profileEditorRow"></div>');
-		if (rowIdx++ % 2 === 1)
-			$row.addClass('everyOther');
-
-		var value = p[key];
-		var valueType = typeof value;
-		var type = options.type;
-		if (!type)
-			type = valueType;
-
-		if (valueType === "number")
-		{
-			if (value < 0)
-			{
-				p[key] = -1;
-				value = "";
-			}
-			else if (typeof options.min === "number" && value < options.min)
-			{
-				p[key] = options.min;
-				value = options.min;
-			}
-			else if (typeof options.max === "number" && value > options.max)
-			{
-				p[key] = options.max;
-				value = options.max;
-			}
-		}
-
-		var formFields = {
-			value: value
-			, label: label
-			, tag: key
-		};
-		if (type === "boolean")
-		{
-			formFields.inputType = "checkbox";
-			formFields.onChange = CheckboxChanged;
-		}
-		else if (type === "string")
-		{
-			formFields.inputType = "text";
-			formFields.onChange = TextChanged;
-			formFields.maxValue = options.max;
-		}
-		else if (type === "color")
-		{
-			formFields.inputType = "color";
-			formFields.onChange = TextChanged;
-			formFields.maxValue = 7;
-			if (formFields.value.length === 6)
-				formFields.value = "#" + formFields.value;
-		}
-		else if (type === "number")
-		{
-			formFields.inputType = "number";
-			formFields.onChange = NumberChanged;
-			formFields.minValue = options.min;
-			formFields.maxValue = options.max;
-		}
-		else if (type === "select")
-		{
-			formFields.inputType = "select";
-			formFields.onChange = SelectChanged
-			formFields.options = options.options;
-			if (valueType === "number")
-			{
-				if (valueType < 0 || valueType >= options.options.length)
-					toaster.Error("Profile Editor Error: invalid value for " + label + ": " + value, 30000);
-				else
-					formFields.value = options.options[value];
-			}
-		}
-		else if (type === "comment")
-		{
-			formFields.inputType = "commentText";
-		}
-		else if (type === "errorComment")
-		{
-			formFields.inputType = "errorCommentText";
-		}
-		else
-		{
-			formFields.inputType = "noteText";
-			formFields.label = "Unknown object type: '" + type + "' with value '" + value + "' and label '" + label + "'";
-		}
-		if (typeof options.onChange === "function")
-		{
-			// An extra onChange method was provided. Create a wrapper to see both applied.
-			var oldOnChange = formFields.onChange;
-			formFields.onChange = function ()
-			{
-				if (typeof oldOnChange === "function")
-					oldOnChange.apply(this, arguments);
-				options.onChange.apply(this, arguments);
-			}
-		}
-		$row.append(UIFormField(formFields));
-
-		$content.append($row);
-	}
-	var CheckboxChanged = function (key, checked)
-	{
-		p[key] = checked;
-	}
-	var TextChanged = function (e, key, $input)
-	{
-		p[key] = $input.val();
-	}
-	var SelectChanged = function (e, key, $select)
-	{
-		var type = typeof p[key];
-		if (type === "number")
-			$select.children('option').each(function (idx, ele)
-			{
-				if ($(ele).is(':selected'))
-				{
-					p[key] = idx;
-					return;
-				}
-			});
-		else
-			p[key] = $select.val();
-	}
-	var NumberChanged = function (e, key, $input)
-	{
-		var value = parseFloat($input.val());
-		if (isNaN(value))
-			p[key] = -1;
-		else
-		{
-			var min = parseFloat($input.attr('min'));
-			var max = parseFloat($input.attr('max'));
-			if (min > max)
-			{
-				var tmp = min;
-				min = max;
-				max = tmp;
-			}
-			if (!isNaN(min) && value < min)
-				$input.val(value = min);
-			else if (!isNaN(max) && value > max)
-				$input.val(value = max);
-			p[key] = value;
-		}
 	}
 	var SaveAndClose = function ()
 	{
@@ -14873,7 +14778,7 @@ function CanvasContextMenu()
 				return true;
 			case "downloadclip":
 				return true;
-			case "exportavi":
+			case "convertexport":
 				exportControls.Enable(videoPlayer.Loading().image.uniqueId);
 				break;
 			case "closeclip":
@@ -14893,7 +14798,7 @@ function CanvasContextMenu()
 				break;
 		}
 	}
-	var exportListItem = exporting_clips_to_avi_supported ? { text: 'Export as AVI', icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "exportavi", action: onRecordContextMenuAction } : { type: "skip" };
+	// { type: "skip" }
 	var optionRecord =
 	{
 		alias: "cmroot_record", width: 200, items:
@@ -14901,7 +14806,7 @@ function CanvasContextMenu()
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
-				, exportListItem
+				, { text: 'Convert/export', icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "convertexport", action: onRecordContextMenuAction }
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
@@ -14968,15 +14873,13 @@ function ClipListContextMenu()
 
 	var onShowMenu = function (menu)
 	{
-		var itemsToEnable = ["flag", "protect", "download", "delete", "larger_thumbnails", "mouseover_thumbnails"];
+		var itemsToEnable = ["flag", "protect", "download", "delete", "larger_thumbnails", "mouseover_thumbnails", "convertexport"];
 		var itemsToDisable = [];
 
 		var singleClipItems = itemsToEnable;
 		if (clipLoader.GetAllSelected().length > 1)
 			singleClipItems = itemsToDisable;
 		singleClipItems.push("properties");
-		if (exporting_clips_to_avi_supported)
-			singleClipItems.push("exportavi");
 
 		menu.applyrule({ name: "disable_items", disable: true, items: itemsToDisable });
 		menu.applyrule({ name: "enable_items", disable: false, items: itemsToEnable });
@@ -15107,11 +15010,18 @@ function ClipListContextMenu()
 			case "mouseover_thumbnails":
 				toggleMouseoverClipThumbnails();
 				break;
-			case "exportavi":
+			case "convertexport":
 				if (allSelectedClipIDs.length >= 1)
 				{
-					videoPlayer.LoadClip(clipLoader.GetClipFromId(allSelectedClipIDs[0]));
-					exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+					if (allSelectedClipIDs.length === 1)
+					{
+						videoPlayer.LoadClip(clipLoader.GetClipFromId(allSelectedClipIDs[0]));
+						exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+					}
+					else
+					{
+						new ClipExportDialog(allSelectedClipIDs);
+					}
 				}
 				else
 					toaster.Warning("No " + (currentPrimaryTab == "clips" ? "clip" : "alert") + " is selected.");
@@ -15127,8 +15037,7 @@ function ClipListContextMenu()
 				break;
 		}
 	}
-	var exportListItemSplitline = exporting_clips_to_avi_supported ? { type: "splitLine" } : { type: "skip" };
-	var exportListItem = exporting_clips_to_avi_supported ? { text: "Export as AVI", icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "exportavi", action: onContextMenuAction } : { type: "skip" };
+	// You can use { type: "skip" } as a context menu item, and that item will not be rendered
 	var menuOptions =
 	{
 		alias: "cmroot_cliplist", width: 200, items:
@@ -15140,8 +15049,8 @@ function ClipListContextMenu()
 				, { type: "splitLine" }
 				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
-				, exportListItemSplitline
-				, exportListItem
+				, { type: "splitLine" }
+				, { text: "Convert/export", icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "convertexport", action: onContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
 
@@ -16147,17 +16056,14 @@ function ClipProperties()
 			}
 			$camprop.append(GetInfoEleValue("Download", $link));
 
-			if (exporting_clips_to_avi_supported)
+			var $exportBtn = $('<a href="javascript:void(0)">Export a section of the clip.</a>');
+			$exportBtn.on('click', function ()
 			{
-				var $exportBtn = $('<a href="javascript:void(0)">Export a section of the clip.</a>');
-				$exportBtn.on('click', function ()
-				{
-					videoPlayer.LoadClip(clipData);
-					exportControls.Enable(videoPlayer.Loading().image.uniqueId);
-					dialog.close();
-				});
-				$camprop.append(GetInfoEleValue("Export as AVI", $exportBtn));
-			}
+				videoPlayer.LoadClip(clipData);
+				exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+				dialog.close();
+			});
+			$camprop.append(GetInfoEleValue("Convert/export", $exportBtn));
 
 			if (developerMode)
 			{
@@ -16242,9 +16148,177 @@ function ClipDownloadDialog()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Clip Export Dialog /////////////////////////////////////////
+// Clip Export (API) Dialog ///////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
+/**
+ * 
+ * @param {Array} recIdArray Array of recId.
+ * @param {Number} startTimeMs Start time in milliseconds, ignored if clipDataArray.length > 1
+ * @param {Number} endTimeMs End time in milliseconds, ignored if clipDataArray.length > 1
+ * @param {Function} onExportStarted Callback function which is called if the user clicks "Begin Export".
+ */
+function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
+{
+	var self = this;
+
+	var exportOptions = {
+		format: parseInt(settings.ui3_clip_export_format),
+		profile: parseInt(settings.ui3_clip_export_profile),
+		audio: settings.ui3_clip_export_withAudio === "1",
+		reencode: settings.ui3_clip_export_reencode === "1",
+		overlay: settings.ui3_clip_export_overlay === "1",
+		timelapse: settings.ui3_clip_export_timelapse === "1",
+		timelapseMultiplier: parseFloat(settings.ui3_clip_export_timelapseMultiplier),
+		timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps)
+	};
+
+	var $dlg = $('<div class="clipExportDialog dialogOptionPanel"></div>');
+	var $content = $('<div class="clipExportDialogContent"></div>');
+	var dialog;
+	var classic_ui3_idx = -1;
+	var headingLine1 = null;
+	var headingLine2 = null;
+
+	function Initialize()
+	{
+		if (recIdArray.length === 1)
+		{
+			var clipData = clipLoader.GetClipFromId(recIdArray[0]);
+			var camName = cameraListLoader.GetCameraName(clipData.camera);
+			var date = GetPaddedDateStr(new Date(clipData.displayDate.getTime() + startTimeMs));
+			headingLine1 = camName;
+			headingLine2 = msToTime(endTimeMs - startTimeMs) + " starting at " + date;
+			exportOptions.startTimeMs = startTimeMs;
+			exportOptions.endTimeMs = endTimeMs;
+		}
+
+		ReRender();
+		$dlg.append($content);
+		dialog = $dlg.dialog({
+			title: "Convert/export " + recIdArray.length + " clip" + (recIdArray.length === 1 ? "" : "s")
+			, overlayOpacity: 0.5
+		});
+	}
+
+	var ReRender = function ()
+	{
+		$content.empty();
+		if (headingLine1)
+			$content.append($('<div class="dialogOption_item clipprop_item_info"></div>').text(headingLine1));
+		if (headingLine2)
+			$content.append($('<div class="dialogOption_item clipprop_item_info"></div>').text(headingLine2));
+
+		var AddEditorField = MakeAddEditorFieldFn("Convert/export", $content, exportOptions);
+
+		var formatOptions = ["AVI", "MP4 (H.264, H.265, MPEG4 only)", "Windows Media"];
+		// Add legacy export option if available, otherwise make sure it is not the default choice
+		if (exporting_clips_to_avi_supported && recIdArray.length === 1)
+		{
+			classic_ui3_idx = formatOptions.length;
+			formatOptions.push("UI3 AVI (in-browser)");
+		}
+		else if (exportOptions.format >= formatOptions.length)
+			exportOptions.format = 1;
+
+		AddEditorField("Output format", "format", { type: "select", options: formatOptions, onChange: ReRender });
+		if (exportOptions.format != classic_ui3_idx)
+			AddEditorField("Encoder profile", "profile", { type: "select", options: ["export 0", "export 1", "export 2", "export 3"] });
+		AddEditorField("Include audio track", "audio", { type: "boolean", onChange: ReRender });
+		if (exportOptions.format != classic_ui3_idx)
+		{
+			AddEditorField("Re-encode video to H.264", "reencode", { type: "boolean", onChange: ReRender });
+			AddEditorField("Add the camera's current text and graphic overlay", "overlay", { type: "boolean", disabled: !exportOptions.reencode });
+			AddEditorField("Time-lapse", "timelapse", { type: "boolean", onChange: ReRender, disabled: !exportOptions.reencode || exportOptions.audio });
+			if (exportOptions.timelapse)
+			{
+				AddEditorField("Timelapse multiplier", "timelapseMultiplier", { min: 1, max: 86400, disabled: !exportOptions.reencode || exportOptions.audio || !exportOptions.timelapse });
+				AddEditorField("Timelapse max output fps", "timelapseFps", { min: 1, max: 120, disabled: !exportOptions.reencode || exportOptions.audio || !exportOptions.timelapse });
+			}
+		}
+		var $okBtn = $('<input type="button" value="Begin Export" />');
+		$okBtn.on('click', Ok_Click);
+		$content.append($('<div class="dialogOption_item_info" style="text-align: center;"></div>').append($okBtn));
+	}
+	var Ok_Click = function ()
+	{
+		settings.ui3_clip_export_format = exportOptions.format;
+		settings.ui3_clip_export_profile = exportOptions.profile;
+		settings.ui3_clip_export_withAudio = exportOptions.audio ? "1" : "0";
+		settings.ui3_clip_export_reencode = exportOptions.reencode ? "1" : "0";
+		settings.ui3_clip_export_overlay = exportOptions.overlay ? "1" : "0";
+		settings.ui3_clip_export_timelapse = exportOptions.timelapse ? "1" : "0";
+		settings.ui3_clip_export_timelapseMultiplier = exportOptions.timelapseMultiplier;
+		settings.ui3_clip_export_timelapseFps = exportOptions.timelapseFps;
+
+		// Time to export!
+		if (recIdArray.length === 1 && exportOptions.format === classic_ui3_idx)
+		{
+			// Use classic in-browser export method
+			var clipData = clipLoader.GetClipFromId(recIdArray[0]);
+			var fileDuration = Math.max(clipData.msec, 2);
+			var fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
+			var durationMs = endTimeMs - startTimeMs;
+			var percentOfClip = durationMs / fileDuration;
+			var estimatedSize = percentOfClip * fileSizeBytes;
+			var proceedFunc = function ()
+			{
+				new ClientsideClipExportDialog(clipData, startTimeMs, endTimeMs, exportOptions.audio);
+
+				if (typeof onExportStarted === "function")
+					onExportStarted(exportOptions);
+				dialog.close();
+			}
+			if (estimatedSize >= 950000000)
+			{
+				// 1 GB is the supposed limit for AVI files produced by UI3 at this time.
+				SimpleDialog.ConfirmText("Your selection size is very large, approximately " + formatBytes2(estimatedSize, 1) + ", and the export will probably fail.  Do you wish to try anyway?", proceedFunc);
+			}
+			else if (estimatedSize >= 450000000)
+			{
+				// 500-600 MB is the supposed limit for Blobs / Data URIs in some browsers.
+				SimpleDialog.ConfirmText("Your selection size is very large, approximately " + formatBytes2(estimatedSize, 1) + ", and the export may fail.  Do you wish to try anyway?", proceedFunc);
+			}
+			else
+				proceedFunc();
+			return;
+		}
+
+		if (typeof onExportStarted === "function")
+			onExportStarted(exportOptions);
+		dialog.close();
+
+		clipLoader.Multi_Export(recIdArray, exportOptions);
+
+		//for (var i = 0; i < recIdArray.length; i++)
+		//{
+		//	var clipData = clipLoader.GetClipFromId(recIdArray[i]);
+		//	if (clipData.isClip)
+		//	{
+		//		if (recIdArray.length === 1)
+		//			console.log("Export clip " + clipData.clipId + " from " + startTimeMs + " to " + endTimeMs);
+		//		else
+		//			console.log("Export clip " + clipData.clipId + " whole");
+		//	}
+		//	else // is Alert
+		//	{
+		//		if (recIdArray.length === 1)
+		//			console.log("Export clip " + clipData.clipId + " from " + startTimeMs + " to " + endTimeMs);
+		//		else
+		//		{
+		//			if ((clipData.flags & alert_flag_offsetMs) !== 0)
+		//			{
+		//				console.log("Export alert " + clipData.recId + "(clip " + clipData.clipId + " from " + clipData.offsetMs + " to " + (clipData.offsetMs + clipData.roughLengthMs) + ")");
+		//			}
+		//		}
+		//	}
+		//}
+	}
+	Initialize();
+}
+///////////////////////////////////////////////////////////////
+// Clientside Clip Export Dialog //////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClientsideClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 {
 	// <summary>This dialog controls the actual export operation and lacks a normal close button.</summary>
 	var self = this;
@@ -16357,7 +16431,7 @@ function ActiveClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 	var exportStreamer = new ClipExportStreamer(clipData.path, startTimeMs, durationMs, !fastExport, includeAudio, progressUpdate, exportComplete, enableRecordingOffsetWorkaround);
 }
 ///////////////////////////////////////////////////////////////
-// Clip Export Streaming //////////////////////////////////////
+// Clientside Clip Export Streaming ///////////////////////////
 ///////////////////////////////////////////////////////////////
 var ui3ClipIsExporting = false; // This flag helps the H.264 player module not end the fetch stream if the browser tab visibility changes.
 var enableRecordingOffsetWorkaround = true;
@@ -16827,12 +16901,18 @@ function DeleteAlert(path, isClip, cbSuccess, cbFailure)
 // Custom Checkboxes //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var customCheckboxId = 0;
-function GetCustomCheckbox(tag, label, checked, onChange)
+function GetCustomCheckbox(tag, label, checked, onChange, disabled)
 {
 	var myId = customCheckboxId++;
 	var $wrapper = $('<div class="customCheckboxWrapper"></div>');
 	var $cb = $('<input id="ccb_' + myId + '" type="checkbox" class="sliderCb" ' + (checked ? 'checked="checked" ' : '') + '/>');
-	$cb.on('change', function () { onChange(tag, $(this).is(":checked")); });
+	if (disabled)
+	{
+		$cb.attr("disabled", "disabled");
+		$wrapper.addClass("disabled");
+	}
+	else
+		$cb.on('change', function () { onChange(tag, $(this).is(":checked")); });
 	$wrapper.append($cb);
 	$wrapper.append('<label for="ccb_' + myId + '"><span class="ui"></span>' + label + '<div class="customCheckboxSpacer"></div></label>');
 	return $wrapper;
@@ -21181,10 +21261,13 @@ function UIFormField(args)
 		, options: null // array of option strings for "select" inputs
 		, minValue: undefined // number / range types
 		, maxValue: undefined // number / range types
+		, disabled: false
 	}, args);
 
+	var disabledClass = (o.disabled ? ' disabled' : '');
+
 	if (o.inputType === "checkbox")
-		return GetCustomCheckbox(o.tag, o.label, o.value === true || o.value === "1", o.onChange);
+		return GetCustomCheckbox(o.tag, o.label, o.value === true || o.value === "1", o.onChange, o.disabled);
 	else if (o.inputType === "select")
 	{
 		var sb = new StringBuilder();
@@ -21193,8 +21276,11 @@ function UIFormField(args)
 			sb.Append(GetHtmlOptionElementMarkup(o.options[i], o.options[i], o.value));
 		sb.Append('</select>');
 		var $input = $(sb.ToString());
-		$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
-		return $('<div class="dialogOption_item dialogOption_item_ddl"></div>').append($input).append(GetDialogOptionLabel(o.label));
+		if (o.disabled)
+			$input.attr("disabled", "disabled");
+		else
+			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
+		return $('<div class="dialogOption_item dialogOption_item_ddl' + disabledClass + '"></div>').append($input).append(GetDialogOptionLabel(o.label));
 	}
 	else if (o.inputType === "number" || o.inputType === "range")
 	{
@@ -21203,9 +21289,12 @@ function UIFormField(args)
 		if (typeof o.maxValue !== "undefined") $input.attr('max', o.maxValue);
 		if (typeof o.step !== "undefined") $input.attr('step', o.step);
 		$input.val(o.value);
-		$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
+		if (o.disabled)
+			$input.attr("disabled", "disabled");
+		else
+			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
 		var $label = $(GetDialogOptionLabel(o.label));
-		var classes = "dialogOption_item dialogOption_item_info";
+		var classes = "dialogOption_item dialogOption_item_info" + disabledClass;
 		if (o.inputType === "range")
 		{
 			if (typeof o.onInput === "function")
@@ -21238,8 +21327,11 @@ function UIFormField(args)
 		if (o.maxValue)
 			$input.attr('maxlength', o.maxValue);
 		$input.val(o.value);
-		$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
-		return $('<div class="dialogOption_item dialogOption_item_info"></div>').append($input).append(GetDialogOptionLabel(o.label));
+		if (o.disabled)
+			$input.attr("disabled", "disabled");
+		else
+			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
+		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + '"></div>').append($input).append(GetDialogOptionLabel(o.label));
 	}
 	else if (o.inputType === "errorCommentText")
 	{
@@ -21270,6 +21362,162 @@ function UIFormField(args)
 		console.error("Invalid arguments sent to UIFormField", args);
 		return $('<div class="dialogOption_item dialogOption_item_info">Invalid arguments sent to UIFormField.</div>');
 	}
+}
+function MakeAddEditorFieldFn(title, $content, obj)
+{
+	var rowIdx = 0;
+	var AddEditorField = function (label, key, options)
+	{
+		if (!options)
+			options = {};
+		var $row = $('<div class="profileEditorRow"></div>');
+		if (rowIdx++ % 2 === 1)
+			$row.addClass('everyOther');
+
+		var value = obj[key];
+		var valueType = typeof value;
+		var type = options.type;
+		if (!type)
+			type = valueType;
+
+		if (valueType === "number")
+		{
+			if (value < 0)
+			{
+				obj[key] = -1;
+				value = "";
+			}
+			else if (typeof options.min === "number" && value < options.min)
+			{
+				obj[key] = options.min;
+				value = options.min;
+			}
+			else if (typeof options.max === "number" && value > options.max)
+			{
+				obj[key] = options.max;
+				value = options.max;
+			}
+		}
+
+		var formFields = {
+			value: value
+			, label: label
+			, tag: key
+			, disabled: !!options.disabled
+		};
+		if (type === "boolean")
+		{
+			formFields.inputType = "checkbox";
+			formFields.onChange = CheckboxChanged;
+		}
+		else if (type === "string")
+		{
+			formFields.inputType = "text";
+			formFields.onChange = TextChanged;
+			formFields.maxValue = options.max;
+		}
+		else if (type === "color")
+		{
+			formFields.inputType = "color";
+			formFields.onChange = TextChanged;
+			formFields.maxValue = 7;
+			if (formFields.value.length === 6)
+				formFields.value = "#" + formFields.value;
+		}
+		else if (type === "number")
+		{
+			formFields.inputType = "number";
+			formFields.onChange = NumberChanged;
+			formFields.minValue = options.min;
+			formFields.maxValue = options.max;
+		}
+		else if (type === "select")
+		{
+			formFields.inputType = "select";
+			formFields.onChange = SelectChanged
+			formFields.options = options.options;
+			if (valueType === "number")
+			{
+				if (valueType < 0 || valueType >= options.options.length)
+					toaster.Error(title + " Error: invalid value for " + label + ": " + value, 30000);
+				else
+					formFields.value = options.options[value];
+			}
+		}
+		else if (type === "comment")
+		{
+			formFields.inputType = "commentText";
+		}
+		else if (type === "errorComment")
+		{
+			formFields.inputType = "errorCommentText";
+		}
+		else
+		{
+			formFields.inputType = "noteText";
+			formFields.label = "Unknown object type: '" + type + "' with value '" + value + "' and label '" + label + "'";
+		}
+		if (typeof options.onChange === "function")
+		{
+			// An extra onChange method was provided. Create a wrapper to see both applied.
+			var oldOnChange = formFields.onChange;
+			formFields.onChange = function ()
+			{
+				if (typeof oldOnChange === "function")
+					oldOnChange.apply(this, arguments);
+				options.onChange.apply(this, arguments);
+			}
+		}
+		$row.append(UIFormField(formFields));
+
+		$content.append($row);
+	};
+	var CheckboxChanged = function (key, checked)
+	{
+		obj[key] = checked;
+	};
+	var TextChanged = function (e, key, $input)
+	{
+		obj[key] = $input.val();
+	};
+	var SelectChanged = function (e, key, $select)
+	{
+		var type = typeof obj[key];
+		if (type === "number")
+			$select.children('option').each(function (idx, ele)
+			{
+				if ($(ele).is(':selected'))
+				{
+					obj[key] = idx;
+					return;
+				}
+			});
+		else
+			obj[key] = $select.val();
+	};
+	var NumberChanged = function (e, key, $input)
+	{
+		var value = parseFloat($input.val());
+		if (isNaN(value))
+			obj[key] = -1;
+		else
+		{
+			var min = parseFloat($input.attr('min'));
+			var max = parseFloat($input.attr('max'));
+			if (min > max)
+			{
+				var tmp = min;
+				min = max;
+				max = tmp;
+			}
+			if (!isNaN(min) && value < min)
+				$input.val(value = min);
+			else if (!isNaN(max) && value > max)
+				$input.val(value = max);
+			obj[key] = value;
+		}
+	};
+	return AddEditorField;
 }
 ///////////////////////////////////////////////////////////////
 // UI Help ////////////////////////////////////////////////////
