@@ -461,6 +461,7 @@ var togglableUIFeatures =
 // CONSIDER: Stop using ImageToDataUrl for the clip thumbnail mouseover popup, now that clip thumbnails are cacheable.  I'm not sure there is a point though.
 // CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
 // CONSIDER: Firefox on Android has trouble with switching cameras and seeking.
+// KNOWN: Black frame shown when pausing HTML5 player before first frame is rendered. This is caused by destroying the jmuxer instance before the frame has rendered. Skipping or delaying the destroy causes camera-changing weirdness, so this is the lesser nuisance.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
