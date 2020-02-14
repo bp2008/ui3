@@ -445,7 +445,6 @@ var togglableUIFeatures =
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
 // TODO: Export API
-// * Fix bug where you can try to export snapshots.
 // * Try with limited user accounts
 // * Replace the "download" button in playback controls whenever the open file type is BVR.
 // * Flash the small export controls bar when initiating an export
@@ -458,6 +457,7 @@ var togglableUIFeatures =
 // * New export API should not be locked behind any particular browser features.
 // * Legacy avi export should remain an option in supported browsers.
 // * Reuse setting ui3_clip_export_withAudio
+// * Fix bug where you can try to export snapshots.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -7358,17 +7358,34 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (!sessionManager.IsAdministratorSession())
 			return openLoginDialog(function () { self.Multi_Flag(clipIDs, flagEnable, idx, myToast); });
-		Start_Multi_Operation("flag", clipIDs, { flagEnable: flagEnable });
+		Start_Multi_Operation("flag", GetClipDatas(clipIDs), { flagEnable: flagEnable });
 	}
 	this.Multi_Protect = function (clipIDs, protectEnable, idx, myToast)
 	{
 		if (!sessionManager.IsAdministratorSession())
 			return openLoginDialog(function () { self.Multi_Protect(clipIDs, protectEnable, idx, myToast); });
-		Start_Multi_Operation("protect", clipIDs, { protectEnable: protectEnable });
+		Start_Multi_Operation("protect", GetClipDatas(clipIDs), { protectEnable: protectEnable });
 	}
 	this.Multi_Export = function (clipIDs, exportOptions, onFinish)
 	{
-		Start_Multi_Operation("export", clipIDs, exportOptions, onFinish);
+		var clipDatas = GetClipDatas(clipIDs);
+		var filtered = [];
+		var removedSnapshots = false;
+		var removedNonBvr = false;
+		for (var i = 0; i < clipDatas.length; i++)
+		{
+			if (clipDatas[i].isSnapshot)
+				removedSnapshots = true;
+			else if (!clipDatas[i].rawData.filetype.startsWithCaseInsensitive("bvr "))
+				removedNonBvr = true;
+			else
+				filtered.push(clipDatas[i]);
+		}
+		if (removedSnapshots)
+			toaster.Info("Snapshots are not exportable. You may simply download them instead.", 15000);
+		if (removedNonBvr)
+			toaster.Info("Non-BVR sources are not exportable. You may simply download them instead.", 15000);
+		Start_Multi_Operation("export", filtered, exportOptions, onFinish);
 	}
 	this.Multi_Delete = function (allSelectedClipIDs)
 	{
@@ -7426,11 +7443,11 @@ function ClipLoader(clipsBodySelector)
 			clipDatas[i] = self.GetClipFromId(clipIds[i]);
 		return clipDatas;
 	};
-	var Start_Multi_Operation = function (operation, allSelectedClipIDs, args, onFinish)
+	var Start_Multi_Operation = function (operation, clipDatas, args, onFinish)
 	{
 		var options = {
 			operation: operation
-			, clips: GetClipDatas(allSelectedClipIDs)
+			, clips: clipDatas
 			, recordingType: currentPrimaryTab == "clips" ? "clip" : "alert"
 			, args: args
 			, idx: 0
@@ -7602,6 +7619,14 @@ function ClipLoader(clipsBodySelector)
 		return -1;
 	}
 	// End of Helpers
+	this.GetUnexportableReason = function (clipData)
+	{
+		if (clipData.isSnapshot)
+			return "Snapshots are not exportable. You may simply download them instead.";
+		else if (!clipData.rawData.filetype.startsWithCaseInsensitive("bvr "))
+			return "Non-BVR sources are not exportable. You may simply download them instead.";
+		return null;
+	}
 	this.GetClipFileTypeInfo = function (clipData)
 	{
 		var info = { isBVR: false, isH264: false };
@@ -14826,7 +14851,14 @@ function CanvasContextMenu()
 			case "downloadclip":
 				return true;
 			case "convertexport":
-				exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+				if (lastRecordContextMenuSelectedClip)
+				{
+					var unexportableReason = clipLoader.GetUnexportableReason(lastRecordContextMenuSelectedClip);
+					if (lastRecordContextMenuSelectedClip.isSnapshot && unexportableReason) // Classic UI3 AVI export still works with non-BVR video files, though API export doesn't.
+						toaster.Info(unexportableReason, 15000);
+					else
+						exportControls.Enable(lastRecordContextMenuSelectedClip.recId);
+				}
 				break;
 			case "closeclip":
 				clipLoader.CloseCurrentClip();
@@ -15062,8 +15094,15 @@ function ClipListContextMenu()
 				{
 					if (allSelectedClipIDs.length === 1)
 					{
-						videoPlayer.LoadClip(clipLoader.GetClipFromId(allSelectedClipIDs[0]));
-						exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+						var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[0]);
+						var unexportableReason = clipLoader.GetUnexportableReason(clipData);
+						if (clipData.isSnapshot && unexportableReason) // Classic UI3 AVI export still works with non-BVR video files, though API export doesn't.
+							toaster.Info(unexportableReason, 15000);
+						else
+						{
+							videoPlayer.LoadClip(clipData);
+							exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+						}
 					}
 					else
 					{
@@ -16103,14 +16142,17 @@ function ClipProperties()
 			}
 			$camprop.append(GetInfoEleValue("Download", $link));
 
-			var $exportBtn = $('<a href="javascript:void(0)">Export a section of the clip.</a>');
-			$exportBtn.on('click', function ()
+			if (!clipData.isSnapshot)
 			{
-				videoPlayer.LoadClip(clipData);
-				exportControls.Enable(videoPlayer.Loading().image.uniqueId);
-				dialog.close();
-			});
-			$camprop.append(GetInfoEleValue("Convert/export", $exportBtn));
+				var $exportBtn = $('<a href="javascript:void(0)">Export a section of the clip.</a>');
+				$exportBtn.on('click', function ()
+				{
+					videoPlayer.LoadClip(clipData);
+					exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+					dialog.close();
+				});
+				$camprop.append(GetInfoEleValue("Convert/export", $exportBtn));
+			}
 
 			if (developerMode)
 			{
@@ -16225,6 +16267,7 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 	var classic_ui3_idx = -1;
 	var headingLine1 = null;
 	var headingLine2 = null;
+	var limitedFormatOptions = false;
 
 	function Initialize()
 	{
@@ -16239,12 +16282,13 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 			exportOptions.endTimeMs = endTimeMs;
 		}
 
-		ReRender();
 		$dlg.append($content);
 		dialog = $dlg.dialog({
 			title: "Convert/export " + recIdArray.length + " clip" + (recIdArray.length === 1 ? "" : "s")
 			, overlayOpacity: 0.5
 		});
+
+		ReRender();
 	}
 
 	var ReRender = function ()
@@ -16258,14 +16302,36 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 		var AddEditorField = MakeAddEditorFieldFn("Convert/export", $content, exportOptions);
 
 		var formatOptions = ["AVI", "MP4 (H.264, H.265, MPEG4 only)", "Windows Media"];
-		// Add legacy export option if available, otherwise make sure it is not the default choice
-		if (exporting_clips_to_avi_supported && recIdArray.length === 1)
+
+		if (recIdArray.length === 1)
 		{
-			classic_ui3_idx = formatOptions.length;
-			formatOptions.push("UI3 AVI (in-browser)");
+			// There is only one clip, so we can expose UI3 AVI format if the browser supports it.
+			var clipData = clipLoader.GetClipFromId(recIdArray[0]);
+			var unexportableReason = clipLoader.GetUnexportableReason(clipData);
+			if (unexportableReason)
+			{
+				// This clip is not exportable by any means other than UI3 AVI format.
+				limitedFormatOptions = true;
+				formatOptions = [];
+				if (!exporting_clips_to_avi_supported)
+				{
+					/// UI3 AVI format is not supported!
+					toaster.Info(unexportableReason, 15000);
+					dialog.close();
+					return;
+				}
+			}
+			// Add legacy export option if available, otherwise make sure it is not the default choice
+			if (exporting_clips_to_avi_supported)
+			{
+				classic_ui3_idx = formatOptions.length;
+				formatOptions.push("UI3 AVI (in-browser)");
+			}
+			if (exportOptions.format >= formatOptions.length)
+				exportOptions.format = 1;
+			if (exportOptions.format >= formatOptions.length)
+				exportOptions.format = 0;
 		}
-		else if (exportOptions.format >= formatOptions.length)
-			exportOptions.format = 1;
 
 		AddEditorField("Output format", "format", { type: "select", options: formatOptions, onChange: ReRender });
 		if (exportOptions.format != classic_ui3_idx)
@@ -16289,7 +16355,8 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 
 	var Ok_Click = function ()
 	{
-		settings.ui3_clip_export_format = exportOptions.format;
+		if (!limitedFormatOptions)
+			settings.ui3_clip_export_format = exportOptions.format;
 		settings.ui3_clip_export_profile = exportOptions.profile;
 		settings.ui3_clip_export_withAudio = exportOptions.audio ? "1" : "0";
 		settings.ui3_clip_export_reencode = exportOptions.reencode ? "1" : "0";
@@ -22256,9 +22323,9 @@ String.prototype.startsWith = function (prefix)
 }
 String.prototype.startsWithCaseInsensitive = function (prefix)
 {
-	if (this.length < suffix.length)
+	if (this.length < prefix.length)
 		return false;
-	return this.substr(0, suffix.length).toLowerCase() === suffix.toLowerCase();
+	return this.toLowerCase().startsWith(prefix.toLowerCase());
 }
 String.prototype.endsWith = function (suffix)
 {
