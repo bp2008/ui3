@@ -366,6 +366,7 @@ var streamingProfileUI = null;
 var ptzButtons = null;
 var playbackHeader = null;
 var exportControls = null;
+var exportAPIStatusToast = null;
 var seekBar = null;
 var playbackControls = null;
 var clipTimeline = null;
@@ -444,11 +445,19 @@ var togglableUIFeatures =
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
 // TODO: Export API
+// * Fix bug where you can try to export snapshots.
+// * Try with limited user accounts
+// * Replace the "download" button in playback controls whenever the open file type is BVR.
+// * Flash the small export controls bar when initiating an export
+// * Invert the green and red start/end marker direction so they do not extend offscreen.
+// * "Convert/Export List" item in main menu
+// * "Convert/Export List" panel, linked from "Exports Finished" toast.
+
+// Export API DONE:
 // * Integrate new export API.
 // * New export API should not be locked behind any particular browser features.
 // * Legacy avi export should remain an option in supported browsers.
 // * Reuse setting ui3_clip_export_withAudio
-// * Fix bug where you can try to export snapshots.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -2398,6 +2407,8 @@ $(function ()
 	SetupCollapsibleTriggers();
 
 	exportControls = new ExportControls();
+
+	exportAPIStatusToast = new ExportAPIStatusToast();
 
 	seekBar = new SeekBar();
 
@@ -7343,21 +7354,21 @@ function ClipLoader(clipsBodySelector)
 	{
 		return (clipData.flags & clip_flag_flag) > 0;
 	}
-	this.Multi_Flag = function (allSelectedClipIDs, flagEnable, idx, myToast)
+	this.Multi_Flag = function (clipIDs, flagEnable, idx, myToast)
 	{
 		if (!sessionManager.IsAdministratorSession())
-			return openLoginDialog(function () { self.Multi_Flag(allSelectedClipIDs, flagEnable, idx, myToast); });
-		Multi_Operation("flag", GetClipDatas(allSelectedClipIDs), { flagEnable: flagEnable }, 0, null, 0);
+			return openLoginDialog(function () { self.Multi_Flag(clipIDs, flagEnable, idx, myToast); });
+		Start_Multi_Operation("flag", clipIDs, { flagEnable: flagEnable });
 	}
-	this.Multi_Protect = function (allSelectedClipIDs, protectEnable, idx, myToast)
+	this.Multi_Protect = function (clipIDs, protectEnable, idx, myToast)
 	{
 		if (!sessionManager.IsAdministratorSession())
-			return openLoginDialog(function () { self.Multi_Protect(allSelectedClipIDs, protectEnable, idx, myToast); });
-		Multi_Operation("protect", GetClipDatas(allSelectedClipIDs), { protectEnable: protectEnable }, 0, null, 0);
+			return openLoginDialog(function () { self.Multi_Protect(clipIDs, protectEnable, idx, myToast); });
+		Start_Multi_Operation("protect", clipIDs, { protectEnable: protectEnable });
 	}
-	this.Multi_Export = function (allSelectedClipIDs, exportOptions)
+	this.Multi_Export = function (clipIDs, exportOptions, onFinish)
 	{
-		Multi_Operation("export", GetClipDatas(allSelectedClipIDs), exportOptions, 0, null, 0);
+		Start_Multi_Operation("export", clipIDs, exportOptions, onFinish);
 	}
 	this.Multi_Delete = function (allSelectedClipIDs)
 	{
@@ -7415,117 +7426,133 @@ function ClipLoader(clipsBodySelector)
 			clipDatas[i] = self.GetClipFromId(clipIds[i]);
 		return clipDatas;
 	};
-	var Multi_Operation = function (operation, allSelectedClips, args, idx, myToast, errorCount)
+	var Start_Multi_Operation = function (operation, allSelectedClipIDs, args, onFinish)
 	{
-		if (!idx)
-			idx = 0;
-		if (!errorCount)
-			errorCount = 0;
-
-		if (idx == 0 && bulkOperationInProgress)
+		var options = {
+			operation: operation
+			, clips: GetClipDatas(allSelectedClipIDs)
+			, recordingType: currentPrimaryTab == "clips" ? "clip" : "alert"
+			, args: args
+			, idx: 0
+			, myToast: null
+			, errorCount: 0
+			, onFinish: onFinish
+		};
+		Multi_Operation(options);
+	}
+	var Multi_Operation = function (o)
+	{
+		if (o.idx == 0 && bulkOperationInProgress)
 		{
 			toaster.Warning("Another bulk operation is in progress.  Please wait for it to finish before starting another.", 10000);
 			return;
 		}
 
-		if (idx >= allSelectedClips.length)
+		if (o.idx >= o.clips.length)
 		{
-			Multi_Operation_Stop(operation, myToast, allSelectedClips.length, errorCount);
+			Multi_Operation_Stop(o);
 			return;
 		}
 
 		bulkOperationInProgress = true;
 
-		if (myToast)
+		if (o.myToast)
 		{
-			var $root = $("#multi_" + operation + "_status_toast");
+			var $root = $("#multi_" + o.operation + "_status_toast");
 			if ($root.length > 0)
 			{
 				var $count = $root.find(".multi_operation_count");
-				$count.text(idx + 1);
+				$count.text(o.idx + 1);
 				var $wrap = $root.find(".multi_operation_status_wrapper");
 				var $bar = $wrap.find(".multi_operation_status_bar");
-				var progressPercent = idx / allSelectedClips.length;
+				var progressPercent = o.idx / o.clips.length;
 				$bar.css("width", (progressPercent * 100) + "%");
 			}
 		}
 		else
 		{
 			var verb = "ERROR";
-			if (operation == "flag")
-				verb = args.flagEnable ? "Flagging" : "Unflagging";
-			else if (operation == "protect")
-				verb = args.protectEnable ? "Protecting" : "Unprotecting";
-			else if (operation == "export")
+			if (o.operation == "flag")
+				verb = o.args.flagEnable ? "Flagging" : "Unflagging";
+			else if (o.operation == "protect")
+				verb = o.args.protectEnable ? "Protecting" : "Unprotecting";
+			else if (o.operation == "export")
 				verb = "Queueing export of";
-			myToast = toaster.Info('<div id="multi_' + operation + '_status_toast" class="multi_operation_status_toast">'
-				+ '<div>' + verb + ' ' + (currentPrimaryTab == "clips" ? "clip" : "alert") + ' <span class="multi_operation_count">' + (idx + 1) + '</span> / ' + allSelectedClips.length + '</div>'
+			o.myToast = toaster.Info('<div id="multi_' + o.operation + '_status_toast" class="multi_operation_status_toast">'
+				+ '<div>' + verb + ' ' + o.recordingType + ' <span class="multi_operation_count">' + (o.idx + 1) + '</span> / ' + o.clips.length + '</div>'
 				+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
-				+ '</div>', 60000, true);
+				+ '</div>', 86400000, true);
 		}
 
-		var clipData = allSelectedClips[idx];
+		var clipData = o.clips[o.idx];
 		if (clipData)
 		{
-			if (operation == "flag")
+			o.idx++;
+			if (o.operation == "flag")
 			{
 				var isFlagged = self.ClipDataIndicatesFlagged(clipData);
-				if ((isFlagged && !args.flagEnable) || (!isFlagged && args.flagEnable))
+				if ((isFlagged && !o.args.flagEnable) || (!isFlagged && o.args.flagEnable))
 				{
 					self.ToggleClipFlag(clipData, function ()
 					{
-						Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount);
+						Multi_Operation(o);
 					}, function ()
 					{
-						Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount + 1);
+						o.errorCount++;
+						Multi_Operation(o);
 					});
 					return;
 				}
 			}
-			else if (operation == "protect")
+			else if (o.operation == "protect")
 			{
 				var isProtected = (clipData.flags & clip_flag_protect) > 0;
-				if ((isProtected && !args.protectEnable) || (!isProtected && args.protectEnable))
+				if ((isProtected && !o.args.protectEnable) || (!isProtected && o.args.protectEnable))
 				{
 					self.ToggleClipProtect(clipData, function ()
 					{
-						Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount);
+						Multi_Operation(o);
 					}, function ()
 					{
-						Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount + 1);
+						o.errorCount++;
+						Multi_Operation(o);
 					});
 					return;
 				}
 			}
-			else if (operation == "export")
+			else if (o.operation == "export")
 			{
-				self.QueueExportViaAPI(clipData, args, function ()
+				self.QueueExportViaAPI(clipData, o.args, function ()
 				{
-					Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount);
+					Multi_Operation(o);
 				}, function ()
 				{
-					Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount + 1);
+					o.errorCount++;
+					Multi_Operation(o);
 				});
 				return;
 			}
 		}
 		else
 		{
-			console.error('Null clipData encountered at index ' + idx);
-			errorCount++;
+			console.error('Null clipData encountered at index ' + o.idx);
+			o.idx++;
+			o.errorCount++;
 		}
 		setTimeout(function ()
 		{
-			Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount);
+			Multi_Operation(o);
 		}, 0);
 	}
-	var Multi_Operation_Stop = function (operation, myToast, totalItems, errorCount)
+	var Multi_Operation_Stop = function (o)
 	{
 		bulkOperationInProgress = false;
-		if (myToast)
-			myToast.remove();
-		if (errorCount > 0)
-			toaster.Error("Bulk " + operation + " operation failed on<br/> " + errorCount + " / " + totalItems + " items.", 15000);
+		if (o.myToast)
+			o.myToast.remove();
+		if (o.errorCount > 0)
+			toaster.Error("Bulk " + o.operation + " operation failed on<br/> " + o.errorCount + " / " + o.clips.length + " items.", 15000);
+		if (typeof o.onFinish === "function")
+			o.onFinish(o);
 	}
 	this.GetCurrentClipEle = function ()
 	{
@@ -16259,6 +16286,7 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 		$okBtn.on('click', Ok_Click);
 		$content.append($('<div class="dialogOption_item_info" style="text-align: center;"></div>').append($okBtn));
 	}
+
 	var Ok_Click = function ()
 	{
 		settings.ui3_clip_export_format = exportOptions.format;
@@ -16307,33 +16335,139 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 			onExportStarted(exportOptions);
 		dialog.close();
 
-		clipLoader.Multi_Export(recIdArray, exportOptions);
-
-		//for (var i = 0; i < recIdArray.length; i++)
-		//{
-		//	var clipData = clipLoader.GetClipFromId(recIdArray[i]);
-		//	if (clipData.isClip)
-		//	{
-		//		if (recIdArray.length === 1)
-		//			console.log("Export clip " + clipData.clipId + " from " + startTimeMs + " to " + endTimeMs);
-		//		else
-		//			console.log("Export clip " + clipData.clipId + " whole");
-		//	}
-		//	else // is Alert
-		//	{
-		//		if (recIdArray.length === 1)
-		//			console.log("Export clip " + clipData.clipId + " from " + startTimeMs + " to " + endTimeMs);
-		//		else
-		//		{
-		//			if ((clipData.flags & alert_flag_offsetMs) !== 0)
-		//			{
-		//				console.log("Export alert " + clipData.recId + "(clip " + clipData.clipId + " from " + clipData.offsetMs + " to " + (clipData.offsetMs + clipData.roughLengthMs) + ")");
-		//			}
-		//		}
-		//	}
-		//}
+		clipLoader.Multi_Export(recIdArray, exportOptions, exportAPIStatusToast.show);
 	}
+
+	var startExportStatusToast = function ()
+	{
+	}
+
 	Initialize();
+}
+///////////////////////////////////////////////////////////////
+// Export API Status Toast ////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ExportAPIStatusToast()
+{
+	var self = this;
+
+	var isActive = false;
+	var myToast = null;
+	var $progressBar = null;
+	var $activeItem = null;
+	var $itemsQueued = null;
+	var updateTimeout = null;
+
+	this.show = function ()
+	{
+		if (isActive)
+			return;
+
+		isActive = true;
+
+		update();
+	}
+	var update = function ()
+	{
+		ExecJSON({ cmd: "export", summary: true }
+			, function (response)
+			{
+				if (!isActive)
+				{
+					// We could call stop() here if we wanted to prevent the eventual "Exports Finished" toast.
+					return;
+				}
+				if (response.result === "success")
+				{
+					if (response.data)
+					{
+						var queued = parseInt(response.data.queued);
+						var activeArr = response.data.active;
+						if (queued === 0 && (!activeArr || !activeArr.length))
+						{
+							stop();
+							exportsFinished();
+						}
+						else
+						{
+							if (!myToast)
+							{
+								myToast = toaster.Info('<div id="export_api_status_toast">'
+									+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
+									+ '<div class="active_item"></div>'
+									+ '<div><span class="items_queued"></span></div>'
+									+ '</div>', 86400000, true);
+								var $body = $("#export_api_status_toast");
+								$progressBar = $body.find(".multi_operation_status_bar");
+								$activeItem = $body.find(".active_item");
+								$itemsQueued = $body.find(".items_queued");
+							}
+
+							var progressPercent = 0;
+							var fileName = "";
+							if (activeArr && activeArr.length > 0)
+							{
+								progressPercent = Clamp(parseFloat(activeArr[0].progress), 0, 100);
+								fileName = activeArr[0].uri;
+							}
+
+							$progressBar.css("width", progressPercent + "%");
+							$activeItem.text(fileName);
+							if (queued > 0)
+								$itemsQueued.text(queued + " job" + (queued == 1 ? "" : "s") + " queued");
+							else
+								$itemsQueued.text("");
+
+
+							updateTimeout = setTimeout(update, 1000);
+						}
+					}
+					else
+						error("Export status response was missing the data field.");
+				}
+				else
+				{
+					console.error(response);
+					if (response.result === "fail" && response.status)
+						error(response.status);
+					else if (response.result === "fail" && response.data && response.data.reason)
+						error(response.data.reason);
+					else
+						error("An unspecified error occurred updating export status.");
+				}
+			}
+			, function (jqXHR, textStatus, errorThrown)
+			{
+				if (!isActive)
+					return;
+				error(jqXHR.ErrorMessageHtml);
+			});
+	}
+	var error = function (errMsgHtml)
+	{
+		stop();
+		toaster.Error(errMsgHtml, 15000);
+	}
+	var stop = function ()
+	{
+		isActive = false;
+		clearTimeout(updateTimeout);
+		if (myToast)
+		{
+			myToast.remove();
+			myToast = null;
+			$progressBar = null;
+			$activeItem = null;
+			$itemsQueued = null;
+		}
+	}
+	var exportsFinished = function ()
+	{
+		toaster.Success('Exports Finished<br><br><span style="text-decoration: underline;">Click here</span> to view and download your exported video clips.', 60000, true, function ()
+		{
+			console.log(arguments);
+		});
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Clientside Clip Export Dialog //////////////////////////////
