@@ -7200,12 +7200,17 @@ function ClipLoader(clipsBodySelector)
 	this.QueueExportViaAPI = function (clipData, exportOptions, onSuccess, onFailure)
 	{
 		var args = { cmd: "export", path: clipData.path };
-		if (exportOptions.startTimeMs > 0 && exportOptions.endTimeMs > exportOptions.startTimeMs)
+		if (exportOptions.startTimeMs >= 0 && exportOptions.endTimeMs > exportOptions.startTimeMs)
 		{
 			args.startms = exportOptions.startTimeMs;
 			args.msec = exportOptions.endTimeMs - exportOptions.startTimeMs;
 		}
-		else if (!clipData.isClip)
+		else if (clipData.isClip)
+		{
+			args.startms = 0;
+			args.msec = clipData.msec;
+		}
+		else
 		{
 			// This is an alert we're trying to export.  We can probably set a range.
 			if ((clipData.flags & alert_flag_offsetMs) !== 0)
@@ -7213,7 +7218,14 @@ function ClipLoader(clipsBodySelector)
 				args.startms = clipData.offsetMs;
 				args.msec = clipData.roughLengthMs;
 			}
+			else
+			{
+				args.startms = 0;
+				args.msec = clipData.msec;
+			}
 		}
+		args.startms = parseInt(args.startms);
+		args.msec = parseInt(args.msec);
 		args.format = exportOptions.format;
 		args.profile = exportOptions.profile;
 		args.audio = exportOptions.audio;
@@ -7335,17 +7347,17 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (!sessionManager.IsAdministratorSession())
 			return openLoginDialog(function () { self.Multi_Flag(allSelectedClipIDs, flagEnable, idx, myToast); });
-		Multi_Operation("flag", allSelectedClipIDs, { flagEnable: flagEnable }, 0, null, 0);
+		Multi_Operation("flag", GetClipDatas(allSelectedClipIDs), { flagEnable: flagEnable }, 0, null, 0);
 	}
 	this.Multi_Protect = function (allSelectedClipIDs, protectEnable, idx, myToast)
 	{
 		if (!sessionManager.IsAdministratorSession())
 			return openLoginDialog(function () { self.Multi_Protect(allSelectedClipIDs, protectEnable, idx, myToast); });
-		Multi_Operation("protect", allSelectedClipIDs, { protectEnable: protectEnable }, 0, null, 0);
+		Multi_Operation("protect", GetClipDatas(allSelectedClipIDs), { protectEnable: protectEnable }, 0, null, 0);
 	}
 	this.Multi_Export = function (allSelectedClipIDs, exportOptions)
 	{
-		Multi_Operation("export", allSelectedClipIDs, exportOptions, 0, null, 0);
+		Multi_Operation("export", GetClipDatas(allSelectedClipIDs), exportOptions, 0, null, 0);
 	}
 	this.Multi_Delete = function (allSelectedClipIDs)
 	{
@@ -7396,7 +7408,14 @@ function ClipLoader(clipsBodySelector)
 			}
 		}
 	}
-	var Multi_Operation = function (operation, allSelectedClipIDs, args, idx, myToast, errorCount)
+	var GetClipDatas = function (clipIds)
+	{
+		var clipDatas = new Array(clipIds.length);
+		for (var i = 0; i < clipIds.length; i++)
+			clipDatas[i] = self.GetClipFromId(clipIds[i]);
+		return clipDatas;
+	};
+	var Multi_Operation = function (operation, allSelectedClips, args, idx, myToast, errorCount)
 	{
 		if (!idx)
 			idx = 0;
@@ -7409,9 +7428,9 @@ function ClipLoader(clipsBodySelector)
 			return;
 		}
 
-		if (idx >= allSelectedClipIDs.length)
+		if (idx >= allSelectedClips.length)
 		{
-			Multi_Operation_Stop(operation, myToast, allSelectedClipIDs.length, errorCount);
+			Multi_Operation_Stop(operation, myToast, allSelectedClips.length, errorCount);
 			return;
 		}
 
@@ -7426,7 +7445,7 @@ function ClipLoader(clipsBodySelector)
 				$count.text(idx + 1);
 				var $wrap = $root.find(".multi_operation_status_wrapper");
 				var $bar = $wrap.find(".multi_operation_status_bar");
-				var progressPercent = idx / allSelectedClipIDs.length;
+				var progressPercent = idx / allSelectedClips.length;
 				$bar.css("width", (progressPercent * 100) + "%");
 			}
 		}
@@ -7440,12 +7459,12 @@ function ClipLoader(clipsBodySelector)
 			else if (operation == "export")
 				verb = "Queueing export of";
 			myToast = toaster.Info('<div id="multi_' + operation + '_status_toast" class="multi_operation_status_toast">'
-				+ '<div>' + verb + ' ' + (currentPrimaryTab == "clips" ? "clip" : "alert") + ' <span class="multi_operation_count">' + (idx + 1) + '</span> / ' + allSelectedClipIDs.length + '</div>'
+				+ '<div>' + verb + ' ' + (currentPrimaryTab == "clips" ? "clip" : "alert") + ' <span class="multi_operation_count">' + (idx + 1) + '</span> / ' + allSelectedClips.length + '</div>'
 				+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
 				+ '</div>', 60000, true);
 		}
 
-		var clipData = self.GetClipFromId(allSelectedClipIDs[idx]);
+		var clipData = allSelectedClips[idx];
 		if (clipData)
 		{
 			if (operation == "flag")
@@ -7455,10 +7474,10 @@ function ClipLoader(clipsBodySelector)
 				{
 					self.ToggleClipFlag(clipData, function ()
 					{
-						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
+						Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount);
 					}, function ()
 					{
-						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
+						Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount + 1);
 					});
 					return;
 				}
@@ -7470,10 +7489,10 @@ function ClipLoader(clipsBodySelector)
 				{
 					self.ToggleClipProtect(clipData, function ()
 					{
-						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
+						Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount);
 					}, function ()
 					{
-						Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
+						Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount + 1);
 					});
 					return;
 				}
@@ -7482,22 +7501,22 @@ function ClipLoader(clipsBodySelector)
 			{
 				self.QueueExportViaAPI(clipData, args, function ()
 				{
-					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
+					Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount);
 				}, function ()
 				{
-					Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount + 1);
+					Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount + 1);
 				});
 				return;
 			}
 		}
 		else
 		{
-			console.log('Null clipData encountered (clip ID "' + allSelectedClipIDs[idx] + '")');
+			console.error('Null clipData encountered at index ' + idx);
 			errorCount++;
 		}
 		setTimeout(function ()
 		{
-			Multi_Operation(operation, allSelectedClipIDs, args, idx + 1, myToast, errorCount);
+			Multi_Operation(operation, allSelectedClips, args, idx + 1, myToast, errorCount);
 		}, 0);
 	}
 	var Multi_Operation_Stop = function (operation, myToast, totalItems, errorCount)
