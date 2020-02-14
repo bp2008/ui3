@@ -4350,7 +4350,25 @@ div::-webkit-scrollbar-corner
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
-	margin: 4px 8px;
+	padding: 4px 8px;
+}
+
+	#exportControlsWrapper.flashing
+	{
+		animation: flashingExportControls 1000ms ease 0s 1;
+	}
+
+@keyframes flashingExportControls
+{
+	from
+	{
+		background-color: #59b3f9;
+	}
+
+	to
+	{
+		background-color: transparent;
+	}
 }
 
 #exportControlsStatus

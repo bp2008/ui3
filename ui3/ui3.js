@@ -446,8 +446,6 @@ var togglableUIFeatures =
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
 // TODO: Export API
 // * Try with limited user accounts
-// * Replace the "download" button in playback controls whenever the open file type is BVR.
-// * Flash the small export controls bar when initiating an export
 // * Invert the green and red start/end marker direction so they do not extend offscreen.
 // * "Convert/Export List" item in main menu
 // * "Convert/Export List" panel, linked from "Exports Finished" toast.
@@ -458,6 +456,8 @@ var togglableUIFeatures =
 // * Legacy avi export should remain an option in supported browsers.
 // * Reuse setting ui3_clip_export_withAudio
 // * Fix bug where you can try to export snapshots.
+// * Replace the "download" button in playback controls whenever the open file type is BVR.
+// * Flash the small export controls bar when initiating an export
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -4834,6 +4834,16 @@ function PlaybackControls()
 		self.SetProgressText("Loading...");
 		self.setPlayPauseButtonState();
 		SetDownloadClipLink(clipData);
+		if (clipLoader.GetUnexportableReason(clipData))
+		{
+			$("#clipDownloadButton").show();
+			$("#clipExportButton").hide();
+		}
+		else
+		{
+			$("#clipDownloadButton").hide();
+			$("#clipExportButton").show();
+		}
 	}
 	this.IsSeekbarDragging = function ()
 	{
@@ -5680,7 +5690,10 @@ function ExportControls()
 	this.Enable = function (recId)
 	{
 		if (controlsEnabled)
+		{
+			FlashControls();
 			return;
+		}
 		controlsEnabled = true;
 
 		clipData = clipLoader.GetClipFromId(recId);
@@ -5713,6 +5726,8 @@ function ExportControls()
 				});
 			}
 		}
+
+		FlashControls();
 	}
 	var ClipStatsLoaded = function ()
 	{
@@ -5816,6 +5831,19 @@ function ExportControls()
 		{
 			self.Disable();
 		});
+	}
+	var flashTimeout = null;
+	var FlashControls = function ()
+	{
+		if (flashTimeout === null)
+		{
+			$exportControlsWrapper.addClass("flashing");
+			flashTimeout = setTimeout(function ()
+			{
+				$exportControlsWrapper.removeClass("flashing");
+				flashTimeout = null;
+			}, 1000);
+		}
 	}
 
 	Initialize();
@@ -7132,6 +7160,12 @@ function ClipLoader(clipsBodySelector)
 		var clipData = lastOpenedClipEle.clipData;
 		self.ToggleClipFlag(clipData);
 	}
+	this.ExportCurrentClip = function ()
+	{
+		if (lastOpenedClipEle == null)
+			return;
+		exportControls.Enable(lastOpenedClipEle.clipData.recId);
+	}
 	var GetClipIconClasses = function (clipData)
 	{
 		if ((clipData.flags & clip_flag_flag) > 0)
@@ -7245,6 +7279,13 @@ function ClipLoader(clipsBodySelector)
 		if (exportOptions.timelapse && exportOptions.timelapseMultiplier && exportOptions.timelapseFps)
 			args.timelapse = exportOptions.timelapseMultiplier + "@" + exportOptions.timelapseFps;
 
+		var failCallback = function (msg)
+		{
+			toaster.Error("Export command failed: " + msg, 15000);
+			if (typeof onFailure === "function")
+				onFailure(msg);
+		};
+
 		ExecJSON(args, function (response)
 		{
 			if (response.result === "success")
@@ -7254,21 +7295,17 @@ function ClipLoader(clipsBodySelector)
 			}
 			else
 			{
-				console.log("export command failed: ", response);
-				if (typeof onFailure === "function")
-				{
-					if (response.result === "fail" && response.status)
-						onFailure(response.status);
-					else
-						onFailure("No reason was given for the failure.");
-				}
+				console.log("export command failed:", response);
+				if (response.result === "fail" && response.status)
+					failCallback(response.status);
+				else
+					failCallback("No reason was given for the failure.");
 			}
 		}
 			, function (jqXHR, textStatus, errorThrown)
 			{
-				console.log("export command failed: " + jqXHR.ErrorMessageHtml);
-				if (typeof onFailure === "function")
-					onFailure(jqXHR.ErrorMessageHtml);
+				console.log("export command failed:", jqXHR.ErrorMessageHtml);
+				failCallback(jqXHR.ErrorMessageHtml);
 			});
 	}
 	this.ToggleClipProtect = function (clipData, onSuccess, onFailure)
@@ -7376,7 +7413,7 @@ function ClipLoader(clipsBodySelector)
 		{
 			if (clipDatas[i].isSnapshot)
 				removedSnapshots = true;
-			else if (!clipDatas[i].rawData.filetype.startsWithCaseInsensitive("bvr "))
+			else if (!clipLoader.GetClipFileTypeInfo(clipDatas[i]).isBVR)
 				removedNonBvr = true;
 			else
 				filtered.push(clipDatas[i]);
@@ -7623,20 +7660,27 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (clipData.isSnapshot)
 			return "Snapshots are not exportable. You may simply download them instead.";
-		else if (!clipData.rawData.filetype.startsWithCaseInsensitive("bvr "))
+		else if (!clipLoader.GetClipFileTypeInfo(clipData).isBVR)
 			return "Non-BVR sources are not exportable. You may simply download them instead.";
 		return null;
 	}
 	this.GetClipFileTypeInfo = function (clipData)
 	{
 		var info = { isBVR: false, isH264: false };
-		if (clipData && clipData.rawClipData.filetype)
+		if (clipData)
 		{
-			var fileTypeParts = clipData.rawClipData.filetype.split(' ');
-			for (var i = 0; i < fileTypeParts.length; i++)
-				fileTypeParts[i] = fileTypeParts[i].toLowerCase();
-			info.isBVR = fileTypeParts.indexOf("bvr") > -1;
-			info.isH264 = fileTypeParts.indexOf("h264") > -1;
+			if (clipData.rawClipData.filetype)
+			{
+				var fileTypeParts = clipData.rawClipData.filetype.split(' ');
+				for (var i = 0; i < fileTypeParts.length; i++)
+					fileTypeParts[i] = fileTypeParts[i].toLowerCase();
+				info.isBVR = fileTypeParts.indexOf("bvr") > -1;
+				info.isH264 = fileTypeParts.indexOf("h264") > -1;
+			}
+			else
+			{
+				info.isBVR = clipData.path.endsWithCaseInsensitive(".bvr");
+			}
 		}
 		return info;
 	};
@@ -15100,7 +15144,9 @@ function ClipListContextMenu()
 							toaster.Info(unexportableReason, 15000);
 						else
 						{
-							videoPlayer.LoadClip(clipData);
+							var $ele = $("#c" + clipData.recId);
+							if ($ele.length > 0)
+								clipLoader.OpenClip($ele.get(0), clipData.recId, true);
 							exportControls.Enable(videoPlayer.Loading().image.uniqueId);
 						}
 					}
@@ -16237,13 +16283,13 @@ function ClipDownloadDialog()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Clip Export (API) Dialog ///////////////////////////////////
+// Clip Export (API + Local) Configuration Dialog /////////////
 ///////////////////////////////////////////////////////////////
 /**
- * 
+ * A dialog providing clip export options. Construct with "new". Dialog opened upon construction.
  * @param {Array} recIdArray Array of recId.
- * @param {Number} startTimeMs Start time in milliseconds, ignored if clipDataArray.length > 1
- * @param {Number} endTimeMs End time in milliseconds, ignored if clipDataArray.length > 1
+ * @param {Number} startTimeMs Start time in milliseconds, ignored if clipDataArray.length > 1.
+ * @param {Number} endTimeMs End time in milliseconds, ignored if clipDataArray.length > 1.
  * @param {Function} onExportStarted Callback function which is called if the user clicks "Begin Export".
  */
 function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
