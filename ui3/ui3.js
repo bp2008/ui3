@@ -446,7 +446,6 @@ var togglableUIFeatures =
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
 // TODO: Export API
 // * Try with limited user accounts
-// * Invert the green and red start/end marker direction so they do not extend offscreen.
 // * "Convert/Export List" item in main menu
 // * "Convert/Export List" panel, linked from "Exports Finished" toast.
 
@@ -458,6 +457,7 @@ var togglableUIFeatures =
 // * Fix bug where you can try to export snapshots.
 // * Replace the "download" button in playback controls whenever the open file type is BVR.
 // * Flash the small export controls bar when initiating an export
+// * Invert the green and red start/end marker direction so they do not extend offscreen.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -5646,8 +5646,8 @@ function ExportControls()
 	{
 		$exportOffsetWrapper.hide();
 		$exportControlsWrapper.hide();
-		exportOffsetStart = new ExportOffsetControl($("#exportOffsetStart"), 0.75, offsetChanged);
-		exportOffsetEnd = new ExportOffsetControl($("#exportOffsetEnd"), 0.25, offsetChanged);
+		exportOffsetStart = new ExportOffsetControl($("#exportOffsetStart"), 0.25, offsetChanged);
+		exportOffsetEnd = new ExportOffsetControl($("#exportOffsetEnd"), 0.75, offsetChanged);
 		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
 		$exportControlsExportBtn.on('click', beginExport);
 		$exportControlsCancelBtn.on('click', self.Disable);
@@ -5862,9 +5862,9 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 	var seekBarO = po;
 	var dragOffset = 0;
 	var isDragging = false;
-	var $label = $('<div class="exportOffsetFlagLabel"></div>');
+	var $label = $('<div class="exportOffsetFlagLabel" style="' + (polePosition > 0.5 ? "right: 0px;" : "left: 0px;") + '"></div>');
 	$handle.append($label);
-	$handle.append('<div class="exportOffsetFlagpole"></div>');
+	$handle.append('<div class="exportOffsetFlagpole" style="left: ' + (polePosition * 100) + '%"></div>');
 	var clipData;
 	this.setClipData = function (cd)
 	{

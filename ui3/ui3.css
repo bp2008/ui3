@@ -4289,7 +4289,6 @@ div::-webkit-scrollbar-corner
 #exportOffsetStart .exportOffsetFlagpole
 {
 	background-color: rgba(0,255,0,0.5);
-	left: 75%;
 }
 
 	#exportOffsetStart:hover,
@@ -4302,7 +4301,6 @@ div::-webkit-scrollbar-corner
 #exportOffsetEnd .exportOffsetFlagpole
 {
 	background-color: rgba(255,0,0,0.5);
-	left: 25%;
 }
 
 	#exportOffsetEnd:hover,
@@ -4322,16 +4320,6 @@ div::-webkit-scrollbar-corner
 	background-color: rgba(0,0,0,0.75);
 	opacity: 1;
 	border-radius: 3px;
-}
-
-#exportOffsetStart .exportOffsetFlagLabel
-{
-	right: 0px;
-}
-
-#exportOffsetEnd .exportOffsetFlagLabel
-{
-	left: 0px;
 }
 
 .exportOffsetMessage
