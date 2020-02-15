@@ -3807,11 +3807,17 @@ body + div
 	text-align: center;
 }
 
-/* Camera Properties / Camera List / Clip Properties */
+/* Camera Properties / Camera List / Clip Properties / Convert/Export List */
 
-#cameralistdialog
+#cameralistdialog, #convertexportlistdialog
 {
 	max-width: 915px;
+}
+
+#convertexportlistcontent .heading
+{
+	font-size: 16px;
+	text-align: center;
 }
 
 .icon16
@@ -3825,11 +3831,18 @@ body + div
 	min-width: 283px;
 }
 
-.camlist_item
+.camlist_item,
+.exportlist_item
 {
 	display: inline-block;
 	vertical-align: top;
 	font-size: 0px;
+}
+
+#convertexportlistcontent .camlist_thumbbox
+{
+	background-color: #000000;
+	position: relative;
 }
 
 .camlist_thumbbox
@@ -3839,16 +3852,21 @@ body + div
 	padding: 2px;
 }
 
-	.camlist_thumbbox:hover
+#cameralistdialog .camlist_thumbbox
+{
+	cursor: pointer;
+}
+
+	#cameralistdialog .camlist_thumbbox:hover,
+	#convertexportlistcontent .exportlist_item.linked:hover
 	{
 		background-color: #CCCCCC !important;
-		cursor: pointer;
 	}
 
-	.camlist_thumbbox:active
+	#cameralistdialog .camlist_thumbbox:active,
+	#convertexportlistcontent .exportlist_item.linked:active
 	{
 		background-color: #FFFFFF !important;
-		cursor: pointer;
 	}
 
 .camlist_label
@@ -3857,7 +3875,44 @@ body + div
 	min-height: 38px;
 	line-height: 19px;
 	font-size: 16px;
+	word-wrap: break-word;
+	word-break: break-all;
 }
+
+#convertexportlistcontent .camlist_label
+{
+	background-color: #000000;
+	color: #CCCCCC;
+}
+
+#convertexportlistcontent a
+{
+	text-decoration: none;
+}
+
+#convertexportlistcontent .spinOverlay,
+#convertexportlistcontent .noLinkOverlay
+{
+	position: absolute;
+	top: 0px;
+	left: 0px;
+}
+
+#convertexportlistcontent .noLinkOverlay
+{
+	width: 160px;
+	padding: 10px 2px 2px 2px;
+	text-align: center;
+	font-size: 16px;
+	font-weight: bold;
+	color: #CCCCCC;
+	text-shadow: 0px 0px 5px #000000;
+}
+
+	#convertexportlistcontent .noLinkOverlay.lower
+	{
+		padding-top: 90px;
+	}
 
 .camlist_thumb
 {
@@ -3870,6 +3925,11 @@ body + div
 .camlist_thumb_img
 {
 	display: none;
+}
+
+.camlist_thumb_img,
+#convertexportlistcontent img.thumb
+{
 	max-width: 160px;
 	max-height: 120px;
 	margin-left: auto;
@@ -3881,6 +3941,11 @@ body + div
 	display: inline-block;
 	vertical-align: middle;
 	width: 0px;
+}
+
+#convertexportlistcontent .camlist_thumb_aligner
+{
+	height: 120px;
 }
 
 .camlist_thumb_helper
@@ -3902,7 +3967,7 @@ body + div
 	display: none;
 }
 
-.dialogOption_item, .camlist_item
+.dialogOption_item, .camlist_item, .exportlist_item
 {
 	margin: 7px;
 }

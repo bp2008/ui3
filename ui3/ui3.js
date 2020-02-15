@@ -354,6 +354,7 @@ var pcmPlayer = null;
 var diskUsageGUI = null;
 var systemConfig = null;
 var cameraListDialog = null;
+var exportListDialog = null;
 var clipProperties = null;
 var clipDownloadDialog = null;
 var statusBars = null;
@@ -445,7 +446,6 @@ var togglableUIFeatures =
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
 // TODO: Export API
-// * Try with limited user accounts
 // * "Convert/Export List" item in main menu
 // * "Convert/Export List" panel, linked from "Exports Finished" toast.
 
@@ -458,6 +458,7 @@ var togglableUIFeatures =
 // * Replace the "download" button in playback controls whenever the open file type is BVR.
 // * Flash the small export controls bar when initiating an export
 // * Invert the green and red start/end marker direction so they do not extend offscreen.
+// * Try with limited user accounts
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -2372,6 +2373,8 @@ $(function ()
 
 	cameraListDialog = new CameraListDialog();
 
+	exportListDialog = new ExportListDialog;
+
 	clipProperties = new ClipProperties();
 
 	clipDownloadDialog = new ClipDownloadDialog();
@@ -3110,6 +3113,7 @@ function DropdownBoxes()
 					, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
 					, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
 					, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
+					, new DropdownListItem({ cmd: "export_list", text: "Convert/Export List", icon: "#svg_mio_VideoFilter", cssClass: "blueLarger" })
 					, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
 					, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
 					, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
@@ -3142,6 +3146,9 @@ function DropdownBoxes()
 						break;
 					case "full_camera_list":
 						cameraListDialog.open();
+						break;
+					case "export_list":
+						exportListDialog.open();
 						break;
 					case "disk_usage":
 						statusLoader.diskUsageClick();
@@ -16578,8 +16585,137 @@ function ExportAPIStatusToast()
 	{
 		toaster.Success('Exports Finished<br><br><span style="text-decoration: underline;">Click here</span> to view and download your exported video clips.', 60000, true, function ()
 		{
-			console.log(arguments);
+			exportListDialog.open();
 		});
+	}
+}
+///////////////////////////////////////////////////////////////
+// Clientside Clip Export Dialog //////////////////////////////
+///////////////////////////////////////////////////////////////
+function ExportListDialog()
+{
+	var self = this;
+
+	var dialog = null;
+	var $body = null;
+	var loadedOnce = false;
+	var refreshTimeout = null;
+	var asyncThumbnailDownloader = null;
+
+	this.open = function ()
+	{
+		CloseDialog();
+
+		var $dlg = $('<div id="convertexportlistdialog"></div>');
+		$body = $('<div id="convertexportlistcontent"></div>');
+		$dlg.append($body);
+		dialog = $dlg.dialog({
+			title: "Convert/Export List"
+			, onClosing: DialogClosing
+			, onRefresh: function () { refresh(); }
+		});
+
+		asyncThumbnailDownloader = new AsyncClipThumbnailDownloader();
+
+		refresh();
+	}
+	var refresh = function ()
+	{
+		if (!dialog)
+			return;
+		clearTimeout(refreshTimeout);
+		ExecJSON({ cmd: "export" }
+			, function (response)
+			{
+				if (response.result === "success")
+				{
+					if (response.data && (response.data.length === 0 || response.data.length > 0))
+						ExportListLoaded(response.data);
+					else
+						toaster.Warning("Data missing in Convert/Export List response.");
+					//refreshTimeout = setTimeout(refresh, 4000);
+				}
+			}
+			, function (jqXHR)
+			{
+				refreshTimeout = setTimeout(refresh, 10000);
+			});
+	}
+	var ExportListLoaded = function (itemArray)
+	{
+		$body.empty();
+
+		$body.append('<div class="heading">Click any item to download it.</div>');
+		for (var i = 0; i < itemArray.length; i++)
+		{
+			$body.append(GetExportItemBox(itemArray[i]));
+		}
+
+		$body.find("img.thumb").each(function (idx, ele)
+		{
+			asyncThumbnailDownloader.Enqueue(ele, ele.getAttribute('thumbpath'));
+		});
+		dialog.contentChanged(!loadedOnce);
+		loadedOnce = true;
+	}
+	var GetExportItemBox = function (item)
+	{
+		var linked = item.status === "done";
+		var loadingImg = "ui3/LoadingImage.png" + currentServer.GetLocalSessionArg("?");
+		var thumbUrl = currentServer.remoteBaseURL + 'thumbs/' + item.path + currentServer.GetAPISessionArg("?");
+		var thumbStyle = item.status === "done" ? '' : ' style="opacity: 0.5;"';
+		var thumb = '<div class="camlist_thumb">'
+			+ '<div class="camlist_thumb_aligner"></div>'
+			+ '<div class="camlist_thumb_helper">'
+			+ '<img src="' + loadingImg + '" alt="thumbnail" class="thumb" thumbpath="' + thumbUrl + '"' + thumbStyle + ' />'
+			+ '</div>'
+			+ '</div>';
+
+		var link = '<div>' + thumb + '<div class="camlist_label">' + item.uri + '</div></div>';
+		var noLinkOverlay = '';
+		if (linked)
+		{
+			var exported_clip_url = currentServer.remoteBaseURL + 'clips/' + item.uri + currentServer.GetAPISessionArg("?");
+			link = '<a href="' + exported_clip_url + '" download="' + item.uri + '">' + link + '</a>';
+		}
+		else
+		{
+			var labelUpper = "Queued";
+			var labelLower = null;
+			if (item.status === "active")
+			{
+				labelUpper = "Exporting";
+				labelLower = parseInt(item.progress) + "%";
+			}
+			labelUpper = '<div class="noLinkOverlay">' + labelUpper + '</div>';
+			if (labelLower)
+				labelLower = '<div class="noLinkOverlay lower">' + labelLower + '</div>';
+
+			noLinkOverlay = '<div style="width:50px;height:50px;margin: 35px 55px" class="spinOverlay spin1s">'
+				+ '<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
+				+ '</div>'
+				+ labelUpper
+				+ labelLower;
+		}
+		return '<div class="exportlist_item camlist_thumbbox' + (linked ? ' linked' : '') + '">'
+			+ link
+			+ noLinkOverlay
+			+ '</div>';
+	}
+	var DialogClosing = function ()
+	{
+		clearTimeout(refreshTimeout);
+		if (asyncThumbnailDownloader)
+			asyncThumbnailDownloader.Stop();
+		asyncThumbnailDownloader = null;
+		loadedOnce = false;
+		dialog = null;
+		$body = null;
+	}
+	var CloseDialog = function ()
+	{
+		if (dialog)
+			dialog.close();
 	}
 }
 ///////////////////////////////////////////////////////////////
