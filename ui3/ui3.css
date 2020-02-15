@@ -3818,6 +3818,20 @@ body + div
 {
 	font-size: 16px;
 	text-align: center;
+	margin-top: 3px;
+}
+
+#convertexportlistcontent .timestamp
+{
+	text-align: center;
+	margin-bottom: 5px;
+}
+
+#convertexportlistcontent .clipdur
+{
+	top: 90px;
+	bottom: unset;
+	right: 7px;
 }
 
 .icon16
@@ -3841,7 +3855,7 @@ body + div
 
 #convertexportlistcontent .camlist_thumbbox
 {
-	background-color: #000000;
+	background-color: #444444;
 	position: relative;
 }
 
@@ -3883,6 +3897,7 @@ body + div
 {
 	background-color: #000000;
 	color: #CCCCCC;
+	font-size: 14px;
 }
 
 #convertexportlistcontent a

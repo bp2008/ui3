@@ -445,20 +445,6 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
-// TODO: Export API
-// * "Convert/Export List" item in main menu
-// * "Convert/Export List" panel, linked from "Exports Finished" toast.
-
-// Export API DONE:
-// * Integrate new export API.
-// * New export API should not be locked behind any particular browser features.
-// * Legacy avi export should remain an option in supported browsers.
-// * Reuse setting ui3_clip_export_withAudio
-// * Fix bug where you can try to export snapshots.
-// * Replace the "download" button in playback controls whenever the open file type is BVR.
-// * Flash the small export controls bar when initiating an export
-// * Invert the green and red start/end marker direction so they do not extend offscreen.
-// * Try with limited user accounts
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -16598,6 +16584,7 @@ function ExportListDialog()
 
 	var dialog = null;
 	var $body = null;
+	var itemMap = {};
 	var loadedOnce = false;
 	var refreshTimeout = null;
 	var asyncThumbnailDownloader = null;
@@ -16608,6 +16595,7 @@ function ExportListDialog()
 
 		var $dlg = $('<div id="convertexportlistdialog"></div>');
 		$body = $('<div id="convertexportlistcontent"></div>');
+		$body.append('<div class="heading">Click any item to download it.</div>');
 		$dlg.append($body);
 		dialog = $dlg.dialog({
 			title: "Convert/Export List"
@@ -16633,7 +16621,7 @@ function ExportListDialog()
 						ExportListLoaded(response.data);
 					else
 						toaster.Warning("Data missing in Convert/Export List response.");
-					//refreshTimeout = setTimeout(refresh, 4000);
+					refreshTimeout = setTimeout(refresh, 4000);
 				}
 			}
 			, function (jqXHR)
@@ -16643,12 +16631,33 @@ function ExportListDialog()
 	}
 	var ExportListLoaded = function (itemArray)
 	{
-		$body.empty();
-
-		$body.append('<div class="heading">Click any item to download it.</div>');
-		for (var i = 0; i < itemArray.length; i++)
+		for (var i = itemArray.length - 1; i > -1; i--)
 		{
-			$body.append(GetExportItemBox(itemArray[i]));
+			var newItem = itemArray[i];
+			var oldItem = itemMap[newItem.path];
+			if (oldItem)
+			{
+				if (oldItem.status !== newItem.status
+					|| oldItem.progress !== newItem.progress
+					|| oldItem.msec !== newItem.msec
+					|| oldItem.utc !== newItem.utc
+					|| oldItem.uri !== newItem.uri)
+				{
+					// Item data has changed.  Replace GUI element.
+					var $newBox = $(GetExportItemBox(newItem));
+					newItem.jqEle = $newBox;
+					itemMap[newItem.path] = newItem;
+					oldItem.jqEle.replaceWith($newBox);
+				}
+			}
+			else
+			{
+				// Item is new. Add GUI element.
+				var $newBox = $(GetExportItemBox(newItem));
+				newItem.jqEle = $newBox;
+				itemMap[newItem.path] = newItem;
+				$body.prepend($newBox);
+			}
 		}
 
 		$body.find("img.thumb").each(function (idx, ele)
@@ -16671,8 +16680,11 @@ function ExportListDialog()
 			+ '</div>'
 			+ '</div>';
 
-		var link = '<div>' + thumb + '<div class="camlist_label">' + item.uri + '</div></div>';
+		var startDate = new Date(parseInt(item.utc) + GetServerTimeOffset());
+		var tsHtml = '<div class="timestamp">' + GetDateDisplayStr(startDate) + '<br>' + GetTimeStr(startDate) + '</div>';
+		var link = '<div>' + thumb + '<div class="camlist_label">' + tsHtml + item.uri + '</div></div>';
 		var noLinkOverlay = '';
+		var clipdur = '<div class="clipdur">' + msToTime(parseInt(item.msec)) + '</div>';
 		if (linked)
 		{
 			var exported_clip_url = currentServer.remoteBaseURL + 'clips/' + item.uri + currentServer.GetAPISessionArg("?");
@@ -16700,6 +16712,7 @@ function ExportListDialog()
 		return '<div class="exportlist_item camlist_thumbbox' + (linked ? ' linked' : '') + '">'
 			+ link
 			+ noLinkOverlay
+			+ clipdur
 			+ '</div>';
 	}
 	var DialogClosing = function ()
@@ -16711,6 +16724,7 @@ function ExportListDialog()
 		loadedOnce = false;
 		dialog = null;
 		$body = null;
+		itemMap = {};
 	}
 	var CloseDialog = function ()
 	{
