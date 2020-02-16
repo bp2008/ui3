@@ -16466,8 +16466,7 @@ function ExportAPIStatusToast()
 
 	this.show = function ()
 	{
-		if (isActive)
-			return;
+		stop();
 
 		isActive = true;
 
@@ -16475,6 +16474,8 @@ function ExportAPIStatusToast()
 	}
 	var update = function ()
 	{
+		if (!isActive)
+			return;
 		ExecJSON({ cmd: "export", summary: true }
 			, function (response)
 			{
