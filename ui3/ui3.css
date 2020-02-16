@@ -3880,7 +3880,8 @@ body + div
 	padding: 2px;
 }
 
-#cameralistdialog .camlist_thumbbox
+#cameralistdialog .camlist_thumbbox,
+#convertexportlistcontent .exportlist_item.linked
 {
 	cursor: pointer;
 }

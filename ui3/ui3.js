@@ -16525,7 +16525,7 @@ function ExportAPIStatusToast()
 								$itemsQueued.text("");
 
 
-							updateTimeout = setTimeout(update, 1000);
+							updateTimeout = setTimeout(update, 2000);
 						}
 					}
 					else
@@ -16701,6 +16701,9 @@ function ExportListDialog()
 		{
 			var labelUpper = item.status;
 			var labelLower = null;
+			var spinnerHtml = '<div style="width:50px;height:50px;margin: 35px 55px" class="spinOverlay spin1s">'
+				+ '<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
+				+ '</div>';
 			if (item.status === "queued")
 			{
 				labelUpper = "Queued";
@@ -16712,24 +16715,22 @@ function ExportListDialog()
 			}
 			else if (item.status === "error")
 			{
-				labelUpper = "Error";
-				errorClick = ' onclick="SimpleDialog.Text(&quot;This clip failed to export due to an error.\\n' + htmlAttributeEncode(JavaScriptStringEncode(item.error)) + '&quot;)"';
+				labelUpper = "Error<br><br>Click for Details";
+				errorClick = ' onclick="SimpleDialog.Text(&quot;This clip failed to export due to an error:\\n\\n' + htmlAttributeEncode(JavaScriptStringEncode(item.error)) + '&quot;)"';
+				spinnerHtml = '';
+				linked = true;
 			}
 			labelUpper = '<div class="noLinkOverlay">' + labelUpper + '</div>';
 			if (labelLower)
 				labelLower = '<div class="noLinkOverlay lower">' + labelLower + '</div>';
 
-			noLinkOverlay = '<div style="width:50px;height:50px;margin: 35px 55px" class="spinOverlay spin1s">'
-				+ '<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
-				+ '</div>'
-				+ labelUpper
-				+ labelLower;
+			noLinkOverlay = spinnerHtml + labelUpper + labelLower;
 		}
 		return '<div class="exportlist_item camlist_thumbbox' + (linked ? ' linked' : '') + '"' + errorClick + '>'
 			+ link
-			+ noLinkOverlay
 			+ clipsize
 			+ clipdur
+			+ noLinkOverlay
 			+ '</div>';
 	}
 	var DialogClosing = function ()
