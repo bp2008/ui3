@@ -3814,6 +3814,11 @@ body + div
 	max-width: 915px;
 }
 
+#convertexportlistdialog
+{
+	min-width: 240px;
+}
+
 #convertexportlistcontent .heading
 {
 	font-size: 16px;
@@ -3830,8 +3835,17 @@ body + div
 #convertexportlistcontent .clipdur
 {
 	top: 90px;
-	bottom: unset;
 	right: 7px;
+	bottom: unset;
+	left: unset;
+}
+
+#convertexportlistcontent .clipsize
+{
+	top: 90px;
+	right: unset;
+	bottom: unset;
+	left: 7px;
 }
 
 .icon16
@@ -3920,7 +3934,7 @@ body + div
 	text-align: center;
 	font-size: 16px;
 	font-weight: bold;
-	color: #CCCCCC;
+	color: #CDCDCD;
 	text-shadow: 0px 0px 5px #000000;
 }
 

@@ -16594,9 +16594,12 @@ function ExportListDialog()
 		CloseDialog();
 
 		var $dlg = $('<div id="convertexportlistdialog"></div>');
-		$body = $('<div id="convertexportlistcontent"></div>');
-		$body.append('<div class="heading">Click any item to download it.</div>');
-		$dlg.append($body);
+		var $content = $('<div id="convertexportlistcontent"></div>');
+		$content.append('<div class="heading">Click any item to download it.</div>');
+		$body = $('<div></div>');
+		$content.append($body);
+		$dlg.append($content);
+
 		dialog = $dlg.dialog({
 			title: "Convert/Export List"
 			, onClosing: DialogClosing
@@ -16631,6 +16634,8 @@ function ExportListDialog()
 	}
 	var ExportListLoaded = function (itemArray)
 	{
+		if (!dialog)
+			return;
 		for (var i = itemArray.length - 1; i > -1; i--)
 		{
 			var newItem = itemArray[i];
@@ -16684,7 +16689,9 @@ function ExportListDialog()
 		var tsHtml = '<div class="timestamp">' + GetDateDisplayStr(startDate) + '<br>' + GetTimeStr(startDate) + '</div>';
 		var link = '<div>' + thumb + '<div class="camlist_label">' + tsHtml + item.uri + '</div></div>';
 		var noLinkOverlay = '';
-		var clipdur = '<div class="clipdur">' + msToTime(parseInt(item.msec)) + '</div>';
+		var errorClick = '';
+		var clipsize = item.filesize ? ('<div class="clipdur clipsize">' + htmlEncode(item.filesize) + '</div>') : '';
+		var clipdur = item.msec ? ('<div class="clipdur">' + msToTime(parseInt(item.msec)) + '</div>') : '';
 		if (linked)
 		{
 			var exported_clip_url = currentServer.remoteBaseURL + 'clips/' + item.uri + currentServer.GetAPISessionArg("?");
@@ -16692,12 +16699,21 @@ function ExportListDialog()
 		}
 		else
 		{
-			var labelUpper = "Queued";
+			var labelUpper = item.status;
 			var labelLower = null;
-			if (item.status === "active")
+			if (item.status === "queued")
+			{
+				labelUpper = "Queued";
+			}
+			else if (item.status === "active")
 			{
 				labelUpper = "Exporting";
 				labelLower = parseInt(item.progress) + "%";
+			}
+			else if (item.status === "error")
+			{
+				labelUpper = "Error";
+				errorClick = ' onclick="SimpleDialog.Text(&quot;This clip failed to export due to an error.\\n' + htmlAttributeEncode(JavaScriptStringEncode(item.error)) + '&quot;)"';
 			}
 			labelUpper = '<div class="noLinkOverlay">' + labelUpper + '</div>';
 			if (labelLower)
@@ -16709,9 +16725,10 @@ function ExportListDialog()
 				+ labelUpper
 				+ labelLower;
 		}
-		return '<div class="exportlist_item camlist_thumbbox' + (linked ? ' linked' : '') + '">'
+		return '<div class="exportlist_item camlist_thumbbox' + (linked ? ' linked' : '') + '"' + errorClick + '>'
 			+ link
 			+ noLinkOverlay
+			+ clipsize
 			+ clipdur
 			+ '</div>';
 	}
@@ -22380,11 +22397,11 @@ Number.prototype.padRight = function (len, c)
 };
 function NumToHex4(num)
 {
-	return num.ToString(16).toUpperCase().padLeft(4, '0');
+	return num.toString(16).toUpperCase().padLeft(4, '0');
 }
 function NumToHexUpper(num)
 {
-	return num.ToString(16).toUpperCase();
+	return num.toString(16).toUpperCase();
 }
 function makeUnselectable($target)
 {
@@ -22473,9 +22490,14 @@ function stopDefault(e)
 	}
 	return false;
 }
+/**
+ * Encodes a string so it can safely be written to a string literal in a JavaScript file.  Characters such as tab, carriage return, line feed, single and double quotes are escaped.
+ * @param {String} str String to encode.
+ * @param {Boolean} wrapInQuotes If true, the return value will be wrapped in "quotation marks".
+ * @returns {String} Encoded value.
+ */
 function JavaScriptStringEncode(str, wrapInQuotes)
 {
-	/// <summary>Encodes a string so it can safely be written to a string literal in a JavaScript file.  Characters such as tab, carriage return, line feed, single and double quotes are escaped.</summary>
 	var sb = [];
 	if (wrapInQuotes)
 		sb.push('"');
@@ -22710,6 +22732,41 @@ function htmlEncode(value)
 function htmlDecode(value)
 {
 	return $('<div/>').html(value).text();
+}
+/**
+ * Encodes a string to be safely inserted into an attribute of an HTML element when writing literal HTML markup.
+ * @param {String} value String to encode.
+ * @returns {String} Encoded value.
+ */
+function htmlAttributeEncode(value)
+{
+	var sb = new StringBuilder();
+	for (var i = 0; i < value.length; i++)
+	{
+		var c = value.charAt(i);
+		switch (c)
+		{
+			case '"':
+				sb.Append("&quot;");
+				break;
+			case "'":
+				sb.Append("&#39;");
+				break;
+			case "&":
+				sb.Append("&amp;");
+				break;
+			case "<":
+				sb.Append("&lt;");
+				break;
+			case ">":
+				sb.Append("&gt;");
+				break;
+			default:
+				sb.Append(c);
+				break;
+		}
+	}
+	return sb.ToString();
 }
 jQuery.cachedScript = function (url, options)
 {
