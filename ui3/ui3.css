@@ -4456,6 +4456,22 @@ div::-webkit-scrollbar-corner
 		pointer-events: none;
 	}
 
+.sizeSmall .hideInSizeSmall
+{
+	display: none;
+}
+
+.showInSizeSmall
+{
+	display: none;
+}
+
+.sizeSmall .showInSizeSmall
+{
+	display: initial;
+}
+
+
 /* Export Dialog */
 .activeExportDialog
 {

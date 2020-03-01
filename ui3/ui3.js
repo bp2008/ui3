@@ -16326,7 +16326,8 @@ function ClipExportPanel()
 			+ '</svg></div></div>');
 		$closeBtn.on('click', self.Close);
 		$content.append($closeBtn);
-		$content.append('<div class="leftBarHeading">Convert/export ' + state.recIdArray.length + ' clip' + (state.recIdArray.length === 1 ? '' : 's') + '</div>');
+		var headingStart = '<span class="hideInSizeSmall">Convert/export</span><span class="showInSizeSmall">Export</span>';
+		$content.append('<div class="leftBarHeading">' + headingStart + ' ' + state.recIdArray.length + ' clip' + (state.recIdArray.length === 1 ? '' : 's') + '</div>');
 
 		$status = null;
 		if (state.recIdArray.length === 1)
