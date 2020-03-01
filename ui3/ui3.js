@@ -367,6 +367,7 @@ var streamingProfileUI = null;
 var ptzButtons = null;
 var playbackHeader = null;
 var exportControls = null;
+var clipExportPanel = null;
 var exportAPIStatusToast = null;
 var seekBar = null;
 var playbackControls = null;
@@ -445,6 +446,7 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
+// TODO: Revise rapid failure protection to never stop trying to reconnect, but instead to throttle the reconnection attempts by +30s with each consecutive failure, up to a delay of 5 minutes.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -2309,6 +2311,12 @@ $(function ()
 			, trackClass: 'layoutleft-track'
 			, handleClass: 'layoutleft-track-handle'
 		});
+	$("#layoutleftExportScrollable").CustomScroll(
+		{
+			changeMarginRightToScrollBarWidth: false
+			, trackClass: 'layoutleft-track'
+			, handleClass: 'layoutleft-track-handle'
+		});
 	$(".topbar_tab").click(function ()
 	{
 		var $ele = $(this);
@@ -2316,6 +2324,8 @@ $(function ()
 		$ele.addClass("selected");
 
 		currentPrimaryTab = settings.ui3_defaultTab = $ele.attr("name");
+
+		clipExportPanel.Abort();
 
 		var tabDisplayName;
 		if (currentPrimaryTab == "live")
@@ -2396,6 +2406,8 @@ $(function ()
 	SetupCollapsibleTriggers();
 
 	exportControls = new ExportControls();
+
+	clipExportPanel = new ClipExportPanel();
 
 	exportAPIStatusToast = new ExportAPIStatusToast();
 
@@ -2642,6 +2654,7 @@ function resized()
 	{
 		var llrControlsH = llrControls.outerHeight(true);
 		$("#clipsbodyWrapper").css("height", leftH - statusH - llrControlsH + "px");
+		$("#layoutleftExportScrollableWrapper").css("height", leftH - statusH + "px");
 	}
 
 	var statusArea_margins = statusArea.outerWidth(true) - statusArea.width();
@@ -2711,7 +2724,7 @@ function UiSizeHelper()
 	var largeMinW = 670;// 550 575 1160;
 	var mediumMinW = 540;// 450 515 900;
 	var smallMinW = 350;//680;
-	var currentSize = "large";
+	var currentSize = "unset";
 	var autoSize = true;
 
 	this.SetMostAppropriateSize = function (availableWidth, availableHeight)
@@ -2758,6 +2771,8 @@ function UiSizeHelper()
 		resized();
 		//setTimeout(resized);
 	}
+
+	SetSize(settings.ui3_preferred_ui_scale);
 
 	setTimeout(function () { self.SetUISizeByName(settings.ui3_preferred_ui_scale); }, 0);
 }
@@ -5621,12 +5636,8 @@ function ExportControls()
 	var self = this;
 	var $layoutBottom = $('#layoutbottom');
 	var $exportOffsetWrapper = $("#exportOffsetWrapper");
-	var $exportControlsWrapper = $("#exportControlsWrapper");
 	var exportOffsetStart;
 	var exportOffsetEnd;
-	var $exportControlsStatus = $("#exportControlsStatus");
-	var $exportControlsExportBtn = $("#exportControlsExportBtn");
-	var $exportControlsCancelBtn = $("#exportControlsCancelBtn");
 
 	var clipData = null;
 	var fileDuration = 2;
@@ -5638,25 +5649,17 @@ function ExportControls()
 	var Initialize = function ()
 	{
 		$exportOffsetWrapper.hide();
-		$exportControlsWrapper.hide();
 		exportOffsetStart = new ExportOffsetControl($("#exportOffsetStart"), 0.25, offsetChanged);
 		exportOffsetEnd = new ExportOffsetControl($("#exportOffsetEnd"), 0.75, offsetChanged);
 		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
-		$exportControlsExportBtn.on('click', beginExport);
-		$exportControlsCancelBtn.on('click', self.Disable);
 	}
 	this.resized = function ()
 	{
 		if (!controlsEnabled)
 			return;
-		var w = $layoutBottom.width();
 
 		exportOffsetStart.resized();
 		exportOffsetEnd.resized();
-
-		var labelFontSize = Clamp(w * 0.04, 11, 18);
-		$exportControlsStatus.css('font-size', labelFontSize + 'px');
-		$exportControlsStatus.css('line-height', labelFontSize + 'px');
 
 		offsetChanged();
 	}
@@ -5683,10 +5686,7 @@ function ExportControls()
 	this.Enable = function (recId)
 	{
 		if (controlsEnabled)
-		{
-			FlashControls();
 			return;
-		}
 		controlsEnabled = true;
 
 		clipData = clipLoader.GetClipFromId(recId);
@@ -5694,7 +5694,10 @@ function ExportControls()
 		if (!videoPlayer.Playback_IsPaused())
 			videoPlayer.Playback_Pause();
 
-		$exportControlsWrapper.show();
+		clipExportPanel.Open([clipData.recId], function (exportOptions)
+		{
+			self.Disable();
+		});
 
 		if (clipData.isClip)
 			ClipStatsLoaded();
@@ -5705,8 +5708,7 @@ function ExportControls()
 				ClipStatsLoaded(); // We have
 			else // We have not, so our clip duration and size values need updated.
 			{
-				$exportControlsStatus.text('Loading...');
-				$exportControlsExportBtn.attr('disabled', 'disabled');
+				clipExportPanel.UpdateRangeSelection(exportOffsetStart.getPosition(), exportOffsetEnd.getPosition());
 				// call global resized
 				resized();
 				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
@@ -5719,8 +5721,6 @@ function ExportControls()
 				});
 			}
 		}
-
-		FlashControls();
 	}
 	var ClipStatsLoaded = function ()
 	{
@@ -5745,8 +5745,6 @@ function ExportControls()
 		exportOffsetEnd.setPosition(endTime);
 
 		$exportOffsetWrapper.show();
-
-		$exportControlsExportBtn.removeAttr('disabled');
 
 		var $selectOffsetsMessage = $('<div class="exportOffsetMessage">Choose offsets by dragging the handles</div>');
 		var labelFontSize = Clamp($layoutBottom.width() * 0.04, 9, 18);
@@ -5776,7 +5774,9 @@ function ExportControls()
 		clipData = null;
 
 		$exportOffsetWrapper.hide();
-		$exportControlsWrapper.hide();
+
+		if (clipExportPanel.IsOpen())
+			clipExportPanel.Close();
 
 		// call global resized
 		resized();
@@ -5795,48 +5795,7 @@ function ExportControls()
 	{
 		if (!controlsEnabled || !clipStatsLoaded)
 			return;
-		var percentOfClip = Math.abs(exportOffsetEnd.getPosition() - exportOffsetStart.getPosition());
-		var durationMs = percentOfClip * fileDuration;
-		var estimatedSize = percentOfClip * fileSizeBytes;
-		$exportControlsStatus.text('Ready to Export ' + msToTime(durationMs) + ' (' + formatBytes2(estimatedSize, 1) + ')');
-	}
-	var beginExport = function ()
-	{
-		CheckCurrentClip();
-		var startTimeMs = exportOffsetStart.getPosition() * fileDuration;
-		var endTimeMs = exportOffsetEnd.getPosition() * fileDuration;
-		var durationMs = endTimeMs - startTimeMs;
-		if (durationMs === 0)
-		{
-			// Both markers are in exactly the same spot.
-			// Adjust end time offset 10 seconds forward.
-			endTimeMs = Clamp(endTimeMs + 10000, 0, fileDuration);
-			startTimeMs = Clamp(endTimeMs - 10000, 0, fileDuration);
-		}
-		else if (durationMs < 0)
-		{
-			// End marker is before Start marker.  Swap them.
-			var tmp = startTimeMs;
-			startTimeMs = endTimeMs;
-			endTimeMs = tmp;
-		}
-		new ClipExportDialog([clipData.recId], startTimeMs, endTimeMs, function (exportOptions)
-		{
-			self.Disable();
-		});
-	}
-	var flashTimeout = null;
-	var FlashControls = function ()
-	{
-		if (flashTimeout === null)
-		{
-			$exportControlsWrapper.addClass("flashing");
-			flashTimeout = setTimeout(function ()
-			{
-				$exportControlsWrapper.removeClass("flashing");
-				flashTimeout = null;
-			}, 1000);
-		}
+		clipExportPanel.UpdateRangeSelection(exportOffsetStart.getPosition(), exportOffsetEnd.getPosition());
 	}
 
 	Initialize();
@@ -6521,6 +6480,8 @@ function ClipLoader(clipsBodySelector)
 		}
 			, function (jqXHR, textStatus, errorThrown)
 			{
+				if (isUpdateOfExistingList)
+					return; // Failures of a clip list update should just be ignored.
 				$clipsbody.html('<div class="clipListText">Failed to load!</div>');
 				var tryAgain = !isContinuationOfPreviousLoad && ++failedClipListLoads < 5
 				toaster.Error("Failed to load " + (listName == "cliplist" ? "clip list" : "alert list") + ".<br/>Will " + (tryAgain ? "" : "NOT ") + "try again.<br/>" + jqXHR.ErrorMessageHtml, 5000);
@@ -15145,7 +15106,7 @@ function ClipListContextMenu()
 					}
 					else
 					{
-						new ClipExportDialog(allSelectedClipIDs);
+						clipExportPanel.Open(allSelectedClipIDs);
 					}
 				}
 				else
@@ -16276,76 +16237,112 @@ function ClipDownloadDialog()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Clip Export (API + Local) Configuration Dialog /////////////
+// Clip Export (API + Local) Configuration Panel //////////////
 ///////////////////////////////////////////////////////////////
 /**
- * A dialog providing clip export options. Construct with "new". Dialog opened upon construction.
- * @param {Array} recIdArray Array of recId.
- * @param {Number} startTimeMs Start time in milliseconds, ignored if clipDataArray.length > 1.
- * @param {Number} endTimeMs End time in milliseconds, ignored if clipDataArray.length > 1.
- * @param {Function} onExportStarted Callback function which is called if the user clicks "Begin Export".
+ * A panel providing clip export options.  Overlaps the clip list in the side bar.
  */
-function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
+function ClipExportPanel()
 {
 	var self = this;
 
-	var exportOptions = {
-		format: parseInt(settings.ui3_clip_export_format),
-		profile: parseInt(settings.ui3_clip_export_profile),
-		audio: settings.ui3_clip_export_withAudio === "1",
-		reencode: settings.ui3_clip_export_reencode === "1",
-		overlay: settings.ui3_clip_export_overlay === "1",
-		timelapse: settings.ui3_clip_export_timelapse === "1",
-		timelapseMultiplier: parseFloat(settings.ui3_clip_export_timelapseMultiplier),
-		timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps)
-	};
+	var exportOptions;
 
-	var $dlg = $('<div class="clipExportDialog dialogOptionPanel"></div>');
-	var $content = $('<div class="clipExportDialogContent"></div>');
-	var dialog;
+	var state = { recIdArray: [], fileSizeBytes: 0, onPanelClosing: null };
+	var isOpen = false;
+
+	var $content = $('<div class="clipExportPanel dialogOptionPanel"></div>');
+	var $root = $('#layoutleftExportScrollable');
+	var $status = null;
 	var classic_ui3_idx = -1;
-	var headingLine1 = null;
-	var headingLine2 = null;
 	var limitedFormatOptions = false;
 
 	function Initialize()
 	{
-		if (recIdArray.length === 1)
-		{
-			var clipData = clipLoader.GetClipFromId(recIdArray[0]);
-			var camName = cameraListLoader.GetCameraName(clipData.camera);
-			var date = GetPaddedDateStr(new Date(clipData.displayDate.getTime() + startTimeMs));
-			headingLine1 = camName;
-			headingLine2 = msToTime(endTimeMs - startTimeMs) + " starting at " + date;
-			exportOptions.startTimeMs = startTimeMs;
-			exportOptions.endTimeMs = endTimeMs;
-		}
+		$root.append($content);
+	}
 
-		$dlg.append($content);
-		dialog = $dlg.dialog({
-			title: "Convert/export " + recIdArray.length + " clip" + (recIdArray.length === 1 ? "" : "s")
-			, overlayOpacity: 0.5
-		});
+	/**
+	 * Opens the panel, hiding the clip list.
+	 * @param {Array} recIdArray Array of recId.
+	 * @param {Function} onPanelClosing Callback function which is called when the panel closes.
+	 */
+	this.Open = function (recIdArray, onPanelClosing)
+	{
+		state.recIdArray = recIdArray;
+		state.onPanelClosing = onPanelClosing;
+		state.fileSizeBytes = 0;
+
+		isOpen = true;
+
+		exportOptions = {
+			format: parseInt(settings.ui3_clip_export_format),
+			profile: parseInt(settings.ui3_clip_export_profile),
+			audio: settings.ui3_clip_export_withAudio === "1",
+			reencode: settings.ui3_clip_export_reencode === "1",
+			overlay: settings.ui3_clip_export_overlay === "1",
+			timelapse: settings.ui3_clip_export_timelapse === "1",
+			timelapseMultiplier: parseFloat(settings.ui3_clip_export_timelapseMultiplier),
+			timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps)
+		};
 
 		ReRender();
+
+		$("#layoutleftRecordings").hide();
+		$("#layoutleftExport").show();
+	}
+
+	/**
+	 * Closes the panel, showing the clip list.
+	 */
+	this.Close = function ()
+	{
+		$("#layoutleftRecordings").show();
+		self.Abort();
+	}
+
+	/**
+	 * Closes the panel but does not show the clip list.
+	 */
+	this.Abort = function ()
+	{
+		$("#layoutleftExport").hide();
+		isOpen = false;
+		if (typeof state.onPanelClosing === "function")
+			state.onPanelClosing(exportOptions);
+	}
+
+	this.IsOpen = function ()
+	{
+		return isOpen;
 	}
 
 	var ReRender = function ()
 	{
 		$content.empty();
-		if (headingLine1)
-			$content.append($('<div class="dialogOption_item clipprop_item_info"></div>').text(headingLine1));
-		if (headingLine2)
-			$content.append($('<div class="dialogOption_item clipprop_item_info"></div>').text(headingLine2));
+		var $closeBtn = $('<div class="panel_close" title="Cancel export">'
+			+ '<div class="panel_close_icon"><svg viewbox="0 0 12 12">'
+			+ '<path stroke-width="1.4" d="M 1,1 L 11,11 M 1,11 L 11,1" />'
+			+ '</svg></div></div>');
+		$closeBtn.on('click', self.Close);
+		$content.append($closeBtn);
+		$content.append('<div class="leftBarHeading">Convert/export ' + state.recIdArray.length + ' clip' + (state.recIdArray.length === 1 ? '' : 's') + '</div>');
 
-		var AddEditorField = MakeAddEditorFieldFn("Convert/export", $content, exportOptions);
+		$status = null;
+		if (state.recIdArray.length === 1)
+		{
+			$status = $('<div class="dialogOption_item clipprop_item_info"></div>')
+			$content.append($status);
+		}
+
+		var AddEditorField = MakeAddEditorFieldFn("Convert/export", $content, exportOptions, { compact: true });
 
 		var formatOptions = ["AVI", "MP4 (H.264, H.265, MPEG4 only)", "Windows Media"];
 
-		if (recIdArray.length === 1)
+		if (state.recIdArray.length === 1)
 		{
 			// There is only one clip, so we can expose UI3 AVI format if the browser supports it.
-			var clipData = clipLoader.GetClipFromId(recIdArray[0]);
+			var clipData = clipLoader.GetClipFromId(state.recIdArray[0]);
 			var unexportableReason = clipLoader.GetUnexportableReason(clipData);
 			if (unexportableReason)
 			{
@@ -16356,7 +16353,7 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 				{
 					/// UI3 AVI format is not supported!
 					toaster.Info(unexportableReason, 15000);
-					dialog.close();
+					self.Close();
 					return;
 				}
 			}
@@ -16387,9 +16384,12 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 				AddEditorField("Timelapse max output fps", "timelapseFps", { min: 1, max: 120, disabled: !exportOptions.reencode || exportOptions.audio || !exportOptions.timelapse });
 			}
 		}
-		var $okBtn = $('<input type="button" value="Begin Export" />');
+		var $okBtn = $('<input type="button" value="Begin Export" class="exportControlsExportBtn" />');
 		$okBtn.on('click', Ok_Click);
 		$content.append($('<div class="dialogOption_item_info" style="text-align: center;"></div>').append($okBtn));
+		var $cancelBtn = $('<input type="button" value="Cancel" class="exportControlsCancelBtn" />');
+		$cancelBtn.on('click', self.Close);
+		$content.append($('<div class="dialogOption_item_info" style="text-align: center;"></div>').append($cancelBtn));
 	}
 
 	var Ok_Click = function ()
@@ -16404,23 +16404,42 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 		settings.ui3_clip_export_timelapseMultiplier = exportOptions.timelapseMultiplier;
 		settings.ui3_clip_export_timelapseFps = exportOptions.timelapseFps;
 
+		// Validate start and end times
+		if (state.recIdArray.length === 1)
+		{
+			var durationMs = exportOptions.endTimeMs - exportOptions.startTimeMs;
+			if (durationMs === 0)
+			{
+				// Both markers are in exactly the same spot.
+				// Adjust end time offset 10 seconds forward.
+				exportOptions.endTimeMs = Clamp(exportOptions.endTimeMs + 10000, 0, fileDuration);
+				exportOptions.startTimeMs = Clamp(exportOptions.endTimeMs - 10000, 0, fileDuration);
+			}
+			else if (durationMs < 0)
+			{
+				// End marker is before Start marker.  Swap them.
+				var tmp = exportOptions.startTimeMs;
+				exportOptions.startTimeMs = exportOptions.endTimeMs;
+				exportOptions.endTimeMs = tmp;
+			}
+		}
+
 		// Time to export!
-		if (recIdArray.length === 1 && exportOptions.format === classic_ui3_idx)
+		if (state.recIdArray.length === 1 && exportOptions.format === classic_ui3_idx)
 		{
 			// Use classic in-browser export method
-			var clipData = clipLoader.GetClipFromId(recIdArray[0]);
+			var clipData = clipLoader.GetClipFromId(state.recIdArray[0]);
 			var fileDuration = Math.max(clipData.msec, 2);
-			var fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
-			var durationMs = endTimeMs - startTimeMs;
+			if (!state.fileSizeBytes)
+				state.fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
+			var durationMs = exportOptions.endTimeMs - exportOptions.startTimeMs;
 			var percentOfClip = durationMs / fileDuration;
-			var estimatedSize = percentOfClip * fileSizeBytes;
+			var estimatedSize = percentOfClip * state.fileSizeBytes;
 			var proceedFunc = function ()
 			{
-				new ClientsideClipExportDialog(clipData, startTimeMs, endTimeMs, exportOptions.audio);
+				new ClientsideClipExportDialog(clipData, exportOptions.startTimeMs, exportOptions.endTimeMs, exportOptions.audio);
 
-				if (typeof onExportStarted === "function")
-					onExportStarted(exportOptions);
-				dialog.close();
+				self.Close();
 			}
 			if (estimatedSize >= 950000000)
 			{
@@ -16437,11 +16456,34 @@ function ClipExportDialog(recIdArray, startTimeMs, endTimeMs, onExportStarted)
 			return;
 		}
 
-		if (typeof onExportStarted === "function")
-			onExportStarted(exportOptions);
-		dialog.close();
+		self.Close();
 
-		clipLoader.Multi_Export(recIdArray, exportOptions, exportAPIStatusToast.show);
+		clipLoader.Multi_Export(state.recIdArray, exportOptions, exportAPIStatusToast.show);
+	}
+
+	this.UpdateRangeSelection = function (percentStart, percentEnd)
+	{
+		if (!isOpen)
+			return;
+		if (state.recIdArray.length === 1)
+		{
+			var clipData = clipLoader.GetClipFromId(state.recIdArray[0]);
+			if (!clipData)
+				return;
+
+			var fileDuration = Math.max(clipData.msec, 2);
+			if (!state.fileSizeBytes) // fileSize gets changed/lost in clipData when automatically refreshing the alert list.
+				state.fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
+
+			var percentOfClip = Math.abs(percentEnd - percentStart);
+			var durationMs = percentOfClip * fileDuration;
+			var estimatedSize = percentOfClip * state.fileSizeBytes;
+
+			exportOptions.startTimeMs = percentStart * fileDuration;
+			exportOptions.endTimeMs = percentEnd * fileDuration;
+
+			$status.text(msToTime(durationMs) + ' (' + formatBytes2(estimatedSize, 1) + ')');
+		}
 	}
 
 	var startExportStatusToast = function ()
@@ -21698,15 +21740,37 @@ function UIFormField(args)
 		, minValue: undefined // number / range types
 		, maxValue: undefined // number / range types
 		, disabled: false
+		, compact: false
 	}, args);
 
 	var disabledClass = (o.disabled ? ' disabled' : '');
+	var compactClass = (o.compact ? ' compact' : '');
 
 	if (o.inputType === "checkbox")
-		return GetCustomCheckbox(o.tag, o.label, o.value === true || o.value === "1", o.onChange, o.disabled);
+	{
+		var checked = o.value === true || o.value === "1";
+		if (o.compact)
+		{
+			var $input = $('<input type="' + o.inputType + '"' + (checked ? ' checked="checked"' : '') + ' />');
+			if (o.disabled)
+				$input.attr("disabled", "disabled");
+			else
+				$input.on('change', function (e) { return o.onChange(o.tag, $input.is(":checked")); });
+
+			var $label = $('<label> ' + o.label + '</label>');
+			$label.prepend($input);
+
+			var $row = $('<div class="dialogOption_item dialogOption_item_cb' + disabledClass + '"></div>');
+			$row.append($label);
+			return $row;
+		}
+		else
+			return GetCustomCheckbox(o.tag, o.label, checked, o.onChange, o.disabled);
+	}
 	else if (o.inputType === "select")
 	{
 		var sb = new StringBuilder();
+
 		sb.Append('<select>');
 		for (var i = 0; i < o.options.length; i++)
 			sb.Append(GetHtmlOptionElementMarkup(o.options[i], o.options[i], o.value));
@@ -21716,7 +21780,12 @@ function UIFormField(args)
 			$input.attr("disabled", "disabled");
 		else
 			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
-		return $('<div class="dialogOption_item dialogOption_item_ddl' + disabledClass + '"></div>').append($input).append(GetDialogOptionLabel(o.label));
+		var $el = $('<div class="dialogOption_item dialogOption_item_ddl' + disabledClass + compactClass + '"></div>');
+		if (o.compact)
+			$el.append(GetDialogOptionLabel(o.label)).append($input);
+		else
+			$el.append($input).append(GetDialogOptionLabel(o.label));
+		return $el;
 	}
 	else if (o.inputType === "number" || o.inputType === "range")
 	{
@@ -21730,7 +21799,7 @@ function UIFormField(args)
 		else
 			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
 		var $label = $(GetDialogOptionLabel(o.label));
-		var classes = "dialogOption_item dialogOption_item_info" + disabledClass;
+		var classes = "dialogOption_item dialogOption_item_info" + disabledClass + compactClass;
 		if (o.inputType === "range")
 		{
 			if (typeof o.onInput === "function")
@@ -21767,7 +21836,7 @@ function UIFormField(args)
 			$input.attr("disabled", "disabled");
 		else
 			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
-		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + '"></div>').append($input).append(GetDialogOptionLabel(o.label));
+		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + compactClass + '"></div>').append($input).append(GetDialogOptionLabel(o.label));
 	}
 	else if (o.inputType === "errorCommentText")
 	{
@@ -21799,8 +21868,11 @@ function UIFormField(args)
 		return $('<div class="dialogOption_item dialogOption_item_info">Invalid arguments sent to UIFormField.</div>');
 	}
 }
-function MakeAddEditorFieldFn(title, $content, obj)
+function MakeAddEditorFieldFn(title, $content, obj, o)
 {
+	o = $.extend({
+		compact: false
+	}, o);
 	var rowIdx = 0;
 	var AddEditorField = function (label, key, options)
 	{
@@ -21835,76 +21907,77 @@ function MakeAddEditorFieldFn(title, $content, obj)
 			}
 		}
 
-		var formFields = {
+		var fieldArgs = {
 			value: value
 			, label: label
 			, tag: key
 			, disabled: !!options.disabled
+			, compact: o.compact
 		};
 		if (type === "boolean")
 		{
-			formFields.inputType = "checkbox";
-			formFields.onChange = CheckboxChanged;
+			fieldArgs.inputType = "checkbox";
+			fieldArgs.onChange = CheckboxChanged;
 		}
 		else if (type === "string")
 		{
-			formFields.inputType = "text";
-			formFields.onChange = TextChanged;
-			formFields.maxValue = options.max;
+			fieldArgs.inputType = "text";
+			fieldArgs.onChange = TextChanged;
+			fieldArgs.maxValue = options.max;
 		}
 		else if (type === "color")
 		{
-			formFields.inputType = "color";
-			formFields.onChange = TextChanged;
-			formFields.maxValue = 7;
-			if (formFields.value.length === 6)
-				formFields.value = "#" + formFields.value;
+			fieldArgs.inputType = "color";
+			fieldArgs.onChange = TextChanged;
+			fieldArgs.maxValue = 7;
+			if (fieldArgs.value.length === 6)
+				fieldArgs.value = "#" + fieldArgs.value;
 		}
 		else if (type === "number")
 		{
-			formFields.inputType = "number";
-			formFields.onChange = NumberChanged;
-			formFields.minValue = options.min;
-			formFields.maxValue = options.max;
+			fieldArgs.inputType = "number";
+			fieldArgs.onChange = NumberChanged;
+			fieldArgs.minValue = options.min;
+			fieldArgs.maxValue = options.max;
 		}
 		else if (type === "select")
 		{
-			formFields.inputType = "select";
-			formFields.onChange = SelectChanged
-			formFields.options = options.options;
+			fieldArgs.inputType = "select";
+			fieldArgs.onChange = SelectChanged
+			fieldArgs.options = options.options;
 			if (valueType === "number")
 			{
 				if (valueType < 0 || valueType >= options.options.length)
 					toaster.Error(title + " Error: invalid value for " + label + ": " + value, 30000);
 				else
-					formFields.value = options.options[value];
+					fieldArgs.value = options.options[value];
 			}
 		}
 		else if (type === "comment")
 		{
-			formFields.inputType = "commentText";
+			fieldArgs.inputType = "commentText";
 		}
 		else if (type === "errorComment")
 		{
-			formFields.inputType = "errorCommentText";
+			fieldArgs.inputType = "errorCommentText";
 		}
 		else
 		{
-			formFields.inputType = "noteText";
-			formFields.label = "Unknown object type: '" + type + "' with value '" + value + "' and label '" + label + "'";
+			fieldArgs.inputType = "noteText";
+			fieldArgs.label = "Unknown object type: '" + type + "' with value '" + value + "' and label '" + label + "'";
 		}
 		if (typeof options.onChange === "function")
 		{
 			// An extra onChange method was provided. Create a wrapper to see both applied.
-			var oldOnChange = formFields.onChange;
-			formFields.onChange = function ()
+			var oldOnChange = fieldArgs.onChange;
+			fieldArgs.onChange = function ()
 			{
 				if (typeof oldOnChange === "function")
 					oldOnChange.apply(this, arguments);
 				options.onChange.apply(this, arguments);
 			}
 		}
-		$row.append(UIFormField(formFields));
+		$row.append(UIFormField(fieldArgs));
 
 		$content.append($row);
 	};
