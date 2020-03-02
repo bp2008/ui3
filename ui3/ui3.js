@@ -945,6 +945,13 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
+			key: "ui3_download_exports_automatically"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Download Exports Automatically'
+			, category: "Clips / Alerts"
+		}
+		, {
 			key: "ui3_clipicon_trigger_motion"
 			, value: "0"
 			, inputType: "checkbox"
@@ -7196,7 +7203,7 @@ function ClipLoader(clipsBodySelector)
 			+ (title ? (' title="' + title + '"') : '')
 			+ '><svg class="icon' + (noflip ? ' noflip' : '') + '"><use xlink:href="' + svgId + '"></use></svg></div>'
 	}
-	this.QueueExportViaAPI = function (clipData, exportOptions, onSuccess, onFailure)
+	this.QueueExportViaAPI = function (clipData, exportOptions, options, onSuccess, onFailure)
 	{
 		var args = { cmd: "export", path: clipData.path };
 		if (exportOptions.startTimeMs >= 0 && exportOptions.endTimeMs > exportOptions.startTimeMs)
@@ -7244,6 +7251,12 @@ function ClipLoader(clipsBodySelector)
 		{
 			if (response.result === "success")
 			{
+				if (options)
+				{
+					if (!options.history)
+						options.history = [];
+					options.history.push(response.data);
+				}
 				if (typeof onSuccess === "function")
 					onSuccess(response);
 			}
@@ -7530,7 +7543,7 @@ function ClipLoader(clipsBodySelector)
 			}
 			else if (o.operation == "export")
 			{
-				self.QueueExportViaAPI(clipData, o.args, function ()
+				self.QueueExportViaAPI(clipData, o.args, o, function ()
 				{
 					Multi_Operation(o);
 				}, function ()
@@ -16487,10 +16500,6 @@ function ClipExportPanel()
 		}
 	}
 
-	var startExportStatusToast = function ()
-	{
-	}
-
 	Initialize();
 }
 ///////////////////////////////////////////////////////////////
@@ -16501,15 +16510,23 @@ function ExportAPIStatusToast()
 	var self = this;
 
 	var isActive = false;
-	var myToast = null;
+	var dialog = null;
+	var $body = null;
 	var $progressBar = null;
 	var $activeItem = null;
 	var $itemsQueued = null;
+	var $finished = null;
 	var updateTimeout = null;
+	var items = [];
 
-	this.show = function ()
+	this.show = function (multi_operation_options)
 	{
 		stop();
+
+		items = [];
+		if (multi_operation_options && multi_operation_options.history)
+			for (var i = 0; i < multi_operation_options.history.length; i++)
+				items.push(multi_operation_options.history[i]);
 
 		isActive = true;
 
@@ -16517,40 +16534,74 @@ function ExportAPIStatusToast()
 	}
 	var update = function ()
 	{
+		clearTimeout(updateTimeout);
 		if (!isActive)
 			return;
 		ExecJSON({ cmd: "export", summary: true }
 			, function (response)
 			{
 				if (!isActive)
-				{
-					// We could call stop() here if we wanted to prevent the eventual "Exports Finished" toast.
 					return;
-				}
 				if (response.result === "success")
 				{
 					if (response.data)
 					{
 						var queued = parseInt(response.data.queued);
 						var activeArr = response.data.active;
+
+						var unfinished = queued + activeArr.length;
+						while (unfinished >= 0 && items.length > unfinished)
+						{
+							var last = items[0];
+							items.splice(0, 1);
+							AddDownloadLink(last);
+						}
+
 						if (queued === 0 && (!activeArr || !activeArr.length))
 						{
-							stop();
-							exportsFinished();
+							$progressBar.parent().remove();
+							$activeItem.remove();
+							$itemsQueued.remove();
+							$body.prepend('<div>Finished!</div>');
 						}
 						else
 						{
-							if (!myToast)
+							if (!dialog)
 							{
-								myToast = toaster.Info('<div id="export_api_status_toast">'
+								$body = $('<div class="exportStatus">'
 									+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
 									+ '<div class="active_item"></div>'
 									+ '<div><span class="items_queued"></span></div>'
-									+ '</div>', 86400000, true);
-								var $body = $("#export_api_status_toast");
+									+ '</div>');
+
 								$progressBar = $body.find(".multi_operation_status_bar");
 								$activeItem = $body.find(".active_item");
 								$itemsQueued = $body.find(".items_queued");
+
+								var $fullDialogLink = $('<a role="button" tabindex="0">Open Convert/Export List</a>');
+								$fullDialogLink.on('click', exportListDialog.open);
+								$body.append($('<div class="fullDialogLink"></div>').append($fullDialogLink));
+
+								var $cbDownloadAutomatically = $('<input type="checkbox" />');
+								$cbDownloadAutomatically.on('change', function ()
+								{
+									settings.ui3_download_exports_automatically = $cbDownloadAutomatically.is(':checked') ? "1" : "0";
+								});
+								if (settings.ui3_download_exports_automatically === "1")
+									$cbDownloadAutomatically.attr("checked", "checked");
+
+								var $lblAroundCb = $('<label></label>');
+								$lblAroundCb.append($cbDownloadAutomatically);
+								$lblAroundCb.append('<span>Download Exports Automatically</span>');
+								$body.append($('<div class="downloadAutomaticallyOption"></div>').append($lblAroundCb));
+
+								$finished = $('<div class="items_done"></div>');
+								$body.append($finished);
+
+								dialog = $body.dialog({
+									title: "Export Status"
+									, onClosing: DialogClosing
+								});
 							}
 
 							var progressPercent = 0;
@@ -16567,7 +16618,6 @@ function ExportAPIStatusToast()
 								$itemsQueued.text(queued + " job" + (queued == 1 ? "" : "s") + " queued");
 							else
 								$itemsQueued.text("");
-
 
 							updateTimeout = setTimeout(update, 2000);
 						}
@@ -16598,25 +16648,43 @@ function ExportAPIStatusToast()
 		stop();
 		toaster.Error(errMsgHtml, 15000);
 	}
-	var stop = function ()
+	var AddDownloadLink = function (item)
+	{
+		if (item && item.uri)
+		{
+			var exported_clip_url = currentServer.remoteBaseURL + 'clips/' + item.uri + '?dl=1' + currentServer.GetAPISessionArg("&");
+			if (settings.ui3_download_exports_automatically === "1")
+			{
+				$body.append('<iframe width="1" height="1" frameborder="0" src="' + htmlAttributeEncode(exported_clip_url) + '" style="display:none"></iframe>');
+			}
+			else
+			{
+				var $link = $('<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(item.uri) + '">' + htmlEncode(item.uri) + '</a>');
+				$link.on('click', function ()
+				{
+					setTimeout(function ()
+					{
+						$link.parent().remove();
+					}, 0);
+				});
+				$finished.append($('<div></div>').append($link));
+			}
+		}
+	}
+	var DialogClosing = function ()
 	{
 		isActive = false;
 		clearTimeout(updateTimeout);
-		if (myToast)
-		{
-			myToast.remove();
-			myToast = null;
-			$progressBar = null;
-			$activeItem = null;
-			$itemsQueued = null;
-		}
+		dialog = null;
+		$progressBar = null;
+		$activeItem = null;
+		$itemsQueued = null;
+		$finished = null;
 	}
-	var exportsFinished = function ()
+	var stop = function ()
 	{
-		toaster.Success('Exports Finished<br><br><span style="text-decoration: underline;">Click here</span> to view and download your exported video clips.', 60000, true, function ()
-		{
-			exportListDialog.open();
-		});
+		if (dialog)
+			dialog.close();
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -16731,7 +16799,7 @@ function ExportListDialog()
 
 		var startDate = new Date(parseInt(item.utc) + GetServerTimeOffset());
 		var tsHtml = '<div class="timestamp">' + GetDateDisplayStr(startDate) + '<br>' + GetTimeStr(startDate) + '</div>';
-		var link = '<div>' + thumb + '<div class="camlist_label">' + tsHtml + item.uri + '</div></div>';
+		var link = '<div>' + thumb + '<div class="camlist_label">' + tsHtml + htmlEncode(item.uri) + '</div></div>';
 		var noLinkOverlay = '';
 		var errorClick = '';
 		var clipsize = item.filesize ? ('<div class="clipdur clipsize">' + htmlEncode(item.filesize) + '</div>') : '';
@@ -16739,7 +16807,7 @@ function ExportListDialog()
 		if (linked)
 		{
 			var exported_clip_url = currentServer.remoteBaseURL + 'clips/' + item.uri + currentServer.GetAPISessionArg("?");
-			link = '<a href="' + exported_clip_url + '" download="' + item.uri + '">' + link + '</a>';
+			link = '<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(item.uri) + '">' + link + '</a>';
 		}
 		else
 		{

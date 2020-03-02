@@ -144,6 +144,12 @@ svg.stroke
 	width: 40px;
 }
 /* Main */
+a[role="button"]
+{
+	cursor: pointer;
+	text-decoration: underline;
+}
+
 body
 {
 	margin: 0px;
@@ -4471,6 +4477,12 @@ div::-webkit-scrollbar-corner
 	display: initial;
 }
 
+.exportStatus .fullDialogLink,
+.exportStatus .downloadAutomaticallyOption,
+.exportStatus .items_done div
+{
+	margin: 5px 0px;
+}
 
 /* Export Dialog */
 .activeExportDialog
