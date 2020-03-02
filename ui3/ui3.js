@@ -10727,7 +10727,7 @@ function FetchH264VideoModule()
 	var endSnapshotDisplayTimeout = null;
 	var currentImageDateMs = GetServerDate(new Date()).getTime();
 	var failLimiter = new FailLimiter(5, 20000);
-	var willNotReconnectToast = null;
+	var reconnectDelayedToast = null;
 	var failureRecoveryTimeout = null;
 	var didRequestAudio = false;
 	var canRequestAudio = false;
@@ -10964,10 +10964,10 @@ function FetchH264VideoModule()
 		else
 			volumeIconHelper.setColorIdle();
 		videoOverlayHelper.ShowLoadingOverlay(true);
-		if (willNotReconnectToast)
+		if (reconnectDelayedToast)
 		{
-			willNotReconnectToast.remove();
-			willNotReconnectToast = null;
+			reconnectDelayedToast.remove();
+			reconnectDelayedToast = null;
 		}
 		if (startPaused)
 		{
@@ -11227,7 +11227,12 @@ function FetchH264VideoModule()
 				StopStreaming();
 				if (failLimiter.Fail())
 				{
-					willNotReconnectToast = toaster.Error("The video stream was lost.  Due to rapid failures, automatic reconnection will not occur.", 99999999);
+					if (reconnectDelayedToast)
+						reconnectDelayedToast.remove();
+					var delayMs = 300000; // 5 minutes
+					reconnectDelayedToast = toaster.Error("The video stream was lost.  Due to rapid failures, automatic reconnection will resume at " + GetTimeStr(new Date(Date.now() + delayMs)) + ".", delayMs, true);
+					clearTimeout(failureRecoveryTimeout);
+					failureRecoveryTimeout = setTimeout(ReopenStreamAtCurrentSeekPosition, delayMs);
 				}
 				else
 				{
