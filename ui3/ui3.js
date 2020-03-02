@@ -446,7 +446,6 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
-// TODO: Revise rapid failure protection to never stop trying to reconnect, but instead to throttle the reconnection attempts by +30s with each consecutive failure, up to a delay of 5 minutes.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
