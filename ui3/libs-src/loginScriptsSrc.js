@@ -1,27 +1,37 @@
-var jsonBaseUrl = "";
-function ExecJSON(args, callbackSuccess, callbackFail)
+function ExecJSON(args, callbackSuccess, callbackFail, jsonBaseUrl, appPathFallback)
 {
+	if (typeof jsonBaseUrl === "undefined" || jsonBaseUrl === null)
+		jsonBaseUrl = appPath;
+	var reqUrl = jsonBaseUrl + "json";
 	$.ajax({
 		type: "POST",
-		url: jsonBaseUrl + "json",
+		url: reqUrl,
 		contentType: "text/plain",
 		data: JSON.stringify(args),
 		dataType: "json",
 		success: function (c)
 		{
-			callbackSuccess && callbackSuccess(c)
+			callbackSuccess && callbackSuccess(c);
 		},
 		error: function (jqXHR, textStatus, errorThrown)
 		{
-			if (jqXHR && jqXHR.status == 404 && jsonBaseUrl == "")
+			if (jqXHR && jqXHR.status === 404)
 			{
-				jsonBaseUrl = "/";
-				ExecJSON(args, callbackSuccess, callbackFail);
-				return;
+				if (jsonBaseUrl === appPath && appPath !== "" && !appPathFallback)
+				{
+					console.log('JSON API unreachable at "' + reqUrl + '"');
+					ExecJSON(args, callbackSuccess, callbackFail, "", true); // First fallback
+					return;
+				}
+				else if (jsonBaseUrl === "" && appPath !== "/")
+				{
+					ExecJSON(args, callbackSuccess, callbackFail, "/", true); // Second fallback
+					return;
+				}
 			}
-			callbackFail && callbackFail(jqXHR, textStatus, errorThrown)
+			callbackFail && callbackFail(jqXHR, textStatus, errorThrown);
 		}
-	})
+	});
 }
 var UrlParameters = {
 	loaded: !1,

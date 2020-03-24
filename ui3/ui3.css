@@ -2479,7 +2479,8 @@ div.invisibleLabel
 	bottom: 36px;
 }
 
-#toast-container > .toast-warning > div
+#toast-container > .toast-warning > div,
+#toast-container > .toast-warning a
 {
 	color: #000000;
 }

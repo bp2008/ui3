@@ -6,7 +6,7 @@
 "use strict";
 var developerMode = false;
 var isReloadingUi3 = false;
-
+var appPath = GetAppPath();
 if (navigator.cookieEnabled)
 {
 	NavRemoveUrlParams("session");
@@ -178,7 +178,7 @@ function DoUIFeatureDetection()
 			return;
 		}
 		// A critical test failed
-		location.href = "/jpegpull.htm" + currentServer.GetLocalSessionArg("?");
+		location.href = currentServer.remoteBaseURL + "jpegpull.htm" + currentServer.GetLocalSessionArg("?");
 	}
 	catch (ex)
 	{
@@ -19110,9 +19110,10 @@ function ExecAdminCall(camId, args, callbackSuccess, callbackFail)
 // JSON ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var execJsonCounter = 0;
+var appPathFallback = false;
 function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 {
-	if (currentServer.isLoggingOut && args.cmd != "logout")
+	if (currentServer.isLoggingOut && args.cmd !== "logout")
 		return;
 	var isLogin = args.cmd == "login";
 	if (typeof args.session == "undefined" && !isLogin)
@@ -19136,11 +19137,22 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 		},
 		error: function (jqXHR, textStatus, errorThrown)
 		{
-			if (jqXHR && jqXHR.status == 404 && currentServer.remoteBaseURL == "")
+			if (jqXHR && jqXHR.status === 404)
 			{
-				currentServer.remoteBaseURL = "/";
-				ExecJSON(args, callbackSuccess, callbackFail, synchronous);
-				return;
+				if (currentServer.remoteBaseURL === appPath && appPath !== "" && !appPathFallback)
+				{
+					appPathFallback = true;
+					toaster.Warning('JSON API unreachable at "' + reqUrl + '". This is may be the result of using a reverse-proxy server incorrectly. <a href="https://github.com/bp2008/ui3/wiki/Using-UI3-with-a-reverse-proxy-server" target="_blank">Learn More</a>', 30000);
+					currentServer.remoteBaseURL = ""; // First fallback
+					ExecJSON(args, callbackSuccess, callbackFail, synchronous);
+					return;
+				}
+				else if (currentServer.remoteBaseURL === "" && appPath !== "/")
+				{
+					currentServer.remoteBaseURL = "/"; // Second fallback
+					ExecJSON(args, callbackSuccess, callbackFail, synchronous);
+					return;
+				}
 			}
 			if (!jqXHR)
 				jqXHR = { status: 0, statusText: "No jqXHR object was created" };
@@ -19342,7 +19354,7 @@ function FailLimiter(maxFailsInTimePeriod, timePeriodMs)
 ///////////////////////////////////////////////////////////////
 var currentServer =
 {
-	remoteBaseURL: ""
+	remoteBaseURL: GetAppPath()
 	, remoteServerName: ""
 	, remoteServerUser: ""
 	, remoteServerPass: ""
@@ -19369,7 +19381,7 @@ var currentServer =
 		}
 		if (serverName == "")
 		{
-			currentServer.remoteBaseURL = "";
+			currentServer.remoteBaseURL = GetAppPath();
 			currentServer.remoteServerName = "";
 			currentServer.remoteServerUser = "";
 			currentServer.remoteServerPass = "";
@@ -23251,4 +23263,11 @@ function BindEvents(ele, events, handler, options)
 function BindEventsPassive(ele, events, handler)
 {
 	BindEvents(ele, events, handler, { passive: true });
+}
+function GetAppPath()
+{
+	var appPath = "/" + appPath_raw.replace(/^\/+|\/+$/g, '');
+	if (!appPath.endsWith("/"))
+		appPath = appPath + "/";
+	return appPath;
 }

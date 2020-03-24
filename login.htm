@@ -6,9 +6,12 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "20";
+		var login_version = "21";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
+		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
+		if (!appPath.endsWith("/"))
+			appPath = appPath + "/";
 	</script>
 	<script type="text/javascript">
 		window.onerror = function (msg, url, line, charIdx)
@@ -321,8 +324,8 @@
 		function LeaveLoginPage()
 		{
 			var page = UrlParameters.Get("page");
-			if (page === "")
-				page = "/";
+			if (page.indexOf(appPath) !== 0)
+				page = appPath + page.replace(/^\/+/g, '');
 			page = page.replace(/&session=[^&?#%]+/gi, '');
 			page = page.replace(/\?session=[^&?#%]+/gi, '?');
 			page += (page.indexOf("?") < 0 ? "?" : "&") + "session=" + existingSession;
