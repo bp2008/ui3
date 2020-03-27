@@ -14407,7 +14407,7 @@ function GenericQualityHelper()
 	var Create_4K_VBR = function ()
 	{
 		var p = new StreamingProfile();
-		p.name = "4K VBR^";
+		p.name = "2160p VBR^";
 		p.abbr = "V8";
 		p.aClr = "#00FF00";
 		p.w = 3840;
