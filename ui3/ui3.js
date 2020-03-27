@@ -25,7 +25,13 @@ var _browser_is_edge_legacy = -1;
 function BrowserIsEdgeLegacy()
 {
 	if (_browser_is_edge_legacy === -1)
-		_browser_is_edge_legacy = window.navigator.userAgent.indexOf(" Edge/") > -1 ? 1 : 0;
+	{
+		var edgeVersion = BrowserEdgeVersion();
+		if (edgeVersion && parseInt(edgeVersion) < 20)
+			_browser_is_edge_legacy = 1;
+		else
+			_browser_is_edge_legacy = 0;
+	}
 	return _browser_is_edge_legacy === 1;
 }
 function BrowserEdgeVersion()
@@ -281,7 +287,13 @@ function detectIfPnaclSupported()
 {
 	try
 	{
-		return navigator.mimeTypes['application/x-pnacl'] !== undefined;
+		var reportsFeature = navigator.mimeTypes['application/x-pnacl'] !== undefined;
+		if (reportsFeature)
+		{
+			if (BrowserEdgeVersion()) // Chromium-based Edge falsely reports supporting pnacl.
+				return false;
+			return true;
+		}
 	}
 	catch (ex) { }
 	return false;
@@ -535,7 +547,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_streamingQuality"
-			, value: "720p^"
+			, value: "1080p VBR^"
 		}
 		, {
 			key: "ui3_playback_reverse"
@@ -728,6 +740,10 @@ var defaultSettings =
 		, {
 			key: "ui3_cps_uiSettings_category_Extra_visible"
 			, value: "1"
+		}
+		, {
+			key: "ui3_disableIEWarning"
+			, value: "0"
 		}
 		, {
 			key: "ui3_streamingProfileArray"
@@ -3108,28 +3124,34 @@ function DropdownBoxes()
 				genericQualityHelper.QualityChoiceChanged(item.uniqueId);
 			}
 		});
+	var mainMenuItems = [
+		new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
+		, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
+		, new DropdownListItem({ cmd: "streaming_profiles", text: "Streaming Profiles", icon: "#svg_mio_VideoFilter", cssClass: "goldenLarger" })
+		, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export List", icon: "#svg_mio_VideoFilter", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
+		, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
+		, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
+	];
+	if (BrowserIsIE())
+		mainMenuItems.splice(0, 0, new DropdownListItem({ cmd: "using_ie", text: "Using Internet Explorer?", imgsrc: "ui3/horror.png", cssClass: "redLarger", tooltip: "Get a better web browser" }));
 	this.listDefs["mainMenu"] = new DropdownListDefinition("mainMenu",
 		{
 			selectedIndex: -1
-			, items:
-				[
-					new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
-					, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
-					, new DropdownListItem({ cmd: "streaming_profiles", text: "Streaming Profiles", icon: "#svg_mio_VideoFilter", cssClass: "goldenLarger" })
-					, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
-					, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
-					, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
-					, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
-					, new DropdownListItem({ cmd: "export_list", text: "Convert/Export List", icon: "#svg_mio_VideoFilter", cssClass: "blueLarger" })
-					, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
-					, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
-					, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
-					, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
-				]
+			, items: mainMenuItems
 			, onItemClick: function (item)
 			{
 				switch (item.cmd)
 				{
+					case "using_ie":
+						settings.ui3_disableIEWarning = "0";
+						ShowIEWarning();
+						break;
 					case "ui_settings":
 						uiSettingsPanel.open();
 						break;
@@ -3437,6 +3459,8 @@ function DropdownBoxes()
 		});
 		if (item.icon)
 			$item.prepend('<div class="mainMenuIcon"><svg class="icon' + (item.icon.indexOf('_x5F_') == -1 ? " noflip" : "") + '"><use xlink:href="' + item.icon + '"></use></svg></div>');
+		else if (item.imgsrc)
+			$item.prepend('<div class="mainMenuIcon"><img src="' + item.imgsrc + '" alt="" /></div>');
 		var tooltip = item.GetTooltip();
 		if (tooltip)
 			$item.attr('title', tooltip);
@@ -14008,7 +14032,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 function StreamingProfile()
 {
 	var self = this;
-	this.dv = 2; // default version
+	this.dv = 3; // default version
 	this.name = "Unnamed Streaming Profile";
 	this.abbr = "";
 	this.aClr = "#004882";
@@ -14025,8 +14049,8 @@ function StreamingProfile()
 	this.fps = -1;
 	this.gop = -1;
 	this.zfl = -1;
-	this.pre = -1; // Preset
-	this.pro = -1; // Profile
+	this.pre = -1; // Preset ["inherit", "ultrafast", "superfast", "veryfast"]
+	this.pro = -1; // Profile ["inherit", "default", "baseline", "main", "extended", "high", "high 10"]
 
 	this.GetNameText = function ()
 	{
@@ -14233,6 +14257,13 @@ function GenericQualityHelper()
 		var best = null;
 		if (h264_playback_supported)
 		{
+			// Prefer 1080p VBR
+			if (!best) best = self.FindBestProfile("h264", function (p)
+			{
+				if (p.name.startsWith("1080p VBR"))
+					return 0;
+				return -1;
+			});
 			// Find one near 1400 Kbps
 			if (!best) best = self.FindBestProfile("h264", function (p)
 			{
@@ -14373,9 +14404,41 @@ function GenericQualityHelper()
 			return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimKey, dimValue) + jpegQualityHelper.getQualityArg();
 	}
 
+	var Create_4K_VBR = function ()
+	{
+		var p = new StreamingProfile();
+		p.name = "4K VBR^";
+		p.abbr = "V8";
+		p.aClr = "#00FF00";
+		p.w = 3840;
+		p.h = 2160;
+		p.q = 20;
+		p.limitBitrate = 2;
+		p.kbps = 3000;
+		p.gop = 3000;
+		p.pre = 3;
+		return p;
+	}
+	var Create_1080p_VBR = function ()
+	{
+		var p = new StreamingProfile();
+		p.name = "1080p VBR^";
+		p.abbr = "V2";
+		p.aClr = "#00CC88";
+		p.w = 1920;
+		p.h = 1080;
+		p.q = 20;
+		p.limitBitrate = 2;
+		p.kbps = 1000;
+		p.gop = 3000;
+		p.pre = 3;
+		return p;
+	}
 	this.GenerateDefaultProfiles = function ()
 	{
 		var profiles = new Array();
+		profiles.push(Create_4K_VBR());
+		profiles.push(Create_1080p_VBR());
 		{
 			var p = new StreamingProfile();
 			p.name = "2160p^";
@@ -14501,28 +14564,43 @@ function GenericQualityHelper()
 	}
 	var upgradeDefaultProfileData = function (profileData)
 	{
-		var upgradeMap = {
-			"1440p^": { abbr: "4MP", aClr: "#0048A2" },
-			"1080p^": { abbr: "2MP", aClr: "#004882" },
-			"720p^": { abbr: "1MP", aClr: "#003862" },
-			"480p": { abbr: "480p", aClr: "#884400" },
-			"360p": { abbr: "360p", aClr: "#883000" },
-			"240p": { abbr: "240p", aClr: "#882000" },
-			"144p": { abbr: "144p", aClr: "#880000" }
-		};
 		var upgradeMade = false;
-		for (var i = 0; i < profileData.length; i++)
 		{
-			if (profileData[i].dv && profileData[i].dv >= 2)
-				continue;
-			var u = upgradeMap[profileData[i].name];
-			if (u)
+			// v1 -> v2
+			var upgradeMap = {
+				"1440p^": { abbr: "4MP", aClr: "#0048A2" },
+				"1080p^": { abbr: "2MP", aClr: "#004882" },
+				"720p^": { abbr: "1MP", aClr: "#003862" },
+				"480p": { abbr: "480p", aClr: "#884400" },
+				"360p": { abbr: "360p", aClr: "#883000" },
+				"240p": { abbr: "240p", aClr: "#882000" },
+				"144p": { abbr: "144p", aClr: "#880000" }
+			};
+			for (var i = 0; i < profileData.length; i++)
 			{
-				profileData[i].dv = 2;
-				for (var key in u)
-					profileData[i][key] = u[key];
+				if (profileData[i].dv && profileData[i].dv >= 2)
+					continue;
+				var u = upgradeMap[profileData[i].name];
+				if (u)
+				{
+					profileData[i].dv = 2;
+					for (var key in u)
+						profileData[i][key] = u[key];
+					upgradeMade = true;
+				}
+			}
+		}
+		{
+			// v2 -> v3
+			for (var i = 0; i < profileData.length; i++)
+			{
+				if (profileData[i].dv && profileData[i].dv >= 3)
+					continue;
+				profileData[i].dv = 3;
 				upgradeMade = true;
 			}
+			if (upgradeMade)
+				profileData.splice(0, 0, Create_4K_VBR(), Create_1080p_VBR());
 		}
 		return upgradeMade;
 	}
@@ -19578,6 +19656,7 @@ function LoadingHelper()
 		$("#loadingmsgwrapper").remove();
 		resized();
 		videoPlayer.Initialize();
+		ShowIEWarning();
 		BI_CustomEvent.Invoke("FinishedLoading");
 	}
 	this.DidLoadingFinish = function ()
@@ -19588,6 +19667,34 @@ function LoadingHelper()
 	{
 		self.SetLoadedStatus("window");
 	});
+}
+var ieWarningToast = null;
+function ShowIEWarning()
+{
+	if (BrowserIsIE() && settings.ui3_disableIEWarning !== "1")
+	{
+		ieWarningToast = toaster.Info('<div>UI3 works poorly in Internet Explorer.<br><br>For a better experience, try one of these browsers: <br><br>'
+			+ '<a target="_blank" href="https://www.google.com/chrome"><div class="browserIcon"><svg class="icon noflip"><use xlink: href="#svg_chrome"></use></svg></div>Google Chrome</a>'
+			+ '<br>'
+			+ '<a target="_blank" href="https://www.microsoft.com/edge/"><div class="browserIcon"><svg class="icon noflip"><use xlink: href="#edge_logo"></use></svg></div>Edge (Chromium-based)</a>'
+			+ '<br>'
+			+ '<br>'
+			+ '<input type="button" value="Ignore once" onclick="IgnoreIEWarning()" />'
+			+ '<br>'
+			+ '<br>'
+			+ '<input type="button" value="Do not show again" onclick="DisableIEWarning()" />'
+			+ '</div>', 60000, true);
+	}
+}
+function IgnoreIEWarning()
+{
+	if (ieWarningToast)
+		ieWarningToast.remove();
+}
+function DisableIEWarning()
+{
+	settings.ui3_disableIEWarning = "1";
+	IgnoreIEWarning();
 }
 ///////////////////////////////////////////////////////////////
 // Logging ////////////////////////////////////////////////////
@@ -23267,7 +23374,7 @@ function BindEventsPassive(ele, events, handler)
 function GetAppPath()
 {
 	var appPath = "/" + appPath_raw.replace(/^\/+|\/+$/g, '');
-	if (!appPath.endsWith("/"))
+	if (appPath[appPath.length - 1] !== '/')
 		appPath = appPath + "/";
 	return appPath;
 }
