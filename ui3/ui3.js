@@ -19674,9 +19674,9 @@ function ShowIEWarning()
 	if (BrowserIsIE() && settings.ui3_disableIEWarning !== "1")
 	{
 		ieWarningToast = toaster.Info('<div>UI3 works poorly in Internet Explorer.<br><br>For a better experience, try one of these browsers: <br><br>'
-			+ '<a target="_blank" href="https://www.google.com/chrome"><div class="browserIcon"><svg class="icon noflip"><use xlink: href="#svg_chrome"></use></svg></div>Google Chrome</a>'
+			+ '<a target="_blank" href="https://www.google.com/chrome"><div class="browserIcon"><svg class="icon noflip"><use xlink:href="#svg_chrome"></use></svg></div>Google Chrome</a>'
 			+ '<br>'
-			+ '<a target="_blank" href="https://www.microsoft.com/edge/"><div class="browserIcon"><svg class="icon noflip"><use xlink: href="#edge_logo"></use></svg></div>Edge (Chromium-based)</a>'
+			+ '<a target="_blank" href="https://www.microsoft.com/edge/"><div class="browserIcon"><svg class="icon noflip"><use xlink:href="#edge_logo"></use></svg></div>Edge (Chromium-based)</a>'
 			+ '<br>'
 			+ '<br>'
 			+ '<input type="button" value="Ignore once" onclick="IgnoreIEWarning()" />'
