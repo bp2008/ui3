@@ -458,7 +458,6 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
-// TODO: Fix time-sync issues when snapshotting from a paused H.264 stream.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -468,7 +467,6 @@ var togglableUIFeatures =
 // CONSIDER: Android Chrome > Back button can't close the browser if there is no history, so the back button override is disabled on Android.  Also disabled on iOS for similar bugs.
 // CONSIDER: Seeking while paused in Chrome, the canvas sometimes shows the image scaled using nearest-neighbor.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
-// CONSIDER: Stop using ImageToDataUrl for the clip thumbnail mouseover popup, now that clip thumbnails are cacheable.  I'm not sure there is a point though.
 // CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
 // CONSIDER: Firefox on Android has trouble with switching cameras and seeking.
 // KNOWN: Black frame shown when pausing HTML5 player before first frame is rendered. This is caused by destroying the jmuxer instance before the frame has rendered. Skipping or delaying the destroy causes camera-changing weirdness, so this is the lesser nuisance.
@@ -877,6 +875,37 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Pause when tab is inactive'
 			, hint: 'When set to "Yes", video playback will pause when the tab is inactive.\nSelect "No" to allow audio and event-triggered sounds to play while the browser tab is inactive.\nRecommended: "Yes"'
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_download_snapshot_method"
+			, value: "Server"
+			, inputType: "select"
+			, options: ["Server", "Local (JPEG)", "Local (PNG)"]
+			, label: 'Source of snapshot downloads<br><a href="javascript:UIHelp.LearnMore(\'Local Snapshots\')">(learn more)</a>'
+			, onChange: OnChange_ui3_download_snapshot_method
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_comment_download_snapshot_local"
+			, value: ""
+			, inputType: "comment"
+			, comment: GenerateLocalSnapshotsComment
+			, preconditionFunc: Precondition_ui3_download_snapshot_local
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_download_snapshot_server_quality"
+			, value: 85
+			, minValue: 1
+			, maxValue: 100
+			, step: 1
+			, unitLabel: "%"
+			, inputType: "range"
+			, label: 'Server-sourced Snapshot Jpeg Quality'
+			, hint: 'Default: 85%'
+			, changeOnStep: false
+			, preconditionFunc: Precondition_ui3_download_snapshot_server
 			, category: "Video Player"
 		}
 		, {
@@ -9572,6 +9601,12 @@ function VideoPlayerController()
 		else
 			$("#loadingH264").parent().hide();
 	}
+	this.GetPlayerElement = function ()
+	{
+		if (typeof playerModule.GetPlayerElement === "function")
+			return playerModule.GetPlayerElement();
+		return null;
+	}
 
 	this.Initialize = function ()
 	{
@@ -10404,6 +10439,10 @@ function JpegVideoModule()
 		ClearGetNewImageTimeout();
 		$camimg_canvas.appendTo($camimg_store);
 	}
+	this.GetPlayerElement = function ()
+	{
+		return $camimg_canvas.get(0);
+	}
 	this.VisibilityChanged = function (visible)
 	{
 	}
@@ -10808,6 +10847,10 @@ function FetchH264VideoModule()
 		$volumeBar.addClass("audioTemporarilyUnavailable");
 		StopStreaming();
 		h264_player.Toggle($camimg_store, false);
+	}
+	this.GetPlayerElement = function ()
+	{
+		return h264_player.GetPlayerElement();
 	}
 	var StopStreaming = function ()
 	{
@@ -11636,6 +11679,10 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		$canvas.appendTo($wrapper);
 	}
+	this.GetPlayerElement = function ()
+	{
+		return canvas;
+	}
 	this.ClearDrawingSurface = function ()
 	{
 		ClearCanvas(canvas);
@@ -12101,6 +12148,10 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		else
 			$("#videoElement_wrapper").addClass('deactivated');
 	}
+	this.GetPlayerElement = function ()
+	{
+		return player;
+	}
 	this.ClearDrawingSurface = function ()
 	{
 	}
@@ -12523,6 +12574,10 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			$("#videoElement_wrapper").removeClass('deactivated');
 		else
 			$("#videoElement_wrapper").addClass('deactivated');
+	}
+	this.GetPlayerElement = function ()
+	{
+		return player;
 	}
 	this.ClearDrawingSurface = function ()
 	{
@@ -18277,8 +18332,26 @@ function saveSnapshot(btnSelector)
 	var date = GetPaddedDateStr(new Date(videoPlayer.GetCurrentImageTimeMs() + GetServerTimeOffset()), true);
 	date = FormatFileName(date);
 	var fileName = camName + " " + date + ".jpg";
+	var q = Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100);
+	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=" + q /* LOC0 */);
+	if (settings.ui3_download_snapshot_method === "Local (JPEG)" || settings.ui3_download_snapshot_method === "Local (PNG)")
+	{
+		var playerEle = videoPlayer.GetPlayerElement();
+		if (playerEle)
+		{
+			if (playerEle.tagName === "VIDEO" || (playerEle.tagName === "CANVAS" && videoPlayer.CurrentPlayerModuleName() === "jpeg"))
+			{
+				var contentType = "image/jpeg";
+				if (settings.ui3_download_snapshot_method === "Local (PNG)")
+				{
+					contentType = "image/png";
+					fileName = camName + " " + date + ".png";
+				}
+				$(btnSelector).attr("href", GetSnapshotDataUri(playerEle, contentType));
+			}
+		}
+	}
 	$(btnSelector).attr("download", fileName);
-	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
 	setTimeout(function ()
 	{
 		$(btnSelector).attr("download", "temp.jpg");
@@ -19775,8 +19848,10 @@ function ArrayToHtmlTable(a)
 ///////////////////////////////////////////////////////////////
 // Save Images to Local Storage ///////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ImageToDataUrl(imgEle)
+function ImageToDataUrl(imgEle, contentType)
 {
+	if (!contentType)
+		contentType = "image/jpeg";
 	var imgCanvas = document.createElement("canvas");
 
 	// Make sure canvas is as big as the picture
@@ -19787,7 +19862,30 @@ function ImageToDataUrl(imgEle)
 	var imgContext = imgCanvas.getContext("2d");
 	imgContext.drawImage(imgEle, 0, 0, imgEle.naturalWidth, imgEle.naturalHeight);
 
-	return imgCanvas.toDataURL("image/jpeg");
+	return imgCanvas.toDataURL(contentType);
+}
+/**
+ * Creates a jpeg data URI from the specified video, image, or canvas element.
+ * @param {any} ele video or canvas element
+ */
+function GetSnapshotDataUri(ele, contentType)
+{
+	if (!contentType)
+		contentType = "image/jpeg";
+	if (ele.tagName === "IMAGE")
+		return ImageToDataUrl(ele, contentType);
+	var imgCanvas;
+	if (ele.tagName === "CANVAS")
+		imgCanvas = ele;
+	else if (ele.tagName === "VIDEO")
+	{
+		imgCanvas = document.createElement("canvas");
+		imgCanvas.width = ele.videoWidth;
+		imgCanvas.height = ele.videoHeight;
+		var imgContext = imgCanvas.getContext("2d");
+		imgContext.drawImage(ele, 0, 0, ele.videoWidth, ele.videoHeight);
+	}
+	return imgCanvas.toDataURL(contentType);
 }
 function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 {
@@ -21417,6 +21515,14 @@ function UISettingsPanel()
 			, closeOnOverlayClick: true
 		});
 
+		self.Refresh();
+	}
+	this.Refresh = function ()
+	{
+		if (!modal_dialog)
+			return;
+
+		$content.empty();
 		for (var i = 0; i < settingsCategoryList.length; i++)
 			LoadCategory(settingsCategoryList[i]);
 
@@ -21750,6 +21856,12 @@ function UISettingsPanel()
 		}
 	}
 }
+function GenerateLocalSnapshotsComment()
+{
+	if (!h264_playback_supported || settings.ui3_h264_choice2 === H264PlayerOptions.HTML5)
+		return "";
+	return "<b>-- Your current H.264 player is not capable of local snapshots. --</b>";
+}
 function GenerateEventTriggeredSoundsComment()
 {
 	return GenerateH264RequirementString() + "<br/>Sounds are loaded from Blue Iris's \"www/sounds\" directory. Supported extensions: " + sessionManager.supportedHTML5AudioFormats.join(", ");
@@ -21826,6 +21938,7 @@ function OnChange_ui3_h264_choice2()
 			isReloadingUi3 = true;
 			location.reload();
 		});
+	uiSettingsPanel.Refresh();
 }
 function Precondition_ui3_h264_choice2()
 {
@@ -21863,6 +21976,14 @@ function Precondition_ui3_force_gop_1sec()
 {
 	return (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5 && BrowserIsFirefox());
 }
+function Precondition_ui3_download_snapshot_server()
+{
+	return settings.ui3_download_snapshot_method === "Server";
+}
+function Precondition_ui3_download_snapshot_local()
+{
+	return settings.ui3_download_snapshot_method.startsWith("Local ");
+}
 function OnChange_ui3_force_gop_1sec()
 {
 	videoPlayer.SelectedQualityChanged();
@@ -21894,6 +22015,10 @@ function OnChange_ui3_show_maximize_button()
 function OnChange_ui3_skipAmount()
 {
 	$('#lblSkipBack,#lblSkipAhead').text(GetSkipAmount().dropDecimalsStr() + "s");
+}
+function OnChange_ui3_download_snapshot_method()
+{
+	uiSettingsPanel.Refresh();
 }
 function OnChange_ui3_pc_next_prev_buttons()
 {
@@ -22282,6 +22407,9 @@ function UIHelpTool()
 			case "Edge Fetch Bug":
 				UI3_Edge_Fetch_Bug_Help();
 				break;
+			case "Local Snapshots":
+				UI3_Local_Snapshots_Help();
+				break;
 		}
 	}
 	var Context_Menu_Trigger = function ()
@@ -22386,6 +22514,30 @@ function UIHelpTool()
 		$('<div class="UIHelp">'
 			+ "Beginning with EdgeHTML 17.x and continuing through 18.x (newest at the time of this writing), Microsoft Edge fails to close the network connections used to stream H.264 video (and audio) in UI3.  Instability and poor performance may result as multiple unused video streams remain open until the browser tab is closed.  For this reason, it is recommended to disable the H.264 player and only use Jpeg streaming methods in this browser."
 			+ '</div>').modalDialog({ title: 'Edge Fetch Bug', closeOnOverlayClick: true });
+	}
+	var UI3_Local_Snapshots_Help = function ()
+	{
+		$('<div class="UIHelp">'
+			+ "<p>UI3 has the ability to save snapshots to disk using the camera button in the upper right and also via context menu (right-click on the video player). There are three methods of capture:</p>"
+			+ "<p><b>Server</b> (default)</p>"
+			+ "<ul>"
+			+ "<li>Downloaded snapshots come from the server.</li>"
+			+ "<li>May not capture the exact frame you see in the video player while streaming H.264.</li>"
+			+ "<li>Configurable quality.</li>"
+			+ "</ul>"
+			+ "<p><b>Local (JPEG)</b></p>"
+			+ "<ul>"
+			+ "<li>Downloaded snapshots are captured from the local video player.</li>"
+			+ "<li>Always captures the frame you expect.</li>"
+			+ "<li>Quality typically worse than server-sourced snapshots.</li>"
+			+ "<li>Works well with poor internet connections.</li>"
+			+ "<li>Only works with HTML5 and Jpeg video players.</li>"
+			+ "</ul>"
+			+ "<p><b>Local (PNG)</b></p>"
+			+ "<ul>"
+			+ "<li>Same as Local (JPEG) except snapshots are saved in PNG format.  Slightly better quality, much larger file size.  Still typically worse than server-sourced snapshots.</li>"
+			+ "</ul>"
+			+ '</div>').modalDialog({ title: 'Server Snapshots vs Local Snapshots', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
