@@ -458,6 +458,7 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
+// TODO: Fix time-sync issues when snapshotting from a paused H.264 stream.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -14032,7 +14033,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 function StreamingProfile()
 {
 	var self = this;
-	this.dv = 3; // default version
+	this.dv = 4; // default version
 	this.name = "Unnamed Streaming Profile";
 	this.abbr = "";
 	this.aClr = "#004882";
@@ -14416,7 +14417,8 @@ function GenericQualityHelper()
 		p.limitBitrate = 2;
 		p.kbps = 3000;
 		p.gop = 3000;
-		p.pre = 3;
+		p.pre = 2;
+		p.zfl = 2;
 		return p;
 	}
 	var Create_1080p_VBR = function ()
@@ -14431,7 +14433,8 @@ function GenericQualityHelper()
 		p.limitBitrate = 2;
 		p.kbps = 1000;
 		p.gop = 3000;
-		p.pre = 3;
+		p.pre = 2;
+		p.zfl = 2;
 		return p;
 	}
 	this.GenerateDefaultProfiles = function ()
@@ -14580,10 +14583,10 @@ function GenericQualityHelper()
 			{
 				if (profileData[i].dv && profileData[i].dv >= 2)
 					continue;
+				profileData[i].dv = 2;
 				var u = upgradeMap[profileData[i].name];
 				if (u)
 				{
-					profileData[i].dv = 2;
 					for (var key in u)
 						profileData[i][key] = u[key];
 					upgradeMade = true;
@@ -14602,6 +14605,24 @@ function GenericQualityHelper()
 			if (upgradeMade)
 				profileData.splice(0, 0, Create_4K_VBR(), Create_1080p_VBR());
 		}
+		{
+			// v3 -> v4
+			for (var i = 0; i < profileData.length; i++)
+			{
+				if (profileData[i].dv && profileData[i].dv >= 4)
+					continue;
+				profileData[i].dv = 4;
+				upgradeMade = true;
+				if (profileData[i].name === "2160p VBR^" || profileData[i].name === "1080p VBR^")
+				{
+					if (profileData[i].pre === 3)
+						profileData[i].pre = 2;
+					if (profileData[i].zfl <= 0)
+						profileData[i].zfl = 2;
+				}
+			}
+		}
+		// When adding upgrade steps, be sure to update the dv field declaration to assign the newest version number.
 		return upgradeMade;
 	}
 	this.RestoreDefaultProfiles = function (replaceExisting)
