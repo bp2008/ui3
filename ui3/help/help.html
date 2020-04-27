@@ -43,6 +43,7 @@
 							<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">More Topics<span class="caret"></span></a>
 							<ul class="dropdown-menu">
 								<li><a data-toggle="pill" href="#cameraproperties" id="nav-cameraproperties">Camera Properties</a></li>
+								<li><a data-toggle="pill" href="#export" id="nav-export">Exporting Video</a></li>
 								<li><a data-toggle="pill" href="#hlsstreams" id="nav-hlsstreams">HLS Streams</a></li>
 								<li><a data-toggle="pill" href="#mainmenu" id="nav-mainmenu">Main Menu</a></li>
 								<li><a data-toggle="pill" href="#nerdstats" id="nav-nerdstats">Stats for Nerds</a></li>
@@ -93,7 +94,7 @@
 						<div class="row">
 							<div class="col-sm-5">
 								<p>Prior to June 2018, UI3 simply exposed the three server-side profiles as choices in the Streaming Quality menu, and that was that.</p>
-								<p>Thanks to improvements in Blue Iris, UI3 is now able to provide more-intuitive quality choices such as "1080p", "720p", and "480p".  These quality choices each represent a fully-configurable streaming profile, which you can edit by opening the <b>Main Menu</b> and choosing the <b>Streaming Profiles</b> option.</p>
+								<p>Thanks to improvements in Blue Iris, UI3 is now able to provide more-intuitive quality choices such as "1080p", "720p", and "480p".  These quality choices each represent a fully-configurable streaming profile, which you can edit by opening the <a href="#mainmenu">Main Menu</a> and choosing the <b>Streaming Profiles</b> option.</p>
 								<p>Each of UI3's streaming profiles must be based on one of the server-side profiles.  All encoding parameters are inherited from this profile unless otherwise specified in UI3.  UI3's default profiles are all based on <b>Streaming 0</b>, but they override the <b>Max Frame Width</b>, <b>Max Frame Height</b>, and <b>Max Bit Rate</b> parameters.  Other parameters, such as <b>Quality</b>, are intentionally left blank so their values will be inherited from <b>Streaming 0</b>.</p>
 								<p>UI3 no longer includes <b>Streaming 0</b> or <b>Streaming 1</b> or <b>Streaming 2</b> as default quality choices.  If they are desired, they can be restored easily.  Simply create a new profile in UI3, give it a name, and base it on the desired server-side profile. Leave all the encoding parameters alone, and their values will be inherited from your chosen <b>Base Server Profile</b>.</p>
 								<p class="bg-info padded-info">If you want to share your profile changes with all browsers and devices, <a href="#extensions">see the "Quick Start" section of UI Extensions</a>.</p>
@@ -107,6 +108,7 @@
 						<p>The audio codec setting has no effect on UI3.  UI3 only knows how to decode "mu-law" and that is what Blue Iris provides no matter what you set here.  It is therefore not an option in UI3's streaming profile system, but can be configured in Blue Iris's server-side profiles.</p>
 						<h4>Quality vs Bit Rate</h4>
 						<p>Blue Iris will encode up to your specified <b>Quality</b> level, automatically reducing quality if necessary to stay within the bit rate limit. For streaming, it is recommended to always use the <b>Limit bitrate</b> setting, otherwise the actual bit rate can get excessively high and in extreme cases this can cause decoding errors.</p>
+						<p>The default quality value (50) is already quite high, so setting it higher is almost never a good idea for remote streaming!  Actually, lower values like 20 can provide enormous bandwidth savings while retaining acceptable visual quality.</p>
 						<p>Lower bit rates work better with devices that have a slow CPU or slow network connection.</p>
 						<h4>Maximum keyframe interval (GOP)</h4>
 						<p>Also known as the i-frame interval.  For UI3, you should <b>set this as high as it goes</b> (300 at the time of this writing).</p>
@@ -118,7 +120,7 @@
 						<ul>
 							<li>"ultrafast" - Lowest CPU usage and lowest image quality</li>
 							<li>"superfast" - A good balance between CPU usage and image quality</li>
-							<li>"veryfast" - Slightly better image quality at the cost of higher CPU usage</li>
+							<li>"veryfast" - Slightly better image quality at the cost of higher CPU usage <b>and some video delay</b></li>
 						</ul>
 						<h4>Zero frame latency</h4>
 						<p>Recommended to be enabled for best UI responsiveness. In testing, no perceptible difference was seen with this enabled or disabled.</p>
@@ -191,7 +193,7 @@
 								Many items in this panel only exist when streaming H.264. Other items may only exist while streaming Jpeg frames.<br /><br />
 								<dl class="dl-horizontal">
 									<dt>Viewport</dt>
-									<dd>The size of the screen area available for video playback.</dd>
+									<dd>The size of the screen area available for video playback. When using DPI scaling or browser zoom, the zoom ratio is also shown here.</dd>
 									<dt>Stream Resolution</dt>
 									<dd>The resolution of the current video stream.  Jpeg frames are dynamically adjusted to the ideal resolution to fit the viewport.</dd>
 									<dt>Native Resolution</dt>
@@ -310,7 +312,7 @@
 						<h2>Optimizing Group Frames</h2>
 						<p>The default group frame size may have a lot of empty black area, or the resolution may be lower than you would like. You can change the resolution of each group in Blue Iris's local console.</p>
 						<p><img class="img-responsive" mysrc="img/GroupProperties.png" alt="Screenshot of Group Properties" /></p>
-						<p>For best results, you should use frame dimensions that are multiples of 16.  For convenience, here is a list of suitable multiples of 16 that you can copy from:</p>
+						<p>You may <b>type any resolution</b> you want into the frame size dropdown box.  For best results, use frame dimensions that are multiples of 16.  For convenience, here is a list of suitable multiples of 16 that you can copy from:</p>
 						<div class="panel panel-info">
 							<div class="panel-heading">Multiples of 16</div>
 							<div class="panel-body">
@@ -331,7 +333,7 @@
 						<h1>Recordings</h1>
 						<p>To view recorded video, you must use either the "Alerts" or "Clips" tabs at the top of the UI.</p>
 						<h2>Alerts vs Clips</h2>
-						<p>The "Alerts" and "Clips" tabs look similar, but are different in subtle ways.  Clips may represent many triggered events or a continuous recording.  Alerts, however, are treated as bookmarks into a clip.</p>
+						<p>The "Alerts" and "Clips" tabs look similar, but are different in subtle ways.  A "Clip" represents a single video file on disk.  An "Alert" is a bookmark to a specific location in a clip.  A single clip may have multiple associated alerts, or no associated alerts.</p>
 						<h2>Filters</h2>
 						<p>You can filter the Alerts/Clips list by camera, group, date, and flag state.</p>
 						<p>To filter by camera, simply maximize that camera by clicking on it in the main video area.  To filter by other criteria, use the filter controls above the Alert/Clip list.</p>
@@ -355,13 +357,15 @@
 											<dt>Protect <span class="label label-primary">Admin</span></dt>
 											<dd>Protects the specified item(s) so they will not be deleted by Blue Iris's space-reclaiming algorithm.</dd>
 											<dt>Download </dt>
-											<dd>Downloads the specified clip(s). Only clips can be downloaded.  If you attempt to download an alert, the browser will download the clip which contains the alert.  The format of the downloaded clip is whatever format you have configured for the camera in Blue Iris.</dd>
+											<dd>Downloads the specified clip(s) file exactly as it exists on the server's disk. Only clips can be downloaded.  If you attempt to download an alert, the browser will download the clip which contains the alert.  The format of the downloaded clip is whatever format you have configured for the camera in Blue Iris.</dd>
 											<dt>Delete <span class="label label-primary">Admin</span></dt>
 											<dd>Deletes the specified item(s).</dd>
 											<dt>Enlarge/Shrink Thumbnails</dt>
 											<dd>Toggles between the standard layout and one that dedicates much more space to thumbnail images.</dd>
 											<dt>Enable/Disable Mouseover Thumbs</dt>
 											<dd>Enables or disables a much larger thumbnail that appears when you mouse over each clip.</dd>
+											<dt>Convert/export</dt>
+											<dd>Opens the interface for exporting the selected items as MP4, AVI, or WMV.</dd>
 											<dt>Properties</dt>
 											<dd>Opens a panel containing properties of the selected clip or alert.</dd>
 										</dl>
@@ -409,6 +413,8 @@
 									<dd>Opens the UI Settings panel, which contains many settings and hotkeys.  The settings here are not shared with other devices or browsers.</dd>
 									<dt>About This UI</dt>
 									<dd>Opens the About panel, which contains basic information about UI3.  If some features of UI3 are unavailable in your browser, there will be a note of it in the About panel.</dd>
+									<dt>Streaming Profiles</dt>
+									<dd>Opens the Streaming Profiles panel, which allows you to rearrange, add, edit, or delete streaming profiles.</dd>
 									<dt>System Log</dt>
 									<dd><span class="label label-primary">Admin</span> Opens Blue Iris's System Log.</dd>
 									<dt>User List</dt>
@@ -417,6 +423,8 @@
 									<dd><span class="label label-primary">Admin</span> Opens a list of all mobile devices that have connected to your system.</dd>
 									<dt>Full Camera List</dt>
 									<dd>Opens a list of all cameras configured in your system, even those which are not currently enabled.</dd>
+									<dt>Convert/Export List</dt>
+									<dd>Opens the Convert/Export List panel, which allows you to view current export progress and download exported clips.
 									<dt>Disk Usage</dt>
 									<dd>Opens a panel which shows disk usage pie charts.</dd>
 									<dt>System Configuration</dt>
@@ -427,6 +435,64 @@
 									<dd>Log out of your current session and open the login page.</dd>
 								</dl>
 							</div>
+						</div>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="export" role="tabpanel" aria-labelledby="nav-export">
+						<h1>Exporting Video</h1>
+						<p>Clips or sections of clips may be exported into MP4, AVI, or WMV formats and then downloaded through UI3.</p>
+						<p>Exported items are kept on your Blue Iris server in the "New" folder as configured in Blue Iris settings, and the files will automatically be managed according to the rules assigned to that folder.  UI3 does not currently offer the ability to delete exported items manually, but you can do this from the Covert/Export queue in Blue Iris's local console.</p>
+						<h3>Begin Exporting</h3>
+						<p>To begin exporting clips, open the Convert/Export interface using one of these methods:</p>
+						<p>
+							<ul>
+								<li>Right-click a clip or alert, then choose <b>Convert/export</b></li>
+								<li>Select multiple clips or alerts, then right-click one of them and choose <b>Convert/export</b></li>
+								<li>Right-click the video player while a recording is open, then choose <b>Convert/export</b></li>
+								<li>Click the Export button <img mysrc="img/ConvertExportIcon.png" alt="icon" style="height: 20px;" /> within the playback controls while a recording is open.</li>
+							</ul>
+						</p>
+						<h3>Configuring an Export Operation</h3>
+						<div class="row">
+							<div class="col-sm-7">
+								<p>When you open the Convert/Export interface, you will be shown a panel with options related to the export operation.</p>
+								<p>MP4 output format is recommended for best compatibility with 3rd-party applications.</p>
+								<p>Encoder profiles used by the export feature cannot be edited in UI3.  This must be done in the local console of Blue Iris.</p>
+								<p>To export a timelapse, disable the audio track and enable re-encoding video to H.264.</p>
+								<p>
+									If you are exporting a single clip, you may choose a specific time range to export. Drag the green and red knobs to your desired start and stop points:<br />
+									<img class="img-responsive" mysrc="img/ExportRange.png" alt="time range screenshot" style="margin: 5px 0px;" />
+								</p>
+							</div>
+							<div class="col-sm-5">
+								<img class="img-responsive" mysrc="img/ConvertExport.png" alt="Convert/export settings" style="margin-bottom: 5px;" />
+							</div>
+						</div>
+						<h3>Export Status</h3>
+						<div class="row">
+							<div class="col-sm-7">
+								<p>
+									When you push "Begin Export", the export jobs are queued and then a small dialog appears to give you status updates.<br />
+								</p>
+								<p>
+									From here, you can:
+									<ul>
+										<li>Open the Convert/Export List (also found in the <a href="#mainmenu">Main Menu</a>)</li>
+										<li>Enable automatic download of finished exports</li>
+										<li>Download finished exports manually</li>
+									</ul>
+								</p>
+							</div>
+							<div class="col-sm-5">
+								<img class="img-responsive" mysrc="img/ExportStatus.png" alt="Export status dialog" style="margin-bottom: 5px;" />
+							</div>
+						</div>
+						<h3>The Convert/Export List</h3>
+						<div class="col-sm-3">
+							<p>This dialog is found in the <a href="#mainmenu">Main Menu</a>, and shows active and recently-finished export jobs.  You may download finished items by clicking on them.</p>
+							<p>
+						</div>
+						<div class="col-sm-9">
+							<img class="img-responsive" mysrc="img/ExportList.png" alt="Convert/Export List" />
 						</div>
 					</div><!--/.tab-pane -->
 					<div class="tab-pane" role="tabpanel" id="template" aria-labelledby="nav-template">
