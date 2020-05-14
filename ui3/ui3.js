@@ -458,6 +458,7 @@ var togglableUIFeatures =
 
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
+// TODO: Rewrite camera labels code to build one big HTML string because the current implementation is extremely slow when panning and zooming.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -9781,7 +9782,7 @@ function VideoPlayerController()
 		// Find out which camera is under the mouse pointer, if any.
 		imageRenderer.SetMousePos(event.mouseX, event.mouseY);
 
-		var imgPos = $camimg_wrapper.position();
+		var imgPos = imageRenderer.GetSimulatedCamimgWrapperPosition();
 		var layoutbodyOffset = $layoutbody.offset();
 		var mouseRelX = parseFloat((event.mouseX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
 		var mouseRelY = parseFloat((event.mouseY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
@@ -12980,12 +12981,18 @@ function ImageRenderer()
 	{
 		return previousImageDraw;
 	}
+	this.GetSimulatedCamimgWrapperPosition = function ()
+	{
+		return { left: previousImageDraw.x, top: previousImageDraw.y };
+	}
 	this.ImgResized = function (isFromKeyboard)
 	{
 		dpiScalingFactor = BI_GetDevicePixelRatio();
 
 		var imgAvailableWidth = $layoutbody.width();
 		var imgAvailableHeight = $layoutbody.height();
+
+		var zoomFactor = self.zoomHandler.GetZoomFactor();
 
 		// Calculate new size based on zoom levels
 		var imgForSizing = videoPlayer.Loaded().image;
@@ -13001,8 +13008,8 @@ function ImageRenderer()
 			widthForSizing = imgForSizing.fullwidth;
 			heightForSizing = imgForSizing.fullheight;
 		}
-		var imgDrawWidth = widthForSizing * self.zoomHandler.GetZoomFactor();
-		var imgDrawHeight = heightForSizing * self.zoomHandler.GetZoomFactor();
+		var imgDrawWidth = widthForSizing * zoomFactor;
+		var imgDrawHeight = heightForSizing * zoomFactor;
 		if (imgDrawWidth === 0)
 		{
 			imgDrawWidth = imgAvailableWidth;
@@ -13014,16 +13021,18 @@ function ImageRenderer()
 				imgDrawHeight = imgDrawWidth / aspectRatio;
 			else
 				imgDrawWidth = imgDrawHeight * aspectRatio;
+			$camimg_wrapper.css("width", imgDrawWidth + "px").css("height", imgDrawHeight + "px");
 		}
-		$camimg_wrapper.css("width", imgDrawWidth + "px").css("height", imgDrawHeight + "px");
+		else
+			$camimg_wrapper.css("width", widthForSizing + "px").css("height", heightForSizing + "px");
 
 		imageIsLargerThanAvailableSpace = imgDrawWidth > imgAvailableWidth || imgDrawHeight > imgAvailableHeight;
 
-		if (previousImageDraw.z > -1 && previousImageDraw.z !== self.zoomHandler.GetZoomFactor())
+		if (previousImageDraw.z > -1 && previousImageDraw.z !== zoomFactor)
 		{
 			// We just experienced a zoom change
 			// Find the mouse position percentage relative to the center of the image at its old size
-			var imgPos = $camimg_wrapper.position();
+			var imgPos = imageRenderer.GetSimulatedCamimgWrapperPosition();
 			var layoutbodyOffset = $layoutbody.offset();
 			if (!layoutbodyOffset) // Edge complained about this once
 				layoutbodyOffset = { left: 0, top: 0 };
@@ -13031,8 +13040,8 @@ function ImageRenderer()
 			var yPos = mouseY;
 			if (isFromKeyboard)
 			{
-				xPos = layoutbodyOffset.left + ($layoutbody.outerWidth(true) / 2);
-				yPos = layoutbodyOffset.top + ($layoutbody.outerHeight(true) / 2);
+				xPos = layoutbodyOffset.left + (imgAvailableWidth / 2);
+				yPos = layoutbodyOffset.top + (imgAvailableHeight / 2);
 			}
 			var mouseRelX = -0.5 + (parseFloat((xPos - layoutbodyOffset.left) - imgPos.left) / previousImageDraw.w);
 			var mouseRelY = -0.5 + (parseFloat((yPos - layoutbodyOffset.top) - imgPos.top) / previousImageDraw.h);
@@ -13066,14 +13075,24 @@ function ImageRenderer()
 		var proposedX = (((imgAvailableWidth - imgDrawWidth) / 2) + imgDigitalZoomOffsetX);
 		var proposedY = (((imgAvailableHeight - imgDrawHeight) / 2) + imgDigitalZoomOffsetY);
 
-		$camimg_wrapper.css("left", proposedX + "px").css("top", proposedY + "px");
-
 		// Store new image position for future calculations
 		previousImageDraw.x = proposedX;
-		previousImageDraw.x = proposedY;
+		previousImageDraw.y = proposedY;
 		previousImageDraw.w = imgDrawWidth;
 		previousImageDraw.h = imgDrawHeight;
-		previousImageDraw.z = self.zoomHandler.GetZoomFactor();
+		previousImageDraw.z = zoomFactor;
+
+		// Css scaling shim:
+		if (zoomFactor > 1)
+		{
+			proposedX += (widthForSizing * (zoomFactor - 1)) / 2;
+			proposedY += (heightForSizing * (zoomFactor - 1)) / 2;
+		}
+
+		var transform = "translate(" + proposedX + "px, " + proposedY + "px)";
+		if (zoomFactor > 1)
+			transform += " scale(" + zoomFactor + ")";
+		$camimg_wrapper.css("transform", transform);
 
 		BI_CustomEvent.Invoke("ImageResized");
 	}
@@ -13330,7 +13349,7 @@ function CameraNameLabels()
 			if (fontSizePt < minScaledFontSize)
 				fontSizePt = minScaledFontSize;
 
-			var imgPos = $camimg_wrapper.position();
+			var imgPos = imageRenderer.GetSimulatedCamimgWrapperPosition();
 			var group = loaded.cam.group;
 			var rects = loaded.cam.rects;
 			if (!group || group.length === 0)
