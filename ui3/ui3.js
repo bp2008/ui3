@@ -21526,6 +21526,7 @@ function UISettingsPanel()
 	var modal_dialog = null;
 	var $dlg = $();
 	var $content = $();
+	var filterText = "";
 
 	var Initialize = function ()
 	{
@@ -21553,7 +21554,19 @@ function UISettingsPanel()
 	{
 		Initialize();
 		CloseDialog();
+		filterText = "";
 		$dlg = $('<div id="uiSettingsPanel" class="dialogOptionPanel"></div>');
+
+		var $buttonBar = $('<div class="uiSettingsButtonBar"></div>');
+		var $filterInput = $('<input type="search" value="" placeholder="Type to filter..." />');
+		$filterInput.on('input', function (e)
+		{
+			filterText = $filterInput.val();
+			self.Refresh();
+		});
+		$buttonBar.append($filterInput);
+		$dlg.append($buttonBar);
+
 		$content = $('<div id="uiSettingsPanelContent"></div>');
 		$dlg.append($content);
 		modal_dialog = $dlg.dialog({
@@ -21577,20 +21590,21 @@ function UISettingsPanel()
 	}
 	var LoadCategory = function (category)
 	{
-		var cat = new CollapsibleSection("uiSettings_category_" + category, category, modal_dialog);
+		var cat = new CollapsibleSection("uiSettings_category_" + category, category, modal_dialog, filterActive());
 
 		var rowIdx = 0;
 		if (category === "General Settings")
 		{
-			if (settings.bi_rememberMe === "1")
+			if (settings.bi_rememberMe === "1" && processFilter({ label: "Forget Saved Credentials" }))
 				rowIdx = Add_ForgetSavedCredentialsButton(cat, rowIdx);
-			rowIdx = Add_ResetAllSettingsButton(cat, rowIdx);
+			if (processFilter({ label: "Reset All Settings" }))
+				rowIdx = Add_ResetAllSettingsButton(cat, rowIdx);
 		}
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
 			var s = defaultSettings[i];
 			var isDisplayable = (s.label || (s.comment && s.inputType === "comment")) && s.category === category;
-			if (isDisplayable && (typeof s.preconditionFunc !== "function" || s.preconditionFunc()))
+			if (isDisplayable && (typeof s.preconditionFunc !== "function" || s.preconditionFunc()) && processFilter(s))
 			{
 				var $row = $('<div class="uiSettingsRow"></div>');
 				if (s.hint && s.hint.length > 0)
@@ -21670,12 +21684,15 @@ function UISettingsPanel()
 		{
 			if (sessionManager.IsAdministratorSession())
 			{
-				rowIdx = Add_CreateLocalOverridesJsButton(cat, rowIdx);
+				if (processFilter({ label: "Create Script: \"ui3-local-overrides.js\" (learn more) Download" }))
+					rowIdx = Add_CreateLocalOverridesJsButton(cat, rowIdx);
 			}
 		}
-
-		$content.append(cat.$heading);
-		$content.append(cat.$section);
+		if (!filterActive() || rowIdx > 0)
+		{
+			$content.append(cat.$heading);
+			$content.append(cat.$section);
+		}
 	}
 	var Add_CreateLocalOverridesJsButton = function (cat, rowIdx)
 	{
@@ -21901,6 +21918,32 @@ function UISettingsPanel()
 			modal_dialog.close();
 			modal_dialog = null;
 		}
+	}
+	var filterActive = function ()
+	{
+		return !isNullOrWhitespace(filterText);
+	}
+	var processFilter = function (s)
+	{
+		if (!filterActive())
+			return true;
+		var query = new RegExp(escapeRegExp(filterText), "i");
+		if (filterFind(s.label, query))
+			return true;
+		if (filterFind(s.hint, query))
+			return true;
+		return false;
+	}
+	var filterFind = function (field, query)
+	{
+		if (!field)
+			return false;
+		var text = field;
+		if (typeof text === "function")
+			text = text();
+		else if (typeof text !== "string")
+			text = text.toString();
+		return text.match(query);
 	}
 }
 function GenerateLocalSnapshotsComment()
@@ -22590,7 +22633,7 @@ function UIHelpTool()
 ///////////////////////////////////////////////////////////////
 // Collapsible Section for Dialogs ////////////////////////////
 ///////////////////////////////////////////////////////////////
-function CollapsibleSection(id, htmlTitle, dialogToNotify)
+function CollapsibleSection(id, htmlTitle, dialogToNotify, permanentOpen)
 {
 	var self = this;
 	var settingsKey = "ui3_cps_" + id.replace(/\W/g, '_') + "_visible";
@@ -22606,15 +22649,18 @@ function CollapsibleSection(id, htmlTitle, dialogToNotify)
 	var GetSectionHeading = function ()
 	{
 		var $heading = $('<div class="collapsible_section_heading">' + htmlTitle + '</div>');
-		$heading.on('click', SectionHeadingClick);
-		if (settings.getItem(settingsKey) == "1")
+		if (!permanentOpen)
+			$heading.on('click', SectionHeadingClick);
+		if (permanentOpen || settings.getItem(settingsKey) == "1")
 			$heading.addClass("expanded");
+		if (permanentOpen)
+			$heading.addClass("permanentOpen");
 		return $heading;
 	}
 	var GetSection = function ()
 	{
 		var $section = $('<div class="collapsible_section"></div>');
-		if (settings.getItem(settingsKey) == "0")
+		if (!permanentOpen && settings.getItem(settingsKey) == "0")
 			$section.hide();
 		return $section;
 	}
@@ -23597,4 +23643,8 @@ function GetAppPath()
 	if (appPath[appPath.length - 1] !== '/')
 		appPath = appPath + "/";
 	return appPath;
+}
+function escapeRegExp(string)
+{
+	return string.replace(/[.*+\-?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }

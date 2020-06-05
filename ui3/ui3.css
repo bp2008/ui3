@@ -3362,14 +3362,14 @@ body + div
 		margin-top: 10px;
 	}
 
-	.browserIcon
-	{
-		display: inline-block;
-		vertical-align: middle;
-		width: 24px;
-		height: 24px;
-		margin-right: 10px;
-	}
+.browserIcon
+{
+	display: inline-block;
+	vertical-align: middle;
+	width: 24px;
+	height: 24px;
+	margin-right: 10px;
+}
 
 .about_icon
 {
@@ -4726,16 +4726,49 @@ div::-webkit-scrollbar-corner
 			background-color: var(--collapsible-heading-expanded-active-bg-color);
 		}
 
+	.collapsible_section_heading.permanentOpen
+	{
+		cursor: default;
+	}
+
+		.collapsible_section_heading.permanentOpen:hover,
+		.collapsible_section_heading.permanentOpen:active
+		{
+			background-color: var(--collapsible-heading-expanded-bg-color);
+			color: var(--collapsible-heading-expanded-color);
+		}
+
 .collapsible_section
 {
 	padding: 7px 0px;
 }
 /* Settings Dialog */
-#uiSettingsPanelContent
+#uiSettingsPanelContent,
+.uiSettingsButtonBar
 {
 	min-width: 286px;
 	max-width: 375px;
 }
+
+.uiSettingsButtonBar
+{
+	display: flex;
+	position: sticky;
+	top: -2px;
+	background-color: var(--dialog-bg-color);
+	z-index: 1;
+}
+
+	.uiSettingsButtonBar input
+	{
+		background-color: #111111;
+		color: #DDDDDD;
+		border: 1px solid #666666;
+		border-radius: 2px;
+		font-size: 20px;
+		padding: 2px 4px;
+		flex: 1 1 auto;
+	}
 
 .categoryLinks
 {
