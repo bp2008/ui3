@@ -459,6 +459,8 @@ var togglableUIFeatures =
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
 // TODO: Rewrite camera labels code to build one big HTML string because the current implementation is extremely slow when panning and zooming.
+// TODO: Put a collapse/expand all (context-sensitive) button in the settings and camera properties panels.
+// TODO: Revamp System Configuration panel: Rename to "Server Control". Put more options in the panel (see JSON API docs).
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -3731,13 +3733,12 @@ function PtzButtons()
 		ele.ptzcmd = ptzCmds[ele.svgid];
 		ele.tooltipText = ptzTitles[ele.svgid];
 		var layoutParts = $ele.attr('layoutR').split(' ');
-		ele.layout =
-			{
-				x: parseFloat(layoutParts[0])
-				, y: parseFloat(layoutParts[1])
-				, w: parseFloat(layoutParts[2])
-				, h: parseFloat(layoutParts[3])
-			};
+		ele.layout = {
+			x: parseFloat(layoutParts[0])
+			, y: parseFloat(layoutParts[1])
+			, w: parseFloat(layoutParts[2])
+			, h: parseFloat(layoutParts[3])
+		};
 
 		$ele.css("left", ele.layout.x + "px");
 		$ele.css("top", ele.layout.y + "px");
@@ -8673,7 +8674,7 @@ function DiskUsageGUI()
 		var disk_capacity = disk.total;
 
 		// Compensate for minor rounding errors.
-		if (disk_capacity - disk.used - disk.free < -5)
+		if (disk_capacity !== 0 && disk_capacity - disk.used - disk.free < -5)
 			toaster.Warning("Reported disk info is invalid.  Possibly Blue Iris's clip database is corrupt and needs repaired.", 30000);
 		if (disk_capacity - disk.used - disk.free < 0)
 			disk_capacity = disk.used + disk.free;
@@ -8685,11 +8686,37 @@ function DiskUsageGUI()
 		var other_free = disk_freeSpace - bi_free; // Free space outside BI's allocation
 		var exceededAllocation = bi_free < 0; // We have more recordings than we're supposed to
 		var overAllocated = bi_free > disk_freeSpace;  // There isn't enough free space for BI to fill its allocation.
+		var freeSpaceNotMonitored = disk.total === 0;
 
 		var diskStatus;
 		var problemExplanation = "";
 		var chartData;
-		if (exceededAllocation)
+		if (freeSpaceNotMonitored)
+		{
+			if (exceededAllocation)
+			{
+				exceededAllocationOccurred = true;
+				diskStatus = '<span class="diskStatusOverallocated">Exceeded allocation</span>';
+				problemExplanation = "Blue Iris is currently keeping more recordings than allowed.";
+				chartData =
+					[
+						[bi_allocated, '#FF9900']
+						, [-bi_free, '#FF0000'] // Amount over allocation
+					];
+			}
+			else
+			{
+				normalStateOccurred = true;
+				diskStatus = '<span class="diskStatusNormal">Normal</span>';
+				problemExplanation = "Free space is not being monitored.";
+				chartData =
+					[
+						[bi_used, '#0065AA']
+						, [bi_free, '#0097F0']
+					];
+			}
+		}
+		else if (exceededAllocation)
 		{
 			exceededAllocationOccurred = true;
 			diskStatus = '<span class="diskStatusOverallocated">Exceeded allocation</span>';
@@ -8746,8 +8773,9 @@ function DiskUsageGUI()
 		if (overAllocated)
 			$disk.append('<div class="diskInfo">Overallocated by: ' + formatBytes(getBytesFrom_MiB(bi_free - disk_freeSpace)) + '</div>');
 
-		$disk.attr('title', 'Disk "' + disk.disk + '" is ' + parseInt(disk_usedSpace / disk_capacity * 100) + '% full.'
-			+ '\n\n' + formatBytes(getBytesFrom_MiB(disk_freeSpace)) + ' free of ' + formatBytes(getBytesFrom_MiB(disk_capacity)));
+		if (!freeSpaceNotMonitored)
+			$disk.attr('title', 'Disk "' + disk.disk + '" is ' + parseInt(disk_usedSpace / disk_capacity * 100) + '% full.'
+				+ '\n\n' + formatBytes(getBytesFrom_MiB(disk_freeSpace)) + ' free of ' + formatBytes(getBytesFrom_MiB(disk_capacity)));
 
 		return $disk;
 	}
