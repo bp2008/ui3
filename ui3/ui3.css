@@ -4770,6 +4770,25 @@ div::-webkit-scrollbar-corner
 		flex: 1 1 auto;
 	}
 
+		.uiSettingsButtonBar input[type="button"]
+		{
+			flex: 0 0 auto;
+			height: auto !important;
+			margin: 0px 0px 0px 5px !important;
+		}
+
+			.uiSettingsButtonBar input[type="button"]:hover
+			{
+				background-color: #222222;
+			}
+
+.filterTextNoMatch
+{
+	margin: 20px 10px;
+	text-align: center;
+	font-size: 16px;
+}
+
 .categoryLinks
 {
 	margin: 0px 0px 6px 12px;

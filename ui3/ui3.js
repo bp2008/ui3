@@ -21527,6 +21527,8 @@ function UISettingsPanel()
 	var $dlg = $();
 	var $content = $();
 	var filterText = "";
+	var sections = [];
+	var $expandCollapse = $();
 
 	var Initialize = function ()
 	{
@@ -21556,17 +21558,7 @@ function UISettingsPanel()
 		CloseDialog();
 		filterText = "";
 		$dlg = $('<div id="uiSettingsPanel" class="dialogOptionPanel"></div>');
-
-		var $buttonBar = $('<div class="uiSettingsButtonBar"></div>');
-		var $filterInput = $('<input type="search" value="" placeholder="Type to filter..." />');
-		$filterInput.on('input', function (e)
-		{
-			filterText = $filterInput.val();
-			self.Refresh();
-		});
-		$buttonBar.append($filterInput);
-		$dlg.append($buttonBar);
-
+		$dlg.append(MakeButtonBar());
 		$content = $('<div id="uiSettingsPanelContent"></div>');
 		$dlg.append($content);
 		modal_dialog = $dlg.dialog({
@@ -21583,15 +21575,20 @@ function UISettingsPanel()
 			return;
 
 		$content.empty();
+		sections = [];
+		var loadedAny = false;
 		for (var i = 0; i < settingsCategoryList.length; i++)
-			LoadCategory(settingsCategoryList[i]);
+			if (LoadCategory(settingsCategoryList[i]))
+				loadedAny = true;
+		if (!loadedAny)
+			$content.append('<div class="filterTextNoMatch">Your filter text did not match anything.</div>');
 
 		modal_dialog.contentChanged(true);
 	}
 	var LoadCategory = function (category)
 	{
-		var cat = new CollapsibleSection("uiSettings_category_" + category, category, modal_dialog, filterActive());
-
+		var cat = new CollapsibleSection("uiSettings_category_" + category, category, modal_dialog, filterActive(), updateExpandCollapseAllButtonState);
+		sections.push(cat);
 		var rowIdx = 0;
 		if (category === "General Settings")
 		{
@@ -21692,7 +21689,9 @@ function UISettingsPanel()
 		{
 			$content.append(cat.$heading);
 			$content.append(cat.$section);
+			return true;
 		}
+		return false;
 	}
 	var Add_CreateLocalOverridesJsButton = function (cat, rowIdx)
 	{
@@ -21944,6 +21943,48 @@ function UISettingsPanel()
 		else if (typeof text !== "string")
 			text = text.toString();
 		return text.match(query);
+	}
+	var MakeButtonBar = function ()
+	{
+		var $buttonBar = $('<div class="uiSettingsButtonBar"></div>');
+		var $filterInput = $('<input type="search" value="" placeholder="Type to filter..." />');
+		$filterInput.on('input', function (e)
+		{
+			filterText = $filterInput.val();
+			self.Refresh();
+		});
+		$buttonBar.append($filterInput);
+		$expandCollapse = $('<input type="button" value="Collapse All" myaction="c" />');
+		$expandCollapse.on('click', function (e)
+		{
+			if ($expandCollapse.attr("myaction") == "c")
+			{
+				for (var i = 0; i < sections.length; i++)
+					sections[i].Collapse();
+			}
+			else
+			{
+				for (var i = 0; i < sections.length; i++)
+					sections[i].Expand();
+			}
+		});
+		updateExpandCollapseAllButtonState();
+		$buttonBar.append($expandCollapse);
+		return $buttonBar;
+	}
+	var updateExpandCollapseAllButtonState = function ()
+	{
+		for (var i = 0; i < sections.length; i++)
+		{
+			if (sections[i].IsExpanded())
+			{
+				$expandCollapse.attr("myaction", "c");
+				$expandCollapse.val("Collapse All");
+				return;
+			}
+		}
+		$expandCollapse.attr("myaction", "e");
+		$expandCollapse.val("Expand All");
 	}
 }
 function GenerateLocalSnapshotsComment()
@@ -22633,7 +22674,7 @@ function UIHelpTool()
 ///////////////////////////////////////////////////////////////
 // Collapsible Section for Dialogs ////////////////////////////
 ///////////////////////////////////////////////////////////////
-function CollapsibleSection(id, htmlTitle, dialogToNotify, permanentOpen)
+function CollapsibleSection(id, htmlTitle, dialogToNotify, permanentOpen, onToggle)
 {
 	var self = this;
 	var settingsKey = "ui3_cps_" + id.replace(/\W/g, '_') + "_visible";
@@ -22666,25 +22707,38 @@ function CollapsibleSection(id, htmlTitle, dialogToNotify, permanentOpen)
 	}
 	var SectionHeadingClick = function ()
 	{
-		var $ele = $(this);
-		var $section = $ele.next('.collapsible_section');
-		$section.slideToggle(
+		self.$section.slideToggle(
 			{
 				duration: 150
 				, always: function ()
 				{
 					if (dialogToNotify != null)
 						dialogToNotify.contentChanged(false, true);
-					var expanded = $section.is(":visible");
+					var expanded = self.$section.is(":visible");
 					settings.setItem(settingsKey, expanded ? "1" : "0");
 					if (expanded)
-						$ele.addClass("expanded");
+						self.$heading.addClass("expanded");
 					else
-						$ele.removeClass("expanded");
+						self.$heading.removeClass("expanded");
+					if (typeof onToggle === "function")
+						onToggle(expanded);
 				}
 			});
 	}
-
+	this.Expand = function ()
+	{
+		if (!self.$section.is(":visible"))
+			SectionHeadingClick();
+	}
+	this.Collapse = function ()
+	{
+		if (self.$section.is(":visible"))
+			SectionHeadingClick();
+	}
+	this.IsExpanded = function ()
+	{
+		return self.$section.is(":visible");
+	}
 	this.$heading = GetSectionHeading();
 	this.$section = GetSection();
 }
