@@ -364,7 +364,7 @@ var uiSizeHelper = null;
 var uiSettingsPanel = null;
 var pcmPlayer = null;
 var diskUsageGUI = null;
-var systemConfig = null;
+var serverControl = null;
 var cameraListDialog = null;
 var exportListDialog = null;
 var clipProperties = null;
@@ -456,10 +456,7 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
-// TODO: Rewrite camera labels code to build one big HTML string because the current implementation is extremely slow when panning and zooming.
-// TODO: Revamp System Configuration panel: Rename to "Server Control". Put more options in the panel (see JSON API docs).
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -472,6 +469,7 @@ var togglableUIFeatures =
 // CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
 // CONSIDER: Firefox on Android has trouble with switching cameras and seeking.
 // KNOWN: Black frame shown when pausing HTML5 player before first frame is rendered. This is caused by destroying the jmuxer instance before the frame has rendered. Skipping or delaying the destroy causes camera-changing weirdness, so this is the lesser nuisance.
+// CONSIDER: Expandable clip list. ("Show more clips")
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -2419,7 +2417,7 @@ $(function ()
 
 	diskUsageGUI = new DiskUsageGUI();
 
-	systemConfig = new SystemConfig();
+	serverControl = new ServerControl();
 
 	cameraListDialog = new CameraListDialog();
 
@@ -3166,7 +3164,7 @@ function DropdownBoxes()
 		, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export List", icon: "#svg_mio_VideoFilter", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
-		, new DropdownListItem({ cmd: "system_configuration", text: "System Configuration", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
+		, new DropdownListItem({ cmd: "server_control", text: "Server Control", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
 		, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
 	];
@@ -3202,8 +3200,8 @@ function DropdownBoxes()
 					case "device_list":
 						deviceList.open();
 						break;
-					case "system_configuration":
-						systemConfig.open();
+					case "server_control":
+						serverControl.open();
 						break;
 					case "full_camera_list":
 						cameraListDialog.open();
@@ -3421,7 +3419,7 @@ function DropdownBoxes()
 
 		if (name == "mainMenu")
 		{
-			$ddl.css("min-width", ($ddl.width() + 1) + "px"); // Workaround for "System Configuration" wrapping bug
+			$ddl.css("min-width", ($ddl.width() + 1) + "px"); // Workaround for "Server Control" wrapping bug
 			if (BrowserIsIE())
 				$ddl.css("height", ($ddl.height() + 3) + "px"); // Workaround for IE bug that adds unnecessary scroll bars
 		}
@@ -17673,19 +17671,21 @@ function GetCustomCheckbox(tag, label, checked, onChange, disabled)
 	return $wrapper;
 }
 ///////////////////////////////////////////////////////////////
-// Get System Configuration ///////////////////////////////////
+// Server Control Dialog //////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function SystemConfig()
+function ServerControl()
 {
 	var self = this;
-	var modal_systemconfigdialog = null;
+	var modal_servercontroldialog = null;
 	this.open = function ()
 	{
 		CloseSysConfigDialog();
-		modal_systemconfigdialog = $('<div id="sysconfigdialog"><div id="sysconfigcontent"></div></div>')
+		modal_servercontroldialog = $('<div id="sysconfigdialog" class="dialogOptionPanel"><div id="sysconfigcontent"></div></div>')
 			.dialog({
-				title: "System Configuration"
-				, onClosing: function () { modal_systemconfigdialog = null; }
+				title: "Server Control"
+				, overlayOpacity: 0.3
+				, closeOnOverlayClick: true
+				, onClosing: function () { modal_servercontroldialog = null; }
 			});
 		var $sysconfig = $("#sysconfigcontent");
 		if ($sysconfig.length == 0)
@@ -17711,9 +17711,46 @@ function SystemConfig()
 			$sysconfig.empty();
 			$sysconfig.append(GetCustomCheckbox('archive', "Clip Web Archival (FTP)", response.data.archive, SetSysConfig));
 			$sysconfig.append(GetCustomCheckbox('schedule', "Global Schedule", response.data.schedule, SetSysConfig));
+			$sysconfig.append(UIFormField({
+				inputType: "number",
+				value: response.data.manrecsec,
+				label: "Manual recording limit (seconds)",
+				tag: "manrecsec",
+				onChange: function (e, tag, $input)
+				{
+					SetSysConfig(tag, $input.val());
+				}
+			}));
+			var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
+			var $input = $('<input type="button" value="Reboot" />');
+			$input.on('click', function ()
+			{
+				SimpleDialog.ConfirmText("This function will cause the computer running Blue Iris to be restarted.\n\nDo you wish to proceed?\n\n(confirmation 1/2)", function ()
+				{
+					SimpleDialog.ConfirmHtml("If the remote computer fails to reboot for any reason, you may be unable to access the system.  Please remember that Windows Updates may slow down or interfere with the reboot procedure.<br><br>Click <b>Yes</b> to send the restart command now.<br><br>(confirmation 2/2)", function ()
+					{
+						console.log("Sending REBOOT command to Blue Iris");
 
-			if (modal_systemconfigdialog != null)
-				modal_systemconfigdialog.contentChanged(true);
+						ExecJSON({ cmd: "status", reboot: true }, function (response)
+						{
+							console.log("REBOOT command was sent successfully");
+							SimpleDialog.Text("The server was instructed to reboot.\n\n"
+								+ "Blue Iris should stop responding shortly.\n\n"
+								+ "Windows may take longer than usual to reboot if there were any updates ready to install.");
+							toaster.Success("The server was instructed to reboot.", 60000);
+						}, function (jqXHR, textStatus, errorThrown)
+						{
+							toaster.Error("An error occurred. The server may not have received the reboot command.<br>" + jqXHR.ErrorMessageHtml);
+						});
+					});
+				});
+			});
+			$row.append($input);
+			$row.append(GetDialogOptionLabel("Reboot Server Computer"));
+			$sysconfig.append($row);
+
+			if (modal_servercontroldialog !== null)
+				modal_servercontroldialog.contentChanged(true);
 		}, function ()
 		{
 			toaster.Error('Unable to contact Blue Iris server.', 3000);
@@ -17722,8 +17759,8 @@ function SystemConfig()
 	}
 	var CloseSysConfigDialog = function ()
 	{
-		if (modal_systemconfigdialog != null)
-			modal_systemconfigdialog.close();
+		if (modal_servercontroldialog != null)
+			modal_servercontroldialog.close();
 	}
 	var SetSysConfig = function (key, value)
 	{
@@ -17732,6 +17769,8 @@ function SystemConfig()
 			args.archive = value;
 		else if (key == "schedule")
 			args.schedule = value;
+		else if (key == "manrecsec")
+			args.manrecsec = parseInt(value);
 		else
 		{
 			toaster.Error('Unknown system configuration key: ' + htmlEncode(key), 3000);

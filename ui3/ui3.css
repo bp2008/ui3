@@ -3779,11 +3779,6 @@ body + div
 	margin: 10px;
 }
 
-	#sysconfigcontent label
-	{
-		display: block;
-	}
-
 	.listDialogContent table, .cameralistcontent table
 	{
 		border-collapse: collapse;
@@ -4138,7 +4133,8 @@ body + div
 .dialogOptionPanel input[type="color"],
 .dialogOptionPanel input[type="text"],
 #uiSettingsPanel input[type="button"],
-#uiSettingsPanel a.input
+#uiSettingsPanel a.input,
+#sysconfigdialog input[type="button"]
 {
 	box-sizing: border-box;
 	height: 28px;
