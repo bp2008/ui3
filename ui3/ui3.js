@@ -459,7 +459,6 @@ var togglableUIFeatures =
 // TODO: Expandable clip list. ("Show more clips")
 // TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
 // TODO: Rewrite camera labels code to build one big HTML string because the current implementation is extremely slow when panning and zooming.
-// TODO: Put a collapse/expand all (context-sensitive) button in the settings and camera properties panels.
 // TODO: Revamp System Configuration panel: Rename to "Server Control". Put more options in the panel (see JSON API docs).
 
 ///////////////////////////////////////////////////////////////
@@ -13385,6 +13384,7 @@ function CameraNameLabels()
 				group = [loaded.cam.optionValue];
 				rects = [[0, 0, loaded.cam.width, loaded.cam.height]];
 			}
+			var sb = new StringBuilder();
 			for (var i = 0; i < group.length; i++)
 			{
 				var cam = cameraListLoader.GetCameraWithId(group[i]);
@@ -13397,42 +13397,45 @@ function CameraNameLabels()
 				var adjH = (rect[3] - rect[1]) * scaleY;
 
 				// Create and style labels.
-				var $label = $('<div class="cameraNameLabel"></div>');
-				if (showName && showShortName)
-					$label.text(CleanUpGroupName(cam.optionDisplay) + " (" + cam.optionValue + ")");
-				else if (showName)
-					$label.text(CleanUpGroupName(cam.optionDisplay));
-				else
-					$label.text(cam.optionValue);
-				$label.css("width", adjW + "px");
+				sb.Append('<div class="cameraNameLabel" style="');
+				sb.Append("width:" + adjW + "px;");
+
 				var bgOpacity = PercentTo01Float(settings.ui3_cameraLabels_backgroundOpacity);
 				var textOpacity = PercentTo01Float(settings.ui3_cameraLabels_textOpacity);
 				if (settings.ui3_cameraLabels_cameraColor == "1")
 				{
 					var colorHex = BlueIrisColorToCssColor(cam.color);
 					var colorRgba = HexColorToRgbaColor(colorHex, bgOpacity);
-					$label.css("background-color", colorRgba);
+					sb.Append("background-color:" + colorRgba + ";");
 					colorRgba = HexColorToRgbaColor(GetReadableTextColorHexForBackgroundColorHex(colorHex), textOpacity);
-					$label.css("color", colorRgba);
+					sb.Append("color:" + colorRgba + ";");
 				}
 				else
 				{
 					var bg = HexColorToRgbObj(settings.ui3_cameraLabels_backgroundColor);
 					var tx = HexColorToRgbObj(settings.ui3_cameraLabels_textColor);
-					$label.css("background-color", "rgba(" + bg.r + "," + bg.g + "," + bg.b + "," + bgOpacity + ")");
-					$label.css("color", "rgba(" + tx.r + "," + tx.g + "," + tx.b + "," + textOpacity + ")");
+					sb.Append("background-color:rgba(" + bg.r + "," + bg.g + "," + bg.b + "," + bgOpacity + ");");
+					sb.Append("color:rgba(" + tx.r + "," + tx.g + "," + tx.b + "," + textOpacity + ");");
 				}
-				$label.css("font-size", fontSizePt + "pt");
-				$label.css("left", (adjX + imgPos.left) + "px");
-				$camLabels_wrapper.append($label);
+				sb.Append("font-size:" + fontSizePt + "px;");
+				sb.Append("left:" + (adjX + imgPos.left) + "px;");
 
 				var yOffset = 0;
 				if (offsetCamHeight)
 					yOffset += adjH;
 				if (offsetNegativeLabelHeight)
-					yOffset -= $label.height();
-				$label.css("top", (adjY + imgPos.top + yOffset) + "px");
+					yOffset -= (fontSizePt * 1.333333);
+				sb.Append("top:" + (adjY + imgPos.top + yOffset) + "px;");
+				sb.Append('">');
+				if (showName && showShortName)
+					sb.Append(htmlEncode(CleanUpGroupName(cam.optionDisplay) + " (" + cam.optionValue + ")"));
+				else if (showName)
+					sb.Append(htmlEncode(CleanUpGroupName(cam.optionDisplay)));
+				else
+					sb.Append(htmlEncode(cam.optionValue));
+				sb.Append('</div>');
 			}
+			$camLabels_wrapper.append(sb.ToString());
 		}
 		else if (isHotkeyShow)
 		{
