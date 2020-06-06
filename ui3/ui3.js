@@ -21954,7 +21954,7 @@ function UISettingsPanel()
 			self.Refresh();
 		});
 		$buttonBar.append($filterInput);
-		$expandCollapse = $('<input type="button" value="Collapse All" myaction="c" />');
+		$expandCollapse = $('<input type="button" value="Toggle All" myaction="c" />');
 		$expandCollapse.on('click', function (e)
 		{
 			if ($expandCollapse.attr("myaction") == "c")
@@ -21968,7 +21968,7 @@ function UISettingsPanel()
 					sections[i].Expand();
 			}
 		});
-		updateExpandCollapseAllButtonState();
+		setTimeout(updateExpandCollapseAllButtonState, 0);
 		$buttonBar.append($expandCollapse);
 		return $buttonBar;
 	}
