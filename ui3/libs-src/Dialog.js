@@ -372,11 +372,11 @@ var SimpleDialog = new function ()
 	};
 	this.confirmText = this.ConfirmText = function (question, onYes, onNo, options)
 	{
-		return Confirm($('<div></div>').text(question), onYes, onNo, GetConfirmOptions(options));
+		return Confirm($('<div style="white-space: pre-wrap; padding: 10px;"></div>').text(question), onYes, onNo, GetConfirmOptions(options));
 	};
 	this.confirmHtml = this.ConfirmHtml = function (question, onYes, onNo, options)
 	{
-		return Confirm($('<div></div>').html(question), onYes, onNo, GetConfirmOptions(options));
+		return Confirm($('<div style="padding: 10px;"></div>').html(question), onYes, onNo, GetConfirmOptions(options));
 	};
 	var GetConfirmOptions = function (options)
 	{
