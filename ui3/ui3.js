@@ -9633,6 +9633,15 @@ function VideoPlayerController()
 			return playerModule.GetPlayerElement();
 		return null;
 	}
+	/**
+	 * Gets a reference to the current player's h264_player field.  Returns null if using a Jpeg streaming method. (For use by UI extensions)
+	 */
+	this.GetPlayerObject = function ()
+	{
+		if (typeof playerModule.GetPlayerObject === "function")
+			return playerModule.GetPlayerObject();
+		return null;
+	}
 
 	this.Initialize = function ()
 	{
@@ -10877,6 +10886,10 @@ function FetchH264VideoModule()
 	this.GetPlayerElement = function ()
 	{
 		return h264_player.GetPlayerElement();
+	}
+	this.GetPlayerObject = function ()
+	{
+		return h264_player;
 	}
 	var StopStreaming = function ()
 	{
