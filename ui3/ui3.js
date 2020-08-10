@@ -8359,13 +8359,20 @@ function StatusLoader()
 				statusBars.setProgress("cpu", cpu / 100.0, cpu + "%");
 				statusBars.setTooltip("cpu", "Total CPU usage on server: " + cpu + "%");
 				var mem = response.data.mem;
-				var memFree = response.data.memfree;
+				var memNum = parseInt(response.data.ram);
+				var memPhys = response.data.memphys ? response.data.memphys : "0B";
+				var memPhysNum = getBytesFromBISizeStr(memPhys);
 				var memLoad = response.data.memload;
 				var memLoadNum = parseFloat(memLoad) / 100;
+				var memUsedNum = memPhysNum * memLoadNum;
+				var memUsed = formatBytes(memUsedNum, 1);
+				var memFreeNum = memPhysNum - memUsedNum;
+				var memFree = formatBytes(memFreeNum, 2);
 				statusBars.setProgress("mem", memLoadNum, memLoad);
-				statusBars.setTooltip("mem", "Total Computer Memory Usage: " + memLoad
-					+ "\n\nBlue Iris: " + mem + "."
-					+ "\nFree memory: " + memFree + ".");
+				statusBars.setTooltip("mem", "Server's Memory Usage: " + memUsed + "/" + memPhys + " (" + memLoad + ")"
+					+ "\n\nBlue Iris: " + mem
+					+ "\nOther Processes: " + formatBytes(memUsedNum - memNum, 2)
+					+ "\nFree: " + memFree);
 
 				// Disk info example: "disks":[{ "disk":"V:", "allocated":1841152, "used":1563676, "free":343444, "total":1907599 }]
 				// Values are in Mebibytes (MiB)
