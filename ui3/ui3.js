@@ -5708,8 +5708,8 @@ function ExportControls()
 	var Initialize = function ()
 	{
 		$exportOffsetWrapper.hide();
-		exportOffsetStart = new ExportOffsetControl($("#exportOffsetStart"), 0.25, offsetChanged);
-		exportOffsetEnd = new ExportOffsetControl($("#exportOffsetEnd"), 0.75, offsetChanged);
+		exportOffsetStart = new ExportOffsetControl($("#exportOffsetStart"), 0.25, offsetChanged, onControlFocused);
+		exportOffsetEnd = new ExportOffsetControl($("#exportOffsetEnd"), 0.75, offsetChanged, onControlFocused);
 		BI_CustomEvent.AddListener("OpenVideo", CheckCurrentClip);
 	}
 	this.resized = function ()
@@ -5856,10 +5856,14 @@ function ExportControls()
 			return;
 		clipExportPanel.UpdateRangeSelection(exportOffsetStart.getPosition(), exportOffsetEnd.getPosition());
 	}
-
+	var onControlFocused = function (control)
+	{
+		exportOffsetStart.setZIndex(1);
+		exportOffsetEnd.setZIndex(1);
+	}
 	Initialize();
 }
-function ExportOffsetControl($handle, polePosition, offsetChanged)
+function ExportOffsetControl($handle, polePosition, offsetChanged, onFocused)
 {
 	var self = this;
 	var $parent = $handle.parent();
@@ -5903,7 +5907,18 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 		$handle.css('left', ((seekBarWm1 * percent) - (w * polePosition) + (seekBarO.left - po.left)) + 'px');
 
 		if (clipData)
-			$label.text(msToTime(percent * clipData.msec));
+		{
+			var offsetMs = percent * clipData.msec;
+			var txt = msToTime(offsetMs);
+			if (!clipLoader.ClipLikelyHasGaps(clipData))
+			{
+				txt += '<br/><span class="realTime">' + GetTimeStr(new Date(clipData.clipStartDate.getTime() + offsetMs)) + '</span>';
+				$parent.addClass('hasRealTime');
+			}
+			else
+				$parent.removeClass('hasRealTime');
+			$label.html(txt);
+		}
 	}
 	this.getPosition = function ()
 	{
@@ -5956,6 +5971,9 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 		isDragging = true;
 		if (!videoPlayer.Playback_IsPaused())
 			videoPlayer.Playback_Pause();
+		if (typeof onFocused === "function")
+			onFocused(self);
+		this.setZIndex(2);
 	}
 	this.mouseMove = function (e)
 	{
@@ -5978,6 +5996,10 @@ function ExportOffsetControl($handle, polePosition, offsetChanged)
 			return true;
 		}
 		return false;
+	}
+	this.setZIndex = function (idx)
+	{
+		$handle.css('z-index', idx);
 	}
 
 	Initialize();
