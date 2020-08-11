@@ -6372,6 +6372,8 @@ function ClipLoader(clipsBodySelector)
 					clipData.isClip = !clip.clip; // Only alert items have a clip property.
 					if (isClipListRequest !== clipData.isClip)
 						continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
+					if (clip.memo)
+						clipData.memo = clip.memo;
 					clipData.roughLength = CleanUpFileSize(clip.filesize);
 					clipData.roughLengthMs = GetClipLengthMs(clipData.roughLength);
 					clipData.camera = clip.camera;
@@ -6886,10 +6888,12 @@ function ClipLoader(clipsBodySelector)
 			var clipDur = GetClipDurStrFromMs(clipData.roughLength);
 			var clipDurTitle = clipDur == 'S' ? ' title="Snapshot"' : '';
 			var camName = cameraListLoader.GetCameraName(clipData.camera);
+			var clipMemo = clipData.memo ? '<div class="clipmemo">' + htmlEncode(clipData.memo) + '</div>' : '';
 			$clip = $('<div id="c' + clipData.recId + '" class="cliptile ' + enabledOrDisabled + '" style="top:' + clipData.y + 'px"' + clipTitle + '>'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipimghelper">'
 				+ '<div class="verticalAlignHelper"></div>'
+				+ clipMemo
 				+ '<div class="clipdur"' + clipDurTitle + '>' + clipDur + '</div>'
 				+ '<img id="t' + clipData.recId + '" src="ui3/LoadingImage.png' + currentServer.GetLocalSessionArg("?") + '" />'
 				+ '</div>'

@@ -2282,7 +2282,8 @@ div.invisibleLabel
 }
 
 
-.clipdur
+.clipdur,
+.clipmemo
 {
 	font-size: 9px;
 	color: var(--text-active-color);
@@ -2302,6 +2303,42 @@ div.invisibleLabel
 {
 	opacity: 0.25;
 }*/
+
+.clipmemo
+{
+	right: auto;
+	bottom: auto;
+	left: 2px;
+	top: 2px;
+	max-width: 72px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+
+.sizeSmall .clipmemo
+{
+	top: 0px;
+	left: 0px;
+	max-width: 42px;
+}
+
+#clipsbody.largerThumbs .clipmemo
+{
+	max-width: 179px;
+}
+
+.sizeMedium #clipsbody.largerThumbs .clipmemo
+{
+	max-width: 171px;
+}
+
+.sizeSmall #clipsbody.largerThumbs .clipmemo
+{
+	top: 2px;
+	left: 2px;
+	max-width: 124px;
+}
 
 .clipcolorbar
 {
