@@ -4741,6 +4741,7 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 ///////////////////////////////////////////////////////////////
 // Playback Controls //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var overridePlaybackSpeedOptions = null;
 function PlaybackControls()
 {
 	var self = this;
@@ -4760,8 +4761,10 @@ function PlaybackControls()
 	var loopingEnabled = settings.ui3_playback_loop == "1";
 	var SpeedOptions =
 		[
-			0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256
+			0.125, 0.25, 0.5, 1, 2, 4, 6, 8, 16, 32, 64, 128, 256
 		];
+	if (overridePlaybackSpeedOptions && overridePlaybackSpeedOptions.length)
+		SpeedOptions = overridePlaybackSpeedOptions;
 	var playSpeed = 1;
 	for (var i = 0; i < SpeedOptions.length; i++)
 		if (SpeedOptions[i] == settings.ui3_playback_speed)
