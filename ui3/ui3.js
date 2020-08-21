@@ -23049,7 +23049,6 @@ String.prototype.padLeft = function (len, c)
 		return sb.join("");
 	}
 	return this;
-
 };
 String.prototype.padRight = function (len, c)
 {
