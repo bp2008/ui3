@@ -16771,6 +16771,7 @@ function ExportAPIStatusToast()
 	var $activeItem = null;
 	var $itemsQueued = null;
 	var $finished = null;
+	var $allDone = null;
 	var updateTimeout = null;
 	var items = [];
 
@@ -16801,6 +16802,47 @@ function ExportAPIStatusToast()
 				{
 					if (response.data)
 					{
+						if (!dialog)
+						{
+							$body = $('<div class="exportStatus">'
+								+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
+								+ '<div class="active_item"></div>'
+								+ '<div><span class="items_queued"></span></div>'
+								+ '</div>');
+
+							$progressBar = $body.find(".multi_operation_status_bar");
+							$activeItem = $body.find(".active_item");
+							$itemsQueued = $body.find(".items_queued");
+
+							var $fullDialogLink = $('<a role="button" tabindex="0">Open Convert/Export List</a>');
+							$fullDialogLink.on('click', exportListDialog.open);
+							$body.append($('<div class="fullDialogLink"></div>').append($fullDialogLink));
+
+							var $cbDownloadAutomatically = $('<input type="checkbox" />');
+							$cbDownloadAutomatically.on('change', function ()
+							{
+								settings.ui3_download_exports_automatically = $cbDownloadAutomatically.is(':checked') ? "1" : "0";
+							});
+							if (settings.ui3_download_exports_automatically === "1")
+								$cbDownloadAutomatically.attr("checked", "checked");
+
+							var $lblAroundCb = $('<label></label>');
+							$lblAroundCb.append($cbDownloadAutomatically);
+							$lblAroundCb.append('<span>Download Exports Automatically</span>');
+							$body.append($('<div class="downloadAutomaticallyOption"></div>').append($lblAroundCb));
+
+							$finished = $('<div class="items_done"></div>');
+							$body.append($finished);
+
+							$allDone = $('<div class="exportStatus_allDone" style="display: none;">Finished!</div>');
+							$body.append($allDone);
+
+							dialog = $body.dialog({
+								title: "Export Status"
+								, onClosing: DialogClosing
+							});
+						}
+
 						var queued = parseInt(response.data.queued);
 						var activeArr = response.data.active;
 
@@ -16814,50 +16856,17 @@ function ExportAPIStatusToast()
 
 						if (queued === 0 && (!activeArr || !activeArr.length))
 						{
-							$progressBar.parent().remove();
-							$activeItem.remove();
-							$itemsQueued.remove();
-							$body.prepend('<div>Finished!</div>');
+							$progressBar.parent().hide();
+							$activeItem.hide();
+							$itemsQueued.hide();
+							$allDone.show();
 						}
 						else
 						{
-							if (!dialog)
-							{
-								$body = $('<div class="exportStatus">'
-									+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
-									+ '<div class="active_item"></div>'
-									+ '<div><span class="items_queued"></span></div>'
-									+ '</div>');
-
-								$progressBar = $body.find(".multi_operation_status_bar");
-								$activeItem = $body.find(".active_item");
-								$itemsQueued = $body.find(".items_queued");
-
-								var $fullDialogLink = $('<a role="button" tabindex="0">Open Convert/Export List</a>');
-								$fullDialogLink.on('click', exportListDialog.open);
-								$body.append($('<div class="fullDialogLink"></div>').append($fullDialogLink));
-
-								var $cbDownloadAutomatically = $('<input type="checkbox" />');
-								$cbDownloadAutomatically.on('change', function ()
-								{
-									settings.ui3_download_exports_automatically = $cbDownloadAutomatically.is(':checked') ? "1" : "0";
-								});
-								if (settings.ui3_download_exports_automatically === "1")
-									$cbDownloadAutomatically.attr("checked", "checked");
-
-								var $lblAroundCb = $('<label></label>');
-								$lblAroundCb.append($cbDownloadAutomatically);
-								$lblAroundCb.append('<span>Download Exports Automatically</span>');
-								$body.append($('<div class="downloadAutomaticallyOption"></div>').append($lblAroundCb));
-
-								$finished = $('<div class="items_done"></div>');
-								$body.append($finished);
-
-								dialog = $body.dialog({
-									title: "Export Status"
-									, onClosing: DialogClosing
-								});
-							}
+							$progressBar.parent().show();
+							$activeItem.show();
+							$itemsQueued.show();
+							$allDone.hide();
 
 							var progressPercent = 0;
 							var fileName = "";
@@ -16873,9 +16882,8 @@ function ExportAPIStatusToast()
 								$itemsQueued.text(queued + " job" + (queued == 1 ? "" : "s") + " queued");
 							else
 								$itemsQueued.text("");
-
-							updateTimeout = setTimeout(update, 2000);
 						}
+						updateTimeout = setTimeout(update, 2000);
 					}
 					else
 						error("Export status response was missing the data field.");
