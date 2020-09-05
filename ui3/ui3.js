@@ -745,6 +745,10 @@ var defaultSettings =
 			, value: "0"
 		}
 		, {
+			key: "ui3_maxGOP"
+			, value: 1000
+		}
+		, {
 			key: "ui3_streamingProfileArray"
 			, value: "[]"
 			, category: "Streaming Profiles" // This category isn't shown in UI Settings, but has special-case logic in ui3-local-overrides.js export.
@@ -14024,6 +14028,12 @@ function StreamingProfileUI()
 		}
 	}
 }
+function getMaxGOP()
+{
+	if (!settings.ui3_maxGOP)
+		settings.ui3_maxGOP = 1000;
+	return Clamp(parseInt(settings.ui3_maxGOP), 300, 99999);
+}
 function StreamingProfileEditor(srcProfile, profileEditedCallback)
 {
 	var self = this;
@@ -14077,7 +14087,8 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			AddEditorField("Frame Rate [0-60]", "fps", { min: 0, max: 60 });
 			AddEditorField("Limit Bit Rate", "limitBitrate", { type: "select", options: ["inherit", "No Limit", "Yes Limit"] });
 			AddEditorField("Max Bit Rate (Kbps) [10-8192]", "kbps", { min: 10, max: 8192 });
-			AddEditorField("Keyframe Interval [1-99999]", "gop", { min: 1, max: 99999 });
+			var maxGop = getMaxGOP();
+			AddEditorField("Keyframe Interval [1-" + maxGop + "]", "gop", { min: 1, max: maxGop, hint: 'Advanced users may change the Keyframe Interval max limit. Use the developer console to set "settings.ui3_maxGOP = N" where N is between 300 and 99999, then reload UI3. Higher keyframe values may make video streams freeze.' });
 			AddEditorField("Preset", "pre", { type: "select", options: ["inherit", "ultrafast", "superfast", "veryfast"] });
 			AddEditorField("Profile", "pro", { type: "select", options: ["inherit", "default", "baseline", "main", "extended", "high", "high 10"] });
 			AddEditorField("Zero-Frame Latency", "zfl", { type: "select", options: ["inherit", "No", "Yes"] });
@@ -14568,7 +14579,7 @@ function GenericQualityHelper()
 		p.q = 20;
 		p.limitBitrate = 2;
 		p.kbps = 3000;
-		p.gop = 3000;
+		p.gop = 1000;
 		p.pre = 2;
 		p.zfl = 2;
 		return p;
@@ -14584,7 +14595,7 @@ function GenericQualityHelper()
 		p.q = 20;
 		p.limitBitrate = 2;
 		p.kbps = 1000;
-		p.gop = 3000;
+		p.gop = 1000;
 		p.pre = 2;
 		p.zfl = 2;
 		return p;
@@ -14771,6 +14782,18 @@ function GenericQualityHelper()
 						profileData[i].pre = 2;
 					if (profileData[i].zfl <= 0)
 						profileData[i].zfl = 2;
+				}
+			}
+		}
+		// Every time
+		{
+			var maxGop = getMaxGOP();
+			for (var i = 0; i < profileData.length; i++)
+			{
+				if (profileData[i].gop > maxGop)
+				{
+					profileData[i].gop = maxGop;
+					upgradeMade = true;
 				}
 			}
 		}
@@ -22449,6 +22472,9 @@ function MakeAddEditorFieldFn(title, $content, obj, o)
 		var $row = $('<div class="profileEditorRow"></div>');
 		if (rowIdx++ % 2 === 1)
 			$row.addClass('everyOther');
+
+		if (options.hint)
+			$row.attr('title', options.hint);
 
 		var value = obj[key];
 		var valueType = typeof value;
