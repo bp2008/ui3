@@ -6381,7 +6381,7 @@ function ClipLoader(clipsBodySelector)
 						continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
 					if (clip.memo)
 						clipData.memo = clip.memo;
-					clipData.roughLength = CleanUpFileSize(clip.filesize);
+					clipData.roughLength = GetClipLengthFromFileSize(clip.filesize);
 					clipData.roughLengthMs = GetClipLengthMs(clipData.roughLength);
 					clipData.camera = clip.camera;
 					clipData.recId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
@@ -6725,11 +6725,11 @@ function ClipLoader(clipsBodySelector)
 	{
 		return selectedClips;
 	}
-	var CleanUpFileSize = function (fileSize)
+	var GetClipLengthFromFileSize = function (fileSize)
 	{
-		var indexSpace = fileSize.indexOf(" ");
-		if (indexSpace > 0)
-			fileSize = fileSize.substring(0, indexSpace);
+		var indexLeftParen = fileSize.indexOf("(");
+		if (indexLeftParen > 1)
+			fileSize = fileSize.substring(0, indexLeftParen - 1);
 		return fileSize;
 	}
 	var GetFileSize = function (fileSize)
@@ -6747,7 +6747,7 @@ function ClipLoader(clipsBodySelector)
 		clipData.msec = stats.msec;
 		clipData.fileSize = GetFileSize(stats.filesize);
 		clipData.clipStartDate = new Date((stats.date * 1000) + GetServerTimeOffset());
-		clipData.clipCoverMs = GetClipLengthMs(CleanUpFileSize(stats.filesize));
+		clipData.clipCoverMs = GetClipLengthMs(GetClipLengthFromFileSize(stats.filesize));
 		clipData.rawClipData = stats;
 		return true;
 	}
@@ -6781,15 +6781,15 @@ function ClipLoader(clipsBodySelector)
 		var minutes = 0;
 		var seconds = 0;
 
-		var match = new RegExp("(\\d+)h").exec(str);
+		var match = new RegExp("(\\d+) ?h").exec(str);
 		if (match)
 			hours = parseInt(match[1]);
 
-		match = new RegExp("(\\d+)m").exec(str);
+		match = new RegExp("(\\d+) ?m").exec(str);
 		if (match)
 			minutes = parseInt(match[1]);
 
-		match = new RegExp("(\\d+)s").exec(str);
+		match = new RegExp("(\\d+) ?s").exec(str);
 		if (match)
 			seconds = parseInt(match[1]);
 
