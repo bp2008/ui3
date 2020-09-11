@@ -20221,13 +20221,20 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 	var blockType = -1;
 	var baseVideoFrameTime = -1;
 	var lastVideoFrameTime = -1;
-	var currentVideoFrame = { pos: 0, time: 0, utc: 0, size: 0 };
+	var currentVideoFrame = { pos: 0, time: 0, rawtime: 0, utc: 0, size: 0 };
 	var currentAudioFrame = { size: 0 };
 	var statusBlockSize = 0;
 	var bitmapHeader = null;
 	var audioHeader = null;
 	var abort_controller = null;
 	var responseError = null;
+	var playRate = 1;
+	if (url)
+	{
+		var m = url.match(/[?&]speed=(-?\d+\.?\d*)/i);
+		if (m)
+			playRate = parseFloat(m[1]) / 100;
+	}
 
 	this.StopStreaming = function ()
 	{
@@ -20484,6 +20491,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 							var offsetWrapper = { offset: 0 };
 							currentVideoFrame.pos = ReadUInt16(buf, offsetWrapper);
 							currentVideoFrame.time = ReadUInt32(buf, offsetWrapper);
+							currentVideoFrame.rawtime = currentVideoFrame.time;
 							currentVideoFrame.utc = ReadUInt64LE(buf, offsetWrapper);
 							currentVideoFrame.size = ReadUInt32(buf, offsetWrapper);
 
@@ -20493,12 +20501,21 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 								if (baseVideoFrameTime === -1)
 									baseVideoFrameTime = currentVideoFrame.time;
 
-								// If time jumped backwards more than 1000 seconds, assume the UINT32 overflowed back to 0.
-								if (lastVideoFrameTime - 1000000 > currentVideoFrame.time)
-									baseVideoFrameTime -= UINT32_MAX;
+								if (lastVideoFrameTime != -1)
+								{
+									// If time jumped backwards more than one billion milliseconds, assume the UINT32 overflowed to 0.
+									if (lastVideoFrameTime - 1000000000 > currentVideoFrame.time)
+										baseVideoFrameTime -= UINT32_MAX;
+									// If time jumped forward more than one billion milliseconds, assume the UINT32 overflowed to UINT32_MAX.
+									if (lastVideoFrameTime + 1000000000 < currentVideoFrame.time)
+										baseVideoFrameTime += UINT32_MAX;
+								}
 								lastVideoFrameTime = currentVideoFrame.time;
 
 								currentVideoFrame.time -= baseVideoFrameTime;
+								if (playRate !== 0)
+									currentVideoFrame.time = Math.round(currentVideoFrame.time / playRate);
+								currentVideoFrame.time = Math.abs(currentVideoFrame.time);
 							}
 
 
