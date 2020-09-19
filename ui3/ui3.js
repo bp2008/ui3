@@ -565,8 +565,8 @@ var defaultSettings =
 			, value: "0"
 		}
 		, {
-			key: "ui3_recordings_flagged_only"
-			, value: "0"
+			key: "ui3_current_dbView"
+			, value: "all"
 		}
 		, {
 			key: "ui3_cliplist_larger_thumbnails"
@@ -1177,17 +1177,8 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_hotkey_tab_alerts"
-			, value: "0|0|0|113" // 113: F2
-			, hotkey: true
-			, label: "Load Tab: Alerts"
-			, hint: "Opens the Alerts tab"
-			, actionDown: BI_Hotkey_Load_Tab_Alerts
-			, category: "Hotkeys"
-		}
-		, {
 			key: "ui3_hotkey_tab_clips"
-			, value: "0|0|0|114" // 114: F3
+			, value: "0|0|0|113" // 113: F2
 			, hotkey: true
 			, label: "Load Tab: Clips"
 			, hint: "Opens the Clips tab"
@@ -2324,6 +2315,8 @@ $(function ()
 
 	try
 	{
+		if (typeof localStorage.ui3_recordings_flagged_only !== "undefined")
+			delete localStorage.ui3_recordings_flagged_only;
 		if (typeof localStorage.ui3_contextMenus_longPress !== "undefined")
 		{
 			if (localStorage.ui3_contextMenus_longPress === "1" && settings.ui3_contextMenus_trigger === "Right-Click")
@@ -2383,21 +2376,18 @@ $(function ()
 
 		clipExportPanel.Abort();
 
-		var tabDisplayName;
 		if (currentPrimaryTab == "live")
 		{
-			tabDisplayName = "Live";
 			$("#layoutleftLive").show();
 			$("#layoutleftRecordings").hide();
 			//$("#layoutbottom").hide();
 		}
 		else
 		{
-			tabDisplayName = currentPrimaryTab == "clips" ? "Clips" : "Alerts";
 			$("#layoutleftLive").hide();
 			$("#layoutleftRecordings").show();
 			//$("#layoutbottom").show();
-			$("#recordingsFilterByHeading").text("Filter " + tabDisplayName + " by:");
+			$("#recordingsFilterByHeading").text("Filter by:");
 		}
 
 		if (settings.ui3_openARecording === "First" || settings.ui3_openARecording === "Last")
@@ -2408,8 +2398,7 @@ $(function ()
 		resized();
 	});
 	BI_CustomEvent.AddListener("TabLoaded_live", function () { videoPlayer.goLive(); });
-	BI_CustomEvent.AddListener("TabLoaded_clips", function () { clipLoader.LoadClips("cliplist"); });
-	BI_CustomEvent.AddListener("TabLoaded_alerts", function () { clipLoader.LoadClips("alertlist"); });
+	BI_CustomEvent.AddListener("TabLoaded_clips", function () { clipLoader.LoadClips(); });
 
 	clipboardHelper = new ClipboardHelper();
 
@@ -2562,7 +2551,12 @@ $(function ()
 });
 function ValidateTabName(tabName)
 {
-	if (tabName == "live" || tabName == "alerts" || tabName == "clips")
+	if (tabName === "alerts")
+	{
+		settings.ui3_current_dbView = "alerts";
+		return "clips";
+	}
+	if (tabName === "live" || tabName === "clips")
 		return tabName;
 	return "live";
 }
@@ -2607,17 +2601,22 @@ function HandlePreLoadUrlParameters()
 {
 	// Parameter "tab"
 	var tab = UrlParameters.Get("tab");
-	if (tab != '')
+	if (tab !== '')
 		settings.ui3_defaultTab = tab;
+
+	// Parameter "clipview"
+	var clipview = UrlParameters.Get("clipview");
+	if (clipview !== '')
+		settings.ui3_current_dbView = clipview;
 
 	// Parameter "group"
 	var group = UrlParameters.Get("group");
-	if (group != '')
+	if (group !== '')
 		settings.ui3_defaultCameraGroupId = group;
 
 	// Parameter "cam"
 	var cam = UrlParameters.Get("cam");
-	if (cam != '')
+	if (cam !== '')
 	{
 		BI_CustomEvent.AddListener("FinishedLoading", function ()
 		{
@@ -2627,9 +2626,9 @@ function HandlePreLoadUrlParameters()
 		});
 	}
 	var maximize = UrlParameters.Get("maximize");
-	if (maximize == "1" || maximize.toLowerCase() == "true")
+	if (maximize === "1" || maximize.toLowerCase() === "true")
 		settings.ui3_is_maximized = "1";
-	else if (maximize == "0" || maximize.toLowerCase() == "false")
+	else if (maximize === "0" || maximize.toLowerCase() === "false")
 		settings.ui3_is_maximized = "0";
 }
 ///////////////////////////////////////////////////////////////
@@ -3283,6 +3282,32 @@ function DropdownBoxes()
 				}
 			}
 		});
+	this.listDefs["dbView"] = new DropdownListDefinition("dbView",
+		{
+			selectedIndex: 0,
+			items:
+				[
+					new DropdownListItem({ id: "all", text: "All", icon: "#svg_mio_storage", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "alerts", text: "Alerts", icon: "#svg_x5F_Alert1", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "new", text: "New", icon: "#svg_mio_folder", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "stored", text: "Stored", icon: "#svg_mio_folder", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux1", text: "Aux 1", icon: "#svg_mio_folder", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux2", text: "Aux 2", icon: "#svg_mio_folder", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux3", text: "Aux 3", icon: "#svg_mio_folder", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux4", text: "Aux 4", icon: "#svg_mio_folder", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux5", text: "Aux 5", icon: "#svg_mio_folder", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_VideoFilter", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "archive", text: "Archive", icon: "#svg_mio_folder", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "confirmed", text: "Sentry Confirmed", icon: "#sentry_logo", cssClass: "smallIcon" })
+					, new DropdownListItem({ id: "cancelled", text: "Sentry Cancelled", icon: "#svg_x5F_HoldProfile", cssClass: "smallIcon" })
+				],
+			onItemClick: function (item)
+			{
+				settings.ui3_current_dbView = item.id;
+				clipLoader.LoadClips();
+			}
+		});
 
 	function GetNumberedDropdownListItems(name, min, max)
 	{
@@ -3534,6 +3559,25 @@ function DropdownBoxes()
 			$ele.css("max-height", (windowH - $ele.offset().top - 2) + "px");
 		});
 	}
+
+	{
+		// Initialize dbView dropdown list.
+		var didSet = false;
+		var views = this.listDefs["dbView"].items;
+		for (var i = 0; i < views.length && !didSet; i++)
+		{
+			if (views[i].id === settings.ui3_current_dbView)
+			{
+				self.setLabelText("dbView", views[i].text);
+				didSet = true;
+			}
+		}
+		if (!didSet)
+		{
+			settings.ui3_current_dbView = views[0].id;
+			self.setLabelText("dbView", views[0].text);
+		}
+	}
 }
 function GetTooltipForStreamQuality(index)
 {
@@ -3577,33 +3621,33 @@ function setSystemNameButtonState()
 ///////////////////////////////////////////////////////////////
 function LeftBarBooleans()
 {
-	var $items = $('#layoutleft .leftBarBool');
-	$items.each(function (idx, ele)
-	{
-		var $ele = $(ele);
-		var name = $ele.attr("name");
-		switch (name)
-		{
-			case "flaggedOnly":
-				{
-					var $cb = $('<input type="checkbox" />');
-					if (settings.ui3_recordings_flagged_only == "1")
-						$cb.prop('checked', 'checked');
-					$cb.on('change', function ()
-					{
-						settings.ui3_recordings_flagged_only = $cb.is(':checked') ? "1" : "0";
-						clipLoader.LoadClips();
-					});
-					var $label = $('<label></label>');
-					$label.append('<div class="smallFlagIcon"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>');
-					$label.append($cb);
-					$label.append($ele.html());
-					$ele.empty();
-					$ele.append($label);
-				}
-				break;
-		}
-	});
+	//var $items = $('#layoutleft .leftBarBool');
+	//$items.each(function (idx, ele)
+	//{
+	//	var $ele = $(ele);
+	//	var name = $ele.attr("name");
+	//	switch (name)
+	//	{
+	//		case "flaggedOnly":
+	//			{
+	//				var $cb = $('<input type="checkbox" />');
+	//				if (settings.ui3_recordings_flagged_only == "1")
+	//					$cb.prop('checked', 'checked');
+	//				$cb.on('change', function ()
+	//				{
+	//					settings.ui3_recordings_flagged_only = $cb.is(':checked') ? "1" : "0";
+	//					clipLoader.LoadClips();
+	//				});
+	//				var $label = $('<label></label>');
+	//				$label.append('<div class="smallFlagIcon"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>');
+	//				$label.append($cb);
+	//				$label.append($ele.html());
+	//				$ele.empty();
+	//				$ele.append($label);
+	//			}
+	//			break;
+	//	}
+	//});
 }
 ///////////////////////////////////////////////////////////////
 // PTZ Pad Buttons ////////////////////////////////////////////
@@ -6236,12 +6280,12 @@ function ClipLoader(clipsBodySelector)
 	var clipTileSelectLimit = 1000;
 	var clipVisibilityMap = {};
 
-	this.LoadClips = function (listName)
+	this.LoadClips = function ()
 	{
 		var loading = videoPlayer.Loading();
 		if (loading.image && loading.image.isLive)
 			lastLoadedCameraFilter = loading.image.id;
-		loadClipsInternal(listName, lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false, false, null, settings.ui3_recordings_flagged_only == "1" ? "flagged" : null);
+		loadClipsInternal(lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false, false, null, settings.ui3_current_dbView);
 	}
 	this.UpdateClipList = function ()
 	{
@@ -6258,9 +6302,9 @@ function ClipLoader(clipsBodySelector)
 		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
 			return;
 		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
-		loadClipsInternal(null, lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true, null, settings.ui3_recordings_flagged_only == "1" ? "flagged" : null);
+		loadClipsInternal(lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true, null, settings.ui3_current_dbView);
 	}
-	this.LoadClipsRange = function (listName, camFilter, dateBegin, dateEnd)
+	this.LoadClipsRange = function (camFilter, dateBegin, dateEnd)
 	{
 		if (!camFilter)
 		{
@@ -6268,28 +6312,26 @@ function ClipLoader(clipsBodySelector)
 			if (loading.image && loading.image.isLive)
 				camFilter = loading.image.id;
 		}
-		loadClipsInternal(listName, camFilter, dateBegin, dateEnd, false, false, null, false);
+		loadClipsInternal(camFilter, dateBegin, dateEnd, false, false, null, settings.ui3_current_dbView);
 	}
-	var loadClipsInternal = function (listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView)
+	var loadClipsInternal = function (cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView)
 	{
 		if (!videoPlayer.Loading().cam)
 			return; // UI hasn't loaded far enough yet.
-		if ((currentPrimaryTab != "clips" && currentPrimaryTab != "alerts") || self.suppressClipListLoad)
+		if (currentPrimaryTab !== "clips" || self.suppressClipListLoad)
 		{
 			QueuedClipListLoad = null;
 			return;
 		}
 		if (!previousClipDate)
 			previousClipDate = new Date(0);
-		if (typeof (listName) == "undefined" || listName == null)
-			listName = currentPrimaryTab == "clips" ? "cliplist" : "alertlist";
 		if (!isContinuationOfPreviousLoad && !isUpdateOfExistingList)
 		{
 			if (isLoadingAClipList)
 			{
 				QueuedClipListLoad = function ()
 				{
-					loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
+					loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
 				};
 				return;
 			}
@@ -6324,7 +6366,7 @@ function ClipLoader(clipsBodySelector)
 		isLoadingAClipList = true;
 
 		var allowContinuation = false;
-		var args = { cmd: listName, camera: cameraId };
+		var args = { cmd: "cliplist", camera: cameraId };
 		if (myDateStart != 0 && myDateEnd != 0)
 		{
 			allowContinuation = true;
@@ -6333,15 +6375,16 @@ function ClipLoader(clipsBodySelector)
 		}
 		if (dbView)
 		{
+			// When cmd="alertlist" and dbView="flagged", clip items are included too, but they don't have msec metadata.
+			// When cmd="cliplist" and dbView="flagged", alert items are included too, but they don't have zones metadata. These alert items have an msec value indicating the length of the alert.  The msec value Prior to version 91, UI3 handled it incorrectly, believing it to be the clip length.
 			args.view = dbView;
-			if (dbView === "flagged")
+			if (dbView === "alerts")
 			{
-				args.cmd = "cliplist"; // [flagged hack] The "flagged" view only works on cliplist commands and it returns alerts/clips both.
-				// Only when dbView === "flagged", alert items have an msec value indicating the length of the alert. Prior to version 91, UI3 handled it incorrectly, believing it to be the clip length.
+				args.cmd = "alertlist";
 			}
 		}
 
-		var isClipListRequest = listName == "cliplist"; // We can't rely on this anymore to tell us if response items are clips or alerts.
+		var isClipListRequest = args.cmd === "cliplist"; // We can't rely on this anymore to tell us if response items are clips or alerts.
 
 		ExecJSON(args, function (response)
 		{
@@ -6377,8 +6420,8 @@ function ClipLoader(clipsBodySelector)
 					clipData.rawData = clip;
 					clipData.rawClipData = clip;
 					clipData.isClip = !clip.clip; // Only alert items have a clip property.
-					if (isClipListRequest !== clipData.isClip)
-						continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
+					//if (isClipListRequest !== clipData.isClip)
+					//	continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
 					if (clip.memo)
 						clipData.memo = clip.memo;
 					clipData.roughLength = GetClipLengthFromFileSize(clip.filesize);
@@ -6506,7 +6549,7 @@ function ClipLoader(clipsBodySelector)
 				{
 					if (isUpdateOfExistingList)
 					{
-						toaster.Info("Automatic " + (listName == "cliplist" ? "clip list" : "alert list") + " update got too many items.  Refreshing clip list now.", 10000);
+						toaster.Info("Automatic " + (args.cmd === "cliplist" ? "clip list" : "alert list") + " update got too many items.  Refreshing clip list now.", 10000);
 						isLoadingAClipList = false;
 						lastClipListLoadedAt = performance.now();
 						self.LoadClips();
@@ -6515,14 +6558,14 @@ function ClipLoader(clipsBodySelector)
 					for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
 						if (typeof response.data[i].newalerts === "undefined")
 						{
-							if (isClipListRequest !== !response.data[i].clip)
-								continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
+							//if (isClipListRequest !== !response.data[i].clip)
+							//	continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
 							myDateEnd = response.data[i].date;
 							break;
 						}
 					$("#clipListDateRange").html("&nbsp;Remaining to load:<br/>&nbsp;&nbsp;&nbsp;" + parseInt((myDateEnd - myDateStart) / 86400) + " days");
 					$.CustomScroll.callMeOnContainerResize();
-					return loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate, dbView);
+					return loadClipsInternal(cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate, dbView);
 				}
 			}
 
@@ -6574,14 +6617,14 @@ function ClipLoader(clipsBodySelector)
 					return; // Failures of a clip list update should just be ignored.
 				$clipsbody.html('<div class="clipListText">Failed to load!</div>');
 				var tryAgain = !isContinuationOfPreviousLoad && ++failedClipListLoads < 5
-				toaster.Error("Failed to load " + (listName == "cliplist" ? "clip list" : "alert list") + ".<br/>Will " + (tryAgain ? "" : "NOT ") + "try again.<br/>" + jqXHR.ErrorMessageHtml, 5000);
+				toaster.Error("Failed to load " + (args.cmd === "cliplist" ? "clip list" : "alert list") + ".<br/>Will " + (tryAgain ? "" : "NOT ") + "try again.<br/>" + jqXHR.ErrorMessageHtml, 5000);
 
 				if (tryAgain)
 				{
 					setTimeout(function ()
 					{
 						isLoadingAClipList = false;
-						loadClipsInternal(listName, cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
+						loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
 					}, 1000);
 				}
 				else
@@ -7516,7 +7559,7 @@ function ClipLoader(clipsBodySelector)
 			};
 			if (settings.ui3_askForDelete === "All")
 			{
-				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert");
+				var whichKind = (settings.ui3_current_dbView === "alerts" ? "alert" : "clip");
 				AskYesNo("Confirm deletion of 1 " + whichKind + "?", deleter);
 			}
 			else
@@ -7537,7 +7580,7 @@ function ClipLoader(clipsBodySelector)
 		var options = {
 			operation: operation
 			, clips: clipDatas
-			, recordingType: currentPrimaryTab == "clips" ? "clip" : "alert"
+			, recordingType: settings.ui3_current_dbView === "alerts" ? "alert" : "clip"
 			, args: args
 			, idx: 0
 			, myToast: null
@@ -9124,11 +9167,11 @@ function SessionManager()
 
 		if (permission_clips)
 		{
-			$("#topbar_tab_alerts,#topbar_tab_clips").show();
+			$("#topbar_tab_clips").show();
 		}
 		else
 		{
-			$("#topbar_tab_alerts,#topbar_tab_clips").hide();
+			$("#topbar_tab_clips").hide();
 			if (currentPrimaryTab != "live")
 				$("#topbar_tab_live").click();
 		}
@@ -15304,7 +15347,7 @@ function ClipListContextMenu()
 		}
 		else if (allSelectedClipIDs.length > 1)
 		{
-			var label = " " + allSelectedClipIDs.length + " " + (currentPrimaryTab == "clips" ? "clips" : "alerts");
+			var label = " " + allSelectedClipIDs.length + " " + (settings.ui3_current_dbView === "alerts" ? "alerts" : "clips");
 			$("#cm_cliplist_flag").text((flagEnable ? "Flag" : "Unflag") + label);
 			$("#cm_cliplist_protect").text((protectEnable ? "Protect" : "Unprotect") + label);
 			$("#cm_cliplist_download").text("Download" + label);
@@ -15330,7 +15373,7 @@ function ClipListContextMenu()
 		{
 			case "flag":
 				var whatAction = (flagEnable ? "flag" : "unflag");
-				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				var whichKind = (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
 				if (allSelectedClipIDs.length <= 12)
 					clipLoader.Multi_Flag(allSelectedClipIDs, flagEnable);
 				else
@@ -15341,7 +15384,7 @@ function ClipListContextMenu()
 				break;
 			case "protect":
 				var whatAction = (protectEnable ? "protect" : "unprotect");
-				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				var whichKind = (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
 				if (allSelectedClipIDs.length <= 12)
 					clipLoader.Multi_Protect(allSelectedClipIDs, protectEnable);
 				else
@@ -15357,7 +15400,7 @@ function ClipListContextMenu()
 					clipDownloadDialog.open(allSelectedClipIDs);
 				break;
 			case "delete":
-				var whichKind = (currentPrimaryTab == "clips" ? "clip" : "alert") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				var whichKind = (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
 				var deleter = function ()
 				{
 					clipLoader.Multi_Delete(allSelectedClipIDs);
@@ -15401,13 +15444,13 @@ function ClipListContextMenu()
 					}
 				}
 				else
-					toaster.Warning("No " + (currentPrimaryTab == "clips" ? "clip" : "alert") + " is selected.");
+					toaster.Warning("No " + (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + " is selected.");
 				break;
 			case "properties":
 				if (allSelectedClipIDs.length >= 1)
 					clipProperties.open(allSelectedClipIDs[0]);
 				else
-					toaster.Warning("No " + (currentPrimaryTab == "clips" ? "clip" : "alert") + " is selected.");
+					toaster.Warning("No " + (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + " is selected.");
 				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
@@ -18864,10 +18907,6 @@ function BI_Hotkey_FullScreen()
 function BI_Hotkey_Load_Tab_Live()
 {
 	$('.topbar_tab[name="live"]').click();
-}
-function BI_Hotkey_Load_Tab_Alerts()
-{
-	$('.topbar_tab[name="alerts"]').click();
 }
 function BI_Hotkey_Load_Tab_Clips()
 {

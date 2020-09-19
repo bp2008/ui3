@@ -42,7 +42,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "119";
+		var ui_version = "120";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var combined_version = ui_version + "-" + bi_version;
@@ -123,7 +123,6 @@
 		<div id="topbar_vertical_align_helper"></div>
 		<div id="systemnamewrapper" onclick="systemNameButtonClick()"><span id="systemname">%%SYSNAME%%</span></div>
 		<div class="topbar_tab selected" name="live" id="topbar_tab_live"><span class="topbar_tab_label">Live View</span></div>
-		<div class="topbar_tab" name="alerts" id="topbar_tab_alerts"><span class="topbar_tab_label">Alerts</span></div>
 		<div class="topbar_tab" name="clips" id="topbar_tab_clips"><span class="topbar_tab_label">Clips</span></div>
 		<a id="Something"></a>
 		<div id="btn_main_menu" class="topbar_right_floating icon" name="mainMenu" extendLeft="1"><svg class="icon"><use xlink:href="#svg_x5F_Menu"></use></svg></div>
@@ -292,7 +291,7 @@
 					<div>
 						<div class="dropdownBox" name="currentGroup"></div>
 						<div class="standardLeftBarBoxSize" id="dateRange" onclick="dateFilter.OpenDatePicker(this);"><svg class="icon calendarIcon"><use xlink:href="#svg_x5F_Calendar2"></use></svg><span id="dateRangeLabel" class="oneLine">All Recent</span></div>
-						<div class="leftBarBool" name="flaggedOnly">Flagged Only</div>
+						<div class="dropdownBox" name="dbView"></div>
 					</div>
 				</div>
 				<div class="clipListTopDateWrapper">

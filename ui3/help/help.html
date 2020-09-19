@@ -258,14 +258,30 @@
 									<td><a href="../../ui3.htm?tab=live" target="_blank">ui3.htm?tab=live</a></td>
 								</tr>
 								<tr>
-									<td>tab=alerts</td>
-									<td>The "Alerts" tab is loaded.</td>
-									<td><a href="../../ui3.htm?tab=alerts" target="_blank">ui3.htm?tab=alerts</a></td>
-								</tr>
-								<tr>
 									<td>tab=clips</td>
 									<td>The "Clips" tab is loaded.</td>
 									<td><a href="../../ui3.htm?tab=clips" target="_blank">ui3.htm?tab=clips</a></td>
+								</tr>
+								<tr>
+									<td>clipview=X</td>
+									<td>
+										The clip list view specified by X is selected upon UI startup. Possible values of X:
+										<code>all</code>,
+										<code>alerts</code>,
+										<code>new</code>,
+										<code>stored</code>,
+										<code>aux1</code>,
+										<code>aux2</code>,
+										<code>aux3</code>,
+										<code>aux4</code>,
+										<code>aux5</code>,
+										<code>flagged</code>,
+										<code>export</code>,
+										<code>archive</code>,
+										<code>confirmed</code>,
+										<code>cancelled</code>
+									</td>
+									<td><a href="../../ui3.htm?clipview=alerts" target="_blank">ui3.htm?tab=clips&clipview=alerts</a></td>
 								</tr>
 								<tr>
 									<td>group=groupname</td>
@@ -282,7 +298,7 @@
 						<div class="panel panel-info">
 							<div class="panel-heading">Multiple parameters can be combined</div>
 							<div class="panel-body">
-								Separate multiple parameters with "&amp;", like this: <a href="../../ui3.htm?tab=alerts&cam=porch&maximize=1" target="_blank">ui3.htm?tab=alerts&cam=porch&maximize=1</a>
+								Separate multiple parameters with "&amp;", like this: <a href="../../ui3.htm?tab=clips&cam=porch&maximize=1" target="_blank">ui3.htm?tab=clips&clipview=alerts&cam=porch&maximize=1</a>
 							</div>
 						</div>
 					</div>
@@ -331,11 +347,11 @@
 					</div>
 					<div class="tab-pane" id="recordings" role="tabpanel" aria-labelledby="nav-recordings">
 						<h1>Recordings</h1>
-						<p>To view recorded video, you must use either the "Alerts" or "Clips" tabs at the top of the UI.</p>
-						<h2>Alerts vs Clips</h2>
-						<p>The "Alerts" and "Clips" tabs look similar, but are different in subtle ways.  A "Clip" represents a single video file on disk.  An "Alert" is a bookmark to a specific location in a clip.  A single clip may have multiple associated alerts, or no associated alerts.</p>
+						<p>To view recorded video, you must use "Clips" tab at the top of the UI.</p>
+						<h2>Alerts</h2>
+						<p>The "Alerts" tab is gone since UI3-120.  "Alerts" is now one of many dropdown list items on the "Clips" tab.  A "Clip" represents a single video file on disk.  An "Alert" is a bookmark to a specific location in a clip.  A single clip may have multiple associated alerts, or no associated alerts.</p>
 						<h2>Filters</h2>
-						<p>You can filter the Alerts/Clips list by camera, group, date, and flag state.</p>
+						<p>You can filter the Clips list by camera, group, date, and flag state.</p>
 						<p>To filter by camera, simply maximize that camera by clicking on it in the main video area.  To filter by other criteria, use the filter controls above the Alert/Clip list.</p>
 						<p><img class="img-responsive" mysrc="img/RecordingFilters.png" alt="Screenshot of recording filters" /></p>
 						<h3>Expanding the Filters</h3>
@@ -386,7 +402,7 @@
 								<ul>
 									<li>Cameras</li>
 									<li>Alerts and Clips</li>
-									<li>The date filter on Alerts and Clips tabs</li>
+									<li>The date filter on Clips tab</li>
 									<li>PTZ Preset buttons</li>
 									<li>Profile and Schedule controls</li>
 									<li>The Stoplight (in the status area at the bottom)</li>

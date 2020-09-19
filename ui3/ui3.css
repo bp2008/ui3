@@ -533,7 +533,17 @@ div.icon, a.icon
 
 #layoutLeftRecordingsControls .leftBarBox
 {
-	padding-bottom: 0px;
+	padding-bottom: 7px;
+}
+
+.sizeMedium #layoutLeftRecordingsControls .leftBarBox
+{
+	padding-bottom: 4px;
+}
+
+.sizeSmall #layoutLeftRecordingsControls .leftBarBox
+{
+	padding-bottom: 2px;
 }
 
 .leftBarInnerBox
@@ -1596,18 +1606,22 @@ div.invisibleLabel
 	line-height: 39px;
 	color: var(--text-color);
 	white-space: nowrap;
+	overflow: hidden;
+	max-width: 150px;
 }
 
 .sizeMedium .dropdownLabel
 {
 	font-size: 15px;
 	line-height: 29px;
+	max-width: 125px;
 }
 
 .sizeSmall .dropdownLabel
 {
 	font-size: 13px;
 	line-height: 19px;
+	max-width: 107px;
 }
 
 .dropdownBox:hover .dropdownLabel
@@ -1775,6 +1789,19 @@ div.invisibleLabel
 	width: 16px;
 	height: 16px;
 }
+
+.dropdown_list > div.smallIcon .mainMenuIcon
+{
+	width: 16px;
+	height: 16px;
+}
+
+.sizeSmall .dropdown_list > div.smallIcon .mainMenuIcon
+{
+	width: 14px;
+	height: 14px;
+}
+
 /* Left Bar Checkboxes */
 .leftBarBool
 {
