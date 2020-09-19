@@ -456,8 +456,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Replace clip/alert filter screenshot in UI3 Help, after Flagged Only setting is changed to a dropdown list.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -3293,7 +3291,7 @@ function DropdownBoxes()
 				[
 					new DropdownListItem({ id: "all", text: "All clips", icon: "#svg_mio_storage", iconClass: "smallIcon" })
 					, new DropdownListItem({ id: "alerts", text: "Alerts", icon: "#svg_x5F_Alert1", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "new", text: "New", icon: "#svg_mio_folder", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "new", text: "New", icon: "#svg_mio_folder_special", iconClass: "smallIcon" })
 					, new DropdownListItem({ id: "stored", text: "Stored", icon: "#svg_mio_folder", iconClass: "smallIcon" })
 					, new DropdownListItem({ id: "aux1", text: "Aux 1", icon: "#svg_mio_folder", iconClass: "smallIcon" })
 					, new DropdownListItem({ id: "aux2", text: "Aux 2", icon: "#svg_mio_folder", iconClass: "smallIcon" })

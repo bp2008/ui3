@@ -1104,6 +1104,16 @@ div.invisibleLabel
 	cursor: pointer;
 }
 
+	#dateRange:hover
+	{
+		color: var(--text-hover-color);
+	}
+
+	#dateRange:active
+	{
+		color: var(--text-active-color);
+	}
+
 .sizeMedium #dateRange
 {
 	margin-top: 6px;
@@ -1122,7 +1132,6 @@ div.invisibleLabel
 
 #dateRangeLabel
 {
-	color: var(--text-active-color);
 	white-space: nowrap;
 	overflow: hidden;
 }
@@ -1998,7 +2007,6 @@ div.invisibleLabel
 	text-align: center;
 	padding: 10px;
 	font-size: 16px;
-	white-space: normal;
 	box-sizing: border-box;
 }
 
@@ -2143,6 +2151,11 @@ div.invisibleLabel
 	white-space: nowrap;
 	left: 15px;
 	width: 219px;
+}
+
+.clipListText
+{
+	white-space: normal;
 }
 
 .cliptile
