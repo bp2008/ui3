@@ -391,7 +391,10 @@
 <symbol id="svg_mio_storage" viewBox="2 2 20 20">
 	<path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/>
 </symbol>
-<symbol id="svg_mio_folder" viewBox="0 0 24 24">
+<symbol id="svg_mio_folder" viewBox="2 2 20 20">
 	<path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+</symbol>
+<symbol id="svg_mio_launch" viewBox="3 3 18 18">
+	<path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
 </symbol>
 </svg>

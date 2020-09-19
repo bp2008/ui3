@@ -2670,12 +2670,16 @@ function resized()
 	var systemNameWidth = systemnamewrapper.width();
 	var topTabCurrentWidth = -1000;
 	var topWidthNoTabs = 5; // Workaround for rounding errors
+	var topTabCount = 0;
 	layouttop.children().each(function (idx, ele)
 	{
 		var $ele = $(ele);
 		var w = $ele.outerWidth(true);
 		if ($ele.hasClass("topbar_tab"))
+		{
 			topTabCurrentWidth = w;
+			topTabCount++;
+		}
 		else if ($ele.attr("id") != "systemnamewrapper")
 			topWidthNoTabs += w;
 	});
@@ -2687,11 +2691,11 @@ function resized()
 	var topTabMinWidth = 42;
 	if (topBarDesiredWidth > windowW)
 	{
-		topTabAllowableWidth = Math.min(topTabDesiredWidth, ((windowW - topWidthNoTabs) - topTabDesiredWidth) / 3);
+		topTabAllowableWidth = Math.min(topTabDesiredWidth, ((windowW - topWidthNoTabs) - topTabDesiredWidth) / topTabCount);
 		if (topTabAllowableWidth < topTabMinWidth)
 		{
 			topTabAllowableWidth = topTabMinWidth;
-			systemNameAllowableWidth = (windowW - topWidthNoTabs) - (topTabAllowableWidth * 3);
+			systemNameAllowableWidth = (windowW - topWidthNoTabs) - (topTabAllowableWidth * topTabCount);
 		}
 	}
 	if (topTabCurrentWidth != topTabAllowableWidth)
@@ -3165,7 +3169,7 @@ function DropdownBoxes()
 		, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
-		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export List", icon: "#svg_mio_VideoFilter", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export List", icon: "#svg_mio_launch", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "server_control", text: "Server Control", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
 		, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
@@ -3287,20 +3291,20 @@ function DropdownBoxes()
 			selectedIndex: 0,
 			items:
 				[
-					new DropdownListItem({ id: "all", text: "All", icon: "#svg_mio_storage", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "alerts", text: "Alerts", icon: "#svg_x5F_Alert1", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "new", text: "New", icon: "#svg_mio_folder", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "stored", text: "Stored", icon: "#svg_mio_folder", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux1", text: "Aux 1", icon: "#svg_mio_folder", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux2", text: "Aux 2", icon: "#svg_mio_folder", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux3", text: "Aux 3", icon: "#svg_mio_folder", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux4", text: "Aux 4", icon: "#svg_mio_folder", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux5", text: "Aux 5", icon: "#svg_mio_folder", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_VideoFilter", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "archive", text: "Archive", icon: "#svg_mio_folder", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "confirmed", text: "Sentry Confirmed", icon: "#sentry_logo", cssClass: "smallIcon" })
-					, new DropdownListItem({ id: "cancelled", text: "Sentry Cancelled", icon: "#svg_x5F_HoldProfile", cssClass: "smallIcon" })
+					new DropdownListItem({ id: "all", text: "All clips", icon: "#svg_mio_storage", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "alerts", text: "Alerts", icon: "#svg_x5F_Alert1", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "new", text: "New", icon: "#svg_mio_folder", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "stored", text: "Stored", icon: "#svg_mio_folder", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux1", text: "Aux 1", icon: "#svg_mio_folder", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux2", text: "Aux 2", icon: "#svg_mio_folder", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux3", text: "Aux 3", icon: "#svg_mio_folder", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux4", text: "Aux 4", icon: "#svg_mio_folder", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "aux5", text: "Aux 5", icon: "#svg_mio_folder", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_launch", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "archive", text: "FTP backup queue", icon: "#svg_mio_cloudUploading", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "confirmed", text: "Sentry confirmed", icon: "#sentry_logo", iconClass: "smallIcon" })
+					, new DropdownListItem({ id: "cancelled", text: "Sentry cancelled", icon: "#svg_x5F_HoldProfile", iconClass: "smallIcon" })
 				],
 			onItemClick: function (item)
 			{
@@ -3355,7 +3359,7 @@ function DropdownBoxes()
 			handleElements[name] = [];
 		handleElements[name].push(ele);
 	});
-	this.setLabelText = function (name, labelText, isHtml)
+	this.setLabelText = function (name, labelText, isHtml, item)
 	{
 		var handleEles = handleElements[name];
 		if (handleEles)
@@ -3368,6 +3372,11 @@ function DropdownBoxes()
 						ele.$label.html(labelText);
 					else
 						ele.$label.text(labelText);
+					if (item && item.icon)
+					{
+						var iconClass = item.iconClass ? (" " + item.iconClass) : "";
+						ele.$label.prepend('<div class="mainMenuIcon' + iconClass + '"><svg class="icon' + (item.icon.indexOf('_x5F_') == -1 ? " noflip" : "") + '"><use xlink:href="' + item.icon + '"></use></svg></div>');
+					}
 				}
 			}
 	};
@@ -3511,15 +3520,18 @@ function DropdownBoxes()
 		$item.click(function ()
 		{
 			if (listDef.items[i].autoSetLabelText)
-				self.setLabelText(listDef.name, item.text, item.isHtml);
+				self.setLabelText(listDef.name, item.text, item.isHtml, item);
 			listDef.selectedIndex = i;
 			listDef.onItemClick && listDef.onItemClick(listDef.items[i]); // run if not null
 			closeDropdownLists();
 		});
+		var iconClass = item.iconClass ? (" " + item.iconClass) : "";
 		if (item.icon)
-			$item.prepend('<div class="mainMenuIcon"><svg class="icon' + (item.icon.indexOf('_x5F_') == -1 ? " noflip" : "") + '"><use xlink:href="' + item.icon + '"></use></svg></div>');
+		{
+			$item.prepend('<div class="mainMenuIcon' + iconClass + '"><svg class="icon' + (item.icon.indexOf('_x5F_') == -1 ? " noflip" : "") + '"><use xlink:href="' + item.icon + '"></use></svg></div>');
+		}
 		else if (item.imgsrc)
-			$item.prepend('<div class="mainMenuIcon"><img src="' + item.imgsrc + '" alt="" /></div>');
+			$item.prepend('<div class="mainMenuIcon' + iconClass + '"><img src="' + item.imgsrc + '" alt="" /></div>');
 		var tooltip = item.GetTooltip();
 		if (tooltip)
 			$item.attr('title', tooltip);
@@ -3568,14 +3580,14 @@ function DropdownBoxes()
 		{
 			if (views[i].id === settings.ui3_current_dbView)
 			{
-				self.setLabelText("dbView", views[i].text);
+				self.setLabelText("dbView", views[i].text, false, views[i]);
 				didSet = true;
 			}
 		}
 		if (!didSet)
 		{
 			settings.ui3_current_dbView = views[0].id;
-			self.setLabelText("dbView", views[0].text);
+			self.setLabelText("dbView", views[0].text, false, views[i]);
 		}
 	}
 }
@@ -15217,7 +15229,7 @@ function CanvasContextMenu()
 				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
-				, { text: 'Convert/export', icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "convertexport", action: onRecordContextMenuAction }
+				, { text: 'Convert/export', icon: "#svg_mio_launch", iconClass: "noflip", alias: "convertexport", action: onRecordContextMenuAction }
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
@@ -15470,7 +15482,7 @@ function ClipListContextMenu()
 				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
 				, { type: "splitLine" }
-				, { text: "Convert/export", icon: "#svg_mio_VideoFilter", iconClass: "noflip", alias: "convertexport", action: onContextMenuAction }
+				, { text: "Convert/export", icon: "#svg_mio_launch", iconClass: "noflip", alias: "convertexport", action: onContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onContextMenuAction }
 

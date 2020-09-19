@@ -1603,17 +1603,18 @@ div.invisibleLabel
 {
 	display: inline-block;
 	font-size: 16px;
-	line-height: 39px;
+	padding-top: 10px;
 	color: var(--text-color);
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 	max-width: 150px;
 }
 
 .sizeMedium .dropdownLabel
 {
 	font-size: 15px;
-	line-height: 29px;
+	padding-top: 5px;
 	max-width: 125px;
 }
 
@@ -1621,6 +1622,7 @@ div.invisibleLabel
 {
 	font-size: 13px;
 	line-height: 19px;
+	padding-top: 0px;
 	max-width: 107px;
 }
 
@@ -1776,6 +1778,7 @@ div.invisibleLabel
 	height: 24px;
 	float: left;
 	margin-right: 10px;
+	line-height: initial;
 }
 
 .sizeMedium .mainMenuIcon
@@ -1790,16 +1793,27 @@ div.invisibleLabel
 	height: 16px;
 }
 
-.dropdown_list > div.smallIcon .mainMenuIcon
+.mainMenuIcon.smallIcon
 {
 	width: 16px;
 	height: 16px;
 }
 
-.sizeSmall .dropdown_list > div.smallIcon .mainMenuIcon
+.sizeSmall .mainMenuIcon.smallIcon
 {
 	width: 14px;
 	height: 14px;
+}
+
+.sizeMedium .dropdownLabel > .mainMenuIcon.smallIcon
+{
+	margin-right: 7px;
+}
+
+.sizeSmall .dropdownLabel > .mainMenuIcon.smallIcon
+{
+	margin-right: 4px;
+	padding-top: 2px;
 }
 
 /* Left Bar Checkboxes */
