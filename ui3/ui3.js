@@ -15033,10 +15033,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */);
 		else
 			downloadButton.wrap('<a id="cmroot_liveview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */
+				+ videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */
 				+ '" onclick="saveSnapshot(&quot;#cmroot_liveview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_liveview_downloadlink").attr("download", "temp.jpg");
 
@@ -15102,10 +15102,10 @@ function CanvasContextMenu()
 				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
 				break;
 			case "opennewtab":
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85"); /* LOC0 */
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"); /* LOC0 */
 				break;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85"; /* LOC0 */
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"; /* LOC0 */
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -15174,10 +15174,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */);
 		else
 			downloadButton.wrap('<a id="cmroot_recordview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85" /* LOC0 */
+				+ videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */
 				+ '" onclick="saveSnapshot(&quot;#cmroot_recordview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_recordview_downloadlink").attr("download", "temp.jpg");
 
@@ -15206,7 +15206,7 @@ function CanvasContextMenu()
 				break;
 			case "opennewtab":
 				videoPlayer.Playback_Pause();
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85"); /* LOC0 */
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"); /* LOC0 */
 				break;
 			case "saveas":
 				return true;
@@ -15229,7 +15229,7 @@ function CanvasContextMenu()
 				nerdStats.Open();
 				return;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=85"; /* LOC0 */
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"; /* LOC0 */
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -18575,7 +18575,7 @@ function saveSnapshot(btnSelector)
 	date = FormatFileName(date);
 	var fileName = camName + " " + date + ".jpg";
 	var q = Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100);
-	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&w=99999&q=" + q /* LOC0 */);
+	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=" + q /* LOC0 */);
 	if (settings.ui3_download_snapshot_method === "Local (JPEG)" || settings.ui3_download_snapshot_method === "Local (PNG)")
 	{
 		var playerEle = videoPlayer.GetPlayerElement();
