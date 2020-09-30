@@ -2062,6 +2062,15 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
+			key: "ui3_show_cameras_in_group_dropdowns"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Show Cameras in Group Dropdowns'
+			, hint: 'If enabled, the "Current Group" and "Filter by" dropdown lists will include individual cameras.'
+			, onChange: OnChange_ui3_show_cameras_in_group_dropdowns
+			, category: "Extra"
+		}
+		, {
 			key: "ui3_show_session_success"
 			, value: "0"
 			, inputType: "checkbox"
@@ -3133,19 +3142,30 @@ function DropdownBoxes()
 		{
 			onItemClick: function (item)
 			{
-				videoPlayer.SelectCameraGroup(item.id);
+				if (item.isGroupOrCycle)
+					videoPlayer.SelectCameraGroup(item.id);
+				else
+				{
+					var camData = cameraListLoader.GetCameraWithId(item.id);
+					if (camData)
+						videoPlayer.LoadLiveCamera(camData);
+					else
+						videoPlayer.LoadHomeGroup();
+				}
 			}
 			, rebuildItems: function (data)
 			{
 				this.items = [];
 				for (var i = 0; i < data.length; i++)
 				{
-					if (cameraListLoader.CameraIsGroupOrCycle(data[i]))
+					var isGroupOrCycle = cameraListLoader.CameraIsGroupOrCycle(data[i]);
+					if (isGroupOrCycle || (settings.ui3_show_cameras_in_group_dropdowns === "1" && data[i].isEnabled))
 					{
 						this.items.push(new DropdownListItem(
 							{
 								text: CleanUpGroupName(data[i].optionDisplay)
 								, id: data[i].optionValue
+								, isGroupOrCycle: isGroupOrCycle
 							}));
 					}
 				}
@@ -22223,6 +22243,12 @@ function OnChange_ui3_sideBarPosition()
 	else
 		$('body').removeClass("sideBarRight");
 	resized();
+}
+function OnChange_ui3_show_cameras_in_group_dropdowns()
+{
+	var lastResponse = cameraListLoader.GetLastResponse();
+	if (lastResponse)
+		dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
 }
 var ui3_contextMenus_trigger_toast = null;
 function OnChange_ui3_contextMenus_trigger(newValue)
