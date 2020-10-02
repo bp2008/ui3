@@ -456,14 +456,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// CONSIDER: Add an option to reverse the order of the clip list.
-// * Consider automatic updates
-// * Consider the "scroll to top" function.
-// * Consider if this would invert the meaning of next/previous clip selection.
-// * Consider any possible sorting or binary search methods that might be broken by such a change.
-// * Consider if days remain in the same order.
-// * The sticky and static date headers might need repositioned...
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
