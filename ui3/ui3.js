@@ -456,6 +456,14 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// CONSIDER: Add an option to reverse the order of the clip list.
+// * Consider automatic updates
+// * Consider the "scroll to top" function.
+// * Consider if this would invert the meaning of next/previous clip selection.
+// * Consider any possible sorting or binary search methods that might be broken by such a change.
+// * Consider if days remain in the same order.
+// * The sticky and static date headers might need repositioned...
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -788,7 +796,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_time24hour"
-			, value: "0"
+			, value: localeUses24HourTime() ? "1" : "0"
 			, inputType: "checkbox"
 			, label: '24-Hour Time'
 			, onChange: OnChange_ui3_time24hour
@@ -2322,22 +2330,34 @@ $(function ()
 
 	try
 	{
-		if (typeof localStorage.ui3_recordings_flagged_only !== "undefined")
-			delete localStorage.ui3_recordings_flagged_only;
-		if (typeof localStorage.ui3_contextMenus_longPress !== "undefined")
+		if (isLocalStorageEnabled())
 		{
-			if (localStorage.ui3_contextMenus_longPress === "1" && settings.ui3_contextMenus_trigger === "Right-Click")
-				settings.ui3_contextMenus_trigger = "Long-Press"; // one-time transition
-			delete localStorage.ui3_contextMenus_longPress;
-		}
-		if (typeof localStorage.ui3_openFirstRecording !== "undefined")
-		{
-			if (localStorage.ui3_openFirstRecording === "1")
-				settings.ui3_openARecording = "First"; // one-time transition
-			delete localStorage.ui3_openFirstRecording;
+			if (typeof localStorage.ui3_recordings_flagged_only !== "undefined")
+				delete localStorage.ui3_recordings_flagged_only;
+			if (typeof localStorage.ui3_contextMenus_longPress !== "undefined")
+			{
+				if (localStorage.ui3_contextMenus_longPress === "1" && settings.ui3_contextMenus_trigger === "Right-Click")
+					settings.ui3_contextMenus_trigger = "Long-Press"; // one-time transition
+				delete localStorage.ui3_contextMenus_longPress;
+			}
+			if (typeof localStorage.ui3_openFirstRecording !== "undefined")
+			{
+				if (localStorage.ui3_openFirstRecording === "1")
+					settings.ui3_openARecording = "First"; // one-time transition
+				delete localStorage.ui3_openFirstRecording;
+			}
+			if (typeof localStorage.ui3_time24hour_migrated === "undefined")
+			{
+				if (localeUses24HourTime())
+					settings.ui3_time24hour = "1";
+				localStorage.ui3_time24hour_migrated = "1";
+			}
 		}
 	}
-	catch (e) { }
+	catch (e)
+	{
+		console.log("Error migrating settings", e);
+	}
 
 	if (fetch_streams_cant_close_bug && settings.ui3_edge_fetch_bug_h264_enable !== "1")
 		h264_playback_supported = false; // Affects Edge 17.x, 18.x, and possibly newer versions.
@@ -23433,6 +23453,10 @@ function msToTime(totalMs, includeMs)
 		retVal += '<span style="opacity:0.6;">.' + ms.toString().padLeft(3, "0") + "</span>";
 
 	return retVal;
+}
+function localeUses24HourTime()
+{
+	return new Date(2000, 0, 1, 13).toLocaleString().indexOf("13") > -1;
 }
 var use24HourTime = false;
 function GetTimeStr(date, includeMilliseconds)
