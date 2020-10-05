@@ -3318,31 +3318,66 @@ function DropdownBoxes()
 		});
 	this.listDefs["dbView"] = new DropdownListDefinition("dbView",
 		{
-			selectedIndex: 0,
-			items:
-				[
-					new DropdownListItem({ id: "all", text: "All clips", icon: "#svg_mio_storage", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "alerts", text: "Alerts", icon: "#svg_x5F_Alert1", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "new", text: "New", icon: "#svg_mio_folder_special", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "stored", text: "Stored", icon: "#svg_mio_folder", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux1", text: "Aux 1", icon: "#svg_mio_folder", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux2", text: "Aux 2", icon: "#svg_mio_folder", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux3", text: "Aux 3", icon: "#svg_mio_folder", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux4", text: "Aux 4", icon: "#svg_mio_folder", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "aux5", text: "Aux 5", icon: "#svg_mio_folder", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_launch", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "archive", text: "FTP backup queue", icon: "#svg_mio_cloudUploading", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "confirmed", text: "Sentry confirmed", icon: "#sentry_logo", iconClass: "smallIcon" })
-					, new DropdownListItem({ id: "cancelled", text: "Sentry cancelled", icon: "#svg_x5F_HoldProfile", iconClass: "smallIcon" })
-				],
 			onItemClick: function (item)
 			{
 				settings.ui3_current_dbView = item.id;
 				clipLoader.LoadClips();
 			}
+			, rebuildItems: function (data)
+			{
+				this.items = [];
+				this.items.push(new DropdownListItem({ id: "all", text: "All clips", icon: "#svg_mio_storage", iconClass: "smallIcon" }));
+
+				var alertsName = statusLoader ? statusLoader.GetFolderName(2) : null;
+				if (!alertsName)
+					alertsName = "Alerts";
+				this.items.push(new DropdownListItem({ id: "alerts", text: alertsName, icon: "#svg_x5F_Alert1", iconClass: "smallIcon" }));
+
+				AddDbViewFolder(this.items, "new", "New", 0, "#svg_mio_folder_special");
+				AddDbViewFolder(this.items, "stored", "Stored", 1, "#svg_mio_folder");
+				AddDbViewFolder(this.items, "aux1", "Aux 1", 3, "#svg_mio_folder");
+				AddDbViewFolder(this.items, "aux2", "Aux 2", 4, "#svg_mio_folder");
+				AddDbViewFolder(this.items, "aux3", "Aux 3", 5, "#svg_mio_folder");
+				AddDbViewFolder(this.items, "aux4", "Aux 4", 6, "#svg_mio_folder");
+				AddDbViewFolder(this.items, "aux5", "Aux 5", 7, "#svg_mio_folder");
+				AddDbViewFolder(this.items, "aux6", "Aux 6", 8, "#svg_mio_folder");
+				AddDbViewFolder(this.items, "aux7", "Aux 7", 9, "#svg_mio_folder");
+
+				this.items.push(new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_launch", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "archive", text: "FTP backup queue", icon: "#svg_mio_cloudUploading", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "confirmed", text: "Sentry confirmed", icon: "#sentry_logo", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "cancelled", text: "Sentry cancelled", icon: "#svg_x5F_HoldProfile", iconClass: "smallIcon" }));
+
+				var didSet = false;
+				for (var i = 0; i < this.items.length && !didSet; i++)
+				{
+					if (this.items[i].id === settings.ui3_current_dbView)
+					{
+						self.setLabelText("dbView", this.items[i].text, false, this.items[i]);
+						didSet = true;
+					}
+				}
+				if (!didSet)
+				{
+					var notFound = settings.ui3_current_dbView;
+					settings.ui3_current_dbView = this.items[0].id;
+					self.setLabelText("dbView", this.items[0].text, false, this.items[0]);
+					console.log('Clip List db view not found: "' + notFound + '". Falling back to "' + settings.ui3_current_dbView + '"');
+					clipLoader.LoadClips();
+				}
+			}
 		});
 
+	function AddDbViewFolder(items, id, defaultName, folderIndex, icon)
+	{
+		var name = statusLoader ? statusLoader.GetFolderName(folderIndex) : null;
+		if (name === "")
+			return;
+		else if (name === null)
+			name = defaultName;
+		items.push(new DropdownListItem({ id: id, text: name, icon: icon, iconClass: "smallIcon" }));
+	}
 	function GetNumberedDropdownListItems(name, min, max)
 	{
 		var items = [];
@@ -3602,24 +3637,8 @@ function DropdownBoxes()
 		});
 	}
 
-	{
-		// Initialize dbView dropdown list.
-		var didSet = false;
-		var views = this.listDefs["dbView"].items;
-		for (var i = 0; i < views.length && !didSet; i++)
-		{
-			if (views[i].id === settings.ui3_current_dbView)
-			{
-				self.setLabelText("dbView", views[i].text, false, views[i]);
-				didSet = true;
-			}
-		}
-		if (!didSet)
-		{
-			settings.ui3_current_dbView = views[0].id;
-			self.setLabelText("dbView", views[0].text, false, views[i]);
-		}
-	}
+	// Initialize dbView dropdown list.
+	this.listDefs["dbView"].rebuildItems();
 }
 function GetTooltipForStreamQuality(index)
 {
@@ -8529,6 +8548,7 @@ function StatusLoader()
 
 				UpdateProfileStatus();
 				UpdateScheduleStatus();
+				dropdownBoxes.listDefs["dbView"].rebuildItems();
 				serverTimeZoneOffsetMs = parseInt(parseFloat(response.data.tzone) * -60000);
 			}
 			loadingHelper.SetLoadedStatus("status");
@@ -8635,6 +8655,13 @@ function StatusLoader()
 			return currentProfileNames[profileNum];
 		return "Profile " + profileNum;
 	}
+	this.GetFolderName = function (index)
+	{
+		if (lastResponse && lastResponse.folders && index >= 0 && index < lastResponse.folders.length)
+			return lastResponse.folders[index];
+		else
+			return null;
+	}
 	var UpdateScheduleStatus = function ()
 	{
 		if (lastResponse == null)
@@ -8707,6 +8734,10 @@ function StatusLoader()
 		if (lastResponse.data && lastResponse.data.disks && lastResponse.data.disks.length > 0)
 			diskUsageGUI.open(lastResponse.data.disks);
 	};
+	this.getLastResponse = function ()
+	{
+		return lastResponse;
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Disk Usage GUI /////////////////////////////////////////////
