@@ -2,11 +2,17 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+	<link rel="icon" id="ui3launcher1">
+	<link rel="apple-touch-icon" id="ui3launcher2">
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="apple-mobile-web-app-capable" content="yes"> <!--iOS Safari-->
+	<meta name="apple-mobile-web-app-status-bar-style" content="black">
+	<meta name="mobile-web-app-capable" content="yes"><!--Android Chrome-->
+	<meta name="theme-color" content="#000000">
+	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "21";
+		var login_version = "22";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -32,6 +38,11 @@
 				alert(ex);
 			}
 		};
+	</script>
+	<script type="text/javascript">
+		document.getElementById("ui3manifest").href = 'applet/manifest.json?v=' + combined_version;
+		document.getElementById("ui3launcher1").href = 'applet/logos/launcher-icon48.png?v=' + combined_version;
+		document.getElementById("ui3launcher2").href = 'applet/launcher-icon.png?v=' + combined_version;
 	</script>
 	<style type="text/css">
 		body
