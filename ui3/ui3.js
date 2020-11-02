@@ -11357,7 +11357,7 @@ function FetchH264VideoModule()
 	}
 	this.GetClipPlaybackPositionMs = function ()
 	{
-		return (currentSeekPositionPercent * loading.msec - 1).dropDecimals();
+		return Clamp((currentSeekPositionPercent * loading.msec).dropDecimals(), 0, loading.msec - 1);
 	}
 	this.GetStaticSnapshotId = function ()
 	{
