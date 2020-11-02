@@ -16510,7 +16510,7 @@ function ClipProperties()
 			if (clipData.isClip)
 				$camprop.append(GetInfo("Size", clipData.fileSize));
 			else
-				$camprop.append(GetInfo("Zones", clipData.rawData.zones));
+				$camprop.append(GetInfo("Zones", new AlertZonesMask(clipData.rawData.zones).toString()));
 
 			if ((clipData.flags & alert_flag_sentry_trigger) > 0)
 				$camprop.append(GetIcon("trigger_sentry", "Sentry-verified alert"));
@@ -23057,6 +23057,36 @@ var alert_flag_nosignal = b0000_0100_0000_0000_0000_0000;
 var alert_flag_trigger_audio = b0000_1000_0000_0000_0000_0000;
 var alert_flag_trigger_external = b0001_0000_0000_0000_0000_0000;
 var alert_flag_trigger_group = b0100_0000_0000_0000_0000_0000;
+///////////////////////////////////////////////////////////////
+// Zones Bitmask //////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function AlertZonesMask(zonesVal)
+{
+	this.A = (zonesVal & b0000_0001) > 0;
+	this.B = (zonesVal & b0000_0010) > 0;
+	this.C = (zonesVal & b0000_0100) > 0;
+	this.D = (zonesVal & b0000_1000) > 0;
+	this.E = (zonesVal & b0001_0000) > 0;
+	this.F = (zonesVal & b0010_0000) > 0;
+	this.G = (zonesVal & b0100_0000) > 0;
+	this.Hotspot = (zonesVal & b1000_0000) > 0;
+	this.toString = function ()
+	{
+		var arr = [];
+		if (this.A) arr.push("A");
+		if (this.B) arr.push("B");
+		if (this.C) arr.push("C");
+		if (this.D) arr.push("D");
+		if (this.E) arr.push("E");
+		if (this.F) arr.push("F");
+		if (this.G) arr.push("G");
+		if (this.Hotspot) arr.push("Hotspot");
+		if (arr.length > 0)
+			return arr.join(", ");
+		else
+			return "none";
+	}
+}
 ///////////////////////////////////////////////////////////////
 // StringBuilder //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
