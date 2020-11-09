@@ -6956,16 +6956,18 @@ function ClipLoader(clipsBodySelector)
 			oldClipData.msec = newClipData.msec;
 			oldClipData.clipCoverMs = newClipData.clipCoverMs;
 
-			var loaded = videoPlayer.Loaded().image;
-			if (loaded.uniqueId == newClipData.recId)
-				loaded.msec = newClipData.msec;
+			// Do not notify the video player in any way. Blue Iris doesn't update its clip duration metadata in a way I've been able to predict.
 
-			var loading = videoPlayer.Loading().image;
-			if (loading.uniqueId == newClipData.recId)
-			{
-				loading.msec = newClipData.msec;
-				videoPlayer.NotifyClipMetadataChanged(newClipData);
-			}
+			//var loaded = videoPlayer.Loaded().image;
+			//if (loaded.uniqueId == newClipData.recId)
+			//	loaded.msec = newClipData.msec;
+
+			//var loading = videoPlayer.Loading().image;
+			//if (loading.uniqueId == newClipData.recId)
+			//{
+			//	loading.msec = newClipData.msec;
+			//	videoPlayer.NotifyClipMetadataChanged(newClipData);
+			//}
 		}
 	}
 	var ThumbOnAppear = function (ele)
@@ -10317,9 +10319,13 @@ function VideoPlayerController()
 		if (typeof playerModule.ShowDelayWarning === "function")
 			playerModule.ShowDelayWarning();
 	}
+	/**
+	 * Tells the video player about a clip's new duration.
+	 * As of BI 4.6.5.2, this currently should not be called as it will make UI3 and Blue Iris disagree about the clip duration.
+	 * @param {any} clipData
+	 */
 	this.NotifyClipMetadataChanged = function (clipData)
 	{
-		// <summary>Tells the video player about a clip's new duration.  As of BI 4.6.5.2, this currently should not be called as it will make UI3 and Blue Iris disagree about the clip duration.</summary>
 		if (videoPlayer.Loading().image.uniqueId === clipData.recId && typeof playerModule.NotifyClipMetadataChanged === "function")
 			playerModule.NotifyClipMetadataChanged(clipData);
 	}
@@ -11018,7 +11024,7 @@ function FetchH264VideoModule()
 	var didRequestAudio = false;
 	var canRequestAudio = false;
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
-	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, utc: Date.now(), expectedInterframe: 100 };
+	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, rawtime: 0, utc: Date.now(), expectedInterframe: 100 };
 	var audioCodec = "";
 
 	var loading = new BICameraData();
@@ -11323,6 +11329,13 @@ function FetchH264VideoModule()
 						frame.pos = frame.meta.pos = ((realmsec / loading.msec) * 10000).dropDecimals();
 					}
 				}
+				if (loading.msec < frame.meta.rawtime)
+				{
+					loading.msec = frame.meta.rawtime;
+					var loadingImg = videoPlayer.Loading().image;
+					if (loadingImg.uniqueId == loading.uniqueId)
+						loadingImg.msec = frame.meta.rawtime;
+				}
 				h264_player.AcceptFrame(frame);
 			}
 		}
@@ -11473,12 +11486,13 @@ function FetchH264VideoModule()
 		lastFrameMetadata.height = frame.height;
 		lastFrameMetadata.pos = frame.pos;
 		lastFrameMetadata.timestamp = frame.timestamp;
+		lastFrameMetadata.rawtime = frame.rawtime;
 		lastFrameMetadata.utc = frame.utc;
 		lastFrameMetadata.size = frame.size;
 		lastFrameMetadata.expectedInterframe = frame.expectedInterframe;
 
 		currentImageDateMs = frame.utc;
-		currentSeekPositionPercent = frame.pos / 10000;
+		currentSeekPositionPercent = frame.rawtime / loading.msec;
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
 		if (loading.isLive)
@@ -20640,8 +20654,8 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 								return pump();
 							var offsetWrapper = { offset: 0 };
 							currentVideoFrame.pos = ReadUInt16(buf, offsetWrapper);
-							currentVideoFrame.time = ReadUInt32(buf, offsetWrapper);
-							currentVideoFrame.rawtime = currentVideoFrame.time;
+							currentVideoFrame.rawtime = ReadUInt32(buf, offsetWrapper); // Position of the frame relative to the start of the clip
+							currentVideoFrame.time = currentVideoFrame.rawtime; // After below computation, this will be the playback clock timestamp at which to render the frame.
 							currentVideoFrame.utc = ReadUInt64LE(buf, offsetWrapper);
 							currentVideoFrame.size = ReadUInt32(buf, offsetWrapper);
 
