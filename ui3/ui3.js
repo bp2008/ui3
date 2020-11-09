@@ -4172,6 +4172,21 @@ function PtzButtons()
 					talksamplerate:8000
 				*/
 				currentPtzData = response.data;
+				if (currentPtzData)
+				{
+					currentPtzData.presetMap = {};
+					if (currentPtzData.presets)
+					{
+						for (var i = 0; i < currentPtzData.presets.length; i++)
+						{
+							var objType = typeof currentPtzData.presets[i];
+							if (objType === "string")
+								currentPtzData.presetMap[i + 1] = MakePresetObj(i + 1, currentPtzData.presets[i]);
+							else if (objType === "object")
+								currentPtzData.presetMap[parseInt(currentPtzData.presets[i].num)] = currentPtzData.presets[i];
+						}
+					}
+				}
 				currentPtzData.cameraId = cameraId;
 				self.SetIRButtonState();
 				self.SetBrightnessButtonState();
@@ -4183,14 +4198,22 @@ function PtzButtons()
 				toaster.Warning("Unable to load PTZ metadata for camera: " + cameraId);
 		});
 	}
+	var MakePresetObj = function (presetNum, description)
+	{
+		return { num: presetNum, desc: description };
+	}
 	this.GetPresetDescription = function (presetNum, asAnnotation)
 	{
 		presetNum = parseInt(presetNum);
 		if (presetNum < 0 || presetNum > GetPtzPresetShowCount())
 			return asAnnotation ? "" : ("Preset " + presetNum);
 		var desc = null;
-		if (currentPtzData && currentPtzData.cameraId == videoPlayer.Loading().image.id && currentPtzData.presets && currentPtzData.presets.length > presetNum - 1)
-			desc = currentPtzData.presets[presetNum - 1];
+		if (currentPtzData && currentPtzData.cameraId == videoPlayer.Loading().image.id)
+		{
+			var obj = currentPtzData.presetMap[presetNum];
+			if (obj)
+				desc = obj.desc;
+		}
 		if (desc === null || desc === "" || desc === "(undefined)")
 			desc = "Preset " + presetNum;
 		if (asAnnotation)
@@ -4209,11 +4232,7 @@ function PtzButtons()
 			return;
 		if (currentPtzData && currentPtzData.cameraId == cameraId)
 		{
-			if (!currentPtzData.presets)
-				currentPtzData.presets = [];
-			while (currentPtzData.presets.length < presetNum)
-				currentPtzData.presets.push('Preset' + (currentPtzData.presets.length + 1));
-			currentPtzData.presets[presetNum - 1] = description;
+			currentPtzData.presetMap[presetNum] = MakePresetObj(presetNum, description);
 		}
 	}
 	// PTZ Actions //
