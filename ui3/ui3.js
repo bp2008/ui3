@@ -992,6 +992,14 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
+			key: "ui3_allow_clip_deletion"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Allow Clip Deletion'
+			, onChange: OnChange_ui3_allow_clip_deletion
+			, category: "Clips / Alerts"
+		}
+		, {
 			key: "ui3_download_exports_automatically"
 			, value: "0"
 			, inputType: "checkbox"
@@ -7603,6 +7611,11 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (allSelectedClipIDs.length === 0)
 			return;
+		if (settings.ui3_allow_clip_deletion === "0")
+		{
+			toaster.Info("Clip deletion is not allowed by the current configuration.");
+			return;
+		}
 		if (!sessionManager.IsAdministratorSession())
 			return openLoginDialog(function () { self.Multi_Delete(allSelectedClipIDs); });
 
@@ -15373,12 +15386,15 @@ function ClipListContextMenu()
 	var allSelectedClipIDs = [];
 	var flagEnable = false;
 	var protectEnable = false;
+	var addDeleteItem = settings.ui3_allow_clip_deletion !== "0";
 
 	var onShowMenu = function (menu)
 	{
-		var itemsToEnable = ["flag", "protect", "download", "delete", "larger_thumbnails", "mouseover_thumbnails", "convertexport"];
+		var itemsToEnable = ["flag", "protect", "download", "larger_thumbnails", "mouseover_thumbnails", "convertexport"];
 		var itemsToDisable = [];
 
+		if (addDeleteItem)
+			itemsToEnable.push("delete");
 		var singleClipItems = itemsToEnable;
 		if (clipLoader.GetAllSelected().length > 1)
 			singleClipItems = itemsToDisable;
@@ -15552,12 +15568,15 @@ function ClipListContextMenu()
 	// You can use { type: "skip" } as a context menu item, and that item will not be rendered
 	var menuOptions =
 	{
+
 		alias: "cmroot_cliplist", width: 200, items:
 			[
 				{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
-				, { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
+				, (addDeleteItem
+					? { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
+					: { type: "skip" })
 				, { type: "splitLine" }
 				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
@@ -22469,10 +22488,14 @@ function OnChange_ui3_pc_seek_1frame_buttons()
 }
 function OnChange_ui3_pc_delete_button()
 {
-	if (settings.ui3_pc_delete_button == "1")
+	if (settings.ui3_pc_delete_button === "1" && settings.ui3_allow_clip_deletion !== "0")
 		$('#clipDeleteButton').removeClass("hidden");
 	else
 		$('#clipDeleteButton').addClass("hidden");
+}
+function OnChange_ui3_allow_clip_deletion()
+{
+	OnChange_ui3_pc_delete_button();
 }
 function OnChange_ui3_extra_playback_controls_padding()
 {
