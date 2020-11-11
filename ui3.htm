@@ -13,6 +13,15 @@
 	<title>%%SYSNAME%% UI3</title>
 	<script type="text/javascript">
 		var html5PlayFunc; try { html5PlayFunc = HTMLMediaElement.prototype.play; } catch (e) { }
+
+		// Each method in suppressErrorCallbacks can inspect the error and return true to suppress reporting of the error.
+		var suppressErrorCallbacks = [
+			function (err) // [2020-11-11] LG TV browser injects bad script on line 1 of htm file.
+			{
+				return err.line === 1 && err.msg.indexOf("'getAttribute'") > -1 && err.url.length > 4 && err.url.substr(err.url.length - 4).toLowerCase() === ".htm";
+			}
+		];
+
 		// If messages stating "An unexpected error has occurred" become troublesome, you can disable it by deleting this script block!
 		// Also, be sure to report the problem so I can fix it!
 		window.onerror = function (msg, url, line, charIdx)
@@ -27,6 +36,18 @@
 					biVersionStr = bi_version;
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
 				var errStr = "An unexpected error has occurred in " + location.pathname + " (v " + uiVersionStr + " / " + biVersionStr + "). A full refresh may solve the problem (CTRL + F5). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent;
+
+				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, uiVersionStr: uiVersionStr, biVersionStr: biVersionStr };
+				for (var i = 0; i < suppressErrorCallbacks.length; i++)
+				{
+					if (suppressErrorCallbacks[i](errObj))
+					{
+						try { console.log("The following error report was suppressed by callback " + i + ":"); console.error(errStr); }
+						catch (ex) { }
+						return;
+					}
+				}
+
 				try
 				{
 					if (toaster)
@@ -42,7 +63,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "125";
+		var ui_version = "126";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
