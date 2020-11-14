@@ -18,7 +18,7 @@
 		var suppressErrorCallbacks = [
 			function (err) // [2020-11-11] LG TV browser injects bad script on line 1 of htm file.
 			{
-				return err.line === 1 && err.msg.indexOf("'getAttribute'") > -1 && err.url.length > 4 && err.url.substr(err.url.length - 4).toLowerCase() === ".htm";
+				return err.line === 1 && err.msg && err.msg.indexOf("'getAttribute'") > -1 && err.url && err.url.indexOf(".htm") > -1;
 			}
 		];
 
@@ -40,9 +40,18 @@
 				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, uiVersionStr: uiVersionStr, biVersionStr: biVersionStr };
 				for (var i = 0; i < suppressErrorCallbacks.length; i++)
 				{
-					if (suppressErrorCallbacks[i](errObj))
+					try
 					{
-						try { console.log("The following error report was suppressed by callback " + i + ":"); console.error(errStr); }
+						if (suppressErrorCallbacks[i](errObj))
+						{
+							try { console.log("The following error report was suppressed by callback " + i + ":"); console.error(errStr); }
+							catch (ex) { }
+							return;
+						}
+					}
+					catch (ex)
+					{
+						try { console.log("Error suppression callback " + i + " had an error:"); console.error(errStr); }
 						catch (ex) { }
 						return;
 					}
@@ -63,7 +72,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "126";
+		var ui_version = "127";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
