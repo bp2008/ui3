@@ -3355,7 +3355,7 @@ function DropdownBoxes()
 				AddDbViewFolder(this.items, "aux5", "Aux 5", 7, "#svg_mio_folder");
 				AddDbViewFolder(this.items, "aux6", "Aux 6", 8, "#svg_mio_folder");
 				AddDbViewFolder(this.items, "aux7", "Aux 7", 9, "#svg_mio_folder");
-				
+
 				this.items.push(new DropdownListItem({ id: "separator" }));
 
 				this.items.push(new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", iconClass: "smallIcon" }));
@@ -8622,7 +8622,7 @@ function StatusLoader()
 				serverTimeZoneOffsetMs = parseInt(parseFloat(response.data.tzone) * -60000);
 			}
 			loadingHelper.SetLoadedStatus("status");
-			BI_CustomEvent.Invoke("StatusLoaded");
+			BI_CustomEvent.Invoke("StatusLoaded", response);
 
 			var nextStatusUpdateDelay = updateDelay;
 			if (typeof args.schedule != "undefined")
