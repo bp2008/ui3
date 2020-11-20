@@ -1683,6 +1683,7 @@ div.invisibleLabel
 	z-index: 9999999; /* Same z-index as playback settings panels. Toasts are at 999999 (one less 9)*/
 	color: var(--dropdown-item-color);
 	overflow: auto;
+	box-shadow: 0px 5px 15px 5px rgba(0,0,0,1);
 }
 
 	.dropdown_list > div
@@ -1780,6 +1781,14 @@ div.invisibleLabel
 		background-color: var(--dropdown-item-active-bg-color);
 		color: var(--dropdown-item-red-active-color);
 	}
+
+.dropdown_list > div.separator
+{
+	padding: 0px;
+	cursor: default;
+	height: 1px;
+	background-color: var(--dropdown-item-color);
+}
 
 .mainMenuIcon
 {

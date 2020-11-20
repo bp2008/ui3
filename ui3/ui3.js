@@ -3328,6 +3328,9 @@ function DropdownBoxes()
 		{
 			onItemClick: function (item)
 			{
+				if (item.id === "separator")
+					return;
+
 				settings.ui3_current_dbView = item.id;
 				clipLoader.LoadClips();
 			}
@@ -3336,8 +3339,10 @@ function DropdownBoxes()
 				this.items = [];
 				this.items.push(new DropdownListItem({ id: "all", text: "All clips", icon: "#svg_mio_storage", iconClass: "smallIcon" }));
 
+				this.items.push(new DropdownListItem({ id: "separator" }));
+
 				var alertsName = statusLoader ? statusLoader.GetFolderName(2) : null;
-				if (!alertsName)
+				if (!alertsName || alertsName === "")
 					alertsName = "Alerts";
 				this.items.push(new DropdownListItem({ id: "alerts", text: alertsName, icon: "#svg_x5F_Alert1", iconClass: "smallIcon" }));
 
@@ -3350,12 +3355,37 @@ function DropdownBoxes()
 				AddDbViewFolder(this.items, "aux5", "Aux 5", 7, "#svg_mio_folder");
 				AddDbViewFolder(this.items, "aux6", "Aux 6", 8, "#svg_mio_folder");
 				AddDbViewFolder(this.items, "aux7", "Aux 7", 9, "#svg_mio_folder");
+				
+				this.items.push(new DropdownListItem({ id: "separator" }));
 
 				this.items.push(new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", iconClass: "smallIcon" }));
-				this.items.push(new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_launch", iconClass: "smallIcon" }));
-				this.items.push(new DropdownListItem({ id: "archive", text: "FTP backup queue", icon: "#svg_mio_cloudUploading", iconClass: "smallIcon" }));
-				this.items.push(new DropdownListItem({ id: "confirmed", text: "Sentry confirmed", icon: "#sentry_logo", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "new.clipboard", text: "Clipboard", icon: "#svg_mio_crop", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "cancelled", text: "Sentry cancelled", icon: "#svg_x5F_HoldProfile", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "confirmed", text: "Sentry confirmed", icon: "#sentry_logo", iconClass: "smallIcon" }));
+
+				this.items.push(new DropdownListItem({ id: "separator" }));
+
+				this.items.push(new DropdownListItem({ id: "zonea", text: "Zone A alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "zoneb", text: "Zone B alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "zonec", text: "Zone C alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "zoned", text: "Zone D alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "zonee", text: "Zone E alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "zonef", text: "Zone F alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "zoneg", text: "Zone G alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "zoneh", text: "Hotspot alerts", icon: "#blank", iconClass: "smallIcon" }));
+
+				this.items.push(new DropdownListItem({ id: "separator" }));
+
+				this.items.push(new DropdownListItem({ id: "dio", text: "DIO alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "onvif", text: "ONVIF alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "audio", text: "Audio alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "extern", text: "External alerts", icon: "#blank", iconClass: "smallIcon" }));
+
+				this.items.push(new DropdownListItem({ id: "separator" }));
+
+				this.items.push(new DropdownListItem({ id: "memo", text: "Memos", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "archive", text: "FTP backup queue", icon: "#svg_mio_cloudUploading", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_launch", iconClass: "smallIcon" }));
 
 				var didSet = false;
 				for (var i = 0; i < this.items.length && !didSet; i++)
@@ -3582,7 +3612,9 @@ function DropdownBoxes()
 	{
 		var item = listDef.items[i];
 		var $item = $("<div></div>");
-		if (item.isHtml)
+		if (item.id === "separator")
+			$item.addClass("separator");
+		else if (item.isHtml)
 			$item.html(item.text);
 		else
 			$item.text(item.text);
@@ -3592,6 +3624,9 @@ function DropdownBoxes()
 			$item.addClass(item.cssClass);
 		$item.click(function ()
 		{
+			if (listDef.items[i].id === "separator")
+				return;
+
 			if (listDef.items[i].autoSetLabelText)
 				self.setLabelText(listDef.name, item.text, item.isHtml, item);
 			listDef.selectedIndex = i;
@@ -8514,8 +8549,9 @@ function StatusLoader()
 				}, 5000);
 				return;
 			}
-			HandleChangesInStatus(lastResponse, response);
+			var lrSave = lastResponse;
 			lastResponse = response;
+			HandleChangesInStatus(lrSave, response);
 			if (response && response.data)
 			{
 				$stoplightDiv.css("opacity", "");
@@ -8586,6 +8622,7 @@ function StatusLoader()
 				serverTimeZoneOffsetMs = parseInt(parseFloat(response.data.tzone) * -60000);
 			}
 			loadingHelper.SetLoadedStatus("status");
+			BI_CustomEvent.Invoke("StatusLoaded");
 
 			var nextStatusUpdateDelay = updateDelay;
 			if (typeof args.schedule != "undefined")
@@ -8691,8 +8728,8 @@ function StatusLoader()
 	}
 	this.GetFolderName = function (index)
 	{
-		if (lastResponse && lastResponse.folders && index >= 0 && index < lastResponse.folders.length)
-			return lastResponse.folders[index];
+		if (lastResponse && lastResponse.data && lastResponse.data.folders && index >= 0 && index < lastResponse.data.folders.length)
+			return lastResponse.data.folders[index];
 		else
 			return null;
 	}
