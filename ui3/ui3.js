@@ -3379,11 +3379,11 @@ function DropdownBoxes()
 				this.items.push(new DropdownListItem({ id: "dio", text: "DIO alerts", icon: "#blank", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "onvif", text: "ONVIF alerts", icon: "#blank", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "audio", text: "Audio alerts", icon: "#blank", iconClass: "smallIcon" }));
-				this.items.push(new DropdownListItem({ id: "extern", text: "External alerts", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "external", text: "External alerts", icon: "#blank", iconClass: "smallIcon" }));
 
 				this.items.push(new DropdownListItem({ id: "separator" }));
 
-				this.items.push(new DropdownListItem({ id: "memo", text: "Memos", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "memos", text: "Memos", icon: "#blank", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "archive", text: "FTP backup queue", icon: "#svg_mio_cloudUploading", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_launch", iconClass: "smallIcon" }));
 
@@ -6501,7 +6501,7 @@ function ClipLoader(clipsBodySelector)
 			// When cmd="alertlist" and dbView="flagged", clip items are included too, but they don't have msec metadata.
 			// When cmd="cliplist" and dbView="flagged", alert items are included too, but they don't have zones metadata. These alert items have an msec value indicating the length of the alert.  The msec value Prior to version 91, UI3 handled it incorrectly, believing it to be the clip length.
 			args.view = dbView;
-			if (dbView === "alerts")
+			if (dbView === "alerts" || dbView === "cancelled" || dbView === "confirmed" || dbView.match("zone[a-h]") || dbView === "dio" || dbView === "onvif" || dbView === "audio" || dbView === "external")
 			{
 				args.cmd = "alertlist";
 			}
@@ -17298,7 +17298,7 @@ function ExportListDialog()
 		if (linked)
 		{
 			var exported_clip_url = currentServer.remoteBaseURL + 'clips/' + item.uri + currentServer.GetAPISessionArg("?");
-			link = '<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(item.uri) + '">' + link + '</a>';
+			link = '<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(GetFilenameFromPath(item.uri)) + '">' + link + '</a>';
 		}
 		else
 		{
@@ -24102,6 +24102,18 @@ function GetAppPath()
 	if (appPath[appPath.length - 1] !== '/')
 		appPath = appPath + "/";
 	return appPath;
+}
+function GetFilenameFromPath(path)
+{
+	if (!path)
+		return "";
+	var i = path.lastIndexOf("\\");
+	if (i > -1)
+		path = path.substr(i + 1);
+	i = path.lastIndexOf("/");
+	if (i > -1)
+		path = path.substr(i + 1);
+	return path;
 }
 function escapeRegExp(string)
 {
