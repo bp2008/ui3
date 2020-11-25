@@ -17101,7 +17101,7 @@ function ExportAPIStatusToast()
 							if (activeArr && activeArr.length > 0)
 							{
 								progressPercent = Clamp(parseFloat(activeArr[0].progress), 0, 100);
-								fileName = activeArr[0].uri;
+								fileName = GetFilenameFromPath(activeArr[0].uri);
 							}
 
 							$progressBar.css("width", progressPercent + "%");
@@ -17150,7 +17150,7 @@ function ExportAPIStatusToast()
 			}
 			else
 			{
-				var $link = $('<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(item.uri) + '">' + htmlEncode(item.uri) + '</a>');
+				var $link = $('<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(item.uri) + '">' + htmlEncode(GetFilenameFromPath(item.uri)) + '</a>');
 				$link.on('click', function ()
 				{
 					setTimeout(function ()
@@ -17290,7 +17290,7 @@ function ExportListDialog()
 
 		var startDate = new Date(parseInt(item.utc) + GetServerTimeOffset());
 		var tsHtml = '<div class="timestamp">' + GetDateDisplayStr(startDate) + '<br>' + GetTimeStr(startDate) + '</div>';
-		var link = '<div>' + thumb + '<div class="camlist_label">' + tsHtml + htmlEncode(item.uri) + '</div></div>';
+		var link = '<div>' + thumb + '<div class="camlist_label">' + tsHtml + htmlEncode(GetFilenameFromPath(item.uri)) + '</div></div>';
 		var noLinkOverlay = '';
 		var errorClick = '';
 		var clipsize = item.filesize ? ('<div class="clipdur clipsize">' + htmlEncode(item.filesize) + '</div>') : '';
