@@ -19911,7 +19911,12 @@ var currentServer =
 	, GetLocalSessionArg: function (prefix, forceAddArg)
 	{
 		if (!navigator.cookieEnabled || forceAddArg)
-			return prefix + "session=" + sessionManager.GetLocalSession();
+		{
+			if (sessionManager)
+				return prefix + "session=" + sessionManager.GetLocalSession();
+			else
+				toaster.Error("Attempted to access sessionManager before it was initialized.");
+		}
 		return "";
 	}
 	, SetRemoteServer: function (serverName, baseUrl, user, pass)
