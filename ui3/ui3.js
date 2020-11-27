@@ -391,6 +391,7 @@ var maximizedModeController = null;
 var fullScreenModeController = null;
 var canvasContextMenu = null;
 var calendarContextMenu = null;
+var openAlertListButtonContextMenu = null;
 var clipListContextMenu = null;
 var togglableContextMenus = null;
 var cameraConfig = null;
@@ -2395,6 +2396,9 @@ $(function ()
 		});
 	$(".topbar_tab").click(function ()
 	{
+		SetClipListShortcutIconState("#open_all_clips_btn", false);
+		SetClipListShortcutIconState("#open_alerts_btn", false);
+
 		var $ele = $(this);
 		$(".topbar_tab").removeClass("selected");
 		$ele.addClass("selected");
@@ -2504,6 +2508,8 @@ $(function ()
 	canvasContextMenu = new CanvasContextMenu();
 
 	calendarContextMenu = new CalendarContextMenu();
+
+	openAlertListButtonContextMenu = new OpenAlertListButtonContextMenu();
 
 	clipListContextMenu = new ClipListContextMenu();
 
@@ -3203,7 +3209,7 @@ function DropdownBoxes()
 		new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
 		, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "streaming_profiles", text: "Streaming Profiles", icon: "#svg_mio_VideoFilter", cssClass: "goldenLarger" })
-		, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger", notificationCounter: function () { return Math.min(99999, statusLoader.getNotificationCounterValue("warnings")); } })
 		, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
@@ -3622,6 +3628,17 @@ function DropdownBoxes()
 			$item.addClass("selected");
 		if (item.cssClass)
 			$item.addClass(item.cssClass);
+		if (typeof item.notificationCounter === "function")
+		{
+			var notificationCounterValue = item.notificationCounter();
+			if (notificationCounterValue)
+			{
+				$item.css("position", "relative");
+				var $nc = $('<div class="notificationCounter">' + htmlEncode(notificationCounterValue) + '</div>');
+				$item.append($nc);
+				$nc.show();
+			}
+		}
 		$item.click(function ()
 		{
 			if (listDef.items[i].id === "separator")
@@ -3650,11 +3667,11 @@ function DropdownBoxes()
 		if (!preventDDLClose)
 			closeDropdownLists();
 	});
-	$(document).mouseleave(function (e)
-	{
-		if (!preventDDLClose)
-			closeDropdownLists();
-	});
+	//$(document).mouseleave(function (e)
+	//{
+	//	if (!preventDDLClose)
+	//		closeDropdownLists();
+	//});
 	var closeDropdownLists = function ()
 	{
 		if (currentlyOpenList != null)
@@ -3690,6 +3707,25 @@ function GetTooltipForStreamQuality(index)
 		return arr[index];
 	return "";
 }
+///////////////////////////////////////////////////////////////
+// Notification Counters //////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var notificationCounters = new (function ()
+{
+	var self = this;
+
+	this.setCounter = function (selector, value)
+	{
+		var $ele = $(selector);
+		if (value)
+		{
+			$ele.text(value);
+			$ele.show();
+		}
+		else
+			$ele.hide();
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // System Name Button /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -6403,6 +6439,12 @@ function ClipLoader(clipsBodySelector)
 	var clipTileSelectLimit = 1000;
 	var clipVisibilityMap = {};
 
+	this.LoadView = function (dbView)
+	{
+		settings.ui3_current_dbView = dbView;
+		dropdownBoxes.listDefs["dbView"].rebuildItems();
+		$("#topbar_tab_clips").click();
+	}
 	this.LoadClips = function ()
 	{
 		var loading = videoPlayer.Loading();
@@ -6501,11 +6543,14 @@ function ClipLoader(clipsBodySelector)
 			// When cmd="alertlist" and dbView="flagged", clip items are included too, but they don't have msec metadata.
 			// When cmd="cliplist" and dbView="flagged", alert items are included too, but they don't have zones metadata. These alert items have an msec value indicating the length of the alert.  The msec value Prior to version 91, UI3 handled it incorrectly, believing it to be the clip length.
 			args.view = dbView;
-			if (dbView === "alerts" || dbView === "cancelled" || dbView === "confirmed" || dbView.match("zone[a-h]") || dbView === "dio" || dbView === "onvif" || dbView === "audio" || dbView === "external")
+			if (DbViewIsAlerts(dbView))
 			{
 				args.cmd = "alertlist";
 			}
 		}
+
+		SetClipListShortcutIconState("#open_all_clips_btn", !dbView || dbView === "all");
+		SetClipListShortcutIconState("#open_alerts_btn", dbView === "alerts");
 
 		var isClipListRequest = args.cmd === "cliplist"; // We can't rely on this anymore to tell us if response items are clips or alerts.
 
@@ -7689,7 +7734,7 @@ function ClipLoader(clipsBodySelector)
 			};
 			if (settings.ui3_askForDelete === "All")
 			{
-				var whichKind = (settings.ui3_current_dbView === "alerts" ? "alert" : "clip");
+				var whichKind = (DbViewIsAlerts(settings.ui3_current_dbView) ? "alert" : "clip");
 				AskYesNo("Confirm deletion of 1 " + whichKind + "?", deleter);
 			}
 			else
@@ -7710,7 +7755,7 @@ function ClipLoader(clipsBodySelector)
 		var options = {
 			operation: operation
 			, clips: clipDatas
-			, recordingType: settings.ui3_current_dbView === "alerts" ? "alert" : "clip"
+			, recordingType: DbViewIsAlerts(settings.ui3_current_dbView) ? "alert" : "clip"
 			, args: args
 			, idx: 0
 			, myToast: null
@@ -7955,6 +8000,17 @@ function ClipLoader(clipsBodySelector)
 	setInterval(self.UpdateClipList, 6000);
 	BI_CustomEvent.AddListener("ClipList_Updated", ClipList_Updated);
 	$clipsbody.on('scroll', ClipsBodyScroll);
+}
+function DbViewIsAlerts(dbView)
+{
+	return dbView === "alerts" || dbView === "cancelled" || dbView === "confirmed" || dbView.match("zone[a-h]") || dbView === "dio" || dbView === "onvif" || dbView === "audio" || dbView === "external";
+}
+function SetClipListShortcutIconState(iconSelector, selected)
+{
+	if (selected)
+		$(iconSelector).addClass("selected");
+	else
+		$(iconSelector).removeClass("selected");
 }
 ///////////////////////////////////////////////////////////////
 // Clip Res Parser ////////////////////////////////////////////
@@ -8616,6 +8672,9 @@ function StatusLoader()
 					}
 				}
 
+				notificationCounters.setCounter("#btn_main_menu .notificationCounter", Math.min(99, self.getNotificationCounterValue("warnings")));
+				notificationCounters.setCounter("#open_alerts_btn .notificationCounter", Math.min(99999, self.getNotificationCounterValue("alerts")));
+
 				UpdateProfileStatus();
 				UpdateScheduleStatus();
 				dropdownBoxes.listDefs["dbView"].rebuildItems();
@@ -8808,6 +8867,20 @@ function StatusLoader()
 	this.getLastResponse = function ()
 	{
 		return lastResponse;
+	}
+	this.getNotificationCounterValue = function (key)
+	{
+		if (lastResponse && lastResponse.data)
+		{
+			var value = lastResponse.data[key];
+			if (value)
+			{
+				value = parseInt(value);
+				if (value)
+					return value;
+			}
+		}
+		return 0;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -9467,6 +9540,8 @@ function CameraListLoader()
 	var firstCameraListLoaded = false;
 	var cameraListUpdateTimeout = null;
 	var webcastingWarning;
+	this.clearNewAlertsCounterOnNextLoad = false;
+
 	this.LoadCameraList = function (successCallbackFunc)
 	{
 		if (cameraListUpdateTimeout != null)
@@ -9479,7 +9554,13 @@ function CameraListLoader()
 			}, 5000);
 			return;
 		}
-		ExecJSON({ cmd: "camlist" }, function (response)
+		var args = { cmd: "camlist" };
+		if (self.clearNewAlertsCounterOnNextLoad)
+		{
+			self.clearNewAlertsCounterOnNextLoad = false;
+			args.reset = 2;
+		}
+		ExecJSON(args, function (response)
 		{
 			if (typeof (response.data) == "undefined" || response.data.length == 0)
 			{
@@ -15429,6 +15510,39 @@ function CalendarContextMenu()
 	$("#dateRange").contextmenu(menuOptions);
 }
 ///////////////////////////////////////////////////////////////
+// Open Alert List Button Context Menu ////////////////////////
+///////////////////////////////////////////////////////////////
+function OpenAlertListButtonContextMenu()
+{
+	var self = this;
+
+	var onContextMenuAction = function ()
+	{
+		switch (this.data.alias)
+		{
+			case "open":
+				$("#open_alerts_btn").click();
+				break;
+			case "clear":
+				resetNewAlertCounters();
+				break;
+			default:
+				toaster.Error(this.data.alias + " is not implemented!");
+				break;
+		}
+	}
+	var menuOptions =
+	{
+		alias: "cmroot_open_alert_list_button", width: 160, items:
+			[
+				{ text: "Open Alert List", icon: "#svg_x5F_Alert1", alias: "open", action: onContextMenuAction }
+				, { text: "Clear Counters", icon: "#svg_mio_Trash", iconClass: "noflip", alias: "clear", action: onContextMenuAction }
+			]
+		, clickType: GetPreferredContextMenuTrigger()
+	};
+	$("#open_alerts_btn").contextmenu(menuOptions);
+}
+///////////////////////////////////////////////////////////////
 // Clip list Context Menu /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function ClipListContextMenu()
@@ -15506,7 +15620,7 @@ function ClipListContextMenu()
 		}
 		else if (allSelectedClipIDs.length > 1)
 		{
-			var label = " " + allSelectedClipIDs.length + " " + (settings.ui3_current_dbView === "alerts" ? "alerts" : "clips");
+			var label = " " + allSelectedClipIDs.length + " " + (DbViewIsAlerts(settings.ui3_current_dbView) ? "alerts" : "clips");
 			$("#cm_cliplist_flag").text((flagEnable ? "Flag" : "Unflag") + label);
 			$("#cm_cliplist_protect").text((protectEnable ? "Protect" : "Unprotect") + label);
 			$("#cm_cliplist_download").text("Download" + label);
@@ -15532,7 +15646,7 @@ function ClipListContextMenu()
 		{
 			case "flag":
 				var whatAction = (flagEnable ? "flag" : "unflag");
-				var whichKind = (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				var whichKind = (DbViewIsAlerts(settings.ui3_current_dbView) ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
 				if (allSelectedClipIDs.length <= 12)
 					clipLoader.Multi_Flag(allSelectedClipIDs, flagEnable);
 				else
@@ -15543,7 +15657,7 @@ function ClipListContextMenu()
 				break;
 			case "protect":
 				var whatAction = (protectEnable ? "protect" : "unprotect");
-				var whichKind = (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				var whichKind = (DbViewIsAlerts(settings.ui3_current_dbView) ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
 				if (allSelectedClipIDs.length <= 12)
 					clipLoader.Multi_Protect(allSelectedClipIDs, protectEnable);
 				else
@@ -15559,7 +15673,7 @@ function ClipListContextMenu()
 					clipDownloadDialog.open(allSelectedClipIDs);
 				break;
 			case "delete":
-				var whichKind = (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				var whichKind = (DbViewIsAlerts(settings.ui3_current_dbView) ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
 				var deleter = function ()
 				{
 					clipLoader.Multi_Delete(allSelectedClipIDs);
@@ -15603,13 +15717,13 @@ function ClipListContextMenu()
 					}
 				}
 				else
-					toaster.Warning("No " + (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + " is selected.");
+					toaster.Warning("No " + (DbViewIsAlerts(settings.ui3_current_dbView) ? "alert" : "clip") + " is selected.");
 				break;
 			case "properties":
 				if (allSelectedClipIDs.length >= 1)
 					clipProperties.open(allSelectedClipIDs[0]);
 				else
-					toaster.Warning("No " + (settings.ui3_current_dbView === "alerts" ? "alert" : "clip") + " is selected.");
+					toaster.Warning("No " + (DbViewIsAlerts(settings.ui3_current_dbView) ? "alert" : "clip") + " is selected.");
 				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
@@ -16027,6 +16141,7 @@ function CameraListDialog()
 		}
 		// Finish up
 		$cameralistcontent.append('<div></div>'
+			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnBlue" onclick="resetNewAlertCounters()" value="reset new alert counters" title="Resets the new alert counters for all cameras" />'
 			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.UpdateCameraThumbnails(true)" value="force refresh thumbnails" title="Thumbnails otherwise update only once per day" />'
 			+ (developerMode ? ' <input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.ShowRawCameraList()" value="view raw data" />' : '')
 			+ '</div>');
@@ -16064,10 +16179,12 @@ function CameraListDialog()
 			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="alerting"><svg class="icon"><use xlink:href="#svg_x5F_Alert1"></use></svg></div>';
 		if (cam.isEnabled && (!cam.isOnline || cam.isNoSignal))
 			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="offline / no signal"><svg class="icon"><use xlink:href="#svg_x5F_Warning"></use></svg></div>';
+		if (cam.newalerts > 0)
+			floatingBadges += '<div class="newAlerts" title="' + htmlAttributeEncode(cam.newalerts) + ' new alert' + (cam.newAlerts === 1 ? '' : 's') + '" style="color:#FF0000;"><div class="icon16"><svg class="icon"><use xlink:href="#svg_x5F_Alert2"></use></svg></div>' + htmlEncode(cam.newalerts) + '</div>';
 		if (!cam.isEnabled)
 			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="disabled"><svg class="icon"><use xlink:href="#svg_x5F_Logout"></use></svg></div>';
 		if (floatingBadges != '')
-			floatingBadges = '<div style="float: right;">' + floatingBadges + '</div>';
+			floatingBadges = '<div class="floatingBadges">' + floatingBadges + '</div>';
 
 		return '<div class="camlist_thumbbox" onclick="cameraListDialog.camListThumbClick(\'' + cam.optionValue + '\')" style="background-color: #' + colorHex + ';">'
 			+ '<div class="camlist_thumb">'
@@ -16126,6 +16243,14 @@ function CameraListDialog()
 			}
 		});
 	}
+}
+function resetNewAlertCounters()
+{
+	cameraListLoader.clearNewAlertsCounterOnNextLoad = true;
+	cameraListLoader.LoadCameraList(function ()
+	{
+		statusLoader.LoadStatus();
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Camera Properties Dialog ///////////////////////////////////
@@ -23737,6 +23862,8 @@ function htmlDecode(value)
  */
 function htmlAttributeEncode(value)
 {
+	if (typeof value !== "string" && typeof value !== "undefined" && typeof value.toString === "function")
+		value = value.toString();
 	var sb = new StringBuilder();
 	for (var i = 0; i < value.length; i++)
 	{

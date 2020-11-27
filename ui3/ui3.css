@@ -482,8 +482,51 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	padding: 10px 8px;
 }
 
+#open_alerts_btn
+{
+	width: 16px;
+	height: 36px;
+	padding: 14px 28px;
+}
+
+.sizeMedium #open_alerts_btn
+{
+	width: 12px;
+	height: 27px;
+	padding: 12.5px 22px;
+}
+
+.sizeSmall #open_alerts_btn
+{
+	width: 8px;
+	height: 18px;
+	padding: 11px 16px;
+}
+
+#open_all_clips_btn
+{
+	width: 24px;
+	height: 24px;
+	padding: 20px 20px;
+}
+
+.sizeMedium #open_all_clips_btn
+{
+	width: 22px;
+	height: 22px;
+	padding: 15px 10px;
+}
+
+.sizeSmall #open_all_clips_btn
+{
+	width: 18px;
+	height: 18px;
+	padding: 11px 8px;
+}
+
 div.icon, a.icon
 {
+	position: relative;
 	display: inline-block;
 	cursor: pointer;
 }
@@ -502,6 +545,51 @@ div.icon, a.icon
 		{
 			color: var(--text-active-color);
 		}
+
+.topbar_right_floating.icon.selected
+{
+	color: var(--dropdown-item-blue-color);
+}
+
+	.topbar_right_floating.icon.selected:hover
+	{
+		color: var(--dropdown-item-blue-hover-color);
+	}
+
+	.topbar_right_floating.icon.selected:active
+	{
+		color: var(--dropdown-item-blue-active-color);
+	}
+
+/* Notification Counters */
+.notificationCounter
+{
+	display: none;
+	position: absolute;
+	background-color: #FF0000;
+	color: #FFFFFF;
+	padding: 1px 3px;
+	border-radius: 2px;
+	top: 6px;
+	right: 5px;
+	font-size: 12px;
+}
+
+.sizeMedium .notificationCounter
+{
+	top: 4px;
+	right: 3px;
+	font-size: 11px;
+	padding: 1px 2px;
+}
+
+.sizeSmall .notificationCounter
+{
+	top: 2px;
+	right: 1px;
+	font-size: 10px;
+	padding: 0px 1px;
+}
 
 /* Left Bar Scrolling */
 .layoutleft-track
@@ -3777,8 +3865,8 @@ body + div
 .btnTransparent
 {
 	background-color: transparent;
-	color: black;
-	border: 1px solid black;
+	color: var(--text-color);
+	border: 1px solid var(--text-color);
 }
 
 	.btnTransparent:hover
@@ -3962,6 +4050,14 @@ body + div
 {
 	width: 16px;
 	height: 16px;
+}
+
+.floatingBadges
+{
+	float: right;
+	filter: drop-shadow(1px 1px 2px rgba(0,0,0,1));
+	text-shadow: 1px 1px 2px rgba(0,0,0,0.25);
+	font-weight: bold;
 }
 
 .campropcontent
