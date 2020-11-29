@@ -524,7 +524,7 @@ var Zoom1xOptions = {
 	Stream: "Stream"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Top Bar", "Video Player", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -704,11 +704,11 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_cps_uiSettings_category_Top_Bar_visible"
+			key: "ui3_cps_uiSettings_category_Video_Player_visible"
 			, value: "1"
 		}
 		, {
-			key: "ui3_cps_uiSettings_category_Video_Player_visible"
+			key: "ui3_cps_uiSettings_category_Top_Bar_visible"
 			, value: "1"
 		}
 		, {
@@ -798,38 +798,6 @@ var defaultSettings =
 			, label: '24-Hour Time'
 			, onChange: OnChange_ui3_time24hour
 			, category: "General Settings"
-		}
-		, {
-			key: "ui3_topbar_allclips_shortcut_show"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: "Shortcut to All Clips"
-			, onChange: OnChange_ui3_topbar_allclips_shortcut_show
-			, category: "Top Bar"
-		}
-		, {
-			key: "ui3_topbar_alerts_shortcut_show"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: "Shortcut to Alerts"
-			, onChange: OnChange_ui3_topbar_alerts_shortcut_show
-			, category: "Top Bar"
-		}
-		, {
-			key: "ui3_topbar_alerts_shortcut_counter"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: 'Show New Alerts Counter<div class="settingDesc">(requires Shortcut to Alerts)</div>'
-			, onChange: OnChange_ui3_topbar_alerts_shortcut_counter
-			, category: "Top Bar"
-		}
-		, {
-			key: "ui3_topbar_warnings_counter"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: 'Show New Warnings Counter<div class="settingDesc">(appears on Main Menu / System Log)</div>'
-			, onChange: OnChange_ui3_topbar_warnings_counter
-			, category: "Top Bar"
 		}
 		, {
 			key: "ui3_doubleClick_behavior"
@@ -946,6 +914,38 @@ var defaultSettings =
 			, changeOnStep: false
 			, preconditionFunc: Precondition_ui3_download_snapshot_server
 			, category: "Video Player"
+		}
+		, {
+			key: "ui3_topbar_allclips_shortcut_show"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: "Shortcut to All Clips"
+			, onChange: OnChange_ui3_topbar_allclips_shortcut_show
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_topbar_alerts_shortcut_show"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: "Shortcut to Alerts"
+			, onChange: OnChange_ui3_topbar_alerts_shortcut_show
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_topbar_alerts_shortcut_counter"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show New Alerts Counter<div class="settingDesc">(requires Shortcut to Alerts)</div>'
+			, onChange: OnChange_ui3_topbar_alerts_shortcut_counter
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_topbar_warnings_counter"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show New Warnings Counter<div class="settingDesc">(appears on Main Menu / System Log)</div>'
+			, onChange: OnChange_ui3_topbar_warnings_counter
+			, category: "Top Bar"
 		}
 		, {
 			key: "ui3_pc_next_prev_buttons"
@@ -11158,7 +11158,7 @@ function JpegVideoModule()
 }
 ///////////////////////////////////////////////////////////////
 // Fetch H264 Video Module ////////////////////////////////////
-// Using OpenH264 or Pnacl_Player /////////////////////////////
+// Using OpenH264 or Pnacl_Player or HTML5_MSE_Player /////////
 ///////////////////////////////////////////////////////////////
 function FetchH264VideoModule()
 {
@@ -12071,7 +12071,6 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		if (timestampFirstAcceptedFrame == -1)
 		{
 			timestampFirstAcceptedFrame = frame.time;
-			firstFrameReceivedAt = lastFrameReceivedAt;
 			firstFrameRenderedAt = lastFrameReceivedAt; // This value is faked so the timing starts more reasonably.
 		}
 		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
@@ -12222,6 +12221,7 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError, onC
 			ev2.data.pos = frame.pos;
 			ev2.data.utc = frame.utc;
 			ev2.data.size = frame.size;
+			ev2.data.rawtime = frame.meta.rawtime;
 			DecodeDone(ev2.data);
 		};
 		worker.postMessage({ timestamp: frame.time, data: frame.frameData.buffer });
