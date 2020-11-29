@@ -524,7 +524,7 @@ var Zoom1xOptions = {
 	Stream: "Stream"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Top Bar", "Video Player", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -704,6 +704,10 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_uiSettings_category_Top_Bar_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_uiSettings_category_Video_Player_visible"
 			, value: "1"
 		}
@@ -794,6 +798,38 @@ var defaultSettings =
 			, label: '24-Hour Time'
 			, onChange: OnChange_ui3_time24hour
 			, category: "General Settings"
+		}
+		, {
+			key: "ui3_topbar_allclips_shortcut_show"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: "Shortcut to All Clips"
+			, onChange: OnChange_ui3_topbar_allclips_shortcut_show
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_topbar_alerts_shortcut_show"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: "Shortcut to Alerts"
+			, onChange: OnChange_ui3_topbar_alerts_shortcut_show
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_topbar_alerts_shortcut_counter"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show New Alerts Counter<div class="settingDesc">(requires Shortcut to Alerts)</div>'
+			, onChange: OnChange_ui3_topbar_alerts_shortcut_counter
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_topbar_warnings_counter"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show New Warnings Counter<div class="settingDesc">(appears on Main Menu / System Log)</div>'
+			, onChange: OnChange_ui3_topbar_warnings_counter
+			, category: "Top Bar"
 		}
 		, {
 			key: "ui3_doubleClick_behavior"
@@ -2555,6 +2591,8 @@ $(function ()
 	}
 
 	OnChange_ui3_time24hour();
+	OnChange_ui3_topbar_allclips_shortcut_show();
+	OnChange_ui3_topbar_alerts_shortcut_show();
 	OnChange_ui3_skipAmount();
 	OnChange_ui3_pc_next_prev_buttons();
 	OnChange_ui3_pc_seek_buttons();
@@ -8672,8 +8710,12 @@ function StatusLoader()
 					}
 				}
 
-				notificationCounters.setCounter("#btn_main_menu .notificationCounter", Math.min(99, self.getNotificationCounterValue("warnings")));
-				notificationCounters.setCounter("#open_alerts_btn .notificationCounter", Math.min(99999, self.getNotificationCounterValue("alerts")));
+				notificationCounters.setCounter("#btn_main_menu .notificationCounter", settings.ui3_topbar_warnings_counter === "1"
+					? Math.min(99, self.getNotificationCounterValue("warnings"))
+					: 0);
+				notificationCounters.setCounter("#open_alerts_btn .notificationCounter", settings.ui3_topbar_alerts_shortcut_counter === "1"
+					? Math.min(99999, self.getNotificationCounterValue("alerts"))
+					: 0);
 
 				UpdateProfileStatus();
 				UpdateScheduleStatus();
@@ -22553,6 +22595,28 @@ function GetPreferredContextMenuTrigger()
 function OnChange_ui3_time24hour()
 {
 	use24HourTime = settings.ui3_time24hour == "1";
+}
+function OnChange_ui3_topbar_allclips_shortcut_show()
+{
+	if (settings.ui3_topbar_allclips_shortcut_show === "1")
+		$("#open_all_clips_btn").show();
+	else
+		$("#open_all_clips_btn").hide();
+}
+function OnChange_ui3_topbar_alerts_shortcut_show()
+{
+	if (settings.ui3_topbar_alerts_shortcut_show === "1")
+		$("#open_alerts_btn").show();
+	else
+		$("#open_alerts_btn").hide();
+}
+function OnChange_ui3_topbar_alerts_shortcut_counter()
+{
+	statusLoader.LoadStatus();
+}
+function OnChange_ui3_topbar_warnings_counter()
+{
+	statusLoader.LoadStatus();
 }
 function OnChange_ui3_h264_choice2()
 {
