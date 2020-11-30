@@ -6583,7 +6583,9 @@ function ClipLoader(clipsBodySelector)
 			args.view = dbView;
 			if (DbViewIsAlerts(dbView))
 			{
-				args.cmd = "alertlist";
+				// As of UI3-132, the "alertlist" command is soon changing and will no longer be useful to UI3.
+				// Fortunately, "cliplist" is now a suitable replacement for UI3's purposes.
+				//args.cmd = "alertlist";
 			}
 		}
 
