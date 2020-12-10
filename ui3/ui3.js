@@ -6583,9 +6583,7 @@ function ClipLoader(clipsBodySelector)
 			args.view = dbView;
 			if (DbViewIsAlerts(dbView))
 			{
-				// As of UI3-132, the "alertlist" command is soon changing and will no longer be useful to UI3.
-				// Fortunately, "cliplist" is now a suitable replacement for UI3's purposes.
-				//args.cmd = "alertlist";
+				args.cmd = "alertlist";
 			}
 		}
 
@@ -18982,7 +18980,7 @@ function HLSPlayer()
 
 			var src = currentServer.remoteBaseURL + "h264/" + camId + "/temp.m3u8" + currentServer.GetAPISessionArg("?", true);
 			playerObj = new Clappr.Player({ source: src, parentId: "#hlsPlayer", autoPlay: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 });
-			playerObj.on('error', onHlsError);
+			playerObj.on('playererror', onHlsError);
 			playerObj.on('fullscreen', function ()
 			{
 				setTimeout(resizeHlsPlayer, 0); setTimeout(resizeHlsPlayer, 100);
@@ -19001,15 +18999,13 @@ function HLSPlayer()
 		var description = "Unknown";
 		try
 		{
-			var code = obj.error.code;
-			if (code == 1)
-				description = "Aborted";
-			else if (code == 2)
-				description = "Network Error";
-			else if (code == 3)
-				description = "Decoding Error";
-			else if (code == 4)
-				description = "Source Not Supported";
+			var code = obj.raw.response.code;
+			if (code === 503)
+				description = "Unable to load stream with this camera name.";
+			else if (code === 403)
+				description = "Session Lost";
+			else
+				description = obj.description;
 		}
 		catch (ex)
 		{

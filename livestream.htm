@@ -8,6 +8,44 @@
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : "&session=" + local_bi_session;
 		var bi_version = "%%VERSION%%";
 		var badsession = !local_bi_session || (local_bi_session.length === 11 && local_bi_session.startsWith("%") && local_bi_session.endsWith("%") && local_bi_session.indexOf("SESSION") === 2);
+		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
+		if (!appPath.endsWith("/"))
+			appPath = appPath + "/";
+		function ExecJSON(args, callbackSuccess, callbackFail, jsonBaseUrl, appPathFallback)
+		{
+			if (typeof jsonBaseUrl === "undefined" || jsonBaseUrl === null)
+				jsonBaseUrl = appPath;
+			var reqUrl = jsonBaseUrl + "json";
+			$.ajax({
+				type: "POST",
+				url: reqUrl,
+				contentType: "text/plain",
+				data: JSON.stringify(args),
+				dataType: "json",
+				success: function (c)
+				{
+					callbackSuccess && callbackSuccess(c);
+				},
+				error: function (jqXHR, textStatus, errorThrown)
+				{
+					if (jqXHR && jqXHR.status === 404)
+					{
+						if (jsonBaseUrl === appPath && appPath !== "" && !appPathFallback)
+						{
+							console.log('JSON API unreachable at "' + reqUrl + '"');
+							ExecJSON(args, callbackSuccess, callbackFail, "", true); // First fallback
+							return;
+						}
+						else if (jsonBaseUrl === "" && appPath !== "/")
+						{
+							ExecJSON(args, callbackSuccess, callbackFail, "/", true); // Second fallback
+							return;
+						}
+					}
+					callbackFail && callbackFail(jqXHR, textStatus, errorThrown);
+				}
+			});
+		}
 		var UrlParameters =
 		{
 			loaded: false,
@@ -47,15 +85,17 @@
 			var description = "Unknown";
 			try
 			{
-				var code = obj.error.code;
-				if (code === 1)
-					description = "Aborted";
-				else if (code === 2)
-					description = "Network Error";
-				else if (code === 3)
-					description = "Decoding Error";
-				else if (code === 4)
-					description = "Source Not Supported";
+				var code = obj.raw.response.code;
+				if (code === 503)
+					description = "Unable to load stream with this camera name.";
+				else if (code === 403)
+				{
+					description = "Session Lost";
+					location.reload();
+					return;
+				}
+				else
+					description = obj.description;
 			}
 			catch (ex)
 			{
@@ -64,6 +104,7 @@
 		}
 		function ShowErrorMessage(message)
 		{
+			console.log(message);
 			var errorDiv = document.createElement("div");
 			errorDiv.style.position = "absolute";
 			errorDiv.style.top = "10px";
@@ -125,6 +166,48 @@
 				NavRemoveUrlParams("session");
 			document.write('<script src="clappr/clappr.min.js?v=' + bi_version + local_bi_session_arg + '"><\/script>');
 		}
+		function getHiddenProp()
+		{
+			var prefixes = ['webkit', 'moz', 'ms', 'o'];
+
+			// if 'hidden' is natively supported just return it
+			if ('hidden' in document) return 'hidden';
+
+			// otherwise loop over all the known prefixes until we find one
+			for (var i = 0; i < prefixes.length; i++)
+			{
+				if ((prefixes[i] + 'Hidden') in document)
+					return prefixes[i] + 'Hidden';
+			}
+
+			// otherwise it's not supported
+			return null;
+		}
+		function documentIsHidden()
+		{
+			var prop = getHiddenProp();
+			if (!prop) return false;
+
+			return document[prop];
+		}
+		function CheckExistingSession()
+		{
+			ExecJSON({ cmd: "login", session: local_bi_session }, function (response)
+			{
+				if (response.result === "success")
+					console.log("Session check: success");
+				else
+				{
+					console.log("Session check: " + response.result);
+					//location.reload();
+				}
+			},
+				function (jqXHR, textStatus, errorThrown)
+				{
+					console.log("Session check failed.")
+					location.reload();
+				});
+		}
 	</script>
 	<style type="text/css">
 		body
@@ -140,6 +223,32 @@
 		<div id="player"></div>
 	</div>
 	<script type="text/javascript">
+		function SetPlayerState()
+		{
+			var visibleNow = !documentIsHidden();
+			console.log("Tab is " + (visibleNow ? "visible" : "hidden"));
+			if (player)
+			{
+				if (visibleNow)
+				{
+					CheckExistingSession();
+					player.play();
+					player.seek(player.getDuration());
+				}
+				else
+					player.stop();
+			}
+		}
+		var visProp = getHiddenProp();
+		if (visProp)
+		{
+			var evtname = visProp.replace(/[H|h]idden/, '') + 'visibilitychange';
+			document.addEventListener(evtname, function ()
+			{
+				// Called when page visibility changes.
+				SetPlayerState();
+			});
+		}
 		if (!badsession)
 		{
 			var camId = (UrlParameters.Get("cam") === "" ? "index" : UrlParameters.Get("cam"));
@@ -152,9 +261,16 @@
 				args.disableVideoTagContextMenu = false;
 			}
 			var player = new Clappr.Player(args);
-			player.on('error', onStreamingError);
+			player.on('playererror', onStreamingError);
 			player.on('fullscreen', function () { setTimeout(onResize, 0); setTimeout(onResize, 100); });
-			player.play();
+			player.on('ready', function ()
+			{
+				setTimeout(function ()
+				{
+					onResize();
+				}, 0);
+			});
+			SetPlayerState();
 			onResize();
 			if (mode === 3)
 			{
