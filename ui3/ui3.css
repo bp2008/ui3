@@ -2083,7 +2083,7 @@ div.invisibleLabel
 	{
 		padding: 0px 0;
 	}
-/*Camera Name Labels*/
+/* Camera Name Labels */
 #cameraLabelsWrapper
 {
 	position: absolute;
@@ -2097,6 +2097,63 @@ div.invisibleLabel
 	position: absolute;
 	text-align: center;
 	pointer-events: none;
+}
+/* Camera Overlay Icons */
+.cameraOverlayIcons
+{
+	position: absolute;
+	pointer-events: none;
+	text-align: right;
+}
+
+.cameraOverlayIcon
+{
+	width: 16px;
+	height: 16px;
+	display: inline-block;
+	filter: drop-shadow(0px 0px 2px rgba(0,0,0,0.7));
+}
+
+.cameraOverlayIcons.extraVisibility .cameraOverlayIcon
+{
+	background-color: rgba(255,0,0,0.3);
+	border: 1px solid rgba(255,0,0,0.5);
+	border-radius: 50%;
+	padding: 2px;
+	margin-left: 2px;
+	margin-bottom: 2px;
+}
+
+@media all and (min-width: 1000px) and (min-height: 600px)
+{
+	.cameraOverlayIcons
+	{
+		margin-top: 2px;
+	}
+
+	.cameraOverlayIcon
+	{
+		width: 24px;
+		height: 24px;
+	}
+}
+
+@media all and (min-width: 1600px) and (min-height: 1200px)
+{
+	.cameraOverlayIcon
+	{
+		width: 30px;
+		height: 30px;
+	}
+}
+
+@media all and (min-width: 1200px) and (min-height: 1600px)
+{
+	.cameraOverlayIcon
+	{
+		width: 30px;
+		height: 30px;
+	}
 }
 /* Clips */
 .clipListText

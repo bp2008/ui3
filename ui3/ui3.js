@@ -1143,6 +1143,37 @@ var defaultSettings =
 			, category: "Event-Triggered Icons"
 		}
 		, {
+			key: "ui3_comment_camera_overlay_icons_Heading"
+			, value: ""
+			, inputType: "comment"
+			, comment: "The following icons are shown <b>per-camera</b> and do not require an H.264 stream."
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_camera_overlay_icon_motion_trigger"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip" style="fill: rgba(255,0,0,1)"><use xlink:href="#svg_mio_run"></use></svg> on Motion Trigger'
+			, onChange: OnChange_ui3_camera_overlay_icons
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_camera_overlay_icon_audio_trigger"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip" style="fill: rgba(255,0,0,1)"><use xlink:href="#svg_mio_volumeUp"></use></svg> on Audio Trigger'
+			, onChange: OnChange_ui3_camera_overlay_icons
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_camera_overlay_icon_generic_trigger"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon" style="fill: rgba(255,0,0,1)"><use xlink:href="#svg_x5F_Alert1"></use></svg> on Other Trigger'
+			, onChange: OnChange_ui3_camera_overlay_icons
+			, category: "Event-Triggered Icons"
+		}
+		, {
 			key: "ui3_icons_extraVisibility"
 			, value: "0"
 			, inputType: "checkbox"
@@ -9699,10 +9730,11 @@ function CameraListLoader()
 
 			if (cameraListUpdateTimeout != null)
 				clearTimeout(cameraListUpdateTimeout);
+			var interval = AnyCameraOverlayIconsEnabled() ? 1000 : 5000;
 			cameraListUpdateTimeout = setTimeout(function ()
 			{
 				self.LoadCameraList();
-			}, 5000);
+			}, interval);
 		}, function (jqXHR, textStatus, errorThrown)
 		{
 			if (cameraListUpdateTimeout != null)
@@ -13711,6 +13743,11 @@ function onui3_cameraLabelsChanged()
 {
 	cameraNameLabels.show();
 }
+function OnChange_ui3_camera_overlay_icons()
+{
+	cameraNameLabels.show();
+	cameraListLoader.LoadCameraList();
+}
 function CameraNameLabels()
 {
 	var self = this;
@@ -13718,22 +13755,28 @@ function CameraNameLabels()
 	var $camLabels_wrapper = $("#cameraLabelsWrapper");
 
 	BI_CustomEvent.AddListener("ImageResized", onui3_cameraLabelsChanged);
+	BI_CustomEvent.AddListener("CameraListLoaded", onui3_cameraLabelsChanged);
 
 	this.show = function (isHotkeyShow)
 	{
 		self.hide();
 		var loaded = videoPlayer.Loaded();
-		if (!loaded.cam || !loaded.image.uniqueId || settings.ui3_cameraLabels_enabled != "1")
+		if (!loaded.cam || !loaded.image.uniqueId)
 			return;
+
+		var show_names = settings.ui3_cameraLabels_enabled === "1";
+		var show_overlay_icons = AnyCameraOverlayIconsEnabled();
 
 		var showName = settings.ui3_cameraLabels_text === CameraLabelTextValues.Name;
 		var showShortName = settings.ui3_cameraLabels_text === CameraLabelTextValues.ShortName;
 		if (settings.ui3_cameraLabels_text === CameraLabelTextValues.Both)
 			showName = showShortName = true;
 		if (!showName && !showShortName)
-			return;
+			show_names = false;
 
-		if ((loaded.image.isGroup && settings.ui3_cameraLabels_multiCameras === "1") || (!loaded.image.isGroup && settings.ui3_cameraLabels_singleCameras === "1"))
+		show_names = show_names && ((loaded.image.isGroup && settings.ui3_cameraLabels_multiCameras === "1") || (!loaded.image.isGroup && settings.ui3_cameraLabels_singleCameras === "1"));
+
+		if (show_names || show_overlay_icons)
 		{
 			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.fullwidth;
 			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.fullheight;
@@ -13769,56 +13812,112 @@ function CameraNameLabels()
 				var adjW = (rect[2] - rect[0]) * scaleX;
 				var adjH = (rect[3] - rect[1]) * scaleY;
 
-				// Create and style labels.
-				sb.Append('<div class="cameraNameLabel" style="');
-				sb.Append("width:" + adjW + "px;");
-
-				var bgOpacity = PercentTo01Float(settings.ui3_cameraLabels_backgroundOpacity);
-				var textOpacity = PercentTo01Float(settings.ui3_cameraLabels_textOpacity);
-				if (settings.ui3_cameraLabels_cameraColor == "1")
+				if (show_names)
 				{
-					var colorHex = BlueIrisColorToCssColor(cam.color);
-					var colorRgba = HexColorToRgbaColor(colorHex, bgOpacity);
-					sb.Append("background-color:" + colorRgba + ";");
-					colorRgba = HexColorToRgbaColor(GetReadableTextColorHexForBackgroundColorHex(colorHex), textOpacity);
-					sb.Append("color:" + colorRgba + ";");
-				}
-				else
-				{
-					var bg = HexColorToRgbObj(settings.ui3_cameraLabels_backgroundColor);
-					var tx = HexColorToRgbObj(settings.ui3_cameraLabels_textColor);
-					sb.Append("background-color:rgba(" + bg.r + "," + bg.g + "," + bg.b + "," + bgOpacity + ");");
-					sb.Append("color:rgba(" + tx.r + "," + tx.g + "," + tx.b + "," + textOpacity + ");");
-				}
-				sb.Append("font-size:" + fontSizePt + "px;");
-				sb.Append("left:" + (adjX + imgPos.left) + "px;");
+					// Create and style labels.
+					sb.Append('<div class="cameraNameLabel" style="');
+					sb.Append("width:" + adjW + "px;");
 
-				var yOffset = 0;
-				if (offsetCamHeight)
-					yOffset += adjH;
-				if (offsetNegativeLabelHeight)
-					yOffset -= (fontSizePt * 1.333333);
-				sb.Append("top:" + (adjY + imgPos.top + yOffset) + "px;");
-				sb.Append('">');
-				if (showName && showShortName)
-					sb.Append(htmlEncode(CleanUpGroupName(cam.optionDisplay) + " (" + cam.optionValue + ")"));
-				else if (showName)
-					sb.Append(htmlEncode(CleanUpGroupName(cam.optionDisplay)));
-				else
-					sb.Append(htmlEncode(cam.optionValue));
-				sb.Append('</div>');
+					var bgOpacity = PercentTo01Float(settings.ui3_cameraLabels_backgroundOpacity);
+					var textOpacity = PercentTo01Float(settings.ui3_cameraLabels_textOpacity);
+					if (settings.ui3_cameraLabels_cameraColor == "1")
+					{
+						var colorHex = BlueIrisColorToCssColor(cam.color);
+						var colorRgba = HexColorToRgbaColor(colorHex, bgOpacity);
+						sb.Append("background-color:" + colorRgba + ";");
+						colorRgba = HexColorToRgbaColor(GetReadableTextColorHexForBackgroundColorHex(colorHex), textOpacity);
+						sb.Append("color:" + colorRgba + ";");
+					}
+					else
+					{
+						var bg = HexColorToRgbObj(settings.ui3_cameraLabels_backgroundColor);
+						var tx = HexColorToRgbObj(settings.ui3_cameraLabels_textColor);
+						sb.Append("background-color:rgba(" + bg.r + "," + bg.g + "," + bg.b + "," + bgOpacity + ");");
+						sb.Append("color:rgba(" + tx.r + "," + tx.g + "," + tx.b + "," + textOpacity + ");");
+					}
+					sb.Append("font-size:" + fontSizePt + "px;");
+					sb.Append("left:" + (adjX + imgPos.left) + "px;");
+
+					var yOffset = 0;
+					if (offsetCamHeight)
+						yOffset += adjH;
+					if (offsetNegativeLabelHeight)
+						yOffset -= (fontSizePt * 1.333333);
+					sb.Append("top:" + (adjY + imgPos.top + yOffset) + "px;");
+					sb.Append('">');
+					if (showName && showShortName)
+						sb.Append(htmlEncode(CleanUpGroupName(cam.optionDisplay) + " (" + cam.optionValue + ")"));
+					else if (showName)
+						sb.Append(htmlEncode(CleanUpGroupName(cam.optionDisplay)));
+					else
+						sb.Append(htmlEncode(cam.optionValue));
+					sb.Append('</div>');
+				}
+
+				// Build icon HTML
+				if (show_overlay_icons)
+				{
+					var icons = GetCameraOverlayIcons(group[i]);
+					if (icons.length > 0)
+					{
+						var iconYOffset = 0;
+						if (show_names && !offsetCamHeight && !offsetNegativeLabelHeight)
+							iconYOffset = (fontSizePt * 1.333333);
+
+						sb.Append('<div class="cameraOverlayIcons' + (settings.ui3_icons_extraVisibility === "1" ? " extraVisibility" : "") + '" style="');
+						sb.Append("width:" + adjW + "px;");
+						sb.Append("left:" + (adjX + imgPos.left) + "px;");
+						sb.Append("top:" + (adjY + imgPos.top + iconYOffset) + "px;");
+						sb.Append('">');
+						for (var n = 0; n < icons.length; n++)
+						{
+							var icon = icons[n];
+							sb.Append('<div class="cameraOverlayIcon" style="color: #FF0000;">');
+							sb.Append('<svg class="icon' + (icon.iconclass ? " " + icon.iconclass : "") + '"><use xlink:href="' + icon.svg + '"></use></svg>');
+							sb.Append('</div>');
+						}
+						sb.Append('</div>');
+					}
+				}
 			}
 			$camLabels_wrapper.append(sb.ToString());
-		}
-		else if (isHotkeyShow)
-		{
-			toaster.Info("Camera name labels can only be shown on groups of cameras.");
 		}
 	}
 	this.hide = function ()
 	{
 		$camLabels_wrapper.empty();
 	}
+}
+function GetCameraOverlayIcons(cameraId)
+{
+	var icons = [];
+	var cam = cameraListLoader.GetCameraWithId(cameraId);
+	if (cam)
+	{
+		var ts = cam.triggerSource;
+		if (settings.ui3_camera_overlay_icon_motion_trigger === "1"
+			&& (ts & TRIGGER_SOURCE_MOTION) > 0)
+		{
+			icons.push({ id: "motion_trigger", svg: "#svg_mio_run", iconclass: "noflip" });
+		}
+		if (settings.ui3_camera_overlay_icon_audio_trigger === "1"
+			&& (ts & TRIGGER_SOURCE_AUDIO) > 0)
+		{
+			icons.push({ id: "audio_trigger", svg: "#svg_mio_volumeUp", iconclass: "noflip" });
+		}
+		if (settings.ui3_camera_overlay_icon_generic_trigger === "1"
+			&& ((ts & TRIGGER_SOURCE_ONVIF) > 0 || (ts & TRIGGER_SOURCE_EXTERNAL) > 0 || (ts & TRIGGER_SOURCE_DIO) > 0 || (ts & TRIGGER_SOURCE_GROUP) > 0))
+		{
+			icons.push({ id: "generic_trigger", svg: "#svg_x5F_Alert1" });
+		}
+	}
+	return icons;
+}
+function AnyCameraOverlayIconsEnabled()
+{
+	return settings.ui3_camera_overlay_icon_motion_trigger === "1"
+		|| settings.ui3_camera_overlay_icon_audio_trigger === "1"
+		|| settings.ui3_camera_overlay_icon_generic_trigger === "1";
 }
 ///////////////////////////////////////////////////////////////
 // VideoCenter Icons and Video Loading/Buffering Overlay //////
@@ -22679,6 +22778,7 @@ function OnChange_ui3_force_gop_1sec()
 function OnChange_ui3_icons_extraVisibility()
 {
 	cornerStatusIcons.ReInitialize();
+	cameraNameLabels.show();
 }
 function OnChange_ui3_wheelZoomMethod()
 {
@@ -23342,6 +23442,14 @@ var alert_flag_nosignal = b0000_0100_0000_0000_0000_0000;
 var alert_flag_trigger_audio = b0000_1000_0000_0000_0000_0000;
 var alert_flag_trigger_external = b0001_0000_0000_0000_0000_0000;
 var alert_flag_trigger_group = b0100_0000_0000_0000_0000_0000;
+var TRIGGER_SOURCE_MOTION = (1 << 1);
+var TRIGGER_SOURCE_ONVIF = (1 << 2);
+var TRIGGER_SOURCE_AUDIO = (1 << 3);
+var TRIGGER_SOURCE_EXTERNAL = (1 << 4);
+var TRIGGER_SOURCE_DIO = (1 << 5);
+var TRIGGER_SOURCE_GROUP = (1 << 6);
+var TRIGGER_SOURCE_CANCELLED = (1 << 7);
+var TRIGGER_SOURCE_NOSIGNAL = (1 << 8);
 ///////////////////////////////////////////////////////////////
 // Zones Bitmask //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
