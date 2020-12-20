@@ -4179,7 +4179,7 @@ function PtzButtons()
 			return;
 		if (!videoPlayer.Loading().image.ptz)
 			return;
-		if (!sessionManager.IsAdministratorSession())
+		if (!sessionManager.HasPermission_PtzPresetSet())
 		{
 			openLoginDialog(function () { self.PresetSet(presetNumStr); });
 			return;
@@ -8642,21 +8642,21 @@ function StatusLoader()
 		var args = { cmd: "status" };
 		if (typeof profileNum != "undefined" && profileNum != null)
 		{
-			if (sessionManager.IsAdministratorSession())
+			if (sessionManager.HasPermission_ChangeProfile())
 				args.profile = parseInt(profileNum);
 			else
 				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
 		}
 		if (typeof stoplightState != "undefined" && stoplightState != null)
 		{
-			if (sessionManager.IsAdministratorSession())
+			if (sessionManager.HasPermission_ChangeProfile())
 				args.signal = parseInt(stoplightState);
 			else
 				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
 		}
 		if (typeof schedule != "undefined" && schedule != null)
 		{
-			if (sessionManager.IsAdministratorSession())
+			if (sessionManager.HasPermission_ChangeProfile())
 				args.schedule = schedule;
 			else
 				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
@@ -9188,9 +9188,12 @@ function SessionManager()
 	var isAdministratorSession = false;
 	var lastResponse = null;
 	var remoteServerSession = null;
+	var permission_changeprofile = false;
 	var permission_ptz = true;
+	var permission_ptzpresetset = false;
 	var permission_audio = true;
 	var permission_clips = true;
+	var permission_clipcreate = false;
 	var biSoundOptions = ["None"];
 	this.supportedHTML5AudioFormats = [".mp3", ".wav"]; // File extensions, in order of preference
 	this.Initialize = function ()
@@ -9335,9 +9338,14 @@ function SessionManager()
 		if (typeof lastResponse.data.tzone != "undefined")
 			serverTimeZoneOffsetMs = parseInt(parseFloat(lastResponse.data.tzone) * -60000);
 
+		isAdministratorSession = !!lastResponse.data.admin;
+
+		permission_changeprofile = getBoolMaybe(lastResponse.data.changeprofile, isAdministratorSession);
 		permission_ptz = getBoolMaybe(lastResponse.data.ptz, true);
+		permission_ptzpresetset = isAdministratorSession;
 		permission_audio = getBoolMaybe(lastResponse.data.audio, true);
 		permission_clips = getBoolMaybe(lastResponse.data.clips, true);
+		permission_clipcreate = getBoolMaybe(lastResponse.data.clipcreate, isAdministratorSession);
 
 		HandleUpdatedPermissions();
 
@@ -9354,9 +9362,8 @@ function SessionManager()
 				+ '<ul>', 60000, true);
 		}
 
-		if (lastResponse.data.admin)
+		if (isAdministratorSession)
 		{
-			isAdministratorSession = true;
 			if (user == "")
 				user = "administrator";
 			if (typeof adminLoginCallbackSuccess == "function")
@@ -9368,7 +9375,6 @@ function SessionManager()
 		}
 		else
 		{
-			isAdministratorSession = false;
 			if (user == "")
 				user = "user";
 		}
@@ -9439,7 +9445,7 @@ function SessionManager()
 	}
 	var getBoolMaybe = function (boolMaybe, defaultValue)
 	{
-		if (typeof boolMaybe == "undefined")
+		if (typeof boolMaybe === "undefined")
 			return defaultValue;
 		return boolMaybe ? true : false;
 	}
@@ -9580,9 +9586,17 @@ function SessionManager()
 			return lastResponse.data.streams;
 		return ["", "", ""];
 	}
+	this.HasPermission_ChangeProfile = function ()
+	{
+		return permission_changeprofile;
+	}
 	this.HasPermission_Ptz = function ()
 	{
 		return permission_ptz;
+	}
+	this.HasPermission_PtzPresetSet = function ()
+	{
+		return permission_ptzpresetset;
 	}
 	this.HasPermission_Audio = function ()
 	{
@@ -9591,6 +9605,10 @@ function SessionManager()
 	this.HasPermission_Clips = function ()
 	{
 		return permission_clips;
+	}
+	this.HasPermission_ClipCreate = function ()
+	{
+		return permission_clipcreate;
 	}
 	this.GetBISoundOptions = function ()
 	{
@@ -18580,7 +18598,7 @@ function openLoginDialog(callbackSuccess)
 		{
 			overlayOpacity: 0.3
 			, closeOnOverlayClick: true
-			, title: "Administrator Login"
+			, title: "Upgrade Session"
 			, onClosing: function ()
 			{
 				adminLoginCallbackSuccess = null;

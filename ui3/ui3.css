@@ -3607,6 +3607,11 @@ body + div
 		margin-top: 10px;
 	}
 
+#loginDialog
+{
+	max-width: 350px;
+}
+
 .browserIcon
 {
 	display: inline-block;
