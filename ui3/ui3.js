@@ -770,7 +770,7 @@ var defaultSettings =
 			, inputType: "number"
 			, minValue: 0
 			, maxValue: 525600
-			, label: "The UI will close itself after this many minutes of inactivity. (0 to disable)"
+			, label: 'Idle Timeout<div class="settingDesc">The UI will close itself after this many minutes of inactivity. (0 to disable)</div>'
 			, category: "General Settings"
 		}
 		, {
