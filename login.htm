@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "22";
+		var login_version = "23";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -123,6 +123,9 @@
 		var autologin_timeout_1 = null;
 		var autologin_timeout_2 = null;
 		var existingSession = "%%SESSION%%";
+		var authStatus = "%%AUTHSTATUS%%";
+		var authExempt = "%%AUTHEXEMPT%%";
+		var loginSession = "";
 		var isStoredDataLoaded = false;
 		var windowUnloading = false;
 		var cookiesEnabled;
@@ -248,41 +251,24 @@
 				SetPersistedValue("bi_password", "");
 			}
 
-			// Check for existing session
-			ExecJSON({ cmd: "login", session: existingSession }, function (response)
-			{
-				if (response.result === "fail")
-				{
-					// No existing session.
-					var anonymousAvailable = response.data && response.data["auth-exempt"];
-					if (anonymousAvailable)
-					{
-						// Attempt Anonymous login, to get the permission level.
-						var myResponse = md5("Anonymous:" + response.session + ":");
-						ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
-						{
-							if (response.result === "success")
-							{
-								existingSession = response.session;
-								SetStatus("An anonymous " + (response.data.admin ? "administrator" : "user") + ' session is available. <a href="javascript:LeaveLoginPage()">Click here to use it.</a>');
-							}
-						},
-							function (jqXHR, textStatus, errorThrown)
-							{
-								HandleError("Unable to contact Blue Iris server");
-							});
-					}
-				}
-				else if (response.result === "success")
-				{
-					existingSession = response.session;
-					SetStatus("An existing " + (response.data.admin ? "administrator" : "user") + ' session is available. <a href="javascript:LeaveLoginPage()">Click here to use it.</a>');
-				}
-			},
-				function (jqXHR, textStatus, errorThrown)
-				{
-					HandleError("Unable to contact Blue Iris server");
-				});
+			var sessionType = "";
+
+			// authExempt predefined values: no, user, admin, unknown (should not happen)
+			if (authExempt === "user")
+				sessionType = "anonymous user";
+			else if (authExempt === "admin")
+				sessionType = "anonymous admin";
+
+			// authStatus predefined values: unknown, admin, anonymous, user
+			if (authStatus === "admin")
+				sessionType = "existing admin";
+			else if (authStatus === "user")
+				sessionType = "existing user";
+			else if (authStatus === "anonymous")
+				sessionType = "existing anonymous user";
+
+			if (sessionType)
+				SetStatus("An " + sessionType + ' session is available. <a href="javascript:UseAltSession(\'' + sessionType + '\')">Click here to use it.</a>');
 
 			// Set focus on first empty field
 			if (!$("#txtUn").val())
@@ -299,16 +285,39 @@
 			cbLoginAutomaticallyClicked();
 			$("#btnLogin").val("Logging in ...");
 			SetStatus();
+			if (authStatus === "unknown")
+				loginSession = existingSession;
+
+			if (!loginSession)
+				authenticateNewSession();
+			else
+				authenticateSession(loginSession);
+		}
+		function authenticateNewSession(user, pass)
+		{
 			ExecJSON({ cmd: "login" }, function (response)
 			{
-				var myResponse = md5($("#txtUn").val() + ":" + response.session + ":" + $("#txtPw").val());
-				ExecJSON({ cmd: "login", session: response.session, response: myResponse }, function (response)
+				loginSession = response.session;
+				authenticateSession(loginSession, true);
+			}, loginFail);
+		}
+		function authenticateSession(session, isNewSession)
+		{
+			var myResponse = md5($("#txtUn").val() + ":" + session + ":" + $("#txtPw").val());
+			ExecJSON({ cmd: "login", session: session, response: myResponse }, function (response)
+			{
+				if (response.result === "success")
 				{
-					if (response.result === "success")
+					$("#btnLogin").attr("disabled", "disabled").val("Redirecting...");
+					existingSession = response.session;
+					LeaveLoginPage();
+				}
+				else
+				{
+					if ((!response.data || !response.data.reason) && !isNewSession)
 					{
-						$("#btnLogin").attr("disabled", "disabled").val("Redirecting...");
-						existingSession = response.session;
-						LeaveLoginPage();
+						// This happens when the session we were trying to authenticate has expired.
+						authenticateNewSession();
 					}
 					else
 					{
@@ -319,18 +328,25 @@
 						$("#btnLogin").val("Log in");
 						HandleError(response.data ? response.data.reason : "Login failed but Blue Iris did not provide a reason.");
 					}
-				},
-					function (jqXHR, textStatus, errorThrown)
-					{
-						HandleError("Unable to contact Blue Iris server");
-						$("#btnLogin").val("Log in");
-					});
-			},
-				function (jqXHR, textStatus, errorThrown)
-				{
-					HandleError("Unable to contact Blue Iris server");
-					$("#btnLogin").val("Log in");
-				});
+				}
+			}, loginFail);
+		}
+		function loginFail(jqXHR, textStatus, errorThrown)
+		{
+			HandleError("Unable to contact Blue Iris server");
+			$("#btnLogin").val("Log in");
+		}
+		function UseAltSession(sessionType)
+		{
+			if (!sessionType)
+				alert("Error. Please reload.");
+			else if (sessionType.indexOf("existing") > -1)
+				LeaveLoginPage();
+			else
+			{
+				existingSession = "";
+				LeaveLoginPage();
+			}
 		}
 		function LeaveLoginPage()
 		{
@@ -339,9 +355,12 @@
 				page = appPath + page.replace(/^\/+/g, '');
 			page = page.replace(/&session=[^&?#%]+/gi, '');
 			page = page.replace(/\?session=[^&?#%]+/gi, '?');
-			page += (page.indexOf("?") < 0 ? "?" : "&") + "session=" + existingSession;
-			if (cookiesEnabled)
-				$.cookie("session", existingSession, { path: "/" });
+			if (existingSession)
+			{
+				page += (page.indexOf("?") < 0 ? "?" : "&") + "session=" + existingSession;
+				if (cookiesEnabled)
+					$.cookie("session", existingSession, { path: "/" });
+			}
 			location.href = page + location.hash;
 		}
 		function cancelAutoLogin()
