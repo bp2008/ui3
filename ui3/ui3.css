@@ -3937,6 +3937,11 @@ body + div
 	}
 
 /* Context Menu Icon Classes */
+.iconGray
+{
+	color: rgba(0,0,0,0.1);
+}
+
 .iconBlue
 {
 	color: var(--context-menu-icon-highlight-color);

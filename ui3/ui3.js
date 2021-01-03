@@ -405,6 +405,7 @@ var clipLoader = null;
 var clipThumbnailVideoPreview = null;
 var nerdStats = null;
 var sessionTimeout = null;
+var clipOverlayCfg = null;
 
 var currentPrimaryTab = "";
 
@@ -750,6 +751,10 @@ var defaultSettings =
 		, {
 			key: "ui3_maxGOP"
 			, value: 1000
+		}
+		, {
+			key: "ui3_clipOverlayCfg"
+			, value: ""
 		}
 		, {
 			key: "ui3_streamingProfileArray"
@@ -2602,6 +2607,8 @@ $(function ()
 	nerdStats = new UI3NerdStats();
 
 	sessionTimeout = new SessionTimeout();
+
+	clipOverlayCfg = new ClipOverlayCfg();
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
@@ -10519,6 +10526,11 @@ function VideoPlayerController()
 				playerModule.SelectedQualityChanged();
 		}
 	}
+	this.ReopenStreamAtCurrentSeekPosition = function ()
+	{
+		if (typeof playerModule.ReopenStreamAtCurrentSeekPosition === "function")
+			playerModule.ReopenStreamAtCurrentSeekPosition();
+	}
 	this.PlaybackDirectionChanged = function (playReverse)
 	{
 		if (typeof playerModule.PlaybackDirectionChanged == "function")
@@ -10982,6 +10994,7 @@ function JpegVideoModule()
 		var timeValue = currentImageTimestampMs = currentImageRequestedAtMs = new Date().getTime();
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
+		var overlayArgs = "";
 		if (!loading.isLive)
 		{
 			var timePassed = timeValue - timeLastClipFrame;
@@ -11025,6 +11038,8 @@ function JpegVideoModule()
 				else
 					staticSnapshotId = "";
 			}
+			if (clipData)
+				overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
 		}
 
 		var widthToRequest = imageRenderer.GetSizeToRequest(true).w;
@@ -11036,7 +11051,7 @@ function JpegVideoModule()
 		if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
-			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + "&w=" + widthToRequest + qualityArg;
 
 		if ($("#camimg").attr('src') == imgSrcPath)
@@ -11372,6 +11387,7 @@ function FetchH264VideoModule()
 		didRequestAudio = pcmPlayer.AudioEnabled();
 		canRequestAudio = true;
 		var audioArg = "&audio=" + (didRequestAudio ? "1" : "0");
+		var overlayArgs = "";
 		var videoUrl;
 		if (loading.isLive)
 		{
@@ -11426,6 +11442,7 @@ function FetchH264VideoModule()
 						currentSeekPositionPercent = Clamp(offsetMs / lastMs, 0, 1);
 				}
 				currentImageDateMs = clipData.date.getTime() + (currentSeekPositionPercent * lastMs);
+				overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
 			}
 			if (speed !== 100)
 			{
@@ -11465,7 +11482,7 @@ function FetchH264VideoModule()
 				offsetArg = "&time=" + reqMs;
 				loading.requestedMs = reqMs;
 			}
-			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg;
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg + overlayArgs;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -11604,7 +11621,7 @@ function FetchH264VideoModule()
 		if (loading.isLive)
 			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + currentServer.GetAPISessionArg("&", true);
 		else
-			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true);
+			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs(loading.id);
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
@@ -11675,6 +11692,10 @@ function FetchH264VideoModule()
 			if (didRequestAudio && streamHasAudio != -1)
 				ReopenStreamAtCurrentSeekPosition(); // We don't want audio, but we requested it and may be receiving it.
 		}
+	}
+	this.ReopenStreamAtCurrentSeekPosition = function ()
+	{
+		ReopenStreamAtCurrentSeekPosition();
 	}
 	var ReopenStreamAtCurrentSeekPosition = function ()
 	{
@@ -14347,6 +14368,111 @@ var inputRequiredOverlay = new (function ()
 	}
 })();
 ///////////////////////////////////////////////////////////////
+// Clip Overlay Configuration /////////////////////////////////
+///////////////////////////////////////////////////////////////
+/**
+	Provides storage of clip overlay configuration on a per-camera basis.
+	Value 0 indicates "UNSET". 1 indicates "OFF". 2 indicates "ON".
+ */
+function ClipOverlayCfg()
+{
+	var self = this;
+	var cfg = {};
+	try
+	{
+		var json = settings.ui3_clipOverlayCfg;
+		if (json)
+			cfg = JSON.parse(json);
+	}
+	catch (ex)
+	{
+		toaster.Error(ex);
+	}
+	var Get = function (camId, type)
+	{
+		if (camId)
+		{
+			var camCfg = cfg[camId];
+			if (camCfg)
+			{
+				var val = camCfg[type];
+				if (typeof val === "number")
+					return val;
+			}
+		}
+		return 0;
+	}
+	var Set = function (camId, type, val)
+	{
+		var camData = cameraListLoader.GetCameraWithId(camId);
+		if (camData)
+		{
+			if (!cameraListLoader.CameraIsGroupOrCycle(camData))
+			{
+				if ((type === "t" || type === "m")
+					&& typeof val === "number")
+				{
+					var camCfg = cfg[camId];
+					if (!camCfg)
+						cfg[camId] = camCfg = {};
+					camCfg[type] = val;
+
+					if (val === 0)
+						delete camCfg[type];
+
+					var hasAnyProps = false;
+					for (var id in camCfg)
+					{
+						if (camCfg.hasOwnProperty(id))
+						{
+							hasAnyProps = true;
+							break;
+						}
+					}
+					if (!hasAnyProps)
+						delete cfg[camId];
+
+					settings.ui3_clipOverlayCfg = JSON.stringify(cfg);
+				}
+			}
+		}
+	}
+	this.GetTextOverlay = function (camId)
+	{
+		return Get(camId, "t"); // "t" stores the value for "text/graphic overlay"
+	}
+	this.GetMotionOverlay = function (camId)
+	{
+		return Get(camId, "m"); // "m" stores the value for "motion overlay"
+	}
+	this.SetTextOverlay = function (camId, val)
+	{
+		return Set(camId, "t", val);
+	}
+	this.SetMotionOverlay = function (camId, val)
+	{
+		return Set(camId, "m", val);
+	}
+	this.GetUrlArgs = function (camId)
+	{
+		var urlArgs = "";
+
+		var motionoverlay = clipOverlayCfg.GetMotionOverlay(camId);
+		if (motionoverlay === 1)
+			urlArgs += "&addmotion=0";
+		else if (motionoverlay === 2)
+			urlArgs += "&addmotion=1";
+
+		var textoverlay = clipOverlayCfg.GetTextOverlay(camId);
+		if (textoverlay === 1)
+			urlArgs += "&addoverlay=0";
+		else if (textoverlay === 2)
+			urlArgs += "&addoverlay=1";
+
+		return urlArgs;
+	}
+}
+///////////////////////////////////////////////////////////////
 // Customizable Streaming Profiles ////////////////////////////
 ///////////////////////////////////////////////////////////////
 function StreamingProfileUI()
@@ -15560,7 +15686,38 @@ function CanvasContextMenu()
 		var name = clipLoader.GetClipDisplayName(clipData);
 		$("#contextMenuClipName").text(name).closest(".b-m-item,.b-m-idisable").attr("title", name);
 
+		var motionoverlay = clipOverlayCfg.GetMotionOverlay(clipData.camera);
+		getIconWrapper("submenu_motionoverlays").find("use").attr("href", getIconId(motionoverlay));
+		setIconClass("motionoverlays_nopreference", motionoverlay === 0);
+		setIconClass("motionoverlays_off", motionoverlay === 1);
+		setIconClass("motionoverlays_on", motionoverlay === 2);
+
+		var textoverlay = clipOverlayCfg.GetTextOverlay(clipData.camera);
+		getIconWrapper("submenu_textoverlays").find("use").attr("href", getIconId(textoverlay));
+		setIconClass("textoverlays_nopreference", textoverlay === 0);
+		setIconClass("textoverlays_off", textoverlay === 1);
+		setIconClass("textoverlays_on", textoverlay === 2);
+
 		return true;
+	}
+	var getIconWrapper = function (spanId)
+	{
+		return $("#" + spanId).parent().siblings(".b-m-icon");
+	}
+	var getIconId = function (val)
+	{
+		if (val === 1)
+			return "#svg_mio_cbMinus";
+		if (val === 2)
+			return "#svg_mio_cbPlus";
+		return "#svg_mio_cbUnchecked";
+	}
+	var setIconClass = function (spanId, enabled)
+	{
+		if (enabled)
+			getIconWrapper(spanId).removeClass("iconGray");
+		else
+			getIconWrapper(spanId).addClass("iconGray");
 	}
 	var onRecordContextMenuAction = function ()
 	{
@@ -15600,6 +15757,48 @@ function CanvasContextMenu()
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
 				break;
+			case "motionoverlays_nopreference":
+				if (lastRecordContextMenuSelectedClip)
+				{
+					clipOverlayCfg.SetMotionOverlay(lastRecordContextMenuSelectedClip.camera, 0);
+					videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
+				break;
+			case "motionoverlays_off":
+				if (lastRecordContextMenuSelectedClip)
+				{
+					clipOverlayCfg.SetMotionOverlay(lastRecordContextMenuSelectedClip.camera, 1);
+					videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
+				break;
+			case "motionoverlays_on":
+				if (lastRecordContextMenuSelectedClip)
+				{
+					clipOverlayCfg.SetMotionOverlay(lastRecordContextMenuSelectedClip.camera, 2);
+					videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
+				break;
+			case "textoverlays_nopreference":
+				if (lastRecordContextMenuSelectedClip)
+				{
+					clipOverlayCfg.SetTextOverlay(lastRecordContextMenuSelectedClip.camera, 0);
+					videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
+				break;
+			case "textoverlays_off":
+				if (lastRecordContextMenuSelectedClip)
+				{
+					clipOverlayCfg.SetTextOverlay(lastRecordContextMenuSelectedClip.camera, 1);
+					videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
+				break;
+			case "textoverlays_on":
+				if (lastRecordContextMenuSelectedClip)
+				{
+					clipOverlayCfg.SetTextOverlay(lastRecordContextMenuSelectedClip.camera, 2);
+					videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
+				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
 				break;
@@ -15614,9 +15813,28 @@ function CanvasContextMenu()
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
 				, { text: 'Convert/export', icon: "#svg_mio_launch", iconClass: "noflip", alias: "convertexport", action: onRecordContextMenuAction }
-				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
+				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onRecordContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
+				, { type: "splitLine" }
+				, {
+					text: "<span id=\"submenu_motionoverlays\">Motion overlays</span>", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "submenu_motionoverlays",
+					type: "group",
+					items: [
+						{ text: "<span id=\"motionoverlays_nopreference\">No preference</span>&nbsp;", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "motionoverlays_nopreference", action: onRecordContextMenuAction },
+						{ text: "<span id=\"motionoverlays_off\">Force OFF</span>", icon: "#svg_mio_cbMinus", iconClass: "noflip", alias: "motionoverlays_off", action: onRecordContextMenuAction },
+						{ text: "<span id=\"motionoverlays_on\">Force ON</span>", icon: "#svg_mio_cbPlus", iconClass: "noflip", alias: "motionoverlays_on", action: onRecordContextMenuAction }
+					]
+				}
+				, {
+					text: "<span id=\"submenu_textoverlays\">Text/graphic overlays</span>", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "submenu_textoverlays",
+					type: "group",
+					items: [
+						{ text: "<span id=\"textoverlays_nopreference\">No preference</span>&nbsp;", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "textoverlays_nopreference", action: onRecordContextMenuAction },
+						{ text: "<span id=\"textoverlays_off\">Force OFF</span>", icon: "#svg_mio_cbMinus", iconClass: "noflip", alias: "textoverlays_off", action: onRecordContextMenuAction },
+						{ text: "<span id=\"textoverlays_on\">Force ON</span>", icon: "#svg_mio_cbPlus", iconClass: "noflip", alias: "textoverlays_on", action: onRecordContextMenuAction }
+					]
+				}
 				, { type: "splitLine" }
 				, { text: "Close Clip", icon: "#svg_x5F_Error", alias: "closeclip", action: onRecordContextMenuAction }
 				, { type: "splitLine" }
