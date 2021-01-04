@@ -757,6 +757,10 @@ var defaultSettings =
 			, value: ""
 		}
 		, {
+			key: "ui3_prioritizeTriggered"
+			, value: "0"
+		}
+		, {
 			key: "ui3_streamingProfileArray"
 			, value: "[]"
 			, category: "Streaming Profiles" // This category isn't shown in UI Settings, but has special-case logic in ui3-local-overrides.js export.
@@ -918,6 +922,15 @@ var defaultSettings =
 			, hint: 'Default: 85%'
 			, changeOnStep: false
 			, preconditionFunc: Precondition_ui3_download_snapshot_server
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_prioritizeTriggered_triggerMode"
+			, value: "Trigger"
+			, inputType: "select"
+			, options: ["Trigger", "Motion"]
+			, label: '<svg class="icon clipicon prioritizeTriggeredButton on"><use xlink:href="#svg_x5F_Alert"></use></svg> Auto-Maximize upon...<div class="settingDesc" style="margin-left: 35px;"><i>(experimental feature)</i></div>'
+			, hint: '"Motion" uses Blue Iris\'s built-in motion detection.\n\n"Trigger" works with any method of trigger (such as ONVIF or audio), but may not respond as quickly.'
 			, category: "Video Player"
 		}
 		, {
@@ -5102,12 +5115,14 @@ function PlaybackControls()
 			playbackHeader.Hide();
 			$("#seekBarWrapper").hide();
 			$("#pcButtonContainer .hideWhenLive").addClass('temporarilyUnavailable');
+			$("#pcButtonContainer .showWhenLive").removeClass('temporarilyUnavailable');
 		}
 		else
 		{
 			playbackHeader.Show();
 			$("#seekBarWrapper").show();
 			$("#pcButtonContainer .hideWhenLive").removeClass('temporarilyUnavailable');
+			$("#pcButtonContainer .showWhenLive").addClass('temporarilyUnavailable');
 		}
 	}
 	this.Hide = function ()
@@ -9649,7 +9664,7 @@ function CameraListLoader()
 			cameraListUpdateTimeout = setTimeout(function ()
 			{
 				self.LoadCameraList();
-			}, 5000);
+			}, 2000);
 			return;
 		}
 		var args = { cmd: "camlist" };
@@ -9755,7 +9770,9 @@ function CameraListLoader()
 
 			if (cameraListUpdateTimeout != null)
 				clearTimeout(cameraListUpdateTimeout);
-			var interval = AnyCameraOverlayIconsEnabled() ? 1000 : 5000;
+			var interval = 5000;
+			if (AnyCameraOverlayIconsEnabled() || videoPlayer.PrioritizeTriggeredEnabled())
+				interval = 1000;
 			cameraListUpdateTimeout = setTimeout(function ()
 			{
 				self.LoadCameraList();
@@ -9963,6 +9980,9 @@ function VideoPlayerController()
 
 	var mouseHelper = null;
 
+	// Prioritize Triggered
+	var pt_currentCam = null;
+
 	this.suppressMouseHelper = function (invalidateNextEvent)
 	{
 		/// <summary>Call this from mouse or touch events that conflict with the VideoPlayer's double-click helper, and past events will no longer count toward new clicks or drags.</summary>
@@ -10056,6 +10076,8 @@ function VideoPlayerController()
 			return;
 		isInitialized = true;
 
+		setPrioritizeTriggeredButtonState();
+
 		self.PreLoadPlayerModules();
 		self.SetPlayerModule(genericQualityHelper.GetCurrentProfile().vcodec, true);
 
@@ -10134,10 +10156,73 @@ function VideoPlayerController()
 
 		BI_CustomEvent.AddListener("CameraListLoaded", UpdatedCurrentCameraData);
 	}
-	var UpdatedCurrentCameraData = function ()
+	var UpdatedCurrentCameraData = function (lastResponse)
 	{
 		currentlyLoadingCamera = GetUpdatedCameraData(currentlyLoadingCamera);
 		currentlyLoadedCamera = GetUpdatedCameraData(currentlyLoadedCamera);
+
+		if (currentlyLoadingImage.isLive)
+		{
+			var wasAutoMaximized = pt_currentCam && pt_currentCam === currentlyLoadingCamera.optionValue;
+			if (self.PrioritizeTriggeredEnabled())
+			{
+				if (pt_currentCam)
+				{
+					var cam = cameraListLoader.GetCameraWithId(pt_currentCam);
+					if (!self.CamIsConsideredTriggered(cam))
+						pt_currentCam = null;
+				}
+				if (!pt_currentCam)
+				{
+					var group = self.GetCurrentHomeGroupObj();
+					if (group)
+					{
+						var camsInGroup = {};
+						for (var i = 0; i < group.group.length; i++)
+							camsInGroup[group.group[i]] = true;
+
+						for (var i = 0; i < lastResponse.data.length; i++)
+						{
+							var cam = lastResponse.data[i];
+							if (camsInGroup[cam.optionValue])
+							{
+								if (self.CamIsConsideredTriggered(cam))
+								{
+									pt_currentCam = cam.optionValue;
+									self.ImgClick_Camera(cam);
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+			else
+				pt_currentCam = null;
+
+			if (wasAutoMaximized && pt_currentCam === null)
+			{
+				var cam = cameraListLoader.GetCameraWithId(currentlyLoadingCamera.optionValue);
+				self.ImgClick_Camera(cam);
+			}
+		}
+	}
+	this.CamIsConsideredTriggered = function (camData)
+	{
+		if (camData && camData.isEnabled && camData.active)
+		{
+			if (settings.ui3_prioritizeTriggered_triggerMode === "Trigger")
+			{
+				if (camData.isTriggered)
+					return true;
+			}
+			else if (settings.ui3_prioritizeTriggered_triggerMode === "Motion")
+			{
+				if (camData.isMotion)
+					return true;
+			}
+		}
+		return false;
 	}
 	var GetUpdatedCameraData = function (currentCameraData)
 	{
@@ -10268,7 +10353,7 @@ function VideoPlayerController()
 		if (camData.optionValue == currentlyLoadedImage.id)
 		{
 			// Back to Group
-			camData = cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId);
+			camData = self.GetCurrentHomeGroupObj();
 			if (scaleOut && playerModule.DrawFullCameraAsThumb)
 				playerModule.DrawFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
 			self.LoadLiveCamera(camData);
@@ -10658,6 +10743,23 @@ function VideoPlayerController()
 	var ZeroFps = function ()
 	{
 		statusBars.setProgress("fps", 0, 0);
+	}
+	this.PrioritizeTriggeredEnabled = function ()
+	{
+		return settings.ui3_prioritizeTriggered === "1";
+	}
+	this.PrioritizeTriggeredToggle = function ()
+	{
+		settings.ui3_prioritizeTriggered = self.PrioritizeTriggeredEnabled() ? "0" : "1";
+		setPrioritizeTriggeredButtonState();
+		UpdatedCurrentCameraData(cameraListLoader.GetLastResponse());
+	}
+	var setPrioritizeTriggeredButtonState = function ()
+	{
+		if (self.PrioritizeTriggeredEnabled())
+			$("#prioritizeTriggeredButton").addClass("on");
+		else
+			$("#prioritizeTriggeredButton").removeClass("on");
 	}
 }
 function BICameraData()

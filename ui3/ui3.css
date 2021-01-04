@@ -3389,6 +3389,16 @@ body + div
 	margin: 6px;
 }
 
+.prioritizeTriggeredButton
+{
+	color: #737373;
+}
+
+	.prioritizeTriggeredButton.on
+	{
+		color: var(--seek-bar-color);
+	}
+
 /* Seek Bar */
 #seekBarWrapper
 {

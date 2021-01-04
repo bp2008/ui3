@@ -72,7 +72,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "136";
+		var ui_version = "137";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -427,6 +427,7 @@
 				<div id="clipFlagButton" class="pcButton rightSide hideWhenLive" onclick="clipLoader.FlagCurrentClip()" title="Flag/Unflag"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>
 				<div id="clipDeleteButton" class="pcButton hidden rightSide hideWhenLive" onclick="clipLoader.DeleteCurrentClip()" title="Delete"><svg class="icon"><use xlink:href="#svg_x5F_Error"></use></svg></div>
 				<div id="playbackSettingsButton" class="pcButton rightSide" onclick="playbackControls.OpenSettingsPanel()"><svg class="icon"><use xlink:href="#svg_x5F_Settings"></use></svg><div id="playbackSettingsQualityMark"></div></div>
+				<div id="prioritizeTriggeredButton" class="pcButton rightSide showWhenLive prioritizeTriggeredButton" onclick="videoPlayer.PrioritizeTriggeredToggle()" title="Auto-Maximize&#10;&#10;When live viewing, automatically maximize cameras that are triggered or detecting motion.&#10;&#10;Click button to toggle.  Configure feature at UI Settings > Video Player."><svg class="icon"><use xlink:href="#svg_x5F_Alert"></use></svg></div>
 				<div id="playbackSpeedText" class="pcText rightSide hideWhenLive" onclick="playbackControls.OpenSpeedPanel()" title="Playback Speed"></div>
 			</div>
 		</div>
