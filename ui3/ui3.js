@@ -1093,14 +1093,14 @@ var defaultSettings =
 			key: "ui3_clipicon_trigger_sentry"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_logo"></use></svg> for Sentry-verified alerts'
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_logo"></use></svg> for AI-verified alerts'
 			, category: "Clip / Alert Icons"
 		}
 		, {
 			key: "ui3_clipicon_trigger_sentry_occupied"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_human"></use></svg> for Sentry-verified alerts that continue a previous alert'
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_human"></use></svg> for AI-verified alerts that continue a previous alert'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -3455,8 +3455,8 @@ function DropdownBoxes()
 
 				this.items.push(new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "new.clipboard", text: "Clipboard", icon: "#svg_mio_crop", iconClass: "smallIcon" }));
-				this.items.push(new DropdownListItem({ id: "cancelled", text: "Sentry cancelled", icon: "#svg_x5F_HoldProfile", iconClass: "smallIcon" }));
-				this.items.push(new DropdownListItem({ id: "confirmed", text: "Sentry confirmed", icon: "#sentry_logo", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "cancelled", text: "Cancelled alerts", icon: "#svg_x5F_HoldProfile", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "confirmed", text: "Confirmed alerts", icon: "#sentry_logo", iconClass: "smallIcon" }));
 
 				this.items.push(new DropdownListItem({ id: "separator" }));
 
@@ -7558,9 +7558,9 @@ function ClipLoader(clipsBodySelector)
 		switch (name)
 		{
 			case "trigger_sentry":
-				return GetClipIcon_Internal(name, "#sentry_logo", true, "Sentry-verified alert");
+				return GetClipIcon_Internal(name, "#sentry_logo", true, "AI-verified alert");
 			case "trigger_sentry_occupied":
-				return GetClipIcon_Internal(name, "#sentry_human", true, "Sentry-verified continuation of a previous alert");
+				return GetClipIcon_Internal(name, "#sentry_human", true, "AI-verified continuation of a previous alert");
 			case "trigger_motion":
 				return GetClipIcon_Internal(name, "#svg_mio_run", true, "Triggered by motion detection");
 			case "trigger_audio":
@@ -17206,9 +17206,9 @@ function ClipProperties()
 				$camprop.append(GetInfo("Zones", new AlertZonesMask(clipData.rawData.zones).toString()));
 
 			if ((clipData.flags & alert_flag_sentry_trigger) > 0)
-				$camprop.append(GetIcon("trigger_sentry", "Sentry-verified alert"));
+				$camprop.append(GetIcon("trigger_sentry", "AI-verified alert"));
 			if ((clipData.flags & alert_flag_sentry_occupied) > 0)
-				$camprop.append(GetIcon("trigger_sentry_occupied", "Sentry-verified continuation of a previous alert"));
+				$camprop.append(GetIcon("trigger_sentry_occupied", "AI-verified continuation of a previous alert"));
 			if ((clipData.flags & alert_flag_trigger_motion) > 0)
 				$camprop.append(GetIcon("trigger_motion", "Triggered by motion detection"));
 			if ((clipData.flags & alert_flag_trigger_audio) > 0)
