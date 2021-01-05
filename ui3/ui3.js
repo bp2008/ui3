@@ -1132,6 +1132,13 @@ var defaultSettings =
 			, category: "Clip / Alert Icons"
 		}
 		, {
+			key: "ui3_clipicon_is_new"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_star"></use></svg> for new alerts'
+			, category: "Clip / Alert Icons"
+		}
+		, {
 			key: "ui3_comment_eventTriggeredIcons_Heading"
 			, value: ""
 			, inputType: "comment"
@@ -6530,6 +6537,9 @@ function ClipLoader(clipsBodySelector)
 	var clipTileSelectLimit = 1000;
 	var clipVisibilityMap = {};
 
+	// For showing alert "new" icon
+	var newAlertTimes = {};
+
 	this.LoadView = function (dbView)
 	{
 		settings.ui3_current_dbView = dbView;
@@ -6708,6 +6718,9 @@ function ClipLoader(clipsBodySelector)
 							clipData.clipId = clip.clip.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID of the underlying clip.
 							clipData.path = clip.clip; // Path used for loading the video stream
 						}
+						clipData.isNew = false;
+						if (clip.newalerttime)
+							newAlertTimes[clipData.camera] = parseInt(clip.newalerttime);
 					}
 					clipData.alertPath = clip.path; // Alert path if this is an alert, otherwise just another copy of the clip path.
 					clipData.offsetMs = clip.offset ? clip.offset : 0;
@@ -6830,6 +6843,7 @@ function ClipLoader(clipsBodySelector)
 
 			isLoadingAClipList = false;
 			lastClipListLoadedAt = performance.now();
+			self.updateNewAlertIcons();
 			if (isUpdateOfExistingList)
 			{
 				if (clipListGrew)
@@ -6948,18 +6962,65 @@ function ClipLoader(clipsBodySelector)
 		else
 			return "l";
 	}
+	/**
+	 * Gets the clip or alert with the specified camera ID and recording ID. I'm only keeping this more complicated cache around in case I want to enumerate clips by camera ID in the future.
+	 * @param {any} cameraId camera ID
+	 * @param {any} recId recording ID
+	 */
 	this.GetCachedClip = function (cameraId, recId)
 	{
-		/// <summary>Gets the clip with the specified camera ID and clip ID. I'm only keeping this more complicated cache around in case I want to enumerate clips by camera ID in the future.</summary>
 		var camClips = clipListCache[cameraId];
 		if (camClips)
 			return camClips[recId];
 		return null;
 	}
+	/**
+	 * Gets the clip or alert with the specified recording ID.
+	 * @param {any} recId ID of the clip
+	 */
 	this.GetClipFromId = function (recId)
 	{
-		/// <summary>Gets the clip with the specified clip ID.</summary>
 		return clipListIdCache[recId];
+	}
+	/**
+	 * Returns the array containing all loaded clip IDs.
+	 */
+	this.GetAllClipIds = function ()
+	{
+		return loadedClipIds;
+	}
+	/**
+	 * Returns an array containing clips where the specified function returns true.
+	 * @param {Function} predicate A method accepting a clipData and returning true or false.
+	 */
+	this.GetClips = function (predicate)
+	{
+		var clips = [];
+		if (typeof predicate === "function")
+		{
+			for (var i = 0; i < loadedClipIds.length; i++)
+			{
+				var clipData = clipListIdCache[loadedClipIds[i]];
+				if (predicate(clipData))
+					clips.push(clipData);
+			}
+		}
+		else
+		{
+			for (var i = 0; i < loadedClipIds.length; i++)
+				clips.push(clipListIdCache[loadedClipIds[i]]);
+		}
+		return clips;
+	}
+	/**
+	 * Returns an array containing clipData for all loaded alert objects that have the isNew flag set.
+	 */
+	this.GetNewAlerts = function ()
+	{
+		return self.GetClips(function (clipData)
+		{
+			return clipData.isNew;
+		});
 	}
 	this.GetClipIdsBetween = function (first, last)
 	{
@@ -7522,6 +7583,8 @@ function ClipLoader(clipsBodySelector)
 			return GetClipIconClass("flag");
 		if ((clipData.flags & clip_flag_protect) > 0)
 			return GetClipIconClass("protect");
+		if (clipData.isNew)
+			return GetClipIconClass("is_new");
 		return "";
 	}
 	var GetClipIconClass = function (name)
@@ -7549,6 +7612,8 @@ function ClipLoader(clipsBodySelector)
 			icons.push(self.GetClipIcon("clip_backingup"));
 		if ((clipData.flags & clip_flag_backedup) > 0 && settings.ui3_clipicon_clip_backup == "1")
 			icons.push(self.GetClipIcon("clip_backedup"));
+		if (settings.ui3_clipicon_is_new === "1")
+			icons.push(self.GetClipIcon("is_new"));
 		icons.push(self.GetClipIcon("protect"));
 		icons.push(self.GetClipIcon("flag"));
 		return icons.join("");
@@ -7583,6 +7648,8 @@ function ClipLoader(clipsBodySelector)
 				return GetClipIcon_Internal(name, "#svg_x5F_Stoplight", false, "Clip is still recording");
 			case "nosignal":
 				return GetClipIcon_Internal(name, "#svg_x5F_Error", false, "Camera was in a no-signal state");
+			case "is_new":
+				return GetClipIcon_Internal(name, "#svg_mio_star", true, "Alert is newer than you have seen before");
 		}
 		return "";
 	}
@@ -7591,6 +7658,53 @@ function ClipLoader(clipsBodySelector)
 		return '<div class="clipicon ' + GetClipIconClass(name) + '"'
 			+ (title ? (' title="' + title + '"') : '')
 			+ '><svg class="icon' + (noflip ? ' noflip' : '') + '"><use xlink:href="' + svgId + '"></use></svg></div>'
+	}
+	this.updateNewAlertIcons = function ()
+	{
+		if (currentPrimaryTab !== "clips")
+			return;
+		if (loadedClipIds.length === 0)
+			return;
+		var recId = loadedClipIds[0];
+		var firstClipData = self.GetClipFromId(recId);
+		if (!firstClipData || firstClipData.isClip)
+			return;
+		for (var i = 0; i < loadedClipIds.length; i++)
+		{
+			var clipData = self.GetClipFromId(loadedClipIds[i]);
+			if (!clipData.isClip)
+			{
+				var lastSeenAlertTime = newAlertTimes[clipData.camera];
+				if (lastSeenAlertTime)
+				{
+					var val = lastSeenAlertTime < clipData.rawData.date;
+					if (clipData.isNew && !val)
+					{
+						clipData.isNew = false;
+						var $clip = $("#c" + clipData.recId);
+						if ($clip.length !== 0)
+						{
+							var $flags = $clip.find(".clipIconWrapper");
+							$flags.removeClass(GetClipIconClass("is_new"));
+						}
+					}
+					else if (!clipData.isNew && val)
+					{
+						clipData.isNew = true;
+						var $clip = $("#c" + clipData.recId);
+						if ($clip.length !== 0)
+						{
+							var $flags = $clip.find(".clipIconWrapper");
+							$flags.addClass(GetClipIconClass("is_new"));
+						}
+					}
+				}
+			}
+		}
+	}
+	this.GetNewAlertTimes = function ()
+	{
+		return newAlertTimes;
 	}
 	this.QueueExportViaAPI = function (clipData, exportOptions, options, onSuccess, onFailure)
 	{
@@ -17231,6 +17345,8 @@ function ClipProperties()
 				$camprop.append(GetIcon("is_recording", "Clip is still recording"));
 			if ((clipData.flags & alert_flag_nosignal) > 0)
 				$camprop.append(GetIcon("nosignal", "Camera had no signal"));
+			if (clipData.isNew)
+				$camprop.append(GetIcon("is_new", "Alert is newer than you have seen before"));
 
 			var $link = $('<a href="javascript:void(0)">Click here to download the clip.</a>');
 			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
