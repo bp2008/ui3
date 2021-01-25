@@ -5153,6 +5153,18 @@ div::-webkit-scrollbar-corner
 {
 	color: #e6e660;
 }
+/* Audio Visualizer */
+#ui3AudioVisualizerPanel
+{
+	width: 80vw;
+	max-width: 1032px;
+}
+
+.audioGraph
+{
+	width: 100%;
+	height: 256px;
+}
 /* Dialog Theme */
 .dialog_wrapper.darkTheme
 {

@@ -19107,6 +19107,8 @@ function MuLawDecoder()
 }
 ///////////////////////////////////////////////////////////////
 // Audio Filter (silences crackle at frame boundaries) ////////
+// Not recommended because not all audio waveforms are ////////
+// centered on zero.                                   ////////
 ///////////////////////////////////////////////////////////////
 function AudioEdgeFilter(buffer)
 {
@@ -19144,9 +19146,34 @@ function AudioEdgeFilter(buffer)
 
 	return buffer;
 }
+function AudioEdgeFilterRaw(audio32)
+{
+	var wasPositive = (audio32[0] > 0);
+
+	for (var i = 0; i < audio32.length; i += 1)
+	{
+		if ((wasPositive && audio32[i] < 0) || (!wasPositive && audio32[i] > 0))
+			break;
+
+		audio32[i] = 0;
+	}
+
+	wasPositive = (audio32[audio32.length - 1] > 0);
+
+	for (var i = audio32.length - 1; i > 0; i -= 1)
+	{
+		if ((wasPositive && audio32[i] < 0) || (!wasPositive && audio32[i] > 0))
+			break;
+
+		audio32[i] = 0;
+	}
+
+	return audio32;
+}
 ///////////////////////////////////////////////////////////////
 // Audio Playback /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var debug_doEdgeFilter = false;
 function PcmAudioPlayer()
 {
 	var self = this;
@@ -19178,9 +19205,14 @@ function PcmAudioPlayer()
 	//			break;
 	//	}
 	//};
+	/**
+	 * Queues a Float32Array of raw audio data (range -1.0 to 1.0) for playback.
+	 * @param {Float32Array} audio32 First channel audio buffer: Float32Array of raw audio data (range -1.0 to 1.0)
+	 * @param {Number} channels Number of audio channels
+	 * @param {Number} sampleRate Sample rate (hz)
+	 */
 	this.AcceptBuffer = function (audio32, channels, sampleRate)
 	{
-		/// <summary>Queues a Float32Array of raw audio data (range -1.0 to 1.0) for playback.</summary>
 		if (!supported)
 			return;
 		if (suspended)
@@ -19188,11 +19220,14 @@ function PcmAudioPlayer()
 			suspended = false;
 			context.resume();
 		}
+		if (debug_doEdgeFilter)
+			AudioEdgeFilterRaw(audio32);
+
 		var buffer = context.createBuffer(channels, audio32.length, sampleRate);
 		buffer.copyToChannel(audio32, 0);
 
 		var bufferSource = context.createBufferSource();
-		bufferSource.buffer = AudioEdgeFilter(buffer);
+		bufferSource.buffer = buffer;
 		bufferSource.connect(volumeController);
 		volumeController.connect(context.destination);
 
@@ -19225,6 +19260,9 @@ function PcmAudioPlayer()
 		bufferSource.start(nextTime);
 		//bufferSource.stop(nextTime + duration);
 		nextTime += duration;
+
+		if (ui3AudioVisualizer)
+			ui3AudioVisualizer.AcceptBuffer([audio32], sampleRate, currentTime, nextTime, duration);
 	}
 	var DequeueBufferSource = function ()
 	{
@@ -19240,6 +19278,12 @@ function PcmAudioPlayer()
 		if (buffered < 0)
 			return 0;
 		return buffered * 1000;
+	}
+	this.GetCurrentTime = function ()
+	{
+		if (!supported)
+			return 0;
+		return context.currentTime;
 	}
 	this.SuppressAudioVolumeSave = function ()
 	{
@@ -21837,6 +21881,10 @@ function UI3NerdStats()
 			, "Player Delay"
 			, "Delayed Frames"
 		];
+	this.statClickEvents = [
+		{ name: "Audio Bit Rate", handler: CreateAudioVisualizer },
+		{ name: "Audio Buffer", handler: CreateAudioVisualizer }
+	];
 	this.Open = function ()
 	{
 		if (dialog)
@@ -21862,6 +21910,20 @@ function UI3NerdStats()
 		$root.empty();
 		for (var i = 0; i < self.orderedStatNames.length; i++)
 			CreateStat(self.orderedStatNames[i]);
+
+		for (var i = 0; i < self.statClickEvents.length; i++)
+		{
+			var e = self.statClickEvents[i];
+			if (e && typeof e.name === "string" && typeof e.handler === "function")
+			{
+				var row = statsRows[e.name];
+				if (row)
+				{
+					row.GetRoot().on('click', e.handler);
+					row.GetRoot().css('cursor', 'pointer');
+				}
+			}
+		}
 	}
 	this.IsOpen = function ()
 	{
@@ -21996,6 +22058,10 @@ function StatsRow(name)
 	{
 		return hidden;
 	}
+	this.GetRoot = function ()
+	{
+		return $root;
+	}
 	var CreateGraph = function ()
 	{
 		if (graph)
@@ -22106,6 +22172,182 @@ function SimpleGraph()
 		ctx.lineTo(dataIndex, h);
 		ctx.stroke();
 	}
+}
+///////////////////////////////////////////////////////////////
+// Audio Visualizer ///////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var ui3AudioVisualizer = null;
+function CreateAudioVisualizer()
+{
+	if (ui3AudioVisualizer)
+		return;
+	ui3AudioVisualizer = new UI3AudioVisualizer(function ()
+	{
+		ui3AudioVisualizer = null;
+	});
+}
+function UI3AudioVisualizer(onDialogClosing)
+{
+	var self = this;
+	var $dlg;
+	var dialog;
+
+	var graphs = [];
+
+	var Initialize = function ()
+	{
+		$dlg = $('<div id="ui3AudioVisualizerPanel"></div>');
+		dialog = $dlg.dialog({
+			title: 'Audio Waveform Visualizer'
+			, onClosing: function ()
+			{
+				for (var i = 0; i < graphs.length; i++)
+					graphs[i].Stop();
+				onDialogClosing();
+			}
+		});
+	}
+	/**
+	 * Accepts audio buffers.
+	 * @param {array} channels Array of audio channels, where each value is a Float32Array of raw audio data (range -1.0 to 1.0)
+	 * @param {Number} sampleRate Sample rate (hz)
+	 * @param {Number} currentTime Current playback clock time in seconds
+	 * @param {Number} sampleTime Timestamp of the sample in seconds
+	 * @param {Number} duration Sample duration in seconds
+	 */
+	this.AcceptBuffer = function (channels, sampleRate, currentTime, sampleTime, duration)
+	{
+		for (var n = 0; n < channels.length; n++)
+		{
+			var graph = graphs[n];
+			if (!graph)
+			{
+				graphs[n] = graph = new AudioGraph();
+				$dlg.append(graph.Get$Canvas());
+			}
+			graph.AddValues(channels[n], sampleRate, currentTime, sampleTime, duration);
+		}
+	}
+	Initialize();
+}
+///////////////////////////////////////////////////////////////
+// Audio Graph ////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var ui3AudioVisualizerSeconds = 2;
+function AudioGraph()
+{
+	var self = this;
+	var $canvas = $('<canvas class="audioGraph"></canvas>');
+	var canvas = $canvas.get(0);
+	var dpiScale = BI_GetDevicePixelRatio();
+	var buffer = new Array();
+	var timeLastFrame = 0;
+
+	this.Get$Canvas = function ()
+	{
+		return $canvas;
+	}
+	this.Stop = function ()
+	{
+		$canvas = canvas = buffer = null;
+	}
+	this.AddValues = function (audio32, sampleRate, currentTime, sampleTime, duration)
+	{
+		if (!canvas)
+			return;
+		dpiScale = BI_GetDevicePixelRatio();
+
+		var h = 256 * dpiScale;
+		var w = Math.ceil(1024 * dpiScale);
+		if (canvas.height != h)
+			canvas.height = h;
+
+		if (canvas.width != w)
+		{
+			canvas.width = w;
+
+			var ctx = canvas.getContext("2d");
+			ctx.translate(0.5, 0.5);
+			ctx.imageSmoothingEnabled = false;
+		}
+
+		for (var i = 0; i < audio32.length; i++)
+			buffer.push({ t: sampleTime + (duration * (i / audio32.length)), v: audio32[i] });
+	}
+	var Draw = function ()
+	{
+		if (!canvas)
+			return;
+
+		dpiScale = BI_GetDevicePixelRatio();
+
+		var currentTime = pcmPlayer.GetCurrentTime();
+
+		var renderAheadTime = 0;
+		if (timeLastFrame > 0)
+			renderAheadTime = (performance.now() - timeLastFrame) / 1000;
+		timeLastFrame = performance.now();
+		currentTime += renderAheadTime;
+
+		// Y increases as we go down the screen
+		var w = canvas.width;
+		var h = canvas.height;
+		var halfW = w / 2;
+		var halfH = h / 2;
+		var currentTimeDrawOffset = 2 / 3;
+
+		var ctx = canvas.getContext("2d");
+
+		ctx.fillStyle = "#000000";
+		ctx.fillRect(0, 0, w, h);
+
+		ctx.lineWidth = 2 * dpiScale;
+		ctx.strokeStyle = "#0097F0";
+		ctx.beginPath();
+		ctx.moveTo(w * currentTimeDrawOffset, 0);
+		ctx.lineTo(w * currentTimeDrawOffset, h);
+		ctx.moveTo(0, halfH);
+		ctx.lineTo(w, halfH);
+		ctx.stroke();
+
+		if (buffer)
+		{
+			var graphStartTime = currentTime - (ui3AudioVisualizerSeconds * currentTimeDrawOffset);
+			var graphEndTime = graphStartTime + ui3AudioVisualizerSeconds;
+
+			// Remove expired samples
+			for (var i = 0; i < buffer.length; i++)
+			{
+				if (buffer[i].t >= graphStartTime)
+				{
+					if (i > 0)
+						buffer.splice(0, i);
+					break;
+				}
+			}
+
+			var pixelsPerSecond = w / ui3AudioVisualizerSeconds;
+			ctx.lineWidth = 1;
+			ctx.strokeStyle = "#33aa33";
+			ctx.beginPath();
+			for (var i = 0; i < buffer.length; i++)
+			{
+				var sample = buffer[i];
+				var timeOffset = sample.t - graphStartTime;
+				var x = timeOffset * pixelsPerSecond;
+				if (x > w)
+					break;
+
+				var y = halfH + (sample.v * -1 * h);
+				if (i === 0)
+					ctx.moveTo(x, y);
+				ctx.lineTo(x, y);
+			}
+			ctx.stroke();
+		}
+		requestAnimationFrame(function () { requestAnimationFrame(Draw); });
+	}
+	requestAnimationFrame(Draw);
 }
 ///////////////////////////////////////////////////////////////
 // Drag and Drop //////////////////////////////////////////////
