@@ -1062,6 +1062,14 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
+			key: "ui3_seek_with_substream"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Seek with Sub Stream<div class="settingDesc">for better performance</div>'
+			, hint: 'Only affects recordings that include main and sub streams'
+			, category: "Clips / Alerts"
+		}
+		, {
 			key: "ui3_clipicon_trigger_motion"
 			, value: "0"
 			, inputType: "checkbox"
@@ -5823,10 +5831,11 @@ function SeekBar()
 			{
 				videoOverlayHelper.ShowLoadingOverlay(true, true);
 
-				qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue);
+				var subStreamArg = settings.ui3_seek_with_substream === "1" ? "&decode=-1" : "";
+				qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue) + subStreamArg;
 			}
 			else
-				qualityArgs = "&" + largestDimensionKey + "=160&q=50"
+				qualityArgs = "&" + largestDimensionKey + "=160&q=50&decode=-1"
 			seekhint_img.attr('src', videoPlayer.GetLastSnapshotUrl().replace(/time=\d+/, "time=" + msec) + qualityArgs);
 		}
 	}
@@ -15336,12 +15345,12 @@ function GenericQualityHelper()
 			else if (bitRateMbps < 3.5)
 			{
 				sizeLimit = Math.min(dimValue, 1280);
-				quality = 50;
+				quality = 60;
 			}
 			else // Plenty of bandwidth. Get whatever resolution fits best.
 			{
 				sizeLimit = dimValue;
-				quality = 50;
+				quality = 75;
 			}
 			return "&" + dimKey + "=" + sizeLimit + "&q=" + quality;
 		}
