@@ -15815,9 +15815,6 @@ function CanvasContextMenu()
 				else
 					new CameraProperties(lastLiveContextMenuSelectedCamera.optionValue);
 				break;
-			case "openhls":
-				hlsPlayer.OpenDialog(videoPlayer.Loading().image.id);
-				break;
 			case "opennewtab":
 				window.open(videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"); /* LOC0 */
 				break;
@@ -15846,7 +15843,6 @@ function CanvasContextMenu()
 			[
 				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onLiveContextMenuAction }
 				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
-				, { text: "Open HLS Stream", icon: "#svg_mio_ViewStream", iconClass: "noflip", alias: "openhls", tooltip: "Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds.", action: onLiveContextMenuAction }
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
@@ -16571,7 +16567,7 @@ function CachedClipStats(stats)
 function CameraConfig()
 {
 	var self = this;
-	this.get = function (camId, successCallbackFunc, failCallbackFunc, adminLoginCallback)
+	this.get = function (camId, successCallbackFunc, failCallbackFunc)
 	{
 		ExecJSON({ cmd: "camconfig", camera: camId }, function (response)
 		{
@@ -16579,14 +16575,13 @@ function CameraConfig()
 			{
 				toaster.Error("Unexpected response when getting camera configuration from server.");
 				if (failCallbackFunc)
-					failCallbackFunc(camId);
+					failCallbackFunc(camId, false);
 				return;
 			}
 			if (response.result == "fail")
 			{
 				if (failCallbackFunc)
-					failCallbackFunc(camId);
-				openLoginDialog(adminLoginCallback);
+					failCallbackFunc(camId, true);
 				return;
 			}
 			if (successCallbackFunc)
@@ -16594,7 +16589,7 @@ function CameraConfig()
 		}, function (jqXHR, textStatus, errorThrown)
 		{
 			if (failCallbackFunc)
-				failCallbackFunc(camId);
+				failCallbackFunc(camId, false);
 		});
 	}
 	this.set = function (camId, key, value, successCallbackFunc, failCallbackFunc)
@@ -16871,7 +16866,6 @@ function CameraProperties(camId)
 	var $btnDisable = $();
 	var initialize = function ()
 	{
-		var camName = cameraListLoader.GetCameraName(camId);
 		modal_cameraPropDialog = $dlg.dialog({
 			title: "Camera Properties"
 			, overlayOpacity: 0.3
@@ -16894,164 +16888,190 @@ function CameraProperties(camId)
 		{
 			modal_cameraPropDialog.setLoadingState(true);
 
-			cameraConfig.get(camId, function (response)
-			{
-				if (modal_cameraPropDialog == null)
-					return;
-				modal_cameraPropDialog.setLoadingState(false);
+			cameraConfig.get(camId,
+				function (response)
+				{
+					if (modal_cameraPropDialog == null)
+						return;
+					modal_cameraPropDialog.setLoadingState(false);
 
-				$camprop.empty();
-				if ($camprop.length == 0)
-					return;
-				/* Example Response
-				{
-				  "result": "success",
-				  "session": "...",
-				  "data": {
-					"pause": 0,
-					"push": false,
-					"motion": true,
-					"schedule": false,
-					"ptzcycle": false,
-					"ptzevents": false,
-					"alerts": 0,
-					"output": false,
-					"setmotion": {
-					  "audio_trigger": false,
-					  "audio_sense": 10000,
-					  "usemask": true,
-					  "sense": 8650,
-					  "contrast": 67,
-					  "showmotion": 0,
-					  "shadows": true,
-					  "luminance": false,
-					  "objects": true,
-					  "maketime": 16,
-					  "breaktime": 70
-					},
-					"record": 2
-				  }
-				}
-				*/
-				try
-				{
-					var cam = cameraListLoader.GetCameraWithId(camId);
-					if (cam)
+					/* Example Response
 					{
-						var collapsible = new CollapsibleSection("info", "Information", modal_cameraPropDialog);
+					  "result": "success",
+					  "session": "...",
+					  "data": {
+						"pause": 0,
+						"push": false,
+						"motion": true,
+						"schedule": false,
+						"ptzcycle": false,
+						"ptzevents": false,
+						"alerts": 0,
+						"output": false,
+						"setmotion": {
+						  "audio_trigger": false,
+						  "audio_sense": 10000,
+						  "usemask": true,
+						  "sense": 8650,
+						  "contrast": 67,
+						  "showmotion": 0,
+						  "shadows": true,
+						  "luminance": false,
+						  "objects": true,
+						  "maketime": 16,
+						  "breaktime": 70
+						},
+						"record": 2
+					  }
+					}
+					*/
+					try
+					{
+						AppendInformationSection();
+
+						var cam = cameraListLoader.GetCameraWithId(camId);
+
+						var collapsible = new CollapsibleSection('gs', "General Settings", modal_cameraPropDialog);
 						$camprop.append(collapsible.$heading);
-						var $infoSection = collapsible.$section;
-						$infoSection.append(GetInfo("ID", cam.optionValue));
-						$infoSection.append(GetInfo("Name", CleanUpGroupName(cam.optionDisplay)));
-						$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
-						$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + " @ " + cam.FPS + " FPS"));
-						$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
-						$infoSection.append(GetInfo("PTZ", cam.ptz ? "Yes" : "No"));
-						$camprop.append($infoSection);
+						var $generalSection = collapsible.$section;
+						$generalSection.append(GetCamPropCheckbox("webcast|" + camId, "Webcasting Enabled", cam.webcast, camPropAdminCommandOnOffBtnClick));
+						$generalSection.append(GetCamPropCheckbox("hide|" + camId, "Hidden", cam.hidden, camPropAdminCommandOnOffBtnClick));
+						$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
+						$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
+						$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
+						$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
+						$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
+						var $selectRecord = GetSelectRow("Record:", "record",
+							GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("1", "Continuously", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("2", "When triggered", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString()));
+						$generalSection.append($selectRecord);
+						var $selectAlerts = GetSelectRow("Alerts:", "alerts",
+							GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
+							+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
+							+ GetHtmlOptionElementMarkup("1", "Any camera in group is triggered", response.data.alerts.toString())
+							+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString()));
+						$generalSection.append($selectAlerts);
+						$camprop.append($generalSection);
+
+						var collapsible = new CollapsibleSection('mt', "Motion/Trigger", modal_cameraPropDialog);
+						$camprop.append(collapsible.$heading);
+						var $motionSection = collapsible.$section;
+						$motionSection.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
+						$motionSection.append(GetRangeSlider("setmotion.sense|" + camId, "Min. object size: "
+							, response.data.setmotion.sense, 1000, 11000, 50, true, motionSenseScalingMethod
+							, camPropSliderChanged));
+						$motionSection.append(GetRangeSlider("setmotion.contrast|" + camId, "Min. contrast: "
+							, response.data.setmotion.contrast, 12, 84, 1, false, null
+							, camPropSliderChanged));
+						$motionSection.append(GetRangeSlider("setmotion.maketime|" + camId, "Make time: "
+							, response.data.setmotion.maketime, 0, 100, 1, false, timeScalingMethod
+							, camPropSliderChanged));
+						$motionSection.append(GetRangeSlider("setmotion.breaktime|" + camId, "Break time: "
+							, response.data.setmotion.breaktime, 0, 9000, 10, false, timeScalingMethod
+							, camPropSliderChanged));
+						$motionSection.append(GetCamPropCheckbox("setmotion.objects|" + camId, "Object detection", response.data.setmotion.objects, camPropOnOffBtnClick));
+						$motionSection.append(GetCamPropCheckbox("setmotion.usemask|" + camId, "Mask/hotspot", response.data.setmotion.usemask, camPropOnOffBtnClick));
+						$motionSection.append(GetCamPropCheckbox("setmotion.luminance|" + camId, "Black &amp; white", response.data.setmotion.luminance, camPropOnOffBtnClick));
+						$motionSection.append(GetCamPropCheckbox("setmotion.shadows|" + camId, "Cancel shadows", response.data.setmotion.shadows, camPropOnOffBtnClick));
+						$motionSection.append(GetCamPropCheckbox("setmotion.audio_trigger|" + camId, "Audio trigger enabled", response.data.setmotion.audio_trigger, camPropOnOffBtnClick));
+						$motionSection.append(GetRangeSlider("setmotion.audio_sense|" + camId, "Audio Sensitivity: "
+							, response.data.setmotion.audio_sense, 0, 32000, 320, false, percentScalingMethod
+							, camPropSliderChanged));
+						var $selectHighlight = GetSelectRow("Highlight:", "setmotion.showmotion",
+							GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
+							+ GetHtmlOptionElementMarkup("1", "Motion", response.data.setmotion.showmotion.toString())
+							+ GetHtmlOptionElementMarkup("2", "Objects", response.data.setmotion.showmotion.toString())
+							+ GetHtmlOptionElementMarkup("3", "Motion + Objects", response.data.setmotion.showmotion.toString()));
+						$motionSection.append($selectHighlight);
+						$camprop.append($motionSection);
+
+						var collapsible = new CollapsibleSection('mro', "Manual Recording Options", modal_cameraPropDialog);
+						$camprop.append(collapsible.$heading);
+						var $manrecSection = collapsible.$section;
+						var $btnSet1 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
+						$btnSet1.append(GetCameraPropertyButton("Trigger", "trigger", "largeBtnYellow", camId));
+						$btnSet1.append(GetCameraPropertyButton("Snapshot", "snapshot", "largeBtnBlue", camId));
+						$btnSet1.append($btnManrec = GetCameraPropertyButton("Toggle Recording", "manrec", "largeBtnRed", camId));
+						$manrecSection.append($btnSet1);
+						$camprop.append($manrecSection);
+
+						var collapsible = new CollapsibleSection('mgmt', "Camera Management", modal_cameraPropDialog);
+						$camprop.append(collapsible.$heading);
+						var $mgmtSection = collapsible.$section;
+						var $btnSet2 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
+						$btnSet2.append($btnPause = GetCameraPropertyButton("Pause", "pause", "largeBtnYellow", camId));
+						$btnSet2.append(GetCameraPropertyButton("Restart", "reset", "largeBtnBlue", camId));
+						$btnSet2.append($btnDisable = GetCameraPropertyButton("Disable", "disable", "largeBtnRed", camId));
+						$mgmtSection.append($btnSet2);
+						$camprop.append($mgmtSection);
+
+						if (cam)
+						{
+							SetCameraPropertyManualRecordButtonState(cam.isRecording);
+							SetCameraPropertyEnableButtonState(cam.isEnabled);
+						}
 					}
-
-					var collapsible = new CollapsibleSection('gs', "General Settings", modal_cameraPropDialog);
-					$camprop.append(collapsible.$heading);
-					var $generalSection = collapsible.$section;
-					$generalSection.append(GetCamPropCheckbox("webcast|" + camId, "Webcasting Enabled", cam.webcast, camPropAdminCommandOnOffBtnClick));
-					$generalSection.append(GetCamPropCheckbox("hide|" + camId, "Hidden", cam.hidden, camPropAdminCommandOnOffBtnClick));
-					$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
-					$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
-					$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
-					$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
-					$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
-					var $selectRecord = GetSelectRow("Record:", "record",
-						GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
-						+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
-						+ GetHtmlOptionElementMarkup("1", "Continuously", response.data.record.toString())
-						+ GetHtmlOptionElementMarkup("2", "When triggered", response.data.record.toString())
-						+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString()));
-					$generalSection.append($selectRecord);
-					var $selectAlerts = GetSelectRow("Alerts:", "alerts",
-						GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
-						+ GetHtmlOptionElementMarkup("0", "This camera is triggered", response.data.alerts.toString())
-						+ GetHtmlOptionElementMarkup("1", "Any camera in group is triggered", response.data.alerts.toString())
-						+ GetHtmlOptionElementMarkup("2", "Any camera is triggered", response.data.alerts.toString()));
-					$generalSection.append($selectAlerts);
-					$camprop.append($generalSection);
-
-					var collapsible = new CollapsibleSection('mt', "Motion/Trigger", modal_cameraPropDialog);
-					$camprop.append(collapsible.$heading);
-					var $motionSection = collapsible.$section;
-					$motionSection.append(GetCamPropCheckbox("motion|" + camId, "Motion sensor", response.data.motion, camPropOnOffBtnClick));
-					$motionSection.append(GetRangeSlider("setmotion.sense|" + camId, "Min. object size: "
-						, response.data.setmotion.sense, 1000, 11000, 50, true, motionSenseScalingMethod
-						, camPropSliderChanged));
-					$motionSection.append(GetRangeSlider("setmotion.contrast|" + camId, "Min. contrast: "
-						, response.data.setmotion.contrast, 12, 84, 1, false, null
-						, camPropSliderChanged));
-					$motionSection.append(GetRangeSlider("setmotion.maketime|" + camId, "Make time: "
-						, response.data.setmotion.maketime, 0, 100, 1, false, timeScalingMethod
-						, camPropSliderChanged));
-					$motionSection.append(GetRangeSlider("setmotion.breaktime|" + camId, "Break time: "
-						, response.data.setmotion.breaktime, 0, 9000, 10, false, timeScalingMethod
-						, camPropSliderChanged));
-					$motionSection.append(GetCamPropCheckbox("setmotion.objects|" + camId, "Object detection", response.data.setmotion.objects, camPropOnOffBtnClick));
-					$motionSection.append(GetCamPropCheckbox("setmotion.usemask|" + camId, "Mask/hotspot", response.data.setmotion.usemask, camPropOnOffBtnClick));
-					$motionSection.append(GetCamPropCheckbox("setmotion.luminance|" + camId, "Black &amp; white", response.data.setmotion.luminance, camPropOnOffBtnClick));
-					$motionSection.append(GetCamPropCheckbox("setmotion.shadows|" + camId, "Cancel shadows", response.data.setmotion.shadows, camPropOnOffBtnClick));
-					$motionSection.append(GetCamPropCheckbox("setmotion.audio_trigger|" + camId, "Audio trigger enabled", response.data.setmotion.audio_trigger, camPropOnOffBtnClick));
-					$motionSection.append(GetRangeSlider("setmotion.audio_sense|" + camId, "Audio Sensitivity: "
-						, response.data.setmotion.audio_sense, 0, 32000, 320, false, percentScalingMethod
-						, camPropSliderChanged));
-					var $selectHighlight = GetSelectRow("Highlight:", "setmotion.showmotion",
-						GetHtmlOptionElementMarkup("0", "No", response.data.setmotion.showmotion.toString())
-						+ GetHtmlOptionElementMarkup("1", "Motion", response.data.setmotion.showmotion.toString())
-						+ GetHtmlOptionElementMarkup("2", "Objects", response.data.setmotion.showmotion.toString())
-						+ GetHtmlOptionElementMarkup("3", "Motion + Objects", response.data.setmotion.showmotion.toString()));
-					$motionSection.append($selectHighlight);
-					$camprop.append($motionSection);
-
-					var collapsible = new CollapsibleSection('mro', "Manual Recording Options", modal_cameraPropDialog);
-					$camprop.append(collapsible.$heading);
-					var $manrecSection = collapsible.$section;
-					var $btnSet1 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
-					$btnSet1.append(GetCameraPropertyButton("Trigger", "trigger", "largeBtnYellow", camId));
-					$btnSet1.append(GetCameraPropertyButton("Snapshot", "snapshot", "largeBtnBlue", camId));
-					$btnSet1.append($btnManrec = GetCameraPropertyButton("Toggle Recording", "manrec", "largeBtnRed", camId));
-					$manrecSection.append($btnSet1);
-					$camprop.append($manrecSection);
-
-					var collapsible = new CollapsibleSection('mgmt', "Camera Management", modal_cameraPropDialog);
-					$camprop.append(collapsible.$heading);
-					var $mgmtSection = collapsible.$section;
-					var $btnSet2 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
-					$btnSet2.append($btnPause = GetCameraPropertyButton("Pause", "pause", "largeBtnYellow", camId));
-					$btnSet2.append(GetCameraPropertyButton("Restart", "reset", "largeBtnBlue", camId));
-					$btnSet2.append($btnDisable = GetCameraPropertyButton("Disable", "disable", "largeBtnRed", camId));
-					$mgmtSection.append($btnSet2);
-					$camprop.append($mgmtSection);
-
-					if (cam)
+					catch (ex)
 					{
-						SetCameraPropertyManualRecordButtonState(cam.isRecording);
-						SetCameraPropertyEnableButtonState(cam.isEnabled);
+						toaster.Error(ex);
 					}
-				}
-				catch (ex)
-				{
-					toaster.Error(ex);
-				}
-				if (developerMode)
-					$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="Camera_OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
+					if (developerMode)
+						$camprop.append('<div class="dialogOption_item dialogOption_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="Camera_OpenRaw(&quot;' + camId + '&quot;)" value="view raw data" /></div>');
 
-				modal_cameraPropDialog.contentChanged(!loadedOnce);
-				loadedOnce = true;
-				CameraListLoaded(response.data);
-			}
-				, function ()
-				{
-					modal_cameraPropDialog.close();
+					modal_cameraPropDialog.contentChanged(!loadedOnce);
+					loadedOnce = true;
+					CameraListLoaded(response.data);
 				}
-				, function ()
+				, function (camId, adminRequired)
 				{
-					initialize();
+					if (adminRequired)
+					{
+						modal_cameraPropDialog.setLoadingState(false);
+
+						AppendInformationSection();
+
+						var $adminSection = $('<div style="margin: 12px; border: 1px solid currentColor; padding: 8px;"></div>');
+						var $adminLoginBtn = $('<a role="button">Upgrade to Administrator</a>');
+						$adminLoginBtn.on('click', function ()
+						{
+							openLoginDialog(function ()
+							{
+								self.refresh();
+							});
+						});
+						$adminSection.append($adminLoginBtn);
+						$adminSection.append(' for more options.');
+						$camprop.append($adminSection);
+					}
+					else
+						modal_cameraPropDialog.close();
 				});
+		}
+	}
+	var AppendInformationSection = function ()
+	{
+		$camprop.empty();
+		if ($camprop.length == 0)
+			return;
+
+		var cam = cameraListLoader.GetCameraWithId(camId);
+		if (cam)
+		{
+			var collapsible = new CollapsibleSection("info", "Information", modal_cameraPropDialog);
+			$camprop.append(collapsible.$heading);
+			var $infoSection = collapsible.$section;
+			$infoSection.append(GetInfo("ID", cam.optionValue));
+			$infoSection.append(GetInfo("Name", CleanUpGroupName(cam.optionDisplay)));
+			$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
+			$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + " @ " + cam.FPS + " FPS"));
+			$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
+			$infoSection.append('<div class="dialogOption_item dialogOption_item_info"><a title="Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds." href="javascript:hlsPlayer.OpenDialog(\'' + JavaScriptStringEncode(camId) + '\')">'
+				+ '<svg class="icon noflip"><use xlink:href="#svg_mio_ViewStream"></use></svg>'
+				+ ' Open HTTP Live Stream (HLS)</a></div>');
+			$camprop.append($infoSection);
 		}
 	}
 	var CameraListLoadedCb = function ()

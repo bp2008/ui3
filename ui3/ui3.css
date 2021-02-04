@@ -4303,6 +4303,13 @@ body + div
 	padding: 6px 0px;
 }
 
+	.dialogOption_item_info .icon
+	{
+		width: 16px;
+		height: 16px;
+		vertical-align: text-top;
+	}
+
 .dialogOption_item_comment
 {
 	color: #66cd66;
@@ -5027,6 +5034,11 @@ div::-webkit-scrollbar-corner
 .collapsible_section
 {
 	padding: 7px 0px;
+}
+
+.campropdialog .collapsible_section
+{
+	padding: 7px;
 }
 /* Settings Dialog */
 #uiSettingsPanelContent,
