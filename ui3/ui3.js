@@ -13711,7 +13711,7 @@ function ImageRenderer()
 			imgDrawWidth = imgAvailableWidth;
 			imgDrawHeight = imgAvailableHeight;
 
-			var aspectRatio = imgForSizing.actualwidth / imgForSizing.actualheight;
+			var aspectRatio = widthForSizing / heightForSizing;
 			var newRatio = imgDrawWidth / imgDrawHeight;
 			if (newRatio < aspectRatio)
 				imgDrawHeight = imgDrawWidth / aspectRatio;
