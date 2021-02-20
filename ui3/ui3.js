@@ -55,6 +55,7 @@ var audio_playback_supported = false;
 var web_workers_supported = false;
 var export_blob_supported = false;
 var exporting_clips_to_avi_supported = false;
+var html5HistorySupported = false;
 var fetch_supported = false;
 var readable_stream_supported = false;
 var webgl_supported = false;
@@ -103,6 +104,7 @@ function DoUIFeatureDetection()
 			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported && webgl_supported;
 			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported && web_audio_buffer_copyToChannel_supported;
 			exporting_clips_to_avi_supported = h264_playback_supported && export_blob_supported;
+			html5HistorySupported = isHtml5HistorySupported()
 
 			if (h264_playback_supported)
 			{
@@ -153,7 +155,7 @@ function DoUIFeatureDetection()
 				{
 					ul_root.append('<li>Fullscreen mode is not supported.</li>');
 				}
-				if (!isHtml5HistorySupported())
+				if (!html5HistorySupported)
 				{
 					ul_root.append('<li>The back button will not close the current clip or camera, like it does on most other platforms.</li>');
 				}
@@ -2783,7 +2785,9 @@ function HandlePreLoadUrlParameters()
 				offset = 0;
 			recId = recId.substr(0, idxHyphen);
 		}
-		recId = "@" + recId;
+		if (!recId.startsWith("@"))
+			recId = "@" + recId;
+		settings.ui3_defaultTab = "clips";
 		StartupClipOpener(recId, offset);
 	}
 	else
@@ -7502,6 +7506,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.OpenClip = function (clipEle, recId, alsoLoadClip)
 	{
+		self.SetStartupClip(null);
 		self.UnselectAllClips(true);
 		lastOpenedClipEle = clipEle;
 
@@ -10702,6 +10707,7 @@ function VideoPlayerController()
 	this.Playback_Pause = function ()
 	{
 		playerModule.Playback_Pause();
+		UpdateCurrentURL();
 	}
 	this.Playback_Play = function ()
 	{
@@ -10710,9 +10716,9 @@ function VideoPlayerController()
 	this.Playback_PlayPause = function ()
 	{
 		if (playerModule.Playback_IsPaused())
-			playerModule.Playback_Play();
+			self.Playback_Play();
 		else
-			playerModule.Playback_Pause();
+			self.Playback_Pause();
 	}
 	this.Playback_NextClip = function ()
 	{
@@ -11226,6 +11232,7 @@ function JpegVideoModule()
 			});
 		}
 		GetNewImage();
+		UpdateCurrentURL();
 		BI_CustomEvent.Invoke("OpenVideo", loading);
 	}
 	this.GetSeekPercent = function ()
@@ -11787,6 +11794,7 @@ function FetchH264VideoModule()
 			StopStreaming();
 			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 		}
+		UpdateCurrentURL();
 		BI_CustomEvent.Invoke("OpenVideo", loading);
 	}
 	var acceptFrame = function (frame, streams)
@@ -19913,8 +19921,56 @@ function AjaxHistoryManager()
 			return false;
 		return true;
 	}
-	if (isHtml5HistorySupported())
+	if (html5HistorySupported)
 		buttonOverride = new HistoryButtonOverride(BackButtonPressed);
+}
+//////////////////////////////////////////////////////////////////////
+// Update Current URL ////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+var lastUpdateCurrentUrlTime = 0;
+var updateCurrentUrl_Timeout = null;
+function UpdateCurrentURL_Throttled()
+{
+	if (!html5HistorySupported)
+		return;
+	var t = performance.now() - lastUpdateCurrentUrlTime;
+	if (t > 1000)
+		UpdateCurrentURL();
+	else
+	{
+		if (!updateCurrentUrl_Timeout)
+			updateCurrentUrl_Timeout = setTimeout(UpdateCurrentURL, 1000 - t);
+	}
+}
+function UpdateCurrentURL()
+{
+	if (!html5HistorySupported)
+		return;
+	clearTimeout(updateCurrentUrl_Timeout);
+	updateCurrentUrl_Timeout = null;
+	lastUpdateCurrentUrlTime = performance.now();
+	var search = location.search;
+	var m = search.match("([&?]rec=)[^#&?]*");
+	if (m)
+		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
+	var cli = videoPlayer.Loading().image;
+	if (!cli.isLive)
+	{
+		var clipData = clipLoader.GetClipFromId(cli.uniqueId);
+		if (clipData)
+		{
+			if (search === "")
+				search = "?";
+			else
+				search += "&";
+			search += "rec=" + encodeURIComponent(clipData.recId);
+			var offset = videoPlayer.GetClipPlaybackPositionMs();
+			if (offset > 0)
+				search += "-" + offset;
+		}
+	}
+	var newUrl = location.origin + location.pathname + search + location.hash;
+	history.replaceState(history.state, "", newUrl);
 }
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////

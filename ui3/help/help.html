@@ -309,6 +309,21 @@
 									<td>The camera with the specified "Short name" is loaded.</td>
 									<td><a href="../../ui3.htm?cam=porch" target="_blank">ui3.htm?cam=porch</a></td>
 								</tr>
+								<tr>
+									<td>rec=ID[-MS]</td>
+									<td>
+										<p>
+											Opens a specific clip at UI3 startup. The value should be the numeric portion of a clip's database ID. For example, a clip might have database ID <code>@21148130039</code>, so a "rec=" argument to open this clip would be <code>rec=21148130039</code>.  To open a clip at a specific time offset, append a hyphen and a number of milliseconds.  For example, to open the clip at its 10-second mark, use <code>rec=21148130039-10000</code>.
+										</p>
+										<p>
+											This parameter also loads the Clips tab at UI3 startup.
+										</p>
+										<p style="font-style: italic;">
+											To make it easy to share a link to a clip, this parameter is automatically entered into the address bar during clip playback.
+										</p>
+									</td>
+									<td><a href="../../ui3.htm?rec=21148130039-10000" target="_blank">ui3.htm?rec=21148130039-10000</a></td>
+								</tr>
 							</tbody>
 						</table>
 						<div class="panel panel-info">
