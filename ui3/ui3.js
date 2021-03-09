@@ -6178,15 +6178,18 @@ function ExportControls()
 			return;
 		clipStatsLoaded = true;
 
-		fileDuration = Math.max(clipData.msec, 2);
+		var msec = clipData.msec;
+		if (videoPlayer.Loading().image.uniqueId === clipData.recId)
+			msec = videoPlayer.Loading().image.msec;
+		fileDuration = Math.max(msec, 2);
 		fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
 
 		var startTime = 0;
 		var endTime = 1;
 		if ((clipData.flags & alert_flag_offsetMs) !== 0)
 		{
-			startTime = clipData.offsetMs / fileDuration;
-			endTime = (clipData.offsetMs + clipData.roughLengthMs) / fileDuration;
+			startTime = clipData.offsetMs / (fileDuration - 1);
+			endTime = (clipData.offsetMs + clipData.roughLengthMs) / (fileDuration - 1);
 		}
 
 		exportOffsetStart.setClipData(clipData);
@@ -6264,7 +6267,6 @@ function ExportOffsetControl($handle, polePosition, offsetChanged, onFocused)
 	var pwm1 = pw - 1;
 	var w = $handle.width();
 	var seekBarW = pw;
-	var seekBarWm1 = pwm1;
 	var seekBarO = po;
 	var dragOffset = 0;
 	var isDragging = false;
@@ -6292,14 +6294,13 @@ function ExportOffsetControl($handle, polePosition, offsetChanged, onFocused)
 		pwm1 = pw - 1;
 		w = $handle.width();
 		seekBarW = seekBar.getWidth();
-		seekBarWm1 = seekBarW - 1;
 		seekBarO = seekBar.getOffset();
 
-		$handle.css('left', ((seekBarWm1 * percent) - (w * polePosition) + (seekBarO.left - po.left)) + 'px');
+		$handle.css('left', ((seekBarW * percent) - (w * polePosition) + (seekBarO.left - po.left)) + 'px');
 
 		if (clipData)
 		{
-			var offsetMs = percent * clipData.msec;
+			var offsetMs = percent * (videoPlayer.Loading().image.msec - 1); // Don't use clipData.msec here, because that can be out of sync with the seek bar.
 			var txt = msToTime(offsetMs);
 			if (!clipLoader.ClipLikelyHasGaps(clipData))
 			{
@@ -6371,7 +6372,7 @@ function ExportOffsetControl($handle, polePosition, offsetChanged, onFocused)
 		if (isDragging)
 		{
 			var newPosX = (e.mouseX - seekBarO.left) - dragOffset;
-			self.setPosition(newPosX / seekBarWm1);
+			self.setPosition(newPosX / seekBarW);
 			seekBar.mouseMove(FakeMouseEventForSeekBar(e), true);
 			return true;
 		}
@@ -17753,7 +17754,7 @@ function ClipExportPanel()
 		{
 			// Use classic in-browser export method
 			var clipData = clipLoader.GetClipFromId(state.recIdArray[0]);
-			var fileDuration = Math.max(clipData.msec, 2);
+			var fileDuration = Math.max(videoPlayer.Loading().image.msec, 2);
 			if (!state.fileSizeBytes)
 				state.fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
 			var durationMs = exportOptions.endTimeMs - exportOptions.startTimeMs;
@@ -17795,7 +17796,7 @@ function ClipExportPanel()
 			if (!clipData)
 				return;
 
-			var fileDuration = Math.max(clipData.msec, 2);
+			var fileDuration = Math.max(videoPlayer.Loading().image.msec, 2);
 			if (!state.fileSizeBytes) // fileSize gets changed/lost in clipData when automatically refreshing the alert list.
 				state.fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
 
