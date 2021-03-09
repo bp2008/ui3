@@ -2795,6 +2795,11 @@ function HandlePreLoadUrlParameters()
 		$("#loadingStartupClip").parent().hide();
 		loadingHelper.SetLoadedStatus("startupClip");
 	}
+
+	// Parameter "streamingprofile"
+	var streamingprofile = UrlParameters.Get("streamingprofile");
+	if (streamingprofile !== '')
+		settings.ui3_streamingQuality = streamingprofile;
 }
 function StartupClipOpener(recId, offset)
 {

@@ -10,6 +10,15 @@
 
 	<title>UI3 Help</title>
 
+	<style type="text/css">
+		table.borderCells td,
+		table.borderCells th
+		{
+			border: 1px solid black;
+			padding: 1px 2px;
+		}
+	</style>
+
 	<script type="text/javascript">
 		var local_bi_session = "%%SESSION%%";
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : "&session=" + local_bi_session;
@@ -324,6 +333,22 @@
 									</td>
 									<td><a href="../../ui3.htm?rec=21148130039-10000" target="_blank">ui3.htm?rec=21148130039-10000</a></td>
 								</tr>
+								<tr>
+									<td>streamingprofile=name</td>
+									<td>
+										<p>
+											Selects a specific streaming profile at UI3 startup.  The value <code>name</code> must exactly match one of your streaming profiles.  Streaming profile names are case-sensitive and should be URL-encoded when used in a URL parameter.
+										</p>
+										<p id="streamingProfileListParagraph" style="display: none;">
+											This is a list of your streaming profiles which you may copy from:
+											<table class="borderCells">
+												<thead><tr><th>Profile</th><th>Name Parameter</th></tr></thead>
+												<tbody id="streamingProfileTbody"></tbody>
+											</table>
+										</p>
+									</td>
+									<td><a href="../../ui3.htm?streamingprofile=144p" target="_blank">ui3.htm?streamingprofile=144p</a></td>
+								</tr>
 							</tbody>
 						</table>
 						<div class="panel panel-info">
@@ -569,6 +594,26 @@
 				if (src)
 					imgs[i].src = src + (navigator.cookieEnabled ? "" : "?session=" + local_bi_session);
 			}
+			try
+			{
+				var profileData = JSON.parse(localStorage.ui3_streamingProfileArray);
+				for (var i = 0; i < profileData.length; i++)
+				{
+					var row = $('<tr></tr>');
+					var cell_name = $('<td></td>').text(profileData[i].name);
+					var cell_nameEnc = $('<td></td>').append($('<code></code>').text(encodeURIComponent(profileData[i].name)));
+					row.append(cell_name);
+					row.append(cell_nameEnc);
+					$("#streamingProfileTbody").append(row);
+				}
+				$("#streamingProfileListParagraph").show();
+			}
+			catch (ex)
+			{
+				console.log("Unable to load streaming profiles. Local storage is probably not enabled.");
+				console.error(ex);
+			}
+
 		})();
 	</script>
 </body>
