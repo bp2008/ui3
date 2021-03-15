@@ -2391,6 +2391,25 @@ div.invisibleLabel
 	height: 40px;
 }
 
+.datetile .dayNameShort,
+.datetile .dayNameFull
+{
+	float: right;
+	margin-left: 2px;
+	display: none;
+}
+
+.sizeLarge .datetile .dayNameFull
+{
+	display: inline;
+}
+
+.sizeMedium .datetile .dayNameShort,
+.sizeSmall .datetile .dayNameShort
+{
+	display: inline;
+}
+
 #clipsbody.largerThumbs .cliptile
 {
 	height: 137px;

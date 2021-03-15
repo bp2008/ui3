@@ -72,7 +72,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "143";
+		var ui_version = "144";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -429,7 +429,8 @@
 				<div id="playbackFrameTimestamp" class="pcText hideWhenLive"></div>
 				<div id="clipFullscreenButton" class="pcButton rightSide" title="Full Screen"><svg class="icon"><use xlink:href="#svg_mio_Fullscreen"></use></svg></div>
 				<div id="clipExitFullscreenButton" class="pcButton rightSide fullscreenButtonHidden" title="Exit Full Screen"><svg class="icon"><use xlink:href="#svg_mio_FullscreenExit"></use></svg></div>
-				<div id="clipMaximizeButton" class="pcButton rightSide" title="Toggle Maximize Video"><svg class="icon"><use xlink:href="#svg_mio_maximize"></use></svg></div>
+				<div id="clipMaximizeButton" class="pcButton rightSide" title="Maximize Video"><svg class="icon"><use xlink:href="#svg_mio_expand"></use></svg></div>
+				<div id="clipExitMaximizeButton" class="pcButton rightSide" title="Exit Maximize Video"><svg class="icon"><use xlink:href="#svg_mio_collapse"></use></svg></div>
 				<div id="clipExportButton" class="pcButton rightSide hideWhenLive" title="Export" onclick="clipLoader.ExportCurrentClip()"><svg class="icon noflip"><use xlink:href="#svg_mio_launch"></use></svg></div>
 				<a id="clipDownloadButton" class="pcButton rightSide hideWhenLive" href="javascript:void(0)" title="Download Clip" target="_blank"><svg class="icon"><use xlink:href="#svg_x5F_Download"></use></svg></a>
 				<div id="clipFlagButton" class="pcButton rightSide hideWhenLive" onclick="clipLoader.FlagCurrentClip()" title="Flag/Unflag"><svg class="icon"><use xlink:href="#svg_x5F_Flag"></use></svg></div>

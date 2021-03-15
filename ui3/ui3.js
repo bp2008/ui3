@@ -389,8 +389,8 @@ var clipTimeline = null;
 var hotkeys = null;
 var dateFilter = null;
 var hlsPlayer = null;
-var maximizedModeController = null;
 var fullScreenModeController = null;
+var maximizedModeController = null;
 var canvasContextMenu = null;
 var calendarContextMenu = null;
 var openAlertListButtonContextMenu = null;
@@ -2603,9 +2603,9 @@ $(function ()
 
 	hlsPlayer = new HLSPlayer();
 
-	maximizedModeController = new MaximizedModeController();
-
 	fullScreenModeController = new FullScreenModeController();
+
+	maximizedModeController = new MaximizedModeController();
 
 	canvasContextMenu = new CanvasContextMenu();
 
@@ -6844,7 +6844,7 @@ function ClipLoader(clipsBodySelector)
 					if (!isSameDay(previousClipDate, clipData.displayDate))
 					{
 						if (previousClipDate.getTime() == 0)
-							$clipListTopDate.attr("defaultStr", GetDateDisplayStr(clipData.displayDate)); // Do not add the first date tile because it is redundant with a date display above the list.
+							$clipListTopDate.attr("defaultStr", GetDateDisplayStr(clipData.displayDate, true)); // Do not add the first date tile because it is redundant with a date display above the list.
 						else
 						{
 							if (isUpdateOfExistingList)
@@ -7589,7 +7589,7 @@ function ClipLoader(clipsBodySelector)
 		var $dateTile = $("#dt" + time);
 		if ($dateTile.length == 0)
 		{
-			var timeStr = GetDateDisplayStr(dateTileData.date);
+			var timeStr = GetDateDisplayStr(dateTileData.date, true);
 			$clipsbody.append('<div id="dt' + time + '" class="datetile" style="top:' + dateTileData.y + 'px">'
 				+ timeStr
 				+ '</div>');
@@ -7608,7 +7608,7 @@ function ClipLoader(clipsBodySelector)
 		else if (!isSameDay(dateTileData.date, currentTopDate))
 		{
 			currentTopDate = dateTileData.date;
-			$clipListTopDate.html(GetDateDisplayStr(dateTileData.date));
+			$clipListTopDate.html(GetDateDisplayStr(dateTileData.date, true));
 		}
 	}
 	var TileOnMove = function (obj)
@@ -19770,7 +19770,7 @@ function HLSPlayer()
 function MaximizedModeController()
 {
 	var self = this;
-	$("#clipMaximizeButton")
+	$("#clipMaximizeButton,#clipExitMaximizeButton")
 		.on("click", function () { self.toggleMaximize(); })
 		.on("mousedown touchstart", function (e)
 		{
@@ -19783,10 +19783,24 @@ function MaximizedModeController()
 		});
 	this.updateMaximizeButtonState = function ()
 	{
-		if (settings.ui3_is_maximized === "1" || settings.ui3_show_maximize_button === "1")
-			$("#clipMaximizeButton").removeClass('maximizeButtonHidden');
+		if (settings.ui3_is_maximized === "1" || settings.ui3_show_maximize_button === "1" || fullScreenModeController.isFullScreen())
+		{
+			if (settings.ui3_is_maximized === "1")
+			{
+				$("#clipMaximizeButton").addClass('maximizeButtonHidden');
+				$("#clipExitMaximizeButton").removeClass('maximizeButtonHidden');
+			}
+			else
+			{
+				$("#clipMaximizeButton").removeClass('maximizeButtonHidden');
+				$("#clipExitMaximizeButton").addClass('maximizeButtonHidden');
+			}
+		}
 		else
+		{
 			$("#clipMaximizeButton").addClass('maximizeButtonHidden');
+			$("#clipExitMaximizeButton").addClass('maximizeButtonHidden');
+		}
 		if (loadingHelper.DidLoadingFinish())
 			resized();
 	};
@@ -19829,12 +19843,16 @@ function FullScreenModeController()
 	var isFullScreen_cached = false;
 	$(document).on("webkitfullscreenchange mozfullscreenchange fullscreenchange MSFullscreenChange", function (event)
 	{
-		if (settings.ui3_fullscreen_videoonly == "1")
+		if (maximizedModeController)
 		{
-			if (self.isFullScreen())
-				maximizedModeController.EnableMaximizedMode();
-			else
-				maximizedModeController.DisableMaximizedMode();
+			if (settings.ui3_fullscreen_videoonly == "1")
+			{
+				if (self.isFullScreen())
+					maximizedModeController.EnableMaximizedMode();
+				else
+					maximizedModeController.DisableMaximizedMode();
+			}
+			maximizedModeController.updateMaximizeButtonState();
 		}
 		self.updateFullScreenButtonState();
 	});
@@ -24859,32 +24877,98 @@ function GetDateStr(date, includeMilliseconds)
 	var str = date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate() + " " + GetTimeStr(date, includeMilliseconds);
 	return str;
 }
-function GetDateDisplayStr(date)
+function GetDateDisplayStr(date, includeWeekday)
 {
 	var sameDay = isSameDay(date, GetServerDate(new Date()));
-	return (sameDay ? "Today, " : "") + date.getMonthName() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear());
+	return (sameDay ? "Today, " : "") + date.getMonthName() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear()) + (includeWeekday ? ' <span class="dayNameShort">(' + date.getDayNameShort() + ')</span><span class="dayNameFull">(' + date.getDayName() + ')</span>' : '');
 }
 function GetPaddedDateStr(date, includeMilliseconds)
 {
 	var str = date.getFullYear() + "/" + (date.getMonth() + 1).toString().padLeft(2, '0') + "/" + date.getDate().toString().padLeft(2, '0') + " " + GetTimeStr(date, includeMilliseconds);
 	return str;
 }
-Date.prototype.getMonthName = function (lang)
+Date.prototype.getMonthName = function ()
 {
-	lang = lang && (lang in Date.locale) ? lang : 'en';
-	return Date.locale[lang].month_names[this.getMonth()];
+	try
+	{
+		if (toLocaleDateStringSupportsLocales())
+			return this.toLocaleString(getPreferredLanguageCode(), { month: 'long' });
+	}
+	catch (ex) { }
+	return fallbackDateLocale.en.month_names[this.getMonth()];
 };
 
-Date.prototype.getMonthNameShort = function (lang)
+Date.prototype.getMonthNameShort = function ()
 {
-	lang = lang && (lang in Date.locale) ? lang : 'en';
-	return Date.locale[lang].month_names_short[this.getMonth()];
+	try
+	{
+		if (toLocaleDateStringSupportsLocales())
+			return this.toLocaleString(getPreferredLanguageCode(), { month: 'short' });
+	}
+	catch (ex) { }
+	return fallbackDateLocale.en.month_names_short[this.getMonth()];
 };
 
-Date.locale = {
+Date.prototype.getDayName = function ()
+{
+	try
+	{
+		if (toLocaleDateStringSupportsLocales())
+			return this.toLocaleString(getPreferredLanguageCode(), { weekday: 'long' });
+	}
+	catch (ex) { }
+	return fallbackDateLocale.en.day_names[this.getDay()];
+};
+
+Date.prototype.getDayNameShort = function ()
+{
+	try
+	{
+		if (toLocaleDateStringSupportsLocales())
+			return this.toLocaleString(getPreferredLanguageCode(), { weekday: 'short' });
+	}
+	catch (ex) { }
+	return fallbackDateLocale.en.day_names_short[this.getDay()];
+};
+function getPreferredLanguageCode()
+{
+	try
+	{
+		return navigator.userLanguage || (navigator.languages && navigator.languages.length && navigator.languages[0]) || navigator.language || navigator.browserLanguage || navigator.systemLanguage || 'en';
+	}
+	catch (ex)
+	{
+		return 'en';
+	}
+}
+var cached_toLocaleDateStringSupportsLocales = 0;
+function toLocaleDateStringSupportsLocales()
+{
+	if (cached_toLocaleDateStringSupportsLocales === 0)
+		return false;
+	else if (cached_toLocaleDateStringSupportsLocales === 1)
+		return true;
+	try
+	{
+		new Date().toLocaleDateString('i');
+	}
+	catch (e)
+	{
+		if (e.name === 'RangeError')
+		{
+			cached_toLocaleDateStringSupportsLocales = 1;
+			return true;
+		}
+	}
+	cached_toLocaleDateStringSupportsLocales = 0;
+	return false;
+}
+var fallbackDateLocale = {
 	en: {
 		month_names: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
-		month_names_short: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+		month_names_short: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+		day_names: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+		day_names_short: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 	}
 };
 // Performs a deep clone of the specified element, removing all id attributes, data, and event handlers.
