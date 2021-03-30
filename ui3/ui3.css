@@ -1359,27 +1359,26 @@ div.invisibleLabel
 #stoplightBtn div
 {
 	display: inline-block;
-	width: 10px;
-	height: 10px;
+	width: 16px;
+	height: 16px;
 	opacity: 0.15;
 }
 
 .sizeMedium #stoplightBtn div
 {
-	width: 8px;
-	height: 8px;
+	width: 14px;
+	height: 14px;
 }
 
 .sizeSmall #stoplightBtn div
 {
-	width: 7px;
-	height: 7px;
+	width: 13px;
+	height: 13px;
 }
 
 #stoplightBtn
 {
 	float: right;
-	padding: 3px;
 	cursor: pointer;
 }
 
@@ -1396,7 +1395,7 @@ div.invisibleLabel
 
 #stoplightGreen
 {
-	color: rgba(0,255,0,1);
+	color: rgba(99,195,91,1);
 	margin-left: 5px;
 }
 

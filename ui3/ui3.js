@@ -425,7 +425,7 @@ var togglableUIFeatures =
 				$("#volumeBar").addClass("disabled")
 		}, null, null]
 		, ["#profileStatusBox", "profileStatus", "Profile Status Controls", function (enabled) { statusLoader.SetProfileButtonsEnabled(enabled); }, null, null]
-		, ["#stoplightBtn", "stopLight", "Stoplight Controls", function (enabled) { statusLoader.SetStoplightButtonEnabled(enabled); }, null, null]
+		, ["#stoplightBtn", "stopLight", "Stoplight/Shield Controls", function (enabled) { statusLoader.SetStoplightButtonEnabled(enabled); }, null, null]
 		, ["#globalScheduleBox", "globalSchedule", "Schedule Controls", function (enabled) { dropdownBoxes.setEnabled("schedule", enabled); }, null, null]
 		// The PTZ Controls hot area specifically does not include the main button pad because a context menu on that pad would break touchscreen usability
 		, [".ptzpreset", "ptzControls", "PTZ Controls", function (enabled) { ptzButtons.setEnabled(enabled); }
@@ -1089,7 +1089,7 @@ var defaultSettings =
 			key: "ui3_clipicon_trigger_external"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Alert2"></use></svg> for externally-triggered alerts'
+			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Alert1"></use></svg> for externally-triggered alerts'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -1145,7 +1145,7 @@ var defaultSettings =
 			key: "ui3_clipicon_is_new"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_star"></use></svg> for new alerts'
+			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Stoplight"></use></svg> for new alerts'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -1166,7 +1166,7 @@ var defaultSettings =
 			key: "ui3_icon_trigger"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon" style="fill: rgba(255,64,64,1)"><use xlink:href="#svg_x5F_Alert2"></use></svg> on Camera Triggered'
+			, label: '<svg class="icon clipicon" style="fill: rgba(255,64,64,1)"><use xlink:href="#svg_x5F_Alert1"></use></svg> on Camera Triggered'
 			, category: "Event-Triggered Icons"
 		}
 		, {
@@ -7687,7 +7687,7 @@ function ClipLoader(clipsBodySelector)
 			case "trigger_audio":
 				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Triggered by audio");
 			case "trigger_external":
-				return GetClipIcon_Internal(name, "#svg_x5F_Alert2", false, "Triggered by external source");
+				return GetClipIcon_Internal(name, "#svg_x5F_Alert1", false, "Triggered by external source");
 			case "trigger_group":
 				return GetClipIcon_Internal(name, "#svg_mio_quilt", true, "The group was triggered");
 			case "clip_audio":
@@ -7705,7 +7705,7 @@ function ClipLoader(clipsBodySelector)
 			case "nosignal":
 				return GetClipIcon_Internal(name, "#svg_x5F_Error", false, "Camera was in a no-signal state");
 			case "is_new":
-				return GetClipIcon_Internal(name, "#svg_mio_star", true, "Alert is newer than you have seen before");
+				return GetClipIcon_Internal(name, "#svg_x5F_Stoplight", true, "Alert is newer than you have seen before");
 		}
 		return "";
 	}
@@ -10327,6 +10327,7 @@ function VideoPlayerController()
 		);
 
 		BI_CustomEvent.AddListener("CameraListLoaded", UpdatedCurrentCameraData);
+		BI_CustomEvent.AddListener("OpenVideo", OnOpenVideo);
 	}
 	var UpdatedCurrentCameraData = function (lastResponse)
 	{
@@ -10347,7 +10348,7 @@ function VideoPlayerController()
 				if (!pt_currentCam)
 				{
 					var group = self.GetCurrentHomeGroupObj();
-					if (group)
+					if (group && group.group)
 					{
 						var camsInGroup = {};
 						for (var i = 0; i < group.group.length; i++)
@@ -10378,6 +10379,13 @@ function VideoPlayerController()
 				self.ImgClick_Camera(cam);
 			}
 		}
+	}
+	var OnOpenVideo = function (loading)
+	{
+		if (loading.id.startsWith('@'))
+			$("#prioritizeTriggeredButton").hide();
+		else
+			$("#prioritizeTriggeredButton").show();
 	}
 	this.CamIsConsideredTriggered = function (camData)
 	{
@@ -14370,7 +14378,7 @@ function CornerStatusIcons()
 	});
 	self.iconList.push({
 		name: "trigger",
-		iconHtml: '<svg class="icon"><use xlink:href="#svg_x5F_Alert2"></use></svg>',
+		iconHtml: '<svg class="icon"><use xlink:href="#svg_x5F_Alert1"></use></svg>',
 		rgb: "255,64,64",
 		title: "A camera is triggered"
 	});
@@ -16861,7 +16869,7 @@ function CameraListDialog()
 		if (cam.isEnabled && (!cam.isOnline || cam.isNoSignal))
 			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="offline / no signal"><svg class="icon"><use xlink:href="#svg_x5F_Warning"></use></svg></div>';
 		if (cam.newalerts > 0)
-			floatingBadges += '<div class="newAlerts" title="' + htmlAttributeEncode(cam.newalerts) + ' new alert' + (cam.newAlerts === 1 ? '' : 's') + '" style="color:#FF0000;"><div class="icon16"><svg class="icon"><use xlink:href="#svg_x5F_Alert2"></use></svg></div>' + htmlEncode(cam.newalerts) + '</div>';
+			floatingBadges += '<div class="newAlerts" title="' + htmlAttributeEncode(cam.newalerts) + ' new alert' + (cam.newAlerts === 1 ? '' : 's') + '" style="color:#FF0000;"><div class="icon16"><svg class="icon"><use xlink:href="#svg_x5F_Alert1"></use></svg></div>' + htmlEncode(cam.newalerts) + '</div>';
 		if (!cam.isEnabled)
 			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="disabled"><svg class="icon"><use xlink:href="#svg_x5F_Logout"></use></svg></div>';
 		if (floatingBadges != '')
@@ -19994,7 +20002,14 @@ function UpdateCurrentURL()
 		}
 	}
 	var newUrl = location.origin + location.pathname + search + location.hash;
-	history.replaceState(history.state, "", newUrl);
+	try
+	{
+		history.replaceState(history.state, "", newUrl);
+	}
+	catch (ex)
+	{
+		console.error(ex);
+	}
 }
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////
