@@ -9868,9 +9868,19 @@ function CameraListLoader()
 				var obj = lastResponse.data[i];
 				if (obj.group)
 				{
-					numGroups++;
-					for (var n = 0; n < obj.group.length; n++)
-						camIdsInGroups[obj.group[n]] = true;
+					if (obj.group.length > 1)
+					{
+						numGroups++;
+						for (var n = 0; n < obj.group.length; n++)
+							camIdsInGroups[obj.group[n]] = true;
+					}
+					else
+					{
+						// Blue Iris recently started including single-camera group metadata, causing a number of undesired effects.
+						// Easiest fix is to just remove single-camera groups so we can recreate them the way we want.
+						lastResponse.data.splice(i, 1);
+						i--;
+					}
 				}
 				else
 					numCameras++;
@@ -9898,15 +9908,15 @@ function CameraListLoader()
 						anyFakeGroupsNotHidden = true;
 				}
 
-				if (!firstCameraListLoaded && numCameras > 1 && anyFakeGroupsNotHidden && settings.ui3_webcasting_disabled_dontShowAgain != "1")
-				{
-					webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
-						+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
-						+ ' not visible in any group streams.<br><br>'
-						+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
-						+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
-						, 60000, true);
-				}
+				//if (!firstCameraListLoaded && numCameras > 1 && anyFakeGroupsNotHidden && settings.ui3_webcasting_disabled_dontShowAgain != "1")
+				//{
+				//	webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
+				//		+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
+				//		+ ' not visible in any group streams.<br><br>'
+				//		+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
+				//		+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
+				//		, 60000, true);
+				//}
 			}
 
 			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
