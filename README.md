@@ -13,4 +13,6 @@ If you wish to manually install UI3 (maybe to get a bugfix without waiting for i
 
 To install, just extract everything to Blue Iris's `www` directory and overwrite all files.  The default path to this folder is `C:\Program Files\Blue Iris 5\www`.
 
-If you still run Blue Iris 4.x, do not update UI3 beyond [Version 77](https://github.com/bp2008/ui3/releases/tag/77) because backwards-compatibility is not maintained.
+### Blue Iris 4.x Users
+
+Blue Iris 4.8.6.3 shipped with [UI3-70](https://github.com/bp2008/ui3/releases/tag/70), but you can update to [UI3-77](https://github.com/bp2008/ui3/releases/tag/77) for a few improvements.  Things will begin breaking if you update a Blue Iris 4.x installation beyond UI3-77.
