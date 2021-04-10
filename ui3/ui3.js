@@ -1075,8 +1075,8 @@ var defaultSettings =
 			key: "ui3_clip_navigation_direction"
 			, value: "Oldest First"
 			, inputType: "select"
-			, options: ["Newest First", // "next clip" is older, further down the clip list.
-				"Oldest First"] // "next clip" is newer, further up the clip list.
+			, options: ["Oldest First", // "next clip" is newer, further up the clip list.
+				"Newest First"] // "next clip" is older, further down the clip list.
 			, label: 'Clip Review Order/Direction'
 			, hint: 'Choose "Oldest First" if you prefer to review clips from oldest to newest.  Affects autoplay direction and Next/Previous button logic.  May affect other aspects of clip navigation in the future.'
 			, category: "Clips / Alerts"
