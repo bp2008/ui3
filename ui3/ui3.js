@@ -7625,6 +7625,11 @@ function ClipLoader(clipsBodySelector)
 		if (cli.isLive)
 			return;
 		var clipData = this.GetClipFromId(cli.uniqueId);
+		if (!sessionManager.IsAdministratorSession(cli.uniqueId))
+		{
+			openLoginDialog(function () { self.ToggleClipFlag(clipData); });
+			return;
+		}
 		self.ToggleClipFlag(clipData);
 	}
 	this.ExportCurrentClip = function ()
@@ -7922,13 +7927,13 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.Multi_Flag = function (clipIDs, flagEnable, idx, myToast)
 	{
-		if (!sessionManager.IsAdministratorSession())
+		if (!sessionManager.IsAdministratorSession(clipIDs.length > 0 ? clipIDs[0] : null))
 			return openLoginDialog(function () { self.Multi_Flag(clipIDs, flagEnable, idx, myToast); });
 		Start_Multi_Operation("flag", GetClipDatas(clipIDs), { flagEnable: flagEnable });
 	}
 	this.Multi_Protect = function (clipIDs, protectEnable, idx, myToast)
 	{
-		if (!sessionManager.IsAdministratorSession())
+		if (!sessionManager.IsAdministratorSession(clipIDs.length > 0 ? clipIDs[0] : null))
 			return openLoginDialog(function () { self.Multi_Protect(clipIDs, protectEnable, idx, myToast); });
 		Start_Multi_Operation("protect", GetClipDatas(clipIDs), { protectEnable: protectEnable });
 	}
@@ -7962,7 +7967,7 @@ function ClipLoader(clipsBodySelector)
 			toaster.Info("Clip deletion is not allowed by the current configuration.");
 			return;
 		}
-		if (!sessionManager.IsAdministratorSession())
+		if (!sessionManager.IsAdministratorSession(allSelectedClipIDs.length > 0 ? allSelectedClipIDs[0] : null))
 			return openLoginDialog(function () { self.Multi_Delete(allSelectedClipIDs); });
 
 		// Close current clip if it is among those being deleted.
@@ -9783,8 +9788,21 @@ function SessionManager()
 		else
 			return true;
 	}
-	this.IsAdministratorSession = function ()
+	this.IsAdministratorSession = function (objectId)
 	{
+		if (objectId)
+		{
+			var cam;
+			if (objectId.startsWith('@'))
+				objectId = objectId.substr(1);
+			var clipData = clipLoader.GetClipFromId(objectId);
+			if (clipData)
+				cam = cameraListLoader.GetCameraWithId(clipData.camera);
+			else
+				cam = cameraListLoader.GetCameraWithId(objectId);
+			if (cam && cam.admin)
+				return true;
+		}
 		return isAdministratorSession;
 	}
 	this.GetSchedulesArray = function ()
@@ -10148,6 +10166,21 @@ function CameraListLoader()
 	this.GetLastResponse = function ()
 	{
 		return lastResponse;
+	}
+	/**
+	 * Returns true if the current user has admin privilege for any camera
+	 */
+	this.hasCameraAdminPrivilege = function ()
+	{
+		if (lastResponse && lastResponse.data)
+		{
+			for (var i = 0; i < lastResponse.data.length; i++)
+			{
+				if (lastResponse.data[i].admin)
+					return true;
+			}
+		}
+		return false;
 	}
 }
 function DontShowWebcastingWarningAgain()
@@ -18564,7 +18597,7 @@ function CameraPauseDialog(camId)
 	}
 	var DoPause = function (camId, pauseValue)
 	{
-		if (!sessionManager.IsAdministratorSession())
+		if (!sessionManager.IsAdministratorSession(camId))
 			openLoginDialog(function () { DoPause(camId, pauseValue); });
 		else
 			cameraConfig.set(camId, "pause", pauseValue, function (response)
@@ -18784,16 +18817,17 @@ function DeleteAlert(path, isClip, cbSuccess, cbFailure)
 	{
 		if (typeof response.result != "undefined" && response.result == "fail")
 		{
+			var isAdmin = cameraListLoader.hasCameraAdminPrivilege() || sessionManager.IsAdministratorSession();
 			var msg = "Failed to delete " + clipOrAlert + ".<br/>";
 			if (response.data && response.data.reason)
 				msg += htmlEncode(response.data.reason);
 			else
-				msg += (sessionManager.IsAdministratorSession() ? ("The " + clipOrAlert + " may be still recording.") : ("You need administrator permission to delete " + clipOrAlert + "s."));
+				msg += (isAdmin ? ("The " + clipOrAlert + " may be still recording.") : ("You need administrator permission to delete " + clipOrAlert + "s."));
 			if (typeof cbFailure == "function")
 				cbFailure(msg);
 			else
 				toaster.Warning(msg, 10000);
-			if (!sessionManager.IsAdministratorSession())
+			if (!isAdmin)
 				openLoginDialog(function () { DeleteAlert(path, isClip, cbSuccess, cbFailure); });
 			return;
 		}
