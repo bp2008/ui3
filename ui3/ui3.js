@@ -1072,6 +1072,16 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
+			key: "ui3_clip_navigation_direction"
+			, value: "Oldest First"
+			, inputType: "select"
+			, options: ["Newest First", // "next clip" is older, further down the clip list.
+				"Oldest First"] // "next clip" is newer, further up the clip list.
+			, label: 'Clip Review Order/Direction'
+			, hint: 'Choose "Oldest First" if you prefer to review clips from oldest to newest.  Affects autoplay direction and Next/Previous button logic.  May affect other aspects of clip navigation in the future.'
+			, category: "Clips / Alerts"
+		}
+		, {
 			key: "ui3_clipicon_trigger_motion"
 			, value: "0"
 			, inputType: "checkbox"
@@ -1385,7 +1395,7 @@ var defaultSettings =
 			key: "ui3_hotkey_newerClip"
 			, value: "0|0|0|38" // 38: up arrow
 			, hotkey: true
-			, label: "Next Clip"
+			, label: "Navigate Up One Clip"
 			, hint: "Load the next clip, higher up in the list."
 			, actionDown: BI_Hotkey_NextClip
 			, category: "Hotkeys"
@@ -1394,7 +1404,7 @@ var defaultSettings =
 			key: "ui3_hotkey_olderClip"
 			, value: "0|0|0|40" // 40: down arrow
 			, hotkey: true
-			, label: "Previous Clip"
+			, label: "Navigate Down One Clip"
 			, hint: "Load the previous clip, lower down in the list."
 			, actionDown: BI_Hotkey_PreviousClip
 			, category: "Hotkeys"
@@ -6649,7 +6659,6 @@ function ClipLoader(clipsBodySelector)
 	var clipListCache = new Object();
 	var clipListIdCache = new Object();
 	var loadedClipIds = new Array();
-	var lastOpenedClipEle = null;
 	var isLoadingAClipList = false;
 	var QueuedClipListLoad = null;
 	var failedClipListLoads = 0;
@@ -7371,10 +7380,7 @@ function ClipLoader(clipsBodySelector)
 			if (selectedClipsMap[clipData.recId])
 			{
 				if (videoPlayer.Loading().image.uniqueId == clipData.recId)
-				{
-					lastOpenedClipEle = $clip.get(0);
 					$clip.addClass("opened");
-				}
 				$clip.addClass("selected");
 			}
 		}
@@ -7514,7 +7520,6 @@ function ClipLoader(clipsBodySelector)
 	{
 		self.SetStartupClip(null);
 		self.UnselectAllClips(true);
-		lastOpenedClipEle = clipEle;
 
 		$(clipEle).addClass("opened");
 		$(clipEle).addClass("selected");
@@ -7539,15 +7544,13 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.CloseCurrentClip = function ()
 	{
-		if (lastOpenedClipEle)
+		var currentClipEle = self.GetCurrentClipEle();
+		if (currentClipEle)
 		{
-			if (selectedClips.length == 1 && selectedClipsMap[lastOpenedClipEle.id.substr(1)])
+			if (selectedClips.length == 1 && selectedClipsMap[currentClipEle.id.substr(1)])
 				self.UnselectAllClips(true);
 			else
-			{
-				$(lastOpenedClipEle).removeClass("opened");
-				lastOpenedClipEle = null;
-			}
+				$(currentClipEle).removeClass("opened");
 		}
 		this.SetStartupClip(null);
 		videoPlayer.goLive();
@@ -7555,11 +7558,9 @@ function ClipLoader(clipsBodySelector)
 	this.UnselectAllClips = function (alsoRemoveOpenedStatus)
 	{
 		var unselectedOffscreen = new Array();
-		if (alsoRemoveOpenedStatus && lastOpenedClipEle)
-		{
-			$(lastOpenedClipEle).removeClass("opened");
-			lastOpenedClipEle = null;
-		}
+		var currentClipEle = self.GetCurrentClipEle();
+		if (alsoRemoveOpenedStatus && currentClipEle)
+			$(currentClipEle).removeClass("opened");
 		for (var i = 0; i < selectedClips.length; i++)
 		{
 			if (!clipVisibilityMap[selectedClips[i]])
@@ -7967,8 +7968,17 @@ function ClipLoader(clipsBodySelector)
 		// Close current clip if it is among those being deleted.
 		var loadingClipId = videoPlayer.Loading().image.uniqueId;
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
+		{
 			if (loadingClipId === allSelectedClipIDs[i])
-				self.CloseCurrentClip();
+			{
+				if (allSelectedClipIDs.length === 1)
+					videoPlayer.Playback_NextClip();
+				loadingClipId = videoPlayer.Loading().image.uniqueId;
+				if (loadingClipId === allSelectedClipIDs[i])
+					self.CloseCurrentClip();
+				break;
+			}
+		}
 
 		var allIdsCommaSeparated = '@' + allSelectedClipIDs.join(',@'); // Separated by ';' or ','
 		console.log("Deleting ", allIdsCommaSeparated);
@@ -7977,6 +7987,8 @@ function ClipLoader(clipsBodySelector)
 			function ()
 			{
 				self.UnselectAllClips();
+				if (!videoPlayer.Loading().image.isLive)
+					clipLoader.SelectClipIdNoOpen(videoPlayer.Loading().image.uniqueId);
 				for (var i = 0; i < allSelectedClipIDs.length; i++)
 					self.DisableClipTileById(allSelectedClipIDs[i]);
 			},
@@ -7992,7 +8004,7 @@ function ClipLoader(clipsBodySelector)
 			var clip_to_delete = videoPlayer.Loading().image.uniqueId;
 			var deleter = function ()
 			{
-				videoPlayer.Playback_PreviousClip();
+				videoPlayer.Playback_NextClip();
 				clipLoader.Multi_Delete([clip_to_delete]);
 			};
 			if (settings.ui3_askForDelete === "All")
@@ -8143,7 +8155,14 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.GetCurrentClipEle = function ()
 	{
-		return lastOpenedClipEle;
+		var img = videoPlayer.Loading().image;
+		if (!img.isLive)
+		{
+			var $clip = $("#c" + img.uniqueId);
+			if ($clip.length)
+				return $clip.get(0);
+		}
+		return null;
 	}
 	this.ClipLikelyHasGaps = function (clipData)
 	{
@@ -10746,12 +10765,16 @@ function VideoPlayerController()
 	}
 	this.Playback_NextClip = function ()
 	{
-		var clip = clipLoader.GetCurrentClipEle();
-		if (clip != null && clipLoader.GetAllSelected().length <= 1)
+		var clipEle = clipLoader.GetCurrentClipEle();
+		if (clipEle && clipLoader.GetAllSelected().length <= 1)
 		{
-			if (clipLoader.GetAllSelected().length == 0 || clipLoader.IsClipSelected(clip.id.substr(1)))
+			if (clipLoader.GetAllSelected().length === 0 || clipLoader.IsClipSelected(clipEle.id.substr(1)))
 			{
-				var $clip = clipLoader.GetClipAboveClip($(clip));
+				var $clip;
+				if (settings.ui3_clip_navigation_direction === "Oldest First")
+					$clip = clipLoader.GetClipAboveClip($(clipEle));
+				else
+					$clip = clipLoader.GetClipBelowClip($(clipEle));
 				if (Playback_ClipObj($clip))
 					return;
 			}
@@ -10760,12 +10783,16 @@ function VideoPlayerController()
 	}
 	this.Playback_PreviousClip = function ()
 	{
-		var clip = clipLoader.GetCurrentClipEle();
-		if (clip != null && clipLoader.GetAllSelected().length <= 1)
+		var clipEle = clipLoader.GetCurrentClipEle();
+		if (clipEle && clipLoader.GetAllSelected().length <= 1)
 		{
-			if (clipLoader.GetAllSelected().length == 0 || clipLoader.IsClipSelected(clip.id.substr(1)))
+			if (clipLoader.GetAllSelected().length === 0 || clipLoader.IsClipSelected(clipEle.id.substr(1)))
 			{
-				var $clip = clipLoader.GetClipBelowClip($(clip));
+				var $clip;
+				if (settings.ui3_clip_navigation_direction === "Oldest First")
+					$clip = clipLoader.GetClipBelowClip($(clipEle));
+				else
+					$clip = clipLoader.GetClipAboveClip($(clipEle));
 				if (Playback_ClipObj($clip))
 					return;
 			}
@@ -20149,12 +20176,22 @@ function BI_Hotkey_ToggleReverse()
 function BI_Hotkey_NextClip()
 {
 	if (!videoPlayer.Loading().image.isLive)
-		videoPlayer.Playback_NextClip();
+	{
+		if (settings.ui3_clip_navigation_direction === "Oldest First")
+			videoPlayer.Playback_NextClip();
+		else
+			videoPlayer.Playback_PreviousClip();
+	}
 }
 function BI_Hotkey_PreviousClip()
 {
 	if (!videoPlayer.Loading().image.isLive)
-		videoPlayer.Playback_PreviousClip();
+	{
+		if (settings.ui3_clip_navigation_direction === "Oldest First")
+			videoPlayer.Playback_PreviousClip();
+		else
+			videoPlayer.Playback_NextClip();
+	}
 }
 function BI_Hotkey_SkipAhead()
 {
