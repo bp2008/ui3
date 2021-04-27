@@ -16792,6 +16792,8 @@ function CameraConfig()
 			args.manrec = value;
 		else if (key == "reset")
 			args.reset = value;
+		else if (key == "reboot")
+			args.reboot = value;
 		else if (key == "enable")
 			args.enable = value;
 		else if (key == "pause")
@@ -17185,9 +17187,9 @@ function CameraProperties(camId)
 						$camprop.append(collapsible.$heading);
 						var $manrecSection = collapsible.$section;
 						var $btnSet1 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
-						$btnSet1.append(GetCameraPropertyButton("Trigger", "trigger", "largeBtnYellow", camId));
-						$btnSet1.append(GetCameraPropertyButton("Snapshot", "snapshot", "largeBtnBlue", camId));
-						$btnSet1.append($btnManrec = GetCameraPropertyButton("Toggle Recording", "manrec", "largeBtnRed", camId));
+						$btnSet1.append(GetCameraPropertyButton("Trigger", "trigger", "largeBtnYellow", camId, "Trigger the camera, typically causing a new Alert item to be created."));
+						$btnSet1.append(GetCameraPropertyButton("Snapshot", "snapshot", "largeBtnBlue", camId, "Save a snapshot within Blue Iris."));
+						$btnSet1.append($btnManrec = GetCameraPropertyButton("Toggle Recording", "manrec", "largeBtnRed", camId, "Toggle manual recording mode on or off."));
 						$manrecSection.append($btnSet1);
 						$camprop.append($manrecSection);
 
@@ -17195,9 +17197,14 @@ function CameraProperties(camId)
 						$camprop.append(collapsible.$heading);
 						var $mgmtSection = collapsible.$section;
 						var $btnSet2 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
-						$btnSet2.append($btnPause = GetCameraPropertyButton("Pause", "pause", "largeBtnYellow", camId));
-						$btnSet2.append(GetCameraPropertyButton("Restart", "reset", "largeBtnBlue", camId));
-						$btnSet2.append($btnDisable = GetCameraPropertyButton("Disable", "disable", "largeBtnRed", camId));
+						$btnSet2.append($btnPause = GetCameraPropertyButton("Pause", "pause", "largeBtnYellow", camId, "Open a menu of Pause options. Pausing a camera is equivalent to setting the Shield icon red, but for one camera only."));
+						$btnSet2.append($btnDisable = GetCameraPropertyButton("Disable", "disable", "largeBtnRed", camId, "Disable this camera instance in Blue Iris."));
+
+						$btnSet2.append("<br/>");
+
+						$btnSet2.append(GetCameraPropertyButton("Soft Restart", "reset", "largeBtnBlue", camId, "Restart this camera instance in Blue Iris."));
+						$btnSet2.append(GetCameraPropertyButton("Hard Reboot", "reboot", "largeBtnRed", camId, "Send a hard-reboot command to the physical camera. Not guaranteed to work with all cameras."));
+
 						$mgmtSection.append($btnSet2);
 						$camprop.append($mgmtSection);
 
@@ -17356,9 +17363,11 @@ function CameraProperties(camId)
 	{
 		return parseInt(value / 10);
 	}
-	var GetCameraPropertyButton = function (text, buttonId, colorClass, camId)
+	var GetCameraPropertyButton = function (text, buttonId, colorClass, camId, tooltip)
 	{
 		var $btn = $('<input type="button" class="largeTextButton ' + colorClass + '" value="' + text + '" />');
+		if (tooltip)
+			$btn.attr('title', tooltip);
 		$btn.click(function ()
 		{
 			camPropButtonClick(camId, buttonId);
@@ -17447,6 +17456,9 @@ function CameraProperties(camId)
 				break;
 			case "reset":
 				ResetCamera(camId);
+				break;
+			case "reboot":
+				RebootCamera(camId);
 				break;
 			case "disable":
 				cameraConfig.set(camId, "enable", $btnDisable.attr("enabled") != "1"
@@ -18705,17 +18717,31 @@ var objectVisualizer = new (function ObjectVisualizer()
 	}
 })();
 ///////////////////////////////////////////////////////////////
-// Reset Camera ///////////////////////////////////////////////
+// Soft-Reset Camera //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function ResetCamera(camId)
 {
 	var camName = cameraListLoader.GetCameraName(camId);
 	cameraConfig.set(camId, "reset", true, function (response)
 	{
-		toaster.Success("Camera " + camName + " is restarting");
+		toaster.Success("Camera " + camName + " is soft-restarting");
 	}, function ()
 	{
-		toaster.Error("Camera " + camName + " could not be restarted");
+		toaster.Error("Camera " + camName + " could not be soft-restarted");
+	});
+}
+///////////////////////////////////////////////////////////////
+// Hard-Reboot Camera /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function RebootCamera(camId)
+{
+	var camName = cameraListLoader.GetCameraName(camId);
+	cameraConfig.set(camId, "reboot", true, function (response)
+	{
+		toaster.Success("Camera " + camName + " hard-reboot command sent");
+	}, function ()
+	{
+		toaster.Error("Camera " + camName + " hard-reboot command could not be sent");
 	});
 }
 ///////////////////////////////////////////////////////////////
