@@ -5173,6 +5173,7 @@ div::-webkit-scrollbar-corner
 #volumeBar.audioNoPermission,
 .fullscreenButtonHidden,
 .maximizeButtonHidden,
+.pictureInPictureButtonHidden,
 .temporarilyUnavailable,
 .permanentlyUnavailable
 {

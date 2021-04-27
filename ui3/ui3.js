@@ -401,6 +401,8 @@ var videoPlayer = null;
 var imageRenderer = null;
 var cameraNameLabels = null;
 var sessionManager = null;
+var mediaSessionController = null;
+var pictureInPictureController = null;
 var statusLoader = null;
 var cameraListLoader = null;
 var clipLoader = null;
@@ -933,6 +935,15 @@ var defaultSettings =
 			, options: ["Trigger", "Motion"]
 			, label: '<svg class="icon clipicon prioritizeTriggeredButton on"><use xlink:href="#svg_x5F_Alert"></use></svg> Auto-Maximize upon...<div class="settingDesc" style="margin-left: 35px;"><i>(experimental feature)</i></div>'
 			, hint: '"Motion" uses Blue Iris\'s built-in motion detection.\n\n"Trigger" works with any method of trigger (such as ONVIF or audio), but may not respond as quickly.'
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_show_picture_in_picture_button"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Picture-in-Picture Button'
+			, hint: 'Requires a supported browser and H.264 player: HTML5.'
+			, onChange: OnChange_ui3_show_picture_in_picture_button
 			, category: "Video Player"
 		}
 		, {
@@ -2637,6 +2648,10 @@ $(function ()
 	statusLoader = new StatusLoader();
 
 	sessionManager = new SessionManager();
+
+	mediaSessionController = new MediaSessionController();
+
+	pictureInPictureController = new PictureInPictureController();
 
 	cameraListLoader = new CameraListLoader();
 
@@ -5338,6 +5353,7 @@ function PlaybackControls()
 			$("#pcPlay").hide();
 			$("#pcPause").show();
 		}
+		mediaSessionController.setMediaState();
 	}
 	var SetDownloadClipLink = function (clipData)
 	{
@@ -9845,6 +9861,10 @@ function SessionManager()
 	{
 		return biSoundOptions;
 	}
+	this.GetLastResponse = function ()
+	{
+		return lastResponse;
+	}
 }
 function getBISoundOptions()
 {
@@ -10265,6 +10285,9 @@ function VideoPlayerController()
 		}
 		else
 			toaster.Error("Video Player was asked to load unexpected module \"" + moduleName + "\".", 30000);
+
+		if (pictureInPictureController)
+			pictureInPictureController.updatePictureInPictureButtonState();
 
 		if (!playerModule)
 			toaster.Error("Video Player was asked to load module \"" + moduleName + "\" which does not exist.", 30000);
@@ -10700,6 +10723,8 @@ function VideoPlayerController()
 			playerModule.OpenVideo(cli, 0, false);
 
 		fullScreenModeController.updateFullScreenButtonState();
+
+		mediaSessionController.setMediaMetadata(CleanUpGroupName(clc.optionDisplay));
 	}
 	this.LoadClip = function (clipData)
 	{
@@ -10750,6 +10775,8 @@ function VideoPlayerController()
 			videoOverlayHelper.ShowLoadingOverlay(true);
 			if (playerModule)
 				playerModule.OpenVideo(cli, -1, false);
+
+			mediaSessionController.setMediaMetadata(clipLoader.GetClipDisplayName(clipData));
 		}
 		else
 			toaster.Error("Could not find camera " + htmlEncode(clipData.camera) + " associated with clip.");
@@ -10947,6 +10974,8 @@ function VideoPlayerController()
 		if (!currentlyLoadedImage.isLive)
 			seekBar.drawSeekbarAtPercent(playerModule.GetSeekPercent());
 		videoOverlayHelper.HideLoadingOverlay();
+
+		mediaSessionController.setMediaState();
 	}
 	this.Playback_Ended = function (isLeftBoundary)
 	{
@@ -11686,6 +11715,8 @@ function FetchH264VideoModule()
 	this.VisibilityChanged = function (visible)
 	{
 		if (settings.ui3_pause_when_hidden !== "1")
+			return;
+		if (pictureInPictureController.isPictureInPictureEnabled())
 			return;
 		if (visible && isCurrentlyActive)
 		{
@@ -19844,6 +19875,213 @@ function HLSPlayer()
 	};
 }
 ///////////////////////////////////////////////////////////////
+// MediaSession (OS-provided media controls) //////////////////
+///////////////////////////////////////////////////////////////
+function MediaSessionController()
+{
+	var self = this;
+	var lastSetState = null;
+
+	var supportsMediaSession = navigator.mediaSession;
+	this.supportsMediaSession = function ()
+	{
+		return supportsMediaSession;
+	}
+
+	this.setMediaMetadata = function (title)
+	{
+		if (supportsMediaSession)
+		{
+			navigator.mediaSession.metadata = new MediaMetadata({
+				title: title,
+				album: document.title
+			});
+		}
+	}
+
+	this.setMediaState = function ()
+	{
+		if (supportsMediaSession)
+		{
+			var isPlaying = true;
+			var duration = 86400;
+			var position = 86400;
+			var playbackRate = 1.0;
+			if (!videoPlayer.Loading().image.isLive)
+			{
+				var isPlaying = !videoPlayer.Playback_IsPaused();
+				duration = Clamp(videoPlayer.Loading().image.msec - 1, 0, Infinity);
+				position = Clamp(videoPlayer.GetClipPlaybackPositionMs(), 0, duration);
+				playbackRate = playbackControls.GetPlaybackSpeed();
+				if (playbackRate === 0)
+				{
+					playbackRate = 0.0001;
+					isPlaying = false;
+				}
+			}
+
+			var stateDict = { duration: duration, playbackRate: playbackRate, position: position };
+			if (lastSetState == null
+				|| lastSetState.duration !== stateDict.duration
+				|| lastSetState.playbackRate !== stateDict.playbackRate
+				|| lastSetState.position !== stateDict.position) 
+			{
+				navigator.mediaSession.setPositionState(stateDict);
+				lastSetState = stateDict;
+			}
+
+			var playbackState = isPlaying ? "playing" : "paused"
+			if (navigator.mediaSession.playbackState !== playbackState)
+			{
+				navigator.mediaSession.playbackState = playbackState;
+			}
+		}
+	}
+
+	if (supportsMediaSession)
+	{
+		navigator.mediaSession.setActionHandler('play', function ()
+		{
+			if (videoPlayer.Loading().image.isLive)
+				videoPlayer.LoadHomeGroup();
+			else
+				videoPlayer.Playback_Play();
+		});
+
+		navigator.mediaSession.setActionHandler('pause', function ()
+		{
+			if (videoPlayer.Loading().image.isLive)
+				videoPlayer.LoadHomeGroup();
+			else
+				videoPlayer.Playback_Pause();
+		});
+
+		navigator.mediaSession.setActionHandler('stop', function ()
+		{
+			if (videoPlayer.Loading().image.isLive)
+				videoPlayer.goLive();
+			else
+				clipLoader.CloseCurrentClip();
+		});
+
+		navigator.mediaSession.setActionHandler('seekbackward', function (details)
+		{
+			if (!videoPlayer.Loading().image.isLive)
+			{
+				if (details.seekOffset && details.seekOffset > 0)
+					videoPlayer.SeekByMs(-1000 * details.seekOffset);
+				else
+					videoPlayer.SeekByMs(-1000 * GetSkipAmount());
+			}
+		});
+
+		navigator.mediaSession.setActionHandler('seekforward', function (details)
+		{
+			if (!videoPlayer.Loading().image.isLive)
+			{
+				if (details.seekOffset && details.seekOffset > 0)
+					videoPlayer.SeekByMs(1000 * details.seekOffset);
+				else
+					videoPlayer.SeekByMs(1000 * GetSkipAmount());
+			}
+		});
+
+		navigator.mediaSession.setActionHandler('seekto', function (details)
+		{
+			if (!videoPlayer.Loading().image.isLive)
+			{
+				if (details.seekTime || details.seekTime === 0)
+				{
+					var msLength = currentlyLoadingImage.msec - 1;
+					if (msLength <= 0)
+						return;
+					var newPos = (details.seekTime * 1000) / msLength;
+					newPos = Clamp(newPos, 0, 1);
+					var play = !details.fastSeek;
+					videoPlayer.SeekToPercent(newPos, play);
+				}
+			}
+		});
+
+		navigator.mediaSession.setActionHandler('previoustrack', function ()
+		{
+			if (videoPlayer.Loading().image.isLive)
+				BI_Hotkey_PreviousCamera();
+			else
+				videoPlayer.Playback_PreviousClip();
+		});
+
+		navigator.mediaSession.setActionHandler('nexttrack', function ()
+		{
+			if (videoPlayer.Loading().image.isLive)
+				BI_Hotkey_NextCamera();
+			else
+				videoPlayer.Playback_NextClip();
+		});
+	}
+}
+///////////////////////////////////////////////////////////////
+// Picture-in-Picture /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function OnChange_ui3_show_picture_in_picture_button()
+{
+	pictureInPictureController.updatePictureInPictureButtonState();
+}
+function PictureInPictureController()
+{
+	var self = this;
+	var pipIsSupported = document.pictureInPictureEnabled && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5;
+
+	function Initialize()
+	{
+		$("#clipPictureInPictureButton").on("click", function ()
+		{
+			self.togglePictureInPicture();
+		});
+		self.updatePictureInPictureButtonState();
+	}
+	function CurrentPlayerSupportsPip()
+	{
+		return videoPlayer.CurrentPlayerModuleName() !== "none" && videoPlayer.GetPlayerObject() && videoPlayer.GetPlayerObject().isMsePlayer;
+	}
+	this.updatePictureInPictureButtonState = function ()
+	{
+		var playerSupportsPip = CurrentPlayerSupportsPip();
+		if (settings.ui3_show_picture_in_picture_button === "1" && pipIsSupported && playerSupportsPip)
+			$("#clipPictureInPictureButton").removeClass("pictureInPictureButtonHidden");
+		else
+			$("#clipPictureInPictureButton").addClass("pictureInPictureButtonHidden");
+		if (!playerSupportsPip)
+			this.disablePictureInPicture();
+	}
+	this.isPictureInPictureSupported = function ()
+	{
+		return pipIsSupported;
+	}
+	this.isPictureInPictureEnabled = function ()
+	{
+		return pipIsSupported && !!document.pictureInPictureElement;
+	}
+	this.enablePictureInPicture = function ()
+	{
+		if (pipIsSupported && CurrentPlayerSupportsPip())
+			videoPlayer.GetPlayerElement().requestPictureInPicture();
+	}
+	this.disablePictureInPicture = function ()
+	{
+		if (pipIsSupported && document.pictureInPictureElement)
+			document.exitPictureInPicture();
+	}
+	this.togglePictureInPicture = function ()
+	{
+		if (self.isPictureInPictureEnabled())
+			self.disablePictureInPicture();
+		else
+			self.enablePictureInPicture();
+	}
+	Initialize();
+}
+///////////////////////////////////////////////////////////////
 // Maximized Mode /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function MaximizedModeController()
@@ -25377,6 +25615,9 @@ function documentIsHidden()
 
 	var prop = getHiddenProp();
 	if (!prop) return false;
+
+	if (pictureInPictureController.isPictureInPictureEnabled())
+		return false;
 
 	return document[prop];
 }
