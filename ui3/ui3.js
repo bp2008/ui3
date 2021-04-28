@@ -19908,20 +19908,37 @@ function MediaSessionController()
 	var self = this;
 	var lastSetState = null;
 
-	var supportsMediaSession = navigator.mediaSession;
+	var supportsMediaSession = false;
 	this.supportsMediaSession = function ()
 	{
 		return supportsMediaSession;
+	}
+
+	try
+	{
+		supportsMediaSession = navigator.mediaSession;
+	}
+	catch (ex)
+	{
+		console.error(ex);
 	}
 
 	this.setMediaMetadata = function (title)
 	{
 		if (supportsMediaSession)
 		{
-			navigator.mediaSession.metadata = new MediaMetadata({
-				title: title,
-				album: document.title
-			});
+			try
+			{
+				navigator.mediaSession.metadata = new MediaMetadata({
+					title: title,
+					album: document.title
+				});
+			}
+			catch (ex)
+			{
+				console.error(ex);
+				supportsMediaSession = false;
+			}
 		}
 	}
 
@@ -19952,98 +19969,133 @@ function MediaSessionController()
 				|| lastSetState.playbackRate !== stateDict.playbackRate
 				|| lastSetState.position !== stateDict.position) 
 			{
-				navigator.mediaSession.setPositionState(stateDict);
+				try
+				{
+					navigator.mediaSession.setPositionState(stateDict);
+				}
+				catch (ex)
+				{
+					console.error(ex);
+					supportsMediaSession = false;
+					return;
+				}
 				lastSetState = stateDict;
 			}
 
 			var playbackState = isPlaying ? "playing" : "paused"
-			if (navigator.mediaSession.playbackState !== playbackState)
+			try
 			{
-				navigator.mediaSession.playbackState = playbackState;
+				if (navigator.mediaSession.playbackState !== playbackState)
+				{
+					navigator.mediaSession.playbackState = playbackState;
+				}
+			}
+			catch (ex)
+			{
+				console.error(ex);
+				supportsMediaSession = false;
+				return;
 			}
 		}
 	}
 
 	if (supportsMediaSession)
 	{
-		navigator.mediaSession.setActionHandler('play', function ()
+		try
 		{
-			if (videoPlayer.Loading().image.isLive)
-				videoPlayer.LoadHomeGroup();
-			else
-				videoPlayer.Playback_Play();
-		});
-
-		navigator.mediaSession.setActionHandler('pause', function ()
-		{
-			if (videoPlayer.Loading().image.isLive)
-				videoPlayer.LoadHomeGroup();
-			else
-				videoPlayer.Playback_Pause();
-		});
-
-		navigator.mediaSession.setActionHandler('stop', function ()
-		{
-			if (videoPlayer.Loading().image.isLive)
-				videoPlayer.goLive();
-			else
-				clipLoader.CloseCurrentClip();
-		});
-
-		navigator.mediaSession.setActionHandler('seekbackward', function (details)
-		{
-			if (!videoPlayer.Loading().image.isLive)
+			navigator.mediaSession.setActionHandler('play', function ()
 			{
-				if (details.seekOffset && details.seekOffset > 0)
-					videoPlayer.SeekByMs(-1000 * details.seekOffset);
+				if (videoPlayer.Loading().image.isLive)
+					videoPlayer.LoadHomeGroup();
 				else
-					videoPlayer.SeekByMs(-1000 * GetSkipAmount());
-			}
-		});
-
-		navigator.mediaSession.setActionHandler('seekforward', function (details)
-		{
-			if (!videoPlayer.Loading().image.isLive)
+					videoPlayer.Playback_Play();
+			});
+			navigator.mediaSession.setActionHandler('pause', function ()
 			{
-				if (details.seekOffset && details.seekOffset > 0)
-					videoPlayer.SeekByMs(1000 * details.seekOffset);
+				if (videoPlayer.Loading().image.isLive)
+					videoPlayer.LoadHomeGroup();
 				else
-					videoPlayer.SeekByMs(1000 * GetSkipAmount());
-			}
-		});
-
-		navigator.mediaSession.setActionHandler('seekto', function (details)
-		{
-			if (!videoPlayer.Loading().image.isLive)
+					videoPlayer.Playback_Pause();
+			});
+			navigator.mediaSession.setActionHandler('stop', function ()
 			{
-				if (details.seekTime || details.seekTime === 0)
+				if (videoPlayer.Loading().image.isLive)
+					videoPlayer.goLive();
+				else
+					clipLoader.CloseCurrentClip();
+			});
+		}
+		catch (ex)
+		{
+			console.error(ex);
+		}
+
+		try
+		{
+			navigator.mediaSession.setActionHandler('seekbackward', function (details)
+			{
+				if (!videoPlayer.Loading().image.isLive)
 				{
-					var msLength = currentlyLoadingImage.msec - 1;
-					if (msLength <= 0)
-						return;
-					var newPos = (details.seekTime * 1000) / msLength;
-					newPos = Clamp(newPos, 0, 1);
-					var play = !details.fastSeek;
-					videoPlayer.SeekToPercent(newPos, play);
+					if (details.seekOffset && details.seekOffset > 0)
+						videoPlayer.SeekByMs(-1000 * details.seekOffset);
+					else
+						videoPlayer.SeekByMs(-1000 * GetSkipAmount());
 				}
-			}
-		});
-
-		navigator.mediaSession.setActionHandler('previoustrack', function ()
+			});
+			navigator.mediaSession.setActionHandler('seekforward', function (details)
+			{
+				if (!videoPlayer.Loading().image.isLive)
+				{
+					if (details.seekOffset && details.seekOffset > 0)
+						videoPlayer.SeekByMs(1000 * details.seekOffset);
+					else
+						videoPlayer.SeekByMs(1000 * GetSkipAmount());
+				}
+			});
+			navigator.mediaSession.setActionHandler('seekto', function (details)
+			{
+				if (!videoPlayer.Loading().image.isLive)
+				{
+					if (details.seekTime || details.seekTime === 0)
+					{
+						var msLength = currentlyLoadingImage.msec - 1;
+						if (msLength <= 0)
+							return;
+						var newPos = (details.seekTime * 1000) / msLength;
+						newPos = Clamp(newPos, 0, 1);
+						var play = !details.fastSeek;
+						videoPlayer.SeekToPercent(newPos, play);
+					}
+				}
+			});
+		}
+		catch (ex)
 		{
-			if (videoPlayer.Loading().image.isLive)
-				BI_Hotkey_PreviousCamera();
-			else
-				videoPlayer.Playback_PreviousClip();
-		});
+			console.error(ex);
+		}
 
-		navigator.mediaSession.setActionHandler('nexttrack', function ()
+		try
 		{
-			if (videoPlayer.Loading().image.isLive)
-				BI_Hotkey_NextCamera();
-			else
-				videoPlayer.Playback_NextClip();
-		});
+			navigator.mediaSession.setActionHandler('previoustrack', function ()
+			{
+				if (videoPlayer.Loading().image.isLive)
+					BI_Hotkey_PreviousCamera();
+				else
+					videoPlayer.Playback_PreviousClip();
+			});
+
+			navigator.mediaSession.setActionHandler('nexttrack', function ()
+			{
+				if (videoPlayer.Loading().image.isLive)
+					BI_Hotkey_NextCamera();
+				else
+					videoPlayer.Playback_NextClip();
+			});
+		}
+		catch (ex)
+		{
+			console.error(ex);
+		}
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -20056,7 +20108,15 @@ function OnChange_ui3_show_picture_in_picture_button()
 function PictureInPictureController()
 {
 	var self = this;
-	var pipIsSupported = document.pictureInPictureEnabled && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5;
+	var pipIsSupported = false;
+	try
+	{
+		pipIsSupported = document.pictureInPictureEnabled && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5;
+	}
+	catch (ex)
+	{
+		console.error(ex);
+	}
 
 	function Initialize()
 	{
@@ -20086,17 +20146,39 @@ function PictureInPictureController()
 	}
 	this.isPictureInPictureEnabled = function ()
 	{
-		return pipIsSupported && !!document.pictureInPictureElement;
+		try
+		{
+			return pipIsSupported && !!document.pictureInPictureElement;
+		}
+		catch (ex)
+		{
+			console.log(ex);
+			return false;
+		}
 	}
 	this.enablePictureInPicture = function ()
 	{
-		if (pipIsSupported && CurrentPlayerSupportsPip())
-			videoPlayer.GetPlayerElement().requestPictureInPicture();
+		try
+		{
+			if (pipIsSupported && CurrentPlayerSupportsPip())
+				videoPlayer.GetPlayerElement().requestPictureInPicture();
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
 	}
 	this.disablePictureInPicture = function ()
 	{
-		if (pipIsSupported && document.pictureInPictureElement)
-			document.exitPictureInPicture();
+		try
+		{
+			if (pipIsSupported && document.pictureInPictureElement)
+				document.exitPictureInPicture();
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
 	}
 	this.togglePictureInPicture = function ()
 	{
