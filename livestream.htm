@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
+	<meta charset='utf-8' />
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 	<title>Live Video - Blue Iris</title>
 	<script type="text/javascript">
@@ -167,6 +168,16 @@
 		<div id="player"></div>
 	</div>
 	<script type="text/javascript">
+		console.log("=========================================================================");
+		console.log("Welcome to livestream.htm");
+		console.log("Supported URL parameters:");
+		console.log("* cam=short     -- Select camera or group with [short] name");
+		console.log("* autoplay=0    -- Disables autoplay.");
+		console.log("* audio=1       -- Unmute at startup. Also disables autoplay.");
+		console.log("* mode=2        -- Hide video player controls");
+		console.log("* mode=3        -- Use browser's standard video player controls");
+		console.log("=========================================================================");
+
 		function SetPlayerState()
 		{
 			var visibleNow = !documentIsHidden();
@@ -196,8 +207,14 @@
 		{
 			var camId = (UrlParameters.Get("cam") === "" ? "index" : UrlParameters.Get("cam"));
 			var src = "/h264/" + camId + "/temp.m3u8?session=" + local_bi_session;
-			var mode = UrlParameters.Get("mode");
-			var args = { source: src, parentId: "#player", autoPlay: false, chromeless: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 };
+			var mode = parseInt(UrlParameters.Get("mode"));
+			var autoplay = UrlParameters.Get("audio");
+			autoplay = autoplay === "0" || autoplay.toUpperCase() === "FALSE";
+			var audio = UrlParameters.Get("audio");
+			audio = audio === "1" || audio.toUpperCase() === "TRUE";
+			if (audio)
+				autoplay = false;
+			var args = { source: src, parentId: "#player", autoPlay: false, mute: !audio, chromeless: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 };
 			if (mode === 2 || mode === 3)
 			{
 				args.chromeless = true;
@@ -213,7 +230,8 @@
 					onResize();
 				}, 0);
 			});
-			SetPlayerState();
+			if (autoplay)
+				SetPlayerState();
 			onResize();
 			if (mode === 3)
 			{
