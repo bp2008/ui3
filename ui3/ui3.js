@@ -9543,7 +9543,7 @@ function SessionManager()
 				});
 			}
 			else
-				onFail(response, 'Failed to log in. ' + GetFailReason(response));
+				onFail(response, 'Blue Iris sent session data instead of an authentication challenge (probably indicates a Blue Iris bug): ' + JSON.stringify(args) + " -> " + JSON.stringify(response));
 		}, function (jqXHR, textStatus, errorThrown)
 		{
 			onFail(null, 'Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.ErrorMessageHtml);
