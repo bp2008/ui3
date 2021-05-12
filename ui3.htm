@@ -72,7 +72,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "149";
+		var ui_version = "150";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -84,8 +84,9 @@
 		var combined_version = ui_version + "-" + bi_version;
 		//if (!!navigator.userAgent.match(/ Android /))
 		//	combined_version += "-" + Date.now();
-		var local_bi_session_arg = navigator.cookieEnabled ? "" : (local_bi_session ? "&session=" + local_bi_session : "");
-		document.getElementById("ui3manifest").href = 'ui3/manifest.json?v=' + combined_version + local_bi_session_arg;
+		var local_bi_session_arg_always = local_bi_session ? "&session=" + local_bi_session : "";
+		var local_bi_session_arg = navigator.cookieEnabled ? "" : local_bi_session_arg_always;
+		document.getElementById("ui3manifest").href = 'ui3/manifest.json?v=' + combined_version + local_bi_session_arg_always;
 		document.getElementById("ui3launcher1").href = 'ui3/logos/launcher-icon48.png?v=' + combined_version + local_bi_session_arg;
 		document.getElementById("ui3launcher2").href = 'ui3/launcher-icon.png?v=' + combined_version + local_bi_session_arg;
 		document.write('<link href="ui3/libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
