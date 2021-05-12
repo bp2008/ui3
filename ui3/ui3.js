@@ -17138,10 +17138,12 @@ function CameraProperties(camId)
 						$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
 						var $selectRecord = GetSelectRow("Record:", "record",
 							GetHtmlOptionElementMarkup("-1", "Only manually", response.data.record.toString())
-							+ GetHtmlOptionElementMarkup("0", "Every X.X minutes", response.data.record.toString())
-							+ GetHtmlOptionElementMarkup("1", "Continuously", response.data.record.toString())
-							+ GetHtmlOptionElementMarkup("2", "When triggered", response.data.record.toString())
-							+ GetHtmlOptionElementMarkup("3", "Triggered + periodically", response.data.record.toString()));
+							+ GetHtmlOptionElementMarkup("0", "When triggered", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("1", "When alerted", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("2", "Continuous", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("3", "Periodic, each", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("4", "Triggered + periodic", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("5", "Continuous + Alerts", response.data.record.toString()));
 						$generalSection.append($selectRecord);
 						var $selectAlerts = GetSelectRow("Alerts:", "alerts",
 							GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
