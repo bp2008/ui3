@@ -17143,7 +17143,8 @@ function CameraProperties(camId)
 							+ GetHtmlOptionElementMarkup("2", "Continuous", response.data.record.toString())
 							+ GetHtmlOptionElementMarkup("3", "Periodic, each", response.data.record.toString())
 							+ GetHtmlOptionElementMarkup("4", "Triggered + periodic", response.data.record.toString())
-							+ GetHtmlOptionElementMarkup("5", "Continuous + Alerts", response.data.record.toString()));
+							+ GetHtmlOptionElementMarkup("5", "Continuous + Alerts", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("6", "Continuous + Triggered", response.data.record.toString()));
 						$generalSection.append($selectRecord);
 						var $selectAlerts = GetSelectRow("Alerts:", "alerts",
 							GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
