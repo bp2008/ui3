@@ -589,6 +589,10 @@ var defaultSettings =
 			, value: 0
 		}
 		, {
+			key: "ui3_clip_export_substream"
+			, value: "0"
+		}
+		, {
 			key: "ui3_clip_export_withAudio"
 			, value: "1"
 		}
@@ -7815,6 +7819,7 @@ function ClipLoader(clipsBodySelector)
 		args.msec = parseInt(args.msec);
 		args.format = exportOptions.format;
 		args.profile = exportOptions.profile;
+		args.substream = exportOptions.substream;
 		args.audio = exportOptions.audio;
 		args.reencode = exportOptions.reencode;
 		args.overlay = exportOptions.overlay;
@@ -17731,6 +17736,7 @@ function ClipExportPanel()
 		exportOptions = {
 			format: parseInt(settings.ui3_clip_export_format),
 			profile: parseInt(settings.ui3_clip_export_profile),
+			substream: settings.ui3_clip_export_substream === "1",
 			audio: settings.ui3_clip_export_withAudio === "1",
 			reencode: settings.ui3_clip_export_reencode === "1",
 			overlay: settings.ui3_clip_export_overlay === "1",
@@ -17826,6 +17832,7 @@ function ClipExportPanel()
 		AddEditorField("Output format", "format", { type: "select", options: formatOptions, onChange: ReRender });
 		if (exportOptions.format != classic_ui3_idx)
 			AddEditorField("Encoder profile", "profile", { type: "select", options: ["export 0", "export 1", "export 2", "export 3"] });
+		AddEditorField("Use sub stream if available", "substream", { type: "boolean", onChange: ReRender });
 		AddEditorField("Include audio track", "audio", { type: "boolean", onChange: ReRender });
 		if (exportOptions.format != classic_ui3_idx)
 		{
@@ -17851,6 +17858,7 @@ function ClipExportPanel()
 		if (!limitedFormatOptions)
 			settings.ui3_clip_export_format = exportOptions.format;
 		settings.ui3_clip_export_profile = exportOptions.profile;
+		settings.ui3_clip_export_substream = exportOptions.substream ? "1" : "0";
 		settings.ui3_clip_export_withAudio = exportOptions.audio ? "1" : "0";
 		settings.ui3_clip_export_reencode = exportOptions.reencode ? "1" : "0";
 		settings.ui3_clip_export_overlay = exportOptions.overlay ? "1" : "0";
