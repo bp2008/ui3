@@ -1046,14 +1046,6 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
-			key: "ui3_openARecording"
-			, value: "No"
-			, inputType: "select"
-			, options: ["No", "First", "Last"]
-			, label: 'Automatically Open a Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
-			, category: "Clips / Alerts"
-		}
-		, {
 			key: "ui3_askForDelete"
 			, value: "All"
 			, inputType: "select"
@@ -1084,6 +1076,14 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Seek with Sub Stream<div class="settingDesc">for better performance</div>'
 			, hint: 'Only affects recordings that include main and sub streams'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_openARecording"
+			, value: "No"
+			, inputType: "select"
+			, options: ["No", "First", "Last"]
+			, label: 'Automatically Open a Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
 			, category: "Clips / Alerts"
 		}
 		, {
