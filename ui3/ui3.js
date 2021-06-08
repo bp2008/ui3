@@ -9924,7 +9924,11 @@ function CameraListLoader()
 			var numGroups = 0;
 			var numCameras = 0;
 			var camIdsInGroups = {};
-			// See what we've got.
+			var allCameras = {};
+			var camIdsToDelete = {};
+			// See what we've got
+			for (var i = 0; i < lastResponse.data.length; i++)
+				allCameras[lastResponse.data[i].optionValue] = lastResponse.data[i];
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
 				var obj = lastResponse.data[i];
@@ -9939,9 +9943,10 @@ function CameraListLoader()
 					else
 					{
 						// Blue Iris recently started including single-camera group metadata, causing a number of undesired effects.
-						// Easiest fix is to just remove single-camera groups so we can recreate them the way we want.
-						lastResponse.data.splice(i, 1);
-						i--;
+						// Easiest fix is to replace single-camera groups with a fake group based on the camera.
+						// Side effect: The group name will effectively not exist in the UI.
+						lastResponse.data[i] = MakeFakeGroup(allCameras[obj.group[0]]);
+						camIdsToDelete[obj.group[0]] = true;
 					}
 				}
 				else
@@ -9979,6 +9984,15 @@ function CameraListLoader()
 				//		+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
 				//		, 60000, true);
 				//}
+			}
+			// Delete items we've previously marked for deletion.
+			for (var i = 0; i < lastResponse.data.length; i++)
+			{
+				if (!lastResponse.data[i].isFakeGroup && camIdsToDelete[lastResponse.data[i].optionValue])
+				{
+					lastResponse.data.splice(i, 1);
+					i--;
+				}
 			}
 
 			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
@@ -10608,7 +10622,15 @@ function VideoPlayerController()
 			return;
 		// mouseCoordFixer.fix(event); // Don't call this more than once per event!
 		var camData = self.GetCameraUnderMousePointer(event);
-		if (camData != null && !camData.isFakeGroup && !cameraListLoader.CameraIsCycle(camData))
+		if (!camData || cameraListLoader.CameraIsCycle(camData))
+		{
+			// Do nothing
+		}
+		else if (camData.isFakeGroup && settings.ui3_defaultCameraGroupId === camData.optionValue)
+		{
+			// Do nothing
+		}
+		else
 		{
 			thing(camData);
 		}
