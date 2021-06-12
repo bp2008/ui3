@@ -9883,6 +9883,7 @@ function CameraListLoader()
 	var self = this;
 	var lastResponse = null;
 	var cameraIdToCameraMap = new Object();
+	this.singleCameraGroupMap = {};
 	this.cameraIdToCameraMap = cameraIdToCameraMap;
 	var firstCameraListLoaded = false;
 	var cameraListUpdateTimeout = null;
@@ -9925,7 +9926,7 @@ function CameraListLoader()
 			var numCameras = 0;
 			var camIdsInGroups = {};
 			var allCameras = {};
-			var camIdsToDelete = {};
+			self.singleCameraGroupMap = {};
 			// See what we've got
 			for (var i = 0; i < lastResponse.data.length; i++)
 				allCameras[lastResponse.data[i].optionValue] = lastResponse.data[i];
@@ -9940,13 +9941,13 @@ function CameraListLoader()
 						for (var n = 0; n < obj.group.length; n++)
 							camIdsInGroups[obj.group[n]] = true;
 					}
-					else
+					else if (!obj.isFakeGroup)
 					{
 						// Blue Iris recently started including single-camera group metadata, causing a number of undesired effects.
-						// Easiest fix is to replace single-camera groups with a fake group based on the camera.
-						// Side effect: The group name will effectively not exist in the UI.
-						lastResponse.data[i] = MakeFakeGroup(allCameras[obj.group[0]]);
-						camIdsToDelete[obj.group[0]] = true;
+						// My current best fix is to maintain this map of group name to camera short name for every group that has just a single camera.
+						// When the LoadLiveCamera method is instructed to load a group in this map, the single camera is loaded instead.
+						// So the dropdown box behaves a little inconsistently, but the group still exists in UI3.
+						self.singleCameraGroupMap[obj.optionValue] = obj.group[0];
 					}
 				}
 				else
@@ -9984,15 +9985,6 @@ function CameraListLoader()
 				//		+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
 				//		, 60000, true);
 				//}
-			}
-			// Delete items we've previously marked for deletion.
-			for (var i = 0; i < lastResponse.data.length; i++)
-			{
-				if (!lastResponse.data[i].isFakeGroup && camIdsToDelete[lastResponse.data[i].optionValue])
-				{
-					lastResponse.data.splice(i, 1);
-					i--;
-				}
 			}
 
 			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
@@ -10630,6 +10622,10 @@ function VideoPlayerController()
 		{
 			// Do nothing
 		}
+		else if (cameraListLoader.singleCameraGroupMap[settings.ui3_defaultCameraGroupId] && cameraListLoader.singleCameraGroupMap[settings.ui3_defaultCameraGroupId] === camData.optionValue)
+		{
+			// Do nothing
+		}
 		else
 		{
 			thing(camData);
@@ -10722,6 +10718,9 @@ function VideoPlayerController()
 	}
 	this.LoadLiveCamera = function (camData)
 	{
+		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
+			camData = cameraListLoader.GetCameraWithId(cameraListLoader.singleCameraGroupMap[camData.optionValue]);
+
 		imageRenderer.zoomHandler.ZoomToFit();
 		var cli = currentlyLoadingImage;
 		var clc = currentlyLoadingCamera = camData;
