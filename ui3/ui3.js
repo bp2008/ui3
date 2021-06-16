@@ -13279,6 +13279,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			else
 				console.log("HTML5 video suspended");
 		});
+		HTML5BetterFrameTiming(player, onTimeUpdate);
 
 		isLoaded = true;
 		loadingHelper.SetLoadedStatus("h264");
@@ -13695,6 +13696,28 @@ function BadAutoplayPreventionDetector()
 		else
 			return player.play();
 	};
+}
+function HTML5BetterFrameTiming(video, callback)
+{
+	var lastTime = null;
+	function timeCheck()
+	{
+		var time = video.currentTime;
+		if (lastTime !== time)
+		{
+			lastTime = time;
+			try
+			{
+				callback(time);
+			}
+			catch (ex)
+			{
+				toaster.Error(ex);
+			}
+		}
+		requestAnimationFrame(timeCheck);
+	}
+	timeCheck();
 }
 ///////////////////////////////////////////////////////////////
 // Network Delay Calculator - An Imperfect Science ////////////
