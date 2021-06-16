@@ -6831,9 +6831,16 @@ function ClipLoader(clipsBodySelector)
 
 		ExecJSON(args, function (response)
 		{
-			if (response.result != "success")
+			if (response.result !== "success")
 			{
-				$clipsbody.html('<div class="clipListText">Failed to load.</div>');
+				var failMessage = $('<div class="clipListText clipListFailed">Failed to load. Click to learn more.</div>');
+				var reason = args.cmd + ' response did not indicate "success" result: ' + JSON.stringify(response);
+				failMessage.on('click', function ()
+				{
+					ShowErrorDialog(reason);
+				});
+				$clipsbody.empty();
+				$clipsbody.append(failMessage);
 				return;
 			}
 			failedClipListLoads = 0;
@@ -25900,4 +25907,32 @@ function GetFilenameFromPath(path)
 function escapeRegExp(string)
 {
 	return string.replace(/[.*+\-?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+}
+function ShowErrorDialog(messageText)
+{
+	var dialogContent = $('<div style="white-space: pre-wrap; padding: 10px;"></div>');
+
+	var copyButtonContainer = $('<div style="margin-bottom: 10px;"></div>');
+	var copyButton = $('<input type="button" value="Copy to clipboard" />');
+	copyButton.on('click', function ()
+	{
+		clipboardHelper.CopyText(messageText);
+		var copiedLabel = $('<span style="font-weight: bold; margin-left: 7px;">copied!</span>');
+		copyButton.after(copiedLabel);
+		setTimeout(function ()
+		{
+			copiedLabel.fadeOut(1000, function ()
+			{
+				copiedLabel.remove();
+			});
+		}, 300);
+	});
+	copyButtonContainer.append(copyButton);
+
+	var messageBox = $('<div></div>').text(messageText);
+
+	dialogContent.append(copyButtonContainer);
+	dialogContent.append(messageBox);
+
+	dialogContent.modalDialog({ title: "Error" });
 }

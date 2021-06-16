@@ -2163,6 +2163,27 @@ div.invisibleLabel
 	box-sizing: border-box;
 }
 
+.clipListFailed
+{
+	cursor: pointer;
+	border: 1px solid var(--text-color);
+	color: var(--text-color);
+	background-color: var(--uicontrol-bg-color);
+	margin-top: 10px;
+}
+
+	.clipListFailed:hover
+	{
+		color: var(--text-hover-color);
+		background-color: var(--uicontrol-hover-bg-color);
+	}
+
+	.clipListFailed:active
+	{
+		color: var(--text-active-color);
+		background-color: var(--uicontrol-active-bg-color);
+	}
+
 #clipsbody
 {
 	width: 100%;
