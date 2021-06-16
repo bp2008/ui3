@@ -9709,11 +9709,11 @@ function SessionManager()
 
 		if (permission_clips)
 		{
-			$("#topbar_tab_clips").show();
+			$("#topbar_tab_clips,#open_all_clips_btn,#open_alerts_btn").show();
 		}
 		else
 		{
-			$("#topbar_tab_clips").hide();
+			$("#topbar_tab_clips,#open_all_clips_btn,#open_alerts_btn").hide();
 			if (currentPrimaryTab != "live")
 				$("#topbar_tab_live").click();
 		}
