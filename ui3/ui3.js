@@ -9948,6 +9948,15 @@ function CameraListLoader()
 						for (var n = 0; n < obj.group.length; n++)
 							camIdsInGroups[obj.group[n]] = true;
 					}
+					else if (obj.group.length === 0)
+					{
+						if (!firstCameraListLoaded)
+							console.log("Found empty camera group: " + obj.optionDisplay + " (" + obj.optionValue + ")");
+						delete obj.group;
+						delete obj.rects;
+						obj.optionDisplay = CleanUpGroupName(obj.optionDisplay)
+						numCameras++;
+					}
 					else if (!obj.isFakeGroup)
 					{
 						// Blue Iris recently started including single-camera group metadata, causing a number of undesired effects.
