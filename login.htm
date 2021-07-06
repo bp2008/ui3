@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "23";
+		var login_version = "24";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -20,6 +20,17 @@
 			appPath = appPath + "/";
 	</script>
 	<script type="text/javascript">
+		// Each method in suppressErrorCallbacks can inspect the error and return true to suppress reporting of the error.
+		var suppressErrorCallbacks = [
+			function (err) // [2020-11-11] LG TV browser injects bad script on line 1 of htm file.
+			{
+				return err.line === 1 && err.msg && err.msg.indexOf("'getAttribute'") > -1 && err.url && err.url.indexOf(".htm") > -1;
+			},
+			function (err) // ublock origin in Brave browser
+			{
+				return err.msg && err.msg == "Uncaught TypeError: Cannot redefine property: getElementById" && err.url === "";
+			}
+		];
 		window.onerror = function (msg, url, line, charIdx)
 		{
 			try
@@ -31,7 +42,28 @@
 				if (typeof bi_version !== "undefined")
 					biVersionStr = bi_version;
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
-				alert("An unexpected error has occurred in Blue Iris Login (v " + versionStr + " / " + biVersionStr + "). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent);
+				var errStr = "An unexpected error has occurred in Blue Iris Login (v " + versionStr + " / " + biVersionStr + "). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent;
+
+				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, uiVersionStr: uiVersionStr, biVersionStr: biVersionStr };
+				for (var i = 0; i < suppressErrorCallbacks.length; i++)
+				{
+					try
+					{
+						if (suppressErrorCallbacks[i](errObj))
+						{
+							try { console.log("The following error report was suppressed by callback " + i + ":"); console.error(errStr); }
+							catch (ex) { }
+							return;
+						}
+					}
+					catch (ex)
+					{
+						try { console.log("Error suppression callback " + i + " had an error:"); console.error(errStr); }
+						catch (ex) { }
+						return;
+					}
+				}
+				alert(errStr);
 			}
 			catch (ex)
 			{

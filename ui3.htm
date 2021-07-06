@@ -19,6 +19,10 @@
 			function (err) // [2020-11-11] LG TV browser injects bad script on line 1 of htm file.
 			{
 				return err.line === 1 && err.msg && err.msg.indexOf("'getAttribute'") > -1 && err.url && err.url.indexOf(".htm") > -1;
+			},
+			function (err) // ublock origin in Brave browser
+			{
+				return err.msg && err.msg == "Uncaught TypeError: Cannot redefine property: getElementById" && err.url === "";
 			}
 		];
 
@@ -72,7 +76,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "157";
+		var ui_version = "158";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
