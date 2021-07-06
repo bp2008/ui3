@@ -44,7 +44,7 @@
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
 				var errStr = "An unexpected error has occurred in Blue Iris Login (v " + versionStr + " / " + biVersionStr + "). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent;
 
-				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, uiVersionStr: uiVersionStr, biVersionStr: biVersionStr };
+				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, versionStr: versionStr, biVersionStr: biVersionStr };
 				for (var i = 0; i < suppressErrorCallbacks.length; i++)
 				{
 					try
