@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "24";
+		var login_version = "25";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -25,6 +25,10 @@
 			function (err) // [2020-11-11] LG TV browser injects bad script on line 1 of htm file.
 			{
 				return err.line === 1 && err.msg && err.msg.indexOf("'getAttribute'") > -1 && err.url && err.url.indexOf(".htm") > -1;
+			},
+			function (err) // [2021-07-19] LG TV browser fails repeatedly.
+			{
+				return err.line === 0 && err.charIdx === 0 && err.msg && err.msg.indexOf("Script error.") > -1 && (!err.url || err.url == "");
 			},
 			function (err) // ublock origin in Brave browser
 			{
