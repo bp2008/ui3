@@ -73,6 +73,7 @@ var vibrate_supported = false;
 var web_audio_autoplay_disabled = false;
 var cookies_accessible = false;
 var fetch_streams_cant_close_bug = false;
+var flac_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -105,6 +106,7 @@ function DoUIFeatureDetection()
 			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported && web_audio_buffer_copyToChannel_supported;
 			exporting_clips_to_avi_supported = h264_playback_supported && export_blob_supported;
 			html5HistorySupported = isHtml5HistorySupported()
+			flac_supported = isFlacSupported();
 
 			if (h264_playback_supported)
 			{
@@ -224,6 +226,15 @@ function testCookieFunctionality()
 		return session === "test";
 	} catch (e) { }
 	return false;
+}
+function isFlacSupported()
+{
+	try
+	{
+		var testEl = document.createElement("video");
+		return testEl.canPlayType("audio/flac");
+	}
+	catch (e) { return false; }
 }
 function isLocalStorageEnabled()
 {
@@ -948,6 +959,15 @@ var defaultSettings =
 			, label: 'Picture-in-Picture Button'
 			, hint: 'Requires a supported browser and H.264 player: HTML5.'
 			, onChange: OnChange_ui3_show_picture_in_picture_button
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_audio_codec"
+			, value: "FLAC"
+			, inputType: "select"
+			, options: ["\u03BC-law", "FLAC"]
+			, label: 'Audio Codec' + (!flac_supported ? '<div class="settingDesc">(FLAC unavailable in this browser)</div>' : '')
+			, onChange: OnChange_ui3_audio_codec
 			, category: "Video Player"
 		}
 		, {
@@ -7668,13 +7688,14 @@ function ClipLoader(clipsBodySelector)
 	}
 	var GetClipIconClasses = function (clipData)
 	{
+		var classes = [];
 		if ((clipData.flags & clip_flag_flag) > 0)
-			return GetClipIconClass("flag");
+			classes.push(GetClipIconClass("flag"));
 		if ((clipData.flags & clip_flag_protect) > 0)
-			return GetClipIconClass("protect");
+			classes.push(GetClipIconClass("protect"));
 		if (clipData.isNew)
-			return GetClipIconClass("is_new");
-		return "";
+			classes.push(GetClipIconClass("is_new"));
+		return classes.join(" ");
 	}
 	var GetClipIconClass = function (name)
 	{
@@ -11828,7 +11849,13 @@ function FetchH264VideoModule()
 		streamHasAudio = 0;
 		didRequestAudio = pcmPlayer.AudioEnabled();
 		canRequestAudio = true;
-		var audioArg = "&audio=" + (didRequestAudio ? "1" : "0");
+		var audioArg = "&audio=";
+		if (!didRequestAudio)
+			audioArg += "0";
+		else if (flac_supported && settings.ui3_audio_codec === "FLAC")
+			audioArg += "2";
+		else
+			audioArg += "1";
 		var overlayArgs = "";
 		var videoUrl;
 		if (loading.isLive)
@@ -12015,16 +12042,28 @@ function FetchH264VideoModule()
 			if (frame.format.wFormatTag === 7 && frame.format.nChannels === 1)
 			{
 				// 7 is mu-law, mu-law is 8 bits per sample but decodes to 16 bits per sample.
-				audioCodec = "mu-law " + frame.format.nSamplesPerSec + "hz";
+				audioCodec = "\u03BC-law " + frame.format.nSamplesPerSec + "hz";
 				var pcm16Bit = muLawDecoder.DecodeUint8ArrayToFloat32Array(frame.frameData);
-				pcmPlayer.AcceptBuffer(pcm16Bit, frame.format.nChannels, frame.format.nSamplesPerSec);
+				pcmPlayer.AcceptBuffer([pcm16Bit], frame.format.nSamplesPerSec);
+			}
+			else if (frame.format.wFormatTag === 61868) // 0xF1AC (FLAC)
+			{
+				audioCodec = "flac";
+				//if (!flacDecoder)
+				//	flacDecoder = window.UI3FLACDecoder(pcmPlayer.AcceptFrame);
+				//flacDecoder.DecodeUint8Array(frame.frameData);
+				pcmPlayer.DecodeAndPlayAudioData(frame.frameData, frame.format.nSamplesPerSec, setAudioCodecString);
 			}
 			else
 			{
 				audioCodec = "";
-				console.log("Unsupported audio frame format", frame.format);
+				console.log("Unsupported audio frame format", frame.format, frame);
 			}
 		}
+	}
+	var setAudioCodecString = function (codecString)
+	{
+		audioCodec = codecString;
 	}
 	var acceptStatusBlock = function (status)
 	{
@@ -19504,9 +19543,10 @@ function PcmAudioPlayer()
 	else
 		AudioContext = FakeAudioContext_Dummy;
 
-	var context = new AudioContext();
-	context.suspend();
-	var volumeController = context.createGain();
+
+	var context;
+	var volumeController;
+	var currentVolume = -1; // 0 to 1
 	var nextTime = 0; // This is the playback time in seconds at which we run out (or ran out) of audio.
 	var audioStopTimeout = null;
 	var suppressAudioVolumeSave = false;
@@ -19525,26 +19565,68 @@ function PcmAudioPlayer()
 	//			break;
 	//	}
 	//};
-	/**
-	 * Queues a Float32Array of raw audio data (range -1.0 to 1.0) for playback.
-	 * @param {Float32Array} audio32 First channel audio buffer: Float32Array of raw audio data (range -1.0 to 1.0)
-	 * @param {Number} channels Number of audio channels
-	 * @param {Number} sampleRate Sample rate (hz)
-	 */
-	this.AcceptBuffer = function (audio32, channels, sampleRate)
+	var decoderState = { lastReceivedAudioIndex: -1, nextPlayAudioIndex: 0, buffers: [] };
+	this.DecodeAndPlayAudioData = function (audioData, sampleRate, setAudioCodecString)
 	{
 		if (!supported)
 			return;
+		if (sampleRate !== context.sampleRate)
+			NewContext(sampleRate);
+
+		decoderState.lastReceivedAudioIndex++;
+		var myIndex = decoderState.lastReceivedAudioIndex;
+		context.decodeAudioData(audioData.buffer, function (audioBuffer)
+		{
+			setAudioCodecString("flac " + audioBuffer.numberOfChannels + "ch " + sampleRate + "hz");
+			decoderState.buffers.push({ buffer: audioBuffer, index: myIndex });
+			PlayDecodedAudio(setAudioCodecString);
+		}, function ()
+		{
+			console.log("Audio decode FAIL", arguments);
+			setAudioCodecString("flac (cannot decode)");
+		});
+	}
+	var PlayDecodedAudio = function ()
+	{
+		// Plays the decoded audio buffers in the correct order.
+		for (var i = 0; i < decoderState.buffers.length; i++)
+		{
+			if (decoderState.buffers[i].index === decoderState.nextPlayAudioIndex)
+			{
+				decoderState.nextPlayAudioIndex++;
+				var audioBuffer = decoderState.buffers[i].buffer;
+				decoderState.buffers.splice(i, 1);
+				var channels = [];
+				for (var i = 0; i < audioBuffer.numberOfChannels; i++)
+					channels.push(audioBuffer.getChannelData(i));
+				self.AcceptBuffer(channels, audioBuffer.sampleRate);
+				PlayDecodedAudio(); // Recursively call in case the next buffer was already added out of order.
+				return;
+			}
+		}
+	}
+	/**
+	 * Queues a Float32Array of raw audio data (range -1.0 to 1.0) for playback.
+	 * @param {Array} audio32 Array of audio channels.  Each channel is a Float32Array of raw audio data (range -1.0 to 1.0)
+	 * @param {Number} sampleRate Sample rate (hz)
+	 */
+	this.AcceptBuffer = function (audio32, sampleRate)
+	{
+		if (!supported)
+			return;
+		if (sampleRate !== context.sampleRate)
+			NewContext(sampleRate);
 		if (suspended)
 		{
 			suspended = false;
 			context.resume();
 		}
 		if (debug_doEdgeFilter)
-			AudioEdgeFilterRaw(audio32);
+			AudioEdgeFilterRaw(audio32[0]);
 
-		var buffer = context.createBuffer(channels, audio32.length, sampleRate);
-		buffer.copyToChannel(audio32, 0);
+		var buffer = context.createBuffer(audio32.length, audio32[0].length, sampleRate);
+		for (var i = 0; i < audio32.length; i++)
+			buffer.copyToChannel(audio32[i], i);
 
 		var bufferSource = context.createBufferSource();
 		bufferSource.buffer = buffer;
@@ -19582,7 +19664,7 @@ function PcmAudioPlayer()
 		nextTime += duration;
 
 		if (ui3AudioVisualizer)
-			ui3AudioVisualizer.AcceptBuffer([audio32], sampleRate, currentTime, nextTime, duration);
+			ui3AudioVisualizer.AcceptBuffer(audio32, sampleRate, currentTime, nextTime, duration);
 	}
 	var DequeueBufferSource = function ()
 	{
@@ -19623,6 +19705,7 @@ function PcmAudioPlayer()
 		if (!supported)
 			return;
 		clearMuteStopTimeout();
+		currentVolume = newVolume;
 		newVolume = Clamp(newVolume, 0, 1);
 		volumeController.gain.value = newVolume * newVolume; // Don't use setValueAtTime method because it has issues (UI3-v17 + Chrome 66 was affected)
 		volumeIconHelper.setIconForVolume(newVolume);
@@ -19696,6 +19779,27 @@ function PcmAudioPlayer()
 			buffer.stop();
 		}
 	}
+	var NewContext = function (sampleRate)
+	{
+		console.log("New AudioContext " + sampleRate);
+		if (context)
+			context.suspend();
+		// We must specify the correct sample rate during AudioContext construction, 
+		// or else FLAC will be resampled by the decoder in such a way that it 
+		// introduces a static pop after every audio buffer.
+		if (sampleRate)
+			context = new AudioContext({ sampleRate: sampleRate });
+		else
+			context = new AudioContext();
+		context.suspend();
+		volumeController = context.createGain();
+		if (currentVolume >= 0)
+			self.SetVolume(currentVolume);
+		suspended = true;
+		if (ui3AudioVisualizer)
+			ui3AudioVisualizer.Reset();
+	}
+	NewContext();
 }
 function FakeAudioContext_Dummy()
 {
@@ -22921,6 +23025,13 @@ function UI3AudioVisualizer(onDialogClosing)
 			graph.AddValues(channels[n], sampleRate, currentTime, sampleTime, duration);
 		}
 	}
+	this.Reset = function ()
+	{
+		for (var i = 0; i < graphs.length; i++)
+			graphs[i].Stop();
+		graphs = [];
+		$dlg.empty();
+	}
 	Initialize();
 }
 ///////////////////////////////////////////////////////////////
@@ -24021,6 +24132,11 @@ function GenerateEventTriggeredIconsComment()
 function GenerateH264RequirementString()
 {
 	return '-- Requires an H.264 stream. --' + (h264_playback_supported ? '' : '<br/><span class="settingsCommentError">-- H.264 streams are not supported by this browser --</span>');
+}
+function OnChange_ui3_audio_codec()
+{
+	if (videoPlayer.CurrentPlayerModuleName() === "h264")
+		videoPlayer.ReopenStreamAtCurrentSeekPosition();
 }
 function OnChange_ui3_preferred_ui_scale(newValue)
 {
