@@ -10755,6 +10755,21 @@ function VideoPlayerController()
 	}
 	this.LoadLiveCamera = function (camData)
 	{
+		// DEBUGGING AID
+		try
+		{
+			var nothing = null;
+			if (nothing == null)
+			{
+				var catchError = nothing.optionValue;
+			}
+		}
+		catch (ex)
+		{
+			ShowErrorDialog("Error.  The following information will be useful if sent to technical support:\n\nLoadLiveCamera was called with null camData argument.\n\n" + ex.stack + "\n\ncurrentlySelectedHomeGroupId: " + currentlySelectedHomeGroupId + "\nsettings.ui3_defaultCameraGroupId: " + settings.ui3_defaultCameraGroupId + "\nLast camlist response: " + JSON.stringify(cameraListLoader.GetLastResponse(), 0, 2));
+			return;
+		}
+		// END DEBUGGING AID
 		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
 			camData = cameraListLoader.GetCameraWithId(cameraListLoader.singleCameraGroupMap[camData.optionValue]);
 
