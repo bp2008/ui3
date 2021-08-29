@@ -10758,10 +10758,9 @@ function VideoPlayerController()
 		// DEBUGGING AID
 		try
 		{
-			var nothing = null;
-			if (nothing == null)
+			if (camData == null)
 			{
-				var catchError = nothing.optionValue;
+				var catchError = camData.optionValue;
 			}
 		}
 		catch (ex)
