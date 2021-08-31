@@ -10034,7 +10034,12 @@ function CameraListLoader()
 					&& videoPlayer.Loading().image.isLive)) // isLive check allows recordings to continue playing if their camera instance is missing
 			{
 				if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId) == null)
-					videoPlayer.SelectCameraGroup(lastResponse.data[0].optionValue);
+				{
+					if (self.CameraIsGroup(lastResponse.data[0]))
+						videoPlayer.SelectCameraGroup(lastResponse.data[0].optionValue);
+					else
+						videoPlayer.LoadLiveCamera(lastResponse.data[0]);
+				}
 				else
 					videoPlayer.SelectCameraGroup(settings.ui3_defaultCameraGroupId);
 			}
@@ -10755,20 +10760,11 @@ function VideoPlayerController()
 	}
 	this.LoadLiveCamera = function (camData)
 	{
-		// DEBUGGING AID
-		try
+		if (camData == null)
 		{
-			if (camData == null)
-			{
-				var catchError = camData.optionValue;
-			}
-		}
-		catch (ex)
-		{
-			ShowErrorDialog("Error.  The following information will be useful if sent to technical support:\n\nLoadLiveCamera was called with null camData argument.\n\n" + ex.stack + "\n\ncurrentlySelectedHomeGroupId: " + currentlySelectedHomeGroupId + "\nsettings.ui3_defaultCameraGroupId: " + settings.ui3_defaultCameraGroupId + "\nLast camlist response: " + JSON.stringify(cameraListLoader.GetLastResponse(), 0, 2));
+			toaster.Error("The target camera or group could not be found.");
 			return;
 		}
-		// END DEBUGGING AID
 		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
 			camData = cameraListLoader.GetCameraWithId(cameraListLoader.singleCameraGroupMap[camData.optionValue]);
 
