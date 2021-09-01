@@ -971,6 +971,15 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
+			key: "ui3_audio_buffer_ms"
+			, value: 700
+			, minValue: 0
+			, maxValue: 5000
+			, inputType: "number"
+			, label: 'Audio Buffer Size Milliseconds<div class="settingDesc">(max audio delay)</div>'
+			, category: "Video Player"
+		}
+		, {
 			key: "ui3_topbar_allclips_shortcut_show"
 			, value: "1"
 			, inputType: "checkbox"
@@ -19649,6 +19658,7 @@ function PcmAudioPlayer()
 
 		var duration = bufferSource.buffer.duration;
 		var offset = currentTime - nextTime;
+		var maxDelayMs = Clamp(parseInt(settings.ui3_audio_buffer_ms) / 1000, 0, 5000);
 		if (offset > 0)
 		{
 			// This frame is late. Play it immediately.
@@ -19656,7 +19666,7 @@ function PcmAudioPlayer()
 			//console.log("Audio frame is LATE by", offset);
 			offset = 0;
 		}
-		else if (offset < -0.7)
+		else if (offset < -1 * maxDelayMs)
 		{
 			CheckUserInputRequirement();
 			// We have received so many frames that we are queued at least 700ms ahead. Drop this frame.
@@ -19791,7 +19801,6 @@ function PcmAudioPlayer()
 	}
 	var NewContext = function (sampleRate)
 	{
-		console.log("New AudioContext " + sampleRate);
 		if (context)
 			context.suspend();
 		// We must specify the correct sample rate during AudioContext construction, 
