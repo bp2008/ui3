@@ -421,6 +421,7 @@ var clipThumbnailVideoPreview = null;
 var nerdStats = null;
 var sessionTimeout = null;
 var clipOverlayCfg = null;
+var programmaticSoundPlayer = null;
 
 var currentPrimaryTab = "";
 
@@ -2697,6 +2698,8 @@ $(function ()
 	sessionTimeout = new SessionTimeout();
 
 	clipOverlayCfg = new ClipOverlayCfg();
+
+	programmaticSoundPlayer = new ProgrammaticSoundPlayer();
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
@@ -10774,6 +10777,8 @@ function VideoPlayerController()
 			toaster.Error("The target camera or group could not be found.");
 			return;
 		}
+		if (!camData.isEnabled && !cameraListLoader.CameraIsGroupOrCycle(camData))
+			return;
 		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
 			camData = cameraListLoader.GetCameraWithId(cameraListLoader.singleCameraGroupMap[camData.optionValue]);
 
@@ -25051,6 +25056,122 @@ function Uint8ArrayToDataURI(someUint8Array)
 	// <summary>The dataUri returned from this method should be sent to window.URL.revokeObjectURL() when it is done being used!</summary>
 	var blob = new Blob([someUint8Array]);
 	return window.URL.createObjectURL(blob);
+}
+
+
+///////////////////////////////////////////////////////////////
+// Programmatic Sound Player //////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ProgrammaticSoundPlayer()
+{
+	var self = this;
+
+	var audioContext = null;
+	var PrepareAudioContext = function ()
+	{
+		if (!audioContext)
+		{
+			try
+			{
+				console.log("Preparing Audio Context");
+				audioContext = new AudioContext(); // browsers limit the number of concurrent audio contexts
+			}
+			catch (ex)
+			{
+			}
+		}
+		return !!audioContext;
+	}
+
+	/**
+	 * Plays a simple tone defined by the specified parameters.
+	 * @param {Number} volume Volume from 0 to 1.
+	 * @param {Number} frequency Frequency in Hz.
+	 * @param {Number} durationSeconds Tone duration in seconds
+	 * @returns {Number} Returns the audio context time when the sound will stop. This can be used to schedule future notes to play in sequence.
+	 */
+	this.PlayNote = function (volume, frequency, durationSeconds, playAt)
+	{
+		if (!PrepareAudioContext())
+			return 0;
+
+		console.log("Playing note ", arguments);
+		var edgeSofteningTime = Math.min(durationSeconds / 3, 0.02);
+
+		var oscillator = audioContext.createOscillator();
+		var gainNode = audioContext.createGain();
+		oscillator.connect(gainNode);
+		oscillator.frequency.value = frequency;
+		oscillator.type = "triangle";
+		gainNode.connect(audioContext.destination);
+		gainNode.gain.value = volume;
+
+		var startAt = playAt ? playAt : audioContext.currentTime;
+		gainNode.gain.setValueAtTime(gainNode.gain.value, startAt);
+		oscillator.start(startAt);
+		gainNode.gain.exponentialRampToValueAtTime(gainNode.gain.value, startAt + edgeSofteningTime);
+
+		var stopAt = startAt + durationSeconds;
+		oscillator.stop(stopAt);
+		gainNode.gain.setValueAtTime(gainNode.gain.value, stopAt - edgeSofteningTime);
+		gainNode.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+
+		return stopAt;
+	}
+	/**
+	 * Plays an array of notes in sequence.
+	 * @param {Array} notes An array of notes taking the form { volume: Number, frequency: Number, durationSeconds: Number, offset: Number }. The offset of the first note is ignored.
+	 */
+	this.PlayNotes = function (notes)
+	{
+		if (!PrepareAudioContext())
+			return;
+		var nextStartTime = null;
+		for (var i = 0; i < notes.length; i++)
+		{
+			if (nextStartTime !== null)
+				nextStartTime += notes[i].offset;
+			nextStartTime = self.PlayNote(notes[i].volume, notes[i].frequency, notes[i].durationSeconds, nextStartTime);
+		}
+	}
+
+	this.NoteHi = { volume: 0.0667, frequency: 760, durationSeconds: 0.1, offset: 0 };
+	this.NoteLo = { volume: 0.0667, frequency: 380, durationSeconds: 0.1, offset: 2000 };
+
+	this.PlayLoHi = function (notes)
+	{
+		self.PlayNotes([self.NoteLo, self.NoteHi]);
+	}
+	this.PlayHiLo = function (notes)
+	{
+		self.PlayNotes([self.NoteHi, self.NoteLo]);
+	}
+
+	//BI_CustomEvent.AddListener("OpenVideo", function ()
+	//{
+	//	self.PlayNotes([
+	//		{ volume: 0.15, frequency: 286, durationSeconds: 0.125, offset: 0 },
+	//		{ volume: 0.15, frequency: 171, durationSeconds: 0.125, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
+	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
+	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
+	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
+	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
+	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
+	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
+	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
+	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
+	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
+	//		//{ volume: 1, frequency: 340, durationSeconds: 0.54, offset: 0.1 },
+	//	]);
+	//});
 }
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
