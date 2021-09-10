@@ -6,6 +6,7 @@
 "use strict";
 var developerMode = false;
 var isReloadingUi3 = false;
+var allowResizableGroups = false;
 var appPath = GetAppPath();
 if (navigator.cookieEnabled)
 {
@@ -5947,14 +5948,14 @@ function SeekBar()
 			if (loadingImg.aspectratio >= 1)
 			{
 				largestDimensionKey = "w";
-				largestDimensionValue = imageRenderer.GetSizeToRequest(false).w;
+				largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).w;
 				hintW = 160;
 				hintH = (hintW / videoPlayer.Loading().image.aspectratio);
 			}
 			else
 			{
 				largestDimensionKey = "h";
-				largestDimensionValue = imageRenderer.GetSizeToRequest(false).h;
+				largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).h;
 				hintH = 160;
 				hintW = (hintH * videoPlayer.Loading().image.aspectratio);
 			}
@@ -11138,6 +11139,8 @@ function BICameraData()
 	this.aspectratio = 1280 / 720;
 	this.actualwidth = 1280; // Actual size of image (can be smaller than fullwidth)
 	this.actualheight = 720;
+	this.intendedW = 0; // Special value to assist in digital zooming dynamically sized group frames.
+	this.intendedH = 0;
 	this.path = "";
 	this.uniqueId = "";
 	this.isLive = true;
@@ -11154,6 +11157,8 @@ function BICameraData()
 		self.aspectratio = other.aspectratio;
 		self.actualwidth = other.actualwidth;
 		self.actualheight = other.actualheight;
+		self.intendedW = other.intendedW;
+		self.intendedH = other.intendedH;
 		self.path = other.path;
 		self.uniqueId = other.uniqueId;
 		self.isLive = other.isLive;
@@ -11255,7 +11260,7 @@ function JpegVideoModule()
 	var timeLastClipFrame = 0;
 	var repeatedSameImageURLs = 1;
 	var loadedFirstFrame = false;
-	var lastRequestedWidth = 0;
+	var lastRequestedSize = { w: 0, h: 0 };
 	var lastLoadedTimeValue = -1;
 
 	var currentImageTimestampMs = new Date().getTime();
@@ -11520,17 +11525,18 @@ function JpegVideoModule()
 				overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
 		}
 
-		var widthToRequest = imageRenderer.GetSizeToRequest(true).w;
+		var sizeToRequest = imageRenderer.GetSizeToRequest(true, loading);
+		var sizeArgs = "&w=" + sizeToRequest.w + (allowResizableGroups && loading.isGroup ? "&h=" + sizeToRequest.h : "");
 		$("#camimg").attr('loadingimg', loading.id);
 
-		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight);
+		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
-		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + "&w=" + widthToRequest + qualityArg;
+		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg;
 
 		if ($("#camimg").attr('src') == imgSrcPath)
 		{
@@ -11541,7 +11547,7 @@ function JpegVideoModule()
 		{
 			if ((lastLoadedTimeValue == timeValue
 				&& loading.uniqueId == videoPlayer.Loaded().image.uniqueId
-				&& !CouldBenefitFromWidthChange(widthToRequest)
+				&& !CouldBenefitFromSizeChange(sizeToRequest)
 				&& loadedFirstFrame)
 				|| !isVisible
 			)
@@ -11552,7 +11558,7 @@ function JpegVideoModule()
 			}
 			else
 			{
-				lastRequestedWidth = widthToRequest;
+				lastRequestedSize = sizeToRequest;
 				repeatedSameImageURLs = 1;
 				SetImageLoadTimeout();
 				lastLoadedTimeValue = timeValue;
@@ -11560,9 +11566,13 @@ function JpegVideoModule()
 			}
 		}
 	}
-	var CouldBenefitFromWidthChange = function (newWidth)
+	var CouldBenefitFromSizeChange = function (newSize)
 	{
-		return newWidth > lastRequestedWidth && loading.fullwidth > lastRequestedWidth;
+		if (allowResizableGroups && loading.isGroup)
+			return (newSize.w > lastRequestedSize.w && loading.fullwidth > lastRequestedSize.w)
+				|| (newSize.h > lastRequestedSize.h && loading.fullheight > lastRequestedSize.h);
+		else
+			return (newSize.w > lastRequestedSize.w && loading.fullwidth > lastRequestedSize.w);
 	}
 
 	this.Playback_IsPaused = function ()
@@ -11884,7 +11894,7 @@ function FetchH264VideoModule()
 		var videoUrl;
 		if (loading.isLive)
 		{
-			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight) + "&extend=2";
+			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + "&extend=2";
 		}
 		else
 		{
@@ -11959,13 +11969,13 @@ function FetchH264VideoModule()
 				reqMs = (currentSeekPositionPercent * (loading.msec + offsetMsec)).dropDecimals();
 				posArg = "";
 			}
-			var urlArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading.fullwidth, loading.fullheight);
+			var urlArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 			var widthAndQualityArg = "";
 			if (speed === 0)
 			{
 				// speed == 0 means we'll get a jpeg, so we should include w and q arguments.
 				if (urlArgs.indexOf("&h=") === -1)
-					widthAndQualityArg += "&w=" + imageRenderer.GetSizeToRequest(false).w;
+					widthAndQualityArg += "&w=" + imageRenderer.GetSizeToRequest(false, loading).w;
 				widthAndQualityArg += "&q=50";
 			}
 			var offsetArg = "";
@@ -13930,45 +13940,83 @@ function ImageRenderer()
 	previousImageDraw.h = -1;
 	previousImageDraw.z = 10;
 
+	this.maxGroupImageDimension = 3000; // Strictly <= 7680 or else dynamic group layouts are broken
+
 	var $layoutbody = $("#layoutbody");
 	var $camimg_wrapper = $("#camimg_wrapper");
 	var sccc_outerObjs = $('#layoutbody,#camimg_wrapper,#zoomhint');
 
 	this.zoomHandler = null;
 
-	this.GetSizeToRequest = function (modifyForJpegQualitySetting)
+	this.GetSizeToRequest = function (modifyForJpegQualitySetting, ciLoading)
 	{
 		// Calculate the size of the image we need
-		var ciLoading = videoPlayer.Loading().image;
 		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
 		if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
 			ssFactor = 1;
-		var imgDrawWidth = ciLoading.fullwidth * dpiScalingFactor * ssFactor * self.zoomHandler.GetZoomFactor();
-		var imgDrawHeight = ciLoading.fullheight * dpiScalingFactor * ssFactor * self.zoomHandler.GetZoomFactor();
+		var zoomFactor = self.zoomHandler.GetZoomFactor();
+
+		var bodyW = $layoutbody.width();
+		var bodyH = $layoutbody.height();
+		var resizableSource = allowResizableGroups && ciLoading.isGroup && (bodyW * dpiScalingFactor * ssFactor) >= 240 && (bodyH * dpiScalingFactor * ssFactor) >= 240;
+		var srcNativeWidth = resizableSource ? bodyW : ciLoading.fullwidth;
+		var srcNativeHeight = resizableSource ? bodyH : ciLoading.fullheight;
+		var srcNativeAspect = srcNativeWidth / srcNativeHeight;
+		var imgDrawWidth = srcNativeWidth * dpiScalingFactor * ssFactor;
+		var imgDrawHeight = srcNativeHeight * dpiScalingFactor * ssFactor;
+
+		ciLoading.intendedW = imgDrawWidth;
+		ciLoading.intendedH = imgDrawHeight;
+		var imgLoaded = videoPlayer.Loaded().image;
+		if (imgLoaded.id === ciLoading.id)
+		{
+			imgLoaded.intendedW = ciLoading.intendedW;
+			imgLoaded.intendedH = ciLoading.intendedH;
+		}
+
+		imgDrawWidth *= zoomFactor;
+		imgDrawHeight *= zoomFactor;
 		if (imgDrawWidth === 0)
 		{
 			// Image is supposed to scale to fit the screen (first zoom level)
-			imgDrawWidth = $layoutbody.width() * dpiScalingFactor * ssFactor;
-			imgDrawHeight = $layoutbody.height() * dpiScalingFactor * ssFactor;
+			imgDrawWidth = bodyW * dpiScalingFactor * ssFactor;
+			imgDrawHeight = bodyH * dpiScalingFactor * ssFactor;
 
 			var availableRatio = imgDrawWidth / imgDrawHeight;
-			if (availableRatio < ciLoading.aspectratio)
-				imgDrawHeight = imgDrawWidth / ciLoading.aspectratio;
+			if (availableRatio < srcNativeAspect)
+				imgDrawHeight = imgDrawWidth / srcNativeAspect;
 			else
-				imgDrawWidth = imgDrawHeight * ciLoading.aspectratio;
+				imgDrawWidth = imgDrawHeight * srcNativeAspect;
 		}
-		if (ciLoading.aspectratio < 1)
+		if (srcNativeAspect < 1)
 		{
 			if (modifyForJpegQualitySetting)
 				imgDrawHeight = jpegQualityHelper.ModifyImageDimension("h", imgDrawHeight);
-			imgDrawWidth = imgDrawHeight * ciLoading.aspectratio;
+			imgDrawWidth = imgDrawHeight * srcNativeAspect;
 		}
 		else
 		{
 			if (modifyForJpegQualitySetting)
 				imgDrawWidth = jpegQualityHelper.ModifyImageDimension("w", imgDrawWidth);
-			imgDrawHeight = imgDrawWidth / ciLoading.aspectratio;
+			imgDrawHeight = imgDrawWidth / srcNativeAspect;
 		}
+
+		// Do not request a dimension larger than 7680.  Resizable group streams will revert to a standard size.
+		if (resizableSource)
+		{
+			var aspect = (imgDrawWidth / imgDrawHeight);
+			if (imgDrawWidth > self.maxGroupImageDimension)
+			{
+				imgDrawWidth = self.maxGroupImageDimension;
+				imgDrawHeight = imgDrawWidth / aspect;
+			}
+			if (imgDrawHeight > self.maxGroupImageDimension)
+			{
+				imgDrawHeight = self.maxGroupImageDimension;
+				imgDrawWidth = imgDrawHeight * aspect;
+			}
+		}
+
 		// Now we have the size we need.  Determine what argument we will send to Blue Iris
 		return { w: parseInt(Math.round(imgDrawWidth)), h: parseInt(Math.round(imgDrawHeight)) };
 	}
@@ -13998,7 +14046,13 @@ function ImageRenderer()
 		var imgForSizing = videoPlayer.Loaded().image;
 		var widthForSizing;
 		var heightForSizing;
-		if (settings.ui3_zoom1x_mode === "Stream")
+		var resizableSource = allowResizableGroups && imgForSizing.isGroup;
+		if (resizableSource)
+		{
+			widthForSizing = imgForSizing.intendedW;
+			heightForSizing = imgForSizing.intendedH;
+		}
+		else if (settings.ui3_zoom1x_mode === "Stream")
 		{
 			widthForSizing = imgForSizing.actualwidth;
 			heightForSizing = imgForSizing.actualheight;
@@ -15366,8 +15420,10 @@ function StreamingProfile()
 		return newProfile;
 	}
 
-	this.GetUrlArgs = function (w, h)
+	this.GetUrlArgs = function (loading)
 	{
+		var w = loading.fullwidth;
+		var h = loading.fullheight;
 		var sb = new StringBuilder();
 
 		sb.Append("&stream=").Append(self.stream);
