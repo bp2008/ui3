@@ -6,7 +6,7 @@
 "use strict";
 var developerMode = false;
 var isReloadingUi3 = false;
-var allowResizableGroups = false;
+var allowResizableGroups = true;
 var appPath = GetAppPath();
 if (navigator.cookieEnabled)
 {
@@ -9938,6 +9938,7 @@ function CameraListLoader()
 	var cameraListUpdateTimeout = null;
 	var webcastingWarning;
 	this.clearNewAlertsCounterOnNextLoad = false;
+	var dynamicGroupLayout = {};
 
 	this.LoadCameraList = function (successCallbackFunc)
 	{
@@ -10112,15 +10113,92 @@ function CameraListLoader()
 			, isFakeGroup: true
 		});
 	}
+	this.AsyncLoadDynamicGroupRects = function (groupId, resolution)
+	{
+		if (!resolution || !self.isDynamicLayoutEnabled(groupId))
+			return;
+		var cam = self.GetCameraWithId(groupId);
+		if (cam)
+		{
+			var g = dynamicGroupLayout[groupId];
+			if (!g)
+				g = dynamicGroupLayout[groupId] = {};
+			if (g[resolution] === "pending")
+				return;
+			if (!g[resolution])
+				g[resolution] = "pending";
+			console.log("AsyncLoadDynamicGroupRects", groupId, resolution);
+			ExecJSON({ cmd: "ptz", camera: groupId }, function (response)
+			{
+				if (g[resolution] === "pending")
+					g[resolution] = null;
+				if (videoPlayer.Loading().image.id == groupId)
+				{
+					if (response.result === "success")
+					{
+						g[resolution] = response.data.rects;
+						console.log(" --> ", groupId, resolution, response.data.rects, response);
+						BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
+					}
+					else
+						toaster.Warning("Failed to load layout information for group: " + groupId + "<br/>" + JSON.stringify(response));
+				}
+			}, function (jqXHR, textStatus, errorThrown)
+			{
+				if (g[resolution] === "pending")
+					g[resolution] = null;
+				if (videoPlayer.Loading().image.id == groupId)
+					toaster.Warning("Failed to load layout information for group: " + groupId + "<br/>" + jqXHR.ErrorMessageHtml);
+			});
+		}
+		else
+			toaster.Warning("Failed to load group layout information for group that does not exist: " + groupId);
+	}
+	this.GetGroupRects = function (groupId, resolution)
+	{
+		var rects = self.GetDynamicGroupRects(groupId, resolution);
+		if (!rects)
+		{
+			var cam = self.GetCameraWithId(groupId);
+			if (cam)
+				rects = cam.rects;
+		}
+		return rects;
+	}
+	this.GetDynamicGroupRects = function (groupId, resolution)
+	{
+		if (!resolution)
+		{
+			var loadedImg = videoPlayer.Loaded().image;
+			if (loadedImg.id === groupId)
+				resolution = loadedImg.actualwidth + "x" + loadedImg.actualheight;
+		}
+		if (resolution)
+		{
+			var g = dynamicGroupLayout[groupId];
+			if (g)
+			{
+				var rects = g[resolution];
+				if (rects !== "pending")
+					return rects;
+			}
+		}
+		return null;
+	}
+	this.isDynamicLayoutEnabled = function (groupId)
+	{
+		var cam = self.GetCameraWithId(groupId);
+		return cam && self.CameraIsGroup(cam) && allowResizableGroups && cam.dynamic;
+	}
 	this.HideWebcastingWarning = function ()
 	{
 		if (webcastingWarning)
 			webcastingWarning.remove();
 	}
-	this.GetCameraBoundsInCurrentGroupImageScaled = function (cameraId, groupId)
+	this.GetCameraBoundsInCurrentGroupImageScaled = function (cameraId, groupId, resolution)
 	{
 		var coordScale = videoPlayer.Loaded().image.actualwidth / videoPlayer.Loaded().image.fullwidth;
-		var unscaled = self.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
+		var unscaled = self.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId, resolution);
 		if (unscaled == null)
 			return null;
 		// The first line of the array definition must be on the same line as the return statement
@@ -10129,34 +10207,19 @@ function CameraListLoader()
 			, Math.round(unscaled[2] * coordScale)
 			, Math.round(unscaled[3] * coordScale)];
 	}
-	this.GetCameraBoundsInCurrentGroupImageUnscaled = function (cameraId, groupId)
+	this.GetCameraBoundsInCurrentGroupImageUnscaled = function (cameraId, groupId, resolution)
 	{
-		var camData = videoPlayer.Loaded().cam;
-		if (camData)
+		var camData = self.GetCameraWithId(groupId);
+		var group = camData.group;
+		if (group)
 		{
-			if (!camData.group)
-			{
-				if (groupId && lastResponse && lastResponse.data)
-				{
-					for (var i = 0; i < lastResponse.data.length; i++)
-					{
-						if (lastResponse.data[i].group && lastResponse.data[i].optionValue == groupId)
-						{
-							camData = lastResponse.data[i];
-							break;
-						}
-					}
-				}
-				if (!camData.group)
-					return null;
-			}
-			for (var j = 0; j < camData.rects.length; j++)
-			{
-				if (camData.group[j] == cameraId)
-				{
-					return camData.rects[j];
-				}
-			}
+			var rects = self.GetGroupRects(groupId, resolution);
+			if (!rects)
+				rects = camData.rects;
+			if (rects)
+				for (var j = 0; j < rects.length; j++)
+					if (group[j] == cameraId)
+						return rects[j];
 		}
 		return null;
 	}
@@ -10652,17 +10715,21 @@ function VideoPlayerController()
 		var mouseRelX = parseFloat((event.mouseX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
 		var mouseRelY = parseFloat((event.mouseY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
 
-		var x = currentlyLoadedImage.fullwidth * mouseRelX;
-		var y = currentlyLoadedImage.fullheight * mouseRelY;
+		var x = currentlyLoadedImage.actualwidth * mouseRelX;
+		var y = currentlyLoadedImage.actualheight * mouseRelY;
 		var camData = currentlyLoadedCamera;
 		if (camData)
 		{
-			if (camData.group && camData.rects.length > 0)
+			if (camData.group)
 			{
-				for (var j = 0; j < camData.rects.length; j++)
+				var rects = cameraListLoader.GetGroupRects(camData.optionValue);
+				if (rects)
 				{
-					if (x > camData.rects[j][0] && y > camData.rects[j][1] && x < camData.rects[j][2] && y < camData.rects[j][3])
-						return cameraListLoader.GetCameraWithId(camData.group[j]);
+					for (var j = 0; j < rects.length; j++)
+					{
+						if (x > rects[j][0] && y > rects[j][1] && x < rects[j][2] && y < rects[j][3])
+							return cameraListLoader.GetCameraWithId(camData.group[j]);
+					}
 				}
 			}
 			else
@@ -10714,8 +10781,9 @@ function VideoPlayerController()
 		else
 		{
 			// Maximize
+			var loadedImg = videoPlayer.Loaded().image;
 			if (playerModule.DrawThumbAsFullCamera)
-				playerModule.DrawThumbAsFullCamera(camData.optionValue);
+				playerModule.DrawThumbAsFullCamera(camData.optionValue, loadedImg.id, loadedImg.actualwidth + "x" + loadedImg.actualheight);
 			self.LoadLiveCamera(camData);
 			if (playerModule.DrawThumbAsFullCamera)
 				self.CameraOrResolutionChange();
@@ -11269,6 +11337,7 @@ function JpegVideoModule()
 	var repeatedSameImageURLs = 1;
 	var loadedFirstFrame = false;
 	var lastRequestedSize = { w: 0, h: 0 };
+	var lastReceivedSize = { w: 0, h: 0 };
 	var lastLoadedTimeValue = -1;
 
 	var currentImageTimestampMs = new Date().getTime();
@@ -11320,6 +11389,13 @@ function JpegVideoModule()
 			{
 				loadedFirstFrame = true;
 				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
+				if (lastReceivedSize.w !== this.naturalWidth || lastReceivedSize.h !== this.naturalHeight)
+				{
+					lastReceivedSize.w = this.naturalWidth;
+					lastReceivedSize.h = this.naturalHeight;
+					if (loading.isGroup)
+						Debounced_AsyncLoadDynamicGroupRects();
+				}
 				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, new Date(currentImageRequestedAtMs));
 
 				playbackControls.FrameTimestampUpdated(false);
@@ -11383,7 +11459,12 @@ function JpegVideoModule()
 	{
 		return loadedFirstFrame;
 	}
-
+	var Debounced_AsyncLoadDynamicGroupRects = debounce(function ()
+	{
+		var loadedImg = videoPlayer.Loaded().image;
+		if (cameraListLoader.isDynamicLayoutEnabled(loadedImg.id))
+			cameraListLoader.AsyncLoadDynamicGroupRects(loadedImg.id, loadedImg.actualwidth + "x" + loadedImg.actualheight);
+	}, 250);
 	var openVideoTimeout = null;
 	var lastOpenVideoCallAt = -60000;
 	var timeBetweenOpenVideoCalls = 300;
@@ -11632,9 +11713,10 @@ function JpegVideoModule()
 		// Draw rectangles around each image's grid space
 		backbuffer_context2d.strokeStyle = "#888888";
 		backbuffer_context2d.lineWidth = 2;
-		for (var i = 0; i < groupObj.rects.length; i++)
+		var rects = cameraListLoader.GetGroupRects(groupId);
+		for (var i = 0; i < rects.length; i++)
 		{
-			var rect = groupObj.rects[i];
+			var rect = rects[i];
 			backbuffer_context2d.strokeRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
 		}
 
@@ -11657,9 +11739,9 @@ function JpegVideoModule()
 		var context2d = canvas.getContext("2d");
 		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
 	}
-	this.DrawThumbAsFullCamera = function (cameraId)
+	this.DrawThumbAsFullCamera = function (cameraId, groupId, resolution)
 	{
-		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId);
+		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId, groupId, resolution);
 		if (!thumbBounds)
 			return;
 		var cameraObj = cameraListLoader.GetCameraWithId(cameraId);
@@ -11747,6 +11829,7 @@ function FetchH264VideoModule()
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
 	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, rawtime: 0, utc: Date.now(), expectedInterframe: 100 };
 	var audioCodec = "";
+	var loadDynamicGroupLayout = false;
 
 	var loading = new BICameraData();
 
@@ -11903,6 +11986,7 @@ function FetchH264VideoModule()
 		if (loading.isLive)
 		{
 			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + "&extend=2";
+			loadDynamicGroupLayout = true;
 		}
 		else
 		{
@@ -12248,6 +12332,13 @@ function FetchH264VideoModule()
 
 		currentImageDateMs = frame.utc;
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
+
+		if (loadDynamicGroupLayout)
+		{
+			loadDynamicGroupLayout = false;
+			cameraListLoader.AsyncLoadDynamicGroupRects(loading.uniqueId, frame.width + "x" + frame.height);
+		}
+
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
 		if (loading.isLive)
@@ -14394,6 +14485,7 @@ function CameraNameLabels()
 
 	BI_CustomEvent.AddListener("ImageResized", onui3_cameraLabelsChanged);
 	BI_CustomEvent.AddListener("CameraListLoaded", onui3_cameraLabelsChanged);
+	BI_CustomEvent.AddListener("DynamicGroupLayoutLoaded", onui3_cameraLabelsChanged);
 
 	this.show = function (isHotkeyShow)
 	{
@@ -14416,8 +14508,8 @@ function CameraNameLabels()
 
 		if (show_names || show_overlay_icons)
 		{
-			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.fullwidth;
-			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.fullheight;
+			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.actualwidth;
+			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.actualheight;
 			var offsetCamHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Below;
 			var offsetNegativeLabelHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Above || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom;
 
@@ -14432,13 +14524,15 @@ function CameraNameLabels()
 
 			var imgPos = imageRenderer.GetSimulatedCamimgWrapperPosition();
 			var group = loaded.cam.group;
-			var rects = loaded.cam.rects;
+			var rects = cameraListLoader.GetGroupRects(loaded.cam.optionValue);
 			if (!group || group.length === 0)
 			{
 				group = [loaded.cam.optionValue];
 				rects = [[0, 0, loaded.cam.width, loaded.cam.height]];
 			}
 			var sb = new StringBuilder();
+			if (!rects || rects.length != group.length)
+				console.log("rects", rects);
 			for (var i = 0; i < group.length; i++)
 			{
 				var cam = cameraListLoader.GetCameraWithId(group[i]);
@@ -15520,9 +15614,9 @@ function StreamingProfile()
 				sizeToRequest.h = ~~(self.w / aspect);
 			}
 
-			// Do not request a dimension larger than 7680.  Resizable group streams will revert to a standard size.
 			if (resizableSource)
 			{
+				// Do not request a dimension larger than 7680.  Resizable group streams will revert to a standard size.
 				var aspect = (sizeToRequest.w / sizeToRequest.h);
 				if (sizeToRequest.w > imageRenderer.maxGroupImageDimension)
 				{
@@ -15535,6 +15629,15 @@ function StreamingProfile()
 					sizeToRequest.w = sizeToRequest.h * aspect;
 				}
 				sb.Append("&w=").Append(sizeToRequest.w);
+
+				loading.intendedW = sizeToRequest.w;
+				loading.intendedH = sizeToRequest.h;
+				var imgLoaded = videoPlayer.Loaded().image;
+				if (imgLoaded.id === loading.id)
+				{
+					imgLoaded.intendedW = loading.intendedW;
+					imgLoaded.intendedH = loading.intendedH;
+				}
 			}
 			sb.Append("&h=").Append(sizeToRequest.h);
 
