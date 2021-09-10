@@ -2738,6 +2738,7 @@ $(function ()
 	sessionManager.Initialize();
 
 	$(window).resize(resized);
+	$(window).resize(debounce(AfterWindowResized, 250));
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
 
 	window.addEventListener("beforeunload", function ()
@@ -2750,6 +2751,13 @@ $(function ()
 
 	BI_CustomEvent.Invoke("UI_Loading_End");
 });
+function AfterWindowResized()
+{
+	if (allowResizableGroups && videoPlayer.Loading().image.isGroup)
+	{
+		videoPlayer.ReopenStreamAtCurrentSeekPosition();
+	}
+}
 function ValidateTabName(tabName)
 {
 	if (tabName === "alerts")
@@ -13940,6 +13948,7 @@ function ImageRenderer()
 	previousImageDraw.h = -1;
 	previousImageDraw.z = 10;
 
+	this.minGroupImageDimension = 240; // Strictly >= 240 or else dynamic group layouts are broken
 	this.maxGroupImageDimension = 3000; // Strictly <= 7680 or else dynamic group layouts are broken
 
 	var $layoutbody = $("#layoutbody");
@@ -13958,7 +13967,9 @@ function ImageRenderer()
 
 		var bodyW = $layoutbody.width();
 		var bodyH = $layoutbody.height();
-		var resizableSource = allowResizableGroups && ciLoading.isGroup && (bodyW * dpiScalingFactor * ssFactor) >= 240 && (bodyH * dpiScalingFactor * ssFactor) >= 240;
+		var resizableSource = allowResizableGroups && ciLoading.isGroup
+			&& (bodyW * dpiScalingFactor * ssFactor) >= self.minGroupImageDimension
+			&& (bodyH * dpiScalingFactor * ssFactor) >= self.minGroupImageDimension;
 		var srcNativeWidth = resizableSource ? bodyW : ciLoading.fullwidth;
 		var srcNativeHeight = resizableSource ? bodyH : ciLoading.fullheight;
 		var srcNativeAspect = srcNativeWidth / srcNativeHeight;
@@ -15439,8 +15450,31 @@ function StreamingProfile()
 		// Jpeg size arguments are handled elsewhere.
 		if (self.vcodec === "h264")
 		{
-			// function args w and h are the native resolution of the stream, and will help us determine what to request here.
-			// However this method should still work if w and h were omitted.
+			// local variables w and h are the native resolution of the stream, and will help us determine what to request here.
+
+			// Dynamically-sized groups ignore the stated native resolution.
+			var resizableSource = allowResizableGroups && loading.isGroup;
+			if (resizableSource)
+			{
+				var dpiScalingFactor = BI_GetDevicePixelRatio();
+				var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
+				if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
+					ssFactor = 1;
+				var zoomFactor = imageRenderer.zoomHandler.GetZoomFactor();
+				var $layoutbody = $("#layoutbody");
+				var bodyW = $layoutbody.width();
+				var bodyH = $layoutbody.height();
+				resizableSource = resizableSource
+					&& (bodyW * dpiScalingFactor * ssFactor) >= imageRenderer.minGroupImageDimension
+					&& (bodyH * dpiScalingFactor * ssFactor) >= imageRenderer.minGroupImageDimension;
+				if (resizableSource)
+				{
+					w = bodyW * dpiScalingFactor * ssFactor;
+					h = bodyH * dpiScalingFactor * ssFactor;
+				}
+			}
+
+			// This method should still work if w and h were omitted.
 			var aspect;
 			if (!w || !h)
 			{
@@ -15448,6 +15482,7 @@ function StreamingProfile()
 				h = 720;
 			}
 			aspect = w / h;
+			var sizeToRequest = { w: 0, h: 0 };
 			if (self.w > 0 && self.h > 0)
 			{
 				// If both width and height are provided in the profile, UI3 will allow the 90-degree rotated form of this. Otherwise the width or height arguments will be strict limits.
@@ -15464,14 +15499,44 @@ function StreamingProfile()
 				}
 				var profileAspect = maxW / maxH;
 				if (profileAspect >= aspect)
-					sb.Append("&h=").Append(maxH);
+				{
+					sizeToRequest.w = ~~(maxH * aspect); // ~~ is like casting to int
+					sizeToRequest.h = maxH;
+				}
 				else
-					sb.Append("&h=").Append(~~(maxW / aspect)); // ~~ is like casting to int
+				{
+					sizeToRequest.w = maxW;
+					sizeToRequest.h = ~~(maxW / aspect);
+				}
 			}
 			else if (self.h >= 1)
-				sb.Append("&h=").Append(self.h);
+			{
+				sizeToRequest.w = ~~(self.h * aspect);
+				sizeToRequest.h = self.h;
+			}
 			else if (self.w >= 1)
-				sb.Append("&h=").Append(~~(self.w / aspect));
+			{
+				sizeToRequest.w = self.w;
+				sizeToRequest.h = ~~(self.w / aspect);
+			}
+
+			// Do not request a dimension larger than 7680.  Resizable group streams will revert to a standard size.
+			if (resizableSource)
+			{
+				var aspect = (sizeToRequest.w / sizeToRequest.h);
+				if (sizeToRequest.w > imageRenderer.maxGroupImageDimension)
+				{
+					sizeToRequest.w = imageRenderer.maxGroupImageDimension;
+					sizeToRequest.h = sizeToRequest.w / aspect;
+				}
+				if (sizeToRequest.h > imageRenderer.maxGroupImageDimension)
+				{
+					sizeToRequest.h = imageRenderer.maxGroupImageDimension;
+					sizeToRequest.w = sizeToRequest.h * aspect;
+				}
+				sb.Append("&w=").Append(sizeToRequest.w);
+			}
+			sb.Append("&h=").Append(sizeToRequest.h);
 
 			var kbps = -1; // -1: inherit, 0: no limit, 10-8192: limit
 			if (self.limitBitrate === 1)
@@ -26284,4 +26349,13 @@ function ShowErrorDialog(messageText)
 	dialogContent.append(messageBox);
 
 	dialogContent.modalDialog({ title: "Error" });
+}
+function debounce(fn, delay)
+{
+	var timeout = null;
+	return function ()
+	{
+		clearTimeout(timeout);
+		timeout = setTimeout(fn, delay);
+	};
 }
