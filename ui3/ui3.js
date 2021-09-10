@@ -14051,6 +14051,11 @@ function ImageRenderer()
 		{
 			widthForSizing = imgForSizing.intendedW;
 			heightForSizing = imgForSizing.intendedH;
+			if (!widthForSizing || !heightForSizing)
+			{
+				widthForSizing = imgForSizing.actualwidth;
+				heightForSizing = imgForSizing.actualheight;
+			}
 		}
 		else if (settings.ui3_zoom1x_mode === "Stream")
 		{
