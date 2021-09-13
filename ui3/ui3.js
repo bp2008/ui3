@@ -6,7 +6,6 @@
 "use strict";
 var developerMode = false;
 var isReloadingUi3 = false;
-var allowResizableGroups = true;
 var appPath = GetAppPath();
 if (navigator.cookieEnabled)
 {
@@ -834,7 +833,7 @@ var defaultSettings =
 			, value: "Recordings"
 			, inputType: "select"
 			, options: ["None", "Live View", "Recordings", "Both"]
-			, label: 'Double-Click to Fullscreen<br><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a>'
+			, label: 'Double-Click to Fullscreen<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a></div>'
 			, category: "Video Player"
 		}
 		, {
@@ -873,7 +872,7 @@ var defaultSettings =
 			, value: HTML5DelayCompensationOptions.Normal
 			, inputType: "select"
 			, options: [HTML5DelayCompensationOptions.None, HTML5DelayCompensationOptions.Weak, HTML5DelayCompensationOptions.Normal, HTML5DelayCompensationOptions.Strong]
-			, label: 'HTML5 Video Delay Compensation <a href="javascript:UIHelp.LearnMore(\'HTML5 Video Delay Compensation\')">(learn more)</a>'
+			, label: 'HTML5 Video Delay Compensation <div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'HTML5 Video Delay Compensation\')">(learn more)</a></div>'
 			, preconditionFunc: Precondition_ui3_html5_delay_compensation
 			, category: "Video Player"
 		}
@@ -881,7 +880,7 @@ var defaultSettings =
 			key: "ui3_force_gop_1sec"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<span style="color:#FF0000">Firefox Stutter Fix</span> <a href="javascript:UIHelp.LearnMore(\'Firefox Stutter Fix\')">(learn more)</a>'
+			, label: '<span style="color:#FF0000">Firefox Stutter Fix</span> <div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Firefox Stutter Fix\')">(learn more)</a></div>'
 			, onChange: OnChange_ui3_force_gop_1sec
 			, preconditionFunc: Precondition_ui3_force_gop_1sec
 			, category: "Video Player"
@@ -919,7 +918,7 @@ var defaultSettings =
 			, value: "Server"
 			, inputType: "select"
 			, options: ["Server", "Local (JPEG)", "Local (PNG)"]
-			, label: 'Source of snapshot downloads<br><a href="javascript:UIHelp.LearnMore(\'Local Snapshots\')">(learn more)</a>'
+			, label: 'Source of snapshot downloads<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Local Snapshots\')">(learn more)</a></div>'
 			, onChange: OnChange_ui3_download_snapshot_method
 			, category: "Video Player"
 		}
@@ -979,6 +978,14 @@ var defaultSettings =
 			, maxValue: 5000
 			, inputType: "number"
 			, label: 'Audio Buffer Size Milliseconds<div class="settingDesc">(max audio delay)</div>'
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_dynamicGroupLayout"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Dynamic Group Layout<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Dynamic Group Layout\')">(learn more)</a></div>'
+			, onChange: OnChange_ui3_dynamicGroupLayout
 			, category: "Video Player"
 		}
 		, {
@@ -2753,10 +2760,12 @@ $(function ()
 });
 function AfterWindowResized()
 {
-	if (allowResizableGroups && videoPlayer.Loading().image.isGroup)
-	{
+	if (cameraListLoader.isDynamicLayoutEnabled(videoPlayer.Loading().image.id, true))
 		videoPlayer.ReopenStreamAtCurrentSeekPosition();
-	}
+}
+function OnChange_ui3_dynamicGroupLayout()
+{
+	videoPlayer.ReopenStreamAtCurrentSeekPosition();
 }
 function ValidateTabName(tabName)
 {
@@ -10127,7 +10136,6 @@ function CameraListLoader()
 				return;
 			if (!g[resolution])
 				g[resolution] = "pending";
-			console.log("AsyncLoadDynamicGroupRects", groupId, resolution);
 			ExecJSON({ cmd: "ptz", camera: groupId }, function (response)
 			{
 				if (g[resolution] === "pending")
@@ -10137,7 +10145,6 @@ function CameraListLoader()
 					if (response.result === "success")
 					{
 						g[resolution] = response.data.rects;
-						console.log(" --> ", groupId, resolution, response.data.rects, response);
 						BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
 					}
 					else
@@ -10167,28 +10174,31 @@ function CameraListLoader()
 	}
 	this.GetDynamicGroupRects = function (groupId, resolution)
 	{
-		if (!resolution)
+		if (self.isDynamicLayoutEnabled(groupId))
 		{
-			var loadedImg = videoPlayer.Loaded().image;
-			if (loadedImg.id === groupId)
-				resolution = loadedImg.actualwidth + "x" + loadedImg.actualheight;
-		}
-		if (resolution)
-		{
-			var g = dynamicGroupLayout[groupId];
-			if (g)
+			if (!resolution)
 			{
-				var rects = g[resolution];
-				if (rects !== "pending")
-					return rects;
+				var loadedImg = videoPlayer.Loaded().image;
+				if (loadedImg.id === groupId)
+					resolution = loadedImg.actualwidth + "x" + loadedImg.actualheight;
+			}
+			if (resolution)
+			{
+				var g = dynamicGroupLayout[groupId];
+				if (g)
+				{
+					var rects = g[resolution];
+					if (rects !== "pending")
+						return rects;
+				}
 			}
 		}
 		return null;
 	}
-	this.isDynamicLayoutEnabled = function (groupId)
+	this.isDynamicLayoutEnabled = function (groupId, ignoreViewportSize)
 	{
 		var cam = self.GetCameraWithId(groupId);
-		return cam && self.CameraIsGroup(cam) && allowResizableGroups && cam.dynamic;
+		return cam && self.CameraIsGroup(cam) && settings.ui3_dynamicGroupLayout === "1" && cam.dynamic && (ignoreViewportSize || imageRenderer.ViewportCanSupportDynamicGroupLayout());
 	}
 	this.HideWebcastingWarning = function ()
 	{
@@ -10197,7 +10207,7 @@ function CameraListLoader()
 	}
 	this.GetCameraBoundsInCurrentGroupImageScaled = function (cameraId, groupId, resolution)
 	{
-		var coordScale = videoPlayer.Loaded().image.actualwidth / videoPlayer.Loaded().image.fullwidth;
+		var coordScale = self.isDynamicLayoutEnabled(groupId) ? 1 : (videoPlayer.Loaded().image.actualwidth / videoPlayer.Loaded().image.fullwidth);
 		var unscaled = self.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId, resolution);
 		if (unscaled == null)
 			return null;
@@ -10715,8 +10725,11 @@ function VideoPlayerController()
 		var mouseRelX = parseFloat((event.mouseX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
 		var mouseRelY = parseFloat((event.mouseY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
 
-		var x = currentlyLoadedImage.actualwidth * mouseRelX;
-		var y = currentlyLoadedImage.actualheight * mouseRelY;
+		var nativeRes = cameraListLoader.isDynamicLayoutEnabled(currentlyLoadedImage.id)
+			? { w: currentlyLoadedImage.actualwidth, h: currentlyLoadedImage.actualheight }
+			: { w: currentlyLoadedImage.fullwidth, h: currentlyLoadedImage.fullheight };
+		var x = nativeRes.w * mouseRelX;
+		var y = nativeRes.h * mouseRelY;
 		var camData = currentlyLoadedCamera;
 		if (camData)
 		{
@@ -11615,7 +11628,7 @@ function JpegVideoModule()
 		}
 
 		var sizeToRequest = imageRenderer.GetSizeToRequest(true, loading);
-		var sizeArgs = "&w=" + sizeToRequest.w + (allowResizableGroups && loading.isGroup ? "&h=" + sizeToRequest.h : "");
+		var sizeArgs = "&w=" + sizeToRequest.w + (cameraListLoader.isDynamicLayoutEnabled(loading.id) ? "&h=" + sizeToRequest.h : "");
 		$("#camimg").attr('loadingimg', loading.id);
 
 		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
@@ -11657,7 +11670,7 @@ function JpegVideoModule()
 	}
 	var CouldBenefitFromSizeChange = function (newSize)
 	{
-		if (allowResizableGroups && loading.isGroup)
+		if (cameraListLoader.isDynamicLayoutEnabled(loading.id))
 			return (newSize.w > lastRequestedSize.w && loading.fullwidth > lastRequestedSize.w)
 				|| (newSize.h > lastRequestedSize.h && loading.fullheight > lastRequestedSize.h);
 		else
@@ -13354,6 +13367,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	{
 		var w = player.videoWidth;
 		var h = player.videoHeight;
+		if (w === 0 && h === 0)
+			return;
 		while (!frameMetadataQueue.IsEmpty())
 		{
 			var meta = frameMetadataQueue.Get();
@@ -14058,9 +14073,7 @@ function ImageRenderer()
 
 		var bodyW = $layoutbody.width();
 		var bodyH = $layoutbody.height();
-		var resizableSource = allowResizableGroups && ciLoading.isGroup
-			&& (bodyW * dpiScalingFactor * ssFactor) >= self.minGroupImageDimension
-			&& (bodyH * dpiScalingFactor * ssFactor) >= self.minGroupImageDimension;
+		var resizableSource = cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
 		var srcNativeWidth = resizableSource ? bodyW : ciLoading.fullwidth;
 		var srcNativeHeight = resizableSource ? bodyH : ciLoading.fullheight;
 		var srcNativeAspect = srcNativeWidth / srcNativeHeight;
@@ -14122,6 +14135,17 @@ function ImageRenderer()
 		// Now we have the size we need.  Determine what argument we will send to Blue Iris
 		return { w: parseInt(Math.round(imgDrawWidth)), h: parseInt(Math.round(imgDrawHeight)) };
 	}
+
+	this.ViewportCanSupportDynamicGroupLayout = function ()
+	{
+		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
+		if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
+			ssFactor = 1;
+		var bodyW = $layoutbody.width();
+		var bodyH = $layoutbody.height();
+		return (bodyW * dpiScalingFactor * ssFactor) >= self.minGroupImageDimension
+			&& (bodyH * dpiScalingFactor * ssFactor) >= self.minGroupImageDimension;
+	}
 	this.SetMousePos = function (x, y)
 	{
 		mouseX = x;
@@ -14148,7 +14172,7 @@ function ImageRenderer()
 		var imgForSizing = videoPlayer.Loaded().image;
 		var widthForSizing;
 		var heightForSizing;
-		var resizableSource = allowResizableGroups && imgForSizing.isGroup;
+		var resizableSource = cameraListLoader.isDynamicLayoutEnabled(imgForSizing.id);
 		if (resizableSource)
 		{
 			widthForSizing = imgForSizing.intendedW;
@@ -14508,8 +14532,11 @@ function CameraNameLabels()
 
 		if (show_names || show_overlay_icons)
 		{
-			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / loaded.image.actualwidth;
-			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / loaded.image.actualheight;
+			var nativeRes = cameraListLoader.isDynamicLayoutEnabled(loaded.image.id)
+				? { w: loaded.image.actualwidth, h: loaded.image.actualheight }
+				: { w: loaded.image.fullwidth, h: loaded.image.fullheight };
+			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / nativeRes.w;
+			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / nativeRes.h;
 			var offsetCamHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Below;
 			var offsetNegativeLabelHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Above || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom;
 
@@ -15547,7 +15574,7 @@ function StreamingProfile()
 			// local variables w and h are the native resolution of the stream, and will help us determine what to request here.
 
 			// Dynamically-sized groups ignore the stated native resolution.
-			var resizableSource = allowResizableGroups && loading.isGroup;
+			var resizableSource = cameraListLoader.isDynamicLayoutEnabled(loading.id);
 			if (resizableSource)
 			{
 				var dpiScalingFactor = BI_GetDevicePixelRatio();
@@ -15628,7 +15655,7 @@ function StreamingProfile()
 					sizeToRequest.h = imageRenderer.maxGroupImageDimension;
 					sizeToRequest.w = sizeToRequest.h * aspect;
 				}
-				sb.Append("&w=").Append(sizeToRequest.w);
+				sb.Append("&w=").Append(parseInt(Math.round(sizeToRequest.w)));
 
 				loading.intendedW = sizeToRequest.w;
 				loading.intendedH = sizeToRequest.h;
@@ -15639,7 +15666,7 @@ function StreamingProfile()
 					imgLoaded.intendedH = loading.intendedH;
 				}
 			}
-			sb.Append("&h=").Append(sizeToRequest.h);
+			sb.Append("&h=").Append(parseInt(Math.round(sizeToRequest.h)));
 
 			var kbps = -1; // -1: inherit, 0: no limit, 10-8192: limit
 			if (self.limitBitrate === 1)
@@ -24963,6 +24990,9 @@ function UIHelpTool()
 			case "Local Snapshots":
 				UI3_Local_Snapshots_Help();
 				break;
+			case "Dynamic Group Layout":
+				UI3_Dynamic_Group_Layout();
+				break;
 		}
 	}
 	var Context_Menu_Trigger = function ()
@@ -25091,6 +25121,13 @@ function UIHelpTool()
 			+ "<li>Same as Local (JPEG) except snapshots are saved in PNG format.  Slightly better quality, much larger file size.  Still typically worse than server-sourced snapshots.</li>"
 			+ "</ul>"
 			+ '</div>').modalDialog({ title: 'Server Snapshots vs Local Snapshots', closeOnOverlayClick: true });
+	}
+	var UI3_Dynamic_Group_Layout = function ()
+	{
+		$('<div class="UIHelp">'
+			+ "<p>If \"Dynamic Group Layout\" is enabled, the layout of your camera groups will be optimized to best-fit your current browser window.  This only works for groups that are configured in Blue Iris to have an \"Auto\" aspect ratio.</p>"
+			+ "<p>Requires Blue Iris 5.5.x or newer.</p>"
+			+ '</div>').modalDialog({ title: 'Dynamic Group Layout', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
