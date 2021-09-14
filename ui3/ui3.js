@@ -421,6 +421,7 @@ var clipThumbnailVideoPreview = null;
 var nerdStats = null;
 var sessionTimeout = null;
 var clipOverlayCfg = null;
+var groupCfg = null;
 var programmaticSoundPlayer = null;
 
 var currentPrimaryTab = "";
@@ -774,6 +775,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_clipOverlayCfg"
+			, value: ""
+		}
+		, {
+			key: "ui3_groupCfg"
 			, value: ""
 		}
 		, {
@@ -2707,6 +2712,8 @@ $(function ()
 
 	clipOverlayCfg = new ClipOverlayCfg();
 
+	groupCfg = new GroupCfg();
+
 	programmaticSoundPlayer = new ProgrammaticSoundPlayer();
 
 	togglableContextMenus = new Array();
@@ -2760,7 +2767,7 @@ $(function ()
 });
 function AfterWindowResized()
 {
-	if (cameraListLoader.isDynamicLayoutEnabled(videoPlayer.Loading().image.id, true))
+	if (cameraListLoader.isDynamicLayoutEnabled(videoPlayer.Loading().image.id, true) && !groupCfg.GetLockedResolution(videoPlayer.Loading().image.id))
 		videoPlayer.ReopenStreamAtCurrentSeekPosition();
 }
 function OnChange_ui3_dynamicGroupLayout()
@@ -11633,12 +11640,14 @@ function JpegVideoModule()
 
 		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 
+		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
-		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg;
+		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg + groupArgs;
 
 		if ($("#camimg").attr('src') == imgSrcPath)
 		{
@@ -11998,7 +12007,8 @@ function FetchH264VideoModule()
 		var videoUrl;
 		if (loading.isLive)
 		{
-			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + "&extend=2";
+			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&extend=2";
 			loadDynamicGroupLayout = true;
 		}
 		else
@@ -12240,7 +12250,10 @@ function FetchH264VideoModule()
 	this.GetLastSnapshotUrl = function ()
 	{
 		if (loading.isLive)
-			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + currentServer.GetAPISessionArg("&", true);
+		{
+			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true);
+		}
 		else
 			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs(loading.id);
 	}
@@ -14073,21 +14086,28 @@ function ImageRenderer()
 
 		var bodyW = $layoutbody.width();
 		var bodyH = $layoutbody.height();
+		var srcNativeWidth = ciLoading.fullwidth;
+		var srcNativeHeight = ciLoading.fullheight;
 		var resizableSource = cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
-		var srcNativeWidth = resizableSource ? bodyW : ciLoading.fullwidth;
-		var srcNativeHeight = resizableSource ? bodyH : ciLoading.fullheight;
+		if (resizableSource)
+		{
+			var lockedResolution = groupCfg.GetLockedResolution(ciLoading.id);
+			if (lockedResolution)
+			{
+				srcNativeWidth = lockedResolution.w;
+				srcNativeHeight = lockedResolution.h;
+			}
+			else
+			{
+				srcNativeWidth = bodyW;
+				srcNativeHeight = bodyH;
+			}
+		}
 		var srcNativeAspect = srcNativeWidth / srcNativeHeight;
 		var imgDrawWidth = srcNativeWidth * dpiScalingFactor * ssFactor;
 		var imgDrawHeight = srcNativeHeight * dpiScalingFactor * ssFactor;
 
-		ciLoading.intendedW = imgDrawWidth;
-		ciLoading.intendedH = imgDrawHeight;
-		var imgLoaded = videoPlayer.Loaded().image;
-		if (imgLoaded.id === ciLoading.id)
-		{
-			imgLoaded.intendedW = ciLoading.intendedW;
-			imgLoaded.intendedH = ciLoading.intendedH;
-		}
+		SetIntendedSize(ciLoading, imgDrawWidth, imgDrawHeight);
 
 		imgDrawWidth *= zoomFactor;
 		imgDrawHeight *= zoomFactor;
@@ -15177,19 +15197,151 @@ function ClipOverlayCfg()
 	{
 		var urlArgs = "";
 
-		var motionoverlay = clipOverlayCfg.GetMotionOverlay(camId);
+		var motionoverlay = self.GetMotionOverlay(camId);
 		if (motionoverlay === 1)
 			urlArgs += "&addmotion=0";
 		else if (motionoverlay === 2)
 			urlArgs += "&addmotion=1";
 
-		var textoverlay = clipOverlayCfg.GetTextOverlay(camId);
+		var textoverlay = self.GetTextOverlay(camId);
 		if (textoverlay === 1)
 			urlArgs += "&addoverlay=0";
 		else if (textoverlay === 2)
 			urlArgs += "&addoverlay=1";
 
 		return urlArgs;
+	}
+}
+///////////////////////////////////////////////////////////////
+// Group Streaming Configuration //////////////////////////////
+///////////////////////////////////////////////////////////////
+/**
+	Provides storage of group configuration on a per-group basis.
+	For boolean setting overrides, value 0 indicates "UNSET". 1 indicates "OFF". 2 indicates "ON".
+ */
+function GroupCfg()
+{
+	var self = this;
+	var cfg = {};
+	var keyMap = {
+		showCameraNames: "scn",
+		showCameraBorders: "scb",
+		showHiddenCameras: "shc",
+		hideDisabledCameras: "hdc",
+		hideInactiveCamerasWithoutVideo: "hicwv",
+		lockedResolution: "lr"
+	};
+	try
+	{
+		var json = settings.ui3_groupCfg;
+		if (json)
+			cfg = JSON.parse(json);
+	}
+	catch (ex)
+	{
+		toaster.Error(ex);
+	}
+	this.Get = function (camId, key)
+	{
+		if (camId)
+		{
+			var camCfg = cfg[camId];
+			if (camCfg)
+			{
+				if (keyMap[key])
+					key = keyMap[key];
+				var val = camCfg[key];
+				return val;
+			}
+		}
+		return 0;
+	}
+	this.Set = function (camId, key, val)
+	{
+		var camData = cameraListLoader.GetCameraWithId(camId);
+		if (camData)
+		{
+			if (cameraListLoader.CameraIsGroup(camData))
+			{
+				if (keyMap[key])
+					key = keyMap[key];
+				var camCfg = cfg[camId];
+				if (!camCfg)
+					cfg[camId] = camCfg = {};
+				camCfg[key] = val;
+
+				if (typeof val === "undefined" || val === null || val === 0)
+					delete camCfg[key];
+
+				var hasAnyProps = false;
+				for (var id in camCfg)
+				{
+					if (camCfg.hasOwnProperty(id))
+					{
+						hasAnyProps = true;
+						break;
+					}
+				}
+				if (!hasAnyProps)
+					delete cfg[camId];
+
+				settings.ui3_groupCfg = JSON.stringify(cfg);
+			}
+		}
+	}
+	this.GetUrlArgs = function (camId)
+	{
+		var flagMask = { flags: 0, mask: 0 };
+
+		SetFlagMask(camId, flagMask, 0, "showCameraNames");
+		SetFlagMask(camId, flagMask, 1, "showCameraBorders");
+		SetFlagMask(camId, flagMask, 2, "showHiddenCameras");
+		SetFlagMask(camId, flagMask, 3, "hideDisabledCameras");
+		SetFlagMask(camId, flagMask, 4, "hideInactiveCamerasWithoutVideo");
+
+		var urlArgs = "";
+		if (flagMask.mask > 0)
+			urlArgs = "&flags=" + flagMask.flags + "&mask=" + flagMask.mask;
+		return urlArgs;
+	}
+	var SetFlagMask = function (camId, flagMask, index, key)
+	{
+		var value = self.Get(camId, key);
+		if (value === 1 || value === 2)
+		{
+			flagMask.mask |= (1 << index);
+			if (value === 2)
+				flagMask.flags |= (1 << index);
+		}
+	}
+	this.GetResolutionThatWouldBeLockedIn = function (image)
+	{
+		var w = image.intendedW;
+		var h = image.intendedH;
+		if (w < image.actualwidth || h < image.actualheight)
+		{
+			w = image.actualwidth;
+			h = image.actualheight;
+		}
+		return w + "x" + h;
+	}
+	this.LockResolution = function (image)
+	{
+		self.Set(image.id, "lockedResolution", self.GetResolutionThatWouldBeLockedIn(image));
+	}
+	this.UnlockResolution = function (image)
+	{
+		self.Set(image.id, "lockedResolution", null);
+	}
+	this.GetLockedResolution = function (camId)
+	{
+		var lockedResolution = self.Get(camId, "lockedResolution");
+		if (lockedResolution)
+		{
+			var parts = lockedResolution.split('x');
+			return { w: parseInt(parts[0]), h: parseInt(parts[1]) };
+		}
+		return null;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -15585,6 +15737,12 @@ function StreamingProfile()
 				var $layoutbody = $("#layoutbody");
 				var bodyW = $layoutbody.width();
 				var bodyH = $layoutbody.height();
+				var lockedResolution = groupCfg.GetLockedResolution(loading.id);
+				if (lockedResolution)
+				{
+					bodyW = lockedResolution.w;
+					bodyH = lockedResolution.h;
+				}
 				resizableSource = resizableSource
 					&& (bodyW * dpiScalingFactor * ssFactor) >= imageRenderer.minGroupImageDimension
 					&& (bodyH * dpiScalingFactor * ssFactor) >= imageRenderer.minGroupImageDimension;
@@ -15657,14 +15815,7 @@ function StreamingProfile()
 				}
 				sb.Append("&w=").Append(parseInt(Math.round(sizeToRequest.w)));
 
-				loading.intendedW = sizeToRequest.w;
-				loading.intendedH = sizeToRequest.h;
-				var imgLoaded = videoPlayer.Loaded().image;
-				if (imgLoaded.id === loading.id)
-				{
-					imgLoaded.intendedW = loading.intendedW;
-					imgLoaded.intendedH = loading.intendedH;
-				}
+				SetIntendedSize(loading, sizeToRequest.w, sizeToRequest.h);
 			}
 			sb.Append("&h=").Append(parseInt(Math.round(sizeToRequest.h)));
 
@@ -15741,6 +15892,23 @@ function StreamingProfile()
 	this.IsCompatible = function ()
 	{
 		return self.vcodec === "jpeg" || (h264_playback_supported && self.vcodec === "h264");
+	}
+}
+function SetIntendedSize(loading, w, h)
+{
+	loading.intendedW = w;
+	loading.intendedH = h;
+	var imgLoading = videoPlayer.Loading().image;
+	if (imgLoading.id === loading.id)
+	{
+		imgLoading.intendedW = w;
+		imgLoading.intendedH = h;
+	}
+	var imgLoaded = videoPlayer.Loaded().image;
+	if (imgLoaded.id === loading.id)
+	{
+		imgLoaded.intendedW = w;
+		imgLoaded.intendedH = h;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -16275,6 +16443,24 @@ function CanvasContextMenu()
 
 	var onShowLiveContextMenu = function (menu)
 	{
+		var imgLoaded = videoPlayer.Loaded().image;
+		if (imgLoaded.isGroup)
+			$("#submenu_trigger_groupLayout").closest('.b-m-item,.b-m-ifocus').show();
+		else
+			$("#submenu_trigger_groupLayout").closest('.b-m-item,.b-m-ifocus').hide();
+
+		if (cameraListLoader.isDynamicLayoutEnabled(imgLoaded.id))
+		{
+			var lockedResolution = groupCfg.GetLockedResolution(imgLoaded.id);
+			if (lockedResolution)
+				$("#label_lockin_current_resolution").text("Unlock aspect ratio");
+			else
+				$("#label_lockin_current_resolution").text("Lock-in current aspect ratio");
+			$("#label_lockin_current_resolution").closest('.b-m-item,.b-m-ifocus').show();
+		}
+		else
+			$("#label_lockin_current_resolution").closest('.b-m-item,.b-m-ifocus').hide();
+
 		var itemsToDisable = ["cameraname"];
 		if (lastLiveContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
 		{
@@ -16300,7 +16486,7 @@ function CanvasContextMenu()
 	}
 	var onTriggerLiveContextMenu = function (e)
 	{
-		if (!videoPlayer.Loading().image.isLive)
+		if (!videoPlayer.Loading().image.isLive || !videoPlayer.Loaded().image.isLive)
 			return false;
 
 		mouseCoordFixer.fix(e);
@@ -16333,10 +16519,40 @@ function CanvasContextMenu()
 			$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
 			$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
 		}
+		var imgLoaded = videoPlayer.Loaded().image;
+		if (imgLoaded.isGroup)
+		{
+			ThreeStateMenuItem.Refresh("showCameraNames", groupCfg.Get(imgLoaded.id, "showCameraNames"));
+			ThreeStateMenuItem.Refresh("showCameraBorders", groupCfg.Get(imgLoaded.id, "showCameraBorders"));
+			ThreeStateMenuItem.Refresh("showHiddenCameras", groupCfg.Get(imgLoaded.id, "showHiddenCameras"));
+			ThreeStateMenuItem.Refresh("hideDisabledCameras", groupCfg.Get(imgLoaded.id, "hideDisabledCameras"));
+			ThreeStateMenuItem.Refresh("hideInactiveCamerasWithoutVideo", groupCfg.Get(imgLoaded.id, "hideInactiveCamerasWithoutVideo"));
+		}
+
 		return true;
 	}
 	var onLiveContextMenuAction = function ()
 	{
+		if (this.data.alias.endsWith("_nopreference")
+			|| this.data.alias.endsWith("_off")
+			|| this.data.alias.endsWith("_on"))
+		{
+			var imgLoaded = videoPlayer.Loaded().image;
+			if (imgLoaded.isGroup)
+			{
+				var parts = this.data.alias.split('_');
+				var key = parts[0];
+				var value = 0;
+				if (parts[1] === "off")
+					value = 1;
+				if (parts[1] === "on")
+					value = 2;
+				console.log("Setting " + imgLoaded.id + "." + key + " = " + parts[1]);
+				groupCfg.Set(imgLoaded.id, key, value);
+				videoPlayer.ReopenStreamAtCurrentSeekPosition();
+			}
+			return;
+		}
 		switch (this.data.alias)
 		{
 			case "maximize":
@@ -16389,6 +16605,22 @@ function CanvasContextMenu()
 			case "statsfornerds":
 				nerdStats.Open();
 				break;
+			case "lockin_current_resolution":
+				{
+					var imgLoaded = videoPlayer.Loaded().image;
+					if (cameraListLoader.isDynamicLayoutEnabled(imgLoaded.id))
+					{
+						var lockedResolution = groupCfg.GetLockedResolution(imgLoaded.id);
+						if (lockedResolution)
+						{
+							groupCfg.UnlockResolution(imgLoaded);
+							videoPlayer.ReopenStreamAtCurrentSeekPosition();
+						}
+						else
+							groupCfg.LockResolution(imgLoaded);
+					}
+					break;
+				}
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
 				break;
@@ -16405,6 +16637,18 @@ function CanvasContextMenu()
 				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
+				, {
+					text: "<span id=\"submenu_trigger_groupLayout\">Group Layout</span>", icon: "#svg_mio_apps", iconClass: "noflip", alias: "submenu_groupLayout",
+					type: "group",
+					items: [
+						{ text: "<span id=\"label_lockin_current_resolution\">Lock-in current aspect ratio</span>", icon: "#svg_mio_lock", iconClass: "noflip", alias: "lockin_current_resolution", action: onLiveContextMenuAction },
+						ThreeStateMenuItem.Create("showCameraNames", "Show camera names", onLiveContextMenuAction),
+						ThreeStateMenuItem.Create("showCameraBorders", "Show camera borders", onLiveContextMenuAction),
+						ThreeStateMenuItem.Create("showHiddenCameras", "Show hidden cameras", onLiveContextMenuAction),
+						ThreeStateMenuItem.Create("hideDisabledCameras", "Hide disabled cameras", onLiveContextMenuAction),
+						ThreeStateMenuItem.Create("hideInactiveCamerasWithoutVideo", "Hide inactive cameras without video&nbsp;", onLiveContextMenuAction)
+					]
+				}
 				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
@@ -16467,38 +16711,10 @@ function CanvasContextMenu()
 		var name = clipLoader.GetClipDisplayName(clipData);
 		$("#contextMenuClipName").text(name).closest(".b-m-item,.b-m-idisable").attr("title", name);
 
-		var motionoverlay = clipOverlayCfg.GetMotionOverlay(clipData.camera);
-		getIconWrapper("submenu_motionoverlays").find("use").attr("href", getIconId(motionoverlay));
-		setIconClass("motionoverlays_nopreference", motionoverlay === 0);
-		setIconClass("motionoverlays_off", motionoverlay === 1);
-		setIconClass("motionoverlays_on", motionoverlay === 2);
-
-		var textoverlay = clipOverlayCfg.GetTextOverlay(clipData.camera);
-		getIconWrapper("submenu_textoverlays").find("use").attr("href", getIconId(textoverlay));
-		setIconClass("textoverlays_nopreference", textoverlay === 0);
-		setIconClass("textoverlays_off", textoverlay === 1);
-		setIconClass("textoverlays_on", textoverlay === 2);
+		ThreeStateMenuItem.Refresh("motionoverlays", clipOverlayCfg.GetMotionOverlay(clipData.camera));
+		ThreeStateMenuItem.Refresh("textoverlays", clipOverlayCfg.GetTextOverlay(clipData.camera));
 
 		return true;
-	}
-	var getIconWrapper = function (spanId)
-	{
-		return $("#" + spanId).parent().siblings(".b-m-icon");
-	}
-	var getIconId = function (val)
-	{
-		if (val === 1)
-			return "#svg_mio_cbMinus";
-		if (val === 2)
-			return "#svg_mio_cbPlus";
-		return "#svg_mio_cbUnchecked";
-	}
-	var setIconClass = function (spanId, enabled)
-	{
-		if (enabled)
-			getIconWrapper(spanId).removeClass("iconGray");
-		else
-			getIconWrapper(spanId).addClass("iconGray");
 	}
 	var onRecordContextMenuAction = function ()
 	{
@@ -16598,24 +16814,8 @@ function CanvasContextMenu()
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
 				, { type: "splitLine" }
-				, {
-					text: "<span id=\"submenu_motionoverlays\">Motion overlays</span>", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "submenu_motionoverlays",
-					type: "group",
-					items: [
-						{ text: "<span id=\"motionoverlays_nopreference\">No preference</span>&nbsp;", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "motionoverlays_nopreference", action: onRecordContextMenuAction },
-						{ text: "<span id=\"motionoverlays_off\">Force OFF</span>", icon: "#svg_mio_cbMinus", iconClass: "noflip", alias: "motionoverlays_off", action: onRecordContextMenuAction },
-						{ text: "<span id=\"motionoverlays_on\">Force ON</span>", icon: "#svg_mio_cbPlus", iconClass: "noflip", alias: "motionoverlays_on", action: onRecordContextMenuAction }
-					]
-				}
-				, {
-					text: "<span id=\"submenu_textoverlays\">Text/graphic overlays</span>", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "submenu_textoverlays",
-					type: "group",
-					items: [
-						{ text: "<span id=\"textoverlays_nopreference\">No preference</span>&nbsp;", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "textoverlays_nopreference", action: onRecordContextMenuAction },
-						{ text: "<span id=\"textoverlays_off\">Force OFF</span>", icon: "#svg_mio_cbMinus", iconClass: "noflip", alias: "textoverlays_off", action: onRecordContextMenuAction },
-						{ text: "<span id=\"textoverlays_on\">Force ON</span>", icon: "#svg_mio_cbPlus", iconClass: "noflip", alias: "textoverlays_on", action: onRecordContextMenuAction }
-					]
-				}
+				, ThreeStateMenuItem.Create("motionoverlays", "Motion overlays", onRecordContextMenuAction)
+				, ThreeStateMenuItem.Create("textoverlays", "Text/graphic overlays", onRecordContextMenuAction)
 				, { type: "splitLine" }
 				, { text: "Close Clip", icon: "#svg_x5F_Error", alias: "closeclip", action: onRecordContextMenuAction }
 				, { type: "splitLine" }
@@ -16629,6 +16829,48 @@ function CanvasContextMenu()
 	};
 	$("#layoutbody").contextmenu(optionRecord);
 }
+var ThreeStateMenuItem = new (function ()
+{
+	this.Create = function (id, nameHtml, action)
+	{
+		return {
+			text: "<span id=\"submenu_trigger_" + id + "\">" + nameHtml + "</span>", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: "submenu_" + id,
+			type: "group",
+			items: [
+				{ text: "<span id=\"" + id + "_nopreference\" title=\"Value is inherited from server\">No preference</span>&nbsp;", icon: "#svg_mio_cbUnchecked", iconClass: "noflip", alias: id + "_nopreference", action: action },
+				{ text: "<span id=\"" + id + "_off\">Force OFF</span>", icon: "#svg_mio_cbMinus", iconClass: "noflip", alias: id + "_off", action: action },
+				{ text: "<span id=\"" + id + "_on\">Force ON</span>", icon: "#svg_mio_cbPlus", iconClass: "noflip", alias: id + "_on", action: action }
+			]
+		}
+	};
+	this.Refresh = function (id, value)
+	{
+		getIconWrapper("submenu_trigger_" + id).find("use").attr("href", getIconId(value));
+		setIconClass(id + "_nopreference", value === 0);
+		setIconClass(id + "_off", value === 1);
+		setIconClass(id + "_on", value === 2);
+	};
+
+	function getIconWrapper(spanId)
+	{
+		return $("#" + spanId).parent().siblings(".b-m-icon");
+	}
+	function getIconId(val)
+	{
+		if (val === 1)
+			return "#svg_mio_cbMinus";
+		if (val === 2)
+			return "#svg_mio_cbPlus";
+		return "#svg_mio_cbUnchecked";
+	}
+	function setIconClass(spanId, enabled)
+	{
+		if (enabled)
+			getIconWrapper(spanId).removeClass("iconGray");
+		else
+			getIconWrapper(spanId).addClass("iconGray");
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // Calendar Context Menu //////////////////////////////////////
 ///////////////////////////////////////////////////////////////
