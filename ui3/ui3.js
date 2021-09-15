@@ -10801,9 +10801,12 @@ function VideoPlayerController()
 		else
 		{
 			// Maximize
-			var loadedImg = videoPlayer.Loaded().image;
 			if (playerModule.DrawThumbAsFullCamera)
-				playerModule.DrawThumbAsFullCamera(camData.optionValue, loadedImg.id, loadedImg.actualwidth + "x" + loadedImg.actualheight);
+			{
+				var loadedImg = videoPlayer.Loaded().image;
+				if (loadedImg.id)
+					playerModule.DrawThumbAsFullCamera(camData.optionValue, loadedImg.id, loadedImg.actualwidth + "x" + loadedImg.actualheight);
+			}
 			self.LoadLiveCamera(camData);
 			if (playerModule.DrawThumbAsFullCamera)
 				self.CameraOrResolutionChange();
