@@ -994,6 +994,22 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
+			key: "ui3_videoStatusSounds"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Video Status Sounds<div class="settingDesc">Sound is emitted when video is lost or regained.</div>'
+			, onChange: OnChange_ui3_videoStatusSounds
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_videoStatusSpeech"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Video Status Speech<div class="settingDesc">Requires Video Status Sounds. Requires compatible browser. <a href="javascript:TestSpeech()">Click to test.</a></div>'
+			, onChange: OnChange_ui3_videoStatusSpeech
+			, category: "Video Player"
+		}
+		, {
 			key: "ui3_topbar_allclips_shortcut_show"
 			, value: "1"
 			, inputType: "checkbox"
@@ -11407,9 +11423,11 @@ function JpegVideoModule()
 			if (!this.complete || typeof this.naturalWidth == "undefined" || this.naturalWidth == 0)
 			{
 				// Failed
+				programmaticSoundPlayer.NotifyDisconnected();
 			}
 			else
 			{
+				programmaticSoundPlayer.NotifyReconnected();
 				loadedFirstFrame = true;
 				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
 				if (lastReceivedSize.w !== this.naturalWidth || lastReceivedSize.h !== this.naturalHeight)
@@ -11445,6 +11463,7 @@ function JpegVideoModule()
 		});
 		camObj.error(function ()
 		{
+			programmaticSoundPlayer.NotifyDisconnected();
 			ClearImageLoadTimeout();
 			setTimeout(GetNewImage, 1000);
 		});
@@ -12135,6 +12154,7 @@ function FetchH264VideoModule()
 	}
 	var acceptFrame = function (frame, streams)
 	{
+		programmaticSoundPlayer.NotifyReconnected();
 		if (documentIsHidden())
 		{
 			console.log("Stopping H.264 stream because the page is believed to be inactive.");
@@ -12408,6 +12428,7 @@ function FetchH264VideoModule()
 			if (!wasAppTriggered && !safeFetch.IsActive())
 			{
 				StopStreaming();
+				programmaticSoundPlayer.NotifyDisconnected();
 				if (failLimiter.Fail())
 				{
 					if (reconnectDelayedToast)
@@ -15027,8 +15048,9 @@ var biSoundPlayer = new (function ()
 	}
 	this.TestUserInputRequirement = function ()
 	{
-		if ((settings.ui3_sound_motion !== "None" || settings.ui3_sound_trigger !== "None")
-			&& settings.ui3_eventSoundVolume > 0)
+		var eventSoundPlayerEnabled = settings.ui3_eventSoundVolume > 0 && (settings.ui3_sound_motion !== "None" || settings.ui3_sound_trigger !== "None");
+		var videoStatusSoundsEnabled = settings.ui3_videoStatusSounds === "1";
+		if (eventSoundPlayerEnabled || videoStatusSoundsEnabled)
 		{
 			try
 			{
@@ -15040,7 +15062,16 @@ var biSoundPlayer = new (function ()
 					{
 						if (ex.name === "NotAllowedError")
 						{
-							inputRequiredOverlay.Show("event-triggered sound player");
+							var reason = "";
+							if (eventSoundPlayerEnabled)
+								reason += "event-triggered sound player";
+							if (videoStatusSoundsEnabled)
+							{
+								if (eventSoundPlayerEnabled)
+									reason += " and ";
+								reason += "video status sound player";
+							}
+							inputRequiredOverlay.Show(reason);
 						}
 					});
 				}
@@ -21782,7 +21813,10 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 			if (!jqXHR)
 				jqXHR = { status: 0, statusText: "No jqXHR object was created" };
 			jqXHR.OriginalURL = reqUrl;
-			jqXHR.ErrorMessageHtml = 'Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '<br>Status: ' + textStatus + '<br>Error: ' + errorThrown + '<br>URL: ' + reqUrl;
+			if (jqXHR.status === 0)
+				jqXHR.ErrorMessageHtml = "No connection to server.";
+			else
+				jqXHR.ErrorMessageHtml = 'Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '<br>Status: ' + textStatus + '<br>Error: ' + errorThrown + '<br>URL: ' + reqUrl;
 			console.error('Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '\nStatus: ' + textStatus + '\nError: ' + errorThrown + '\nURL: ' + reqUrl);
 			BI_CustomEvent.Invoke("ExecJSON_Fail", eventArgs);
 			if (callbackFail)
@@ -25584,7 +25618,7 @@ function ProgrammaticSoundPlayer()
 		{
 			try
 			{
-				console.log("Preparing Audio Context");
+				//console.log("Preparing Audio Context");
 				audioContext = new AudioContext(); // browsers limit the number of concurrent audio contexts
 			}
 			catch (ex)
@@ -25606,7 +25640,7 @@ function ProgrammaticSoundPlayer()
 		if (!PrepareAudioContext())
 			return 0;
 
-		console.log("Playing note ", arguments);
+		//console.log("Playing note ", arguments);
 		var edgeSofteningTime = Math.min(durationSeconds / 3, 0.02);
 
 		var oscillator = audioContext.createOscillator();
@@ -25657,32 +25691,119 @@ function ProgrammaticSoundPlayer()
 	{
 		self.PlayNotes([self.NoteHi, self.NoteLo]);
 	}
-
-	//BI_CustomEvent.AddListener("OpenVideo", function ()
-	//{
-	//	self.PlayNotes([
-	//		{ volume: 0.15, frequency: 286, durationSeconds: 0.125, offset: 0 },
-	//		{ volume: 0.15, frequency: 171, durationSeconds: 0.125, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
-	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
-	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
-	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
-	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
-	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
-	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
-	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
-	//		{ volume: 0.15, frequency: 114, durationSeconds: 0.20, offset: 2 },
-	//		{ volume: 0.15, frequency: 86, durationSeconds: 0.20, offset: 0 },
-	//		//{ volume: 1, frequency: 340, durationSeconds: 0.54, offset: 0.1 },
-	//	]);
-	//});
+	this.PlayDisconnectSound = function ()
+	{
+		self.PlayNotes([
+			{ volume: 0.2, frequency: 171, durationSeconds: 0.15, offset: 0 },
+			{ volume: 0.2, frequency: 114, durationSeconds: 0.15, offset: 0 },
+			{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 },
+		]);
+		if (settings.ui3_videoStatusSpeech === "1")
+			setTimeout(function ()
+			{
+				self.Speak("disconnected", true);
+			}, 450);
+	}
+	this.PlayConnectSound = function ()
+	{
+		self.PlayNotes([
+			{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 },
+			{ volume: 0.2, frequency: 114, durationSeconds: 0.15, offset: 0 },
+			{ volume: 0.2, frequency: 171, durationSeconds: 0.15, offset: 0 },
+		]);
+		if (settings.ui3_videoStatusSpeech === "1")
+			setTimeout(function ()
+			{
+				self.Speak("reconnected", true);
+			}, 450);
+	}
+	this.Speak = function (str, immediate)
+	{
+		try
+		{
+			if (immediate)
+				self.CancelSpeech();
+			var utterance = new SpeechSynthesisUtterance(str);
+			speechSynthesis.speak(utterance);
+		}
+		catch { }
+	}
+	this.CancelSpeech = function ()
+	{
+		try
+		{
+			speechSynthesis.cancel();
+		}
+		catch { }
+	}
+	var disconnectTimeout = null;
+	var isDisconnected = false;
+	var didEmitDisconnectedSound = false;
+	/**
+	 * Call when video stream connection is lost.
+	 */
+	this.NotifyDisconnected = function ()
+	{
+		if (!isDisconnected)
+		{
+			isDisconnected = true;
+			didEmitDisconnectedSound = false;
+			clearTimeout(disconnectTimeout);
+			disconnectTimeout = setTimeout(function ()
+			{
+				didEmitDisconnectedSound = true;
+				if (settings.ui3_videoStatusSounds === "1")
+					self.PlayDisconnectSound();
+				DisconnectedStatusBeeps();
+			}, 1000);
+		}
+	}
+	var DisconnectedStatusBeeps = function ()
+	{
+		disconnectTimeout = setTimeout(function ()
+		{
+			if (settings.ui3_videoStatusSounds === "1")
+				self.PlayNotes([{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 }]);
+			DisconnectedStatusBeeps();
+		}, 2000);
+	}
+	/**
+	 * Call when video stream connection is re-established after it is lost.
+	 */
+	this.NotifyReconnected = function ()
+	{
+		if (disconnectTimeout)
+			clearTimeout(disconnectTimeout);
+		if (isDisconnected)
+		{
+			isDisconnected = false;
+			if (didEmitDisconnectedSound && settings.ui3_videoStatusSounds === "1")
+				self.PlayConnectSound();
+		}
+	}
+}
+function OnChange_ui3_videoStatusSounds()
+{
+	if (settings.ui3_videoStatusSounds === "1")
+		programmaticSoundPlayer.PlayConnectSound();
+	else
+		programmaticSoundPlayer.PlayDisconnectSound();
+}
+function OnChange_ui3_videoStatusSpeech()
+{
+	if (settings.ui3_videoStatusSpeech === "1")
+		programmaticSoundPlayer.Speak("Speech enabled", true);
+	else
+		programmaticSoundPlayer.Speak("Speech disabled", true);
+}
+function TestSpeech()
+{
+	var speeches = [
+		"you eye three is great, and so are you!",
+		"are we there yet?",
+		"I want a cookie"
+	];
+	programmaticSoundPlayer.Speak(speeches[getRandomInt(speeches.length)], true);
 }
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
@@ -26743,4 +26864,8 @@ function debounce(fn, delay)
 		clearTimeout(timeout);
 		timeout = setTimeout(fn, delay);
 	};
+}
+function getRandomInt(maxPlusOne)
+{
+	return Clamp(Math.floor(Math.random() * maxPlusOne), 0, maxPlusOne - 1);
 }
