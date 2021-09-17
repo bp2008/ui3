@@ -74,6 +74,7 @@ var web_audio_autoplay_disabled = false;
 var cookies_accessible = false;
 var fetch_streams_cant_close_bug = false;
 var flac_supported = false;
+var speech_synthesis_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -107,6 +108,7 @@ function DoUIFeatureDetection()
 			exporting_clips_to_avi_supported = h264_playback_supported && export_blob_supported;
 			html5HistorySupported = isHtml5HistorySupported()
 			flac_supported = isFlacSupported();
+			speech_synthesis_supported = isSpeechSupported();
 
 			if (h264_playback_supported)
 			{
@@ -363,6 +365,17 @@ function detectVibrateSupport()
 	catch (ex) { }
 	return false;
 }
+function isSpeechSupported()
+{
+	try
+	{
+		return !!speechSynthesis;
+	}
+	catch
+	{
+		return false;
+	}
+}
 
 DoUIFeatureDetection();
 ///////////////////////////////////////////////////////////////
@@ -531,6 +544,17 @@ function GetDefaultH264PlayerOption()
 		return H264PlayerOptions.JavaScript;
 	return GetH264PlayerOptions()[0];
 }
+function GetSpeechVoiceOptions()
+{
+	var opt = [];
+	if (speech_synthesis_supported)
+	{
+		var voices = speechSynthesis.getVoices();
+		for (var i = 0; i < voices.length; i++)
+			opt.push(voices[i].name);
+	}
+	return opt;
+}
 var HTML5DelayCompensationOptions = {
 	None: "None",
 	Weak: "Weak",
@@ -542,7 +566,7 @@ var Zoom1xOptions = {
 	Stream: "Stream"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -999,7 +1023,7 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Video Status Sounds<div class="settingDesc">Sound is emitted when video is lost or regained.</div>'
 			, onChange: OnChange_ui3_videoStatusSounds
-			, category: "Video Player"
+			, category: "UI Status Sounds"
 		}
 		, {
 			key: "ui3_videoStatusSpeech"
@@ -1007,7 +1031,19 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Video Status Speech<div class="settingDesc">Requires Video Status Sounds. Requires compatible browser. <a href="javascript:TestSpeech()">Click to test.</a></div>'
 			, onChange: OnChange_ui3_videoStatusSpeech
-			, category: "Video Player"
+			, preconditionFunc: Precondition_ui3_speechAvailable
+			, category: "UI Status Sounds"
+		}
+		, {
+			key: "ui3_speechVoice"
+			, value: ""
+			, inputType: "select"
+			, options: []
+			, getOptions: GetSpeechVoiceOptions
+			, label: 'Speech Voice'
+			, onChange: OnChange_ui3_speechVoice
+			, preconditionFunc: Precondition_ui3_speechAvailable
+			, category: "UI Status Sounds"
 		}
 		, {
 			key: "ui3_topbar_allclips_shortcut_show"
@@ -25612,6 +25648,27 @@ function ProgrammaticSoundPlayer()
 	var self = this;
 
 	var audioContext = null;
+	var voice = null;
+
+	var Initialize = function ()
+	{
+		self.setVoice(settings.ui3_speechVoice);
+	}
+
+	this.setVoice = function(voiceName)
+	{
+		var voices = speechSynthesis.getVoices();
+		for (var i = 0; i < voices.length; i++)
+		{
+			if (voices[i].name === voiceName)
+			{
+				voice = voices[i];
+				return;
+			}
+		}
+		voice = voices.length ? voices[0] : null;
+	}
+
 	var PrepareAudioContext = function ()
 	{
 		if (!audioContext)
@@ -25724,6 +25781,9 @@ function ProgrammaticSoundPlayer()
 			if (immediate)
 				self.CancelSpeech();
 			var utterance = new SpeechSynthesisUtterance(str);
+			if (voice == null)
+				self.setVoice(settings.ui3_speechVoice);
+			utterance.voice = voice;
 			speechSynthesis.speak(utterance);
 		}
 		catch { }
@@ -25781,6 +25841,8 @@ function ProgrammaticSoundPlayer()
 				self.PlayConnectSound();
 		}
 	}
+
+	Initialize();
 }
 function OnChange_ui3_videoStatusSounds()
 {
@@ -25795,6 +25857,15 @@ function OnChange_ui3_videoStatusSpeech()
 		programmaticSoundPlayer.Speak("Speech enabled", true);
 	else
 		programmaticSoundPlayer.Speak("Speech disabled", true);
+}
+function OnChange_ui3_speechVoice()
+{
+	programmaticSoundPlayer.setVoice(settings.ui3_speechVoice);
+	programmaticSoundPlayer.Speak(settings.ui3_speechVoice, true);
+}
+function Precondition_ui3_speechAvailable()
+{
+	return speech_synthesis_supported;
 }
 function TestSpeech()
 {
