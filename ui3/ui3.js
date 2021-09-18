@@ -6801,6 +6801,8 @@ function ClipLoader(clipsBodySelector)
 	var lastLoadedCameraFilter = "index";
 	this.suppressClipListLoad = false;
 	var startupClipData = null;
+	var failedLoadToast = new PersistentToast("failedLoadToast", "ERROR");
+	var recoveryFunction = null;
 
 	// For updating an existing clip list
 	var newestClipDate = 0;
@@ -6940,6 +6942,8 @@ function ClipLoader(clipsBodySelector)
 
 		ExecJSON(args, function (response)
 		{
+			failedLoadToast.hide();
+			recoveryFunction = null;
 			if (response.result !== "success")
 			{
 				var failMessage = $('<div class="clipListText clipListFailed">Failed to load. Click to learn more.</div>');
@@ -7134,17 +7138,17 @@ function ClipLoader(clipsBodySelector)
 				if (isUpdateOfExistingList)
 					return; // Failures of a clip list update should just be ignored.
 				$clipsbody.html('<div class="clipListText">Failed to load!</div>');
-				var tryAgain = !isContinuationOfPreviousLoad && ++failedClipListLoads < 5
-				toaster.Error("Failed to load " + (args.cmd === "cliplist" ? "clip list" : "alert list") + ".<br/>Will " + (tryAgain ? "" : "NOT ") + "try again.<br/>" + jqXHR.ErrorMessageHtml, 5000);
+				var tryAgain = !isContinuationOfPreviousLoad && ++failedClipListLoads < 5;
+				failedLoadToast.showHtml("Failed to load " + (args.cmd === "cliplist" ? "clip list" : "alert list") + ".<br/>Will " + (tryAgain ? "" : "NOT ") + "try again.<br/>" + jqXHR.ErrorMessageHtml);
+
+				recoveryFunction = function ()
+				{
+					isLoadingAClipList = false;
+					loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
+				};
 
 				if (tryAgain)
-				{
-					setTimeout(function ()
-					{
-						isLoadingAClipList = false;
-						loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
-					}, 1000);
-				}
+					setTimeout(recoveryFunction, 1000);
 				else
 				{
 					isLoadingAClipList = false;
@@ -7153,6 +7157,14 @@ function ClipLoader(clipsBodySelector)
 				}
 			});
 	};
+	this.reloadIfInFailedState = function ()
+	{
+		if (recoveryFunction)
+		{
+			recoveryFunction();
+			recoveryFunction = null;
+		}
+	}
 	this.resizeClipList = function ()
 	{
 		var currentClipTileSize = getClipTileSize();
@@ -9019,6 +9031,7 @@ function StatusLoader()
 		}
 		ExecJSON(args, function (response)
 		{
+			EndConnectionErrors();
 			lastStatusUpdateAt = performance.now();
 			if (response && typeof response.result != "undefined" && response.result == "fail")
 			{
@@ -9125,7 +9138,8 @@ function StatusLoader()
 		{
 			if (statusUpdateTimeout != null)
 				clearTimeout(statusUpdateTimeout);
-			toaster.Error("An error occurred loading the server status.<br>" + jqXHR.ErrorMessageHtml);
+			if (!HandleGroupableConnectionError(jqXHR))
+				toaster.Error("An error occurred loading the server status.<br>" + jqXHR.ErrorMessageHtml);
 			statusUpdateTimeout = setTimeout(function ()
 			{
 				self.LoadStatus();
@@ -10028,6 +10042,7 @@ function CameraListLoader()
 		}
 		ExecJSON(args, function (response)
 		{
+			EndConnectionErrors();
 			if (typeof (response.data) == "undefined" || response.data.length == 0)
 			{
 				if (firstCameraListLoaded)
@@ -10163,7 +10178,8 @@ function CameraListLoader()
 		{
 			if (cameraListUpdateTimeout != null)
 				clearTimeout(cameraListUpdateTimeout);
-			toaster.Error("An error occurred loading the camera list.<br>" + jqXHR.ErrorMessageHtml);
+			if (!HandleGroupableConnectionError(jqXHR))
+				toaster.Error("An error occurred loading the camera list.<br>" + jqXHR.ErrorMessageHtml);
 			setTimeout(function ()
 			{
 				self.LoadCameraList(successCallbackFunc);
@@ -11902,7 +11918,8 @@ function FetchH264VideoModule()
 	var endSnapshotDisplayTimeout = null;
 	var currentImageDateMs = GetServerDate(new Date()).getTime();
 	var failLimiter = new FailLimiter(5, 20000);
-	var reconnectDelayedToast = null;
+	var reconnectDelayedToast = new PersistentToast("reconnectDelayedToast", "ERROR", true);
+	var reconnectingToast = new PersistentToast("reconnectingToast", "WARNING");
 	var failureRecoveryTimeout = null;
 	var didRequestAudio = false;
 	var canRequestAudio = false;
@@ -12167,11 +12184,7 @@ function FetchH264VideoModule()
 		else
 			volumeIconHelper.setColorIdle();
 		videoOverlayHelper.ShowLoadingOverlay(true);
-		if (reconnectDelayedToast)
-		{
-			reconnectDelayedToast.remove();
-			reconnectDelayedToast = null;
-		}
+		reconnectDelayedToast.hide();
 		if (startPaused)
 		{
 			self.Playback_Pause(); // If opening the stream while paused, the stream will stop after one frame.
@@ -12191,6 +12204,7 @@ function FetchH264VideoModule()
 	var acceptFrame = function (frame, streams)
 	{
 		programmaticSoundPlayer.NotifyReconnected();
+		reconnectingToast.hide();
 		if (documentIsHidden())
 		{
 			console.log("Stopping H.264 stream because the page is believed to be inactive.");
@@ -12467,16 +12481,15 @@ function FetchH264VideoModule()
 				programmaticSoundPlayer.NotifyDisconnected();
 				if (failLimiter.Fail())
 				{
-					if (reconnectDelayedToast)
-						reconnectDelayedToast.remove();
+					reconnectingToast.hide();
 					var delayMs = 300000; // 5 minutes
-					reconnectDelayedToast = toaster.Error("The video stream was lost.  Due to rapid failures, automatic reconnection will resume at " + GetTimeStr(new Date(Date.now() + delayMs)) + ".", delayMs, true);
+					reconnectDelayedToast.showText("The video stream was lost.  Due to rapid failures, automatic reconnection will resume at " + GetTimeStr(new Date(Date.now() + delayMs)) + ".");
 					clearTimeout(failureRecoveryTimeout);
 					failureRecoveryTimeout = setTimeout(ReopenStreamAtCurrentSeekPosition, delayMs);
 				}
 				else
 				{
-					toaster.Warning("The video stream was lost. Attempting to reconnect...", 5000);
+					reconnectingToast.showText("The video stream was lost. Attempting to reconnect...");
 					clearTimeout(failureRecoveryTimeout);
 					failureRecoveryTimeout = setTimeout(ReopenStreamAtCurrentSeekPosition, 2000);
 				}
@@ -21860,6 +21873,103 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 		}
 	});
 }
+function IsGroupableConnectionError(jqXHR)
+{
+	return !!jqXHR && (jqXHR.status === 0 || jqXHR.status === 503);
+}
+var connectionLostNotice = { toast: null, time: null, interval: null };
+function HandleGroupableConnectionError(jqXHR)
+{
+	if (IsGroupableConnectionError(jqXHR))
+	{
+		if (connectionLostNotice.toast == null)
+		{
+			connectionLostNotice.time = performance.now();
+			connectionLostNotice.toast = toaster.Error('<div id="connectionErrorToast">Server is unavailable (<span class="time"></span>)</div>', 99999999);
+			connectionLostNotice.interval = setInterval(UpdateConnectionLostTime, 500);
+			UpdateConnectionLostTime();
+		}
+		return true;
+	}
+	return false;
+}
+function UpdateConnectionLostTime()
+{
+	$("#connectionErrorToast .time").text(msToTime(performance.now() - connectionLostNotice.time));
+}
+function EndConnectionErrors()
+{
+	if (connectionLostNotice.interval !== null)
+	{
+		clearInterval(connectionLostNotice.interval);
+		connectionLostNotice.interval = null;
+	}
+	if (connectionLostNotice.toast !== null)
+	{
+		connectionLostNotice.toast.remove();
+		connectionLostNotice.toast = null;
+		videoPlayer.ReopenStreamAtCurrentSeekPosition();
+		clipLoader.reloadIfInFailedState();
+	}
+}
+function AddOrUpdateErrorToast(toast, elementId, html)
+{
+	if (!toast)
+		toast = toaster.Error('<div id="' + elementId + '"></div>', 99999999);
+	$("#" + elementId).html(html);
+	return toast;
+}
+function AddOrUpdateWarningToast(toast, elementId, html)
+{
+	if (!toast)
+		toast = toaster.Warning('<div id="' + elementId + '"></div>', 99999999);
+	$("#" + elementId).html(html);
+	return toast;
+}
+///////////////////////////////////////////////////////////////
+// Persistent Toast ///////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function PersistentToast(elementId, type, closeButton)
+{
+	var self = this;
+	var toast = null;
+	this.showText = function (text)
+	{
+		show();
+		$("#" + elementId).text(text);
+	}
+	this.showHtml = function (html)
+	{
+		show();
+		$("#" + elementId).html(html);
+	}
+	var show = function ()
+	{
+		if (!toast)
+		{
+			var fn = toaster.Error;
+			if (type.toUpperCase() === "WARNING")
+				fn = toaster.Warning;
+			else if (type.toUpperCase() === "INFO")
+				fn = toaster.Info;
+			else if (type.toUpperCase() === "SUCCESS")
+				fn = toaster.Success;
+			toast = fn('<div id="' + elementId + '"></div>', 99999999, closeButton);
+		}
+	}
+	this.hide = function ()
+	{
+		if (toast)
+		{
+			toast.remove();
+			toast = null;
+		}
+	}
+	this.isShowing = function ()
+	{
+		return !!toast;
+	}
+}
 ///////////////////////////////////////////////////////////////
 // Frame rate counter /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -25655,7 +25765,7 @@ function ProgrammaticSoundPlayer()
 		self.setVoice(settings.ui3_speechVoice);
 	}
 
-	this.setVoice = function(voiceName)
+	this.setVoice = function (voiceName)
 	{
 		var voices = speechSynthesis.getVoices();
 		for (var i = 0; i < voices.length; i++)
