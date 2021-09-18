@@ -2872,6 +2872,14 @@ function SetupCollapsibleTriggers()
 	});
 }
 ///////////////////////////////////////////////////////////////
+// Reload Interface ///////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ReloadInterface()
+{
+	isReloadingUi3 = true;
+	location.reload();
+}
+///////////////////////////////////////////////////////////////
 // Incoming URL Parameters ////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var skipLoadingFirstVideoStream = false;
@@ -9035,12 +9043,7 @@ function StatusLoader()
 			lastStatusUpdateAt = performance.now();
 			if (response && typeof response.result != "undefined" && response.result == "fail")
 			{
-				toaster.Warning('Your Blue Iris session may have expired.  This page will reload momentarily.', 10000);
-				setTimeout(function ()
-				{
-					isReloadingUi3 = true;
-					location.reload();
-				}, 5000);
+				sessionManager.ReestablishLostSession();
 				return;
 			}
 			var lrSave = lastResponse;
@@ -9565,6 +9568,7 @@ function SessionManager()
 	var permission_clips = true;
 	var permission_clipcreate = false;
 	var biSoundOptions = ["None"];
+	var sessionExpiredToast = null;
 	this.supportedHTML5AudioFormats = [".mp3", ".wav"]; // File extensions, in order of preference
 	this.Initialize = function ()
 	{
@@ -9631,7 +9635,7 @@ function SessionManager()
 						else
 						{
 							loadingHelper.SetErrorStatus("login", 'The current session is invalid or expired.  Reloading this page momentarily.');
-							setTimeout(function () { isReloadingUi3 = true; location.reload(); }, 3000);
+							setTimeout(ReloadInterface, 3000);
 							return;
 						}
 					}
@@ -9925,6 +9929,68 @@ function SessionManager()
 				toaster.Error(errorMessage, 3000);
 			});
 	}
+	this.ReestablishLostSession = function ()
+	{
+		if (sessionExpiredToast)
+			return;
+		sessionExpiredToast = toaster.Warning("Your Blue Iris session has expired. Attempting recovery...", 99999999);
+
+		var args = { cmd: "login" };
+		ExecJSON(args, function (response)
+		{
+			// We expect a result of "fail" and data.reason of "missing response"
+			if (response && response.result == "fail" && response.data && response.data.reason == "missing response")
+			{
+				// We need to log in
+				args.session = response.session;
+				if (settings.bi_username && settings.bi_password)
+					args.response = md5(Base64.decode(settings.bi_username) + ":" + response.session + ":" + Base64.decode(settings.bi_password));
+				else if (response.data["auth-exempt"])
+					args.response = md5("Anonymous:" + response.session + ":");
+				else
+				{
+					self.ReloadAfterWarning();
+					return;
+				}
+				ExecJSON(args, function (response)
+				{
+					lastResponse = response;
+					if (response.result && response.result == "success")
+					{
+						self.HandleSuccessfulLogin(response, true);
+						sessionExpiredToast.remove();
+						sessionExpiredToast = null;
+					}
+					else
+					{
+						settings.bi_username = "";
+						settings.bi_password = "";
+						toaster.Error('Failed to log in. ' + GetFailReason(response));
+						self.ReloadAfterWarning();
+					}
+				}, function (jqXHR, textStatus, errorThrown)
+				{
+					toaster.Error('Error contacting Blue Iris server during login phase 2.<br/>' + jqXHR.ErrorMessageHtml);
+					self.ReloadAfterWarning();
+				});
+			}
+			else
+			{
+				toaster.Error('Blue Iris sent session data instead of an authentication challenge (probably indicates a Blue Iris bug): ' + JSON.stringify(args) + " -> " + JSON.stringify(response));
+				self.ReloadAfterWarning();
+			}
+		}, function (jqXHR, textStatus, errorThrown)
+		{
+			toaster.Error('Error contacting Blue Iris server during login phase 1.<br/>' + jqXHR.ErrorMessageHtml);
+			self.ReloadAfterWarning();
+		});
+	}
+	this.ReloadAfterWarning = function ()
+	{
+		toaster.Info("Reloading UI3", 3000);
+		setTimeout(ReloadInterface, 3000);
+		programmaticSoundPlayer.NotifyReloadingUI();
+	}
 	this.PwKeypress = function (ele, e)
 	{
 		var keycode;
@@ -10043,6 +10109,11 @@ function CameraListLoader()
 		ExecJSON(args, function (response)
 		{
 			EndConnectionErrors();
+			if (response.result === "fail")
+			{
+				sessionManager.ReestablishLostSession();
+				return;
+			}
 			if (typeof (response.data) == "undefined" || response.data.length == 0)
 			{
 				if (firstCameraListLoaded)
@@ -13135,8 +13206,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 				$disablePnaclButton2.on('click', function ()
 				{
 					settings.ui3_h264_choice2 = H264PlayerOptions.HTML5;
-					isReloadingUi3 = true;
-					location.reload();
+					ReloadInterface();
 				});
 				$err.append($disablePnaclButton2);
 			}
@@ -13147,8 +13217,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			$disablePnaclButton.on('click', function ()
 			{
 				settings.ui3_h264_choice2 = H264PlayerOptions.JavaScript;
-				isReloadingUi3 = true;
-				location.reload();
+				ReloadInterface();
 			});
 			$err.append($disablePnaclButton);
 		}
@@ -21880,7 +21949,7 @@ function IsGroupableConnectionError(jqXHR)
 var connectionLostNotice = { toast: null, time: null, interval: null };
 function HandleGroupableConnectionError(jqXHR)
 {
-	if (IsGroupableConnectionError(jqXHR))
+	if (!jqXHR || IsGroupableConnectionError(jqXHR))
 	{
 		if (connectionLostNotice.toast == null)
 		{
@@ -22758,7 +22827,17 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 		{
 			try
 			{
-				if (res.headers.get("Content-Type") == "image/jpeg")
+				if (res.status === 0)
+				{
+					HandleGroupableConnectionError();
+					CallStreamEnded("Server unreachable");
+				}
+				else if (res.status === 503)
+				{
+					HandleGroupableConnectionError();
+					CallStreamEnded("Server responded saying service is unavailable");
+				}
+				else if (res.headers.get("Content-Type") == "image/jpeg")
 				{
 					var blobPromise = res.blob();
 					blobPromise.then(function (jpegBlob)
@@ -24670,8 +24749,7 @@ function UISettingsPanel()
 			AskYesNo('All UI settings will revert to their default values and the page will reload.<br><br><center>Continue?</center>', function ()
 			{
 				RevertSettingsToDefault();
-				isReloadingUi3 = true;
-				location.reload();
+				ReloadInterface();
 			});
 		});
 		$row.append($input);
@@ -24869,8 +24947,7 @@ function OnChange_ui3_contextMenus_trigger(newValue)
 	ui3_contextMenus_trigger_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Context menus will open on " + settings.ui3_contextMenus_trigger + ".<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
-			isReloadingUi3 = true;
-			location.reload();
+			ReloadInterface();
 		});
 }
 var ui3_ptzPresetShowCount_toast = null;
@@ -24881,8 +24958,7 @@ function OnChange_ui3_ptzPresetShowCount(newValue)
 	ui3_ptzPresetShowCount_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>" + settings.ui3_ptzPresetShowCount + " PTZ presets will be shown.<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
-			isReloadingUi3 = true;
-			location.reload();
+			ReloadInterface();
 		});
 }
 function GetPreferredContextMenuTrigger()
@@ -24932,8 +25008,7 @@ function OnChange_ui3_h264_choice2()
 	ui3_contextMenus_trigger_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
-			isReloadingUi3 = true;
-			location.reload();
+			ReloadInterface();
 		});
 	uiSettingsPanel.Refresh();
 }
@@ -24953,8 +25028,7 @@ function OnChange_ui3_edge_fetch_bug_h264_enable()
 	ui3_edge_fetch_bug_h264_enable_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
-			isReloadingUi3 = true;
-			location.reload();
+			ReloadInterface();
 		});
 }
 function OnChange_ui3_streamingProfileBitRateMax()
@@ -25884,6 +25958,16 @@ function ProgrammaticSoundPlayer()
 				self.Speak("reconnected", true);
 			}, 450);
 	}
+	this.PlayReloadingSound = function ()
+	{
+		self.PlayNotes([
+			{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
+			{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
+			{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
+		]);
+		if (settings.ui3_videoStatusSpeech === "1")
+			self.Speak("reloading", true);
+	}
 	this.Speak = function (str, immediate)
 	{
 		try
@@ -25950,6 +26034,11 @@ function ProgrammaticSoundPlayer()
 			if (didEmitDisconnectedSound && settings.ui3_videoStatusSounds === "1")
 				self.PlayConnectSound();
 		}
+	}
+	this.NotifyReloadingUI = function ()
+	{
+		if (settings.ui3_videoStatusSounds === "1")
+			self.PlayReloadingSound();
 	}
 
 	Initialize();
