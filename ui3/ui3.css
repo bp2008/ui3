@@ -5205,6 +5205,10 @@ div::-webkit-scrollbar-corner
 {
 	color: #e6e660;
 }
+ul.extraSpacing li
+{
+	margin-bottom: 10px;
+}
 /* Audio Visualizer */
 #ui3AudioVisualizerPanel
 {

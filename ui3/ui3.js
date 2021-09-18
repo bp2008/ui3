@@ -1018,19 +1018,19 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_videoStatusSounds"
+			key: "ui3_uiStatusSounds"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'Video Status Sounds<div class="settingDesc">Sound is emitted when video is lost or regained.</div>'
-			, onChange: OnChange_ui3_videoStatusSounds
+			, label: 'UI Status Sounds<div class="settingDesc">Sound is emitted when certain important events occur. <a href="javascript:UIHelp.LearnMore(\'UI Status Sounds\')">(learn more)</a></div>'
+			, onChange: OnChange_ui3_uiStatusSounds
 			, category: "UI Status Sounds"
 		}
 		, {
-			key: "ui3_videoStatusSpeech"
+			key: "ui3_uiStatusSpeech"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'Video Status Speech<div class="settingDesc">Requires Video Status Sounds. Requires compatible browser. <a href="javascript:TestSpeech()">Click to test.</a></div>'
-			, onChange: OnChange_ui3_videoStatusSpeech
+			, label: 'UI Status Speech<div class="settingDesc">Requires compatible browser. <a href="javascript:TestSpeech()">Click to test.</a></div>'
+			, onChange: OnChange_ui3_uiStatusSpeech
 			, preconditionFunc: Precondition_ui3_speechAvailable
 			, category: "UI Status Sounds"
 		}
@@ -15167,7 +15167,7 @@ var biSoundPlayer = new (function ()
 	this.TestUserInputRequirement = function ()
 	{
 		var eventSoundPlayerEnabled = settings.ui3_eventSoundVolume > 0 && (settings.ui3_sound_motion !== "None" || settings.ui3_sound_trigger !== "None");
-		var videoStatusSoundsEnabled = settings.ui3_videoStatusSounds === "1";
+		var videoStatusSoundsEnabled = settings.ui3_uiStatusSounds === "1" || settings.ui3_uiStatusSpeech === "1";
 		if (eventSoundPlayerEnabled || videoStatusSoundsEnabled)
 		{
 			try
@@ -25492,6 +25492,9 @@ function UIHelpTool()
 			case "Dynamic Group Layout":
 				UI3_Dynamic_Group_Layout();
 				break;
+			case "UI Status Sounds":
+				UI3_UI_Status_Sounds();
+				break;
 		}
 	}
 	var Context_Menu_Trigger = function ()
@@ -25627,6 +25630,30 @@ function UIHelpTool()
 			+ "<p>If \"Dynamic Group Layout\" is enabled, the layout of your camera groups will be optimized to best-fit your current browser window.  This only works for groups that are configured in Blue Iris to have an \"Auto\" aspect ratio.</p>"
 			+ "<p>Requires Blue Iris 5.5.x or newer.</p>"
 			+ '</div>').modalDialog({ title: 'Dynamic Group Layout', closeOnOverlayClick: true });
+	}
+	var UI3_UI_Status_Sounds = function ()
+	{
+		function MakeSoundListItem(html, playSoundFn)
+		{
+			var $li = $('<li></li>');
+			var $link = $('<a href="javascript:void(0)">' + html + '</a>');
+			$link.on('click', function ()
+			{
+				playSoundFn();
+			});
+			$li.append($link);
+			return $li;
+		}
+		var $ele = $('<div class="UIHelp">'
+			+ "<p>By enabling \"UI Status Sounds\", sounds will be played:</p>"
+			+ '</div>');
+		var $ul = $('<ul class="extraSpacing"></ul>');
+		$ul.append(MakeSoundListItem("When video streaming is disconnected.", function () { programmaticSoundPlayer.PlayDisconnectSound(true, true); }));
+		$ul.append(MakeSoundListItem("When video streaming is reconnected.", function () { programmaticSoundPlayer.PlayConnectSound(true, true); }));
+		$ul.append(MakeSoundListItem("Periodic tone while video is disconnected.", function () { programmaticSoundPlayer.PlayPeriodicDisconnectedSound(true, true); }));
+		$ul.append(MakeSoundListItem("When the UI is about to reload (to recover from an error).", function () { programmaticSoundPlayer.PlayReloadingSound(true, true); }));
+		$ele.append($ul);
+		$ele.modalDialog({ title: 'UI Status Sounds', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -25921,51 +25948,53 @@ function ProgrammaticSoundPlayer()
 		}
 	}
 
-	this.NoteHi = { volume: 0.0667, frequency: 760, durationSeconds: 0.1, offset: 0 };
-	this.NoteLo = { volume: 0.0667, frequency: 380, durationSeconds: 0.1, offset: 2000 };
-
-	this.PlayLoHi = function (notes)
+	this.PlaySoundAsConfigured = function (fn)
 	{
-		self.PlayNotes([self.NoteLo, self.NoteHi]);
+		if (typeof fn === "function")
+			fn(settings.ui3_uiStatusSounds === "1", settings.ui3_uiStatusSpeech === "1");
 	}
-	this.PlayHiLo = function (notes)
+	this.PlayDisconnectSound = function (sound, speech)
 	{
-		self.PlayNotes([self.NoteHi, self.NoteLo]);
-	}
-	this.PlayDisconnectSound = function ()
-	{
-		self.PlayNotes([
-			{ volume: 0.2, frequency: 171, durationSeconds: 0.15, offset: 0 },
-			{ volume: 0.2, frequency: 114, durationSeconds: 0.15, offset: 0 },
-			{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 },
-		]);
-		if (settings.ui3_videoStatusSpeech === "1")
+		if (sound)
+			self.PlayNotes([
+				{ volume: 0.2, frequency: 171, durationSeconds: 0.15, offset: 0 },
+				{ volume: 0.2, frequency: 114, durationSeconds: 0.15, offset: 0 },
+				{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 },
+			]);
+		if (speech)
 			setTimeout(function ()
 			{
 				self.Speak("disconnected", true);
-			}, 450);
+			}, sound ? 150 : 0);
 	}
-	this.PlayConnectSound = function ()
+	this.PlayConnectSound = function (sound, speech)
 	{
-		self.PlayNotes([
-			{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 },
-			{ volume: 0.2, frequency: 114, durationSeconds: 0.15, offset: 0 },
-			{ volume: 0.2, frequency: 171, durationSeconds: 0.15, offset: 0 },
-		]);
-		if (settings.ui3_videoStatusSpeech === "1")
+		if (sound)
+			self.PlayNotes([
+				{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 },
+				{ volume: 0.2, frequency: 114, durationSeconds: 0.15, offset: 0 },
+				{ volume: 0.2, frequency: 171, durationSeconds: 0.15, offset: 0 },
+			]);
+		if (speech)
 			setTimeout(function ()
 			{
 				self.Speak("reconnected", true);
-			}, 450);
+			}, sound ? 150 : 0);
 	}
-	this.PlayReloadingSound = function ()
+	this.PlayPeriodicDisconnectedSound = function (sound)
 	{
-		self.PlayNotes([
-			{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
-			{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
-			{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
-		]);
-		if (settings.ui3_videoStatusSpeech === "1")
+		if (sound)
+			self.PlayNotes([{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 }]);
+	}
+	this.PlayReloadingSound = function (sound, speech)
+	{
+		if (sound)
+			self.PlayNotes([
+				{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
+				{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
+				{ volume: 0.2, frequency: 1600, durationSeconds: 0.1, offset: 0 },
+			]);
+		if (speech)
 			self.Speak("reloading", true);
 	}
 	this.Speak = function (str, immediate)
@@ -26006,19 +26035,17 @@ function ProgrammaticSoundPlayer()
 			disconnectTimeout = setTimeout(function ()
 			{
 				didEmitDisconnectedSound = true;
-				if (settings.ui3_videoStatusSounds === "1")
-					self.PlayDisconnectSound();
-				DisconnectedStatusBeeps();
+				self.PlaySoundAsConfigured(self.PlayDisconnectSound);
+				RecursiveDisconnectedStatusBeeps();
 			}, 1000);
 		}
 	}
-	var DisconnectedStatusBeeps = function ()
+	var RecursiveDisconnectedStatusBeeps = function ()
 	{
 		disconnectTimeout = setTimeout(function ()
 		{
-			if (settings.ui3_videoStatusSounds === "1")
-				self.PlayNotes([{ volume: 0.2, frequency: 86, durationSeconds: 0.15, offset: 0 }]);
-			DisconnectedStatusBeeps();
+			self.PlaySoundAsConfigured(self.PlayPeriodicDisconnectedSound);
+			RecursiveDisconnectedStatusBeeps();
 		}, 2000);
 	}
 	/**
@@ -26031,28 +26058,28 @@ function ProgrammaticSoundPlayer()
 		if (isDisconnected)
 		{
 			isDisconnected = false;
-			if (didEmitDisconnectedSound && settings.ui3_videoStatusSounds === "1")
-				self.PlayConnectSound();
+			if (didEmitDisconnectedSound)
+				self.PlaySoundAsConfigured(self.PlayConnectSound);
 		}
 	}
 	this.NotifyReloadingUI = function ()
 	{
-		if (settings.ui3_videoStatusSounds === "1")
-			self.PlayReloadingSound();
+		self.PlaySoundAsConfigured(self.PlayReloadingSound);
 	}
 
 	Initialize();
 }
-function OnChange_ui3_videoStatusSounds()
+function OnChange_ui3_uiStatusSounds()
 {
-	if (settings.ui3_videoStatusSounds === "1")
-		programmaticSoundPlayer.PlayConnectSound();
+	var spk = settings.ui3_uiStatusSpeech === "1";
+	if (settings.ui3_uiStatusSounds === "1")
+		programmaticSoundPlayer.PlayConnectSound(true, spk);
 	else
-		programmaticSoundPlayer.PlayDisconnectSound();
+		programmaticSoundPlayer.PlayDisconnectSound(true, spk);
 }
-function OnChange_ui3_videoStatusSpeech()
+function OnChange_ui3_uiStatusSpeech()
 {
-	if (settings.ui3_videoStatusSpeech === "1")
+	if (settings.ui3_uiStatusSpeech === "1")
 		programmaticSoundPlayer.Speak("Speech enabled", true);
 	else
 		programmaticSoundPlayer.Speak("Speech disabled", true);
