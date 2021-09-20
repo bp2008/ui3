@@ -555,6 +555,10 @@ function GetSpeechVoiceOptions()
 	}
 	return opt;
 }
+function GetAudioCodecOptions()
+{
+	return ["\u03BC-law", "FLAC"];
+}
 var HTML5DelayCompensationOptions = {
 	None: "None",
 	Weak: "Weak",
@@ -993,9 +997,9 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_audio_codec"
-			, value: "FLAC"
+			, value: flac_supported ? "FLAC" : GetAudioCodecOptions()[0]
 			, inputType: "select"
-			, options: ["\u03BC-law", "FLAC"]
+			, options: GetAudioCodecOptions()
 			, label: 'Audio Codec' + (!flac_supported ? '<div class="settingDesc">(FLAC unavailable in this browser)</div>' : '')
 			, onChange: OnChange_ui3_audio_codec
 			, category: "Video Player"
@@ -20239,7 +20243,7 @@ function PcmAudioPlayer()
 	//			break;
 	//	}
 	//};
-	var decoderState = { lastReceivedAudioIndex: -1, nextPlayAudioIndex: 0, buffers: [] };
+	var decoderState = { lastReceivedAudioIndex: -1, nextPlayAudioIndex: 0, buffers: [], startTime: -1 };
 	this.DecodeAndPlayAudioData = function (audioData, sampleRate, setAudioCodecString)
 	{
 		if (!supported)
@@ -20247,6 +20251,16 @@ function PcmAudioPlayer()
 		if (sampleRate !== context.sampleRate)
 			NewContext(sampleRate);
 
+		// detect decoder stall
+		if (decoderState.nextPlayAudioIndex <= 1 && decoderState.lastReceivedAudioIndex > 20 && decoderState.startTime > -1 && performance.now() - decoderState.startTime > 5000)
+		{
+			console.log("FLAC decoder stall detected.", decoderState);
+			DoAudioDecodingFallback();
+			return;
+		}
+
+		if (decoderState.startTime === -1)
+			decoderState.startTime = performance.now();
 		decoderState.lastReceivedAudioIndex++;
 		var myIndex = decoderState.lastReceivedAudioIndex;
 		context.decodeAudioData(audioData.buffer, function (audioBuffer)
@@ -20258,6 +20272,7 @@ function PcmAudioPlayer()
 		{
 			console.log("Audio decode FAIL", arguments);
 			setAudioCodecString("flac (cannot decode)");
+			DoAudioDecodingFallback();
 		});
 	}
 	var PlayDecodedAudio = function ()
@@ -20495,6 +20510,16 @@ function CameraAudioMuteToggle()
 		settings.ui3_audioVolume = 1;
 	if (pcmPlayer)
 		pcmPlayer.SetAudioVolumeFromSettings();
+}
+function DoAudioDecodingFallback()
+{
+	var fallbackCodec = GetAudioCodecOptions()[0];
+	if (settings.ui3_audio_codec !== fallbackCodec)
+	{
+		toaster.Warning('"' + settings.ui3_audio_codec + '" audio decoder failed. Changing audio codec setting to "' + fallbackCodec + '".', 10000);
+		settings.ui3_audio_codec = fallbackCodec;
+		OnChange_ui3_audio_codec();
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Volume Icon Helper /////////////////////////////////////////
