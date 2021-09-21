@@ -3,6 +3,7 @@
 <head>
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Timeout - Blue Iris</title>
 	<script type="text/javascript">
 		var local_bi_session = "%%SESSION%%";
@@ -39,7 +40,39 @@
 			if (local_bi_session && !navigator.cookieEnabled)
 				path += (path.indexOf("?") < 0 ? "?" : "&") + "session=" + local_bi_session;
 			document.getElementById("reconnect").setAttribute("href", path);
+			// Attempt to use history navigation instead of
+			document.getElementById("reconnect").addEventListener("click", function (event)
+			{
+				if (linkClicked)
+				{
+					event.preventDefault();
+					return false;
+				}
+				linkClicked = true;
+				var navTimeout = setTimeout(function ()
+				{
+					if (!isUnloading)
+						location.href = path;
+				}, 200);
+				try
+				{
+					if (history.length > 1)
+					{
+						history.back();
+						event.preventDefault();
+						return false;
+					}
+				}
+				catch (ex) { }
+				//clearTimeout(navTimeout);
+			});
 		};
+		var linkClicked = false;
+		var isUnloading = false;
+		window.addEventListener('beforeunload', function ()
+		{
+			isUnloading = true;
+		});
 		/**
 		 * Changes the current URL by removing the specified query string parameter(s) from it.
 		 * @returns {String} Returns null if successful, otherwise returns the new URL if changing the history state failed.
@@ -89,12 +122,31 @@
 		a
 		{
 			color: #9999ff;
+			border: 1px solid #9999ff;
+			border-radius: 3px;
+			padding: 10px;
+			background-color: rgba(255,255,255,0.0);
 		}
 
 			a:visited
 			{
 				color: #9999ff;
 			}
+
+			a:hover
+			{
+				color: #bbbbff;
+				background-color: rgba(255,255,255,0.1);
+			}
+
+		svg
+		{
+			fill: currentColor;
+			width: 24px;
+			height: 24px;
+			vertical-align: middle;
+			margin-right: 10px;
+		}
 	</style>
 </head>
 <body>
@@ -103,7 +155,13 @@
 		<h2>Web Interface Timeout</h2>
 		<p>You have been idle too long, and were redirected here to save resources.</p>
 		<p>The idle timeout can be adjusted in "UI Settings" under UI3's Main Menu.</p>
-		<p><a id="reconnect" href="/">Click here to reconnect</a></p>
+		<p style="margin-top: 24px;">
+			<a id="reconnect" href="/">
+				<svg id="svg_mio_Refresh" viewBox="4 4 16 16">
+					<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+				</svg>Click here to reconnect
+			</a>
+		</p>
 	</div>
 </body>
 </html>
