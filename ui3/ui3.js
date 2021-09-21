@@ -26034,7 +26034,7 @@ function ProgrammaticSoundPlayer()
 			utterance.voice = voice;
 			speechSynthesis.speak(utterance);
 		}
-		catch { }
+		catch (ex) { }
 	}
 	this.CancelSpeech = function ()
 	{
@@ -26042,7 +26042,7 @@ function ProgrammaticSoundPlayer()
 		{
 			speechSynthesis.cancel();
 		}
-		catch { }
+		catch (ex) { }
 	}
 	var disconnectTimeout = null;
 	var isDisconnected = false;
