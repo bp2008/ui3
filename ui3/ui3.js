@@ -10091,6 +10091,7 @@ function CameraListLoader()
 	var webcastingWarning;
 	this.clearNewAlertsCounterOnNextLoad = false;
 	var dynamicGroupLayout = {};
+	var badRectsToast = new PersistentToast("badRectsToast", "ERROR");
 
 	this.LoadCameraList = function (successCallbackFunc)
 	{
@@ -10294,8 +10295,25 @@ function CameraListLoader()
 				{
 					if (response.result === "success")
 					{
-						g[resolution] = response.data.rects;
-						BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
+						var rects = response.data.rects;
+						if (rects && rects.length === cam.group.length)
+						{
+							g[resolution] = rects;
+							BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
+							badRectsToast.hide();
+						}
+						else
+						{
+							g[resolution] = [];
+							var cause = "missing";
+							if (rects)
+								cause = "invalid";
+							if (rects && rects.length === 0)
+								cause = "empty";
+							var errMsg = 'Group layout metadata is ' + cause + ' for "' + groupId + '".';
+							console.log(errMsg + ' Expected rects length ' + cam.group.length + ' but got rects:', rects);
+							badRectsToast.showText(errMsg + ' Probably a Blue Iris bug.');
+						}
 					}
 					else
 						toaster.Warning("Failed to load layout information for group: " + groupId + "<br/>" + JSON.stringify(response));
@@ -14725,7 +14743,7 @@ function CameraNameLabels()
 			}
 			var sb = new StringBuilder();
 			if (!rects || rects.length != group.length)
-				console.log("rects", rects);
+				return;
 			for (var i = 0; i < group.length; i++)
 			{
 				var cam = cameraListLoader.GetCameraWithId(group[i]);
@@ -22048,7 +22066,10 @@ function PersistentToast(elementId, type, closeButton)
 				fn = toaster.Info;
 			else if (type.toUpperCase() === "SUCCESS")
 				fn = toaster.Success;
-			toast = fn('<div id="' + elementId + '"></div>', 99999999, closeButton);
+			toast = fn('<div id="' + elementId + '"></div>', 99999999, closeButton, function ()
+			{
+				toast = null;
+			});
 		}
 	}
 	this.hide = function ()
