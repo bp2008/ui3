@@ -10296,22 +10296,21 @@ function CameraListLoader()
 					if (response.result === "success")
 					{
 						var rects = response.data.rects;
-						if (rects && rects.length === cam.group.length)
+						var cams = response.data.cams;
+						if (rects && cams && rects.length === cams.length)
 						{
-							g[resolution] = rects;
+							g[resolution] = { cams: cams, rects: rects };
 							BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
 							badRectsToast.hide();
 						}
 						else
 						{
-							g[resolution] = [];
+							g[resolution] = null;
 							var cause = "missing";
-							if (rects)
+							if (rects || cams)
 								cause = "invalid";
-							if (rects && rects.length === 0)
-								cause = "empty";
 							var errMsg = 'Group layout metadata is ' + cause + ' for "' + groupId + '".';
-							console.log(errMsg + ' Expected rects length ' + cam.group.length + ' but got rects:', rects);
+							console.log(errMsg, rects, cams);
 							badRectsToast.showText(errMsg + ' Probably a Blue Iris bug.');
 						}
 					}
@@ -10355,9 +10354,43 @@ function CameraListLoader()
 				var g = dynamicGroupLayout[groupId];
 				if (g)
 				{
-					var rects = g[resolution];
-					if (rects !== "pending")
-						return rects;
+					var d = g[resolution];
+					if (d && d !== "pending")
+						return d.rects;
+				}
+			}
+		}
+		return null;
+	}
+	this.GetGroupCams = function (groupId, resolution)
+	{
+		var cams = self.GetDynamicGroupCams(groupId, resolution);
+		if (!cams)
+		{
+			var cam = self.GetCameraWithId(groupId);
+			if (cam)
+				cams = cam.group;
+		}
+		return cams;
+	}
+	this.GetDynamicGroupCams = function (groupId, resolution)
+	{
+		if (self.isDynamicLayoutEnabled(groupId))
+		{
+			if (!resolution)
+			{
+				var loadedImg = videoPlayer.Loaded().image;
+				if (loadedImg.id === groupId)
+					resolution = loadedImg.actualwidth + "x" + loadedImg.actualheight;
+			}
+			if (resolution)
+			{
+				var g = dynamicGroupLayout[groupId];
+				if (g)
+				{
+					var d = g[resolution];
+					if (d && d !== "pending")
+						return d.cams;
 				}
 			}
 		}
@@ -10388,15 +10421,15 @@ function CameraListLoader()
 	this.GetCameraBoundsInCurrentGroupImageUnscaled = function (cameraId, groupId, resolution)
 	{
 		var camData = self.GetCameraWithId(groupId);
-		var group = camData.group;
-		if (group)
+		var cams = self.GetGroupCams(groupId);
+		if (cams)
 		{
 			var rects = self.GetGroupRects(groupId, resolution);
 			if (!rects)
 				rects = camData.rects;
 			if (rects)
 				for (var j = 0; j < rects.length; j++)
-					if (group[j] == cameraId)
+					if (cams[j] == cameraId)
 						return rects[j];
 		}
 		return null;
@@ -10748,11 +10781,12 @@ function VideoPlayerController()
 				if (!pt_currentCam)
 				{
 					var group = self.GetCurrentHomeGroupObj();
-					if (group && group.group)
+					var cams = self.GetGroupCams(group.optionValue);
+					if (group && cams)
 					{
 						var camsInGroup = {};
-						for (var i = 0; i < group.group.length; i++)
-							camsInGroup[group.group[i]] = true;
+						for (var i = 0; i < cams.length; i++)
+							camsInGroup[cams] = true;
 
 						for (var i = 0; i < lastResponse.data.length; i++)
 						{
@@ -10903,13 +10937,14 @@ function VideoPlayerController()
 		{
 			if (camData.group)
 			{
+				var cams = cameraListLoader.GetGroupCams(camData.optionValue);
 				var rects = cameraListLoader.GetGroupRects(camData.optionValue);
-				if (rects)
+				if (cams && rects && cams.length === rects.length)
 				{
 					for (var j = 0; j < rects.length; j++)
 					{
 						if (x > rects[j][0] && y > rects[j][1] && x < rects[j][2] && y < rects[j][3])
-							return cameraListLoader.GetCameraWithId(camData.group[j]);
+							return cameraListLoader.GetCameraWithId(cams[j]);
 					}
 				}
 			}
@@ -14734,19 +14769,19 @@ function CameraNameLabels()
 				fontSizePt = minScaledFontSize;
 
 			var imgPos = imageRenderer.GetSimulatedCamimgWrapperPosition();
-			var group = loaded.cam.group;
+			var cams = cameraListLoader.GetGroupCams(loaded.cam.optionValue);
 			var rects = cameraListLoader.GetGroupRects(loaded.cam.optionValue);
-			if (!group || group.length === 0)
+			if (!cams || cams.length === 0)
 			{
-				group = [loaded.cam.optionValue];
+				cams = [loaded.cam.optionValue];
 				rects = [[0, 0, loaded.cam.width, loaded.cam.height]];
 			}
 			var sb = new StringBuilder();
-			if (!rects || rects.length != group.length)
+			if (!rects || !cams || rects.length !== cams.length)
 				return;
-			for (var i = 0; i < group.length; i++)
+			for (var i = 0; i < cams.length; i++)
 			{
-				var cam = cameraListLoader.GetCameraWithId(group[i]);
+				var cam = cameraListLoader.GetCameraWithId(cams[i]);
 				var rect = rects[i];
 
 				// Calculate scaled/adjusted rectangle boundaries
@@ -14800,7 +14835,7 @@ function CameraNameLabels()
 				// Build icon HTML
 				if (show_overlay_icons)
 				{
-					var icons = GetCameraOverlayIcons(group[i]);
+					var icons = GetCameraOverlayIcons(cams[i]);
 					if (icons.length > 0)
 					{
 						var iconYOffset = 0;
@@ -21369,25 +21404,31 @@ function LoadNextOrPreviousCamera(offset)
 	//	return;
 	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
 	var idxCurrentMaximizedCamera = -1;
-	for (var i = 0; i < groupCamera.group.length; i++)
+	var cams = cameraListLoader.GetGroupCams(groupCamera.optionValue);
+	if (!cams)
 	{
-		if (groupCamera.group[i] == loading.cam.optionValue)
+		toaster.Error('Can not load next or previous camera because group "' + groupCamera.optionDisplay + '" has invalid layout metadata.');
+		return;
+	}
+
+	for (var i = 0; i < cams.length; i++)
+	{
+		if (cams[i] == loading.cam.optionValue)
 		{
 			idxCurrentMaximizedCamera = i;
 			break;
 		}
 	}
-	if (offset == 1 && idxCurrentMaximizedCamera >= groupCamera.group.length - 1)
+	if (offset == 1 && idxCurrentMaximizedCamera >= cams.length - 1)
 		idxCurrentMaximizedCamera = -1;
 	else if (offset == -1 && idxCurrentMaximizedCamera <= -1)
-		idxCurrentMaximizedCamera = groupCamera.group.length - 1;
+		idxCurrentMaximizedCamera = cams.length - 1;
 	else
 		idxCurrentMaximizedCamera += offset;
-
 	var newCamera = groupCamera;
 	if (idxCurrentMaximizedCamera != -1)
 	{
-		var newCameraId = groupCamera.group[idxCurrentMaximizedCamera];
+		var newCameraId = cams[idxCurrentMaximizedCamera];
 		newCamera = cameraListLoader.GetCameraWithId(newCameraId);
 	}
 	videoPlayer.ImgClick_Camera(newCamera);
