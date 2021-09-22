@@ -10531,6 +10531,11 @@ function CameraListLoader()
 	{
 		return cameraObj.isFakeGroup || !self.CameraIsGroupOrCycle(cameraObj);
 	}
+	this.IsFakeGroup = function (cameraId)
+	{
+		var cameraObj = self.GetCameraWithId(cameraId);
+		return !!(cameraObj && cameraObj.isFakeGroup);
+	}
 	this.GetLastResponse = function ()
 	{
 		return lastResponse;
@@ -16677,7 +16682,8 @@ function CanvasContextMenu()
 	var onShowLiveContextMenu = function (menu)
 	{
 		var imgLoaded = videoPlayer.Loaded().image;
-		if (imgLoaded.isGroup)
+		var imgIsFakeGroup = cameraListLoader.IsFakeGroup(imgLoaded.id);
+		if (imgLoaded.isGroup && !imgIsFakeGroup)
 			$("#submenu_trigger_groupLayout").closest('.b-m-item,.b-m-ifocus').show();
 		else
 			$("#submenu_trigger_groupLayout").closest('.b-m-item,.b-m-ifocus').hide();
