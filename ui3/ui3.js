@@ -11015,7 +11015,7 @@ function VideoPlayerController()
 		if (currentlyLoadingImage == null || currentlyLoadingImage.isLive)
 			return;
 		var camData = cameraListLoader.GetCameraWithId(lastLiveCameraOrGroupId);
-		if (camData)
+		if (camData && camData.isEnabled)
 		{
 			clipLoader.suppressClipListLoad = true;
 			self.LoadLiveCamera(camData);
@@ -11029,6 +11029,20 @@ function VideoPlayerController()
 	this.isLive = function ()
 	{
 		return currentlyLoadingImage != null && currentlyLoadingImage.isLive;
+	}
+	this.handleDisabledCamera = function (videoData)
+	{
+		if (videoData.isLive && !videoData.isGroup)
+		{
+			var camData = cameraListLoader.GetCameraWithId(videoData.id);
+			if (!camData || !camData.isEnabled)
+			{
+				cameraListLoader.LoadCameraList();
+				self.LoadHomeGroup();
+				return true;
+			}
+		}
+		return false;
 	}
 	this.LoadHomeGroup = function (groupId)
 	{
@@ -11076,7 +11090,11 @@ function VideoPlayerController()
 		if (!camData.isEnabled && !cameraListLoader.CameraIsGroupOrCycle(camData))
 			return;
 		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
-			camData = cameraListLoader.GetCameraWithId(cameraListLoader.singleCameraGroupMap[camData.optionValue]);
+		{
+			var maybeCamData = cameraListLoader.GetCameraWithId(cameraListLoader.singleCameraGroupMap[camData.optionValue]);
+			if (maybeCamData.isEnabled)
+				camData = maybeCamData;
+		}
 
 		imageRenderer.zoomHandler.ZoomToFit();
 		var cli = currentlyLoadingImage;
@@ -11715,6 +11733,9 @@ function JpegVideoModule()
 		lastOpenVideoCallAt = perfNow;
 		if (developerMode)
 			console.log("jpeg.OpenVideo");
+
+		if (videoPlayer.handleDisabledCamera(videoData))
+			return;
 		loading.CopyValuesFrom(videoData);
 		honorAlertOffset = offsetPercent === -1;
 		if (!offsetPercent)
@@ -12178,6 +12199,9 @@ function FetchH264VideoModule()
 		}
 		if (developerMode)
 			console.log("h264.OpenVideo");
+
+		if (videoPlayer.handleDisabledCamera(videoData))
+			return;
 		var isSameClipAsBefore = AreSameClip(loading.uniqueId, videoData.uniqueId);
 		loading = new BICameraData();
 		loading.CopyValuesFrom(videoData);
