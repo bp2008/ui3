@@ -2314,6 +2314,14 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
+			key: "ui3_bypass_single_camera_groups"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Bypass Single-Camera Groups<div class="settingDesc">(enable this if you have trouble with PTZ controls; disable this if you want to configure a group with only one visible camera)</div>'
+			, onChange: OnChange_ui3_bypass_single_camera_groups
+			, category: "Extra"
+		}
+		, {
 			key: "ui3_contextMenus_trigger"
 			, value: "Right-Click"
 			, options: ["Right-Click", "Long-Press", "Double-Click"]
@@ -10144,11 +10152,22 @@ function CameraListLoader()
 				var obj = lastResponse.data[i];
 				if (obj.group)
 				{
-					if (obj.group.length > 1)
+					if (obj.group.length >= 1)
 					{
-						numGroups++;
-						for (var n = 0; n < obj.group.length; n++)
-							camIdsInGroups[obj.group[n]] = true;
+						if (obj.group.length === 1 && !obj.isFakeGroup && settings.ui3_bypass_single_camera_groups === "1")
+						{
+							// Blue Iris recently started including single-camera group metadata, causing a number of undesired effects.
+							// My current best fix is to maintain this map of group name to camera short name for every group that has just a single camera.
+							// When the LoadLiveCamera method is instructed to load a group in this map, the single camera is loaded instead.
+							// So the dropdown box behaves a little inconsistently, but the group still exists in UI3.
+							self.singleCameraGroupMap[obj.optionValue] = obj.group[0];
+						}
+						else
+						{
+							numGroups++;
+							for (var n = 0; n < obj.group.length; n++)
+								camIdsInGroups[obj.group[n]] = true;
+						}
 					}
 					else if (obj.group.length === 0)
 					{
@@ -10158,14 +10177,6 @@ function CameraListLoader()
 						delete obj.rects;
 						obj.optionDisplay = CleanUpGroupName(obj.optionDisplay)
 						numCameras++;
-					}
-					else if (!obj.isFakeGroup)
-					{
-						// Blue Iris recently started including single-camera group metadata, causing a number of undesired effects.
-						// My current best fix is to maintain this map of group name to camera short name for every group that has just a single camera.
-						// When the LoadLiveCamera method is instructed to load a group in this map, the single camera is loaded instead.
-						// So the dropdown box behaves a little inconsistently, but the group still exists in UI3.
-						self.singleCameraGroupMap[obj.optionValue] = obj.group[0];
 					}
 				}
 				else
@@ -14811,6 +14822,11 @@ function CameraNameLabels()
 			for (var i = 0; i < cams.length; i++)
 			{
 				var cam = cameraListLoader.GetCameraWithId(cams[i]);
+				if (!cam)
+				{
+					console.log('Camera label renderer could not find camera "' + cams[i] + '"');
+					continue;
+				}
 				var rect = rects[i];
 
 				// Calculate scaled/adjusted rectangle boundaries
@@ -25055,6 +25071,10 @@ function OnChange_ui3_show_cameras_in_group_dropdowns()
 	var lastResponse = cameraListLoader.GetLastResponse();
 	if (lastResponse)
 		dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
+}
+function OnChange_ui3_bypass_single_camera_groups()
+{
+	cameraListLoader.LoadCameraList();
 }
 var ui3_contextMenus_trigger_toast = null;
 function OnChange_ui3_contextMenus_trigger(newValue)
