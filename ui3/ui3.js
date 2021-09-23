@@ -549,9 +549,16 @@ function GetSpeechVoiceOptions()
 	var opt = [];
 	if (speech_synthesis_supported)
 	{
-		var voices = speechSynthesis.getVoices();
-		for (var i = 0; i < voices.length; i++)
-			opt.push(voices[i].name);
+		try
+		{
+			var voices = speechSynthesis.getVoices();
+			for (var i = 0; i < voices.length; i++)
+				opt.push(voices[i].name);
+		}
+		catch (ex)
+		{
+			opt.push("Not Supported");
+		}
 	}
 	return opt;
 }
@@ -26005,16 +26012,24 @@ function ProgrammaticSoundPlayer()
 
 	this.setVoice = function (voiceName)
 	{
-		var voices = speechSynthesis.getVoices();
-		for (var i = 0; i < voices.length; i++)
+		if (!speech_synthesis_supported)
+			return;
+		try
 		{
-			if (voices[i].name === voiceName)
+			var voices = speechSynthesis.getVoices();
+			for (var i = 0; i < voices.length; i++)
 			{
-				voice = voices[i];
-				return;
+				if (voices[i].name === voiceName)
+				{
+					voice = voices[i];
+					return;
+				}
 			}
+			voice = voices.length ? voices[0] : null;
 		}
-		voice = voices.length ? voices[0] : null;
+		catch (ex)
+		{
+		}
 	}
 
 	var PrepareAudioContext = function ()
@@ -26136,6 +26151,8 @@ function ProgrammaticSoundPlayer()
 	}
 	this.Speak = function (str, immediate)
 	{
+		if (!speech_synthesis_supported)
+			return;
 		try
 		{
 			if (immediate)
@@ -26150,6 +26167,8 @@ function ProgrammaticSoundPlayer()
 	}
 	this.CancelSpeech = function ()
 	{
+		if (!speech_synthesis_supported)
+			return;
 		try
 		{
 			speechSynthesis.cancel();
