@@ -2917,7 +2917,15 @@ function HandlePreLoadUrlParameters()
 	// Parameter "group"
 	var group = UrlParameters.Get("group");
 	if (group !== '')
+	{
 		settings.ui3_defaultCameraGroupId = group;
+		BI_CustomEvent.AddListener("FinishedLoading", function ()
+		{
+			var camData = cameraListLoader.GetCameraWithId(group);
+			if (camData != null)
+				videoPlayer.SelectCameraGroup(group);
+		});
+	}
 
 	// Parameter "cam"
 	var cam = UrlParameters.Get("cam");
