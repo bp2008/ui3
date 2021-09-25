@@ -10812,7 +10812,7 @@ function VideoPlayerController()
 				if (!pt_currentCam)
 				{
 					var group = self.GetCurrentHomeGroupObj();
-					var cams = self.GetGroupCams(group.optionValue);
+					var cams = cameraListLoader.GetGroupCams(group.optionValue);
 					if (group && cams)
 					{
 						var camsInGroup = {};
