@@ -371,7 +371,7 @@ function isSpeechSupported()
 	{
 		return !!speechSynthesis;
 	}
-	catch
+	catch (ex)
 	{
 		return false;
 	}
@@ -10817,7 +10817,7 @@ function VideoPlayerController()
 					{
 						var camsInGroup = {};
 						for (var i = 0; i < cams.length; i++)
-							camsInGroup[cams] = true;
+							camsInGroup[cams[i]] = true;
 
 						for (var i = 0; i < lastResponse.data.length; i++)
 						{
