@@ -5,6 +5,76 @@
 	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Timeout - %%SYSNAME%% UI3</title>
+	<style type="text/css">
+		body
+		{
+			background-color: #000000;
+			color: #999999;
+			font-family: Arial, sans-serif;
+		}
+
+		#blueIrisIcon
+		{
+			float: left;
+			margin: 0px 15px 10px 0px;
+			width: 64px;
+			height: 64px;
+		}
+
+		a
+		{
+			color: #9999ff;
+			border: 1px solid #9999ff;
+			border-radius: 3px;
+			padding: 10px;
+			background-color: rgba(255,255,255,0.0);
+		}
+
+			a:visited
+			{
+				color: #9999ff;
+			}
+
+			a:hover
+			{
+				color: #bbbbff;
+				background-color: rgba(255,255,255,0.1);
+			}
+
+		svg
+		{
+			fill: currentColor;
+			width: 24px;
+			height: 24px;
+			vertical-align: middle;
+			margin-right: 10px;
+		}
+	</style>
+</head>
+<body>
+	<div>
+		<p><img id="blueIrisIcon" src="ui3/launcher-icon.png" alt="Blue Iris" /></p>
+		<div id="idleTimeout">
+			<h2>%%SYSNAME%% - Web Interface Timeout</h2>
+			<p>You have been idle too long, and were redirected here to save resources.</p>
+			<p>The idle timeout can be adjusted in "UI Settings" under UI3's Main Menu.</p>
+		</div>
+		<div id="serverSessionLimit" style="display: none;">
+			<h2>%%SYSNAME%% - Session Limit Reached</h2>
+			<p>Your session has reached the time limit configured for your user account in Blue Iris Settings &gt; Users.</p>
+		</div>
+		<div id="serverDailyLimit" style="display: none;">
+			<h2>%%SYSNAME%% - Daily Limit Reached</h2>
+			<p>Your user account has reached the daily time limit configured in Blue Iris Settings &gt; Users.</p>
+		</div>
+		<p style="margin-top: 24px;">
+			<a id="reconnect" href="/">
+				<svg id="svg_mio_Refresh" viewBox="4 4 16 16">
+					<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+				</svg>Click here to reconnect
+			</a>
+		</p>
+	</div>
 	<script type="text/javascript">
 		var local_bi_session = "%%SESSION%%";
 		if (!local_bi_session || (local_bi_session.length === 11 && local_bi_session.startsWith("%") && local_bi_session.endsWith("%") && local_bi_session.indexOf("SESSION") === 2))
@@ -28,8 +98,29 @@
 				return "";
 			}
 		};
-		window.onload = function ()
+		function Initialize()
 		{
+			var serverSessionLimit = UrlParameters.Get("serverSessionLimit");
+			if (serverSessionLimit === "1")
+			{
+				var ele_idleTimeout = document.getElementById("idleTimeout");
+				ele_idleTimeout.parentNode.removeChild(ele_idleTimeout);
+
+				var ele_sessionLimit = document.getElementById("serverSessionLimit");
+				ele_sessionLimit.style.display = "block";
+			}
+			else
+			{
+				var serverDailyLimit = UrlParameters.Get("serverDailyLimit");
+				if (serverDailyLimit === "1")
+				{
+					var ele_idleTimeout = document.getElementById("idleTimeout");
+					ele_idleTimeout.parentNode.removeChild(ele_idleTimeout);
+
+					var ele_dailyLimit = document.getElementById("serverDailyLimit");
+					ele_dailyLimit.style.display = "block";
+				}
+			}
 			var path = UrlParameters.Get("path");
 			if (path === "")
 				path = "/";
@@ -102,66 +193,8 @@
 			}
 			return location.origin + location.pathname + s + location.hash;
 		}
+
+		Initialize();
 	</script>
-	<style type="text/css">
-		body
-		{
-			background-color: #000000;
-			color: #999999;
-			font-family: Arial, sans-serif;
-		}
-
-		#blueIrisIcon
-		{
-			float: left;
-			margin: 0px 15px 10px 0px;
-			width: 64px;
-			height: 64px;
-		}
-
-		a
-		{
-			color: #9999ff;
-			border: 1px solid #9999ff;
-			border-radius: 3px;
-			padding: 10px;
-			background-color: rgba(255,255,255,0.0);
-		}
-
-			a:visited
-			{
-				color: #9999ff;
-			}
-
-			a:hover
-			{
-				color: #bbbbff;
-				background-color: rgba(255,255,255,0.1);
-			}
-
-		svg
-		{
-			fill: currentColor;
-			width: 24px;
-			height: 24px;
-			vertical-align: middle;
-			margin-right: 10px;
-		}
-	</style>
-</head>
-<body>
-	<div>
-		<p><img id="blueIrisIcon" src="ui3/launcher-icon.png" alt="Blue Iris" /></p>
-		<h2>%%SYSNAME%% - Web Interface Timeout</h2>
-		<p>You have been idle too long, and were redirected here to save resources.</p>
-		<p>The idle timeout can be adjusted in "UI Settings" under UI3's Main Menu.</p>
-		<p style="margin-top: 24px;">
-			<a id="reconnect" href="/">
-				<svg id="svg_mio_Refresh" viewBox="4 4 16 16">
-					<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
-				</svg>Click here to reconnect
-			</a>
-		</p>
-	</div>
 </body>
 </html>

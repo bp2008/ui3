@@ -399,6 +399,7 @@ var statusBars = null;
 var dropdownBoxes = null;
 var leftBarBools = null;
 var cornerStatusIcons = null;
+var serverTimeLimiter = null;
 var genericQualityHelper = null;
 var jpegQualityHelper = null;
 var streamingProfileUI = null;
@@ -2713,6 +2714,8 @@ $(function ()
 	leftBarBools = new LeftBarBooleans();
 
 	cornerStatusIcons = new CornerStatusIcons();
+
+	serverTimeLimiter = new ServerTimeLimiter();
 
 	genericQualityHelper = new GenericQualityHelper();
 
@@ -9753,16 +9756,6 @@ function SessionManager()
 		statusLoader.LoadStatus();
 		cameraListLoader.LoadCameraList();
 
-		if (lastResponse.data.streamtimelimit)
-		{
-			toaster.Info('This user account has time limits enabled.<br/><ul>'
-				+ '<li>Video streams may be interrupted periodically.</li>'
-				+ '<li>Your session may expire after some time, even if you are not idle.</li>'
-				+ '<li>You may have to wait some minutes between sessions.</li>'
-				+ '<li>You may have a daily limit of viewing time.</li>'
-				+ '<ul>', 60000, true);
-		}
-
 		if (isAdministratorSession)
 		{
 			if (user == "")
@@ -15177,6 +15170,83 @@ function CornerStatusIcons()
 function ShowStreamDelayDetails(e)
 {
 	videoPlayer.ShowDelayWarning();
+}
+///////////////////////////////////////////////////////////////
+// Server-specified Time Limits ///////////////////////////////
+///////////////////////////////////////////////////////////////
+function ServerTimeLimiter()
+{
+	var self = this;
+	var timeStart = performance.now();
+	var updateInterval = null;
+	var $sessionLimitClock = $("#sessionLimitClock");
+	var $dailyLimitClock = $("#dailyLimitClock");
+
+	BI_CustomEvent.AddListener("Login Success", function (loginResponse)
+	{
+		timeStart = performance.now();
+		if (updateInterval)
+			clearInterval(updateInterval);
+		if (loginResponse.data.timelimits)
+		{
+			$("#serverTimeLimits").show();
+			updateInterval = setInterval(self.timeLimiterUpdate, 1000);
+			self.timeLimiterUpdate();
+		}
+		else
+			$("#serverTimeLimits").hide();
+	});
+
+	this.timeLimiterUpdate = function ()
+	{
+		var loginResponse = sessionManager.GetLastResponse();
+		var now = performance.now();
+		if (loginResponse && loginResponse.data)
+		{
+			if (loginResponse.data.sessionlimit)
+			{
+				if (!$sessionLimitClock.is(":visible"))
+					$sessionLimitClock.show();
+				var sessionTimeElapsed = now - timeStart;
+				var sessionTimeLimit = parseInt(loginResponse.data.sessionlimit) * 1000;
+				$sessionLimitClock.text("Session Limit: " + msToTime(sessionTimeElapsed) + "/" + msToTime(sessionTimeLimit));
+				if (sessionTimeElapsed >= sessionTimeLimit)
+					self.serverTimeout("serverSessionLimit=1");
+			}
+			else
+			{
+				if ($sessionLimitClock.is(":visible"))
+					$sessionLimitClock.hide();
+			}
+			if (loginResponse.data.daylimit && parseInt(loginResponse.data.daylimit) < 86400)
+			{
+				if (!$dailyLimitClock.is(":visible"))
+					$dailyLimitClock.show();
+				var dailyTimeElapsed = loginResponse.data.dayused ? parseInt(loginResponse.data.dayused) * 1000 : 0;
+				dailyTimeElapsed += (now - timeStart);
+				var dailyTimeLimit = parseInt(loginResponse.data.daylimit) * 1000;
+				$dailyLimitClock.text("Daily Limit: " + msToTime(dailyTimeElapsed) + "/" + msToTime(dailyTimeLimit));
+				if (dailyTimeElapsed >= dailyTimeLimit)
+					self.serverTimeout("serverDailyLimit=1");
+			}
+			else
+			{
+				if ($dailyLimitClock.is(":visible"))
+					$dailyLimitClock.hide();
+			}
+		}
+	}
+
+	this.serverTimeout = function (arg)
+	{
+		if (!arg)
+			arg = "serverSessionLimit=1";
+		currentServer.isLoggingOut = true;
+		var path = RemoveUrlParams("session");
+		if (path.length > location.origin.length)
+			path = path.substr(location.origin.length);
+		location.href = 'timeout.htm?' + arg + '&path=' + encodeURIComponent(path) + currentServer.GetAPISessionArg("&");
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Sound Effect Player ////////////////////////////////////////

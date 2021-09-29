@@ -5205,9 +5205,40 @@ div::-webkit-scrollbar-corner
 {
 	color: #e6e660;
 }
+
 ul.extraSpacing li
 {
 	margin-bottom: 10px;
+}
+
+#serverTimeLimits
+{
+	display: flex;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	padding: 8px;
+	white-space: normal;
+	word-break: break-word;
+}
+
+#sessionLimitClock, #dailyLimitClock
+{
+	display: none;
+	font-weight: bold;
+	font-size: 16px;
+	line-height: initial;
+	background-color: rgba(0,0,0,0.5);
+	padding: 0px 3px;
+}
+
+#sessionLimitClock
+{
+	color: #FFFF00;
+}
+
+#dailyLimitClock
+{
+	color: #FF8800;
 }
 /* Audio Visualizer */
 #ui3AudioVisualizerPanel
