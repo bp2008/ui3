@@ -400,6 +400,7 @@ var dropdownBoxes = null;
 var leftBarBools = null;
 var cornerStatusIcons = null;
 var serverTimeLimiter = null;
+var liveVideoPausing = null;
 var genericQualityHelper = null;
 var jpegQualityHelper = null;
 var streamingProfileUI = null;
@@ -2716,6 +2717,8 @@ $(function ()
 	cornerStatusIcons = new CornerStatusIcons();
 
 	serverTimeLimiter = new ServerTimeLimiter();
+
+	liveVideoPausing = new LiveVideoPausing();
 
 	genericQualityHelper = new GenericQualityHelper();
 
@@ -10939,6 +10942,15 @@ function VideoPlayerController()
 	{
 		return playerModule.GetCurrentImageTimeMs();
 	}
+	/**
+	 * Returns the number of milliseconds that have passed since the most recent stream was started.
+	 */
+	this.GetOffsetFromStartMs = function ()
+	{
+		if (playerModule)
+			return playerModule.GetOffsetFromStartMs();
+		return 0;
+	}
 
 	// Methods dealing with mouse clicks.
 	this.GetCameraUnderMousePointer = function (event)
@@ -11731,6 +11743,7 @@ function JpegVideoModule()
 	}, 250);
 	var openVideoTimeout = null;
 	var lastOpenVideoCallAt = -60000;
+	var lastStreamBeganAt = 0;
 	var timeBetweenOpenVideoCalls = 300;
 	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
@@ -11824,6 +11837,13 @@ function JpegVideoModule()
 	{
 		return currentImageTimestampMs;
 	}
+	this.GetOffsetFromStartMs = function ()
+	{
+		if (self.Playback_IsPaused())
+			return 0;
+		else
+			return performance.now() - lastStreamBeganAt;
+	}
 	var GetNewImage = function ()
 	{
 		ClearGetNewImageTimeout();
@@ -11908,6 +11928,7 @@ function JpegVideoModule()
 				&& !CouldBenefitFromSizeChange(sizeToRequest)
 				&& loadedFirstFrame)
 				|| !isVisible
+				|| (playbackPaused && loading.isLive) // Live video can be paused since UI3-175
 			)
 			{
 				if (isLoadingRecordedSnapshot)
@@ -11941,19 +11962,23 @@ function JpegVideoModule()
 	{
 		playbackPaused = true;
 		playbackControls.setPlayPauseButtonState(playbackPaused);
+		BI_CustomEvent.Invoke("Playback_Pause", loading);
 	}
 	this.Playback_Play = function ()
 	{
+		lastStreamBeganAt = performance.now();
 		playbackPaused = false;
 		playbackControls.setPlayPauseButtonState(playbackPaused);
-		if (loading.isLive)
-			return;
-		if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
-			clipPlaybackPosition = 0;
-		else if (clipPlaybackPosition <= 0 && playbackControls.GetPlayReverse())
-			clipPlaybackPosition = loading.msec - 1;
-		if (clipPlaybackPosition < 0)
-			clipPlaybackPosition = 0;
+		if (!loading.isLive)
+		{
+			if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
+				clipPlaybackPosition = 0;
+			else if (clipPlaybackPosition <= 0 && playbackControls.GetPlayReverse())
+				clipPlaybackPosition = loading.msec - 1;
+			if (clipPlaybackPosition < 0)
+				clipPlaybackPosition = 0;
+		}
+		BI_CustomEvent.Invoke("Playback_Play", loading);
 	}
 	this.NotifyClipMetadataChanged = function (clipData)
 	{
@@ -12084,6 +12109,7 @@ function FetchH264VideoModule()
 	var h264_player;
 	var currentSeekPositionPercent = 0;
 	var lastFrameAt = 0;
+	var lastStreamBeganAt = 0;
 	var playbackPaused = false;
 	var perfMonInterval;
 	var lastNerdStatsUpdate = performance.now();
@@ -12239,7 +12265,7 @@ function FetchH264VideoModule()
 		if (playbackControls.GetPlayReverse() && offsetPercent === 0)
 			offsetPercent = 1;
 		currentSeekPositionPercent = Clamp(offsetPercent, 0, 1);
-		lastFrameAt = performance.now();
+		lastStreamBeganAt = lastFrameAt = performance.now();
 		currentImageDateMs = Date.now();
 		isLoadingRecordedSnapshot = false;
 		clearTimeout(failureRecoveryTimeout);
@@ -12525,6 +12551,13 @@ function FetchH264VideoModule()
 	{
 		return currentImageDateMs;
 	}
+	this.GetOffsetFromStartMs = function ()
+	{
+		if (self.Playback_IsPaused())
+			return 0;
+		else
+			return performance.now() - lastStreamBeganAt;
+	}
 	this.Playback_IsPaused = function ()
 	{
 		return playbackPaused;
@@ -12533,15 +12566,16 @@ function FetchH264VideoModule()
 	{
 		playbackPaused = true;
 		playbackControls.setPlayPauseButtonState(playbackPaused);
-		if (!loading.isLive && h264_player.GetRenderedFrameCount() > 0)
+		if (h264_player.GetRenderedFrameCount() > 0)
 			StopStreaming();
+		BI_CustomEvent.Invoke("Playback_Pause", loading);
 	}
 	this.Playback_Play = function ()
 	{
 		playbackPaused = false;
 		playbackControls.setPlayPauseButtonState(playbackPaused);
-		if (!loading.isLive)
-			ReopenStreamAtCurrentSeekPosition();
+		ReopenStreamAtCurrentSeekPosition();
+		BI_CustomEvent.Invoke("Playback_Play", loading);
 	}
 	this.PlaybackSpeedChanged = function (playSpeed)
 	{
@@ -12622,7 +12656,7 @@ function FetchH264VideoModule()
 			playbackControls.FrameTimestampUpdated(frame.utc);
 		writeNerdStats(frame, timeNow);
 		lastFrameAt = timeNow;
-		if (playbackPaused && !loading.isLive)
+		if (playbackPaused)
 		{
 			StopStreaming();
 		}
@@ -12663,7 +12697,7 @@ function FetchH264VideoModule()
 					clearTimeout(failureRecoveryTimeout);
 					failureRecoveryTimeout = setTimeout(ReopenStreamAtCurrentSeekPosition, delayMs);
 				}
-				else
+				else if (!serverTimeLimiter.isNearStreamLimit())
 				{
 					reconnectingToast.showText("The video stream was lost. Attempting to reconnect...");
 					clearTimeout(failureRecoveryTimeout);
@@ -15172,6 +15206,37 @@ function ShowStreamDelayDetails(e)
 	videoPlayer.ShowDelayWarning();
 }
 ///////////////////////////////////////////////////////////////
+// Live Video Pausing /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function LiveVideoPausing()
+{
+	var self = this;
+	var playbackPausedToast = new PersistentToast("streamTimeLimit", "info", false, function ()
+	{
+		if (videoPlayer)
+			videoPlayer.Playback_Play();
+	});
+
+	BI_CustomEvent.AddListener("Playback_Pause", function (loading)
+	{
+		if (loading.isLive && !playbackPausedToast.isShowing())
+			self.showToast("Live video is paused. Click here to resume.");
+	});
+	BI_CustomEvent.AddListener("Playback_Play", function (loading)
+	{
+		playbackPausedToast.hide();
+	});
+	BI_CustomEvent.AddListener("OpenVideo", function ()
+	{
+		playbackPausedToast.hide();
+	});
+
+	this.showToast = function (text)
+	{
+		playbackPausedToast.showText(text);
+	}
+}
+///////////////////////////////////////////////////////////////
 // Server-specified Time Limits ///////////////////////////////
 ///////////////////////////////////////////////////////////////
 function ServerTimeLimiter()
@@ -15199,6 +15264,8 @@ function ServerTimeLimiter()
 
 	this.timeLimiterUpdate = function ()
 	{
+		if (!sessionManager)
+			return;
 		var loginResponse = sessionManager.GetLastResponse();
 		var now = performance.now();
 		if (loginResponse && loginResponse.data)
@@ -15234,6 +15301,17 @@ function ServerTimeLimiter()
 				if ($dailyLimitClock.is(":visible"))
 					$dailyLimitClock.hide();
 			}
+			if (videoPlayer && loginResponse.data.streamlimit)
+			{
+				var streamTimeElapsed = videoPlayer.GetOffsetFromStartMs();
+				var streamTimeLimit = parseInt(loginResponse.data.streamlimit) * 1000;
+				if (streamTimeElapsed >= streamTimeLimit)
+				{
+					console.log("Stream Time Limit Reached");
+					videoPlayer.Playback_Pause();
+					liveVideoPausing.showToast("Video has stopped because your user account has a stream time limit of " + msToTime(streamTimeLimit) + ". Click here to resume.");
+				}
+			}
 		}
 	}
 
@@ -15246,6 +15324,26 @@ function ServerTimeLimiter()
 		if (path.length > location.origin.length)
 			path = path.substr(location.origin.length);
 		location.href = 'timeout.htm?' + arg + '&path=' + encodeURIComponent(path) + currentServer.GetAPISessionArg("&");
+	}
+
+	this.isNearStreamLimit = function (arg)
+	{
+		if (sessionManager)
+		{
+			var loginResponse = sessionManager.GetLastResponse();
+			if (loginResponse && loginResponse.data)
+			{
+				if (videoPlayer && loginResponse.data.streamlimit)
+				{
+					var streamTimeElapsed = videoPlayer.GetOffsetFromStartMs();
+					var streamTimeLimit = parseInt(loginResponse.data.streamlimit) * 1000;
+					var diff = streamTimeLimit - streamTimeElapsed;
+					if (diff <= 10000)
+						return true;
+				}
+			}
+		}
+		return false;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -21599,14 +21697,11 @@ function LoadNextOrPreviousGroup(offset)
 }
 function BI_Hotkey_PlayPause()
 {
-	if (!videoPlayer.Loading().image.isLive)
-	{
-		if (videoPlayer.Playback_IsPaused())
-			videoOverlayHelper.ShowTemporaryPlayIcon();
-		else
-			videoOverlayHelper.ShowTemporaryPauseIcon();
-		videoPlayer.Playback_PlayPause();
-	}
+	if (videoPlayer.Playback_IsPaused())
+		videoOverlayHelper.ShowTemporaryPlayIcon();
+	else
+		videoOverlayHelper.ShowTemporaryPauseIcon();
+	videoPlayer.Playback_PlayPause();
 }
 function BI_Hotkey_Delete()
 {
@@ -22006,7 +22101,7 @@ function Toaster()
 			"showMethod": "fadeIn",
 			"hideMethod": "fadeOut"
 		}
-	var showToastInternal = function (type, message, showTime, closeButton, onClick)
+	var showToastInternal = function (type, message, showTime, closeButton, onClick, extendedTimeOut)
 	{
 		if (typeof message === "object" && typeof message.message === "string" && typeof message.stack === "string")
 		{
@@ -22038,6 +22133,9 @@ function Toaster()
 			overrideOptions.extendedTimeOut = 60000;
 		}
 
+		if (typeof extendedTimeOut === "number")
+			overrideOptions.extendedTimeOut = extendedTimeOut;
+
 		if (typeof onClick == "function")
 			overrideOptions.onclick = onClick;
 
@@ -22045,21 +22143,21 @@ function Toaster()
 
 		return myToast;
 	}
-	this.Success = function (message, showTime, closeButton, onClick)
+	this.Success = function (message, showTime, closeButton, onClick, extendedTimeOut)
 	{
-		return showToastInternal('success', message, showTime, closeButton, onClick);
+		return showToastInternal('success', message, showTime, closeButton, onClick, extendedTimeOut);
 	}
-	this.Info = function (message, showTime, closeButton, onClick)
+	this.Info = function (message, showTime, closeButton, onClick, extendedTimeOut)
 	{
-		return showToastInternal('info', message, showTime, closeButton, onClick);
+		return showToastInternal('info', message, showTime, closeButton, onClick, extendedTimeOut);
 	}
-	this.Warning = function (message, showTime, closeButton, onClick)
+	this.Warning = function (message, showTime, closeButton, onClick, extendedTimeOut)
 	{
-		return showToastInternal('warning', message, showTime, closeButton, onClick);
+		return showToastInternal('warning', message, showTime, closeButton, onClick, extendedTimeOut);
 	}
-	this.Error = function (message, showTime, closeButton, onClick)
+	this.Error = function (message, showTime, closeButton, onClick, extendedTimeOut)
 	{
-		return showToastInternal('error', message, showTime, closeButton, onClick);
+		return showToastInternal('error', message, showTime, closeButton, onClick, extendedTimeOut);
 	}
 }
 function showSuccessToast(message, showTime, closeButton)
@@ -22169,7 +22267,7 @@ function HandleGroupableConnectionError(jqXHR)
 		if (connectionLostNotice.toast == null)
 		{
 			connectionLostNotice.time = performance.now();
-			connectionLostNotice.toast = toaster.Error('<div id="connectionErrorToast">Server is unavailable (<span class="time"></span>)</div>', 99999999);
+			connectionLostNotice.toast = toaster.Error('<div id="connectionErrorToast">Server is unavailable (<span class="time"></span>)</div>', 99999999, false, null, 99999999);
 			connectionLostNotice.interval = setInterval(UpdateConnectionLostTime, 500);
 			UpdateConnectionLostTime();
 		}
@@ -22199,21 +22297,21 @@ function EndConnectionErrors()
 function AddOrUpdateErrorToast(toast, elementId, html)
 {
 	if (!toast)
-		toast = toaster.Error('<div id="' + elementId + '"></div>', 99999999);
+		toast = toaster.Error('<div id="' + elementId + '"></div>', 99999999, false, null, 99999999);
 	$("#" + elementId).html(html);
 	return toast;
 }
 function AddOrUpdateWarningToast(toast, elementId, html)
 {
 	if (!toast)
-		toast = toaster.Warning('<div id="' + elementId + '"></div>', 99999999);
+		toast = toaster.Warning('<div id="' + elementId + '"></div>', 99999999, false, null, 99999999);
 	$("#" + elementId).html(html);
 	return toast;
 }
 ///////////////////////////////////////////////////////////////
 // Persistent Toast ///////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function PersistentToast(elementId, type, closeButton)
+function PersistentToast(elementId, type, closeButton, onClose)
 {
 	var self = this;
 	var toast = null;
@@ -22241,7 +22339,9 @@ function PersistentToast(elementId, type, closeButton)
 			toast = fn('<div id="' + elementId + '"></div>', 99999999, closeButton, function ()
 			{
 				toast = null;
-			});
+				if (typeof onClose === "function")
+					onClose(self);
+			}, 99999999);
 		}
 	}
 	this.hide = function ()
