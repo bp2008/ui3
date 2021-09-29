@@ -12688,9 +12688,9 @@ function FetchH264VideoModule()
 			if (!wasAppTriggered && !safeFetch.IsActive())
 			{
 				StopStreaming();
-				programmaticSoundPlayer.NotifyDisconnected();
 				if (failLimiter.Fail())
 				{
+					programmaticSoundPlayer.NotifyDisconnected();
 					reconnectingToast.hide();
 					var delayMs = 300000; // 5 minutes
 					reconnectDelayedToast.showText("The video stream was lost.  Due to rapid failures, automatic reconnection will resume at " + GetTimeStr(new Date(Date.now() + delayMs)) + ".");
@@ -12699,6 +12699,7 @@ function FetchH264VideoModule()
 				}
 				else if (!serverTimeLimiter.isNearStreamLimit())
 				{
+					programmaticSoundPlayer.NotifyDisconnected();
 					reconnectingToast.showText("The video stream was lost. Attempting to reconnect...");
 					clearTimeout(failureRecoveryTimeout);
 					failureRecoveryTimeout = setTimeout(ReopenStreamAtCurrentSeekPosition, 2000);
