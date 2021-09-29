@@ -15307,7 +15307,6 @@ function ServerTimeLimiter()
 				var streamTimeLimit = parseInt(loginResponse.data.streamlimit) * 1000;
 				if (streamTimeElapsed >= streamTimeLimit)
 				{
-					console.log("Stream Time Limit Reached");
 					videoPlayer.Playback_Pause();
 					liveVideoPausing.showToast("Video has stopped because your user account has a stream time limit of " + msToTime(streamTimeLimit) + ". Click here to resume.");
 				}
