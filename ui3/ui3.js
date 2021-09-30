@@ -15269,14 +15269,20 @@ function ServerTimeLimiter()
 			return;
 		var loginResponse = sessionManager.GetLastResponse();
 		var now = performance.now();
-		if (loginResponse && loginResponse.data)
+		if (loginResponse && loginResponse.data && loginResponse.data.timelimits)
 		{
-			if (loginResponse.data.sessionlimit)
+			var limits = {
+				session: toInt(loginResponse.data.sessionlimit),
+				day: toInt(loginResponse.data.daylimit),
+				dayused: toInt(loginResponse.data.dayused),
+				stream: toInt(loginResponse.data.streamlimit),
+			};
+			if (limits.session > 0)
 			{
 				if (!$sessionLimitClock.is(":visible"))
 					$sessionLimitClock.show();
 				var sessionTimeElapsed = now - timeStart;
-				var sessionTimeLimit = parseInt(loginResponse.data.sessionlimit) * 1000;
+				var sessionTimeLimit = limits.session * 1000;
 				$sessionLimitClock.text("Session Limit: " + msToTime(sessionTimeElapsed) + "/" + msToTime(sessionTimeLimit));
 				if (sessionTimeElapsed >= sessionTimeLimit)
 					self.serverTimeout("serverSessionLimit=1");
@@ -15286,13 +15292,13 @@ function ServerTimeLimiter()
 				if ($sessionLimitClock.is(":visible"))
 					$sessionLimitClock.hide();
 			}
-			if (loginResponse.data.daylimit && parseInt(loginResponse.data.daylimit) < 86400)
+			if (limits.day > 0 && limits.day < 86400)
 			{
 				if (!$dailyLimitClock.is(":visible"))
 					$dailyLimitClock.show();
-				var dailyTimeElapsed = loginResponse.data.dayused ? parseInt(loginResponse.data.dayused) * 1000 : 0;
+				var dailyTimeElapsed = limits.dayused * 1000;
 				dailyTimeElapsed += (now - timeStart);
-				var dailyTimeLimit = parseInt(loginResponse.data.daylimit) * 1000;
+				var dailyTimeLimit = limits.day * 1000;
 				$dailyLimitClock.text("Daily Limit: " + msToTime(dailyTimeElapsed) + "/" + msToTime(dailyTimeLimit));
 				if (dailyTimeElapsed >= dailyTimeLimit)
 					self.serverTimeout("serverDailyLimit=1");
@@ -15302,10 +15308,10 @@ function ServerTimeLimiter()
 				if ($dailyLimitClock.is(":visible"))
 					$dailyLimitClock.hide();
 			}
-			if (videoPlayer && loginResponse.data.streamlimit)
+			if (videoPlayer && limits.stream > 0)
 			{
 				var streamTimeElapsed = videoPlayer.GetOffsetFromStartMs();
-				var streamTimeLimit = parseInt(loginResponse.data.streamlimit) * 1000;
+				var streamTimeLimit = limits.stream * 1000;
 				if (streamTimeElapsed >= streamTimeLimit)
 				{
 					videoPlayer.Playback_Pause();
@@ -15331,12 +15337,13 @@ function ServerTimeLimiter()
 		if (sessionManager)
 		{
 			var loginResponse = sessionManager.GetLastResponse();
-			if (loginResponse && loginResponse.data)
+			if (loginResponse && loginResponse.data && loginResponse.data.timelimits)
 			{
-				if (videoPlayer && loginResponse.data.streamlimit)
+				var streamLimit = toInt(loginResponse.data.streamlimit);
+				if (videoPlayer && streamLimit > 0)
 				{
 					var streamTimeElapsed = videoPlayer.GetOffsetFromStartMs();
-					var streamTimeLimit = parseInt(loginResponse.data.streamlimit) * 1000;
+					var streamTimeLimit = streamLimit * 1000;
 					var diff = streamTimeLimit - streamTimeElapsed;
 					if (diff <= 10000)
 						return true;
@@ -15344,6 +15351,17 @@ function ServerTimeLimiter()
 			}
 		}
 		return false;
+	}
+
+	var toInt = function (v)
+	{
+		if (v)
+		{
+			var n = parseInt(v);
+			if (!isNaN(n))
+				return n;
+		}
+		return 0;
 	}
 }
 ///////////////////////////////////////////////////////////////
