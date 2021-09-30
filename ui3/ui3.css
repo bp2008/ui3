@@ -2251,14 +2251,16 @@ div.invisibleLabel
 
 .clipicon.icon_flag,
 .clipicon.icon_protect,
-.clipicon.icon_is_new
+.clipicon.icon_is_new,
+.clipicon.icon_trigger_sentry
 {
 	display: none;
 }
 
 .clipIconWrapper.icon_flag .clipicon.icon_flag,
 .clipIconWrapper.icon_protect .clipicon.icon_protect,
-.clipIconWrapper.icon_is_new .clipicon.icon_is_new
+.clipIconWrapper.icon_is_new .clipicon.icon_is_new,
+.clipIconWrapper.icon_trigger_sentry .clipicon.icon_trigger_sentry
 {
 	display: inline-block;
 }

@@ -7430,6 +7430,7 @@ function ClipLoader(clipsBodySelector)
 		{
 			oldClipData.flags = newClipData.flags;
 			self.RepairClipFlagState(oldClipData);
+			self.RepairAiConfirmedState(oldClipData);
 		}
 		if (oldClipData.isClip && oldClipData.msec != newClipData.msec)
 		{
@@ -7837,6 +7838,8 @@ function ClipLoader(clipsBodySelector)
 			classes.push(GetClipIconClass("protect"));
 		if (clipData.isNew)
 			classes.push(GetClipIconClass("is_new"));
+		if ((clipData.flags & alert_flag_sentry_trigger) > 0)
+			classes.push(GetClipIconClass("trigger_sentry"));
 		return classes.join(" ");
 	}
 	var GetClipIconClass = function (name)
@@ -7846,7 +7849,7 @@ function ClipLoader(clipsBodySelector)
 	var GetClipIcons = function (clipData)
 	{
 		var icons = [];
-		if ((clipData.flags & alert_flag_sentry_trigger) > 0 && settings.ui3_clipicon_trigger_sentry == "1")
+		if (settings.ui3_clipicon_trigger_sentry == "1")
 			icons.push(self.GetClipIcon("trigger_sentry"));
 		if ((clipData.flags & alert_flag_sentry_occupied) > 0 && settings.ui3_clipicon_trigger_sentry_occupied == "1")
 			icons.push(self.GetClipIcon("trigger_sentry_occupied"));
@@ -7866,7 +7869,8 @@ function ClipLoader(clipsBodySelector)
 			icons.push(self.GetClipIcon("clip_backedup"));
 		if (settings.ui3_clipicon_is_new === "1")
 			icons.push(self.GetClipIcon("is_new"));
-		icons.push(self.GetClipIcon("protect"));
+		if (settings.ui3_clipicon_protect == "1")
+			icons.push(self.GetClipIcon("protect"));
 		icons.push(self.GetClipIcon("flag"));
 		return icons.join("");
 	}
@@ -8055,6 +8059,18 @@ function ClipLoader(clipsBodySelector)
 				onSuccess(clipData);
 		}, onFailure);
 	}
+	this.ToggleAlertAiConfirmed = function (clipData, onSuccess, onFailure)
+	{
+		ToggleFlag(clipData, alert_flag_sentry_trigger, function (clipData, flagIsSet)
+		{
+			if (flagIsSet)
+				self.HideAiConfirmed(clipData);
+			else
+				self.ShowAiConfirmed(clipData);
+			if (onSuccess)
+				onSuccess(clipData);
+		}, onFailure);
+	}
 	var ToggleFlag = function (clipData, flag, onSuccess, onFailure)
 	{
 		var flagIsSet = (clipData.flags & flag) > 0;
@@ -8116,6 +8132,33 @@ function ClipLoader(clipsBodySelector)
 	{
 		return (clipData.flags & clip_flag_flag) > 0;
 	}
+	this.HideAiConfirmed = function (clipData)
+	{
+		var $clip = $("#c" + clipData.recId);
+		if ($clip.length == 0)
+			return;
+		var $flags = $clip.find(".clipIconWrapper");
+		$flags.removeClass(GetClipIconClass("trigger_sentry"));
+	}
+	this.ShowAiConfirmed = function (clipData)
+	{
+		var $clip = $("#c" + clipData.recId);
+		if ($clip.length == 0)
+			return;
+		var $flags = $clip.find(".clipIconWrapper");
+		$flags.addClass(GetClipIconClass("trigger_sentry"));
+	}
+	this.RepairAiConfirmedState = function (clipData)
+	{
+		if (self.AlertDataIndicatesAIConfirmed(clipData))
+			self.ShowAiConfirmed(clipData);
+		else
+			self.HideAiConfirmed(clipData);
+	}
+	this.AlertDataIndicatesAIConfirmed = function (clipData)
+	{
+		return (clipData.flags & alert_flag_sentry_trigger) > 0;
+	}
 	this.Multi_Flag = function (clipIDs, flagEnable, idx, myToast)
 	{
 		if (!sessionManager.IsAdministratorSession(clipIDs.length > 0 ? clipIDs[0] : null))
@@ -8127,6 +8170,12 @@ function ClipLoader(clipsBodySelector)
 		if (!sessionManager.IsAdministratorSession(clipIDs.length > 0 ? clipIDs[0] : null))
 			return openLoginDialog(function () { self.Multi_Protect(clipIDs, protectEnable, idx, myToast); });
 		Start_Multi_Operation("protect", GetClipDatas(clipIDs), { protectEnable: protectEnable });
+	}
+	this.Multi_AiConfirm = function (clipIDs, confirm, idx, myToast)
+	{
+		if (!sessionManager.IsAdministratorSession(clipIDs.length > 0 ? clipIDs[0] : null))
+			return openLoginDialog(function () { self.Multi_AiConfirm(clipIDs, confirm, idx, myToast); });
+		Start_Multi_Operation("aiconfirm", GetClipDatas(clipIDs), { confirm: confirm });
 	}
 	this.Multi_Export = function (clipIDs, exportOptions, onFinish)
 	{
@@ -8273,6 +8322,8 @@ function ClipLoader(clipsBodySelector)
 				verb = o.args.protectEnable ? "Protecting" : "Unprotecting";
 			else if (o.operation == "export")
 				verb = "Queueing export of";
+			else if (o.operation == "aiconfirm")
+				verb = o.args.confirm ? "Marking AI-confirmed" : "Unmarking AI-confirmed";
 			o.myToast = toaster.Info('<div id="multi_' + o.operation + '_status_toast" class="multi_operation_status_toast">'
 				+ '<div>' + verb + ' ' + o.recordingType + ' <span class="multi_operation_count">' + (o.idx + 1) + '</span> / ' + o.clips.length + '</div>'
 				+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
@@ -8326,6 +8377,22 @@ function ClipLoader(clipsBodySelector)
 					Multi_Operation(o);
 				});
 				return;
+			}
+			else if (o.operation == "aiconfirm")
+			{
+				var isConfirmed = self.AlertDataIndicatesAIConfirmed(clipData);
+				if ((isConfirmed && !o.args.confirm) || (!isConfirmed && o.args.confirm))
+				{
+					self.ToggleAlertAiConfirmed(clipData, function ()
+					{
+						Multi_Operation(o);
+					}, function ()
+					{
+						o.errorCount++;
+						Multi_Operation(o);
+					});
+					return;
+				}
 			}
 		}
 		else
@@ -17407,6 +17474,7 @@ function ClipListContextMenu()
 	var allSelectedClipIDs = [];
 	var flagEnable = false;
 	var protectEnable = false;
+	var aiConfirm = false;
 	var addDeleteItem = settings.ui3_allow_clip_deletion !== "0";
 
 	var onShowMenu = function (menu)
@@ -17420,6 +17488,19 @@ function ClipListContextMenu()
 		if (clipLoader.GetAllSelected().length > 1)
 			singleClipItems = itemsToDisable;
 		singleClipItems.push("properties");
+
+		var hasClipsSelected = false;
+		for (var i = 0; i < allSelectedClipIDs.length; i++)
+		{
+			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
+			if (clipData.isClip)
+			{
+				hasClipsSelected = true;
+				break;
+			}
+		}
+		if (!hasClipsSelected)
+			itemsToEnable.push("aiconfirm");
 
 		menu.applyrule({ name: "disable_items", disable: true, items: itemsToDisable });
 		menu.applyrule({ name: "enable_items", disable: false, items: itemsToEnable });
@@ -17443,6 +17524,7 @@ function ClipListContextMenu()
 
 		flagEnable = false; // Turn all off, but if one is already off, then turn all on.
 		protectEnable = false;
+		aiConfirm = false;
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
 		{
 			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
@@ -17452,6 +17534,8 @@ function ClipListContextMenu()
 					flagEnable = true;
 				if ((clipData.flags & clip_flag_protect) == 0)
 					protectEnable = true;
+				if ((clipData.flags & alert_flag_sentry_trigger) == 0)
+					aiConfirm = true;
 			}
 		}
 
@@ -17461,6 +17545,7 @@ function ClipListContextMenu()
 
 			$("#cm_cliplist_flag").text(flagEnable ? "Flag" : "Unflag");
 			$("#cm_cliplist_protect").text(protectEnable ? "Protect" : "Unprotect");
+			$("#cm_cliplist_aiconfirm").text(aiConfirm ? "Mark as AI-confirmed" : "Unmark as AI-confirmed");
 			if (clipData.fileSize)
 				$("#cm_cliplist_download").text("Download (" + htmlEncode(clipData.fileSize) + ")");
 			else
@@ -17479,6 +17564,7 @@ function ClipListContextMenu()
 			var label = " " + allSelectedClipIDs.length + " " + (DbViewIsAlerts(settings.ui3_current_dbView) ? "alerts" : "clips");
 			$("#cm_cliplist_flag").text((flagEnable ? "Flag" : "Unflag") + label);
 			$("#cm_cliplist_protect").text((protectEnable ? "Protect" : "Unprotect") + label);
+			$("#cm_cliplist_aiconfirm").text((aiConfirm ? "Mark as AI-confirmed" : "Unmark as AI-confirmed") + label);
 			$("#cm_cliplist_download").text("Download" + label);
 			$("#cm_cliplist_delete").text("Delete" + label);
 			$dl_link.attr("href", "javascript:void(0)");
@@ -17520,6 +17606,17 @@ function ClipListContextMenu()
 					AskYesNo("Confirm " + whatAction + " of " + allSelectedClipIDs.length + " " + whichKind + "?", function ()
 					{
 						clipLoader.Multi_Protect(allSelectedClipIDs, protectEnable);
+					});
+				break;
+			case "aiconfirm":
+				var whatAction = (aiConfirm ? "Mark AI-confirmed" : "Unmark AI-confirmed");
+				var whichKind = (DbViewIsAlerts(settings.ui3_current_dbView) ? "alert" : "clip") + (allSelectedClipIDs.length == 1 ? "" : "s");
+				if (allSelectedClipIDs.length <= 12)
+					clipLoader.Multi_AiConfirm(allSelectedClipIDs, aiConfirm);
+				else
+					AskYesNo("Confirm " + whatAction + " of " + allSelectedClipIDs.length + " " + whichKind + "?", function ()
+					{
+						clipLoader.Multi_AiConfirm(allSelectedClipIDs, aiConfirm);
 					});
 				break;
 			case "download":
@@ -17594,6 +17691,7 @@ function ClipListContextMenu()
 			[
 				{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_aiconfirm">(un)Mark as AI-confirmed</span>', icon: "#sentry_logo", iconClass: "noflip", alias: "aiconfirm", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
 				, (addDeleteItem
 					? { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
