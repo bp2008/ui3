@@ -4537,7 +4537,9 @@ body + div
 	margin: 0px auto 20px auto;
 	border: 4px ridge #000000;
 	border-radius: 4px;
-	max-height: 240px;
+	max-width: 88vw;
+	max-height: 88vh;
+	box-sizing: border-box;
 }
 
 .clipprop_item_info
