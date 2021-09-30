@@ -1112,8 +1112,6 @@ div.invisibleLabel
 	position: absolute;
 	border: 4px ridge #888888;
 	border-radius: 5px;
-	max-width: 500px;
-	max-height: 500px;
 	z-index: 9999;
 	overflow: hidden;
 	font-size: 0px;

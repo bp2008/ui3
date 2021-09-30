@@ -828,14 +828,6 @@ var defaultSettings =
 			, category: "Streaming Profiles" // This category isn't shown in UI Settings, but has special-case logic in ui3-local-overrides.js export.
 		}
 		, {
-			key: "ui3_clipPreviewEnabled"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: "Clip Preview Animations"
-			, hint: "When enabled, mousing over the alert/clip list shows a rapid animated preview.  Video streaming performance may suffer while the animation is active."
-			, category: "General Settings"
-		}
-		, {
 			key: "ui3_timeout"
 			, value: 10
 			, inputType: "number"
@@ -1089,6 +1081,21 @@ var defaultSettings =
 			, label: 'Show New Warnings Counter<div class="settingDesc">(appears on Main Menu / System Log)</div>'
 			, onChange: OnChange_ui3_topbar_warnings_counter
 			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_clipPreviewEnabled"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: "Clip Preview Animations"
+			, hint: "When enabled, mousing over the alert/clip list shows a rapid animated preview.  Video streaming performance may suffer while the animation is active."
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_native_res_previews"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Preview clips at native resolution<div class="settingDesc">(affects mouseover thumbnails)</div>'
+			, category: "Clips / Alerts"
 		}
 		, {
 			key: "ui3_pc_next_prev_buttons"
@@ -6679,6 +6686,14 @@ function BigThumbHelper()
 			assumedHeight = assumedHeight * shrinkBy;
 			assumedWidth = assumedHeight * aspectRatio;
 		}
+		var bH = $('#layoutbody').height();
+		shrinkBy = assumedHeight ? bH / assumedHeight : 0;
+		if (shrinkBy > 0 && shrinkBy < 1)
+		{
+			var aspectRatio = assumedWidth / assumedHeight;
+			assumedHeight = assumedHeight * shrinkBy;
+			assumedWidth = assumedHeight * aspectRatio;
+		}
 		var wH = $(window).height();
 		var top = ($vAlign.offset().top + ($vAlign.height() / 2)) - (assumedHeight / 2) - 20; // 20 for the description
 		if (top + (assumedHeight + 20) > wH)
@@ -7550,6 +7565,15 @@ function ClipLoader(clipsBodySelector)
 						var aspectRatio = thumbEle.naturalWidth / thumbEle.naturalHeight;
 						var renderH = 240;
 						var renderW = renderH * aspectRatio;
+						if (settings.ui3_native_res_previews === "1")
+						{
+							var clipRes = new ClipRes(clipData.res);
+							if (clipRes.valid)
+							{
+								renderW = clipRes.width;
+								renderH = clipRes.height;
+							}
+						}
 						bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, renderW, renderH);
 						if (!clipData.isSnapshot)
 							clipThumbnailVideoPreview.Start($clip, clipData, camName);
@@ -8644,6 +8668,15 @@ function ClipThumbnailVideoPreview_BruteForce()
 			aspectRatio = 16 / 9;
 		var expectedHeight = 240;
 		var expectedWidth = expectedHeight * aspectRatio;
+		if (settings.ui3_native_res_previews === "1")
+		{
+			var clipRes = new ClipRes(clipData.res);
+			if (clipRes.valid)
+			{
+				expectedWidth = clipRes.width;
+				expectedHeight = clipRes.height;
+			}
+		}
 		clipThumbPlaybackActive = true;
 		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * duration;
 		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&cache=1&h=" + expectedHeight + currentServer.GetAPISessionArg("&");
