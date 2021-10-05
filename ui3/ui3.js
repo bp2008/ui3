@@ -10402,6 +10402,8 @@ function CameraListLoader()
 		var cam = self.GetCameraWithId(groupId);
 		if (cam)
 		{
+			if (!self.CameraIsGroup(cam))
+				return;
 			var g = dynamicGroupLayout[groupId];
 			if (!g)
 				g = dynamicGroupLayout[groupId] = {};
@@ -10518,10 +10520,26 @@ function CameraListLoader()
 		}
 		return null;
 	}
+	this.isDynamicLayoutEligible = function (groupId)
+	{
+		var cam = self.GetCameraWithId(groupId);
+		if (cam && !self.IsFakeGroup(groupId))
+		{
+			if (self.CameraIsGroup(cam))
+				return !!cam.dynamic;
+			else if (self.CameraIsCycle(cam))
+			{
+				cam = self.GetCameraWithId(groupId.substr(1));
+				if (cam && !self.IsFakeGroup(groupId))
+					return !!cam.dynamic;
+			}
+		}
+		return false;
+	}
 	this.isDynamicLayoutEnabled = function (groupId, ignoreViewportSize)
 	{
 		var cam = self.GetCameraWithId(groupId);
-		return cam && self.CameraIsGroup(cam) && settings.ui3_dynamicGroupLayout === "1" && cam.dynamic && (ignoreViewportSize || imageRenderer.ViewportCanSupportDynamicGroupLayout());
+		return cam && self.isDynamicLayoutEligible(groupId) && settings.ui3_dynamicGroupLayout === "1" && (ignoreViewportSize || imageRenderer.ViewportCanSupportDynamicGroupLayout());
 	}
 	this.HideWebcastingWarning = function ()
 	{
@@ -15771,7 +15789,7 @@ function ClipOverlayCfg()
 // Group Streaming Configuration //////////////////////////////
 ///////////////////////////////////////////////////////////////
 /**
-	Provides storage of group configuration on a per-group basis.
+	Provides storage of group configuration on a per-group basis. Also supports group cycles.
 	For boolean setting overrides, value 0 indicates "UNSET". 1 indicates "OFF". 2 indicates "ON".
  */
 function GroupCfg()
@@ -15816,7 +15834,7 @@ function GroupCfg()
 		var camData = cameraListLoader.GetCameraWithId(camId);
 		if (camData)
 		{
-			if (cameraListLoader.CameraIsGroup(camData))
+			if (cameraListLoader.CameraIsGroupOrCycle(camData))
 			{
 				if (keyMap[key])
 					key = keyMap[key];
@@ -16999,11 +17017,16 @@ function CanvasContextMenu()
 	var onShowLiveContextMenu = function (menu)
 	{
 		var imgLoaded = videoPlayer.Loaded().image;
-		var imgIsFakeGroup = cameraListLoader.IsFakeGroup(imgLoaded.id);
-		if (imgLoaded.isGroup && !imgIsFakeGroup)
+		if (imgLoaded.isGroup || cameraListLoader.isDynamicLayoutEligible(imgLoaded.id))
 			$("#submenu_trigger_groupLayout").closest('.b-m-item,.b-m-ifocus').show();
 		else
 			$("#submenu_trigger_groupLayout").closest('.b-m-item,.b-m-ifocus').hide();
+
+		ThreeStateMenuItem.SetVisible("showCameraNames", imgLoaded.isGroup);
+		ThreeStateMenuItem.SetVisible("showCameraBorders", imgLoaded.isGroup);
+		ThreeStateMenuItem.SetVisible("showHiddenCameras", imgLoaded.isGroup);
+		ThreeStateMenuItem.SetVisible("hideDisabledCameras", imgLoaded.isGroup);
+		ThreeStateMenuItem.SetVisible("hideInactiveCamerasWithoutVideo", imgLoaded.isGroup);
 
 		if (cameraListLoader.isDynamicLayoutEnabled(imgLoaded.id))
 		{
@@ -17425,6 +17448,13 @@ var ThreeStateMenuItem = new (function ()
 			getIconWrapper(spanId).removeClass("iconGray");
 		else
 			getIconWrapper(spanId).addClass("iconGray");
+	}
+	this.SetVisible = function(id, visible)
+	{
+		if (visible)
+			$("#submenu_trigger_" + id).closest('.b-m-item,.b-m-ifocus').show();
+		else
+			$("#submenu_trigger_" + id).closest('.b-m-item,.b-m-ifocus').hide();
 	}
 })();
 ///////////////////////////////////////////////////////////////
