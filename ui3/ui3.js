@@ -495,11 +495,8 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // CONSIDER: Advanced canvas-based clip list viewer.  It should use the entire video playback area (maybe hide the left bar too), be zoomable, and very responsive.  Navigate by keyboard or click-and-drag with inertia. Clips arranged like a timeline, with thumbnails moving across the screen horizontally (left = older, right = newer) with dotted vertical lines every minute/hour etc.  Each camera its own row.
-// CONSIDER: Android Chrome > Back button can't close the browser if there is no history, so the back button override is disabled on Android.  Also disabled on iOS for similar bugs.
-// CONSIDER: Seeking while paused in Chrome, the canvas sometimes shows the image scaled using nearest-neighbor.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
 // CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
-// CONSIDER: Firefox on Android has trouble with switching cameras and seeking.
 // KNOWN: Black frame shown when pausing HTML5 player before first frame is rendered. This is caused by destroying the jmuxer instance before the frame has rendered. Skipping or delaying the destroy causes camera-changing weirdness, so this is the lesser nuisance.
 // CONSIDER: Expandable clip list. ("Show more clips")
 
@@ -541,8 +538,6 @@ function GetH264PlayerOptions()
 function GetDefaultH264PlayerOption()
 {
 	if (BrowserIsEdgeLegacy())
-		return H264PlayerOptions.JavaScript;
-	else if (BrowserIsFirefox())
 		return H264PlayerOptions.JavaScript;
 	return GetH264PlayerOptions()[0];
 }
@@ -908,15 +903,6 @@ var defaultSettings =
 			, options: [HTML5DelayCompensationOptions.None, HTML5DelayCompensationOptions.Weak, HTML5DelayCompensationOptions.Normal, HTML5DelayCompensationOptions.Strong]
 			, label: 'HTML5 Video Delay Compensation <div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'HTML5 Video Delay Compensation\')">(learn more)</a></div>'
 			, preconditionFunc: Precondition_ui3_html5_delay_compensation
-			, category: "Video Player"
-		}
-		, {
-			key: "ui3_force_gop_1sec"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: '<span style="color:#FF0000">Firefox Stutter Fix</span> <div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Firefox Stutter Fix\')">(learn more)</a></div>'
-			, onChange: OnChange_ui3_force_gop_1sec
-			, preconditionFunc: Precondition_ui3_force_gop_1sec
 			, category: "Video Player"
 		}
 		, {
@@ -16410,14 +16396,7 @@ function StreamingProfile()
 			if (self.fps >= 0)
 				sb.Append("&fps=").Append(self.fps);
 
-			if (Precondition_ui3_force_gop_1sec() && settings.ui3_force_gop_1sec === "1")
-			{
-				var forced_GOP = videoPlayer.Loading().cam.FPS || 10;
-				if (self.fps > 0 && self.fps < forced_GOP)
-					forced_GOP = self.fps;
-				sb.Append("&gop=").Append(Clamp(forced_GOP, 3, 60));
-			}
-			else if (self.gop >= 1)
+			if (self.gop >= 1)
 				sb.Append("&gop=").Append(self.gop);
 
 			if (self.zfl > 0)
@@ -25544,10 +25523,6 @@ function Precondition_ui3_html5_delay_compensation()
 {
 	return (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5);
 }
-function Precondition_ui3_force_gop_1sec()
-{
-	return (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5 && BrowserIsFirefox());
-}
 function Precondition_ui3_download_snapshot_server()
 {
 	return settings.ui3_download_snapshot_method === "Server";
@@ -25555,10 +25530,6 @@ function Precondition_ui3_download_snapshot_server()
 function Precondition_ui3_download_snapshot_local()
 {
 	return settings.ui3_download_snapshot_method.startsWith("Local ");
-}
-function OnChange_ui3_force_gop_1sec()
-{
-	videoPlayer.SelectedQualityChanged();
 }
 function OnChange_ui3_icons_extraVisibility()
 {
@@ -25981,9 +25952,6 @@ function UIHelpTool()
 			case "HTML5 Video Delay Compensation":
 				UI3_HTML5_Delay_Compensation_Help();
 				break;
-			case "Firefox Stutter Fix":
-				UI3_Firefox_Stuffer_fix_Help();
-				break;
 			case "Edge Fetch Bug":
 				UI3_Edge_Fetch_Bug_Help();
 				break;
@@ -26087,13 +26055,6 @@ function UIHelpTool()
 		$('<div class="UIHelp">'
 			+ 'HTML5 video was not designed for low-latency playback, so brief stream interruptions build up to a noticeable delay. UI3 is built with an experimental delay compensator which can speed up or slow down the video player to keep video delay at a consistent level. This delay compensator is configurable via the HTML5 Video Delay Compensation option.'
 			+ '</div>').modalDialog({ title: 'HTML5 Video Delay Compensation', closeOnOverlayClick: true });
-	}
-	var UI3_Firefox_Stuffer_fix_Help = function ()
-	{
-		$('<div class="UIHelp">'
-			+ "Firefox's HTML5 video player has trouble with low-latency streams. Basically, it requires frequent keyframes or else performance degrades rapidly.  The Firefox Stutter Fix option forces your keyframe interval to be equal to the camera\'s frame rate while you are using the HTML5 player for H.264 video.  This reduces video quality somewhat, but ensures relatively good decoding performance.<br><br>"
-			+ "If this bothers you, it is recommended to use a different H.264 player option."
-			+ '</div>').modalDialog({ title: 'Firefox Stutter Fix', closeOnOverlayClick: true });
 	}
 	var UI3_Edge_Fetch_Bug_Help = function ()
 	{
