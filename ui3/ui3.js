@@ -10527,12 +10527,12 @@ function CameraListLoader()
 		{
 			if (self.CameraIsGroup(cam))
 				return !!cam.dynamic;
-			else if (self.CameraIsCycle(cam))
-			{
-				cam = self.GetCameraWithId(groupId.substr(1));
-				if (cam && !self.IsFakeGroup(groupId))
-					return !!cam.dynamic;
-			}
+			//else if (self.CameraIsCycle(cam))
+			//{
+			//	cam = self.GetCameraWithId(groupId.substr(1));
+			//	if (cam && !self.IsFakeGroup(groupId))
+			//		return !!cam.dynamic;
+			//}
 		}
 		return false;
 	}
