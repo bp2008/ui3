@@ -875,13 +875,13 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_h264_choice2"
+			key: "ui3_h264_choice3"
 			, value: GetDefaultH264PlayerOption()
 			, inputType: "select"
 			, options: GetH264PlayerOptions()
 			, label: 'H.264 Player <a href="javascript:UIHelp.LearnMore(\'H.264 Player Options\')">(learn more)</a>'
-			, onChange: OnChange_ui3_h264_choice2
-			, preconditionFunc: Precondition_ui3_h264_choice2
+			, onChange: OnChange_ui3_h264_choice3
+			, preconditionFunc: Precondition_ui3_h264_choice3
 			, category: "Video Player"
 		}
 		, {
@@ -2588,6 +2588,19 @@ $(function ()
 				if (localeUses24HourTime())
 					settings.ui3_time24hour = "1";
 				localStorage.ui3_time24hour_migrated = "1";
+			}
+			if (typeof localStorage.ui3_html5_migration === "undefined")
+			{
+				if (typeof localStorage.ui3_h264_choice2 !== "undefined")
+				{
+					// UI3-177 transitions Firefox users from JavaScript to the new FF default of HTML5.
+					// For all other users, this one-time setting migration preserves their previous preference.
+					var isFFwithJS = BrowserIsFirefox() && localStorage.ui3_h264_choice2 === H264PlayerOptions.JavaScript;
+					if (!isFFwithJS) 
+						settings.ui3_h264_choice3 = localStorage.ui3_h264_choice2;
+					delete localStorage.ui3_h264_choice2;
+				}
+				localStorage.ui3_html5_migration = "1";
 			}
 		}
 	}
@@ -12247,12 +12260,12 @@ function FetchH264VideoModule()
 		isInitialized = true;
 		// Do one-time initialization here
 		//console.log("Initializing h264_player");
-		if (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5)
+		if (mse_mp4_h264_supported && settings.ui3_h264_choice3 === H264PlayerOptions.HTML5)
 			h264_player = new HTML5_MSE_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd, playerErrorCb);
 		else if (pnacl_player_supported &&
-			(settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Auto
-				|| settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_No
-				|| settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Yes))
+			(settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Auto
+				|| settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_No
+				|| settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Yes))
 			h264_player = new Pnacl_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd);
 		else
 			h264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
@@ -13449,7 +13462,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 				$disablePnaclButton2.css('display', 'block');
 				$disablePnaclButton2.on('click', function ()
 				{
-					settings.ui3_h264_choice2 = H264PlayerOptions.HTML5;
+					settings.ui3_h264_choice3 = H264PlayerOptions.HTML5;
 					ReloadInterface();
 				});
 				$err.append($disablePnaclButton2);
@@ -13460,7 +13473,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			$disablePnaclButton.css('display', 'block');
 			$disablePnaclButton.on('click', function ()
 			{
-				settings.ui3_h264_choice2 = H264PlayerOptions.JavaScript;
+				settings.ui3_h264_choice3 = H264PlayerOptions.JavaScript;
 				ReloadInterface();
 			});
 			$err.append($disablePnaclButton);
@@ -13552,9 +13565,9 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		listenerDiv.addEventListener('crash', handleCrash, true);
 
 		var hwva = "0";
-		if (settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Auto)
+		if (settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Auto)
 			hwva = "1";
-		else if (settings.ui3_h264_choice2 === H264PlayerOptions.NaCl_HWVA_Yes)
+		else if (settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Yes)
 			hwva = "2";
 		var $player = $('<embed id="pnacl_player_module" name="pnacl_player_module" width="100%" height="100%" path="pnacl" src="ui3/pnacl/pnacl_player.nmf' + currentServer.GetLocalSessionArg("?") + '" type="application/x-pnacl" hwaccel="' + hwva + '" />');
 		$parent.append($player);
@@ -21425,7 +21438,7 @@ function PictureInPictureController()
 	var pipIsSupported = false;
 	try
 	{
-		pipIsSupported = document.pictureInPictureEnabled && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5;
+		pipIsSupported = document.pictureInPictureEnabled && settings.ui3_h264_choice3 === H264PlayerOptions.HTML5;
 	}
 	catch (ex)
 	{
@@ -25376,7 +25389,7 @@ function UISettingsPanel()
 }
 function GenerateLocalSnapshotsComment()
 {
-	if (!h264_playback_supported || settings.ui3_h264_choice2 === H264PlayerOptions.HTML5)
+	if (!h264_playback_supported || settings.ui3_h264_choice3 === H264PlayerOptions.HTML5)
 		return "";
 	return "<b>-- Your current H.264 player is not capable of local snapshots. --</b>";
 }
@@ -25481,7 +25494,7 @@ function OnChange_ui3_topbar_warnings_counter()
 {
 	statusLoader.LoadStatus();
 }
-function OnChange_ui3_h264_choice2()
+function OnChange_ui3_h264_choice3()
 {
 	if (ui3_contextMenus_trigger_toast)
 		ui3_contextMenus_trigger_toast.remove();
@@ -25492,7 +25505,7 @@ function OnChange_ui3_h264_choice2()
 		});
 	uiSettingsPanel.Refresh();
 }
-function Precondition_ui3_h264_choice2()
+function Precondition_ui3_h264_choice3()
 {
 	return (pnacl_player_supported || mse_mp4_h264_supported);
 }
@@ -25521,7 +25534,7 @@ function Precondition_ui3_streamingProfileBitRateMax()
 }
 function Precondition_ui3_html5_delay_compensation()
 {
-	return (mse_mp4_h264_supported && settings.ui3_h264_choice2 === H264PlayerOptions.HTML5);
+	return (mse_mp4_h264_supported && settings.ui3_h264_choice3 === H264PlayerOptions.HTML5);
 }
 function Precondition_ui3_download_snapshot_server()
 {
