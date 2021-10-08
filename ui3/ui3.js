@@ -1077,10 +1077,10 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
-			key: "ui3_native_res_previews"
+			key: "ui3_hires_jpeg_disables_preview_animation"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'Preview clips at native resolution<div class="settingDesc">(affects mouseover thumbnails)</div>'
+			, label: 'No preview animation for alerts with Hi-res JPEG'
 			, category: "Clips / Alerts"
 		}
 		, {
@@ -2596,7 +2596,7 @@ $(function ()
 					// UI3-177 transitions Firefox users from JavaScript to the new FF default of HTML5.
 					// For all other users, this one-time setting migration preserves their previous preference.
 					var isFFwithJS = BrowserIsFirefox() && localStorage.ui3_h264_choice2 === H264PlayerOptions.JavaScript;
-					if (!isFFwithJS) 
+					if (!isFFwithJS)
 						settings.ui3_h264_choice3 = localStorage.ui3_h264_choice2;
 					delete localStorage.ui3_h264_choice2;
 				}
@@ -6788,6 +6788,7 @@ function ClipData(clip)
 	clipData.camera = clip.camera;
 	clipData.recId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
 	clipData.thumbPath = clip.path; // Path used for loading the thumbnail
+	clipData.hasHighResJpeg = !clipData.isClip && !DoesFileSizeStringHaveOnlyDuration(clip.filesize);
 	clipData.res = clip.res;
 	if (clipData.isClip)
 	{
@@ -7473,7 +7474,7 @@ function ClipLoader(clipsBodySelector)
 			console.error("ThumbOnAppear called with undefined ele");
 			return;
 		}
-		var path = currentServer.remoteBaseURL + "thumbs/" + ele.thumbPath + currentServer.GetAPISessionArg("?");
+		var path = GetThumbnailPath(ele.thumbPath, false);
 		if (ele.getAttribute('src') != path)
 			asyncThumbnailDownloader.Enqueue(ele, path);
 	}
@@ -7558,13 +7559,13 @@ function ClipLoader(clipsBodySelector)
 
 					if (getMouseoverClipThumbnails())
 					{
-						var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetAPISessionArg("?");
+						var thumbPath = GetThumbnailPath(clipData.thumbPath, true);
 						if (thumbEle.getAttribute("src") == thumbPath)
 							thumbPath = thumbEle;
 						var aspectRatio = thumbEle.naturalWidth / thumbEle.naturalHeight;
 						var renderH = 240;
 						var renderW = renderH * aspectRatio;
-						if (settings.ui3_native_res_previews === "1")
+						if (clipData.hasHighResJpeg)
 						{
 							var clipRes = new ClipRes(clipData.res);
 							if (clipRes.valid)
@@ -8580,6 +8581,18 @@ function SetClipListShortcutIconState(iconSelector, selected)
 	else
 		$(iconSelector).removeClass("selected");
 }
+function GetThumbnailPath(thumbPath, nativeRes)
+{
+	var id = thumbPath.replace(/@/g, "").replace(/\..*/g, "");
+	var clipData = clipLoader.GetClipFromId(id);
+	if (!clipData)
+	{
+		toaster.Warning("Unable to find clip with ID " + id);
+		return "";
+	}
+	nativeRes = nativeRes && clipData.hasHighResJpeg;
+	return currentServer.remoteBaseURL + (nativeRes ? "alerts" : "thumbs") + "/" + thumbPath + "?" + (nativeRes ? "fulljpeg" : "") + currentServer.GetAPISessionArg("&");
+}
 ///////////////////////////////////////////////////////////////
 // Clip Res Parser ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -8620,6 +8633,8 @@ function ClipThumbnailVideoPreview_BruteForce()
 	{
 		var duration = clipData.isClip ? clipData.msec : clipData.roughLengthMs;
 		if (settings.ui3_clipPreviewEnabled != "1" || duration < 500)
+			return;
+		if (clipData.hasHighResJpeg && settings.ui3_hires_jpeg_disables_preview_animation === "1")
 			return;
 		if (lastItemId != clipData.recId)
 		{
@@ -8667,7 +8682,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 			aspectRatio = 16 / 9;
 		var expectedHeight = 240;
 		var expectedWidth = expectedHeight * aspectRatio;
-		if (settings.ui3_native_res_previews === "1")
+		if (clipData.hasHighResJpeg)
 		{
 			var clipRes = new ClipRes(clipData.res);
 			if (clipRes.valid)
@@ -17441,7 +17456,7 @@ var ThreeStateMenuItem = new (function ()
 		else
 			getIconWrapper(spanId).addClass("iconGray");
 	}
-	this.SetVisible = function(id, visible)
+	this.SetVisible = function (id, visible)
 	{
 		if (visible)
 			$("#submenu_trigger_" + id).closest('.b-m-item,.b-m-ifocus').show();
@@ -18777,10 +18792,15 @@ function ClipProperties()
 		try
 		{
 			var $thumb = $('<img class="clipPropertiesThumb" src="" alt="clip thumbnail"></img>');
-			var thumbPath = currentServer.remoteBaseURL + "thumbs/" + clipData.thumbPath + currentServer.GetAPISessionArg("?");
+			var thumbPath = GetThumbnailPath(clipData.thumbPath, true);
 			$thumb.attr('src', thumbPath);
 			$thumb.css("border-color", "#" + clipData.colorHex);
 			$camprop.append($thumb);
+			$thumb.on('load', function ()
+			{
+				if (dialog)
+					dialog.contentChanged(true, true);
+			});
 
 			$camprop.append(GetInfo("Date", GetDateStr(clipData.displayDate)));
 			if (clipData.isClip)
@@ -19474,7 +19494,7 @@ function ExportListDialog()
 	{
 		var linked = item.status === "done";
 		var loadingImg = "ui3/LoadingImage.png" + currentServer.GetLocalSessionArg("?");
-		var thumbUrl = currentServer.remoteBaseURL + 'thumbs/' + item.path + currentServer.GetAPISessionArg("?");
+		var thumbUrl = GetThumbnailPath(item.path, false);
 		var thumbStyle = item.status === "done" ? '' : ' style="opacity: 0.5;"';
 		var thumb = '<div class="camlist_thumb">'
 			+ '<div class="camlist_thumb_aligner"></div>'
@@ -26890,6 +26910,11 @@ function GetClipLengthFromFileSize(fileSize)
 	if (indexLeftParen > 1)
 		fileSize = fileSize.substring(0, indexLeftParen - 1);
 	return fileSize;
+}
+function DoesFileSizeStringHaveOnlyDuration(fileSize)
+{
+	var indexLeftParen = fileSize.indexOf("(");
+	return indexLeftParen < 0;
 }
 function GetClipLengthMs(str)
 {
