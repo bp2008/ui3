@@ -1084,6 +1084,30 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
+			key: "ui3_clip_preview_num_frames"
+			, value: 8
+			, minValue: 2
+			, maxValue: 100
+			, inputType: "number"
+			, label: 'Number of frames in clip preview'
+			, hint: 'Default: 8'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_clip_preview_speed"
+			, value: 5
+			, minValue: 1
+			, maxValue: 60
+			, step: 1
+			, unitLabel: " fps"
+			, inputType: "range"
+			, label: 'Clip preview speed up to'
+			, hint: 'Default: 5 fps'
+			, changeOnStep: false
+			, preconditionFunc: Precondition_ui3_download_snapshot_server
+			, category: "Clips / Alerts"
+		}
+		, {
 			key: "ui3_pc_next_prev_buttons"
 			, value: "1"
 			, inputType: "checkbox"
@@ -8622,12 +8646,12 @@ function ClipThumbnailVideoPreview_BruteForce()
 	var self = this;
 	var lastThumbLoadTime = -60000;
 	var thumbVideoTimeout = null;
-	var clipPreviewNumFrames = 8;
 	var clipPreviewNumLoopsAllowed = 3;
 	var clipThumbPlaybackActive = false;
 	var clipPreviewStartTimeout = null;
 	var queuedPreview = null;
 	var lastItemId = null;
+	var averageFrameLoadTime = null;
 
 	this.Start = function ($clip, clipData, camName, frameNum, loopNum)
 	{
@@ -8649,20 +8673,25 @@ function ClipThumbnailVideoPreview_BruteForce()
 				clipPreviewStartTimeout = null;
 				if (queuedPreview)
 				{
+					averageFrameLoadTime = new RollingAverage(self.GetClipPreviewNumFrames());
 					self.Start(queuedPreview.clip, queuedPreview.clipData, queuedPreview.camName);
 				}
 			}, 500);
 		}
+
 		queuedPreview = null;
 		if (!frameNum)
 			frameNum = 0;
 		if (!loopNum)
 			loopNum = 0;
+		if (!averageFrameLoadTime)
+			averageFrameLoadTime = new RollingAverage(self.GetClipPreviewNumFrames());
 
 		// Throttle image loads to one per 200ms.
 		var perfNow = performance.now();
 		var timeWaited = perfNow - lastThumbLoadTime;
-		var timeToWait = Clamp(200 - timeWaited, 0, 1000);
+		var waitTime = PreviewSpeedToDelayMs(parseInt(settings.ui3_clip_preview_speed));
+		var timeToWait = Clamp(waitTime - timeWaited, 0, 1000);
 		if (timeToWait > 0)
 		{
 			clearTimeout(thumbVideoTimeout);
@@ -8692,6 +8721,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 			}
 		}
 		clipThumbPlaybackActive = true;
+		var clipPreviewNumFrames = self.GetClipPreviewNumFrames();
 		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * duration;
 		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&cache=1&h=" + expectedHeight + currentServer.GetAPISessionArg("&");
 		var thumbLabel = camName + " " + GetTimeStr(new Date(clipData.displayDate.getTime() + timeValue));
@@ -8705,7 +8735,9 @@ function ClipThumbnailVideoPreview_BruteForce()
 					frameNum = 0;
 					loopNum++;
 				}
-				if (loopNum >= clipPreviewNumLoopsAllowed && performance.now() - lastThumbLoadTime > 40)
+				var timeToLoadThisFrame = performance.now() - lastThumbLoadTime;
+				averageFrameLoadTime.Add(timeToLoadThisFrame);
+				if (loopNum >= clipPreviewNumLoopsAllowed && averageFrameLoadTime.Get() > 10) // Only allow looping past the limit if images are loading fast
 					return;
 
 				self.Start($clip, clipData, camName, frameNum, loopNum);
@@ -8717,6 +8749,15 @@ function ClipThumbnailVideoPreview_BruteForce()
 		ClearTimeouts();
 		clipThumbPlaybackActive = false;
 		bigThumbHelper.Hide();
+		averageFrameLoadTime = new RollingAverage(self.GetClipPreviewNumFrames());
+	}
+	this.GetClipPreviewNumFrames = function ()
+	{
+		var clipPreviewNumFrames = parseInt(settings.ui3_clip_preview_num_frames);
+		if (!clipPreviewNumFrames)
+			clipPreviewNumFrames = 8;
+		clipPreviewNumFrames = Clamp(clipPreviewNumFrames, 2, 100);
+		return clipPreviewNumFrames;
 	}
 	var ClearTimeouts = function ()
 	{
@@ -27677,4 +27718,15 @@ function debounce(fn, delay)
 function getRandomInt(maxPlusOne)
 {
 	return Clamp(Math.floor(Math.random() * maxPlusOne), 0, maxPlusOne - 1);
+}
+function PreviewSpeedToDelayMs(speed)
+{
+	if (!speed)
+		speed = 5;
+	speed = Clamp(speed, 1, 60);
+	var scaled = 1000 / speed;
+	return scaled;
+	// exponential scaling
+	//var sqrt = Math.sqrt(scaled);
+	//return 1000 - Clamp(sqrt * 984, 0, 1000);
 }
