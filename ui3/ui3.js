@@ -50,7 +50,9 @@ function BrowserIsFirefox()
 		_browser_is_firefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1 ? 1 : 0;
 	return _browser_is_firefox === 1;
 }
-var h264_playback_supported = false;
+var any_h264_playback_supported = false;
+var streaming_supported = false; // fetch and readablestream
+var h264_js_player_supported = false; // JS H.264 player
 var audio_playback_supported = false;
 var web_workers_supported = false;
 var export_blob_supported = false;
@@ -66,8 +68,8 @@ var web_audio_requires_user_input = false;
 var fullscreen_supported = false;
 var browser_is_ios = false;
 var browser_is_android = false;
-var pnacl_player_supported = false;
-var mse_mp4_h264_supported = false;
+var pnacl_player_supported = false; // pNaCl H.264 player
+var mse_mp4_h264_supported = false; // HTML5 H.264 player
 var mse_mp4_aac_supported = false;
 var vibrate_supported = false;
 var web_audio_autoplay_disabled = false;
@@ -100,45 +102,65 @@ function DoUIFeatureDetection()
 			}
 			readable_stream_supported = typeof ReadableStream === "function";
 			webgl_supported = detectWebGLContext();
+
+			streaming_supported = fetch_supported && readable_stream_supported;
+			h264_js_player_supported = streaming_supported && web_workers_supported && webgl_supported;
+			pnacl_player_supported = streaming_supported && detectIfPnaclSupported();
+			var mse_support = detectMSESupport();
+			mse_mp4_h264_supported = streaming_supported && (mse_support & 1) > 0;
+			mse_mp4_aac_supported = streaming_supported && (mse_support & 2) > 0; // Not yet used
+			any_h264_playback_supported = fetch_supported && readable_stream_supported && (h264_js_player_supported || mse_mp4_h264_supported || pnacl_player_supported);
+
 			detectAudioSupport();
 			vibrate_supported = detectVibrateSupport();
 			fullscreen_supported = ((document.documentElement.requestFullscreen || document.documentElement.msRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.webkitRequestFullscreen) && (document.exitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen || document.webkitExitFullscreen)) ? true : false;
-			h264_playback_supported = web_workers_supported && fetch_supported && readable_stream_supported && webgl_supported;
-			audio_playback_supported = h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported && web_audio_buffer_copyToChannel_supported;
-			exporting_clips_to_avi_supported = h264_playback_supported && export_blob_supported;
+			audio_playback_supported = any_h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported && web_audio_buffer_copyToChannel_supported;
+			exporting_clips_to_avi_supported = any_h264_playback_supported && export_blob_supported;
 			html5HistorySupported = isHtml5HistorySupported()
 			flac_supported = isFlacSupported();
 			speech_synthesis_supported = isSpeechSupported();
 
-			if (h264_playback_supported)
-			{
-				pnacl_player_supported = detectIfPnaclSupported();
-				var mse_support = detectMSESupport();
-				mse_mp4_h264_supported = (mse_support & 1) > 0;
-				mse_mp4_aac_supported = (mse_support & 2) > 0; // Not yet used
-			}
-
 			$(function ()
 			{
 				var ul_root = $('<ul></ul>');
-				if (!h264_playback_supported)
+				if (!streaming_supported)
 				{
 					var ul = $('<ul></ul>');
-					if (!web_workers_supported)
-						ul.append('<li>Web Workers</li>');
 					if (!fetch_supported)
 						ul.append('<li>Fetch API</li>');
 					if (!readable_stream_supported)
 						ul.append('<li>ReadableStream</li>');
+					ul_root.append($('<li>Data Streaming requires these unsupported features:</li>').append(ul));
+				}
+				if (!h264_js_player_supported)
+				{
+					var ul = $('<ul></ul>');
+					if (!streaming_supported)
+						ul.append('<li>Data Streaming</li>');
+					if (!web_workers_supported)
+						ul.append('<li>Web Workers</li>');
 					if (!webgl_supported)
 						ul.append('<li>WebGL</li>');
-					ul_root.append($('<li>The H.264 video player requires these unsupported features:</li>').append(ul));
+					ul_root.append($('<li>The JavaScript H.264 Player requires these unsupported features:</li>').append(ul));
 				}
+				if (!mse_mp4_h264_supported)
+				{
+					var ul = $('<ul></ul>');
+					if (!streaming_supported)
+						ul.append('<li>Data Streaming</li>');
+					if (!((mse_support & 1) > 0))
+						ul.append('<li>Media Source Extensions, H.264 codec, MP4 format</li>');
+					ul_root.append($('<li>The HTML5 H.264 Player requires these unsupported features:</li>').append(ul));
+				}
+				if (!any_h264_playback_supported)
+					ul_root.append($('<li>No H.264 Player is available.</li>'));
 				if (!audio_playback_supported)
 				{
 					var ul = $('<ul></ul>');
-					if (!h264_playback_supported)
-						ul.append('<li>H.264 Video Player</li>');
+					if (!streaming_supported)
+						ul.append('<li>Data Streaming</li>');
+					if (!any_h264_playback_supported)
+						ul.append('<li>Any H.264 Player</li>');
 					if (!web_audio_supported)
 						ul.append('<li>Web Audio API</li>');
 					if (!web_audio_buffer_source_supported)
@@ -179,12 +201,12 @@ function DoUIFeatureDetection()
 				}
 				var $videoPlayers = $("<ul></ul>");
 				$videoPlayers.append("<li>Jpeg</li>");
-				if (h264_playback_supported)
-					$videoPlayers.append("<li>H.264 via JavaScript</li>");
-				if (pnacl_player_supported)
-					$videoPlayers.append("<li>H.264 via NaCl</li>");
 				if (mse_mp4_h264_supported)
 					$videoPlayers.append("<li>H.264 via HTML5</li>");
+				if (pnacl_player_supported)
+					$videoPlayers.append("<li>H.264 via NaCl</li>");
+				if (h264_js_player_supported)
+					$videoPlayers.append("<li>H.264 via JavaScript</li>");
 				$('#videoPlayersSupported').append($videoPlayers);
 			});
 			return;
@@ -532,7 +554,8 @@ function GetH264PlayerOptions()
 		arr.push(H264PlayerOptions.NaCl_HWVA_No);
 		arr.push(H264PlayerOptions.NaCl_HWVA_Yes);
 	}
-	arr.push(H264PlayerOptions.JavaScript);
+	if (h264_js_player_supported)
+		arr.push(H264PlayerOptions.JavaScript);
 	return arr;
 }
 function GetDefaultH264PlayerOption()
@@ -2634,7 +2657,7 @@ $(function ()
 	}
 
 	if (fetch_streams_cant_close_bug && settings.ui3_edge_fetch_bug_h264_enable !== "1")
-		h264_playback_supported = false; // Affects Edge 17.x, 18.x, and possibly newer versions.
+		any_h264_playback_supported = h264_js_player_supported = mse_mp4_h264_supported = pnacl_player_supported = false; // Affects Edge 17.x, 18.x, and possibly newer versions.
 
 	HandlePreLoadUrlParameters();
 
@@ -2646,7 +2669,7 @@ $(function ()
 
 	ptzButtons = new PtzButtons();
 
-	if (!h264_playback_supported)
+	if (!any_h264_playback_supported)
 		loadingHelper.SetLoadedStatus("h264"); // We aren't going to load the player, so clear the loading step.
 
 	$("#layoutleftLiveScrollable").CustomScroll(
@@ -10851,7 +10874,7 @@ function VideoPlayerController()
 	{
 		if (!moduleHolder["jpeg"])
 			moduleHolder["jpeg"] = new JpegVideoModule();
-		if (h264_playback_supported)
+		if (any_h264_playback_supported)
 		{
 			if (!moduleHolder["h264"])
 				moduleHolder["h264"] = new FetchH264VideoModule();
@@ -12323,8 +12346,33 @@ function FetchH264VideoModule()
 				|| settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_No
 				|| settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Yes))
 			h264_player = new Pnacl_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd);
-		else
+		else if (h264_js_player_supported && settings.ui3_h264_choice3 === H264PlayerOptions.JavaScript)
 			h264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
+		else
+		{
+			if (mse_mp4_h264_supported)
+			{
+				settings.ui3_h264_choice3 = H264PlayerOptions.HTML5;
+				isInitialized = false;
+				Initialize();
+			}
+			else if (pnacl_player_supported)
+			{
+				settings.ui3_h264_choice3 = H264PlayerOptions.NaCl_HWVA_Auto;
+				isInitialized = false;
+				Initialize();
+			}
+			else if (h264_js_player_supported)
+			{
+				settings.ui3_h264_choice3 = H264PlayerOptions.JavaScript;
+				isInitialized = false;
+				Initialize();
+			}
+			else
+			{
+				toaster.Error("No H.264 player is supported.");
+			}
+		}
 	}
 	var Activate = function ()
 	{
@@ -13502,12 +13550,13 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	}
 	var checkErrorBeforeLoad = function (isCrash)
 	{
+		var selectionToast = null;
 		var $err = $('<div>Native H.264 player ' + (isCrash ? "crashed" : "error") + '!<br><br>' + player.lastError + '</div>');
 		if (!isLoaded)
 		{
 			loadingHelper.SetErrorStatus("h264");
 			$err.append($disablePnaclButton);
-			var $explanation = $('<div>You can load UI3 by changing to a different H.264 player:</div>');
+			var $explanation = mse_mp4_h264_supported || h264_js_player_supported ? $('<div>You can load UI3 by changing to a different player:</div>') : $('<div>You can load UI3 by changing to a JPEG streaming method:</div>');
 			$explanation.css('margin-top', '12px');
 			$err.append($explanation);
 			if (mse_mp4_h264_supported)
@@ -13523,18 +13572,32 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 				});
 				$err.append($disablePnaclButton2);
 			}
-			var $disablePnaclButton = $('<input type="button" value="JavaScript (slow)" />');
+			if (h264_js_player_supported)
+			{
+				var $disablePnaclButton = $('<input type="button" value="JavaScript (slow)" />');
+				$disablePnaclButton.css('margin-top', '10px');
+				$disablePnaclButton.css('padding', '6px');
+				$disablePnaclButton.css('display', 'block');
+				$disablePnaclButton.on('click', function ()
+				{
+					settings.ui3_h264_choice3 = H264PlayerOptions.JavaScript;
+					ReloadInterface();
+				});
+				$err.append($disablePnaclButton);
+			}
+			var $disablePnaclButton = $('<input type="button" value="JPEG mode (no H.264)" />');
 			$disablePnaclButton.css('margin-top', '10px');
 			$disablePnaclButton.css('padding', '6px');
 			$disablePnaclButton.css('display', 'block');
 			$disablePnaclButton.on('click', function ()
 			{
-				settings.ui3_h264_choice3 = H264PlayerOptions.JavaScript;
-				ReloadInterface();
+				any_h264_playback_supported = pnacl_player_supported = false;
+				genericQualityHelper.QualityChoiceChanged('');
+				selectionToast.remove();
 			});
 			$err.append($disablePnaclButton);
 		}
-		toaster.Error($err, isCrash || !isLoaded ? 9999999 : 60000, true);
+		selectionToast = toaster.Error($err, isCrash || !isLoaded ? 9999999 : 60000, true);
 	}
 	var handleMessage = function (message_event)
 	{
@@ -16512,7 +16575,7 @@ function StreamingProfile()
 	}
 	this.IsCompatible = function ()
 	{
-		return self.vcodec === "jpeg" || (h264_playback_supported && self.vcodec === "h264");
+		return self.vcodec === "jpeg" || (any_h264_playback_supported && self.vcodec === "h264");
 	}
 }
 function SetIntendedSize(loading, w, h)
@@ -16558,7 +16621,7 @@ function GenericQualityHelper()
 		// Try to find the best profile
 		// First, one with a max bit rate nearest 1000
 		var best = null;
-		if (h264_playback_supported)
+		if (any_h264_playback_supported)
 		{
 			// Prefer 1080p VBR
 			if (!best) best = self.FindBestProfile("h264", function (p)
@@ -25450,7 +25513,7 @@ function UISettingsPanel()
 }
 function GenerateLocalSnapshotsComment()
 {
-	if (!h264_playback_supported || settings.ui3_h264_choice3 === H264PlayerOptions.HTML5)
+	if (!any_h264_playback_supported || settings.ui3_h264_choice3 === H264PlayerOptions.HTML5)
 		return "";
 	return "<b>-- Your current H.264 player is not capable of local snapshots. --</b>";
 }
@@ -25464,7 +25527,7 @@ function GenerateEventTriggeredIconsComment()
 }
 function GenerateH264RequirementString()
 {
-	return '-- Requires an H.264 stream. --' + (h264_playback_supported ? '' : '<br/><span class="settingsCommentError">-- H.264 streams are not supported by this browser --</span>');
+	return '-- Requires an H.264 stream. --' + (any_h264_playback_supported ? '' : '<br/><span class="settingsCommentError">-- H.264 streams are not supported by this browser --</span>');
 }
 function OnChange_ui3_audio_codec()
 {
@@ -25568,7 +25631,7 @@ function OnChange_ui3_h264_choice3()
 }
 function Precondition_ui3_h264_choice3()
 {
-	return (pnacl_player_supported || mse_mp4_h264_supported);
+	return any_h264_playback_supported;
 }
 function Precondition_ui3_edge_fetch_bug_h264_enable()
 {
@@ -25591,7 +25654,7 @@ function OnChange_ui3_streamingProfileBitRateMax()
 }
 function Precondition_ui3_streamingProfileBitRateMax()
 {
-	return h264_playback_supported;
+	return any_h264_playback_supported;
 }
 function Precondition_ui3_html5_delay_compensation()
 {
@@ -26109,7 +26172,7 @@ function UIHelpTool()
 	{
 		$('<div class="UIHelp">'
 			+ 'UI3 has several H.264 player options. Not all options are available in all browsers.'
-			+ '<br><br><b>JavaScript</b> - ' + (h264_playback_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
+			+ '<br><br><b>JavaScript</b> - ' + (h264_js_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
 			+ '&nbsp; &nbsp; The JavaScript player is the most robust and compatible player option, but also the slowest.'
 			+ '<br><br><b>HTML5</b> - ' + (mse_mp4_h264_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
 			+ '&nbsp; &nbsp; The HTML5 player works by converting each frame into a fragmented MP4 which is played using Media Source Extensions.  This is usually the fastest option, but has compatibility problems with some browsers.'
