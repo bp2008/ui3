@@ -2965,17 +2965,23 @@ var skipLoadingFirstVideoStream = false;
 function HandlePreLoadUrlParameters()
 {
 	// Parameter "tab"
-	var tab = UrlParameters.Get("tab");
+	var tab = UrlParameters.Get("tab", "t");
 	if (tab !== '')
+	{
+		if (tab.toUpperCase() === "L")
+			tab = "live";
+		if (tab.toUpperCase() === "C")
+			tab = "clips";
 		settings.ui3_defaultTab = tab;
+	}
 
 	// Parameter "clipview"
-	var clipview = UrlParameters.Get("clipview");
+	var clipview = UrlParameters.Get("clipview", "v");
 	if (clipview !== '')
 		settings.ui3_current_dbView = clipview;
 
 	// Parameter "group"
-	var group = UrlParameters.Get("group");
+	var group = UrlParameters.Get("group", "g");
 	if (group !== '')
 	{
 		settings.ui3_defaultCameraGroupId = group;
@@ -2988,7 +2994,7 @@ function HandlePreLoadUrlParameters()
 	}
 
 	// Parameter "cam"
-	var cam = UrlParameters.Get("cam");
+	var cam = UrlParameters.Get("cam", "c");
 	if (cam !== '')
 	{
 		BI_CustomEvent.AddListener("FinishedLoading", function ()
@@ -2998,14 +3004,14 @@ function HandlePreLoadUrlParameters()
 				videoPlayer.ImgClick_Camera(camData);
 		});
 	}
-	var maximize = UrlParameters.Get("maximize");
+	var maximize = UrlParameters.Get("maximize", "m");
 	if (maximize === "1" || maximize.toLowerCase() === "true")
 		settings.ui3_is_maximized = "1";
 	else if (maximize === "0" || maximize.toLowerCase() === "false")
 		settings.ui3_is_maximized = "0";
 
 	// Parameter "rec", e.g. "12345" or "12345-5000"
-	var recId = UrlParameters.Get("rec");
+	var recId = UrlParameters.Get("rec", "r");
 	if (recId !== '')
 	{
 		// Get Offset
@@ -3030,7 +3036,7 @@ function HandlePreLoadUrlParameters()
 	}
 
 	// Parameter "streamingprofile"
-	var streamingprofile = UrlParameters.Get("streamingprofile");
+	var streamingprofile = UrlParameters.Get("streamingprofile", "p");
 	if (streamingprofile !== '')
 		settings.ui3_streamingQuality = streamingprofile;
 }
@@ -27312,7 +27318,7 @@ var UrlParameters =
 {
 	loaded: false,
 	parsed_url_params: {},
-	Get: function (key)
+	Get: function ()
 	{
 		if (!this.loaded)
 		{
@@ -27323,8 +27329,11 @@ var UrlParameters =
 			})
 			this.loaded = true;
 		}
-		if (typeof this.parsed_url_params[key.toLowerCase()] != 'undefined')
-			return this.parsed_url_params[key.toLowerCase()];
+		for (var i = 0; i < arguments.length; i++)
+		{
+			if (typeof this.parsed_url_params[arguments[i].toLowerCase()] != 'undefined')
+				return this.parsed_url_params[arguments[i].toLowerCase()];
+		}
 		return "";
 	}
 };
