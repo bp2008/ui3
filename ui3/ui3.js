@@ -2593,6 +2593,7 @@ $(function ()
 	BI_CustomEvent.Invoke("UI_Loading_Start");
 
 	$DialogDefaults.theme = "dark";
+	SimpleDialog.onErrorDefault = toaster.Error;
 
 	if (location.protocol == "file:")
 	{
@@ -7268,6 +7269,10 @@ function ClipLoader(clipsBodySelector)
 			recoveryFunction = null;
 		}
 	}
+	this.GetCurrentFilteredCamera = function ()
+	{
+		return lastLoadedCameraFilter;
+	}
 	this.resizeClipList = function ()
 	{
 		var currentClipTileSize = getClipTileSize();
@@ -8281,6 +8286,9 @@ function ClipLoader(clipsBodySelector)
 		if (!sessionManager.IsAdministratorSession(allSelectedClipIDs.length > 0 ? allSelectedClipIDs[0] : null))
 			return openLoginDialog(function () { self.Multi_Delete(allSelectedClipIDs); });
 
+		// Get a reference to the first clip before we try to close the current clip (which can cause the clip list to be temporarily empty)
+		var clipData = self.GetClipFromId(allSelectedClipIDs[0]);
+
 		// Close current clip if it is among those being deleted.
 		var loadingClipId = videoPlayer.Loading().image.uniqueId;
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
@@ -8298,7 +8306,6 @@ function ClipLoader(clipsBodySelector)
 
 		var allIdsCommaSeparated = '@' + allSelectedClipIDs.join(',@'); // Separated by ';' or ','
 		console.log("Deleting ", allIdsCommaSeparated);
-		var clipData = self.GetClipFromId(allSelectedClipIDs[0]);
 		DeleteAlert(allIdsCommaSeparated, clipData.isClip,
 			function ()
 			{
@@ -11349,7 +11356,8 @@ function VideoPlayerController()
 		ptzButtons.UpdatePtzControlDisplayState();
 		dropdownBoxes.setLabelText("currentGroup", CleanUpGroupName(clc.optionDisplay));
 
-		clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
+		if (clipLoader.GetCurrentFilteredCamera() !== cli.id)
+			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
 
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (playerModule)

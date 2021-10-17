@@ -362,6 +362,8 @@ var $DialogDefaults = { theme: "light" };
 var SimpleDialog = new function ()
 {
 	var self = this;
+	this.onErrorDefault = function (ex) { if (console) console.error.apply(window, arguments); };
+
 	this.text = this.Text = function (message)
 	{
 		return $('<div style="white-space: pre-wrap; padding: 10px;"></div>').text(message).modalDialog();
@@ -391,10 +393,8 @@ var SimpleDialog = new function ()
 	};
 	var Confirm = function (questionEle, onYes, onNo, options)
 	{
-		if (!options.onError && console)
-			options.onError = console.log;
 		if (!options.onError)
-			options.onError = function (ex) { };
+			options.onError = self.onErrorDefault;
 		var $dlg = $('<div style="padding: 10px;"></div>');
 		$dlg.append(questionEle);
 
