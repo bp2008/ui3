@@ -71,6 +71,7 @@ var browser_is_android = false;
 var pnacl_player_supported = false; // pNaCl H.264 player
 var mse_mp4_h264_supported = false; // HTML5 H.264 player
 var mse_mp4_aac_supported = false;
+var webcodecs_h264_player_supported = false; // WebCodecs h264 player
 var vibrate_supported = false;
 var web_audio_autoplay_disabled = false;
 var cookies_accessible = false;
@@ -109,7 +110,9 @@ function DoUIFeatureDetection()
 			var mse_support = detectMSESupport();
 			mse_mp4_h264_supported = streaming_supported && (mse_support & 1) > 0;
 			mse_mp4_aac_supported = streaming_supported && (mse_support & 2) > 0; // Not yet used
-			any_h264_playback_supported = fetch_supported && readable_stream_supported && (h264_js_player_supported || mse_mp4_h264_supported || pnacl_player_supported);
+			var webcodecs_support = detectWebCodecsVideoDecoderSupport();
+			webcodecs_h264_player_supported = streaming_supported && webcodecs_support.h264;
+			any_h264_playback_supported = streaming_supported && (h264_js_player_supported || mse_mp4_h264_supported || pnacl_player_supported || webcodecs_h264_player_supported);
 
 			detectAudioSupport();
 			vibrate_supported = detectVibrateSupport();
@@ -151,6 +154,22 @@ function DoUIFeatureDetection()
 					if (!((mse_support & 1) > 0))
 						ul.append('<li>Media Source Extensions, H.264 codec, MP4 format</li>');
 					ul_root.append($('<li>The HTML5 H.264 Player requires these unsupported features:</li>').append(ul));
+				}
+				if (!webcodecs_h264_player_supported)
+				{
+					var ul = $('<ul></ul>');
+					if (!streaming_supported)
+						ul.append('<li>Data Streaming</li>');
+					if (webcodecs_support.videoFrame && !webcodecs_support.decoder && !isSecureContext)
+						ul.append('<li>WebCodecs: VideoDecoder requires secure context (HTTPS).</li>');
+					else
+					{
+						if (!webcodecs_support.decoder)
+							ul.append('<li>WebCodecs: Video Decoder</li>');
+						else if (!webcodecs_support.h264)
+							ul.append('<li>WebCodecs: H.264 Codec</li>');
+					}
+					ul_root.append($('<li>The WebCodecs H.264 Player requires these unsupported features:</li>').append(ul));
 				}
 				if (!any_h264_playback_supported)
 					ul_root.append($('<li>No H.264 Player is available.</li>'));
@@ -207,6 +226,8 @@ function DoUIFeatureDetection()
 					$videoPlayers.append("<li>H.264 via NaCl</li>");
 				if (h264_js_player_supported)
 					$videoPlayers.append("<li>H.264 via JavaScript</li>");
+				if (webcodecs_h264_player_supported)
+					$videoPlayers.append("<li>H.264 via WebCodecs</li>");
 				$('#videoPlayersSupported').append($videoPlayers);
 			});
 			return;
@@ -347,6 +368,35 @@ function detectMSESupport()
 	}
 	catch (ex) { }
 	return 0;
+}
+function detectWebCodecsVideoDecoderSupport()
+{
+	var result = { videoFrame: false, decoder: false, h264: false };
+	try
+	{
+		var videoDecoder = null;
+		if ('VideoFrame' in window)
+			result.videoFrame = true;
+		if ('VideoDecoder' in window)
+		{
+			try
+			{
+				var videoDecoder = new VideoDecoder({ output: function (frame) { }, error: function (error) { } });
+				result.decoder = true;
+				try
+				{
+					videoDecoder.configure({ codec: "avc1.640029" });
+					result.h264 = true;
+				}
+				catch (ex) { }
+				finally { videoDecoder.reset(); }
+			}
+			catch (ex) { }
+			finally { videoDecoder.close(); }
+		}
+	}
+	catch (ex) { }
+	return result;
 }
 function detectAudioSupport()
 {
@@ -541,11 +591,14 @@ var H264PlayerOptions = {
 	HTML5: "HTML5",
 	NaCl_HWVA_Auto: "NaCl (Auto hw accel)",
 	NaCl_HWVA_No: "NaCl (No hw accel)",
-	NaCl_HWVA_Yes: "NaCl (Only hw accel)"
+	NaCl_HWVA_Yes: "NaCl (Only hw accel)",
+	WebCodecs: "WebCodecs"
 }
 function GetH264PlayerOptions()
 {
 	var arr = new Array();
+	if (webcodecs_h264_player_supported)
+		arr.push(H264PlayerOptions.WebCodecs);
 	if (mse_mp4_h264_supported)
 		arr.push(H264PlayerOptions.HTML5);
 	if (pnacl_player_supported)
@@ -2658,7 +2711,7 @@ $(function ()
 	}
 
 	if (fetch_streams_cant_close_bug && settings.ui3_edge_fetch_bug_h264_enable !== "1")
-		any_h264_playback_supported = h264_js_player_supported = mse_mp4_h264_supported = pnacl_player_supported = false; // Affects Edge 17.x, 18.x, and possibly newer versions.
+		any_h264_playback_supported = h264_js_player_supported = mse_mp4_h264_supported = pnacl_player_supported = webcodecs_h264_player_supported = false; // Affects Edge 17.x, 18.x, and possibly newer versions.
 
 	HandlePreLoadUrlParameters();
 
@@ -12353,7 +12406,11 @@ function FetchH264VideoModule()
 		isInitialized = true;
 		// Do one-time initialization here
 		//console.log("Initializing h264_player");
-		if (mse_mp4_h264_supported && settings.ui3_h264_choice3 === H264PlayerOptions.HTML5)
+		if (webcodecs_h264_player_supported && settings.ui3_h264_choice3 === H264PlayerOptions.WebCodecs)
+			h264_player = new WebCodec_Player(FrameRendered, PlaybackReachedNaturalEnd);
+		else if (mse_mp4_h264_supported &&
+			(settings.ui3_h264_choice3 === H264PlayerOptions.HTML5
+				|| (settings.ui3_h264_choice3 === H264PlayerOptions.WebCodecs && !webcodecs_h264_player_supported)))
 			h264_player = new HTML5_MSE_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd, playerErrorCb);
 		else if (pnacl_player_supported &&
 			(settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Auto
@@ -12364,7 +12421,13 @@ function FetchH264VideoModule()
 			h264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
 		else
 		{
-			if (mse_mp4_h264_supported)
+			if (webcodecs_h264_player_supported)
+			{
+				settings.ui3_h264_choice3 = H264PlayerOptions.WebCodecs;
+				isInitialized = false;
+				Initialize();
+			}
+			else if (mse_mp4_h264_supported)
 			{
 				settings.ui3_h264_choice3 = H264PlayerOptions.HTML5;
 				isInitialized = false;
@@ -12968,8 +13031,9 @@ function FetchH264VideoModule()
 			var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
 			var bitRate_Audio = bitRateCalc_Audio.GetBPS() * 8;
 			var bufferSize = pcmPlayer.GetBufferedMs();
-			var interFrame = perfNow - lastFrameAt;
-			var interFrameError = Math.abs(frame.expectedInterframe - interFrame);
+			var interFrame = frame.expectedInterframe;
+			var actualInterFrame = perfNow - lastFrameAt;
+			var interFrameError = Math.abs(frame.expectedInterframe - actualInterFrame);
 			var netDelay = h264_player.GetNetworkDelay().toFloat();
 			var decoderDelay = h264_player.GetBufferedTime().toFloat();
 			if (h264_player.isMsePlayer)
@@ -13240,30 +13304,30 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		return finishedFrameCount;
 	}
+	/**
+	 * Returns the number of buffered video frames that have not yet been rendered.
+	 * If the system has sufficient computational power, this number should remain close to 0.
+	 */
 	this.GetBufferedFrameCount = function ()
 	{
-		/// <summary>
-		/// Returns the number of buffered video frames that have not yet been rendered. 
-		/// If the system has sufficient computational power, this number should remain close to 0.
-		/// </summary>
 		return acceptedFrameCount - finishedFrameCount;
 	}
+	/**
+	 * Returns the approximate number of milliseconds of video delay caused by insufficient network speed.
+	 * If the system has sufficient network bandwidth, this number should remain close to 0.
+	 * One or two frames worth of delay is nothing to worry about.
+	 */
 	this.GetNetworkDelay = function ()
 	{
-		/// <summary>
-		/// Returns the approximate number of milliseconds of video delay caused by insufficient network speed.
-		/// If the system has sufficient network bandwidth, this number should remain close to 0.
-		/// One or two frames worth of delay is nothing to worry about.
-		/// </summary>
 		return netDelayCalc.Calc();
 	}
+	/**
+	 * Returns the number of milliseconds of buffered video frames, calculated as 
+	 * timestampLastAcceptedFrame - timestampLastRenderedFrame.
+	 * If the system has sufficient computational power, this number should remain close to 0.
+	 */
 	this.GetBufferedTime = function ()
 	{
-		/// <summary>
-		/// Returns the number of milliseconds of buffered video frames, calculated as 
-		/// timestampLastAcceptedFrame - timestampLastRenderedFrame.
-		/// If the system has sufficient computational power, this number should remain close to 0.
-		/// </summary>
 		return timestampLastAcceptedFrame - timestampLastRenderedFrame;
 	}
 	this.GetLastFrameRenderTime = function ()
@@ -13326,9 +13390,14 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 
 	Initialize();
 }
+/**
+ * Manages the playback clock and keeps frames rendering as closely as possible to their intended timestamps while adding a minimum amount of video latency.
+ * @param {Function} renderFunc
+ * @param {Function} dropFunc
+ * @param {any} averageRenderTime
+ */
 function RenderScheduler(renderFunc, dropFunc, averageRenderTime)
 {
-	/// <summary>Manages the playback clock and keeps frames rendering as closely as possible to their intended timestamps.</summary>
 	var self = this;
 	var frameQueue = [];
 	var timeout = null;
@@ -13570,9 +13639,22 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		{
 			loadingHelper.SetErrorStatus("h264");
 			$err.append($disablePnaclButton);
-			var $explanation = mse_mp4_h264_supported || h264_js_player_supported ? $('<div>You can load UI3 by changing to a different player:</div>') : $('<div>You can load UI3 by changing to a JPEG streaming method:</div>');
+			var $explanation = mse_mp4_h264_supported || h264_js_player_supported || webcodecs_h264_player_supported ? $('<div>You can load UI3 by changing to a different player:</div>') : $('<div>You can load UI3 by changing to a JPEG streaming method:</div>');
 			$explanation.css('margin-top', '12px');
 			$err.append($explanation);
+			if (webcodecs_h264_player_supported)
+			{
+				var $disablePnaclButton3 = $('<input type="button" value="WebCodecs (best)" />');
+				$disablePnaclButton3.css('margin-top', '10px');
+				$disablePnaclButton3.css('padding', '6px');
+				$disablePnaclButton3.css('display', 'block');
+				$disablePnaclButton3.on('click', function ()
+				{
+					settings.ui3_h264_choice3 = H264PlayerOptions.WebCodecs;
+					ReloadInterface();
+				});
+				$err.append($disablePnaclButton3);
+			}
 			if (mse_mp4_h264_supported)
 			{
 				var $disablePnaclButton2 = $('<input type="button" value="HTML5 (fast)" />');
@@ -13599,17 +13681,17 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 				});
 				$err.append($disablePnaclButton);
 			}
-			var $disablePnaclButton = $('<input type="button" value="JPEG mode (no H.264)" />');
-			$disablePnaclButton.css('margin-top', '10px');
-			$disablePnaclButton.css('padding', '6px');
-			$disablePnaclButton.css('display', 'block');
-			$disablePnaclButton.on('click', function ()
+			var $disablePnaclButton4 = $('<input type="button" value="JPEG mode (no H.264)" />');
+			$disablePnaclButton4.css('margin-top', '10px');
+			$disablePnaclButton4.css('padding', '6px');
+			$disablePnaclButton4.css('display', 'block');
+			$disablePnaclButton4.on('click', function ()
 			{
 				any_h264_playback_supported = pnacl_player_supported = false;
 				genericQualityHelper.QualityChoiceChanged('');
 				selectionToast.remove();
 			});
-			$err.append($disablePnaclButton);
+			$err.append($disablePnaclButton4);
 		}
 		selectionToast = toaster.Error($err, isCrash || !isLoaded ? 9999999 : 60000, true);
 	}
@@ -13799,6 +13881,240 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	}
 	this.ClearDrawingSurface = function ()
 	{
+	}
+	this.PreviousFrameIsLastFrame = function ()
+	{
+		allFramesAccepted = true;
+		CheckStreamEndCondition();
+	}
+
+	Initialize();
+}
+///////////////////////////////////////////////////////////////
+// WebCodec Player ////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
+{
+	var self = this;
+	var videoDecoder;
+	var canvas;
+	var $canvas;
+	var ctx;
+	var canvasW = 0;
+	var canvasH = 0;
+	var frameCache = {};
+	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
+	var decodedFrameCount = 0; // Number of frames rendered.
+	var finishedFrameCount = 0; // Number of frames rendered or dropped.
+	var netDelayCalc = new NetDelayCalc();
+	var timestampFirstAcceptedFrame = -1; // Frame timestamp (ms) of the first frame to be submitted to the decoder.
+	var timestampFirstDecodedFrame = -1; // Frame timestamp (ms) of the first frame to be decoded.
+	var timestampFirstRenderedFrame = -1; // Frame timestamp (ms) of the first frame to be rendered.
+	var timestampLastAcceptedFrame = -1; // Frame timestamp (ms) of the last frame to be submitted to the decoder.
+	var timestampLastDecodedFrame = -1; // Frame timestamp (ms) of the last frame to be decoded.
+	var timestampLastRenderedFrame = -1; // Frame timestamp (ms) of the last frame to be rendered.
+	var firstFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the first frame was received from the network.
+	var lastFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the last frame was received from the network.
+	var firstFrameDecodedAt = performance.now(); // The performance.now() reading at the moment the first frame was finished decoding.
+	var lastFrameDecodedAt = performance.now(); // The performance.now() reading at the moment the last frame was finished decoding.
+	var firstFrameRenderedAt = performance.now(); // The performance.now() reading at the moment the first frame was finished rendering.
+	var lastFrameRenderedAt = performance.now(); // The performance.now() reading at the moment the last frame was finished rendering.
+	var lastFrameRenderTime = 0; // Milliseconds it took to render the last frame.
+	var averageRenderTime = new RollingAverage();
+	var averageDecodeTime = new RollingAverage();
+	var allFramesAccepted = false;
+	var renderScheduler = null;
+
+	var frameDecoded = function (nativeFrame)
+	{
+		var frame = frameCache[nativeFrame.timestamp];
+		if (!frame)
+		{
+			toaster.Error("A frame was decoded with a timestamp that is not in the frame cache.");
+			finishedFrameCount++;
+			return;
+		}
+		delete frameCache[nativeFrame.timestamp];
+		frame.nativeFrame = nativeFrame;
+		frame.width = nativeFrame.displayWidth;
+		frame.height = nativeFrame.displayHeight;
+		frame.timestamp = frame.time;
+
+		var timeNow = performance.now();
+		decodedFrameCount++;
+		timestampLastDecodedFrame = frame.timestamp;
+		lastFrameDecodedAt = timeNow;
+		if (timestampFirstDecodedFrame == -1)
+		{
+			timestampFirstDecodedFrame = timestampLastDecodedFrame;
+			firstFrameDecodedAt = timeNow;
+		}
+		renderScheduler.AddFrame(frame, averageRenderTime);
+	}
+	var renderFrame = function (frame)
+	{
+		if (canvasW != frame.width)
+			canvas.width = canvasW = frame.width;
+		if (canvasH != frame.height)
+			canvas.height = canvasH = frame.height;
+		var drawStart = performance.now();
+		ctx.drawImage(frame.nativeFrame, 0, 0, canvas.width, canvas.height);
+		var drawEnd = performance.now();
+		frame.nativeFrame.close();
+		frame.nativeFrame = null;
+		lastFrameRenderTime = drawEnd - drawStart;
+		averageRenderTime.Add(lastFrameRenderTime);
+		finishedFrameCount++;
+		timestampLastRenderedFrame = frame.timestamp;
+		lastFrameRenderedAt = drawEnd;
+		if (timestampFirstRenderedFrame == -1)
+		{
+			timestampFirstRenderedFrame = frame.timestamp;
+			firstFrameRenderedAt = drawEnd;
+		}
+		frameRendered(frame);
+		CheckStreamEndCondition();
+	}
+	var dropFrame = function (frame)
+	{
+		frame.nativeFrame.close();
+		frame.nativeFrame = null;
+		finishedFrameCount++;
+		CheckStreamEndCondition();
+	}
+	var CheckStreamEndCondition = function ()
+	{
+		if (allFramesAccepted && (finishedFrameCount) >= acceptedFrameCount)
+		{
+			if (PlaybackReachedNaturalEndCB)
+				PlaybackReachedNaturalEndCB(finishedFrameCount);
+		}
+	}
+	var frameError = function (error)
+	{
+		console.log("Frame Error", error);
+		var timeNow = performance.now();
+		if (timeNow - lastFrameWarning > 3000)
+		{
+			lastFrameWarning = timeNow;
+			toaster.Warning("Error decoding video frame(s)", 3000);
+		}
+	}
+	var ConfigureVideoDecoder = function ()
+	{
+		videoDecoder.configure({ codec: "avc1.640029", optimizeForLatency: true });
+	}
+	var Initialize = function ()
+	{
+		renderScheduler = new RenderScheduler(renderFrame, dropFrame);
+
+		videoDecoder = new VideoDecoder({ output: frameDecoded, error: frameError });
+		videoDecoder.reset();
+		ConfigureVideoDecoder();
+
+		$("#webcodec_player_canvas").remove();
+		$canvas = $('<canvas id="webcodec_player_canvas" class="videoCanvas" width="100%" height="100%"></canvas>');
+		canvas = $canvas.get(0);
+		ctx = canvas.getContext('2d');
+
+		loadingHelper.SetLoadedStatus("h264");
+	}
+	this.Dispose = function ()
+	{
+		videoDecoder.close();
+	}
+	this.IsLoaded = function ()
+	{
+		return videoDecoder.state === "configured";
+	}
+	this.IsValid = function ()
+	{
+		return true;
+	}
+	this.GetRenderedFrameCount = function ()
+	{
+		return finishedFrameCount;
+	}
+	this.GetBufferedFrameCount = function ()
+	{
+		return acceptedFrameCount - finishedFrameCount;
+	}
+	this.GetNetworkDelay = function ()
+	{
+		return netDelayCalc.Calc();
+	}
+	this.GetBufferedTime = function ()
+	{
+		return timestampLastAcceptedFrame - timestampLastRenderedFrame;
+	}
+	/**Clears the state of the video player, making it ready to accept a new stream. */
+	this.Flush = function ()
+	{
+		videoDecoder.reset();
+		ConfigureVideoDecoder();
+		renderScheduler.Reset(averageRenderTime);
+		acceptedFrameCount = 0;
+		decodedFrameCount = 0;
+		finishedFrameCount = 0;
+		netDelayCalc.Reset();
+		timestampFirstAcceptedFrame = -1;
+		timestampFirstDecodedFrame = -1;
+		timestampFirstRenderedFrame = -1;
+		timestampLastAcceptedFrame = -1;
+		timestampLastDecodedFrame = -1;
+		timestampLastRenderedFrame = -1;
+		var timeNow = performance.now();
+		firstFrameReceivedAt = timeNow;
+		lastFrameReceivedAt = timeNow;
+		firstFrameDecodedAt = timeNow;
+		lastFrameDecodedAt = timeNow;
+		firstFrameRenderedAt = timeNow;
+		lastFrameRenderedAt = timeNow;
+		allFramesAccepted = false;
+		frameCache = {};
+	}
+	/**
+	 * Accepts a compressed frame from the network.
+	 * @param {any} frame
+	 */
+	this.AcceptFrame = function (frame)
+	{
+		acceptedFrameCount++;
+		timestampLastAcceptedFrame = frame.time;
+		lastFrameReceivedAt = performance.now();
+		if (timestampFirstAcceptedFrame == -1)
+		{
+			timestampFirstAcceptedFrame = frame.time;
+			firstFrameRenderedAt = lastFrameReceivedAt; // This value is faked so the timing starts more reasonably.
+		}
+		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
+
+
+		var chunkArgs = {
+			type: frame.isKeyframe() ? "key" : "delta",
+			timestamp: frame.time * 1000,
+			duration: 0,
+			data: frame.frameData.buffer
+		};
+		frameCache[chunkArgs.timestamp] = frame;
+		// TODO: Try deleting "chunkArgs.type".
+		// It costs a bit of computation time to check, and we probably 
+		// can't even tell as well as the decoder can.
+		var chunk = new EncodedVideoChunk(chunkArgs);
+		videoDecoder.decode(chunk);
+	}
+	this.Toggle = function ($wrapper, activate)
+	{
+		$canvas.appendTo($wrapper);
+	}
+	/**Gets the visible DOM element that shows the video. */
+	this.GetPlayerElement = function ()
+	{
+		return canvas;
+	}
+	this.ClearDrawingSurface = function ()
+	{
+		ClearCanvas(canvas);
 	}
 	this.PreviousFrameIsLastFrame = function ()
 	{
@@ -23744,7 +24060,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 
 							bitRateCalc_Video.AddDataPoint(currentVideoFrame.size);
 
-							CallFrameCallback(new VideoFrame(buf, currentVideoFrame), availableStreams);
+							CallFrameCallback(new BIVideoFrame(buf, currentVideoFrame), availableStreams);
 
 							state = 2;
 						}
@@ -23756,7 +24072,7 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 
 							bitRateCalc_Audio.AddDataPoint(currentAudioFrame.size);
 
-							CallFrameCallback(new AudioFrame(buf, audioHeader), availableStreams);
+							CallFrameCallback(new BIAudioFrame(buf, audioHeader), availableStreams);
 
 							state = 2;
 						}
@@ -23841,7 +24157,7 @@ function BITMAPINFOHEADER(buf)
 	this.biHeight = ReadInt32LE(buf, offsetWrapper); // Height in pixels
 	this.biPlanes = ReadUInt16LE(buf, offsetWrapper); // Number of planes (always 1)
 	this.biBitCount = ReadUInt16LE(buf, offsetWrapper); // Bits Per Pixel
-	this.biCompression = ReadUInt32LE(buf, offsetWrapper); // ['J','P','E','G'] or ['M','J','P','G'] (this can be ignored)
+	this.biCompression = ReadASCII(buf, offsetWrapper, 4); // "JPEG" or "MJPG" or "H264" (this can be ignored)
 	this.biSizeImage = ReadUInt32LE(buf, offsetWrapper); // Image size in bytes
 	this.biXPelsPerMeter = ReadInt32LE(buf, offsetWrapper);
 	this.biYPelsPerMeter = ReadInt32LE(buf, offsetWrapper);
@@ -23872,7 +24188,7 @@ function WAVEFORMATEX(buf)
 	else
 		this.valid = false;
 }
-function VideoFrame(buf, metadata)
+function BIVideoFrame(buf, metadata)
 {
 	var self = this;
 	this.meta = $.extend({}, metadata);
@@ -23913,7 +24229,7 @@ function VideoFrame(buf, metadata)
 		return false;
 	}
 }
-function AudioFrame(buf, formatHeader)
+function BIAudioFrame(buf, formatHeader)
 {
 	var self = this;
 	this.isAudio = true;
@@ -24047,12 +24363,21 @@ function ReadUInt64LE(buf, offsetWrapper)
 	var mostSignificant = (ReadUInt32LE(buf, offsetWrapper) & 0x001FFFFF) * 4294967296;
 	return mostSignificant + leastSignificant;
 }
-//function ReadUTF8(buf, offsetWrapper, byteLength)
-//{
-//	var v = Utf8ArrayToStr(new Uint8Array(buf, offsetWrapper.offset, byteLength));
-//	offsetWrapper.offset += byteLength;
-//	return v;
-//}
+function ReadASCII(buf, offsetWrapper, byteLength)
+{
+	var v = ASCIIArrayToStr(new Uint8Array(buf.buffer, offsetWrapper.offset, byteLength));
+	offsetWrapper.offset += byteLength;
+	return v;
+}
+function ASCIIArrayToStr(arr)
+{
+	var str = [];
+	for (var i = 0; i < arr.length; i++)
+	{
+		str.push(String.fromCharCode(arr[i]));
+	}
+	return str.join('');
+}
 function ReadSubArray(buf, offsetWrapper, byteLength)
 {
 	var readBuf = new Uint8Array(byteLength);
@@ -26284,6 +26609,8 @@ function UIHelpTool()
 	{
 		$('<div class="UIHelp">'
 			+ 'UI3 has several H.264 player options. Not all options are available in all browsers.'
+			+ '<br><br><b>WebCodecs</b> - ' + (webcodecs_h264_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
+			+ '&nbsp; &nbsp; The WebCodecs player directly accesses the browser\'s built-in video codecs to efficiently decode video with the lowest possible latency.  This is the best option if it is available.'
 			+ '<br><br><b>JavaScript</b> - ' + (h264_js_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
 			+ '&nbsp; &nbsp; The JavaScript player is the most robust and compatible player option, but also the slowest.'
 			+ '<br><br><b>HTML5</b> - ' + (mse_mp4_h264_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
