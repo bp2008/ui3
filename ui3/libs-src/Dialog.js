@@ -380,6 +380,40 @@ var SimpleDialog = new function ()
 	{
 		return Confirm($('<div style="padding: 10px;"></div>').html(question), onYes, onNo, GetConfirmOptions(options));
 	};
+	this.inputText = this.InputText = function (title, messageHtml, onOk, onCancel, options)
+	{
+		var dlg = null;
+		var $root = $('<div style="padding: 10px;"></div>');
+		var $msg = $('<div style="padding-bottom: 10px;"></div>').html(messageHtml);
+		var $input = $('<input type="text" style="width: 100%; box-sizing: border-box;" />');
+		var $okBtn = $('<input type="button" value="OK" />');
+		$okBtn.on('click', function ()
+		{
+			if (dlg)
+			{
+				var tmp = dlg;
+				dlg = null;
+				if (typeof onOk === "function")
+					onOk($input.val());
+				tmp.close(true);
+			}
+		});
+		$root.append($msg);
+		$root.append($input);
+		$root.append($('<div style="text-align: center; padding-top: 10px;"></div>').append($okBtn));
+		if (!options)
+			options = {};
+		options.onClosing = function ()
+		{
+			if (dlg)
+			{
+				if (typeof onCancel === "function")
+					onCancel();
+			}
+		}
+		dlg = $root.modalDialog(options);
+		return dlg;
+	};
 	var GetConfirmOptions = function (options)
 	{
 		return $.extend(

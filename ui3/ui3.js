@@ -25218,6 +25218,10 @@ function UISettingsPanel()
 		}
 		if (category === "Extra")
 		{
+			if (processFilter({ label: "Export All Settings" }))
+				rowIdx = Add_ExportAllSettingsButton(cat, rowIdx);
+			if (processFilter({ label: "Import All Settings" }))
+				rowIdx = Add_ImportAllSettingsButton(cat, rowIdx);
 			if (sessionManager.IsAdministratorSession())
 			{
 				if (processFilter({ label: "Create Script: \"ui3-local-overrides.js\" (learn more) Download" }))
@@ -25254,6 +25258,57 @@ function UISettingsPanel()
 		cat.$section.append($row);
 		return rowIdx;
 	}
+	var Add_ExportAllSettingsButton = function (cat, rowIdx)
+	{
+		var date = GetPaddedDateStr(new Date(), false);
+
+		var $row = $('<div id="exportAllSettingsBtn" class="uiSettingsRow dialogOption_item dialogOption_item_info"></div>');
+		var $input = $('<a class="input" href="javascript:void(0)" download="ui3-settings-export-' + date + '.json">Export</a>');
+		$input.on('click', function ()
+		{
+			var text = self.ExportAllSettingsToJson();
+			if (text)
+			{
+				clipboardHelper.CopyText(text);
+				toaster.Success("Copied all settings to clipboard. Please import into a different UI3 instance.");
+			}
+			else
+			{
+				toaster.Error("Failed to export settings");
+				return false;
+			}
+
+			$input.attr('download', 'ui3-settings-export-' + date + '.json');
+			$input.attr('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+			setTimeout(function () { $input.attr('href', 'javascript:void(0)'); }, 0);
+			return true;
+		});
+		$row.append($input);
+		$row.append(GetDialogOptionLabel('Export All Settings'));
+		if (rowIdx++ % 2 == 1)
+			$row.addClass('everyOther');
+		cat.$section.append($row);
+		return rowIdx;
+	}
+	var Add_ImportAllSettingsButton = function (cat, rowIdx)
+	{
+		var $row = $('<div id="importAllSettingsBtn" class="uiSettingsRow dialogOption_item dialogOption_item_info"></div>');
+		var $input = $('<a class="input" href="javascript:void(0)">Import</a>');
+		$input.on('click', function ()
+		{
+			SimpleDialog.InputText("Import All Settings", "Paste settings that were previously exported.<br>If import is successful, UI3 will be reloaded.", function (inputText)
+			{
+				if (self.ImportSettingsJson(inputText))
+					ReloadInterface();
+			});
+		});
+		$row.append($input);
+		$row.append(GetDialogOptionLabel('Import All Settings'));
+		if (rowIdx++ % 2 == 1)
+			$row.addClass('everyOther');
+		cat.$section.append($row);
+		return rowIdx;
+	}
 	var BuildLocalOverridesTemplate = function ($input)
 	{
 		try
@@ -25276,6 +25331,49 @@ function UISettingsPanel()
 			BuildLocalOverridesTemplate_Category(sb, null);
 			BuildLocalOverridesTemplate_Category(sb, "Streaming Profiles"); // This category isn't shown in UI Settings
 			return sb.ToString();
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+			return false;
+		}
+	}
+	this.ExportAllSettingsToJson = function ()
+	{
+		try
+		{
+			if (isLocalStorageEnabled())
+				return JSON.stringify(localStorage);
+			else
+			{
+				toaster.Error("Local Storage is not enabled in this browser, so you have no persistent settings.");
+				return false;
+			}
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+			return false;
+		}
+	}
+	this.ImportSettingsJson = function (s)
+	{
+		try
+		{
+			if (isLocalStorageEnabled())
+			{
+				if (typeof s === "string")
+					s = JSON.parse(s);
+				for (var key in s)
+					if (s.hasOwnProperty(key))
+						localStorage.setItem(key, s[key]);
+				return true;
+			}
+			else
+			{
+				toaster.Error("Local Storage is not enabled in this browser, so you have no persistent settings.");
+				return false;
+			}
 		}
 		catch (ex)
 		{
