@@ -12358,7 +12358,8 @@ function JpegVideoModule()
 }
 ///////////////////////////////////////////////////////////////
 // Fetch H264 Video Module ////////////////////////////////////
-// Using OpenH264 or Pnacl_Player or HTML5_MSE_Player /////////
+// Using OpenH264_Player or Pnacl_Player or HTML5_MSE_Player //
+// or WebCodecs_Player ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function FetchH264VideoModule()
 {
@@ -12407,7 +12408,7 @@ function FetchH264VideoModule()
 		// Do one-time initialization here
 		//console.log("Initializing h264_player");
 		if (webcodecs_h264_player_supported && settings.ui3_h264_choice3 === H264PlayerOptions.WebCodecs)
-			h264_player = new WebCodec_Player(FrameRendered, PlaybackReachedNaturalEnd);
+			h264_player = window.webcodec_player_instance = new WebCodec_Player(FrameRendered, PlaybackReachedNaturalEnd);
 		else if (mse_mp4_h264_supported &&
 			(settings.ui3_h264_choice3 === H264PlayerOptions.HTML5
 				|| (settings.ui3_h264_choice3 === H264PlayerOptions.WebCodecs && !webcodecs_h264_player_supported)))
@@ -13182,6 +13183,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var isValid = true;
 	var allFramesAccepted = false;
 	var renderScheduler = null;
+	var lastFrameWarning = performance.now() - 60000;
 
 	var onLoad = function ()
 	{
@@ -13243,7 +13245,6 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		}
 	}
 
-	var lastFrameWarning = performance.now() - 60000;
 	var frameError = function (badFrame)
 	{
 		console.log("Frame Error", badFrame);
@@ -13924,6 +13925,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var averageDecodeTime = new RollingAverage();
 	var allFramesAccepted = false;
 	var renderScheduler = null;
+	var lastFrameWarning = performance.now() - 60000;
 
 	var frameDecoded = function (nativeFrame)
 	{
@@ -13939,6 +13941,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		frame.width = nativeFrame.displayWidth;
 		frame.height = nativeFrame.displayHeight;
 		frame.timestamp = frame.time;
+		frame.rawtime = frame.meta.rawtime;
 
 		var timeNow = performance.now();
 		decodedFrameCount++;
@@ -13990,14 +13993,29 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 				PlaybackReachedNaturalEndCB(finishedFrameCount);
 		}
 	}
-	var frameError = function (error)
+	var decoderError = function (error)
 	{
+		if (error.message.match(/Codec reclaimed/i))
+		{
+			// This is an expected error in Chromium-based browsers if the video decoder is idle for about a minute.
+			console.log("WebCodecs", error);
+			return;
+		}
 		console.log("Frame Error", error);
 		var timeNow = performance.now();
 		if (timeNow - lastFrameWarning > 3000)
 		{
 			lastFrameWarning = timeNow;
 			toaster.Warning("Error decoding video frame(s)", 3000);
+		}
+	}
+	var RecoverVideoDecoder = function ()
+	{
+		if (!videoDecoder || videoDecoder.state === "closed")
+		{
+			videoDecoder = new VideoDecoder({ output: frameDecoded, error: decoderError });
+			videoDecoder.reset();
+			ConfigureVideoDecoder();
 		}
 	}
 	var ConfigureVideoDecoder = function ()
@@ -14008,9 +14026,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		renderScheduler = new RenderScheduler(renderFrame, dropFrame);
 
-		videoDecoder = new VideoDecoder({ output: frameDecoded, error: frameError });
-		videoDecoder.reset();
-		ConfigureVideoDecoder();
+		RecoverVideoDecoder();
 
 		$("#webcodec_player_canvas").remove();
 		$canvas = $('<canvas id="webcodec_player_canvas" class="videoCanvas" width="100%" height="100%"></canvas>');
@@ -14021,11 +14037,12 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.Dispose = function ()
 	{
-		videoDecoder.close();
+		if (videoDecoder.state === "configured")
+			videoDecoder.close();
 	}
 	this.IsLoaded = function ()
 	{
-		return videoDecoder.state === "configured";
+		return true;
 	}
 	this.IsValid = function ()
 	{
@@ -14050,8 +14067,11 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	/**Clears the state of the video player, making it ready to accept a new stream. */
 	this.Flush = function ()
 	{
-		videoDecoder.reset();
-		ConfigureVideoDecoder();
+		if (videoDecoder.state === "configured")
+		{
+			videoDecoder.reset();
+			ConfigureVideoDecoder();
+		}
 		renderScheduler.Reset(averageRenderTime);
 		acceptedFrameCount = 0;
 		decodedFrameCount = 0;
@@ -14089,7 +14109,6 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		}
 		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 
-
 		var chunkArgs = {
 			type: frame.isKeyframe() ? "key" : "delta",
 			timestamp: frame.time * 1000,
@@ -14097,10 +14116,8 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			data: frame.frameData.buffer
 		};
 		frameCache[chunkArgs.timestamp] = frame;
-		// TODO: Try deleting "chunkArgs.type".
-		// It costs a bit of computation time to check, and we probably 
-		// can't even tell as well as the decoder can.
 		var chunk = new EncodedVideoChunk(chunkArgs);
+		RecoverVideoDecoder();
 		videoDecoder.decode(chunk);
 	}
 	this.Toggle = function ($wrapper, activate)
@@ -14120,6 +14137,10 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		allFramesAccepted = true;
 		CheckStreamEndCondition();
+	}
+	this.GetVideoDecoder = function ()
+	{
+		return videoDecoder;
 	}
 
 	Initialize();
