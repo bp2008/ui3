@@ -838,6 +838,10 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_uiSettings_category_UI_Status_Sounds_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_uiSettings_category_Top_Bar_visible"
 			, value: "1"
 		}
@@ -14272,6 +14276,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	var onVideoError = function (e)
 	{
+		if (player.error.message.indexOf("DEMUXER_ERROR_COULD_NOT_OPEN: MediaSource endOfStream before demuxer initialization completes") === 0)
+			return; // Happens sometimes if the video stream ends very quickly. Some clips may do this if you seek to the very end while they are playing.
 		if (!inputRequiredOverlay.IsActive())
 			playerErrorHandler(player.error.message + ": " + GetMediaErrorMessage(player.error.code));
 	}
