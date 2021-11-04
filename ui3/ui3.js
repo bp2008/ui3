@@ -1157,10 +1157,19 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
-			key: "ui3_hires_jpeg_disables_preview_animation"
+			key: "ui3_hires_jpeg_popups"
 			, value: "0"
 			, inputType: "checkbox"
+			, label: 'Use Hi-res JPEG for alert mouseover'
+			, hint: "This only affects alerts that have Hi-res JPEG images saved by Blue Iris"
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_hires_jpeg_disables_preview_animation"
+			, value: "1"
+			, inputType: "checkbox"
 			, label: 'No preview animation for alerts with Hi-res JPEG'
+			, hint: 'The preview animation would prevent you from reading annotations from deepstack AI.'
 			, category: "Clips / Alerts"
 		}
 		, {
@@ -7674,13 +7683,13 @@ function ClipLoader(clipsBodySelector)
 
 					if (getMouseoverClipThumbnails())
 					{
-						var thumbPath = GetThumbnailPath(clipData.thumbPath, true);
+						var thumbPath = GetThumbnailPath(clipData.thumbPath, settings.ui3_hires_jpeg_popups === "1");
 						if (thumbEle.getAttribute("src") == thumbPath)
 							thumbPath = thumbEle;
 						var aspectRatio = thumbEle.naturalWidth / thumbEle.naturalHeight;
 						var renderH = 240;
 						var renderW = renderH * aspectRatio;
-						if (clipData.hasHighResJpeg)
+						if (clipData.hasHighResJpeg && settings.ui3_hires_jpeg_popups === "1")
 						{
 							var clipRes = new ClipRes(clipData.res);
 							if (clipRes.valid)
@@ -8749,9 +8758,9 @@ function ClipThumbnailVideoPreview_BruteForce()
 	this.Start = function ($clip, clipData, camName, frameNum, loopNum)
 	{
 		var duration = clipData.isClip ? clipData.msec : clipData.roughLengthMs;
-		if (settings.ui3_clipPreviewEnabled != "1" || duration < 500)
+		if (settings.ui3_clipPreviewEnabled !== "1" || duration < 500)
 			return;
-		if (clipData.hasHighResJpeg && settings.ui3_hires_jpeg_disables_preview_animation === "1")
+		if (clipData.hasHighResJpeg && settings.ui3_hires_jpeg_popups === "1" && settings.ui3_hires_jpeg_disables_preview_animation === "1")
 			return;
 		if (lastItemId != clipData.recId)
 		{
@@ -8804,7 +8813,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 			aspectRatio = 16 / 9;
 		var expectedHeight = 240;
 		var expectedWidth = expectedHeight * aspectRatio;
-		if (clipData.hasHighResJpeg)
+		if (clipData.hasHighResJpeg && settings.ui3_hires_jpeg_popups === "1")
 		{
 			var clipRes = new ClipRes(clipData.res);
 			if (clipRes.valid)
