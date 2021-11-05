@@ -3391,7 +3391,8 @@ function StatusBars()
 			{
 				ProgressBar.setProgress(statusEles[i].$pb, progressAmount);
 				ProgressBar.setColor(statusEles[i].$pb, progressColor, progressBackgroundColor);
-				statusEles[i].$amount && statusEles[i].$amount.text(progressAmountText);
+				progressAmountText = progressAmountText.toString();
+				statusEles[i].$amount && statusEles[i].$amount.text() !== progressAmountText.toString() && statusEles[i].$amount.text(progressAmountText);
 			}
 	};
 	this.setTooltip = function (name, tooltipText)
@@ -3480,7 +3481,8 @@ var ProgressBar =
 		progressAmount = Clamp(progressAmount, 0, 1);
 		var changed = typeof ele.pbValue == "undefined" || ele.pbValue != progressAmount;
 		ele.pbValue = progressAmount;
-		ele.$progressBarInner.css("width", (progressAmount * 100) + "%");
+		if (changed)
+			ele.$progressBarInner.css("width", (progressAmount * 100) + "%");
 		if (typeof ele.moveDragHandleElements == "function")
 			ele.moveDragHandleElements();
 		if (changed && typeof ele.onProgressChanged == "function")
@@ -5493,7 +5495,8 @@ function PlaybackControls()
 	}
 	this.SetProgressText = function (text)
 	{
-		$progressText.text(text);
+		if ($progressText.text() !== text)
+			$progressText.text(text);
 	}
 	this.IsVisible = function ()
 	{
@@ -11722,11 +11725,15 @@ function VideoPlayerController()
 		}
 	}
 	var fpsZeroTimeout = null;
+	var setFpsStatusBarThrottled = throttle(function (currentFps, maxFps)
+	{
+		statusBars.setProgress("fps", (currentFps / maxFps), currentFps);
+	}, 250);
 	var RefreshFps = function (imgRequestMs)
 	{
 		var currentFps = fpsCounter.getFPS(imgRequestMs);
 		var maxFps = currentlyLoadingCamera.FPS || 10;
-		statusBars.setProgress("fps", (currentFps / maxFps), currentFps);
+		setFpsStatusBarThrottled(currentFps, maxFps);
 
 		// This allows the FPS to change to 0 if connectivity is lost or greatly reduced
 		if (fpsZeroTimeout != null)
@@ -28254,6 +28261,33 @@ function debounce(fn, delay)
 	{
 		clearTimeout(timeout);
 		timeout = setTimeout(fn, delay);
+	};
+}
+function throttle(fn, delay)
+{
+	var interval;
+	var queued;
+	return function ()
+	{
+		if (!interval)
+		{
+			fn.apply(this, arguments);
+			interval = setInterval(function ()
+			{
+				if (queued)
+				{
+					fn.apply(this, queued.args);
+					queued = null;
+				}
+				else
+				{
+					clearInterval(interval);
+					interval = null;
+				}
+			}, delay);
+		}
+		else
+			queued = { args: arguments };
 	};
 }
 function getRandomInt(maxPlusOne)

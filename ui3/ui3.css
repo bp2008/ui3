@@ -4627,6 +4627,17 @@ body + div
 		float: right;
 		opacity: 0.7;
 	}
+/* Group Layout UI */
+.groupLayoutUiPanel
+{
+	min-width: 210px;
+	max-width: 375px;
+}
+
+.groupLayoutUiPanelContent
+{
+	padding: 3px;
+}
 /* Webkit custom scrollbar for modal dialogs */
 div::-webkit-scrollbar
 {
