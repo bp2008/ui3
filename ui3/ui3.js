@@ -17497,7 +17497,7 @@ function GroupLayoutDialog()
 		if (cameraListLoader.isDynamicLayoutEligible(img.id))
 		{
 			var lockedResolution = groupCfg.GetLockedResolution(img.id);
-			var collapsible = new CollapsibleSection('grpLayout', "Group Layout", dialog);
+			var collapsible = new CollapsibleSection('grpLayout', "Camera Layout", dialog);
 			$content.append(collapsible.$heading);
 			$content.append(collapsible.$section);
 			collapsible.$section.append(UIFormField({
@@ -17564,7 +17564,7 @@ function GroupLayoutDialog()
 
 		if (img.isGroup)
 		{
-			var collapsible = new CollapsibleSection('grpDisp', "Group Display Options", dialog);
+			var collapsible = new CollapsibleSection('grpDisp', "Display Options", dialog);
 			$content.append(collapsible.$heading);
 			$content.append(collapsible.$section);
 			collapsible.$section.append(ThreeStateFormField(img.id, "showCameraNames", "Show camera names"));
