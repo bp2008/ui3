@@ -3987,6 +3987,64 @@ body + div
 		background-color: rgba(255,255,255,0.1);
 	}
 
+/* Three-state buttons */
+.triBtn0,
+.triBtn1,
+.triBtn2
+{
+	color: #000000;
+	border: 0px;
+	padding: 4px 8px;
+	cursor: pointer;
+	min-width: 120px;
+	font-weight: bold;
+}
+
+.triBtn0
+{
+	background-color: #c9c9c9;
+}
+
+	.triBtn0:hover
+	{
+		background-color: #b9b9b9;
+	}
+
+	.triBtn0:active
+	{
+		background-color: #a9a9a9;
+	}
+
+.triBtn1
+{
+	background-color: #ffc6c6;
+}
+
+	.triBtn1:hover
+	{
+		background-color: #ffb6b6;
+	}
+
+	.triBtn1:active
+	{
+		background-color: #ffa6a6;
+	}
+
+.triBtn2
+{
+	background-color: #c6ffc6;
+}
+
+	.triBtn2:hover
+	{
+		background-color: #b6ffb6;
+	}
+
+	.triBtn2:active
+	{
+		background-color: #a6ffa6;
+	}
+
 /* Context Menu Icon Classes */
 .iconGray
 {
@@ -4321,23 +4379,31 @@ body + div
 	display: none;
 }
 
-.dialogOption_item, .camlist_item, .exportlist_item
+.dialogOption_item,
+.camlist_item,
+.exportlist_item
 {
 	margin: 7px;
 }
 
-.dialogOption_item_center, .camlist_item_center
+.dialogOption_item_center,
+.camlist_item_center
 {
 	text-align: center;
 	margin: 7px 0px;
 }
 
-.dialogOption_item_info, .dialogOption_item_cb, .dialogOption_item_ddl
+.dialogOption_item_info,
+.dialogOption_item_cb,
+.dialogOption_item_ddl,
+.dialogOption_item_btn
 {
 	margin: 0px auto;
 }
 
-.dialogOption_item_info, .dialogOption_item_ddl
+.dialogOption_item_info,
+.dialogOption_item_ddl,
+.dialogOption_item_btn
 {
 	padding: 6px 0px;
 }
@@ -4347,6 +4413,21 @@ body + div
 		width: 16px;
 		height: 16px;
 		vertical-align: text-top;
+	}
+
+.dialogOption_item_btn
+{
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+}
+
+	.dialogOption_item_btn input[type="button"]
+	{
+		box-sizing: border-box;
+		height: 28px;
+		margin: 0px 10px;
+		max-width: 35%;
 	}
 
 .dialogOption_item_comment
@@ -4367,12 +4448,9 @@ body + div
 	max-width: 320px;
 }
 
-.campropcontent .dialogOption_item_cb
-{
-	max-width: 340px;
-}
-
-.campropcontent .dialogOption_item_ddl
+.campropcontent .dialogOption_item_cb,
+.campropcontent .dialogOption_item_ddl,
+.campropcontent .dialogOption_item_btn
 {
 	max-width: 340px;
 }

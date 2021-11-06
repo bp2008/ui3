@@ -17575,26 +17575,20 @@ function GroupLayoutDialog()
 
 		dialog.contentChanged(true);
 	}
-	var ThreeStateOptions = ["No preference", "Force OFF", "Force ON"];
 	var ThreeStateFormField = function (camId, key, label)
 	{
 		var v = groupCfg.Get(camId, key);
-		if (v < 0 || v > ThreeStateOptions.length)
+		if (!v || v < 0 || v > 2)
 			v = 0;
-		v = ThreeStateOptions[v];
 
 		return UIFormField({
-			inputType: "select"
-			, options: ThreeStateOptions
+			inputType: "threeState"
 			, value: v
 			, label: label
 			, tag: key,
-			onChange: function (e, tag, $select)
+			onChange: function (e, value, $btn)
 			{
-				var selectedIndex = $select.get(0).selectedIndex;
-				if (selectedIndex < 0)
-					selectedIndex = 0;
-				groupCfg.Set(camId, key, selectedIndex);
+				groupCfg.Set(camId, key, value);
 				videoPlayer.ReopenStreamAtCurrentSeekPosition();
 			}
 		})
@@ -17813,9 +17807,7 @@ function CanvasContextMenu()
 				{
 					var imgLoaded = videoPlayer.Loaded().image;
 					if (cameraListLoader.isDynamicLayoutEnabled(imgLoaded.id))
-					{
 						groupLayoutDialog.Show(imgLoaded);
-					}
 					else
 						toaster.Error(this.data.alias + " is not supported for the current video stream!");
 					break;
@@ -26466,6 +26458,45 @@ function UIFormField(args)
 			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
 		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + compactClass + '"></div>').append($input).append(GetDialogOptionLabel(o.label));
 	}
+	else if (o.inputType === "button" || o.inputType === "threeState")
+	{
+		var $input = $('<input type="button" />');
+
+		if (o.disabled)
+			$input.attr("disabled", "disabled");
+
+		if (o.inputType === "threeState")
+		{
+			$input.attr("threeState", o.value);
+			$input.val(ThreeStateOptions[o.value]);
+			$input.addClass(ThreeStateButtonClasses[o.value]);
+			$input.on('click', function (e)
+			{
+				if ($input.attr("disabled") !== "disabled")
+				{
+					var v = parseInt($input.attr("threeState"));
+					$input.removeClass(ThreeStateButtonClasses[v]);
+					v = (v + 1) % ThreeStateOptions.length;
+					$input.attr("threeState", v);
+					$input.val(ThreeStateOptions[v]);
+					$input.addClass(ThreeStateButtonClasses[v]);
+					return o.onChange(o.tag, v, $input);
+				}
+			});
+		}
+		else
+		{
+			$input.val(o.value);
+			$input.on('click', function (e) { if ($input.attr("disabled") !== "disabled") { return o.onChange(o.tag, $input); } });
+		}
+
+		var $label = $('<label class="dialogOption_label"> ' + o.label + '</label>');
+
+		var $row = $('<div class="dialogOption_item dialogOption_item_btn' + disabledClass + '"></div>');
+		$row.append($label);
+		$row.append($input);
+		return $row;
+	}
 	else if (o.inputType === "errorCommentText")
 	{
 		return $('<div class="dialogOption_item dialogOption_item_info dialogOption_item_comment settingsCommentError"></div>').text(o.label);
@@ -26496,6 +26527,8 @@ function UIFormField(args)
 		return $('<div class="dialogOption_item dialogOption_item_info">Invalid arguments sent to UIFormField.</div>');
 	}
 }
+var ThreeStateOptions = ["No preference", "Force OFF", "Force ON"];
+var ThreeStateButtonClasses = ["triBtn0", "triBtn1", "triBtn2"];
 function MakeAddEditorFieldFn(title, $content, obj, o)
 {
 	o = $.extend({
