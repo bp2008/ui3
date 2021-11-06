@@ -17490,6 +17490,7 @@ function GroupLayoutDialog()
 		dialog = $dlg.dialog({
 			title: '"' + cameraListLoader.GetCameraName(img.id) + '" Group Settings'
 			, overlayOpacity: 0.3
+			, closeOnOverlayClick: true
 		});
 
 		// Load elements into dialog
