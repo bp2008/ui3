@@ -16407,6 +16407,11 @@ function GroupCfg()
 		}
 		return null;
 	}
+	this.SetLockedResolution = function (camId, width, height)
+	{
+		self.Set(camId, "lockedResolution", width + "x" + height);
+		return null;
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Customizable Streaming Profiles ////////////////////////////
@@ -16414,7 +16419,6 @@ function GroupCfg()
 function StreamingProfileUI()
 {
 	var self = this;
-	var initialized = false;
 	var dialog = null;
 	var $dlg = $();
 	var $content = $();
@@ -17459,6 +17463,170 @@ function GenericQualityHelper()
 	self.QualityChoiceChanged(settings.ui3_streamingQuality);
 }
 ///////////////////////////////////////////////////////////////
+// Group Layout Dialog ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var groupLayoutDialog = new GroupLayoutDialog();
+function GroupLayoutDialog()
+{
+	var self = this;
+	var dialog = null;
+	var $dlg = $();
+	var $content = $();
+	var $whLbl = $();
+	var $layoutWidth = $();
+	var $layoutHeight = $();
+	var img = null;
+
+	this.Show = function (imgLoaded)
+	{
+		CloseDialog();
+		img = imgLoaded;
+
+		// Create Dialog
+		$dlg = $('<div class="groupLayoutUiPanel dialogOptionPanel"></div>');
+		$content = $('<div class="groupLayoutUiPanelContent"></div>');
+		$dlg.append($content);
+
+		dialog = $dlg.dialog({
+			title: '"' + cameraListLoader.GetCameraName(img.id) + '" Group Settings'
+			, overlayOpacity: 0.3
+		});
+
+		// Load elements into dialog
+		if (cameraListLoader.isDynamicLayoutEligible(img.id))
+		{
+			var lockedResolution = groupCfg.GetLockedResolution(img.id);
+			var collapsible = new CollapsibleSection('grpLayout', "Group Layout", dialog);
+			$content.append(collapsible.$heading);
+			$content.append(collapsible.$section);
+			collapsible.$section.append(UIFormField({
+				inputType: "checkbox"
+				, value: !lockedResolution
+				, label: "Fit to Viewport"
+				, tag: "dynamic",
+				onChange: function (tag, checked)
+				{
+					if (checked)
+					{
+						groupCfg.UnlockResolution(img);
+						videoPlayer.ReopenStreamAtCurrentSeekPosition();
+					}
+					else
+					{
+						groupCfg.LockResolution(img);
+						$layoutWidth.show();
+					}
+					ResetResolutionInputVisibility();
+				}
+			}));
+			$whLbl = $('<div class="dialogOption_label">Group Frame Size Target:'
+				+ '<div class="settingDesc">(will be rescaled by UI3)</div></div>');
+			$layoutWidth = UIFormField({
+				inputType: "number"
+				, minValue: imageRenderer.minGroupImageDimension
+				, maxValue: Math.max(7680, imageRenderer.maxGroupImageDimension)
+				, step: 16
+				, value: lockedResolution ? lockedResolution.w : 1920
+				, label: "Width"
+				, tag: "width",
+				onChange: function (e, tag, $input)
+				{
+					groupCfg.SetLockedResolution(img.id, $layoutWidth.find('input').val(), $layoutHeight.find('input').val());
+					videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
+			});
+			$layoutHeight = UIFormField({
+				inputType: "number"
+				, minValue: imageRenderer.minGroupImageDimension
+				, maxValue: Math.max(7680, imageRenderer.maxGroupImageDimension)
+				, step: 16
+				, value: lockedResolution ? lockedResolution.h : 1080
+				, label: "Height"
+				, tag: "height",
+				onChange: function (e, tag, $input)
+				{
+					groupCfg.SetLockedResolution(img.id, $layoutWidth.find('input').val(), $layoutHeight.find('input').val());
+					videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
+			});
+			collapsible.$section.append($whLbl);
+			collapsible.$section.append($layoutWidth);
+			collapsible.$section.append($layoutHeight);
+			ResetResolutionInputVisibility();
+		}
+		else
+		{
+			$whLbl = $();
+			$layoutWidth = $();
+			$layoutHeight = $();
+		}
+
+		if (img.isGroup)
+		{
+			var collapsible = new CollapsibleSection('grpDisp', "Group Display Options", dialog);
+			$content.append(collapsible.$heading);
+			$content.append(collapsible.$section);
+			collapsible.$section.append(ThreeStateFormField(img.id, "showCameraNames", "Show camera names"));
+			collapsible.$section.append(ThreeStateFormField(img.id, "showCameraBorders", "Show camera borders"));
+			collapsible.$section.append(ThreeStateFormField(img.id, "showHiddenCameras", "Show hidden cameras"));
+			collapsible.$section.append(ThreeStateFormField(img.id, "hideDisabledCameras", "Hide disabled cameras"));
+			collapsible.$section.append(ThreeStateFormField(img.id, "hideInactiveCamerasWithoutVideo", "Hide inactive cameras without video"));
+		}
+
+		dialog.contentChanged(true);
+	}
+	var ThreeStateOptions = ["No preference", "Force OFF", "Force ON"];
+	var ThreeStateFormField = function (camId, key, label)
+	{
+		var v = groupCfg.Get(camId, key);
+		if (v < 0 || v > ThreeStateOptions.length)
+			v = 0;
+		v = ThreeStateOptions[v];
+
+		return UIFormField({
+			inputType: "select"
+			, options: ThreeStateOptions
+			, value: v
+			, label: label
+			, tag: key,
+			onChange: function (e, tag, $select)
+			{
+				var selectedIndex = $select.get(0).selectedIndex;
+				if (selectedIndex < 0)
+					selectedIndex = 0;
+				groupCfg.Set(camId, key, selectedIndex);
+				videoPlayer.ReopenStreamAtCurrentSeekPosition();
+			}
+		})
+	}
+	var ResetResolutionInputVisibility = function ()
+	{
+		var lockedResolution = groupCfg.GetLockedResolution(img.id);
+		if (lockedResolution)
+		{
+			$layoutWidth.find('input').val(lockedResolution.w);
+			$layoutHeight.find('input').val(lockedResolution.h);
+			$whLbl.show();
+			$layoutWidth.show();
+			$layoutHeight.show();
+		}
+		else
+		{
+			$whLbl.hide();
+			$layoutWidth.hide();
+			$layoutHeight.hide();
+		}
+	}
+	var CloseDialog = function ()
+	{
+		if (dialog != null)
+		{
+			dialog.close();
+			dialog = null;
+		}
+	}
+}
+///////////////////////////////////////////////////////////////
 // Jpeg Quality Helper ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function JpegQualityHelper()
@@ -17502,27 +17670,9 @@ function CanvasContextMenu()
 	{
 		var imgLoaded = videoPlayer.Loaded().image;
 		if (imgLoaded.isGroup || cameraListLoader.isDynamicLayoutEligible(imgLoaded.id))
-			$("#submenu_trigger_groupLayout").closest('.b-m-item,.b-m-ifocus').show();
+			$("#submenu_trigger_groupSettings").closest('.b-m-item,.b-m-ifocus').show();
 		else
-			$("#submenu_trigger_groupLayout").closest('.b-m-item,.b-m-ifocus').hide();
-
-		ThreeStateMenuItem.SetVisible("showCameraNames", imgLoaded.isGroup);
-		ThreeStateMenuItem.SetVisible("showCameraBorders", imgLoaded.isGroup);
-		ThreeStateMenuItem.SetVisible("showHiddenCameras", imgLoaded.isGroup);
-		ThreeStateMenuItem.SetVisible("hideDisabledCameras", imgLoaded.isGroup);
-		ThreeStateMenuItem.SetVisible("hideInactiveCamerasWithoutVideo", imgLoaded.isGroup);
-
-		if (cameraListLoader.isDynamicLayoutEnabled(imgLoaded.id))
-		{
-			var lockedResolution = groupCfg.GetLockedResolution(imgLoaded.id);
-			if (lockedResolution)
-				$("#label_lockin_current_resolution").text("Unlock aspect ratio");
-			else
-				$("#label_lockin_current_resolution").text("Lock-in current aspect ratio");
-			$("#label_lockin_current_resolution").closest('.b-m-item,.b-m-ifocus').show();
-		}
-		else
-			$("#label_lockin_current_resolution").closest('.b-m-item,.b-m-ifocus').hide();
+			$("#submenu_trigger_groupSettings").closest('.b-m-item,.b-m-ifocus').hide();
 
 		var itemsToDisable = ["cameraname"];
 		if (lastLiveContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
@@ -17581,15 +17731,6 @@ function CanvasContextMenu()
 			var isMaxAlready = (camData.optionValue == videoPlayer.Loaded().image.id && homeGroupObj == null);
 			$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
 			$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
-		}
-		var imgLoaded = videoPlayer.Loaded().image;
-		if (imgLoaded.isGroup)
-		{
-			ThreeStateMenuItem.Refresh("showCameraNames", groupCfg.Get(imgLoaded.id, "showCameraNames"));
-			ThreeStateMenuItem.Refresh("showCameraBorders", groupCfg.Get(imgLoaded.id, "showCameraBorders"));
-			ThreeStateMenuItem.Refresh("showHiddenCameras", groupCfg.Get(imgLoaded.id, "showHiddenCameras"));
-			ThreeStateMenuItem.Refresh("hideDisabledCameras", groupCfg.Get(imgLoaded.id, "hideDisabledCameras"));
-			ThreeStateMenuItem.Refresh("hideInactiveCamerasWithoutVideo", groupCfg.Get(imgLoaded.id, "hideInactiveCamerasWithoutVideo"));
 		}
 
 		return true;
@@ -17668,20 +17809,15 @@ function CanvasContextMenu()
 			case "statsfornerds":
 				nerdStats.Open();
 				break;
-			case "lockin_current_resolution":
+			case "group_settings_edit":
 				{
 					var imgLoaded = videoPlayer.Loaded().image;
 					if (cameraListLoader.isDynamicLayoutEnabled(imgLoaded.id))
 					{
-						var lockedResolution = groupCfg.GetLockedResolution(imgLoaded.id);
-						if (lockedResolution)
-						{
-							groupCfg.UnlockResolution(imgLoaded);
-							videoPlayer.ReopenStreamAtCurrentSeekPosition();
-						}
-						else
-							groupCfg.LockResolution(imgLoaded);
+						groupLayoutDialog.Show(imgLoaded);
 					}
+					else
+						toaster.Error(this.data.alias + " is not supported for the current video stream!");
 					break;
 				}
 			default:
@@ -17700,18 +17836,7 @@ function CanvasContextMenu()
 				, { text: '<div id="cmroot_liveview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onLiveContextMenuAction }
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
-				, {
-					text: "<span id=\"submenu_trigger_groupLayout\">Group Layout</span>", icon: "#svg_mio_apps", iconClass: "noflip", alias: "submenu_groupLayout",
-					type: "group",
-					items: [
-						{ text: "<span id=\"label_lockin_current_resolution\">Lock-in current aspect ratio</span>", icon: "#svg_mio_lock", iconClass: "noflip", alias: "lockin_current_resolution", action: onLiveContextMenuAction },
-						ThreeStateMenuItem.Create("showCameraNames", "Show camera names", onLiveContextMenuAction),
-						ThreeStateMenuItem.Create("showCameraBorders", "Show camera borders", onLiveContextMenuAction),
-						ThreeStateMenuItem.Create("showHiddenCameras", "Show hidden cameras", onLiveContextMenuAction),
-						ThreeStateMenuItem.Create("hideDisabledCameras", "Hide disabled cameras", onLiveContextMenuAction),
-						ThreeStateMenuItem.Create("hideInactiveCamerasWithoutVideo", "Hide inactive cameras without video&nbsp;", onLiveContextMenuAction)
-					]
-				}
+				, { text: "<span id=\"submenu_trigger_groupSettings\">Group Settings</span>", icon: "#svg_mio_apps", iconClass: "noflip", alias: "group_settings_edit", action: onLiveContextMenuAction }
 				, { text: "<span id=\"contextMenuCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onLiveContextMenuAction }
