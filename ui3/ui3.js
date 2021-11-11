@@ -12791,7 +12791,8 @@ function FetchH264VideoModule()
 			}
 			else if (frame.format.wFormatTag === 61868) // 0xF1AC (FLAC)
 			{
-				audioCodec = "flac";
+				if (audioCodec.indexOf("flac") !== 0)
+					audioCodec = "flac";
 				//if (!flacDecoder)
 				//	flacDecoder = window.UI3FLACDecoder(pcmPlayer.AcceptFrame);
 				//flacDecoder.DecodeUint8Array(frame.frameData);
@@ -24724,13 +24725,11 @@ function StatsRow(name)
 		{
 			CreateGraph();
 			graph.AddValue(value, true);
-			$htmlValue.html(htmlValue);
 		}
 		else
-		{
 			DestroyGraph();
+		if ($htmlValue.html() !== htmlValue)
 			$htmlValue.html(htmlValue);
-		}
 	}
 	this.GetValue = function ()
 	{
