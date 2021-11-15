@@ -1448,6 +1448,14 @@ var defaultSettings =
 			, category: "Event-Triggered Icons"
 		}
 		, {
+			key: "ui3_camera_overlay_icon_webcasting_disabled"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip" style="fill: rgba(255,0,0,1)"><use xlink:href="#svg_x5F_HoldProfile"></use></svg> if Webcasting Disabled'
+			, onChange: OnChange_ui3_camera_overlay_icons
+			, category: "Event-Triggered Icons"
+		}
+		, {
 			key: "ui3_icons_extraVisibility"
 			, value: "0"
 			, inputType: "checkbox"
@@ -3675,7 +3683,7 @@ function DropdownBoxes()
 				for (var i = 0; i < data.length; i++)
 				{
 					var isGroupOrCycle = cameraListLoader.CameraIsGroupOrCycle(data[i]);
-					if (isGroupOrCycle || (settings.ui3_show_cameras_in_group_dropdowns === "1" && data[i].isEnabled))
+					if (isGroupOrCycle || (settings.ui3_show_cameras_in_group_dropdowns === "1" && data[i].isEnabled && obj.webcast))
 					{
 						this.items.push(new DropdownListItem(
 							{
@@ -10417,7 +10425,11 @@ function CameraListLoader()
 			self.singleCameraGroupMap = {};
 			// See what we've got
 			for (var i = 0; i < lastResponse.data.length; i++)
+			{
+				if (typeof lastResponse.data[i].webcast === "undefined")
+					lastResponse.data[i].webcast = true;
 				allCameras[lastResponse.data[i].optionValue] = lastResponse.data[i];
+			}
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
 				var obj = lastResponse.data[i];
@@ -10526,7 +10538,7 @@ function CameraListLoader()
 			if (cameraListUpdateTimeout != null)
 				clearTimeout(cameraListUpdateTimeout);
 			var interval = 5000;
-			if (AnyCameraOverlayIconsEnabled() || videoPlayer.PrioritizeTriggeredEnabled())
+			if (AnyCameraTriggerOverlayIconsEnabled() || videoPlayer.PrioritizeTriggeredEnabled())
 				interval = 1000;
 			cameraListUpdateTimeout = setTimeout(function ()
 			{
@@ -11128,7 +11140,7 @@ function VideoPlayerController()
 	}
 	this.CamIsConsideredTriggered = function (camData)
 	{
-		if (camData && camData.isEnabled && camData.active)
+		if (camData && camData.isEnabled && camData.active && obj.webcast)
 		{
 			if (settings.ui3_prioritizeTriggered_triggerMode === "Trigger")
 			{
@@ -11329,7 +11341,7 @@ function VideoPlayerController()
 		if (currentlyLoadingImage == null || currentlyLoadingImage.isLive)
 			return;
 		var camData = cameraListLoader.GetCameraWithId(lastLiveCameraOrGroupId);
-		if (camData && camData.isEnabled)
+		if (camData && camData.isEnabled && obj.webcast)
 		{
 			clipLoader.suppressClipListLoad = true;
 			self.LoadLiveCamera(camData);
@@ -11349,7 +11361,7 @@ function VideoPlayerController()
 		if (videoData.isLive && !videoData.isGroup)
 		{
 			var camData = cameraListLoader.GetCameraWithId(videoData.id);
-			if (!camData || !camData.isEnabled)
+			if (!camData || !camData.isEnabled || !camData.webcast)
 			{
 				cameraListLoader.LoadCameraList();
 				self.LoadHomeGroup();
@@ -11401,12 +11413,17 @@ function VideoPlayerController()
 			toaster.Error("The target camera or group could not be found.");
 			return;
 		}
-		if (!camData.isEnabled && !cameraListLoader.CameraIsGroupOrCycle(camData))
+		if ((!camData.isEnabled || !camData.webcast) && !cameraListLoader.CameraIsGroupOrCycle(camData))
+		{
+			console.log("LoadLiveCamera will not try to load " + camData.optionValue + ".", "Enabled: " + camData.isEnabled, "Webcast: " + camData.webcast, "IsGroupOrCycle: " + cameraListLoader.CameraIsGroupOrCycle(camData));
+			if (!camData.webcast)
+				toaster.Warning("The camera you clicked has webcasting disabled.");
 			return;
+		}
 		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
 		{
 			var maybeCamData = cameraListLoader.GetCameraWithId(cameraListLoader.singleCameraGroupMap[camData.optionValue]);
-			if (maybeCamData.isEnabled)
+			if (maybeCamData.isEnabled && maybeCamData.webcast)
 				camData = maybeCamData;
 		}
 
@@ -15586,10 +15603,20 @@ function GetCameraOverlayIcons(cameraId)
 		{
 			icons.push({ id: "generic_trigger", svg: "#svg_x5F_Alert1" });
 		}
+		if (settings.ui3_camera_overlay_icon_webcasting_disabled === "1"
+			&& !cam.webcast)
+		{
+			icons.push({ id: "webcasting_disabled", svg: "#svg_x5F_HoldProfile" });
+		}
 	}
 	return icons;
 }
 function AnyCameraOverlayIconsEnabled()
+{
+	return AnyCameraTriggerOverlayIconsEnabled()
+		|| settings.ui3_camera_overlay_icon_webcasting_disabled === "1";
+}
+function AnyCameraTriggerOverlayIconsEnabled()
 {
 	return settings.ui3_camera_overlay_icon_motion_trigger === "1"
 		|| settings.ui3_camera_overlay_icon_audio_trigger === "1"
@@ -18817,6 +18844,8 @@ function CameraListDialog()
 			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="alerting"><svg class="icon"><use xlink:href="#svg_x5F_Alert1"></use></svg></div>';
 		if (cam.isEnabled && (!cam.isOnline || cam.isNoSignal))
 			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="offline / no signal"><svg class="icon"><use xlink:href="#svg_x5F_Warning"></use></svg></div>';
+		if (!cam.webcast)
+			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="webcasting disabled"><svg class="icon"><use xlink:href="#svg_x5F_HoldProfile"></use></svg></div>';
 		if (cam.newalerts > 0)
 			floatingBadges += '<div class="newAlerts" title="' + htmlAttributeEncode(cam.newalerts) + ' new alert' + (cam.newAlerts === 1 ? '' : 's') + '" style="color:#FF0000;"><div class="icon16"><svg class="icon"><use xlink:href="#svg_x5F_Alert1"></use></svg></div>' + htmlEncode(cam.newalerts) + '</div>';
 		if (!cam.isEnabled)
@@ -18827,7 +18856,7 @@ function CameraListDialog()
 		return '<div class="camlist_thumbbox" onclick="cameraListDialog.camListThumbClick(\'' + cam.optionValue + '\')" style="background-color: #' + colorHex + ';">'
 			+ '<div class="camlist_thumb">'
 			+ '<div class="camlist_thumb_aligner"></div>'
-			+ '<div class="camlist_thumb_helper"><img src="" alt="" class="camlist_thumb_img" camid="' + cam.optionValue + '" isEnabled="' + (cam.isEnabled ? '1' : '0') + '" aspectratio="' + (cam.width / cam.height) + '" />'
+			+ '<div class="camlist_thumb_helper"><img src="" alt="" class="camlist_thumb_img" camid="' + cam.optionValue + '" isEnabled="' + (cam.isEnabled && cam.webcast ? '1' : '0') + '" aspectratio="' + (cam.width / cam.height) + '" />'
 			+ '<span style="display:none;">No Image</span></div></div>'
 			+ '<div class="camlist_label" style="background-color: #' + colorHex + '; color: #' + nameColorHex + ';">' + floatingBadges + htmlEncode(labelText) + '</div>'
 			+ '</div>';
@@ -19115,6 +19144,8 @@ function CameraProperties(camId)
 			$infoSection.append(GetInfo("ID", cam.optionValue));
 			$infoSection.append(GetInfo("Name", CleanUpGroupName(cam.optionDisplay)));
 			$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
+			if (!cam.webcast)
+				$infoSection.append(GetInfo("Webcasting", "Disabled"));
 			$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + " @ " + cam.FPS + " FPS"));
 			$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
 			$infoSection.append('<div class="dialogOption_item dialogOption_item_info"><a title="Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds." href="javascript:hlsPlayer.OpenDialog(\'' + JavaScriptStringEncode(camId) + '\')">'
