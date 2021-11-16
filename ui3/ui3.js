@@ -3683,7 +3683,7 @@ function DropdownBoxes()
 				for (var i = 0; i < data.length; i++)
 				{
 					var isGroupOrCycle = cameraListLoader.CameraIsGroupOrCycle(data[i]);
-					if (isGroupOrCycle || (settings.ui3_show_cameras_in_group_dropdowns === "1" && data[i].isEnabled && obj.webcast))
+					if (isGroupOrCycle || (settings.ui3_show_cameras_in_group_dropdowns === "1" && data[i].isEnabled && data[i].webcast))
 					{
 						this.items.push(new DropdownListItem(
 							{
@@ -11140,7 +11140,7 @@ function VideoPlayerController()
 	}
 	this.CamIsConsideredTriggered = function (camData)
 	{
-		if (camData && camData.isEnabled && camData.active && obj.webcast)
+		if (camData && camData.isEnabled && camData.active && camData.webcast)
 		{
 			if (settings.ui3_prioritizeTriggered_triggerMode === "Trigger")
 			{
@@ -11341,7 +11341,7 @@ function VideoPlayerController()
 		if (currentlyLoadingImage == null || currentlyLoadingImage.isLive)
 			return;
 		var camData = cameraListLoader.GetCameraWithId(lastLiveCameraOrGroupId);
-		if (camData && camData.isEnabled && obj.webcast)
+		if (camData && camData.isEnabled && camData.webcast)
 		{
 			clipLoader.suppressClipListLoad = true;
 			self.LoadLiveCamera(camData);
