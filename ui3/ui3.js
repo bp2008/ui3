@@ -11980,9 +11980,15 @@ function JpegVideoModule()
 				if (nerdStats.IsOpen())
 				{
 					var loaded = videoPlayer.Loaded().image;
-					var nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
-					if (loading.fullwidth !== loaded.actualwidth || loading.fullheight !== loaded.actualheight)
-						nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
+					var nativeRes = "";
+					if (cameraListLoader.isDynamicLayoutEligible(loaded.id))
+						nativeRes = " (dynamically sized group)";
+					else
+					{
+						nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
+						if (loading.fullwidth !== loaded.actualwidth || loading.fullheight !== loaded.actualheight)
+							nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
+					}
 
 					nerdStats.BeginUpdate();
 					nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
@@ -13077,9 +13083,15 @@ function FetchH264VideoModule()
 			var decoderDelay = h264_player.GetBufferedTime().toFloat();
 			if (h264_player.isMsePlayer)
 				interFrame = frame.duration ? frame.duration : 0;
-			var nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
-			if (loading.fullwidth !== frame.width || loading.fullheight !== frame.height)
-				nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
+			var nativeRes = "";
+			if (cameraListLoader.isDynamicLayoutEligible(loading.id))
+				nativeRes = " (dynamically sized group)";
+			else
+			{
+				nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
+				if (loading.fullwidth !== frame.width || loading.fullheight !== frame.height)
+					nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
+			}
 
 			nerdStats.BeginUpdate();
 			nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
