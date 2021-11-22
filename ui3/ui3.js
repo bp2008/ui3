@@ -17847,10 +17847,10 @@ function CanvasContextMenu()
 			case "group_settings_edit":
 				{
 					var imgLoaded = videoPlayer.Loaded().image;
-					if (cameraListLoader.isDynamicLayoutEnabled(imgLoaded.id))
+					if (imgLoaded.isGroup || cameraListLoader.isDynamicLayoutEligible(imgLoaded.id))
 						groupLayoutDialog.Show(imgLoaded);
 					else
-						toaster.Error(this.data.alias + " is not supported for the current video stream!");
+						toaster.Error(this.data.alias + " is not supported for the current video stream because \"" + imgLoaded.id + "\" is not a group!");
 					break;
 				}
 			default:
