@@ -17521,6 +17521,11 @@ function GroupLayoutDialog()
 	{
 		CloseDialog();
 		img = imgLoaded;
+		if (!img)
+		{
+			toaster.Error('GroupLayoutDialog was not given a valid argument');
+			return;
+		}
 
 		// Create Dialog
 		$dlg = $('<div class="groupLayoutUiPanel dialogOptionPanel"></div>');
@@ -17613,6 +17618,9 @@ function GroupLayoutDialog()
 			collapsible.$section.append(ThreeStateFormField(img.id, "hideDisabledCameras", "Hide disabled cameras"));
 			collapsible.$section.append(ThreeStateFormField(img.id, "hideInactiveCamerasWithoutVideo", "Hide inactive cameras without video"));
 		}
+
+		if ($content.children().length === 0)
+			$content.append('<div style="padding: 10px;">"' + img.id + '" does not have any settings that are configurable in this panel.</div>');
 
 		dialog.contentChanged(true);
 	}
@@ -17845,14 +17853,8 @@ function CanvasContextMenu()
 				nerdStats.Open();
 				break;
 			case "group_settings_edit":
-				{
-					var imgLoaded = videoPlayer.Loaded().image;
-					if (imgLoaded.isGroup || cameraListLoader.isDynamicLayoutEligible(imgLoaded.id))
-						groupLayoutDialog.Show(imgLoaded);
-					else
-						toaster.Error(this.data.alias + " is not supported for the current video stream because \"" + imgLoaded.id + "\" is not a group!");
-					break;
-				}
+				groupLayoutDialog.Show(videoPlayer.Loaded().image);
+				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
 				break;
