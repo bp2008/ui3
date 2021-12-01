@@ -3420,8 +3420,8 @@ function UiSizeHelper()
 		//	return true;
 		//else if (settings.ui3_portrait_layout === "No")
 			return false;
-		else
-			return (windowWidth < windowHeight && windowWidth < 440);
+		//else
+		//	return (windowWidth < windowHeight && windowWidth < 440);
 	}
 	this.SetPortraitLayout = function (portrait)
 	{
