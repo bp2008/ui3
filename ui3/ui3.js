@@ -11417,7 +11417,7 @@ function VideoPlayerController()
 		{
 			console.log("LoadLiveCamera will not try to load " + camData.optionValue + ".", "Enabled: " + camData.isEnabled, "Webcast: " + camData.webcast, "IsGroupOrCycle: " + cameraListLoader.CameraIsGroupOrCycle(camData));
 			if (!camData.webcast)
-				toaster.Warning("The camera you clicked has webcasting disabled.");
+				toaster.Warning("The camera you clicked has webcasting disabled. Enable it in Blue Iris Camera Properties > Webcast tab.", 15000);
 			return;
 		}
 		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
@@ -17545,6 +17545,8 @@ function GroupLayoutDialog()
 			var collapsible = new CollapsibleSection('grpLayout', "Camera Layout", dialog);
 			$content.append(collapsible.$heading);
 			$content.append(collapsible.$section);
+			if (settings.ui3_dynamicGroupLayout === "0")
+				collapsible.$section.append('<div style="padding: 8px; margin-bottom: 10px; border: 2px dotted #FF0000;">This section has no effect while Dynamic Group Layout is disabled in UI Settings &gt; Video Player.</div>');
 			collapsible.$section.append(UIFormField({
 				inputType: "checkbox"
 				, value: !lockedResolution
