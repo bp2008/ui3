@@ -337,6 +337,11 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	width: 146px;
 }
 
+.portrait #layoutleft
+{
+	width: 100vw;
+}
+
 .sizeMedium #systemnamewrapper, .sizeMedium .topbar_tab
 {
 	line-height: 46px;
@@ -955,22 +960,26 @@ div.invisibleLabel
 {
 	height: 50px;
 }
-
 /* PTZ Buttons */
-.leftBarTopPadding
+#layoutleftLiveContent
 {
-	width: 0px;
-	height: 22px;
+	margin-top: 22px;
 }
 
-.sizeMedium .leftBarTopPadding
+.sizeMedium #layoutleftLiveContent
 {
-	height: 14px;
+	margin-top: 14px;
 }
 
-.sizeSmall .leftBarTopPadding
+.sizeSmall #layoutleftLiveContent
 {
-	height: 7px;
+	margin-top: 7px;
+}
+
+.portrait #layoutleftLiveContent
+{
+	column-count: 2;
+	width: 100vw;
 }
 
 #layoutLeftRecordingsControls .leftBarTopPadding
@@ -2212,6 +2221,13 @@ div.invisibleLabel
 	width: 100%;
 }
 
+.portrait #clipsbodyWrapper
+{
+	position: absolute !important;
+	left: 50%;
+	width: 50%;
+}
+
 .clipListTopDateWrapper
 {
 	background-color: var(--datetile-bg-color);
@@ -2226,6 +2242,14 @@ div.invisibleLabel
 	{
 		color: #00FF00;
 	}
+
+.portrait #clipListTopDate
+{
+	position: absolute !important;
+	top: 0px;
+	left: 50%;
+	width: 50%;
+}
 
 .clipIconWrapper
 {

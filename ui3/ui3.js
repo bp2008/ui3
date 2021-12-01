@@ -920,6 +920,15 @@ var defaultSettings =
 			, onChange: OnChange_ui3_preferred_ui_scale
 			, category: "General Settings"
 		}
+		//, {
+		//	key: "ui3_portrait_layout"
+		//	, value: "Auto"
+		//	, inputType: "select"
+		//	, options: ["Auto", "Yes", "No"]
+		//	, label: "Portrait Layout"
+		//	, onChange: OnChange_ui3_portrait_layout
+		//	, category: "General Settings"
+		//}
 		, {
 			key: "ui3_sideBarPosition"
 			, value: "Left"
@@ -3168,13 +3177,15 @@ function resized()
 	var windowW = $(window).width();
 	var windowH = $(window).height();
 	var sideBarRight = settings.ui3_sideBarPosition === "Right";
+	var portrait = uiSizeHelper.UsePortraitLayout(windowW, windowH);
+	uiSizeHelper.SetPortraitLayout(portrait);
 
 	// Adjust UI style presets based on window size
 	uiSizeHelper.SetMostAppropriateSize(windowW, windowH);
 
 	// Learn some sizes
 	var layouttop = $("#layouttop");
-	var layoutleft = $("#layoutleft");
+	var layoutsidebar = $("#layoutleft");
 	var layoutbody = $("#layoutbody");
 	var layoutbottom = $("#layoutbottom");
 	var statusArea = $("#statusArea");
@@ -3185,15 +3196,14 @@ function resized()
 	var videoCenter_Bg = $("#camimg_centerIconBackground");
 
 	var topVis = layouttop.is(":visible");
-	var leftVis = layoutleft.is(":visible");
+	var sidebarVis = layoutsidebar.is(":visible");
 	var botVis = layoutbottom.is(":visible");
 
 	var topH = topVis ? layouttop.height() : 0;
 	var botH = botVis ? layoutbottom.height() : 0;
-	var leftH = leftVis ? (windowH - topH) : 0;
-	var leftW = leftVis ? layoutleft.width() : 0;
+	var sidebarH = sidebarVis ? (windowH - topH) : 0;
+	var sidebarW = sidebarVis ? layoutsidebar.width() : 0;
 	var statusH = statusArea.outerHeight(true);
-
 	// Size layouttop
 	// Measure width of objects in top bar
 	var systemNameWidth = systemnamewrapper.width();
@@ -3213,7 +3223,7 @@ function resized()
 			topWidthNoTabs += w;
 	});
 	// Determine how much space is needed for top bar
-	var topTabDesiredWidth = leftW;
+	var topTabDesiredWidth = portrait ? uiSizeHelper.GetPreferredSidebarSize() : sidebarW;
 	var topTabAllowableWidth = topTabDesiredWidth;
 	var systemNameAllowableWidth = topTabDesiredWidth;
 	var topBarDesiredWidth = topWidthNoTabs + (4 * topTabDesiredWidth);
@@ -3232,30 +3242,64 @@ function resized()
 	if (systemNameWidth != systemNameAllowableWidth)
 		systemnamewrapper.css("width", systemNameAllowableWidth + "px");
 
-	// Size layoutleft
-	layoutleft.css("top", topH);
-	layoutleft.css("height", leftH + "px");
+	// Size layoutsidebar
+	var sidebarT = topH;
+	if (portrait)
+	{
+		sidebarH = Math.max((windowH - topH) / 2, 150);
+		sidebarT = windowH - sidebarH;
+	}
+	layoutsidebar.css("top", sidebarT + "px");
+	layoutsidebar.css("height", sidebarH + "px");
 
 	if (currentPrimaryTab == "live")
-		$("#layoutleftLiveScrollableWrapper").css("height", leftH - statusH + "px");
+	{
+		$("#layoutleftLiveScrollableWrapper").css("height", sidebarH - statusH + "px");
+		var $layoutleftLiveContent = $("#layoutleftLiveContent");
+		var sidebarStuff = $layoutleftLiveContent.children();
+		if (portrait)
+		{
+			$layoutleftLiveContent.css("column-width", uiSizeHelper.GetPreferredSidebarSize() + "px");
+			sidebarStuff.css("width", uiSizeHelper.GetPreferredSidebarSize() + "px");
+			sidebarStuff.css("margin", "0px auto");
+		}
+		else
+		{
+			sidebarStuff.css("width", "");
+			sidebarStuff.css("margin", "");
+		}
+	}
 	else
 	{
 		var llrControlsH = llrControls.outerHeight(true);
-		$("#clipsbodyWrapper").css("height", leftH - statusH - llrControlsH + "px");
-		$("#layoutleftExportScrollableWrapper").css("height", leftH - statusH + "px");
+		if (portrait)
+		{
+			var topDateH = $("#clipListTopDate").outerHeight(true);
+			$("#clipsbodyWrapper").css("height", (sidebarH - statusH - topDateH) + "px");
+			$("#clipsbodyWrapper").css("top", topDateH + "px");
+		}
+		else
+		{
+			$("#clipsbodyWrapper").css("height", sidebarH - statusH - llrControlsH + "px");
+			$("#clipsbodyWrapper").css("top", "");
+		}
+		$("#layoutleftExportScrollableWrapper").css("height", sidebarH - statusH + "px");
 	}
 
 	var statusArea_margins = statusArea.outerWidth(true) - statusArea.width();
-	statusArea.css("width", (leftW - statusArea_margins) + "px");
+	statusArea.css("width", (sidebarW - statusArea_margins) + "px");
 
 	// Size layoutbody
-	layoutbody.css("top", topH + "px");
-	if (sideBarRight)
-		layoutbody.css("left", "0px");
-	else
-		layoutbody.css("left", leftW + "px");
-	var bodyW = windowW - leftW;
+	var bodyL = (portrait || sideBarRight) ? 0 : sidebarW;
+	var bodyT = topH;
+	var bodyW = windowW;
 	var bodyH = windowH - topH - botH;
+	if (portrait)
+		bodyH -= sidebarH;
+	else
+		bodyW -= sidebarW;
+	layoutbody.css("top", bodyT + "px");
+	layoutbody.css("left", bodyL + "px");
 	layoutbody.css("width", bodyW + "px");
 	layoutbody.css("height", bodyH + "px");
 
@@ -3288,8 +3332,8 @@ function resized()
 	if (sideBarRight)
 		layoutbottom.css("left", "0px");
 	else
-		layoutbottom.css("left", leftW + "px");
-	layoutbottom.css("width", windowW - leftW + "px");
+		layoutbottom.css("left", sidebarW + "px");
+	layoutbottom.css("width", windowW - sidebarW + "px");
 
 	clipTimeline.Resized();
 	clipTimeline.Draw();
@@ -3312,6 +3356,9 @@ function UiSizeHelper()
 	var largeMinW = 670;// 550 575 1160;
 	var mediumMinW = 540;// 450 515 900;
 	var smallMinW = 350;//680;
+	var largeSidebarSize = 256;
+	var mediumSidebarSize = 196;
+	var smallSidebarSize = 146;
 	var currentSize = "unset";
 	var autoSize = true;
 
@@ -3349,6 +3396,14 @@ function UiSizeHelper()
 	{
 		return currentSize;
 	}
+	this.GetPreferredSidebarSize = function ()
+	{
+		if (currentSize === "smaller" || currentSize === "small")
+			return smallSidebarSize;
+		if (currentSize === "medium")
+			return mediumSidebarSize;
+		return largeSidebarSize;
+	}
 	this.SetUISizeByName = function (size)
 	{
 		if (size)
@@ -3358,6 +3413,23 @@ function UiSizeHelper()
 			SetSize(size);
 		resized();
 		//setTimeout(resized);
+	}
+	this.UsePortraitLayout = function (windowWidth, windowHeight)
+	{
+		//if (settings.ui3_portrait_layout === "Yes")
+		//	return true;
+		//else if (settings.ui3_portrait_layout === "No")
+			return false;
+		else
+			return (windowWidth < windowHeight && windowWidth < 440);
+	}
+	this.SetPortraitLayout = function (portrait)
+	{
+		var $roots = $('body');
+		if (portrait)
+			$roots.addClass("portrait");
+		else
+			$roots.removeClass("portrait");
 	}
 
 	SetSize(settings.ui3_preferred_ui_scale);
@@ -26181,6 +26253,10 @@ function OnChange_ui3_audio_codec()
 function OnChange_ui3_preferred_ui_scale(newValue)
 {
 	uiSizeHelper.SetUISizeByName(newValue);
+}
+function OnChange_ui3_portrait_layout()
+{
+	resized();
 }
 function OnChange_ui3_sideBarPosition()
 {
