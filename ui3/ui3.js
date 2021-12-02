@@ -6902,14 +6902,28 @@ function BigThumbHelper()
 			assumedWidth = assumedHeight * aspectRatio;
 		}
 		var wH = $(window).height();
+		var wW = $(window).width();
 		var top = ($vAlign.offset().top + ($vAlign.height() / 2)) - (assumedHeight / 2) - 20; // 20 for the description
 		if (top + (assumedHeight + 20) > wH)
 			top = (wH - (assumedHeight + 20));
 		if (top < 0)
 			top = 0;
-		if (settings.ui3_sideBarPosition === "Right")
+		var portrait = uiSizeHelper.UsePortraitLayout(wW, wH);
+		if (portrait)
 		{
-			var right = $(window).width() - $hAlign.offset().left;
+			var layoutsidebar = $("#layoutleft");
+			top = $vAlign.offset().top - assumedHeight - 25;
+			if (top < 0)
+				top = 0;
+			var left = $hAlign.offset().left - assumedWidth;
+			if (left < 0)
+				left = 0;
+			$thumb.css("left", left + "px");
+			$thumb.css("right", "");
+		}
+		else if (settings.ui3_sideBarPosition === "Right")
+		{
+			var right = wW - $hAlign.offset().left;
 			$thumb.css("left", "");
 			$thumb.css("right", right + "px");
 		}
