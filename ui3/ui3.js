@@ -510,6 +510,7 @@ var sessionTimeout = null;
 var clipOverlayCfg = null;
 var groupCfg = null;
 var programmaticSoundPlayer = null;
+var sidebarResizeBar = null;
 
 var currentPrimaryTab = "";
 
@@ -736,6 +737,10 @@ var defaultSettings =
 		, {
 			key: "ui3_clip_export_timelapseFps"
 			, value: 30
+		}
+		, {
+			key: "ui3_portraitSidebarSize"
+			, value: 0.5
 		}
 		, {
 			key: "bi_rememberMe"
@@ -2930,6 +2935,8 @@ $(function ()
 
 	programmaticSoundPlayer = new ProgrammaticSoundPlayer();
 
+	sidebarResizeBar = new SidebarResizeBar();
+
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
 	{
@@ -3246,7 +3253,7 @@ function resized()
 	var sidebarT = topH;
 	if (portrait)
 	{
-		sidebarH = Math.max((windowH - topH) / 2, 150);
+		sidebarH = sidebarResizeBar.getSidebarSize() * (windowH - topH - botH);
 		sidebarT = windowH - sidebarH;
 	}
 	layoutsidebar.css("top", sidebarT + "px");
@@ -3440,6 +3447,73 @@ function UiSizeHelper()
 	SetSize(settings.ui3_preferred_ui_scale);
 
 	setTimeout(function () { self.SetUISizeByName(settings.ui3_preferred_ui_scale); }, 0);
+}
+///////////////////////////////////////////////////////////////
+// Portrait Layout Sidebar Resize Bar /////////////////////////
+///////////////////////////////////////////////////////////////
+function SidebarResizeBar()
+{
+	var self = this;
+	var resizeState = { dragging: false, startY: 0, startSize: 0 };
+	var layouttop = $("#layouttop");
+	var layoutbottom = $("#layoutbottom");
+	var layoutsidebar = $("#layoutleft");
+	var statusArea = $("#statusArea");
+	var $dragBar = $("#sidebarPortraitDragbar");
+	var resizedThrottled = throttle(resized, 33.333);
+
+	$(document).on('mouseup touchend', function (e)
+	{
+		mouseCoordFixer.fix(e);
+		resizeState.dragging = false;
+	});
+	$(document).on("touchcancel", function (e)
+	{
+		if (resizeState.dragging)
+		{
+			resizeState.dragging = false;
+			self.setSidebarSize(resizeState.startSize);
+			resized();
+		}
+	});
+	$(document).on('mousemove touchmove', function (e)
+	{
+		mouseCoordFixer.fix(e);
+
+		if (resizeState.dragging)
+		{
+			var dy = (resizeState.startY - e.mouseY) / availableHeight();
+			self.setSidebarSize(resizeState.startSize + dy);
+			resizedThrottled();
+		}
+	});
+	$dragBar.on("mousedown touchstart", function (e)
+	{
+		mouseCoordFixer.fix(e);
+		if (e.which === 0 || e.which === 1)
+		{
+			resizeState.startY = e.mouseY;
+			resizeState.startSize = clampSidebarSize(layoutsidebar.height() / availableHeight());
+			resizeState.dragging = true;
+		}
+	});
+	this.setSidebarSize = function (size)
+	{
+		settings.ui3_portraitSidebarSize = clampSidebarSize(size);
+	}
+	function availableHeight()
+	{
+		return $(window).height() - layouttop.height() - layoutbottom.height();
+	}
+	function clampSidebarSize(size)
+	{
+		var min = ($dragBar.height() + statusArea.height() + 30) / $(window).height();
+		return Clamp(parseFloat(size), min, 0.9)
+	}
+	this.getSidebarSize = function (defaultSize)
+	{
+		return clampSidebarSize(settings.ui3_portraitSidebarSize);
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Progress bar / Scrub bar / Status bar //////////////////////
