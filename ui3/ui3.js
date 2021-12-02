@@ -767,7 +767,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_feature_enabled_stopLight"
-			, value: "1"
+			, value: "0"
 		}
 		, {
 			key: "ui3_feature_enabled_globalSchedule"
@@ -920,15 +920,15 @@ var defaultSettings =
 			, onChange: OnChange_ui3_preferred_ui_scale
 			, category: "General Settings"
 		}
-		//, {
-		//	key: "ui3_portrait_layout"
-		//	, value: "Auto"
-		//	, inputType: "select"
-		//	, options: ["Auto", "Yes", "No"]
-		//	, label: "Portrait Layout"
-		//	, onChange: OnChange_ui3_portrait_layout
-		//	, category: "General Settings"
-		//}
+		, {
+			key: "ui3_portrait_layout"
+			, value: "Auto"
+			, inputType: "select"
+			, options: ["Auto", "Yes", "No"]
+			, label: "Portrait Layout"
+			, onChange: OnChange_ui3_portrait_layout
+			, category: "General Settings"
+		}
 		, {
 			key: "ui3_sideBarPosition"
 			, value: "Left"
@@ -3277,6 +3277,9 @@ function resized()
 			var topDateH = $("#clipListTopDate").outerHeight(true);
 			$("#clipsbodyWrapper").css("height", (sidebarH - statusH - topDateH) + "px");
 			$("#clipsbodyWrapper").css("top", topDateH + "px");
+			uiSizeHelper.setDynCSS(".portrait .cliptile, .portrait .datetile { width: " + ((windowW / 2) - 30) + "px }\n"
+				+ ".sizeMedium.portrait .cliptile, .sizeMedium.portrait .datetile { width: " + ((windowW / 2) - 15) + "px }\n"
+				+ ".sizeSmall.portrait .cliptile, .sizeSmall.portrait .datetile { width: " + ((windowW / 2) - 14) + "px }");
 		}
 		else
 		{
@@ -3362,6 +3365,8 @@ function UiSizeHelper()
 	var currentSize = "unset";
 	var autoSize = true;
 
+	this.setDynCSS = InjectStyleBlock(""); // For dynamic clip tile sizing
+
 	this.SetMostAppropriateSize = function (availableWidth, availableHeight)
 	{
 		if (autoSize)
@@ -3416,12 +3421,12 @@ function UiSizeHelper()
 	}
 	this.UsePortraitLayout = function (windowWidth, windowHeight)
 	{
-		//if (settings.ui3_portrait_layout === "Yes")
-		//	return true;
-		//else if (settings.ui3_portrait_layout === "No")
+		if (settings.ui3_portrait_layout === "Yes")
+			return true;
+		else if (settings.ui3_portrait_layout === "No")
 			return false;
-		//else
-		//	return (windowWidth < windowHeight && windowWidth < 440);
+		else
+			return (windowWidth / windowHeight < (5 / 6) || (windowWidth < windowHeight && windowWidth < 440));
 	}
 	this.SetPortraitLayout = function (portrait)
 	{
@@ -21125,6 +21130,8 @@ function GetLevelImageMarkup(level)
 		return GetSysLogIcon("#svg_x5F_Alert1", "#FF6000");
 	if (level == 4)
 		return GetSysLogIcon("#svg_x5F_OK", "#63C35B");
+	if (level == 5)
+		return GetSysLogIcon("#svg_mio_help", "#FFFF00");
 	if (level == 6)
 		return GetSysLogIcon("#svg_x5F_Stoplight", "#2748CC");
 	if (level == 10)
@@ -28475,6 +28482,7 @@ function InjectStyleBlock(cssText)
 	var styleBlock = $('<style type="text/css"></style>');
 	styleBlock.text(cssText);
 	$("body").append(styleBlock);
+	return function (newCssText) { styleBlock.text(newCssText); };
 }
 function BindEvents(ele, events, handler, options)
 {
