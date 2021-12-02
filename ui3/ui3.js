@@ -21116,15 +21116,17 @@ function ListDialog(options_arg)
 function GetLevelImageMarkup(level)
 {
 	if (level == 0)
-		return GetSysLogIcon("#svg_x5F_Info", "#0088FF");
+		return GetSysLogIcon("#svg_x5F_Info", "#2748CC");
 	if (level == 1)
 		return GetSysLogIcon("#svg_mio_warning", "#FFFF00");
 	if (level == 2)
-		return GetSysLogIcon("#svg_x5F_Error", "#FF0000");
+		return GetSysLogIcon("#svg_x5F_Error", "#DF1751");
 	if (level == 3)
-		return GetSysLogIcon("#svg_x5F_Alert1", "#FF0000");
+		return GetSysLogIcon("#svg_x5F_Alert1", "#FF6000");
 	if (level == 4)
-		return GetSysLogIcon("#svg_x5F_OK", "#00FF00");
+		return GetSysLogIcon("#svg_x5F_OK", "#63C35B");
+	if (level == 6)
+		return GetSysLogIcon("#svg_x5F_Stoplight", "#2748CC");
 	if (level == 10)
 		return GetSysLogIcon("#svg_x5F_User", "#FFFFFF");
 	return '<span title="Log level ' + level + ' is unknown">' + level + '</span>';
