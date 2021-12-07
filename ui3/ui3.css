@@ -5454,6 +5454,12 @@ ul.extraSpacing li
 {
 	color: #FF8800;
 }
+.currentH264PlayerComment
+{
+	text-align: center;
+	font-weight: bold;
+	color: #00d900;
+}
 /* Audio Visualizer */
 #ui3AudioVisualizerPanel
 {

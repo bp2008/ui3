@@ -588,6 +588,7 @@ var CameraLabelPositionValues = {
 	Below: "Below"
 }
 var H264PlayerOptions = {
+	Automatic: "Automatic",
 	JavaScript: "JavaScript",
 	HTML5: "HTML5",
 	NaCl_HWVA_Auto: "NaCl (Auto hw accel)",
@@ -598,6 +599,7 @@ var H264PlayerOptions = {
 function GetH264PlayerOptions()
 {
 	var arr = new Array();
+	arr.push(H264PlayerOptions.Automatic);
 	if (webcodecs_h264_player_supported)
 		arr.push(H264PlayerOptions.WebCodecs);
 	if (mse_mp4_h264_supported)
@@ -969,13 +971,21 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_h264_choice3"
+			key: "ui3_h264_choice4"
 			, value: GetDefaultH264PlayerOption()
 			, inputType: "select"
 			, options: GetH264PlayerOptions()
 			, label: 'H.264 Player <a href="javascript:UIHelp.LearnMore(\'H.264 Player Options\')">(learn more)</a>'
-			, onChange: OnChange_ui3_h264_choice3
-			, preconditionFunc: Precondition_ui3_h264_choice3
+			, onChange: OnChange_ui3_h264_choice
+			, preconditionFunc: Precondition_ui3_h264_choice
+			, category: "Video Player"
+		}
+		, {
+			key: "ui3_comment_current_h264_player"
+			, value: ""
+			, inputType: "comment"
+			, comment: GenerateCurrentH264PlayerComment
+			, preconditionFunc: Precondition_ui3_h264_choice
 			, category: "Video Player"
 		}
 		, {
@@ -2733,10 +2743,17 @@ $(function ()
 					// For all other users, this one-time setting migration preserves their previous preference.
 					var isFFwithJS = BrowserIsFirefox() && localStorage.ui3_h264_choice2 === H264PlayerOptions.JavaScript;
 					if (!isFFwithJS)
-						settings.ui3_h264_choice3 = localStorage.ui3_h264_choice2;
+						localStorage.ui3_h264_choice3 = localStorage.ui3_h264_choice2;
 					delete localStorage.ui3_h264_choice2;
 				}
 				localStorage.ui3_html5_migration = "1";
+			}
+			if (typeof localStorage.ui3_h264_choice3 !== "undefined")
+			{
+				// UI3-189 sets a new default of Automatic, but transitions the old setting if it is not HTML5 or WebCodecs.
+				if (localStorage.ui3_h264_choice3 !== H264PlayerOptions.HTML5 && localStorage.ui3_h264_choice3 !== H264PlayerOptions.WebCodecs)
+					settings.ui3_h264_choice4 = localStorage.ui3_h264_choice3;
+				delete localStorage.ui3_h264_choice3;
 			}
 		}
 	}
@@ -4877,10 +4894,9 @@ function PtzButtons()
 			return;
 
 		// Wait a moment in case Blue Iris needs time to save the updated preset image.
-		setTimeout(function ()
-		{
-			ptzPresetThumbLoader.ReloadPresetImage(cameraId, presetNumber);
-		}, 50);
+		setTimeout(function () { ptzPresetThumbLoader.ReloadPresetImage(cameraId, presetNumber); }, 250);
+		setTimeout(function () { ptzPresetThumbLoader.ReloadPresetImage(cameraId, presetNumber); }, 1100);
+		setTimeout(function () { ptzPresetThumbLoader.ReloadPresetImage(cameraId, presetNumber); }, 3600);
 	}
 	var LoadPTZPresetDescriptions = function (cameraId)
 	{
@@ -12569,6 +12585,11 @@ function JpegVideoModule()
 // Using OpenH264_Player or Pnacl_Player or HTML5_MSE_Player //
 // or WebCodecs_Player ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var currentH264Player = null;
+function SetH264PlayerPreference(val)
+{
+	settings.ui3_h264_choice4 = val;
+}
 function FetchH264VideoModule()
 {
 	/*
@@ -12608,51 +12629,58 @@ function FetchH264VideoModule()
 
 	var lastStatusBlock = null;
 
-	var Initialize = function ()
+	var Initialize = function (h264PlayerChoice)
 	{
 		if (isInitialized)
 			return;
 		isInitialized = true;
 		// Do one-time initialization here
 		//console.log("Initializing h264_player");
-		if (webcodecs_h264_player_supported && settings.ui3_h264_choice3 === H264PlayerOptions.WebCodecs)
+
+		// Automatic player selection works by having the value "Automatic" fail to match any of the H.264 players.
+		// So control falls to the automatic player selection algorithm which recursively calls Initialize() with the chosen player as an argument.
+		if (!h264PlayerChoice)
+			h264PlayerChoice = settings.ui3_h264_choice4;
+		else if (settings.ui3_h264_choice4 !== H264PlayerOptions.Automatic)
+			SetH264PlayerPreference(h264PlayerChoice);
+
+		currentH264Player = h264PlayerChoice;
+
+		if (webcodecs_h264_player_supported && h264PlayerChoice === H264PlayerOptions.WebCodecs)
 			h264_player = window.webcodec_player_instance = new WebCodec_Player(FrameRendered, PlaybackReachedNaturalEnd);
 		else if (mse_mp4_h264_supported &&
-			(settings.ui3_h264_choice3 === H264PlayerOptions.HTML5
-				|| (settings.ui3_h264_choice3 === H264PlayerOptions.WebCodecs && !webcodecs_h264_player_supported)))
+			(h264PlayerChoice === H264PlayerOptions.HTML5
+				|| (h264PlayerChoice === H264PlayerOptions.WebCodecs && !webcodecs_h264_player_supported)))
 			h264_player = new HTML5_MSE_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd, playerErrorCb);
 		else if (pnacl_player_supported &&
-			(settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Auto
-				|| settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_No
-				|| settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Yes))
+			(h264PlayerChoice === H264PlayerOptions.NaCl_HWVA_Auto
+				|| h264PlayerChoice === H264PlayerOptions.NaCl_HWVA_No
+				|| h264PlayerChoice === H264PlayerOptions.NaCl_HWVA_Yes))
 			h264_player = new Pnacl_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd);
-		else if (h264_js_player_supported && settings.ui3_h264_choice3 === H264PlayerOptions.JavaScript)
+		else if (h264_js_player_supported && h264PlayerChoice === H264PlayerOptions.JavaScript)
 			h264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
 		else
 		{
-			if (webcodecs_h264_player_supported)
+			// This is the automatic player selection algorithm:
+			if (mse_mp4_h264_supported)
 			{
-				settings.ui3_h264_choice3 = H264PlayerOptions.WebCodecs;
 				isInitialized = false;
-				Initialize();
+				Initialize(H264PlayerOptions.HTML5);
 			}
-			else if (mse_mp4_h264_supported)
+			else if (webcodecs_h264_player_supported)
 			{
-				settings.ui3_h264_choice3 = H264PlayerOptions.HTML5;
 				isInitialized = false;
-				Initialize();
-			}
-			else if (pnacl_player_supported)
-			{
-				settings.ui3_h264_choice3 = H264PlayerOptions.NaCl_HWVA_Auto;
-				isInitialized = false;
-				Initialize();
+				Initialize(H264PlayerOptions.WebCodecs);
 			}
 			else if (h264_js_player_supported)
 			{
-				settings.ui3_h264_choice3 = H264PlayerOptions.JavaScript;
 				isInitialized = false;
-				Initialize();
+				Initialize(H264PlayerOptions.JavaScript);
+			}
+			else if (pnacl_player_supported)
+			{
+				isInitialized = false;
+				Initialize(H264PlayerOptions.NaCl_HWVA_Auto);
 			}
 			else
 			{
@@ -13858,15 +13886,21 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			var $explanation = mse_mp4_h264_supported || h264_js_player_supported || webcodecs_h264_player_supported ? $('<div>You can load UI3 by changing to a different player:</div>') : $('<div>You can load UI3 by changing to a JPEG streaming method:</div>');
 			$explanation.css('margin-top', '12px');
 			$err.append($explanation);
+			var $automatic = $('<input type="button" value="Automatic" />');
+			$automatic.css('margin-top', '10px').css('padding', '6px').css('display', 'block');
+			$automatic.on('click', function ()
+			{
+				SetH264PlayerPreference(H264PlayerOptions.Automatic);
+				ReloadInterface();
+			});
+			$err.append($automatic);
 			if (webcodecs_h264_player_supported)
 			{
-				var $disablePnaclButton3 = $('<input type="button" value="WebCodecs (best)" />');
-				$disablePnaclButton3.css('margin-top', '10px');
-				$disablePnaclButton3.css('padding', '6px');
-				$disablePnaclButton3.css('display', 'block');
+				var $disablePnaclButton3 = $('<input type="button" value="WebCodecs (new)" />');
+				$disablePnaclButton3.css('margin-top', '10px').css('padding', '6px').css('display', 'block');
 				$disablePnaclButton3.on('click', function ()
 				{
-					settings.ui3_h264_choice3 = H264PlayerOptions.WebCodecs;
+					SetH264PlayerPreference(H264PlayerOptions.WebCodecs);
 					ReloadInterface();
 				});
 				$err.append($disablePnaclButton3);
@@ -13874,12 +13908,10 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			if (mse_mp4_h264_supported)
 			{
 				var $disablePnaclButton2 = $('<input type="button" value="HTML5 (fast)" />');
-				$disablePnaclButton2.css('margin-top', '10px');
-				$disablePnaclButton2.css('padding', '6px');
-				$disablePnaclButton2.css('display', 'block');
+				$disablePnaclButton2.css('margin-top', '10px').css('padding', '6px').css('display', 'block');
 				$disablePnaclButton2.on('click', function ()
 				{
-					settings.ui3_h264_choice3 = H264PlayerOptions.HTML5;
+					SetH264PlayerPreference(H264PlayerOptions.HTML5);
 					ReloadInterface();
 				});
 				$err.append($disablePnaclButton2);
@@ -13887,20 +13919,16 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			if (h264_js_player_supported)
 			{
 				var $disablePnaclButton = $('<input type="button" value="JavaScript (slow)" />');
-				$disablePnaclButton.css('margin-top', '10px');
-				$disablePnaclButton.css('padding', '6px');
-				$disablePnaclButton.css('display', 'block');
+				$disablePnaclButton.css('margin-top', '10px').css('padding', '6px').css('display', 'block');
 				$disablePnaclButton.on('click', function ()
 				{
-					settings.ui3_h264_choice3 = H264PlayerOptions.JavaScript;
+					SetH264PlayerPreference(H264PlayerOptions.JavaScript);
 					ReloadInterface();
 				});
 				$err.append($disablePnaclButton);
 			}
 			var $disablePnaclButton4 = $('<input type="button" value="JPEG mode (no H.264)" />');
-			$disablePnaclButton4.css('margin-top', '10px');
-			$disablePnaclButton4.css('padding', '6px');
-			$disablePnaclButton4.css('display', 'block');
+			$disablePnaclButton4.css('margin-top', '10px').css('padding', '6px').css('display', 'block');
 			$disablePnaclButton4.on('click', function ()
 			{
 				any_h264_playback_supported = pnacl_player_supported = false;
@@ -13996,9 +14024,9 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		listenerDiv.addEventListener('crash', handleCrash, true);
 
 		var hwva = "0";
-		if (settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Auto)
+		if (currentH264Player === H264PlayerOptions.NaCl_HWVA_Auto)
 			hwva = "1";
-		else if (settings.ui3_h264_choice3 === H264PlayerOptions.NaCl_HWVA_Yes)
+		else if (currentH264Player === H264PlayerOptions.NaCl_HWVA_Yes)
 			hwva = "2";
 		var $player = $('<embed id="pnacl_player_module" name="pnacl_player_module" width="100%" height="100%" path="pnacl" src="ui3/pnacl/pnacl_player.nmf' + currentServer.GetLocalSessionArg("?") + '" type="application/x-pnacl" hwaccel="' + hwva + '" />');
 		$parent.append($player);
@@ -22270,7 +22298,7 @@ function PictureInPictureController()
 	var pipIsSupported = false;
 	try
 	{
-		pipIsSupported = document.pictureInPictureEnabled && settings.ui3_h264_choice3 === H264PlayerOptions.HTML5;
+		pipIsSupported = document.pictureInPictureEnabled && currentH264Player === H264PlayerOptions.HTML5;
 	}
 	catch (ex)
 	{
@@ -26326,7 +26354,7 @@ function UISettingsPanel()
 }
 function GenerateLocalSnapshotsComment()
 {
-	if (!any_h264_playback_supported || settings.ui3_h264_choice3 === H264PlayerOptions.HTML5)
+	if (!any_h264_playback_supported || currentH264Player === H264PlayerOptions.HTML5)
 		return "";
 	return "<b>-- Your current H.264 player is not capable of local snapshots. --</b>";
 }
@@ -26341,6 +26369,10 @@ function GenerateEventTriggeredIconsComment()
 function GenerateH264RequirementString()
 {
 	return '-- Requires an H.264 stream. --' + (any_h264_playback_supported ? '' : '<br/><span class="settingsCommentError">-- H.264 streams are not supported by this browser --</span>');
+}
+function GenerateCurrentH264PlayerComment()
+{
+	return '<div class="currentH264PlayerComment">Current H.264 player: ' + currentH264Player + '</div>';
 }
 function OnChange_ui3_audio_codec()
 {
@@ -26435,7 +26467,7 @@ function OnChange_ui3_topbar_warnings_counter()
 {
 	statusLoader.LoadStatus();
 }
-function OnChange_ui3_h264_choice3()
+function OnChange_ui3_h264_choice()
 {
 	if (ui3_contextMenus_trigger_toast)
 		ui3_contextMenus_trigger_toast.remove();
@@ -26446,7 +26478,7 @@ function OnChange_ui3_h264_choice3()
 		});
 	uiSettingsPanel.Refresh();
 }
-function Precondition_ui3_h264_choice3()
+function Precondition_ui3_h264_choice()
 {
 	return any_h264_playback_supported;
 }
@@ -26475,7 +26507,7 @@ function Precondition_ui3_streamingProfileBitRateMax()
 }
 function Precondition_ui3_html5_delay_compensation()
 {
-	return (mse_mp4_h264_supported && settings.ui3_h264_choice3 === H264PlayerOptions.HTML5);
+	return (mse_mp4_h264_supported && currentH264Player === H264PlayerOptions.HTML5);
 }
 function Precondition_ui3_download_snapshot_server()
 {
@@ -27030,8 +27062,10 @@ function UIHelpTool()
 	{
 		$('<div class="UIHelp">'
 			+ 'UI3 has several H.264 player options. Not all options are available in all browsers.'
+			+ '<br><br><b>Automatic</b> <span style="color:#66FF66;">(Preferred)</span><br><br>'
+			+ '&nbsp; &nbsp; When "Automatic" is selected, UI3 will always load the best player available.  It is recommended to stay on "Automatic" unless it causes problems.'
 			+ '<br><br><b>WebCodecs</b> - ' + (webcodecs_h264_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
-			+ '&nbsp; &nbsp; The WebCodecs player directly accesses the browser\'s built-in video codecs to efficiently decode video with the lowest possible latency.  This is the best option if it is available.'
+			+ '&nbsp; &nbsp; The WebCodecs player directly accesses the browser\'s built-in video codecs to efficiently decode video with the lowest possible latency.  WebCodecs is a new feature in browsers as of late 2021, and may not perform as well as HTML5.'
 			+ '<br><br><b>JavaScript</b> - ' + (h264_js_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
 			+ '&nbsp; &nbsp; The JavaScript player is the most robust and compatible player option, but also the slowest.'
 			+ '<br><br><b>HTML5</b> - ' + (mse_mp4_h264_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
