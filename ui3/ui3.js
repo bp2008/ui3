@@ -3289,6 +3289,7 @@ function resized()
 		}
 		else
 		{
+			$layoutleftLiveContent.css("column-width", "");
 			sidebarStuff.css("width", "");
 			sidebarStuff.css("margin", "");
 		}
