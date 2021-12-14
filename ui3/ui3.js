@@ -10777,7 +10777,7 @@ function CameraListLoader()
 						var cams = response.data.cams;
 						if (rects && cams && rects.length === cams.length)
 						{
-							g[resolution] = { cams: cams, rects: rects };
+							g[resolution] = g["latest"] = { cams: cams, rects: rects };
 							BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
 							badRectsToast.hide();
 						}
@@ -10915,7 +10915,7 @@ function CameraListLoader()
 	this.GetCameraBoundsInCurrentGroupImageUnscaled = function (cameraId, groupId, resolution)
 	{
 		var camData = self.GetCameraWithId(groupId);
-		var cams = self.GetGroupCams(groupId);
+		var cams = self.GetGroupCams(groupId, resolution);
 		if (cams)
 		{
 			var rects = self.GetGroupRects(groupId, resolution);
@@ -22658,14 +22658,14 @@ function BI_Hotkey_PreviousCamera()
 }
 function LoadNextOrPreviousCamera(offset)
 {
+	if (offset == 0)
+		return;
 	var loading = videoPlayer.Loading();
 	if (!loading.image.isLive || cameraListLoader.CameraIsCycle(loading.cam))
 		return;
-	//if (cameraListLoader.CameraIsGroup(loading.cam))
-	//	return;
 	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
 	var idxCurrentMaximizedCamera = -1;
-	var cams = cameraListLoader.GetGroupCams(groupCamera.optionValue);
+	var cams = cameraListLoader.GetGroupCams(groupCamera.optionValue, "latest");
 	if (!cams)
 	{
 		toaster.Error('Can not load next or previous camera because group "' + groupCamera.optionDisplay + '" has invalid layout metadata.');
@@ -22680,19 +22680,27 @@ function LoadNextOrPreviousCamera(offset)
 			break;
 		}
 	}
-	if (offset == 1 && idxCurrentMaximizedCamera >= cams.length - 1)
-		idxCurrentMaximizedCamera = -1;
-	else if (offset == -1 && idxCurrentMaximizedCamera <= -1)
-		idxCurrentMaximizedCamera = cams.length - 1;
-	else
-		idxCurrentMaximizedCamera += offset;
-	var newCamera = groupCamera;
-	if (idxCurrentMaximizedCamera != -1)
+
+	if (idxCurrentMaximizedCamera === -1)
 	{
-		var newCameraId = cams[idxCurrentMaximizedCamera];
-		newCamera = cameraListLoader.GetCameraWithId(newCameraId);
+		if (offset < 0)
+			idxCurrentMaximizedCamera = cams.length;
 	}
-	videoPlayer.ImgClick_Camera(newCamera);
+
+	while (true)
+	{
+		idxCurrentMaximizedCamera += offset;
+		if (idxCurrentMaximizedCamera < 0 || idxCurrentMaximizedCamera >= cams.length)
+		{
+			videoPlayer.ImgClick_Camera(groupCamera);
+			break;
+		}
+		var newCameraId = cams[idxCurrentMaximizedCamera];
+		var newCamera = cameraListLoader.GetCameraWithId(newCameraId);
+		videoPlayer.ImgClick_Camera(newCamera);
+		if (videoPlayer.Loading().cam.optionValue === newCameraId)
+			break;
+	}
 }
 function BI_Hotkey_NextGroup()
 {
