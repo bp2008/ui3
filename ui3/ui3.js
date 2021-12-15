@@ -8903,13 +8903,16 @@ function SetClipListShortcutIconState(iconSelector, selected)
 function GetThumbnailPath(thumbPath, nativeRes)
 {
 	var id = thumbPath.replace(/@/g, "").replace(/\..*/g, "");
-	var clipData = clipLoader.GetClipFromId(id);
-	if (!clipData)
+	if (nativeRes)
 	{
-		toaster.Warning("Unable to find clip with ID " + id);
-		return "";
+		var clipData = clipLoader.GetClipFromId(id);
+		if (!clipData)
+		{
+			toaster.Warning("Unable to find clip with ID " + id);
+			return "";
+		}
+		nativeRes = clipData.hasHighResJpeg;
 	}
-	nativeRes = nativeRes && clipData.hasHighResJpeg;
 	return currentServer.remoteBaseURL + (nativeRes ? "alerts" : "thumbs") + "/" + thumbPath + "?" + (nativeRes ? "fulljpeg" : "") + currentServer.GetAPISessionArg("&");
 }
 ///////////////////////////////////////////////////////////////
@@ -10552,6 +10555,7 @@ function CameraListLoader()
 {
 	var self = this;
 	var lastResponse = null;
+	var lastLoadAt = -999999;
 	var cameraIdToCameraMap = new Object();
 	this.singleCameraGroupMap = {};
 	this.cameraIdToCameraMap = cameraIdToCameraMap;
@@ -10562,18 +10566,32 @@ function CameraListLoader()
 	var dynamicGroupLayout = {};
 	var badRectsToast = new PersistentToast("badRectsToast", "ERROR");
 
+	var CallScheduler = function (successCallbackFunc)
+	{
+		clearTimeout(cameraListUpdateTimeout);
+		cameraListUpdateTimeout = setTimeout(function ()
+		{
+			var shouldDelay = true;
+			var timeSinceLastLoad = performance.now() - lastLoadAt;
+			if (timeSinceLastLoad > 4500)
+				shouldDelay = false;
+			else if (AnyCameraTriggerOverlayIconsEnabled() || videoPlayer.PrioritizeTriggeredEnabled() || $("#campropdialog").length)
+				shouldDelay = false;
+			if (shouldDelay)
+				CallScheduler();
+			else
+				self.LoadCameraList();
+		}, 1000);
+	};
+
 	this.LoadCameraList = function (successCallbackFunc)
 	{
-		if (cameraListUpdateTimeout != null)
-			clearTimeout(cameraListUpdateTimeout);
 		if (documentIsHidden() && lastResponse !== null && typeof successCallbackFunc !== "function")
 		{
-			cameraListUpdateTimeout = setTimeout(function ()
-			{
-				self.LoadCameraList();
-			}, 2000);
+			CallScheduler();
 			return;
 		}
+		clearTimeout(cameraListUpdateTimeout);
 		var args = { cmd: "camlist" };
 		if (self.clearNewAlertsCounterOnNextLoad)
 		{
@@ -10582,6 +10600,7 @@ function CameraListLoader()
 		}
 		ExecJSON(args, function (response)
 		{
+			lastLoadAt = performance.now();
 			EndConnectionErrors();
 			if (response.result === "fail")
 			{
@@ -10716,26 +10735,12 @@ function CameraListLoader()
 			}
 
 			BI_CustomEvent.Invoke("CameraListLoaded", lastResponse);
-
-			if (cameraListUpdateTimeout != null)
-				clearTimeout(cameraListUpdateTimeout);
-			var interval = 5000;
-			if (AnyCameraTriggerOverlayIconsEnabled() || videoPlayer.PrioritizeTriggeredEnabled())
-				interval = 1000;
-			cameraListUpdateTimeout = setTimeout(function ()
-			{
-				self.LoadCameraList();
-			}, interval);
+			CallScheduler();
 		}, function (jqXHR, textStatus, errorThrown)
 		{
-			if (cameraListUpdateTimeout != null)
-				clearTimeout(cameraListUpdateTimeout);
+			CallScheduler(successCallbackFunc);
 			if (!HandleGroupableConnectionError(jqXHR))
 				toaster.Error("An error occurred loading the camera list.<br>" + jqXHR.ErrorMessageHtml);
-			setTimeout(function ()
-			{
-				self.LoadCameraList(successCallbackFunc);
-			}, 1000);
 		});
 	}
 	var MakeFakeGroup = function (cameraObj)
@@ -19137,10 +19142,12 @@ function CameraProperties(camId)
 	var self = this;
 	var modal_cameraPropDialog = null;
 	var loadedOnce = false;
-	var $dlg = $('<div class="campropdialog"></div>');
+	var devTypes = { 0: "Screen capture", 2: "USB/Firewire/Analog", 4: "Network IP Camera", 5: "Broadcast from client app" };
+	var $dlg = $('<div id="campropdialog" class="campropdialog"></div>');
 	var $camprop = $('<div class="campropcontent dialogOptionPanel"><div style="text-align: center">Loading...</div></div>');
 	$dlg.append($camprop);
 
+	var $infoSection = $();
 	var $btnPause = $();
 	var $btnManrec = $();
 	var $btnDisable = $();
@@ -19277,6 +19284,7 @@ function CameraProperties(camId)
 						var $btnSet1 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
 						$btnSet1.append(GetCameraPropertyButton("Trigger", "trigger", "largeBtnYellow", camId, "Trigger the camera, typically causing a new Alert item to be created."));
 						$btnSet1.append(GetCameraPropertyButton("Snapshot", "snapshot", "largeBtnBlue", camId, "Save a snapshot within Blue Iris."));
+						$btnSet1.append("<br/>");
 						$btnSet1.append($btnManrec = GetCameraPropertyButton("Toggle Recording", "manrec", "largeBtnRed", camId, "Toggle manual recording mode on or off."));
 						$manrecSection.append($btnSet1);
 						$camprop.append($manrecSection);
@@ -19341,28 +19349,44 @@ function CameraProperties(camId)
 	}
 	var AppendInformationSection = function ()
 	{
-		$camprop.empty();
 		if ($camprop.length == 0)
 			return;
+		$camprop.empty();
 
 		var cam = cameraListLoader.GetCameraWithId(camId);
 		if (cam)
 		{
 			var collapsible = new CollapsibleSection("info", "Information", modal_cameraPropDialog);
 			$camprop.append(collapsible.$heading);
-			var $infoSection = collapsible.$section;
-			$infoSection.append(GetInfo("ID", cam.optionValue));
-			$infoSection.append(GetInfo("Name", CleanUpGroupName(cam.optionDisplay)));
-			$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
-			if (!cam.webcast)
-				$infoSection.append(GetInfo("Webcasting", "Disabled"));
-			$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + " @ " + cam.FPS + " FPS"));
-			$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
-			$infoSection.append('<div class="dialogOption_item dialogOption_item_info"><a title="Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds." href="javascript:hlsPlayer.OpenDialog(\'' + JavaScriptStringEncode(camId) + '\')">'
-				+ '<svg class="icon noflip"><use xlink:href="#svg_mio_ViewStream"></use></svg>'
-				+ ' Open HTTP Live Stream (HLS)</a></div>');
+			$infoSection = collapsible.$section;
+			UpdateInformationSection(cam);
 			$camprop.append($infoSection);
 		}
+	}
+	var UpdateInformationSection = function (cam)
+	{
+		$infoSection.empty();
+		$infoSection.append(GetInfo("ID", cam.optionValue));
+		$infoSection.append(GetInfo("Name", CleanUpGroupName(cam.optionDisplay)));
+		if (cam.type !== 4)
+		{
+			var devType = devTypes[cam.type];
+			if (!devType)
+				devType = "Unknown (" + cam.type + ")";
+			$infoSection.append(GetInfo("Device Type", devType));
+		}
+		$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
+		if (!cam.webcast)
+			$infoSection.append(GetInfo("Webcasting", "Disabled"));
+		$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + (cam.width2 || cam.height2 ? (" (sub: " + cam.width2 + "x" + cam.height2 + ")") : "")));
+		$infoSection.append(GetInfo("Main stream", ((cam.width * cam.height) / 1000000).toFixed(1) + "MP, " + cam.FPS.toFixed(2) + " fps, " + formatBitsPerSecond(cam.BPS * 8), cam.width + "x" + cam.height));
+		if (cam.width2 || cam.height2 || cam.FPS2 || cam.BPS2)
+			$infoSection.append(GetInfo("Sub stream", ((cam.width2 * cam.height2) / 1000000).toFixed(1) + "MP, " + cam.FPS2.toFixed(2) + " fps, " + formatBitsPerSecond(cam.BPS2 * 8), cam.width2 + "x" + cam.height2));
+		$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
+		$infoSection.append(GetInfo("Profile", cam.profile));
+		$infoSection.append('<div class="dialogOption_item dialogOption_item_info"><a title="Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds." href="javascript:hlsPlayer.OpenDialog(\'' + JavaScriptStringEncode(camId) + '\')">'
+			+ '<svg class="icon noflip"><use xlink:href="#svg_mio_ViewStream"></use></svg>'
+			+ ' Open HTTP Live Stream (HLS)</a></div>');
 	}
 	var CameraListLoadedCb = function ()
 	{
@@ -19371,7 +19395,11 @@ function CameraProperties(camId)
 	var CameraListLoaded = function (cam)
 	{
 		if (!cam)
+		{
 			cam = cameraListLoader.GetCameraWithId(camId);
+			if (cam)
+				UpdateInformationSection(cam);
+		}
 		if (!cam)
 			return;
 		if (cam.pause == 0)
@@ -19381,10 +19409,12 @@ function CameraProperties(camId)
 		else
 			$btnPause.val("Paused (" + msToTime(cam.pause * 1000) + ")");
 	}
-	var GetInfo = function (label, value)
+	var GetInfo = function (label, value, tooltip)
 	{
 		var $info = $('<div class="dialogOption_item dialogOption_item_info"></div>');
 		$info.text(label + ": " + value);
+		if (tooltip)
+			$info.attr("title", tooltip);
 		return $info;
 	}
 	var GetCamPropCheckbox = function (tag, label, checked, onChange)
@@ -28355,6 +28385,18 @@ function formatBytes2(bytes, decimals)
 	var k = 1024,
 		dm = typeof decimals != "undefined" ? decimals : 2,
 		sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'],
+		i = Math.floor(Math.log(bytes) / Math.log(k));
+	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + ' ' + sizes[i];
+}
+function formatBytesF10(bytes, decimals)
+{
+	if (bytes == 0) return '0 B';
+	var negative = bytes < 0;
+	if (negative)
+		bytes = -bytes;
+	var k = 1000,
+		dm = typeof decimals != "undefined" ? decimals : 2,
+		sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
 		i = Math.floor(Math.log(bytes) / Math.log(k));
 	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + ' ' + sizes[i];
 }
