@@ -27,6 +27,10 @@
 			function (err) // ublock origin in Brave browser
 			{
 				return err.msg && err.msg == "Uncaught TypeError: Cannot redefine property: getElementById" && err.url === "";
+			},
+			function (err) // Edge iOS
+			{
+				return err.msg && err.msg.indexOf("instantSearchSDKJSBridgeClearHighlight") > -1;
 			}
 		];
 
@@ -80,7 +84,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "191";
+		var ui_version = "192";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";

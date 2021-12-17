@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "26";
+		var login_version = "27";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -33,6 +33,10 @@
 			function (err) // ublock origin in Brave browser
 			{
 				return err.msg && err.msg == "Uncaught TypeError: Cannot redefine property: getElementById" && err.url === "";
+			},
+			function (err) // Edge iOS
+			{
+				return err.msg && err.msg.indexOf("instantSearchSDKJSBridgeClearHighlight") > -1;
 			}
 		];
 		window.onerror = function (msg, url, line, charIdx)
