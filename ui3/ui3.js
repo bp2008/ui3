@@ -11811,7 +11811,7 @@ function VideoPlayerController()
 	}
 	this.ReopenStreamAtCurrentSeekPosition = function ()
 	{
-		if (typeof playerModule.ReopenStreamAtCurrentSeekPosition === "function")
+		if (playerModule && typeof playerModule.ReopenStreamAtCurrentSeekPosition === "function")
 			playerModule.ReopenStreamAtCurrentSeekPosition();
 	}
 	this.PlaybackDirectionChanged = function (playReverse)
