@@ -901,10 +901,6 @@ var defaultSettings =
 			, value: ""
 		}
 		, {
-			key: "ui3_prioritizeTriggered"
-			, value: "0"
-		}
-		, {
 			key: "ui3_streamingProfileArray"
 			, value: "[]"
 			, category: "Streaming Profiles" // This category isn't shown in UI Settings, but has special-case logic in ui3-local-overrides.js export.
@@ -1069,11 +1065,19 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
+			key: "ui3_prioritizeTriggered"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon prioritizeTriggeredButton on"><use xlink:href="#svg_x5F_Alert"></use></svg> Auto-Maximize Enabled'
+			, onChange: OnChange_ui3_prioritizeTriggered
+			, category: "Video Player"
+		}
+		, {
 			key: "ui3_prioritizeTriggered_triggerMode"
 			, value: "Trigger"
 			, inputType: "select"
 			, options: ["Trigger", "Motion"]
-			, label: '<svg class="icon clipicon prioritizeTriggeredButton on"><use xlink:href="#svg_x5F_Alert"></use></svg> Auto-Maximize upon...<div class="settingDesc" style="margin-left: 35px;"><i>(experimental feature)</i></div>'
+			, label: '<svg class="icon clipicon prioritizeTriggeredButton on"><use xlink:href="#svg_x5F_Alert"></use></svg> Auto-Maximize upon...'
 			, hint: '"Motion" uses Blue Iris\'s built-in motion detection.\n\n"Trigger" works with any method of trigger (such as ONVIF or audio), but may not respond as quickly.'
 			, category: "Video Player"
 		}
@@ -11955,6 +11959,10 @@ function VideoPlayerController()
 	this.PrioritizeTriggeredToggle = function ()
 	{
 		settings.ui3_prioritizeTriggered = self.PrioritizeTriggeredEnabled() ? "0" : "1";
+		self.PrioritizeTriggeredWasToggled();
+	}
+	this.PrioritizeTriggeredWasToggled = function ()
+	{
 		setPrioritizeTriggeredButtonState();
 		UpdatedCurrentCameraData(cameraListLoader.GetLastResponse());
 	}
@@ -26634,6 +26642,10 @@ function OnChange_ui3_ir_brightness_contrast()
 		$('#ptzIrBrightnessContrast').show();
 	else
 		$('#ptzIrBrightnessContrast').hide();
+}
+function OnChange_ui3_prioritizeTriggered()
+{
+	videoPlayer.PrioritizeTriggeredWasToggled();
 }
 ///////////////////////////////////////////////////////////////
 // Form Field Helpers /////////////////////////////////////////
