@@ -71,6 +71,56 @@
 		{
 			font-size: 16px;
 		}
+
+		#svgLargeContainer
+		{
+			margin-top: 20px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+		}
+
+		#svgName
+		{
+			display: flex;
+			align-items: center;
+			font-size: 16px;
+			padding: 2px 4px;
+			background-color: rgba(255,200,0,0.15);
+			border: 1px dotted rgba(255,200,0,0.75);
+			margin-bottom: 20px;
+			cursor: pointer;
+		}
+
+		#svgLarge
+		{
+			display: none;
+			padding: 0px;
+			border: 1px solid #000000;
+		}
+
+			#svgLarge svg
+			{
+				width: 80vw;
+				height: 80vw;
+				background-color: rgba(0,0,0,0.5);
+				max-width: 500px;
+				max-height: 500px;
+			}
+
+		#copyBtn
+		{
+			display: none;
+			width: 16px;
+			height: 16px;
+			margin-left: 10px;
+		}
+
+		#svgLargeContainer.enabled #copyBtn,
+		#svgLargeContainer.enabled #svgLarge
+		{
+			display: block;
+		}
 	</style>
 	<script type="text/javascript">
 		$(function ()
@@ -84,16 +134,46 @@
 					var icon_id = $icon.attr("id");
 					var doInverse = icon_id.indexOf('svg_x5F_') == 0;
 					var doStroke = icon_id.indexOf('svg_stroke_') == 0;
-					$root.append('<div class="iconBox">'
+					var $btn = $('<div class="iconBox">'
 						+ '<div class="svgWrapper"><svg class="icon' + (doInverse ? ' iconInverse' : '') + (doStroke ? ' stroke' : '') + '"><use xlink:href="#' + icon_id + '"></use></svg></div>'
 						+ ' <div class="label">' + icon_id + '</div> '
 						+ '</div>');
+					$btn.on('click', function ()
+					{
+						$("#svgNameDiv").text(icon_id);
+						$("#svgLarge").html($btn.find('svg').parent().html());
+						$("#svgLargeContainer").addClass("enabled")
+						window.scrollTo(0, $(document).height());
+					});
+					$root.append($btn);
+				});
+				$("#svgName").on('click', function ()
+				{
+					if ($("#svgLargeContainer").hasClass("enabled"))
+						CopyToClipboard($("#svgNameDiv").text());
 				});
 			});
 		});
 		function svgPaddingClicked()
 		{
 			$(".svgWrapper").css("padding", $("#cb_svgPadding").is(":checked") ? "5px" : "0px");
+		}
+		function CopyToClipboard(text)
+		{
+			try
+			{
+				var data = [new ClipboardItem({ "text/plain": new Blob([text.trim()], { type: "text/plain" }) })];
+				navigator.clipboard.write(data).then(function ()
+				{
+				}, function ()
+				{
+					alert("Unable to copy text to clipboard.");
+				});
+			}
+			catch (ex)
+			{
+				alert("Unable to copy text to clipboard.");
+			}
 		}
 	</script>
 </head>
@@ -102,5 +182,14 @@
 	<div id="root">
 	</div>
 	<div id="svgContainer" style="display:none"></div>
+	<div id="svgLargeContainer">
+		<div id="svgName">
+			<div id="svgNameDiv">
+				Click an SVG to preview it here:
+			</div>
+			<svg id="copyBtn" version="1.1" viewBox="1 1 22 22"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" /></svg>
+		</div>
+		<div id="svgLarge"></div>
+	</div>
 </body>
 </html>

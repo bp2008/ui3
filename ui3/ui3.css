@@ -845,6 +845,24 @@ div.invisibleLabel
 	font-size: 14px;
 }
 
+#ptzHome
+{
+	display: flex;
+	align-items: center;
+}
+
+	#ptzHome svg.icon
+	{
+		width: 48px;
+	}
+
+#homeButtonLabel
+{
+	font-size: 18px;
+	flex: 1 0 auto;
+	margin: 0px 5px;
+}
+
 .squareButton.yellow
 {
 	color: #FFFF00;
@@ -5454,6 +5472,7 @@ ul.extraSpacing li
 {
 	color: #FF8800;
 }
+
 .currentH264PlayerComment
 {
 	text-align: center;

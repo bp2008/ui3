@@ -2439,6 +2439,14 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
+			key: "ui3_ptzHome"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'PTZ: Home Button'
+			, onChange: OnChange_ui3_ptzHome
+			, category: "Extra"
+		}
+		, {
 			key: "ui3_ptzPresetShowCount"
 			, value: "20"
 			, inputType: "select"
@@ -2986,6 +2994,7 @@ $(function ()
 	OnChange_ui3_pc_delete_button();
 	OnChange_ui3_extra_playback_controls_padding();
 	OnChange_ui3_ir_brightness_contrast();
+	OnChange_ui3_ptzHome();
 	OnChange_ui3_sideBarPosition();
 
 	// This makes it impossible to text-select or drag certain UI elements.
@@ -4526,6 +4535,7 @@ function PtzButtons()
 	var $ptzButtons = $("#ptzButtonsMain");
 	var $ptzControlsContainers = $("#ptzPresetsContent,#ptzButtonsMain");
 	var $ptzExtraDropdowns = $("#ptzIrBrightnessContrast .dropdownTrigger");
+	var $ptzHome = $("#ptzHome");
 	var $irButtonText = $("#irButtonText");
 	var $irButtonLabel = $("#irButtonLabel");
 	var $brightnessButtonLabel = $("#brightnessButtonLabel");
@@ -4547,6 +4557,7 @@ function PtzButtons()
 	hitPolys["PTZordinalSE"] = [[138, 181], [116, 132], [124, 127], [127, 124], [132, 116], [181, 138], [171, 171]];
 
 	var ptzCmds = {};
+	ptzCmds["PTZhome"] = 4;
 	ptzCmds["PTZzoomIn"] = 5;
 	ptzCmds["PTZzoomOut"] = 6;
 	ptzCmds["PTZfocusNear"] = -1;
@@ -4562,6 +4573,7 @@ function PtzButtons()
 	ptzCmds["PTZordinalSE"] = 62;
 
 	var ptzTitles = {};
+	ptzTitles["PTZhome"] = "Home";
 	ptzTitles["PTZzoomIn"] = "Zoom In";
 	ptzTitles["PTZzoomOut"] = "Zoom Out";
 	ptzTitles["PTZfocusNear"] = "Focus Near";
@@ -4711,6 +4723,10 @@ function PtzButtons()
 			return;
 		onPointerMove(e);
 	});
+	$ptzHome.on('click', function ()
+	{
+		self.SendOrQueuePtzCommand(videoPlayer.Loading().image.id, ptzCmds["PTZhome"], false);
+	});
 	var GetHoveredPTZButton = function (x, y)
 	{
 		var sizeMultiplier = $ptzGraphicWrapper.width() / 190;
@@ -4756,6 +4772,7 @@ function PtzButtons()
 			$ptzPresets.removeClass("disabled");
 			$ptzButtons.removeClass("disabled");
 			$ptzExtraDropdowns.removeClass("disabled");
+			$ptzHome.removeClass("disabled");
 			setColor($ptzBackgroundGraphics, $ptzBackgroundGraphics.get(0).defaultColor);
 		}
 		else
@@ -4764,6 +4781,7 @@ function PtzButtons()
 			$ptzPresets.addClass("disabled");
 			$ptzButtons.addClass("disabled");
 			$ptzExtraDropdowns.addClass("disabled");
+			$ptzHome.addClass("disabled");
 			setColor($ptzBackgroundGraphics, ptzpadDisabledColor);
 		}
 	}
@@ -26642,6 +26660,13 @@ function OnChange_ui3_ir_brightness_contrast()
 		$('#ptzIrBrightnessContrast').show();
 	else
 		$('#ptzIrBrightnessContrast').hide();
+}
+function OnChange_ui3_ptzHome()
+{
+	if (settings.ui3_ptzHome == "1")
+		$('#ptzHomeContainer').show();
+	else
+		$('#ptzHomeContainer').hide();
 }
 function OnChange_ui3_prioritizeTriggered()
 {

@@ -433,4 +433,7 @@
 <symbol id="svg_mio_videocam" viewBox="2.5 2.5 19 19">
 	<path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
 </symbol>
+<symbol id="svg_mio_home" viewBox="2 2 20 20">
+	<path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+</symbol>
 </svg>

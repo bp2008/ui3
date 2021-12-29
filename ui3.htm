@@ -84,7 +84,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "192";
+		var ui_version = "193";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -305,6 +305,11 @@
 										<div class="squareButton noborder dropdownTrigger" name="ptzBrightness" title="Brightness"><svg class="icon noflip"><use xlink:href="#svg_mio_brightness"></use></svg><div id="brightnessButtonLabel" class="invisibleLabel"></div></div>
 										<div class="squareButton noborder spacer"></div>
 										<div class="squareButton noborder dropdownTrigger" name="ptzContrast" title="Contrast"><svg class="icon noflip stroke"><use xlink:href="#svg_stroke_contrast"></use></svg><div id="contrastButtonLabel" class="invisibleLabel"></div></div>
+									</div>
+								</div>
+								<div id="ptzHomeContainer" style="display: none;">
+									<div class="fiveByOneButtonSet leftBarInnerBox">
+										<div id="ptzHome" class="squareButton fiveByOneButtonSet" title="Sends a PTZ home command to the camera.  Results may vary."><svg class="icon noflip"><use xlink:href="#svg_mio_home"></use></svg><div id="homeButtonLabel">PTZ Home</div></div>
 									</div>
 								</div>
 							</div>
