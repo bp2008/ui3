@@ -10688,39 +10688,39 @@ function CameraListLoader()
 				else
 					numCameras++;
 			}
-			// Are any of the cameras not in a group?
-			var camsNotInGroup = [];
-			for (var i = 0; i < lastResponse.data.length; i++)
-			{
-				var obj = lastResponse.data[i];
-				if (!self.CameraIsGroupOrCycle(obj) && obj.isEnabled && obj.webcast)
-				{
-					if (!camIdsInGroups[obj.optionValue])
-						camsNotInGroup.push(obj);
-				}
-			}
-			if (camsNotInGroup.length > 0)
-			{
-				// Create a fake group for each of these cameras.
-				var anyFakeGroupsNotHidden = false;
-				for (var i = 0; i < camsNotInGroup.length; i++)
-				{
-					var fakeGroup = MakeFakeGroup(camsNotInGroup[i]);
-					lastResponse.data.push(fakeGroup);
-					if (!camsNotInGroup[i].hidden)
-						anyFakeGroupsNotHidden = true;
-				}
+			//// Are any of the cameras not in a group? Disabled 2022-01-06 because UI3 can now control whether hidden cameras are actually shown.
+			//var camsNotInGroup = [];
+			//for (var i = 0; i < lastResponse.data.length; i++)
+			//{
+			//	var obj = lastResponse.data[i];
+			//	if (!self.CameraIsGroupOrCycle(obj) && obj.isEnabled && obj.webcast)
+			//	{
+			//		if (!camIdsInGroups[obj.optionValue])
+			//			camsNotInGroup.push(obj);
+			//	}
+			//}
+			//if (camsNotInGroup.length > 0)
+			//{
+			//	// Create a fake group for each of these cameras.
+			//	var anyFakeGroupsNotHidden = false;
+			//	for (var i = 0; i < camsNotInGroup.length; i++)
+			//	{
+			//		var fakeGroup = MakeFakeGroup(camsNotInGroup[i]);
+			//		lastResponse.data.push(fakeGroup);
+			//		if (!camsNotInGroup[i].hidden)
+			//			anyFakeGroupsNotHidden = true;
+			//	}
 
-				//if (!firstCameraListLoaded && numCameras > 1 && anyFakeGroupsNotHidden && settings.ui3_webcasting_disabled_dontShowAgain != "1")
-				//{
-				//	webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
-				//		+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
-				//		+ ' not visible in any group streams.<br><br>'
-				//		+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
-				//		+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
-				//		, 60000, true);
-				//}
-			}
+			//	//if (!firstCameraListLoaded && numCameras > 1 && anyFakeGroupsNotHidden && settings.ui3_webcasting_disabled_dontShowAgain != "1")
+			//	//{
+			//	//	webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
+			//	//		+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
+			//	//		+ ' not visible in any group streams.<br><br>'
+			//	//		+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
+			//	//		+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
+			//	//		, 60000, true);
+			//	//}
+			//}
 
 			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
 			cameraIdToCameraMap = new Object();
@@ -19091,6 +19091,8 @@ function CameraListDialog()
 			floatingBadges += '<div class="newAlerts" title="' + htmlAttributeEncode(cam.newalerts) + ' new alert' + (cam.newAlerts === 1 ? '' : 's') + '" style="color:#FF0000;"><div class="icon16"><svg class="icon"><use xlink:href="#svg_x5F_Alert1"></use></svg></div>' + htmlEncode(cam.newalerts) + '</div>';
 		if (!cam.isEnabled)
 			floatingBadges += '<div class="icon16" style="color:#FF0000;" title="disabled"><svg class="icon"><use xlink:href="#svg_x5F_Logout"></use></svg></div>';
+		if (cam.hidden)
+			floatingBadges += '<div class="icon16" style="color:#FF8000;" title="hidden"><svg class="icon noflip"><use xlink:href="#svg_mio_hide_image"></use></svg></div>';
 		if (floatingBadges != '')
 			floatingBadges = '<div class="floatingBadges">' + floatingBadges + '</div>';
 
@@ -19401,7 +19403,20 @@ function CameraProperties(camId)
 				devType = "Unknown (" + cam.type + ")";
 			$infoSection.append(GetInfo("Device Type", devType));
 		}
-		$infoSection.append(GetInfo("Status", cam.isEnabled ? ("Enabled, " + (cam.isOnline ? "Online" : "Offline")) : "Disabled"));
+		var statusArr = [];
+		if (cam.isEnabled)
+		{
+			statusArr.push("Enabled");
+			if (cam.isOnline)
+				statusArr.push("Online");
+			else
+				statusArr.push("Offline");
+		}
+		else
+			statusArr.push("Disabled");
+		if (cam.hidden)
+			statusArr.push("Hidden");
+		$infoSection.append(GetInfo("Status", statusArr.join(", ")));
 		if (!cam.webcast)
 			$infoSection.append(GetInfo("Webcasting", "Disabled"));
 		$infoSection.append(GetInfo("Video", cam.width + "x" + cam.height + (cam.width2 || cam.height2 ? (" (sub: " + cam.width2 + "x" + cam.height2 + ")") : "")));
