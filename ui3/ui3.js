@@ -5308,15 +5308,17 @@ function ClipTimeline()
 		Vue.component('clip-timeline', {
 			template: ''
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
-				+ ' <clip-timeline-legend :style="timelineContentStyle" :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" />'
-				+ ' <div class="timelineAlerts" :style="timelineContentStyle">'
-				+ '		<svg v-for="alert in VisibleTimelineAlerts" :key="alert.id" class="icon timelineAlert" :style="alert.style"><use xlink:href="#svg_x5F_Alert1"></use></svg>'
-				+ '	</div> '
-				+ ' <div class="timelineRanges" :style="timelineContentStyle">'
-				+ '		<div v-for="range in VisibleTimelineRanges" :key="range.id" class="timeRange" :style="range.style"></div> '
-				+ '	</div> '
-				+ ' <div class="timelineCenterBar" :style="CenterBarStyle"></div>'
-				+ ' <div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
+				+ ' <clip-timeline-legend :contentStyle="timelineContentStyle" :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" />'
+				+ ' <div class="timelineMain">'
+				+ '		<div class="timelineAlerts" :style="timelineContentStyle">'
+				+ '			<svg v-for="alert in VisibleTimelineAlerts" :key="alert.id" class="icon timelineAlert" :style="alert.style"><use xlink:href="#svg_x5F_Alert1"></use></svg>'
+				+ '		</div>'
+				+ '		<div class="timelineRanges" :style="timelineContentStyle">'
+				+ '			<div v-for="range in VisibleTimelineRanges" :key="range.id" class="timeRange" :style="range.style"></div> '
+				+ '		</div>'
+				+ '		<div class="timelineCenterBar" :style="CenterBarStyle"></div>'
+				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
+				+ '	</div>'
 				+ '</div>',
 			data: function ()
 			{
@@ -5488,7 +5490,7 @@ function ClipTimeline()
 					return {
 						backgroundColor: '#' + range.color
 						, left: ((range.start - timeline.timeBase) / timeline.zoomFactor) + 'px'
-						, top: 28 + (timeline.colorIndices[range.color] * timeline.TimelineColorbarHeight) + 'px' // Offset by 28 for 16px legend (date/timestamps) and 12px for alert icons.
+						, top: 12 + (timeline.colorIndices[range.color] * timeline.TimelineColorbarHeight) + 'px' // Offset by 12px for alert icons.
 						, width: Math.max(0.5, range.len / timeline.zoomFactor) + 'px'
 						, height: timeline.TimelineColorbarHeight + 'px'
 					};
@@ -5766,9 +5768,11 @@ function ClipTimeline()
 
 		Vue.component('clip-timeline-legend', {
 			template: ''
-				+ '<div class="clipTimelineLegend">'
-				+ ' <div class="clipTimelineLegendBackground"></div>'
-				+ '	<div class="clipTimelineLabel" v-for="day in days" :key="day.time" :style="day.style">{{day.label}}</div>'
+				+ '<div class="timelineLegendBar">'
+				+ '	<div class="timelineLegend" :style="contentStyle">'
+				+ '		<div class="timelineLabel" v-for="day in days" :key="day.time" :style="day.style">{{day.label}}</div>'
+				+ '	</div>'
+				+ '	<div class="timelineCurrentTimeWrapper"><div class="timelineCurrentTime">{{currentTimeStr}}</div></div>'
 				+ '</div>',
 			data: function ()
 			{
@@ -5801,7 +5805,14 @@ function ClipTimeline()
 				right: {
 					type: Number,
 					required: true
-				}
+				},
+				/** Timestamp of the center (current time) */
+				currentTime: {
+					type: Number,
+					required: true
+				},
+				/** Style to apply to the scrolling content to position it correctly. */
+				contentStyle: {}
 			},
 			created: function ()
 			{
@@ -5846,6 +5857,10 @@ function ClipTimeline()
 					return {
 						left: -pxLeftOfCurrent + 'px'
 					};
+				},
+				currentTimeStr: function ()
+				{
+					return GetTimeStr(new Date(this.currentTime));
 				}
 			},
 			watch:

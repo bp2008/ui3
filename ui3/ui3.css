@@ -65,6 +65,7 @@
 	--badge-selected-color: #bad8ff;
 	--badge-sentry-color: #d04959;
 	--badge-sentry-hover-color: #F66476;
+	--timeline-background-color: #000000;
 	/* Context Menus */
 	--context-menu-icon-highlight-color: #0097F0;
 }
@@ -2881,44 +2882,69 @@ div.invisibleLabel
 #layoutbottomTimeline
 {
 	height: 96px;
-	background-color: #000000;
 	display: none;
 }
 
 .clipTimeline
 {
-	width: 100%;
-	height: 100%;
-	position: relative;
 }
 
-.clipTimelineLegend
+.timelineLegendBar
 {
-	position: absolute;
-}
-
-.clipTimelineLegendBackground
-{
-	position: fixed;
-	left: 0px;
 	height: 16px;
 	width: 100%;
 	background-color: var(--datetile-bg-color);
 }
 
-.clipTimelineLabel
+.timelineLegend
 {
 	position: absolute;
-	height: 16px;
-	top: 0px;
+}
+
+.timelineLabel
+{
+	position: absolute;
+	height: 15px;
+	top: 1px;
 	background-color: var(--datetile-bg-color);
 	color: var(--text-active-color);
 	border-left: 1px solid var(--text-active-color);
 	padding-left: 2px;
 	font-size: 12px;
 	white-space: nowrap;
-	font-family: Consolas, monospace;
 	box-shadow: -3px 0px 4px var(--datetile-bg-color);
+}
+
+.timelineCurrentTimeWrapper
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 16px;
+}
+
+.timelineCurrentTime
+{
+	border: 1px solid var(--button-color);
+	padding: 0px 4px;
+	box-shadow: 0px 0px 9px #000000;
+	background-color: #000000;
+	color: var(--text-active-color);
+	font-size: 12px;
+	z-index: 1;
+	height: 16px;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.timelineMain
+{
+	width: 100%;
+	height: 80px;
+	background-color: var(--timeline-background-color);
+	position: relative;
+	z-index: 1;
 }
 
 .timelineAlerts
@@ -2930,7 +2956,7 @@ div.invisibleLabel
 {
 	color: #ff6600;
 	position: absolute;
-	top: 17px;
+	top: 1px;
 	left: -5px;
 	width: 10px !important;
 	height: 10px !important;
