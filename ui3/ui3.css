@@ -2921,9 +2921,19 @@ div.invisibleLabel
 	box-shadow: -3px 0px 4px var(--datetile-bg-color);
 }
 
-.timelineError
+.timelineAlerts
 {
-	font-size: 12px;
+	position: absolute;
+}
+
+.timelineAlert
+{
+	color: #ff6600;
+	position: absolute;
+	top: 17px;
+	left: -5px;
+	width: 10px !important;
+	height: 10px !important;
 }
 
 .timelineRanges
@@ -2943,6 +2953,11 @@ div.invisibleLabel
 	height: 100%;
 	width: 2px;
 	background-color: rgba(0,213,255,0.75);
+}
+
+.timelineError
+{
+	font-size: 12px;
 }
 /* Toasts */
 #toast-container

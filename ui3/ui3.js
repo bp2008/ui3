@@ -5309,6 +5309,9 @@ function ClipTimeline()
 			template: ''
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
 				+ ' <clip-timeline-legend :style="timelineContentStyle" :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" />'
+				+ ' <div class="timelineAlerts" :style="timelineContentStyle">'
+				+ '		<svg v-for="alert in VisibleTimelineAlerts" :key="alert.id" class="icon timelineAlert" :style="alert.style"><use xlink:href="#svg_x5F_Alert1"></use></svg>'
+				+ '	</div> '
 				+ ' <div class="timelineRanges" :style="timelineContentStyle">'
 				+ '		<div v-for="range in VisibleTimelineRanges" :key="range.id" class="timeRange" :style="range.style"></div> '
 				+ '	</div> '
@@ -5430,12 +5433,77 @@ function ClipTimeline()
 						{
 							timeline.errorHtml = jqXHR.ErrorMessageHtml;
 						});
+					this.LoadTimelineAlerts();
+				},
+				LoadTimelineAlerts: function ()
+				{
+					var now = new Date();
+					var args = { cmd: "alertlist", camera: "index" };
+					var startdate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+					var enddate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+					ExecJSON(args
+						, function (response)
+						{
+							if (response.result !== "success")
+							{
+								timeline.errorHtml = args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response));
+								return;
+							}
+							else if (typeof response.data === "undefined")
+							{
+								timeline.errorHtml = args.cmd + ' response did not contain data field: ' + htmlEncode(JSON.stringify(response));
+								return;
+							}
+
+							// Convert from "cliplist" response format to proposed "timeline" response format.
+							var alerts = [];
+
+							for (var i = 0; i < response.data.length; i++)
+							{
+								var src = response.data[i];
+								var alert = { cam: src.camera, color: src.color, start: src.date * 1000, thumb: src.path };
+								alerts.push(alert);
+							}
+
+							// Ingest alerts array
+							//var alerts = response.data.alerts;
+							for (var i = 0; i < alerts.length; i++)
+								timeline.AddAlert(alerts[i]);
+
+							timeline.FinalizeAfterAddingAlerts();
+						}
+						, function (jqXHR, textStatus, errorThrown)
+						{
+							timeline.errorHtml = jqXHR.ErrorMessageHtml;
+						});
 				},
 				AddRange: function (range)
 				{
 					range.id = rangeIdCounter++;
 					range.style = timeline.GetRangeStyle(range);
 					timeline.ranges.push(range);
+				},
+				GetRangeStyle: function (range)
+				{
+					return {
+						backgroundColor: '#' + range.color
+						, left: ((range.start - timeline.timeBase) / timeline.zoomFactor) + 'px'
+						, top: 28 + (timeline.colorIndices[range.color] * timeline.TimelineColorbarHeight) + 'px' // Offset by 28 for 16px legend (date/timestamps) and 12px for alert icons.
+						, width: Math.max(0.5, range.len / timeline.zoomFactor) + 'px'
+						, height: timeline.TimelineColorbarHeight + 'px'
+					};
+				},
+				AddAlert: function (alert)
+				{
+					alert.id = alert.thumb;
+					alert.style = timeline.GetAlertStyle(alert);
+					timeline.alerts.push(alert);
+				},
+				GetAlertStyle: function (alert)
+				{
+					return {
+						left: ((alert.start - timeline.timeBase) / timeline.zoomFactor) + 'px'
+					};
 				},
 				AddColor: function (hexcolor)
 				{
@@ -5459,15 +5527,13 @@ function ClipTimeline()
 					var firstAlert = timeline.alerts.length ? timeline.alerts[0] : Date.now();
 					timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
-				GetRangeStyle: function (range)
+				FinalizeAfterAddingAlerts()
 				{
-					return {
-						backgroundColor: '#' + range.color
-						, left: ((range.start - timeline.timeBase) / timeline.zoomFactor) + 'px'
-						, top: 16 + (timeline.colorIndices[range.color] * timeline.TimelineColorbarHeight) + 'px'
-						, width: Math.max(0.5, range.len / timeline.zoomFactor) + 'px'
-						, height: timeline.TimelineColorbarHeight + 'px'
-					};
+					timeline.alerts.sort(function (a, b) { return a.start - b.start; });
+
+					var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
+					var firstAlert = timeline.alerts.length ? timeline.alerts[0].start : Date.now();
+					timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
 				AfterResize: function ()
 				{
@@ -5635,6 +5701,10 @@ function ClipTimeline()
 				{
 					return this.ranges;
 				},
+				VisibleTimelineAlerts: function ()
+				{
+					return this.alerts;
+				},
 				TimelineColorbarHeight: function ()
 				{
 					return (80 / this.colors.length);
@@ -5684,6 +5754,11 @@ function ClipTimeline()
 					{
 						var r = this.ranges[i];
 						r.style = this.GetRangeStyle(r);
+					}
+					for (var i = 0; i < this.alerts.length; i++)
+					{
+						var a = this.alerts[i];
+						a.style = this.GetAlertStyle(a);
 					}
 				}
 			}
@@ -5778,69 +5853,37 @@ function ClipTimeline()
 			}
 		});
 
-		Vue.component('clip-timeline-ranges', {
-			template: ''
-				+ '<div class="clipTimelineRanges">'
-				+ '</div>',
-			data: function ()
-			{
-				return {
-				};
-			},
-			props:
-			{
-			},
-			created: function ()
-			{
-			},
-			mounted: function ()
-			{
-			},
-			beforeDestroy: function ()
-			{
-			},
-			methods:
-			{
-			},
-			computed:
-			{
-			},
-			watch:
-			{
-			}
-		});
-
-		Vue.component('clip-timeline-alerts', {
-			template: ''
-				+ '<div class="clipTimelineAlerts">'
-				+ '</div>',
-			data: function ()
-			{
-				return {
-				};
-			},
-			props:
-			{
-			},
-			created: function ()
-			{
-			},
-			mounted: function ()
-			{
-			},
-			beforeDestroy: function ()
-			{
-			},
-			methods:
-			{
-			},
-			computed:
-			{
-			},
-			watch:
-			{
-			}
-		});
+		//Vue.component('clip-timeline-template', {
+		//	template: ''
+		//		+ '<div class="clipTimelineTemplate">'
+		//		+ '</div>',
+		//	data: function ()
+		//	{
+		//		return {
+		//		};
+		//	},
+		//	props:
+		//	{
+		//	},
+		//	created: function ()
+		//	{
+		//	},
+		//	mounted: function ()
+		//	{
+		//	},
+		//	beforeDestroy: function ()
+		//	{
+		//	},
+		//	methods:
+		//	{
+		//	},
+		//	computed:
+		//	{
+		//	},
+		//	watch:
+		//	{
+		//	}
+		//});
 		$("#layoutbottomTimeline").show();
 		var timelineComponent = new Vue({
 			el: "#layoutbottomTimeline"
