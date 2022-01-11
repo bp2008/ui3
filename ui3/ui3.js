@@ -5308,7 +5308,8 @@ function ClipTimeline()
 		Vue.component('clip-timeline', {
 			template: ''
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
-				+ ' <div class="timelineRanges" :style="timelineRangesStyle">'
+				+ ' <clip-timeline-legend :style="timelineContentStyle" :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" />'
+				+ ' <div class="timelineRanges" :style="timelineContentStyle">'
 				+ '		<div v-for="range in VisibleTimelineRanges" :key="range.id" class="timeRange" :style="range.style"></div> '
 				+ '	</div> '
 				+ ' <div class="timelineCenterBar" :style="CenterBarStyle"></div>'
@@ -5317,43 +5318,25 @@ function ClipTimeline()
 			data: function ()
 			{
 				return {
-					/**
-					 * Array of alert objects.
-					 */
+					/** Array of alert objects.  */
 					alerts: [],
-					/**
-					 * Array of range objects (represents time ranges with video).
-					 */
+					/** Array of range objects (represents time ranges with video). */
 					ranges: [],
-					/**
-					 * Map of color to array index.
-					 */
+					/** Map of color to array index. */
 					colorIndices: {},
-					/**
-					 * Array of colors, predictably ordered.
-					 */
+					/** Array of colors, predictably ordered.  */
 					colors: [],
 					errorHtml: "",
-					/**
-					 * Number of milliseconds per pixel.
-					 */
+					/** Number of milliseconds per pixel. */
 					zoomFactor: 86400,
 					pinchZoomState: { startingZoomFactor: 0 },
-					/**
-					 * Width of the timeline in pixels.
-					 */
+					/** Width of the timeline in pixels. */
 					timelineWidth: 0,
-					/**
-					 * Timestamp of the leftmost object. NOT CURRENTLY USED.
-					 */
+					/** Timestamp of the leftmost object. NOT CURRENTLY USED. */
 					leftmostTime: 0,
-					/**
-					 * Millisecond timestamp which timeRange DOM elements are positioned relative to.
-					 */
-					timeBase: Date.now() - 9999999999,
-					/**
-					 * Millisecond timestamp that is currently selected in the timeline.
-					 */
+					/** Millisecond timestamp which DOM elements are positioned relative to. */
+					timeBase: Date.now(),
+					/** Millisecond timestamp that is currently selected in the timeline (at the center). */
 					lastSetTime: Date.now(),
 					dragState: { isDragging: false, startX: 0, offsetMs: 0, momentum: 0, accelInterval: null },
 					hammerTime: null,
@@ -5633,45 +5616,60 @@ function ClipTimeline()
 			},
 			computed:
 			{
+				/** Number of milliseconds across the visible area of the timeline. */
+				visibleMilliseconds: function ()
+				{
+					return this.timelineWidth * this.zoomFactor;
+				},
+				/** Timestamp of the left edge */
+				left: function ()
+				{
+					return this.currentTime - (this.visibleMilliseconds / 2);
+				},
+				/** Timestamp of the right edge */
+				right: function ()
+				{
+					return this.currentTime + (this.visibleMilliseconds / 2);
+				},
 				VisibleTimelineRanges: function ()
 				{
-					return timeline.ranges;
+					return this.ranges;
 				},
 				TimelineColorbarHeight: function ()
 				{
-					return (80 / timeline.colors.length);
+					return (80 / this.colors.length);
 				},
 				CenterBarCenterX: function ()
 				{
-					return (timeline.timelineWidth / 2) - 1;
+					return this.timelineWidth / 2;
 				},
 				CenterBarStyle: function ()
 				{
 					return {
-						left: timeline.CenterBarCenterX + 'px'
+						left: this.CenterBarCenterX + 'px'
 					};
 				},
-				timelineRangesStyle: function ()
+				timelineContentStyle: function ()
 				{
 					// Compute the left offset which the timeline must have so our center line is rendered at the time indicated by [currentTime].
-					var msLeftOfCurrent = (timeline.currentTime - timeline.timeBase);
-					var pxLeftOfCurrent = (msLeftOfCurrent / timeline.zoomFactor) - timeline.CenterBarCenterX;
+					var msLeftOfCurrent = (this.currentTime - this.timeBase);
+					var pxLeftOfCurrent = (msLeftOfCurrent / this.zoomFactor) - this.CenterBarCenterX;
 					return {
 						left: -pxLeftOfCurrent + 'px'
 					};
 				},
 				currentTime: function ()
 				{
-					var time = timeline.lastSetTime;
-					if (timeline.dragState.isDragging)
+					var time = this.lastSetTime;
+					if (this.dragState.isDragging)
 					{
-						time += timeline.dragState.offsetMs;
+						time += this.dragState.offsetMs;
 					}
 					return time;
 				},
 				clipTimelineClasses: function ()
 				{
-					if (timeline.dragState.isDragging)
+					if (this.dragState.isDragging)
 						return "grabbingcursor";
 					else
 						return "grabcursor";
@@ -5681,13 +5679,166 @@ function ClipTimeline()
 			{
 				zoomFactor: function ()
 				{
-					timeline.timeBase = timeline.currentTime;
-					for (var i = 0; i < timeline.ranges.length; i++)
+					this.timeBase = this.currentTime;
+					for (var i = 0; i < this.ranges.length; i++)
 					{
-						var r = timeline.ranges[i];
-						r.style = timeline.GetRangeStyle(r);
+						var r = this.ranges[i];
+						r.style = this.GetRangeStyle(r);
 					}
 				}
+			}
+		});
+
+		Vue.component('clip-timeline-legend', {
+			template: ''
+				+ '<div class="clipTimelineLegend">'
+				+ ' <div class="clipTimelineLegendBackground"></div>'
+				+ '	<div class="clipTimelineLabel" v-for="day in days" :key="day.time" :style="day.style">{{day.label}}</div>'
+				+ '</div>',
+			data: function ()
+			{
+				return {
+				};
+			},
+			props:
+			{
+				/** Width of timeline in pixels */
+				width: {
+					type: Number,
+					required: true
+				},
+				/** Millisecond timestamp which DOM elements are positioned relative to. */
+				timeBase: {
+					type: Number,
+					required: true
+				},
+				/** Number of milliseconds per pixel. */
+				zoomFactor: {
+					type: Number,
+					required: true
+				},
+				/** Timestamp of the left edge */
+				left: { // 
+					type: Number,
+					required: true
+				},
+				/** Timestamp of the right edge */
+				right: {
+					type: Number,
+					required: true
+				}
+			},
+			created: function ()
+			{
+			},
+			mounted: function ()
+			{
+			},
+			beforeDestroy: function ()
+			{
+			},
+			methods:
+			{
+			},
+			computed:
+			{
+				days: function ()
+				{
+					var days = [];
+					var date = new Date(this.left);
+					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					var isFirst = true;
+					while (date.getTime() < this.right)
+					{
+						var day = { time: date.getTime(), label: GetDateDisplayStrShort(date) };
+						day.style = {
+							left: ((day.time - this.timeBase) / this.zoomFactor) + 'px'
+						};
+						if (isFirst)
+							day.style.left = (((this.left - this.timeBase) / this.zoomFactor) - 1) + 'px';
+						days.push(day);
+
+						isFirst = false;
+						date.setDate(date.getDate() + 1);
+					}
+					return days;
+				},
+				containerStyle: function ()
+				{
+					// Compute the left offset which the timeline must have so our center line is rendered at the time indicated by [currentTime].
+					var msLeftOfCurrent = (this.currentTime - this.timeBase);
+					var pxLeftOfCurrent = (msLeftOfCurrent / this.zoomFactor) - this.CenterBarCenterX;
+					return {
+						left: -pxLeftOfCurrent + 'px'
+					};
+				}
+			},
+			watch:
+			{
+			}
+		});
+
+		Vue.component('clip-timeline-ranges', {
+			template: ''
+				+ '<div class="clipTimelineRanges">'
+				+ '</div>',
+			data: function ()
+			{
+				return {
+				};
+			},
+			props:
+			{
+			},
+			created: function ()
+			{
+			},
+			mounted: function ()
+			{
+			},
+			beforeDestroy: function ()
+			{
+			},
+			methods:
+			{
+			},
+			computed:
+			{
+			},
+			watch:
+			{
+			}
+		});
+
+		Vue.component('clip-timeline-alerts', {
+			template: ''
+				+ '<div class="clipTimelineAlerts">'
+				+ '</div>',
+			data: function ()
+			{
+				return {
+				};
+			},
+			props:
+			{
+			},
+			created: function ()
+			{
+			},
+			mounted: function ()
+			{
+			},
+			beforeDestroy: function ()
+			{
+			},
+			methods:
+			{
+			},
+			computed:
+			{
+			},
+			watch:
+			{
 			}
 		});
 		$("#layoutbottomTimeline").show();
@@ -28444,6 +28595,11 @@ function GetDateDisplayStr(date, includeWeekday)
 {
 	var sameDay = isSameDay(date, GetServerDate(new Date()));
 	return (sameDay ? "Today, " : "") + date.getMonthName() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear()) + (includeWeekday ? ' <span class="dayNameShort">(' + date.getDayNameShort() + ')</span><span class="dayNameFull">(' + date.getDayName() + ')</span>' : '');
+}
+function GetDateDisplayStrShort(date)
+{
+	var sameDay = isSameDay(date, GetServerDate(new Date()));
+	return (sameDay ? "Today, " : "") + date.getMonthNameShort() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear()) + ' (' + date.getDayNameShort() + ')';
 }
 function GetPaddedDateStr(date, includeMilliseconds)
 {

@@ -2892,6 +2892,35 @@ div.invisibleLabel
 	position: relative;
 }
 
+.clipTimelineLegend
+{
+	position: absolute;
+}
+
+.clipTimelineLegendBackground
+{
+	position: fixed;
+	left: 0px;
+	height: 16px;
+	width: 100%;
+	background-color: var(--datetile-bg-color);
+}
+
+.clipTimelineLabel
+{
+	position: absolute;
+	height: 16px;
+	top: 0px;
+	background-color: var(--datetile-bg-color);
+	color: var(--text-active-color);
+	border-left: 1px solid var(--text-active-color);
+	padding-left: 2px;
+	font-size: 12px;
+	white-space: nowrap;
+	font-family: Consolas, monospace;
+	box-shadow: -3px 0px 4px var(--datetile-bg-color);
+}
+
 .timelineError
 {
 	font-size: 12px;
