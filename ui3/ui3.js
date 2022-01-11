@@ -3370,14 +3370,21 @@ function resized()
 	playbackHeader.resized();
 
 	// Size layoutbottom
-	if (sideBarRight)
+	if (portrait)
+	{
+		layoutbottom.css("width", windowW + "px");
 		layoutbottom.css("left", "0px");
+		layoutbottom.css("bottom", windowH - sidebarT + "px");
+	}
 	else
-		layoutbottom.css("left", sidebarW + "px");
-	layoutbottom.css("width", windowW - sidebarW + "px");
-
-	clipTimeline.Resized();
-	clipTimeline.Draw();
+	{
+		layoutbottom.css("width", windowW - sidebarW + "px");
+		if (sideBarRight)
+			layoutbottom.css("left", "0px");
+		else
+			layoutbottom.css("left", sidebarW + "px");
+		layoutbottom.css("bottom", "0px");
+	}
 
 	// Size misc items
 	imageRenderer.ImgResized(false);
@@ -3455,7 +3462,6 @@ function UiSizeHelper()
 		if (!autoSize)
 			SetSize(size);
 		resized();
-		//setTimeout(resized);
 	}
 	this.UsePortraitLayout = function (windowWidth, windowHeight)
 	{
@@ -5278,178 +5284,436 @@ var ptzPresetThumbLoader = new (function ()
 function ClipTimeline()
 {
 	var self = this;
-	var $canvas = $("#canvas_clipTimeline");
-	var canvas = $canvas.get(0);
-	var dpiScale = BI_GetDevicePixelRatio();
-	var isDragging = false;
-	var currentSelectedRelativePosition = -1;
-	var currentGhostRelativePosition = -1;
-	var currentSoftGhostRelativePosition = -1;
-	$canvas.on("mousedown touchstart", function (e)
+	var enabled = UrlParameters.Get("timeline") === "1";
+	var timeline;
+	var rangeIdCounter = 0;
+	var initialized = false;
+	var scriptsLoaded = 0; // Development code
+	this.Initialize = function ()
 	{
-		mouseCoordFixer.fix(e);
-		isDragging = true;
-		currentGhostRelativePosition = mouseXToRelativePosition(e.mouseX);
-		self.Draw();
-	});
-	$(document).on("mouseup touchend touchcancel", function (e)
-	{
-		mouseCoordFixer.fix(e);
-		if (isDragging)
-		{
-			isDragging = false;
-			var newPosition = mouseXToRelativePosition(e.mouseX);
-			if (newPosition != -1)
-				currentSelectedRelativePosition = newPosition;
-			currentGhostRelativePosition = -1;
-			self.Draw();
-		}
-	});
-	$(document).on("mousemove touchmove", function (e)
-	{
-		mouseCoordFixer.fix(e);
-		var newSoftGhost = -1;
-		if (pointInsideElement($canvas, e.mouseX, e.mouseY))
-			newSoftGhost = mouseXToRelativePosition(e.mouseX);
-		var changedGhost = currentSoftGhostRelativePosition != newSoftGhost;
-		currentSoftGhostRelativePosition = newSoftGhost;
-		if (isDragging)
-		{
-			currentGhostRelativePosition = mouseXToRelativePosition(e.mouseX);
-			self.Draw();
-		}
-		else if (changedGhost)
-			self.Draw();
-	});
-	$canvas.on("mouseleave", function (e)
-	{
-		mouseCoordFixer.fix(e);
-		currentSoftGhostRelativePosition = -1;
-		self.Draw();
-	});
-	this.Resized = function ()
-	{
-		if (!$canvas.is(":visible"))
+		if (initialized)
 			return;
-		dpiScale = BI_GetDevicePixelRatio();
-		canvas.width = $canvas.width() * dpiScale;
-		canvas.height = $canvas.height() * dpiScale;
-	};
-	this.Draw = function ()
-	{
-		drawInternal(currentSelectedRelativePosition, currentGhostRelativePosition, currentSoftGhostRelativePosition);
+		initialized = true;
+
+		BI_CustomEvent.AddListener("FinishedLoading", finishInit);
+		$.getScript('ui3/libs-src/hammer.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
+		$.getScript('ui3/libs-src/vue.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 	}
-	var drawInternal = function (handlePosition, ghostPosition, softGhostPosition)
+	var finishInit = function ()
 	{
-		if (!$canvas.is(":visible"))
+		if (scriptsLoaded < 2)
 			return;
-		var timelineBorder = getTimelineBorder();
+		if (!loadingHelper.DidLoadingFinish())
+			return;
+		Vue.component('clip-timeline', {
+			template: ''
+				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
+				+ ' <div class="timelineRanges" :style="timelineRangesStyle">'
+				+ '		<div v-for="range in VisibleTimelineRanges" :key="range.id" class="timeRange" :style="range.style"></div> '
+				+ '	</div> '
+				+ ' <div class="timelineCenterBar" :style="CenterBarStyle"></div>'
+				+ ' <div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
+				+ '</div>',
+			data: function ()
+			{
+				return {
+					/**
+					 * Array of alert objects.
+					 */
+					alerts: [],
+					/**
+					 * Array of range objects (represents time ranges with video).
+					 */
+					ranges: [],
+					/**
+					 * Map of color to array index.
+					 */
+					colorIndices: {},
+					/**
+					 * Array of colors, predictably ordered.
+					 */
+					colors: [],
+					errorHtml: "",
+					/**
+					 * Number of milliseconds per pixel.
+					 */
+					zoomFactor: 86400,
+					pinchZoomState: { startingZoomFactor: 0 },
+					/**
+					 * Width of the timeline in pixels.
+					 */
+					timelineWidth: 0,
+					/**
+					 * Timestamp of the leftmost object. NOT CURRENTLY USED.
+					 */
+					leftmostTime: 0,
+					/**
+					 * Millisecond timestamp which timeRange DOM elements are positioned relative to.
+					 */
+					timeBase: Date.now() - 9999999999,
+					/**
+					 * Millisecond timestamp that is currently selected in the timeline.
+					 */
+					lastSetTime: Date.now(),
+					dragState: { isDragging: false, startX: 0, offsetMs: 0, momentum: 0, accelInterval: null },
+					hammerTime: null,
+					acceptZoomThrottled: null,
+					accumulatedZoomDelta: 0,
+					panThrottled: null
+				};
+			},
+			created: function ()
+			{
+				timeline = this;
+				BI_CustomEvent.AddListener("afterResize", timeline.AfterResize);
+			},
+			mounted: function ()
+			{
+				timeline.hammertime = new Hammer(timeline.$refs.tl_root);
+				timeline.hammertime.get('pinch').set({ enable: true });
+				timeline.hammertime.on('pinchstart', timeline.onPinchStart);
+				timeline.hammertime.on('pinchmove', timeline.onPinchMove);
+				BindEventsPassive(timeline.$refs.tl_root, "mousedown", timeline.mouseDown);
+				BindEventsPassive(timeline.$refs.tl_root, "touchstart", timeline.mouseDown);
+				BindEventsPassive(document, "touchmove mousemove", timeline.mouseMove);
+				BindEventsPassive(document, "touchend mouseup ", timeline.mouseUp);
+				BindEventsPassive(document, "touchcancel", timeline.touchCancel);
+				BindEvents(timeline.$refs.tl_root, "wheel", timeline.mouseWheel);
+				timeline.AfterResize();
+			},
+			beforeDestroy: function ()
+			{
+				timeline.hammertime.off('pinchstart pinchmove');
+				timeline.hammertime.get('pinch').set({ enable: false });
+				BI_CustomEvent.RemoveListener("afterResize", timeline.AfterResize);
+				timeline.$refs.tl_root.removeEventListener("touchstart", timeline.mouseDown);
+				timeline.$refs.tl_root.removeEventListener("mousedown", timeline.mouseDown);
+				document.removeEventListener("touchmove", timeline.mouseMove);
+				document.removeEventListener("mousemove", timeline.mouseMove);
+				document.removeEventListener("touchend", timeline.mouseUp);
+				document.removeEventListener("mouseup", timeline.mouseUp);
+				document.removeEventListener("touchcancel", timeline.touchCancel);
+				timeline.$refs.tl_root.removeEventListener("wheel", timeline.mouseWheel);
+				timeline = undefined;
+			},
+			methods:
+			{
+				LoadTimelineData: function ()
+				{
+					timeline.errorHtml = "";
+					var now = new Date();
+					var args = { cmd: "cliplist", camera: "index", view: "all" };
+					var startdate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+					var enddate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+					ExecJSON(args
+						, function (response)
+						{
+							if (response.result !== "success")
+							{
+								timeline.errorHtml = args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response));
+								return;
+							}
+							else if (typeof response.data === "undefined")
+							{
+								timeline.errorHtml = args.cmd + ' response did not contain data field: ' + htmlEncode(JSON.stringify(response));
+								return;
+							}
 
-		var timelineHourLabelsY = 30 * dpiScale;
-		var timelineTickMarkStartY = 33 * dpiScale;
-		var timelineTickMarkEndY = timelineBorder.startY;
-		var timelineTickMarksH = 4 * dpiScale;
+							// Convert from "cliplist" response format to proposed "timeline" response format.
+							var clips = [];
 
-		var fontSize = 16 * dpiScale;
-		if (canvas.width < 1000)
-			fontSize = Math.max(8, fontSize * (canvas.width / 1000));
+							for (var clipIdx = 0; clipIdx < response.data.length; clipIdx++)
+							{
+								var src = response.data[clipIdx];
+								var clip = { cam: src.camera, color: src.color, start: src.date * 1000, len: src.msec, thumb: src.path };
+								clips.push(clip);
+							}
 
-		var ctx = canvas.getContext("2d");
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-		ctx.strokeStyle = ctx.fillStyle = "#FFFFFF";
-		//ctx.strokeStyle = ctx.fillStyle = "#969BA7";
-		ctx.font = fontSize + "px Arial";
+							// Ingest clips array
+							//var clips = response.data.clips;
+							for (var clipIdx = 0; clipIdx < clips.length; clipIdx++)
+							{
+								clips[clipIdx].color = BlueIrisColorToCssColor(clips[clipIdx].color);
+								timeline.AddColor(clips[clipIdx].color);
+							}
+							timeline.FinalizeAfterAddingColors();
 
-		// Draw timeline rectangle
-		ctx.strokeRect(timelineBorder.startX, timelineBorder.startY, timelineBorder.width, timelineBorder.height);
+							for (var clipIdx = 0; clipIdx < clips.length; clipIdx++)
+								timeline.AddRange(clips[clipIdx]);
 
-		// Draw tick marks
-		ctx.beginPath();
-		var tickMarkDistance = timelineBorder.width / 24;
-		for (var i = 0; i <= 24; i++)
-		{
-			var x = timelineBorder.startX + (i * tickMarkDistance);
-			ctx.moveTo(x, timelineTickMarkStartY);
-			ctx.lineTo(x, timelineTickMarkEndY);
-		}
-		ctx.stroke();
+							timeline.FinalizeAfterAddingRanges();
+						}
+						, function (jqXHR, textStatus, errorThrown)
+						{
+							timeline.errorHtml = jqXHR.ErrorMessageHtml;
+						});
+				},
+				AddRange: function (range)
+				{
+					range.id = rangeIdCounter++;
+					range.style = timeline.GetRangeStyle(range);
+					timeline.ranges.push(range);
+				},
+				AddColor: function (hexcolor)
+				{
+					if (typeof timeline.colorIndices[hexcolor] === "undefined")
+					{
+						timeline.colors.push(hexcolor);
+						timeline.colorIndices[hexcolor] = timeline.colors.length;
+					}
+				},
+				FinalizeAfterAddingColors()
+				{
+					timeline.colors.sort(function (a, b) { return a.localeCompare(b); });
+					for (var i = 0; i < timeline.colors.length; i++)
+						timeline.colorIndices[timeline.colors[i]] = i;
+				},
+				FinalizeAfterAddingRanges()
+				{
+					timeline.ranges.sort(function (a, b) { return a.start - b.start; });
 
-		// Draw hour labels
-		for (var i = 0; i <= 24; i++)
-		{
-			var label = (i + "").padLeft(2, '0');
-			var width = ctx.measureText(label).width;
-			var x = (timelineBorder.startX + (i * tickMarkDistance)) - (width / 2);
-			ctx.fillText(label, x, timelineHourLabelsY);
-		}
+					var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
+					var firstAlert = timeline.alerts.length ? timeline.alerts[0] : Date.now();
+					timeline.leftmostTime = Math.min(firstRange, firstAlert);
+				},
+				GetRangeStyle: function (range)
+				{
+					return {
+						backgroundColor: '#' + range.color
+						, left: ((range.start - timeline.timeBase) / timeline.zoomFactor) + 'px'
+						, top: 16 + (timeline.colorIndices[range.color] * timeline.TimelineColorbarHeight) + 'px'
+						, width: Math.max(0.5, range.len / timeline.zoomFactor) + 'px'
+						, height: timeline.TimelineColorbarHeight + 'px'
+					};
+				},
+				AfterResize: function ()
+				{
+					if (timeline.$refs.tl_root)
+						timeline.timelineWidth = timeline.$refs.tl_root.offsetWidth;
+				},
+				mouseDown: function (e)
+				{
+					mouseCoordFixer.fix(e);
+					if (touchEvents.Gate(e))
+						return;
+					if (touchEvents.isMultiTouch(e))
+					{
+						timeline.dragState.isDragging = false;
+						return;
+					}
+					timeline.dragState.startX = e.mouseX;
+					timeline.dragState.offsetMs = 0;
+					timeline.dragState.momentum = 0;
+					timeline.dragState.isDragging = true;
+					//clearInterval(timeline.dragState.accelInterval);
+					//if (touchEvents.isTouchEvent(e))
+					//	timeline.dragState.accelInterval = setInterval(timeline.handlePanAccel, 33);
+					//else
+					//	timeline.dragState.accelInterval = null;
+				},
+				mouseMove: function (e)
+				{
+					mouseCoordFixer.fix(e);
+					if (touchEvents.Gate(e))
+						return;
+					if (timeline.dragState.isDragging)
+					{
+						if (touchEvents.isMultiTouch(e))
+						{
+							timeline.dragState.isDragging = false;
+							return;
+						}
+						var delta = (e.mouseX - timeline.dragState.startX);
+						if ((delta < 0 && timeline.dragState.momentum > 0) ||
+							(delta > 0 && timeline.dragState.momentum < 0))
+							timeline.dragState.momentum = 0;
+						timeline.dragState.momentum += delta;
+						timeline.pan(delta * -timeline.zoomFactor);
+					}
+				},
+				mouseUp: function (e)
+				{
+					mouseCoordFixer.fix(e);
+					if (touchEvents.Gate(e))
+						return;
+					if (touchEvents.isMultiTouch(e))
+					{
+						timeline.dragState.isDragging = false;
+						return;
+					}
+					if (timeline.dragState.isDragging)
+					{
+						timeline.mouseMove(e);
+						timeline.lastSetTime += (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
+						timeline.dragState.isDragging = false;
+					}
+				},
+				touchCancel: function (e)
+				{
+					mouseCoordFixer.fix(e);
+					if (touchEvents.Gate(e))
+						return;
+					if (timeline.dragState.isDragging)
+						timeline.dragState.isDragging = false;
+				},
+				mouseWheel: function (e)
+				{
+					e.preventDefault();
+					var dy = e.deltaY;
+					if (e.deltaMode === 1)
+						dy *= 33.333;
+					else if (e.deltaMode === 2)
+						dy *= 100;
+					if (settings.ui3_wheelZoomReverse === "1")
+						dy *= -1;
+					dy = Clamp(dy, -100, 100);
+					timeline.accumulatedZoomDelta += dy;
+					timeline.acceptZoom(null);
+				},
+				onPinchStart: function (e)
+				{
+					timeline.pinchZoomState.startingZoomFactor = timeline.zoomFactor;
+				},
+				onPinchMove: function (e)
+				{
+					timeline.acceptZoom(timeline.pinchZoomState.startingZoomFactor / Math.max(0.001, e.scale * e.scale));
+				},
+				handlePanAccel: function ()
+				{
+					if (!timeline.dragState.isDragging)
+					{
+						if (Math.abs(timeline.dragState.momentum) < 1)
+						{
+							timeline.dragState.momentum = 0;
+							clearInterval(timeline.dragState.accelInterval);
+							timeline.dragState.accelInterval = null;
+						}
+						console.log("Momentum " + timeline.dragState.momentum);
+						timeline.lastSetTime += (timeline.dragState.momentum * -timeline.zoomFactor) / 100;
+					}
+					var accel = -100;
+					if (timeline.dragState.momentum < 0)
+						accel *= -1;
+					var newMomentum = timeline.dragState.momentum + accel;
+					if (Math.abs(newMomentum) < accel)
+						newMomentum = 0;
+					timeline.dragState.momentum = newMomentum;
+				},
+				pan: function (arg)
+				{
+					if (!timeline.panThrottled)
+						timeline.panThrottled = throttle(function (offsetMs)
+						{
+							timeline.dragState.offsetMs = offsetMs;
+						}, 33);
 
-		// Draw handle
-		if (typeof handlePosition != "undefined" && handlePosition != -1)
-			drawHandle(ctx, timelineBorder.startX + (handlePosition * timelineBorder.width), "1", "1");
+					timeline.panThrottled(arg);
+				},
+				acceptZoom: function (arg)
+				{
+					if (!timeline.acceptZoomThrottled)
+						timeline.acceptZoomThrottled = throttle(function (newZoomFactor)
+						{
+							if (newZoomFactor)
+								timeline.zoomFactor = Clamp(newZoomFactor, 250, 1000000000);
+							if (timeline.accumulatedZoomDelta !== 0)
+							{
+								var speed = 1 + Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 0, 2000);
+								var multiplier = ((timeline.accumulatedZoomDelta / 100) * speed) / 2500;
+								if (multiplier > 0)
+									multiplier *= 1.191043354; // Painstakingly determined to make zooming out very similar in magnitude to zooming in.
+								newZoomFactor = timeline.zoomFactor + (timeline.zoomFactor * multiplier);
+								timeline.accumulatedZoomDelta = 0;
+								timeline.zoomFactor = Clamp(newZoomFactor, 250, 1000000000);
+							}
+						}, 33);
 
-		// Draw ghost handle
-		if (typeof ghostPosition != "undefined" && ghostPosition != -1)
-			drawHandle(ctx, timelineBorder.startX + (ghostPosition * timelineBorder.width), ".5", "0.1");
-
-		// Draw softer ghost handle
-		if (typeof softGhostPosition != "undefined" && softGhostPosition != -1)
-			drawHandle(ctx, timelineBorder.startX + (softGhostPosition * timelineBorder.width), ".2", "0");
-	};
-	var drawHandle = function (ctx, handleX, strokeAlpha, fillAlpha)
-	{
-		var handleTopY = 33 * dpiScale;
-		var handlePointY = 61 * dpiScale;
-		var handleRectTopY = 67 * dpiScale;
-		var handleRectBotY = 83 * dpiScale;
-		var handleWidth = 16 * dpiScale;
-		var handleLeft = handleX - (handleWidth / 2);
-		var handleRight = handleX + (handleWidth / 2);
-
-		ctx.strokeStyle = "rgba(0,151,240," + strokeAlpha + ")";
-		ctx.fillStyle = "rgba(0,151,240," + fillAlpha + ")";
-		ctx.beginPath();
-		ctx.moveTo(handleX, handlePointY);
-		ctx.lineTo(handleLeft, handleRectTopY);
-		ctx.lineTo(handleLeft, handleRectBotY);
-		ctx.lineTo(handleRight, handleRectBotY);
-		ctx.lineTo(handleRight, handleRectTopY);
-		ctx.closePath();
-		ctx.fill();
-		ctx.stroke();
-		ctx.beginPath();
-		ctx.moveTo(handleX, handlePointY);
-		ctx.lineTo(handleX, handleTopY);
-		ctx.stroke();
-	};
-	var mouseXToRelativePosition = function (mouseX)
-	{
-		var timelineBorder = getTimelineBorder();
-		var position = (mouseX - timelineBorder.startX - $canvas.offset().left) / timelineBorder.width;
-		if (position < -0.1 || position > 1.1)
-			return -1;
-		position = Clamp(position, 0, 1);
-		return position;
-	};
-	var getTimelineBorder = function ()
-	{
-		var sideMarginSize = canvas.width * 0.1;
-		if (canvas.width < 600)
-		{
-			var halfDiff = (600 - canvas.width) / 2;
-			sideMarginSize = Math.max(7, sideMarginSize - halfDiff);
-		}
-
-		var timelineStartX = sideMarginSize;
-		var timelineEndX = canvas.width - sideMarginSize;
-		var timelineWidth = timelineEndX - timelineStartX;
-
-		var timelineStartY = 38 * dpiScale;
-		var timelineEndY = timelineStartY + 16 * dpiScale;
-		var timelineHeight = timelineEndY - timelineStartY;
-
-		var retVal = { startX: timelineStartX, endX: timelineEndX, width: timelineWidth, startY: timelineStartY, endY: timelineEndY, height: timelineHeight };
-		return retVal;
+					timeline.acceptZoomThrottled(arg);
+				}
+			},
+			computed:
+			{
+				VisibleTimelineRanges: function ()
+				{
+					return timeline.ranges;
+				},
+				TimelineColorbarHeight: function ()
+				{
+					return (80 / timeline.colors.length);
+				},
+				CenterBarCenterX: function ()
+				{
+					return (timeline.timelineWidth / 2) - 1;
+				},
+				CenterBarStyle: function ()
+				{
+					return {
+						left: timeline.CenterBarCenterX + 'px'
+					};
+				},
+				timelineRangesStyle: function ()
+				{
+					// Compute the left offset which the timeline must have so our center line is rendered at the time indicated by [currentTime].
+					var msLeftOfCurrent = (timeline.currentTime - timeline.timeBase);
+					var pxLeftOfCurrent = (msLeftOfCurrent / timeline.zoomFactor) - timeline.CenterBarCenterX;
+					return {
+						left: -pxLeftOfCurrent + 'px'
+					};
+				},
+				currentTime: function ()
+				{
+					var time = timeline.lastSetTime;
+					if (timeline.dragState.isDragging)
+					{
+						time += timeline.dragState.offsetMs;
+					}
+					return time;
+				},
+				clipTimelineClasses: function ()
+				{
+					if (timeline.dragState.isDragging)
+						return "grabbingcursor";
+					else
+						return "grabcursor";
+				}
+			},
+			watch:
+			{
+				zoomFactor: function ()
+				{
+					timeline.timeBase = timeline.currentTime;
+					for (var i = 0; i < timeline.ranges.length; i++)
+					{
+						var r = timeline.ranges[i];
+						r.style = timeline.GetRangeStyle(r);
+					}
+				}
+			}
+		});
+		$("#layoutbottomTimeline").show();
+		var timelineComponent = new Vue({
+			el: "#layoutbottomTimeline"
+		});
+		resized();
+		self.LoadTimelineData();
 	}
+	this.LoadTimelineData = function ()
+	{
+		if (!enabled)
+			return;
+		if (!timeline)
+		{
+			console.error("Timeline component not loaded yet");
+			return;
+		}
+		timeline.LoadTimelineData();
+	}
+	this.getVue = function ()
+	{
+		return timeline;
+	}
+	if (enabled)
+		self.Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // Zebra Date Picker //////////////////////////////////////////
@@ -15598,7 +15862,7 @@ var zoomHandler_Adjustable = new (function ()
 			deltaY = 100;
 		else if (deltaY < -100)
 			deltaY = -100;
-		var speed = Clamp(2001 - parseFloat(settings.ui3_wheelAdjustableSpeed), 0, 2000);
+		var speed = Clamp(2001 - parseFloat(settings.ui3_wheelAdjustableSpeed), 1, 2000);
 		var delta = deltaY / speed;
 		if (delta > 0 && zoomIndex < 1)
 			zoomIndex = 1; // This ensures we always hit "1x" zoom precisely when zooming in.

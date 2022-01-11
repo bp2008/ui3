@@ -2881,13 +2881,39 @@ div.invisibleLabel
 #layoutbottomTimeline
 {
 	height: 96px;
+	background-color: #000000;
 	display: none;
 }
 
-#canvas_clipTimeline
+.clipTimeline
 {
 	width: 100%;
 	height: 100%;
+	position: relative;
+}
+
+.timelineError
+{
+	font-size: 12px;
+}
+
+.timelineRanges
+{
+	position: absolute;
+}
+
+.timeRange
+{
+	position: absolute;
+}
+
+.timelineCenterBar
+{
+	position: absolute;
+	top: 0px;
+	height: 100%;
+	width: 2px;
+	background-color: rgba(0,213,255,0.75);
 }
 /* Toasts */
 #toast-container
