@@ -5290,12 +5290,14 @@ function ClipTimeline()
 	var rangeIdCounter = 0;
 	var initialized = false;
 	var scriptsLoaded = 0; // Development code
+	var dynStyle = null;
 	this.Initialize = function ()
 	{
 		if (initialized)
 			return;
 		initialized = true;
 
+		dynStyle = InjectStyleBlock("");
 		BI_CustomEvent.AddListener("FinishedLoading", finishInit);
 		$.getScript('ui3/libs-src/hammer.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 		$.getScript('ui3/libs-src/vue.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
@@ -5309,14 +5311,14 @@ function ClipTimeline()
 		Vue.component('clip-timeline', {
 			template: ''
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
-				+ ' <clip-timeline-legend :contentStyle="timelineContentStyle" :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" />'
+				+ ' <clip-timeline-legend :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" />'
 				+ ' <div class="timelineMain">'
-				+ '		<clip-timeline-loader :contentStyle="timelineContentStyle" :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :dayLoadingStatus="dayLoadingStatus" />'
-				+ '		<div class="timelineAlerts" :style="timelineContentStyle">'
-				+ '			<svg v-for="alert in VisibleTimelineAlerts" :key="alert.id" class="icon timelineAlert" :style="alert.style"><use xlink:href="#svg_x5F_Alert1"></use></svg>'
+				+ '		<clip-timeline-loader :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :dayLoadingStatus="dayLoadingStatus" />'
+				+ '		<div class="timelineAlerts timelineContent">'
+				+ '			<svg v-for="alert in VisibleTimelineAlerts" class="icon timelineAlert" :style="alert.style"><use xlink:href="#svg_x5F_Alert1"></use></svg>'
 				+ '		</div>'
-				+ '		<div class="timelineRanges" :style="timelineContentStyle">'
-				+ '			<div v-for="range in VisibleTimelineRanges" :key="range.id" class="timeRange" :style="range.style"></div> '
+				+ '		<div class="timelineRanges timelineContent">'
+				+ '			<div v-for="range in VisibleTimelineRanges" class="timeRange" :style="range.style"></div> '
 				+ '		</div>'
 				+ '		<div class="timelineCenterBar" :style="CenterBarStyle"></div>'
 				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
@@ -5394,12 +5396,12 @@ function ClipTimeline()
 				{
 					if (!date)
 						date = new Date();
-					var args = { cmd: "cliplist", camera: "index", view: "all" };
 					var startdate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 					var dayId = startdate.getTime();
 					if (timeline.dayLoadingStatus[dayId] > 0)
 						return;
 					var enddate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+					var args = { cmd: "cliplist", camera: "index", view: "all" };
 					args.startdate = startdate.getTime() / 1000;
 					args.enddate = enddate.getTime() / 1000;
 					Vue.set(timeline.dayLoadingStatus, dayId, 1);
@@ -5537,17 +5539,17 @@ function ClipTimeline()
 				{
 					timeline.ranges.sort(function (a, b) { return a.start - b.start; });
 
-					var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
-					var firstAlert = timeline.alerts.length ? timeline.alerts[0] : Date.now();
-					timeline.leftmostTime = Math.min(firstRange, firstAlert);
+					//var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
+					//var firstAlert = timeline.alerts.length ? timeline.alerts[0] : Date.now();
+					//timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
 				FinalizeAfterAddingAlerts: function ()
 				{
 					timeline.alerts.sort(function (a, b) { return a.start - b.start; });
 
-					var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
-					var firstAlert = timeline.alerts.length ? timeline.alerts[0].start : Date.now();
-					timeline.leftmostTime = Math.min(firstRange, firstAlert);
+					//var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
+					//var firstAlert = timeline.alerts.length ? timeline.alerts[0].start : Date.now();
+					//timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
 				AfterResize: function ()
 				{
@@ -5748,14 +5750,12 @@ function ClipTimeline()
 						left: this.CenterBarCenterX + 'px'
 					};
 				},
-				timelineContentStyle: function ()
+				timelineContentLeft: function ()
 				{
 					// Compute the left offset which the timeline must have so our center line is rendered at the time indicated by [currentTime].
 					var msLeftOfCurrent = (this.currentTime - this.timeBase);
 					var pxLeftOfCurrent = (msLeftOfCurrent / this.zoomFactor) - this.CenterBarCenterX;
-					return {
-						left: -pxLeftOfCurrent + 'px'
-					};
+					return -pxLeftOfCurrent;
 				},
 				currentTime: function ()
 				{
@@ -5796,6 +5796,11 @@ function ClipTimeline()
 					{
 						this.LoadTimelineData(new Date(this.VisibleDays[i].start));
 					}
+				},
+				timelineContentLeft: function ()
+				{
+					// Having vue manipulate the DOM to scroll the timeline causes a bunch of extra layout work we can avoid by doing it this way instead:
+					dynStyle(".timelineContent { transform: translate(" + this.timelineContentLeft + "px); }");
 				}
 			}
 		});
@@ -5803,7 +5808,7 @@ function ClipTimeline()
 		Vue.component('clip-timeline-legend', {
 			template: ''
 				+ '<div class="timelineLegendBar">'
-				+ '	<div class="timelineLegend" :style="contentStyle">'
+				+ '	<div class="timelineLegend timelineContent">'
 				+ '		<div class="timelineLabel" v-for="day in days" :key="day.time" :style="day.style">{{day.label}}</div>'
 				+ '	</div>'
 				+ '	<div class="timelineCurrentTimeWrapper"><div class="timelineCurrentTime">{{currentTimeStr}}</div></div>'
@@ -5826,9 +5831,7 @@ function ClipTimeline()
 				/** Timestamp of the right edge */
 				right: Number,
 				/** Timestamp of the center (current time) */
-				currentTime: Number,
-				/** Style to apply to the scrolling content to position it correctly. */
-				contentStyle: Object
+				currentTime: Number
 			},
 			created: function ()
 			{
@@ -5885,7 +5888,7 @@ function ClipTimeline()
 		});
 		Vue.component('clip-timeline-loader', {
 			template: ''
-				+ '<div class="timelineLoader" :style="contentStyle">'
+				+ '<div class="timelineLoader timelineContent">'
 				+ '	<div class="timelineLoaderDay" v-for="day in days" :key="day.start" :style="day.style" :class="{ timelineLoaderDayError: day.error }">'
 				+ '		<div v-if="day.loading" class="spin1s">'
 				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
@@ -5909,8 +5912,6 @@ function ClipTimeline()
 				right: Number,
 				/** Timestamp of the center (current time) */
 				currentTime: Number,
-				/** Style to apply to the scrolling content to position it correctly. */
-				contentStyle: Object,
 				/** Object indicating loading status of every day. */
 				dayLoadingStatus: Object
 			},
