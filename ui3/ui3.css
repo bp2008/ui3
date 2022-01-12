@@ -2947,6 +2947,58 @@ div.invisibleLabel
 	z-index: 1;
 }
 
+.timelineLoader
+{
+	height: 100%;
+	width: 100%;
+	position: absolute;
+}
+
+.timelineLoaderDay
+{
+	position: absolute;
+	top: 0px;
+	height: 100%;
+	box-sizing: border-box;
+	border: 1px solid rgba(255,255,255,0.7);
+	border-radius: 10px;
+	background-color: rgba(255,255,255,0.15);
+	display: flex;
+	justify-content: center;
+	align-items: stretch;
+	opacity: 1;
+	animation: fadeInOpacity .8s;
+}
+
+@keyframes fadeInOpacity
+{
+	0%
+	{
+		opacity: 0;
+	}
+
+	50%
+	{
+		opacity: 0;
+	}
+
+	100%
+	{
+		opacity: 1;
+	}
+}
+
+.timelineLoaderDayError
+{
+	background-color: rgba(255,104,52,0.2);
+}
+
+.timelineLoaderError
+{
+	margin: 10px 2px;
+	color: rgba(255,52,52,0.5);
+}
+
 .timelineAlerts
 {
 	position: absolute;

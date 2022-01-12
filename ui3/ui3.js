@@ -5283,6 +5283,7 @@ var ptzPresetThumbLoader = new (function ()
 ///////////////////////////////////////////////////////////////
 function ClipTimeline()
 {
+	// TODO: Periodically refresh the current day. Update existing records.
 	var self = this;
 	var enabled = UrlParameters.Get("timeline") === "1";
 	var timeline;
@@ -5310,6 +5311,7 @@ function ClipTimeline()
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
 				+ ' <clip-timeline-legend :contentStyle="timelineContentStyle" :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" />'
 				+ ' <div class="timelineMain">'
+				+ '		<clip-timeline-loader :contentStyle="timelineContentStyle" :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :dayLoadingStatus="dayLoadingStatus" />'
 				+ '		<div class="timelineAlerts" :style="timelineContentStyle">'
 				+ '			<svg v-for="alert in VisibleTimelineAlerts" :key="alert.id" class="icon timelineAlert" :style="alert.style"><use xlink:href="#svg_x5F_Alert1"></use></svg>'
 				+ '		</div>'
@@ -5323,6 +5325,8 @@ function ClipTimeline()
 			data: function ()
 			{
 				return {
+					/** Object indicating loading status of every day. */
+					dayLoadingStatus: {},
 					/** Array of alert objects.  */
 					alerts: [],
 					/** Array of range objects (represents time ranges with video). */
@@ -5333,7 +5337,7 @@ function ClipTimeline()
 					colors: [],
 					errorHtml: "",
 					/** Number of milliseconds per pixel. */
-					zoomFactor: 86400,
+					zoomFactor: 10000,
 					pinchZoomState: { startingZoomFactor: 0 },
 					/** Width of the timeline in pixels. */
 					timelineWidth: 0,
@@ -5386,26 +5390,32 @@ function ClipTimeline()
 			},
 			methods:
 			{
-				LoadTimelineData: function ()
+				LoadTimelineData: function (date)
 				{
-					timeline.errorHtml = "";
-					var now = new Date();
+					if (!date)
+						date = new Date();
 					var args = { cmd: "cliplist", camera: "index", view: "all" };
-					var startdate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-					var enddate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+					var startdate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					var dayId = startdate.getTime();
+					if (timeline.dayLoadingStatus[dayId] > 0)
+						return;
+					var enddate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+					args.startdate = startdate.getTime() / 1000;
+					args.enddate = enddate.getTime() / 1000;
+					Vue.set(timeline.dayLoadingStatus, dayId, 1);
 					ExecJSON(args
 						, function (response)
 						{
 							if (response.result !== "success")
 							{
+								Vue.set(timeline.dayLoadingStatus, dayId, 3);
 								timeline.errorHtml = args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response));
 								return;
 							}
-							else if (typeof response.data === "undefined")
-							{
-								timeline.errorHtml = args.cmd + ' response did not contain data field: ' + htmlEncode(JSON.stringify(response));
-								return;
-							}
+
+							Vue.set(timeline.dayLoadingStatus, dayId, 2);
+							if (typeof response.data === "undefined")
+								return; // This happens if you request a future date, or perhaps any date with no data.
 
 							// Convert from "cliplist" response format to proposed "timeline" response format.
 							var clips = [];
@@ -5433,16 +5443,20 @@ function ClipTimeline()
 						}
 						, function (jqXHR, textStatus, errorThrown)
 						{
+							Vue.set(timeline.dayLoadingStatus, dayId, 3);
 							timeline.errorHtml = jqXHR.ErrorMessageHtml;
 						});
-					this.LoadTimelineAlerts();
+					this.LoadTimelineAlerts(date);
 				},
-				LoadTimelineAlerts: function ()
+				LoadTimelineAlerts: function (date)
 				{
-					var now = new Date();
+					if (!date)
+						date = new Date();
 					var args = { cmd: "alertlist", camera: "index" };
-					var startdate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-					var enddate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+					var startdate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					var enddate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+					args.startdate = startdate.getTime() / 1000;
+					args.enddate = enddate.getTime() / 1000;
 					ExecJSON(args
 						, function (response)
 						{
@@ -5451,13 +5465,11 @@ function ClipTimeline()
 								timeline.errorHtml = args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response));
 								return;
 							}
-							else if (typeof response.data === "undefined")
-							{
-								timeline.errorHtml = args.cmd + ' response did not contain data field: ' + htmlEncode(JSON.stringify(response));
-								return;
-							}
 
-							// Convert from "cliplist" response format to proposed "timeline" response format.
+							if (typeof response.data === "undefined")
+								return; // This happens if you request a future date, or perhaps any date with no data.
+
+							// Convert from "alertlist" response format to proposed "timeline" response format.
 							var alerts = [];
 
 							for (var i = 0; i < response.data.length; i++)
@@ -5515,13 +5527,13 @@ function ClipTimeline()
 						timeline.colorIndices[hexcolor] = timeline.colors.length;
 					}
 				},
-				FinalizeAfterAddingColors()
+				FinalizeAfterAddingColors: function ()
 				{
 					timeline.colors.sort(function (a, b) { return a.localeCompare(b); });
 					for (var i = 0; i < timeline.colors.length; i++)
 						timeline.colorIndices[timeline.colors[i]] = i;
 				},
-				FinalizeAfterAddingRanges()
+				FinalizeAfterAddingRanges: function ()
 				{
 					timeline.ranges.sort(function (a, b) { return a.start - b.start; });
 
@@ -5529,7 +5541,7 @@ function ClipTimeline()
 					var firstAlert = timeline.alerts.length ? timeline.alerts[0] : Date.now();
 					timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
-				FinalizeAfterAddingAlerts()
+				FinalizeAfterAddingAlerts: function ()
 				{
 					timeline.alerts.sort(function (a, b) { return a.start - b.start; });
 
@@ -5699,6 +5711,21 @@ function ClipTimeline()
 				{
 					return this.currentTime + (this.visibleMilliseconds / 2);
 				},
+				VisibleDays: function ()
+				{
+					var days = [];
+					var date = new Date(this.left);
+					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					while (date.getTime() < this.right)
+					{
+						var day = {};
+						day.start = date.getTime();
+						date.setDate(date.getDate() + 1);
+						day.end = date.getTime();
+						days.push(day);
+					}
+					return days;
+				},
 				VisibleTimelineRanges: function ()
 				{
 					return this.ranges;
@@ -5762,6 +5789,13 @@ function ClipTimeline()
 						var a = this.alerts[i];
 						a.style = this.GetAlertStyle(a);
 					}
+				},
+				VisibleDays: function ()
+				{
+					for (var i = 0; i < this.VisibleDays.length; i++)
+					{
+						this.LoadTimelineData(new Date(this.VisibleDays[i].start));
+					}
 				}
 			}
 		});
@@ -5782,37 +5816,19 @@ function ClipTimeline()
 			props:
 			{
 				/** Width of timeline in pixels */
-				width: {
-					type: Number,
-					required: true
-				},
+				width: Number,
 				/** Millisecond timestamp which DOM elements are positioned relative to. */
-				timeBase: {
-					type: Number,
-					required: true
-				},
+				timeBase: Number,
 				/** Number of milliseconds per pixel. */
-				zoomFactor: {
-					type: Number,
-					required: true
-				},
+				zoomFactor: Number,
 				/** Timestamp of the left edge */
-				left: { // 
-					type: Number,
-					required: true
-				},
+				left: Number,
 				/** Timestamp of the right edge */
-				right: {
-					type: Number,
-					required: true
-				},
+				right: Number,
 				/** Timestamp of the center (current time) */
-				currentTime: {
-					type: Number,
-					required: true
-				},
+				currentTime: Number,
 				/** Style to apply to the scrolling content to position it correctly. */
-				contentStyle: {}
+				contentStyle: Object
 			},
 			created: function ()
 			{
@@ -5867,6 +5883,72 @@ function ClipTimeline()
 			{
 			}
 		});
+		Vue.component('clip-timeline-loader', {
+			template: ''
+				+ '<div class="timelineLoader" :style="contentStyle">'
+				+ '	<div class="timelineLoaderDay" v-for="day in days" :key="day.start" :style="day.style" :class="{ timelineLoaderDayError: day.error }">'
+				+ '		<div v-if="day.loading" class="spin1s">'
+				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
+				+ '		</div>'
+				+ '		<div v-else-if="day.error" class="timelineLoaderError">'
+				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_closeBtn"></use></svg>'
+				+ '		</div>'
+				+ '	</div>'
+				+ '</div>',
+			props:
+			{
+				/** Width of timeline in pixels */
+				width: Number,
+				/** Millisecond timestamp which DOM elements are positioned relative to. */
+				timeBase: Number,
+				/** Number of milliseconds per pixel. */
+				zoomFactor: Number,
+				/** Timestamp of the left edge */
+				left: Number,
+				/** Timestamp of the right edge */
+				right: Number,
+				/** Timestamp of the center (current time) */
+				currentTime: Number,
+				/** Style to apply to the scrolling content to position it correctly. */
+				contentStyle: Object,
+				/** Object indicating loading status of every day. */
+				dayLoadingStatus: Object
+			},
+			computed:
+			{
+				days: function ()
+				{
+					var days = [];
+					var date = new Date(this.left);
+					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					while (date.getTime() < this.right)
+					{
+						var day = {};
+						day.start = date.getTime();
+						date.setDate(date.getDate() + 1);
+						var state = this.dayLoadingStatus[day.start];
+						// states:
+						// undefined: Date not (yet) processed by timeline engine
+						// 0: not loading
+						// 1: loading
+						// 2: loaded
+						// 3: error
+						if (state === 0 || state === 1 || state === 3)
+						{
+							day.end = date.getTime();
+							day.style = {
+								left: ((day.start - this.timeBase) / this.zoomFactor) + 'px',
+								width: ((day.end - day.start) / this.zoomFactor) + 'px'
+							};
+							day.loading = state === 1;
+							day.error = state === 3;
+							days.push(day);
+						}
+					}
+					return days;
+				}
+			}
+		});
 
 		//Vue.component('clip-timeline-template', {
 		//	template: ''
@@ -5904,18 +5986,6 @@ function ClipTimeline()
 			el: "#layoutbottomTimeline"
 		});
 		resized();
-		self.LoadTimelineData();
-	}
-	this.LoadTimelineData = function ()
-	{
-		if (!enabled)
-			return;
-		if (!timeline)
-		{
-			console.error("Timeline component not loaded yet");
-			return;
-		}
-		timeline.LoadTimelineData();
 	}
 	this.getVue = function ()
 	{
