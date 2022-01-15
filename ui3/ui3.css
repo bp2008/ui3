@@ -3014,14 +3014,10 @@ div.invisibleLabel
 	height: 10px !important;
 }
 
-.timelineRanges
+.clipTimelineCanvas
 {
-	position: absolute;
-}
-
-.timeRange
-{
-	position: absolute;
+	width: 100%;
+	height: 100%;
 }
 
 .timelineCenterBar

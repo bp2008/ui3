@@ -5317,9 +5317,7 @@ function ClipTimeline()
 				+ '		<div class="timelineAlerts timelineContent">'
 				+ '			<svg v-for="alert in VisibleTimelineAlerts" class="icon timelineAlert" :style="alert.style"><use xlink:href="#svg_x5F_Alert1"></use></svg>'
 				+ '		</div>'
-				+ '		<div class="timelineRanges timelineContent">'
-				+ '			<div v-for="range in VisibleTimelineRanges" class="timeRange" :style="range.style"></div> '
-				+ '		</div>'
+				+ '		<canvas ref="clipTimelineCanvas" class="clipTimelineCanvas" />'
 				+ '		<div class="timelineCenterBar" :style="CenterBarStyle"></div>'
 				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
 				+ '	</div>'
@@ -5343,6 +5341,8 @@ function ClipTimeline()
 					pinchZoomState: { startingZoomFactor: 0 },
 					/** Width of the timeline in pixels. */
 					timelineWidth: 0,
+					/** Height of the timeline in pixels. */
+					timelineHeight: 0,
 					/** Timestamp of the leftmost object. NOT CURRENTLY USED. */
 					leftmostTime: 0,
 					/** Millisecond timestamp which DOM elements are positioned relative to. */
@@ -5496,18 +5496,7 @@ function ClipTimeline()
 				AddRange: function (range)
 				{
 					range.id = rangeIdCounter++;
-					range.style = timeline.GetRangeStyle(range);
 					timeline.ranges.push(range);
-				},
-				GetRangeStyle: function (range)
-				{
-					return {
-						backgroundColor: '#' + range.color
-						, left: ((range.start - timeline.timeBase) / timeline.zoomFactor) + 'px'
-						, top: 12 + (timeline.colorIndices[range.color] * timeline.TimelineColorbarHeight) + 'px' // Offset by 12px for alert icons.
-						, width: Math.max(0.5, range.len / timeline.zoomFactor) + 'px'
-						, height: timeline.TimelineColorbarHeight + 'px'
-					};
 				},
 				AddAlert: function (alert)
 				{
@@ -5554,7 +5543,10 @@ function ClipTimeline()
 				AfterResize: function ()
 				{
 					if (timeline.$refs.tl_root)
+					{
 						timeline.timelineWidth = timeline.$refs.tl_root.offsetWidth;
+						timeline.timelineHeight = timeline.$refs.tl_root.offsetHeight;
+					}
 				},
 				mouseDown: function (e)
 				{
@@ -5694,6 +5686,32 @@ function ClipTimeline()
 						}, 33);
 
 					timeline.acceptZoomThrottled(arg);
+				},
+				drawCanvas: function ()
+				{
+					var canvas = this.$refs.clipTimelineCanvas;
+					if (!canvas)
+						return;
+					var ctx = canvas.getContext("2d");
+					ctx.clearRect(0, 0, canvas.width, canvas.height);
+					ctx.fillStyle = "#000000";
+					ctx.fillRect(0, 0, canvas.width, canvas.height);
+					var ranges = this.VisibleTimelineRanges;
+					var left = this.left;
+					var right = this.right;
+					for (var i = 0; i < ranges.length; i++)
+					{
+						var range = ranges[i];
+						if (range.start + range.len >= left && range.start <= right)
+						{
+							ctx.fillStyle = "#" + range.color;
+							var x = ((range.start - left) / timeline.zoomFactor);
+							var y = 12 + (timeline.colorIndices[range.color] * timeline.TimelineColorbarHeight);
+							var w = Math.max(0.5, range.len / timeline.zoomFactor);
+							var h = timeline.TimelineColorbarHeight;
+							ctx.fillRect(x, y, w, h);
+						}
+					}
 				}
 			},
 			computed:
@@ -5747,7 +5765,7 @@ function ClipTimeline()
 				CenterBarStyle: function ()
 				{
 					return {
-						left: this.CenterBarCenterX + 'px'
+						left: (this.CenterBarCenterX - 1) + 'px'
 					};
 				},
 				timelineContentLeft: function ()
@@ -5779,16 +5797,7 @@ function ClipTimeline()
 				zoomFactor: function ()
 				{
 					this.timeBase = this.currentTime;
-					for (var i = 0; i < this.ranges.length; i++)
-					{
-						var r = this.ranges[i];
-						r.style = this.GetRangeStyle(r);
-					}
-					for (var i = 0; i < this.alerts.length; i++)
-					{
-						var a = this.alerts[i];
-						a.style = this.GetAlertStyle(a);
-					}
+					this.drawCanvas();
 				},
 				VisibleDays: function ()
 				{
@@ -5801,6 +5810,32 @@ function ClipTimeline()
 				{
 					// Having vue manipulate the DOM to scroll the timeline causes a bunch of extra layout work we can avoid by doing it this way instead:
 					dynStyle(".timelineContent { transform: translate(" + this.timelineContentLeft + "px); }");
+				},
+				timelineWidth: function ()
+				{
+					var canvas = this.$refs.clipTimelineCanvas;
+					if (!canvas)
+						return;
+					canvas.width = this.timelineWidth;
+					canvas.height = this.timelineHeight;
+					this.drawCanvas();
+				},
+				timelineHeight: function ()
+				{
+					var canvas = this.$refs.clipTimelineCanvas;
+					if (!canvas)
+						return;
+					canvas.width = this.timelineWidth;
+					canvas.height = this.timelineHeight;
+					this.drawCanvas();
+				},
+				VisibleTimelineRanges: function ()
+				{
+					this.drawCanvas();
+				},
+				currentTime: function ()
+				{
+					this.drawCanvas();
 				}
 			}
 		});
