@@ -11267,39 +11267,42 @@ function CameraListLoader()
 				else
 					numCameras++;
 			}
-			//// Are any of the cameras not in a group? Disabled 2022-01-06 because UI3 can now control whether hidden cameras are actually shown.
-			//var camsNotInGroup = [];
-			//for (var i = 0; i < lastResponse.data.length; i++)
-			//{
-			//	var obj = lastResponse.data[i];
-			//	if (!self.CameraIsGroupOrCycle(obj) && obj.isEnabled && obj.webcast)
-			//	{
-			//		if (!camIdsInGroups[obj.optionValue])
-			//			camsNotInGroup.push(obj);
-			//	}
-			//}
-			//if (camsNotInGroup.length > 0)
-			//{
-			//	// Create a fake group for each of these cameras.
-			//	var anyFakeGroupsNotHidden = false;
-			//	for (var i = 0; i < camsNotInGroup.length; i++)
-			//	{
-			//		var fakeGroup = MakeFakeGroup(camsNotInGroup[i]);
-			//		lastResponse.data.push(fakeGroup);
-			//		if (!camsNotInGroup[i].hidden)
-			//			anyFakeGroupsNotHidden = true;
-			//	}
+			// Is this a single-camera system without a visible camera group?
+			if (numGroups === 0 && numCameras > 0)
+			{
+				var camsNotInGroup = [];
+				for (var i = 0; i < lastResponse.data.length; i++)
+				{
+					var obj = lastResponse.data[i];
+					if (!self.CameraIsGroupOrCycle(obj) && obj.isEnabled && obj.webcast)
+					{
+						if (!camIdsInGroups[obj.optionValue])
+							camsNotInGroup.push(obj);
+					}
+				}
+				if (camsNotInGroup.length > 0)
+				{
+					// Create a fake group for each of these cameras.
+					var anyFakeGroupsNotHidden = false;
+					for (var i = 0; i < camsNotInGroup.length; i++)
+					{
+						var fakeGroup = MakeFakeGroup(camsNotInGroup[i]);
+						InsertFakeGroup(lastResponse.data, fakeGroup);
+						if (!camsNotInGroup[i].hidden)
+							anyFakeGroupsNotHidden = true;
+					}
 
-			//	//if (!firstCameraListLoaded && numCameras > 1 && anyFakeGroupsNotHidden && settings.ui3_webcasting_disabled_dontShowAgain != "1")
-			//	//{
-			//	//	webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
-			//	//		+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
-			//	//		+ ' not visible in any group streams.<br><br>'
-			//	//		+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
-			//	//		+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
-			//	//		, 60000, true);
-			//	//}
-			//}
+					//if (!firstCameraListLoaded && numCameras > 1 && anyFakeGroupsNotHidden && settings.ui3_webcasting_disabled_dontShowAgain != "1")
+					//{
+					//	webcastingWarning = toaster.Info(camsNotInGroup.length + ' camera' + (camsNotInGroup.length == 1 ? ' has' : 's have')
+					//		+ ' been individually added to the Current Group dropdown list because ' + (camsNotInGroup.length == 1 ? 'it was' : 'they were')
+					//		+ ' not visible in any group streams.<br><br>'
+					//		+ '<input type="button" class="simpleTextButton btnGreen" value="Learn more" onclick="UIHelp.LearnMore(\'Camera Group Webcasting\')" /><br><br>'
+					//		+ '<input type="button" class="simpleTextButton btnRed" value="Do not warn again" onclick="DontShowWebcastingWarningAgain()" />'
+					//		, 60000, true);
+					//}
+				}
+			}
 
 			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
 			cameraIdToCameraMap = new Object();
@@ -11354,6 +11357,18 @@ function CameraListLoader()
 			, rects: []
 			, isFakeGroup: true
 		});
+	}
+	var InsertFakeGroup = function (cams, fakeGroup)
+	{
+		var i;
+		for (i = 0; i < cams.length; i++)
+		{
+			if (self.CameraIsGroup(cams[i]))
+				continue;
+			else
+				break;
+		}
+		cams.splice(i, 0, fakeGroup);
 	}
 	this.AsyncLoadDynamicGroupRects = function (groupId, resolution)
 	{
@@ -12049,7 +12064,7 @@ function VideoPlayerController()
 		var camData = currentlyLoadedCamera;
 		if (camData)
 		{
-			if (camData.group)
+			if (camData.group && !camData.isFakeGroup)
 			{
 				var cams = cameraListLoader.GetGroupCams(camData.optionValue);
 				var rects = cameraListLoader.GetGroupRects(camData.optionValue);
@@ -12102,6 +12117,8 @@ function VideoPlayerController()
 		{
 			// Back to Group
 			camData = self.GetCurrentHomeGroupObj();
+			if (camData.optionValue === currentlyLoadedImage.id)
+				return;
 			if (scaleOut && playerModule.DrawFullCameraAsThumb)
 				playerModule.DrawFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
 			self.LoadLiveCamera(camData);
@@ -18518,7 +18535,7 @@ function CanvasContextMenu()
 	var onShowLiveContextMenu = function (menu)
 	{
 		var imgLoaded = videoPlayer.Loaded().image;
-		if (imgLoaded.isGroup || cameraListLoader.isDynamicLayoutEligible(imgLoaded.id))
+		if ((imgLoaded.isGroup && !videoPlayer.Loaded().cam.isFakeGroup) || cameraListLoader.isDynamicLayoutEligible(imgLoaded.id))
 			$("#submenu_trigger_groupSettings").closest('.b-m-item,.b-m-ifocus').show();
 		else
 			$("#submenu_trigger_groupSettings").closest('.b-m-item,.b-m-ifocus').hide();
