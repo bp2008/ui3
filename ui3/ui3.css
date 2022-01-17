@@ -2999,21 +2999,6 @@ div.invisibleLabel
 	color: rgba(255,52,52,0.5);
 }
 
-.timelineAlerts
-{
-	position: absolute;
-}
-
-.timelineAlert
-{
-	color: #ff6600;
-	position: absolute;
-	top: 1px;
-	left: -5px;
-	width: 10px !important;
-	height: 10px !important;
-}
-
 .clipTimelineCanvas
 {
 	width: 100%;

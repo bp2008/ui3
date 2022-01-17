@@ -5281,22 +5281,35 @@ var ptzPresetThumbLoader = new (function ()
 ///////////////////////////////////////////////////////////////
 // Timeline ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAUCAYAAABf2RdVAAABMUlEQVQoz33Rv0uVYRjG8c/z+OYBCXJIGwINysAaGkSIfgxO0j9y/go3cUy3iAdECJxajgXRIiJBbm5C4GCgCZVDS/TT"
+	+ "87rcb74dou9238/Fdd1cTxLUXdPo4WasfmMRS9k5d3C1NR/hdSpOc7gM4z5GGmNsYw8apzHMIsX8Bb1UfG2LbuFGK2oXO82Q666MuxiN3Q9s4HMjqnAJ9zAUu4/4gOm6C75VuB5xDVewgn7UsJYxEw8NHUzgGk7Qq8L+SQimMI8LsV"
+	+ "/Guwov8DJuWsAj/MQzvEpFP6ein4pTXMZc1PIGTwd7ErfdxiEe4+BPT/Etnbilg1VspaL+S4RJPMQmVlPxvZUg110pyhQxxwbIuIgHWMPbdkxbNIVPWE/FL/8gYxzPUzn/0EEq7OO9/3AGBF9Ja3vb+5oAAAAASUVORK5CYII=";
+var reduceTimeline = true;
 function ClipTimeline()
 {
 	// TODO: Periodically refresh the current day. Update existing records.
 	var self = this;
 	var enabled = UrlParameters.Get("timeline") === "1";
 	var timeline;
-	var rangeIdCounter = 0;
 	var initialized = false;
 	var scriptsLoaded = 0; // Development code
 	var dynStyle = null;
+	var alertImg = new Image();
+	var alertImgLoaded = false;
+
 	this.Initialize = function ()
 	{
 		if (initialized)
 			return;
 		initialized = true;
 
+		alertImg.onload = function ()
+		{
+			alertImgLoaded = true;
+			if (timeline && typeof timeline.drawCanvas === "function")
+				timeline.drawCanvas();
+		};
+		alertImg.src = timelineAlertImgSrc;
 		dynStyle = InjectStyleBlock("");
 		BI_CustomEvent.AddListener("FinishedLoading", finishInit);
 		$.getScript('ui3/libs-src/hammer.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
@@ -5314,9 +5327,6 @@ function ClipTimeline()
 				+ ' <clip-timeline-legend :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" />'
 				+ ' <div class="timelineMain">'
 				+ '		<clip-timeline-loader :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :dayLoadingStatus="dayLoadingStatus" />'
-				+ '		<div class="timelineAlerts timelineContent">'
-				+ '			<svg v-for="alert in VisibleTimelineAlerts" class="icon timelineAlert" :style="alert.style"><use xlink:href="#svg_x5F_Alert1"></use></svg>'
-				+ '		</div>'
 				+ '		<canvas ref="clipTimelineCanvas" class="clipTimelineCanvas" />'
 				+ '		<div class="timelineCenterBar" :style="CenterBarStyle"></div>'
 				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
@@ -5329,11 +5339,9 @@ function ClipTimeline()
 					dayLoadingStatus: {},
 					/** Array of alert objects.  */
 					alerts: [],
-					/** Array of range objects (represents time ranges with video). */
-					ranges: [],
-					/** Map of color to array index. */
-					colorIndices: {},
-					/** Array of colors, predictably ordered.  */
+					/** Contains arrays of range objects, keyed by the color assigned to them.  Each range object represents a time range that is recorded on video. */
+					ranges: {},
+					/** Array of colors. These are the keys for the ranges object, in the order they should be drawn.  */
 					colors: [],
 					errorHtml: "",
 					/** Number of milliseconds per pixel. */
@@ -5353,7 +5361,10 @@ function ClipTimeline()
 					hammerTime: null,
 					acceptZoomThrottled: null,
 					accumulatedZoomDelta: 0,
-					panThrottled: null
+					panThrottled: null,
+					/** Counter that is incremented when new range or alert data has been added. Modifying this counter causes the canvas to be redrawn.
+					 * Added because it wasn't behaving reliably when watching the data collections directly for changes. */
+					newDataNotifier: 0
 				};
 			},
 			created: function ()
@@ -5434,14 +5445,12 @@ function ClipTimeline()
 							for (var clipIdx = 0; clipIdx < clips.length; clipIdx++)
 							{
 								clips[clipIdx].color = BlueIrisColorToCssColor(clips[clipIdx].color);
-								timeline.AddColor(clips[clipIdx].color);
-							}
-							timeline.FinalizeAfterAddingColors();
-
-							for (var clipIdx = 0; clipIdx < clips.length; clipIdx++)
 								timeline.AddRange(clips[clipIdx]);
+							}
 
 							timeline.FinalizeAfterAddingRanges();
+							timeline.newDataNotifier++;
+							console.log("Added date");
 						}
 						, function (jqXHR, textStatus, errorThrown)
 						{
@@ -5477,7 +5486,7 @@ function ClipTimeline()
 							for (var i = 0; i < response.data.length; i++)
 							{
 								var src = response.data[i];
-								var alert = { cam: src.camera, color: src.color, start: src.date * 1000, thumb: src.path };
+								var alert = src.date * 1000;
 								alerts.push(alert);
 							}
 
@@ -5487,6 +5496,7 @@ function ClipTimeline()
 								timeline.AddAlert(alerts[i]);
 
 							timeline.FinalizeAfterAddingAlerts();
+							timeline.newDataNotifier++;
 						}
 						, function (jqXHR, textStatus, errorThrown)
 						{
@@ -5495,38 +5505,34 @@ function ClipTimeline()
 				},
 				AddRange: function (range)
 				{
-					range.id = rangeIdCounter++;
-					timeline.ranges.push(range);
+					var rangesByColor = timeline.ranges[range.color];
+					if (typeof rangesByColor === "undefined")
+					{
+						timeline.colors.push(range.color);
+						timeline.colors.sort();
+						rangesByColor = [];
+
+						Vue.set(timeline.ranges, range.color, rangesByColor);
+					}
+					rangesByColor.push(range);
+					//var rangesByDay = rangesByColor[GetTimestampWithDayPrecision(range.start)];
+					//if (typeof rangesByColor === "undefined")
+					//{
+					//	timeline.colors.push(range.color);
+					//	timeline.colors.sort();
+					//	rangesByColor = [];
+
+					//	Vue.set(timeline.ranges, range.color, rangesByColor);
+					//}
 				},
 				AddAlert: function (alert)
 				{
-					alert.id = alert.thumb;
-					alert.style = timeline.GetAlertStyle(alert);
 					timeline.alerts.push(alert);
-				},
-				GetAlertStyle: function (alert)
-				{
-					return {
-						left: ((alert.start - timeline.timeBase) / timeline.zoomFactor) + 'px'
-					};
-				},
-				AddColor: function (hexcolor)
-				{
-					if (typeof timeline.colorIndices[hexcolor] === "undefined")
-					{
-						timeline.colors.push(hexcolor);
-						timeline.colorIndices[hexcolor] = timeline.colors.length;
-					}
-				},
-				FinalizeAfterAddingColors: function ()
-				{
-					timeline.colors.sort(function (a, b) { return a.localeCompare(b); });
-					for (var i = 0; i < timeline.colors.length; i++)
-						timeline.colorIndices[timeline.colors[i]] = i;
 				},
 				FinalizeAfterAddingRanges: function ()
 				{
-					timeline.ranges.sort(function (a, b) { return a.start - b.start; });
+					for (var i = 0; i < timeline.colors.length; i++)
+						timeline.ranges[timeline.colors[i]].sort(function (a, b) { return a.start - b.start; });
 
 					//var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
 					//var firstAlert = timeline.alerts.length ? timeline.alerts[0] : Date.now();
@@ -5534,7 +5540,7 @@ function ClipTimeline()
 				},
 				FinalizeAfterAddingAlerts: function ()
 				{
-					timeline.alerts.sort(function (a, b) { return a.start - b.start; });
+					timeline.alerts.sort(function (a, b) { return a - b; });
 
 					//var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
 					//var firstAlert = timeline.alerts.length ? timeline.alerts[0].start : Date.now();
@@ -5692,26 +5698,168 @@ function ClipTimeline()
 					var canvas = this.$refs.clipTimelineCanvas;
 					if (!canvas)
 						return;
+					console.log("drawCanvas");
 					var ctx = canvas.getContext("2d");
 					ctx.clearRect(0, 0, canvas.width, canvas.height);
 					ctx.fillStyle = "#000000";
 					ctx.fillRect(0, 0, canvas.width, canvas.height);
-					var ranges = this.VisibleTimelineRanges;
+
 					var left = this.left;
 					var right = this.right;
-					for (var i = 0; i < ranges.length; i++)
+
+					// Draw alert icons
+					var alerts = this.alerts;
+					if (alertImgLoaded)
 					{
-						var range = ranges[i];
-						if (range.start + range.len >= left && range.start <= right)
+						var alertImgScale = alertImg.naturalHeight / 11;
+						var alertImgW = alertImg.naturalWidth / alertImgScale;
+						var alertImgH = alertImg.naturalHeight / alertImgScale;
+						var alertImgXOffset = alertImgW / 2;
+						var alertImgYOffset = 1;
+
+						var nextAllowedX = 0;
+						var x;
+
+						for (var i = 0; i < alerts.length; i++)
 						{
+							var alert = alerts[i];
+							if (alert >= left && alert <= right)
+							{
+								x = ((alert - left) / timeline.zoomFactor) - alertImgXOffset;
+								// For speed and legibility, do not draw overlapping icons. 
+								// Also, leave 1 icon width of padding to the right of any drawn 
+								// icon, to achieve spacing similar to the local console.
+								if (x >= nextAllowedX)
+								{
+									nextAllowedX = x + (alertImgW * 2);
+									ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
+								}
+							}
+						}
+					}
+
+					// Motion-triggered systems can have hundreds of thousands of time ranges when the timeline is zoomed out.
+					// This is far too much to render efficiently.
+					// If we combine close-together ranges, we don't have to draw as many objects.
+
+					// This is still too slow when there's a lot of data loaded.
+					// Just scanning over all the time ranges is slow.
+
+					// OPTIMIZATION PLAN A:
+					// Further split the ranges by day:
+					// 1. The structure will be:
+					//	data.ranges = {}
+					//	data.ranges[color] = {object}
+					//  data.ranges[color][day] = array
+					//  data.ranges[color][day][i] = range
+					// 2. When retrieving data from the server, any ranges that cross a day boundary will need to be split at the day boundary.
+					// 3. Note that a range could cross one, two, or more day boundaries. Test the splitting algorithm with such a case.
+					// 4. When retrieving range datasets, we can retrieve just the days we need, and therefore we will have <= 2 days of extra data to iterate across.
+					// 5. Segregating data by day also means we don't have to sort as large of a collection when adding new data.
+					//
+					// If the above works well for ranges, repeat it for the alerts collection, splitting them by day (we don't care about color for alerts).
+
+					// OPTIMIZATION PLAN B:
+					// Range add optimization to remove the need to sort.
+					// Always add ranges from oldest to newest (complete REFACTORING PLAN D first).
+					// We don't actually care what camera/thumb is there.  We only need color, start, len.  Remove other fields from spec sheet.
+					// If the range being added starts before the latest range, then find where the new range needs to go and insert it with splice().  Care should be taken so this never happens by design, as it will be slow and it will not take into account overlapping with other ranges. Pop up a warning message or log it to console or something.
+					// If the range being added starts after the latest range but overlaps with the latest range, modify the latest range and do not add a new range object. 
+					// If the range being added starts after the latest range, and does not overlap, then just push it onto the array.
+
+					// OPTIMIZATION PLAN C:
+					// Set up an orderly queue to load new days of data one at a time, prioritizing the most recent.  No more wild-west loading like it is right now.
+
+					// REFACTORING PLAN D:
+					// Properly separate the "cliplist" and "alertlist" based loading of timeline data into a ponyfill.
+
+					var allRanges = this.ranges;
+					var allReducedRanges = {};
+					var perfBeforeReduce = performance.now();
+					if (reduceTimeline)
+					{
+						for (var ci = 0; ci < this.colors.length; ci++)
+						{
+							var colorKey = this.colors[ci];
+							var ranges = allRanges[colorKey];
+							var reducedRanges = allReducedRanges[colorKey] = [];
+
+							// We're reducing the dataset by creating an array of true/false buckets.
+							// Each bucket represents a time slot and the bucket is filled (set = true) if the time slot contains any video.
+							var bucketSize = timeline.zoomFactor / 2; // One bucket represents this many milliseconds.
+							var buckets = new Array((timeline.visibleMilliseconds / bucketSize) | 0);
+
+							// Set the value = true for every bucket that has some video data.
+							for (var i = 0; i < ranges.length; i++)
+							{
+								var range = ranges[i];
+								if (range.start <= right && range.start + range.len >= left)
+								{
+									var leftOffsetMs = range.start - left;
+									var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
+									var firstBucketIdx = (leftOffsetMs / bucketSize) | 0; // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
+									var lastBucketIdx = (rightOffsetMs / bucketSize) | 0;
+									for (var n = firstBucketIdx; n <= lastBucketIdx; n++)
+										buckets[n] = true;
+								}
+							}
+
+							// Build an array containing the minimum number of ranges required to draw these buckets.
+							var inBucket = false;
+							var currentRange = { color: colorKey };
+							for (var i = 0; i < buckets.length; i++)
+							{
+								if (buckets[i])
+								{
+									if (inBucket)
+										continue;
+									else
+									{
+										currentRange.start = left + (i * bucketSize);
+										inBucket = true;
+									}
+								}
+								else
+								{
+									if (!inBucket)
+										continue;
+									else
+									{
+										currentRange.len = (left + (i * bucketSize)) - currentRange.start;
+										reducedRanges.push(currentRange);
+										currentRange = { color: colorKey };
+										inBucket = false;
+									}
+								}
+							}
+							if (inBucket)
+							{
+								currentRange.len = (i * bucketSize) - currentRange.start;
+								reducedRanges.push(currentRange);
+							}
+						}
+					}
+					else
+						allReducedRanges = allRanges;
+					var perfBeforeRender = performance.now();
+
+					for (var ci = 0; ci < this.colors.length; ci++)
+					{
+						var colorKey = this.colors[ci];
+						var ranges = allReducedRanges[colorKey];
+						for (var i = 0; i < ranges.length; i++)
+						{
+							var range = ranges[i];
 							ctx.fillStyle = "#" + range.color;
 							var x = ((range.start - left) / timeline.zoomFactor);
-							var y = 12 + (timeline.colorIndices[range.color] * timeline.TimelineColorbarHeight);
+							var y = 12 + (ci * timeline.TimelineColorbarHeight);
 							var w = Math.max(0.5, range.len / timeline.zoomFactor);
 							var h = timeline.TimelineColorbarHeight;
 							ctx.fillRect(x, y, w, h);
 						}
 					}
+					var perfEnd = performance.now();
+					console.log("Reduce took " + (perfBeforeRender - perfBeforeReduce) + " ms. Render took " + (perfEnd - perfBeforeRender) + " ms.");
 				}
 			},
 			computed:
@@ -5746,14 +5894,41 @@ function ClipTimeline()
 					}
 					return days;
 				},
-				VisibleTimelineRanges: function ()
-				{
-					return this.ranges;
-				},
-				VisibleTimelineAlerts: function ()
-				{
-					return this.alerts;
-				},
+				//VisibleTimelineRanges: function ()
+				//{
+				//	// Filter to only the ranges that overlap the visible area of the timeline.
+				//	var left = this.left;
+				//	var right = this.right;
+				//	var allRanges = this.ranges;
+				//	var allVisibleRanges = {};
+				//	for (var ci = 0; ci < this.colors.length; ci++)
+				//	{
+				//		var colorKey = this.colors[ci];
+				//		var ranges = allRanges[colorKey];
+				//		var reducedRanges = allVisibleRanges[colorKey] = [];
+				//		for (var i = 0; i < ranges.length; i++)
+				//		{
+				//			var range = ranges[i];
+				//			if (range.start + range.len >= left && range.start <= right)
+				//				reducedRanges.push(range);
+				//		}
+				//	}
+				//	return allVisibleRanges;
+				//},
+				//VisibleTimelineAlerts: function () // This computed property would provide little benefit over just filtering in-place when we draw the canvas.  And this would probably be slower.
+				//{
+				//	var allAlerts = this.alerts;
+				//	var visibleAlerts = [];
+				//	for (var i = 0; i < alerts.length; i++)
+				//	{
+				//		var alert = alerts[i];
+				//		if (alert >= left && alert <= right)
+				//		{
+				//			visibleAlerts.push(allAlerts);
+				//		}
+				//	}
+				//	return visibleAlerts;
+				//},
 				TimelineColorbarHeight: function ()
 				{
 					return (80 / this.colors.length);
@@ -5829,7 +6004,7 @@ function ClipTimeline()
 					canvas.height = this.timelineHeight;
 					this.drawCanvas();
 				},
-				VisibleTimelineRanges: function ()
+				newDataNotifier: function ()
 				{
 					this.drawCanvas();
 				},
