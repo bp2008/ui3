@@ -5400,6 +5400,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		}
 		else
 		{
+			console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span at ' + GetTimeStr(new Date()) + ' using simulated timeline data ("cliplist" and "alertlist")');
 			if (!getTimelineData_ponyfill)
 				getTimelineData_ponyfill = new GetTimelineData_Ponyfill();
 			return getTimelineData_ponyfill.getSimulatedTimelineData(startdate, enddate);
@@ -5474,8 +5475,10 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	{
 		var date = new Date(left.getFullYear(), left.getMonth(), left.getDate());
 		var daysNeedingToLoad = [];
+		var visibleDayCount = 0;
 		while (date < right)
 		{
+			visibleDayCount++;
 			if (!dayLoadingStatus[date.getTime()]) // Days where loading has not started
 				daysNeedingToLoad.push(date.getTime());
 			date.setDate(date.getDate() + 1);
@@ -5501,7 +5504,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		next.end.setDate(next.end.getDate() + 1);
 
 		// Expand the date range to include adjacent days if needed.
-		var maxDays = Clamp(daysNeedingToLoad.length, 1, 365);
+		var maxDays = Clamp(Math.round(SizeExpansionScaler_A(visibleDayCount)), 1, 365);
 
 		// Check earlier days.
 		date = new Date(next.start.getTime());
@@ -5522,6 +5525,10 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		}
 		next.days.sort();
 		return next;
+	}
+	function SizeExpansionScaler_A(x)
+	{
+		return 1 + 0.035 * Math.pow(x, 1.25);
 	}
 	function DateNeedsToLoad(date)
 	{
