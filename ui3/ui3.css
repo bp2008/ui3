@@ -2993,7 +2993,7 @@ div.invisibleLabel
 
 .timelineLoaderWaiting
 {
-	margin: 10px;
+	margin: 20px;
 }
 
 @keyframes fadeInOpacity

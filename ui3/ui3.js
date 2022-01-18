@@ -5392,10 +5392,18 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	var getTimelineData_ponyfill;
 	function GetTimelineData(startdate, enddate)
 	{
-		if (!getTimelineData_ponyfill)
-			getTimelineData_ponyfill = new GetTimelineData_Ponyfill();
-		return getTimelineData_ponyfill.getSimulatedTimelineData(startdate, enddate);
+		if (useNativeTimelineCommand)
+		{
+			return ExecJSONPromise({ cmd: "timeline", start: startdate, end: enddate });
+		}
+		else
+		{
+			if (!getTimelineData_ponyfill)
+				getTimelineData_ponyfill = new GetTimelineData_Ponyfill();
+			return getTimelineData_ponyfill.getSimulatedTimelineData(startdate, enddate);
+		}
 	}
+	var useNativeTimelineCommand = UrlParameters.Get("timeline") === "2";
 	/** Precise leftmost date currently visible. */
 	var left = GetServerDate(new Date());
 	var startOfLeftDate = new Date(left.getFullYear(), left.getMonth(), left.getDate());
@@ -5497,7 +5505,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		next.end.setDate(next.end.getDate() + 1);
 
 		// Expand the date range to include nearby consecutive days if possible.
-		var maxDays = Clamp((daysNeedingToLoad.length / 2) | 0, 1, 30); // | 0 is a cheap way of rounding down to 32 bit signed integer
+		var maxDays = Clamp((daysNeedingToLoad.length / 2) | 0, 1, 365); // | 0 is a cheap way of rounding down to 32 bit signed integer
 
 		// Check earlier days.
 		date = new Date(next.start.getTime());
@@ -5531,7 +5539,7 @@ function ClipTimeline()
 {
 	// TODO: Periodically refresh the current day. Update existing records.
 	var self = this;
-	var enabled = UrlParameters.Get("timeline") === "1";
+	var enabled = UrlParameters.Get("timeline") === "1" || UrlParameters.Get("timeline") === "2";
 	var timeline;
 	var initialized = false;
 	var scriptsLoaded = 0; // Development code
@@ -6337,7 +6345,7 @@ function ClipTimeline()
 				+ '<div class="timelineLoader timelineContent" v-show="!!tags.length">'
 				+ '	<div class="timelineLoaderTag" v-for="tag in tags" :key="tag.id" :style="tag.style" :class="{ timelineLoaderTagWaiting: !tag.state, timelineLoaderTagLoading: tag.state === 1, timelineLoaderTagError: tag.state === 3 }" :title="tag.title">'
 				+ '		<div v-if="!tag.state" class="timelineLoaderWaiting">'
-				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_mio_pending"></use></svg>'
+				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_ellipsis"></use></svg>'
 				+ '		</div>'
 				+ '		<div v-if="tag.state === 1" class="spin1s">'
 				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
