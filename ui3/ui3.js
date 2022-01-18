@@ -5542,15 +5542,13 @@ function ClipTimeline()
 							// Ingest ranges array
 							var ranges = response.data.ranges;
 							for (var i = 0; i < ranges.length; i++)
-							{
 								timeline.AddRange(ranges[i]);
-							}
 							timeline.FinalizeAfterAddingRanges();
 
 							// Ingest alerts array
 							var alerts = response.data.alerts;
 							for (var i = 0; i < alerts.length; i++)
-								timeline.AddAlert(alerts[i].time);
+								timeline.AddAlert(alerts[i]);
 							timeline.FinalizeAfterAddingAlerts();
 
 							timeline.newDataNotifier++;
@@ -5577,7 +5575,7 @@ function ClipTimeline()
 						srcdata.colorMap[range.color] = rangesByColor;
 					}
 					rangesByColor.push(range);
-					//var rangesByDay = rangesByColor[GetTimestampWithDayPrecision(range.start)];
+					//var rangesByDay = rangesByColor[GetTimestampWithDayPrecision(range.time)];
 					//if (typeof rangesByColor === "undefined")
 					//{
 					//	timeline.colors.push(range.color);
@@ -5589,14 +5587,14 @@ function ClipTimeline()
 				},
 				AddAlert: function (alert)
 				{
-					srcdata.alerts.push(alert);
+					srcdata.alerts.push(alert.time);
 				},
 				FinalizeAfterAddingRanges: function ()
 				{
 					for (var i = 0; i < timeline.colors.length; i++)
 						srcdata.colorMap[timeline.colors[i]].sort(function (a, b) { return a.time - b.time; });
 
-					//var firstRange = srcdata.colorMap.length ? srcdata.colorMap[0].start : Date.now();
+					//var firstRange = srcdata.colorMap.length ? srcdata.colorMap[0].time : Date.now();
 					//var firstAlert = srcdata.alerts.length ? srcdata.alerts[0] : Date.now();
 					//timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
@@ -5604,8 +5602,8 @@ function ClipTimeline()
 				{
 					srcdata.alerts.sort(function (a, b) { return a - b; });
 
-					//var firstRange = srcdata.colorMap.length ? srcdata.colorMap[0].start : Date.now();
-					//var firstAlert = srcdata.alerts.length ? srcdata.alerts[0].start : Date.now();
+					//var firstRange = srcdata.colorMap.length ? srcdata.colorMap[0].time : Date.now();
+					//var firstAlert = srcdata.alerts.length ? srcdata.alerts[0] : Date.now();
 					//timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
 				AfterResize: function ()
@@ -5856,8 +5854,8 @@ function ClipTimeline()
 								{
 									var leftOffsetMs = range.time - left;
 									var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
-									var firstBucketIdx = (leftOffsetMs / bucketSize) | 0; // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
-									var lastBucketIdx = (rightOffsetMs / bucketSize) | 0;
+									var firstBucketIdx = Clamp((leftOffsetMs / bucketSize) | 0, 0, buckets.length - 1); // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
+									var lastBucketIdx = Clamp((rightOffsetMs / bucketSize) | 0, 0, buckets.length - 1);
 									for (var n = firstBucketIdx; n <= lastBucketIdx; n++)
 										buckets[n] = true;
 								}
@@ -5893,7 +5891,7 @@ function ClipTimeline()
 							}
 							if (inBucket)
 							{
-								currentRange.len = (i * bucketSize) - currentRange.time;
+								currentRange.len = (left + (i * bucketSize)) - currentRange.time;
 								reducedRanges.push(currentRange);
 							}
 						}
