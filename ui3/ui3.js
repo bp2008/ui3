@@ -6191,11 +6191,11 @@ function ClipTimeline()
 		Vue.component('clip-timeline-loader', {
 			template: ''
 				+ '<div class="timelineLoader timelineContent">'
-				+ '	<div class="timelineLoaderTag" v-for="day in days" :key="day.start" :style="day.style" :class="{ timelineLoaderTagError: day.error }">'
-				+ '		<div v-if="day.loading" class="spin1s">'
+				+ '	<div class="timelineLoaderTag" v-for="tag in tags" :key="tag.id" :style="tag.style" :class="{ timelineLoaderTagError: tag.error }">'
+				+ '		<div v-if="tag.loading" class="spin1s">'
 				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
 				+ '		</div>'
-				+ '		<div v-else-if="day.error" class="timelineLoaderError">'
+				+ '		<div v-else-if="tag.error" class="timelineLoaderError">'
 				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_closeBtn"></use></svg>'
 				+ '		</div>'
 				+ '	</div>'
@@ -6219,17 +6219,18 @@ function ClipTimeline()
 			},
 			computed:
 			{
-				days: function ()
+				tags: function ()
 				{
-					var days = [];
+					var tags = [];
 					var date = new Date(this.left);
 					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					var idCtr = 1;
 					while (date.getTime() < this.right)
 					{
-						var day = {};
-						day.start = date.getTime();
-						var state = this.dayLoadingStatus[day.start];
-						while(date.getTime() < this.right && state === this.dayLoadingStatus[date.getTime()])
+						var tag = { id: idCtr++ };
+						tag.start = date.getTime();
+						var state = this.dayLoadingStatus[tag.start];
+						while (date.getTime() < this.right && state === this.dayLoadingStatus[date.getTime()])
 							date.setDate(date.getDate() + 1);
 						// states:
 						// undefined: Date not (yet) processed by timeline engine
@@ -6239,17 +6240,17 @@ function ClipTimeline()
 						// 3: error
 						if (state === 0 || state === 1 || state === 3)
 						{
-							day.end = date.getTime();
-							day.style = {
-								left: ((day.start - this.timeBase) / this.zoomFactor) + 'px',
-								width: ((day.end - day.start) / this.zoomFactor) + 'px'
+							tag.end = date.getTime();
+							tag.style = {
+								left: ((tag.start - this.timeBase) / this.zoomFactor) + 'px',
+								width: ((tag.end - tag.start) / this.zoomFactor) + 'px'
 							};
-							day.loading = state === 1;
-							day.error = state === 3;
-							days.push(day);
+							tag.loading = state === 1;
+							tag.error = state === 3;
+							tags.push(tag);
 						}
 					}
-					return days;
+					return tags;
 				}
 			}
 		});
