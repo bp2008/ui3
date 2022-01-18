@@ -5285,6 +5285,7 @@ var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAA
 	+ "87rcb74dou9238/Fdd1cTxLUXdPo4WasfmMRS9k5d3C1NR/hdSpOc7gM4z5GGmNsYw8apzHMIsX8Bb1UfG2LbuFGK2oXO82Q666MuxiN3Q9s4HMjqnAJ9zAUu4/4gOm6C75VuB5xDVewgn7UsJYxEw8NHUzgGk7Qq8L+SQimMI8LsV"
 	+ "/Guwov8DJuWsAj/MQzvEpFP6ein4pTXMZc1PIGTwd7ErfdxiEe4+BPT/Etnbilg1VspaL+S4RJPMQmVlPxvZUg110pyhQxxwbIuIgHWMPbdkxbNIVPWE/FL/8gYxzPUzn/0EEq7OO9/3AGBF9Ja3vb+5oAAAAASUVORK5CYII=";
 var reduceTimeline = true;
+var timelineThrottleRate = 1000 / 240; // 240 FPS throttle rate.  As a future improvement, this could be made to auto-adjust based on measured timeline rendering speed. E.g. throttle it for 50% CPU usage... a.k.a. one draw per every (avg render ms * 2) ms.
 function GetTimelineData_Ponyfill()
 {
 	// This ponyfill creates a "timeline" command response without requiring serverside support, subject to some limitations:
@@ -5404,6 +5405,7 @@ function ClipTimeline()
 	var alertImg = new Image();
 	var alertImgLoaded = false;
 	var srcdata = { alerts: [], colorMap: {} };
+	var $tl_root = $();
 	this.getSrcData = function ()
 	{
 		return srcdata;
@@ -5436,7 +5438,7 @@ function ClipTimeline()
 		Vue.component('clip-timeline', {
 			template: ''
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
-				+ ' <clip-timeline-legend :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" />'
+				+ ' <clip-timeline-legend :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :showSelectedDate="showSelectedDate" />'
 				+ ' <div class="timelineMain">'
 				+ '		<clip-timeline-loader :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :dayLoadingStatus="dayLoadingStatus" />'
 				+ '		<canvas ref="clipTimelineCanvas" class="clipTimelineCanvas" />'
@@ -5476,7 +5478,8 @@ function ClipTimeline()
 					panThrottled: null,
 					/** Counter that is incremented when new range or alert data has been added. Modifying this counter causes the canvas to be redrawn.
 					 * Added because it wasn't behaving reliably when watching the data collections directly for changes. */
-					newDataNotifier: 0
+					newDataNotifier: 0,
+					isHovered: true
 				};
 			},
 			created: function ()
@@ -5486,6 +5489,7 @@ function ClipTimeline()
 			},
 			mounted: function ()
 			{
+				$tl_root = $(timeline.$refs.tl_root);
 				timeline.hammertime = new Hammer(timeline.$refs.tl_root);
 				timeline.hammertime.get('pinch').set({ enable: true });
 				timeline.hammertime.on('pinchstart', timeline.onPinchStart);
@@ -5495,6 +5499,7 @@ function ClipTimeline()
 				BindEventsPassive(document, "touchmove mousemove", timeline.mouseMove);
 				BindEventsPassive(document, "touchend mouseup ", timeline.mouseUp);
 				BindEventsPassive(document, "touchcancel", timeline.touchCancel);
+				BindEventsPassive(timeline.$refs.tl_root, "mouseleave", timeline.mouseLeave);
 				BindEvents(timeline.$refs.tl_root, "wheel", timeline.mouseWheel);
 				timeline.AfterResize();
 			},
@@ -5510,6 +5515,7 @@ function ClipTimeline()
 				document.removeEventListener("touchend", timeline.mouseUp);
 				document.removeEventListener("mouseup", timeline.mouseUp);
 				document.removeEventListener("touchcancel", timeline.touchCancel);
+				timeline.$refs.tl_root.removeEventListener("mouseleave", timeline.mouseLeave);
 				timeline.$refs.tl_root.removeEventListener("wheel", timeline.mouseWheel);
 				timeline = undefined;
 			},
@@ -5653,6 +5659,7 @@ function ClipTimeline()
 						timeline.dragState.momentum += delta;
 						timeline.pan(delta * -timeline.zoomFactor);
 					}
+					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
 				},
 				mouseUp: function (e)
 				{
@@ -5670,6 +5677,7 @@ function ClipTimeline()
 						timeline.lastSetTime += (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
 						timeline.dragState.isDragging = false;
 					}
+					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
 				},
 				touchCancel: function (e)
 				{
@@ -5678,6 +5686,10 @@ function ClipTimeline()
 						return;
 					if (timeline.dragState.isDragging)
 						timeline.dragState.isDragging = false;
+				},
+				mouseLeave: function (e)
+				{
+					this.isHovered = false;
 				},
 				mouseWheel: function (e)
 				{
@@ -5728,7 +5740,7 @@ function ClipTimeline()
 						timeline.panThrottled = throttle(function (offsetMs)
 						{
 							timeline.dragState.offsetMs = offsetMs;
-						}, 33);
+						}, timelineThrottleRate);
 
 					timeline.panThrottled(arg);
 				},
@@ -5749,7 +5761,7 @@ function ClipTimeline()
 								timeline.accumulatedZoomDelta = 0;
 								timeline.zoomFactor = Clamp(newZoomFactor, 250, 1000000000);
 							}
-						}, 33);
+						}, timelineThrottleRate);
 
 					timeline.acceptZoomThrottled(arg);
 				},
@@ -5987,6 +5999,10 @@ function ClipTimeline()
 						return "grabbingcursor";
 					else
 						return "grabcursor";
+				},
+				showSelectedDate: function ()
+				{
+					return this.dragState.isDragging || this.isHovered;
 				}
 			},
 			watch:
@@ -6041,9 +6057,9 @@ function ClipTimeline()
 			template: ''
 				+ '<div class="timelineLegendBar">'
 				+ '	<div class="timelineLegend timelineContent">'
-				+ '		<div class="timelineLabel" v-for="day in days" :key="day.time" :style="day.style">{{day.label}}</div>'
+				+ '		<div class="timelineLabel" v-for="tag in tags" :key="tag.time" :style="tag.style">{{tag.label}}</div>'
 				+ '	</div>'
-				+ '	<div class="timelineCurrentTimeWrapper"><div class="timelineCurrentTime">{{currentTimeStr}}</div></div>'
+				+ '	<div class="timelineCurrentTimeWrapper" :class="{ withDate: showSelectedDate }"><div class="timelineCurrentTime">{{currentTimeStr}}</div></div>'
 				+ '</div>',
 			data: function ()
 			{
@@ -6063,7 +6079,9 @@ function ClipTimeline()
 				/** Timestamp of the right edge */
 				right: Number,
 				/** Timestamp of the center (current time) */
-				currentTime: Number
+				currentTime: Number,
+				/** If true, the date should be shown in the selected time label */
+				showSelectedDate: Boolean
 			},
 			created: function ()
 			{
@@ -6079,26 +6097,74 @@ function ClipTimeline()
 			},
 			computed:
 			{
-				days: function ()
+				tags: function ()
 				{
-					var days = [];
+					var dayWeekCutoff = 1122000;
+					var weekMonthCutoff = 4544278;
+					var monthYearCutoff = 50000000;
+					var tags = [];
 					var date = new Date(this.left);
-					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					if (this.zoomFactor < dayWeekCutoff)
+					{
+						// Show full days
+						date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					}
+					else if (this.zoomFactor < weekMonthCutoff)
+					{
+						// Show full weeks
+						date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+						while (date.getDay() != 1)
+							date.setDate(date.getDate() - 1);
+					}
+					else if (this.zoomFactor < monthYearCutoff)
+					{
+						// Show full months
+						date = new Date(date.getFullYear(), date.getMonth(), 1);
+					}
+					else
+					{
+						// Show full years
+						date = new Date(date.getFullYear(), 0, 1);
+					}
 					var isFirst = true;
 					while (date.getTime() < this.right)
 					{
-						var day = { time: date.getTime(), label: GetDateDisplayStrShort(date) };
-						day.style = {
-							left: ((day.time - this.timeBase) / this.zoomFactor) + 'px'
+						var tag = { time: date.getTime() };
+						if (this.zoomFactor < dayWeekCutoff)
+						{
+							// Show full days
+							tag.label = GetDateDisplayStrShort(date, this.zoomFactor < 800000);
+							date.setDate(date.getDate() + 1);
+						}
+						else if (this.zoomFactor < weekMonthCutoff)
+						{
+							// Show full weeks
+							tag.label = GetWeekDisplayStr(date);
+							date.setDate(date.getDate() + 7);
+						}
+						else if (this.zoomFactor < monthYearCutoff)
+						{
+							// Show full months
+							tag.label = GetMonthDisplayStr(date, this.zoomFactor < 26106019);
+							date.setMonth(date.getMonth() + 1);
+						}
+						else
+						{
+							// Show full years
+							tag.label = date.getFullYear().toString();
+							date.setFullYear(date.getFullYear() + 1);
+						}
+
+						tag.style = {
+							left: ((tag.time - this.timeBase) / this.zoomFactor) + 'px'
 						};
 						if (isFirst)
-							day.style.left = (((this.left - this.timeBase) / this.zoomFactor) - 1) + 'px';
-						days.push(day);
+							tag.style.left = (((this.left - this.timeBase) / this.zoomFactor) - 1) + 'px';
+						tags.push(tag);
 
 						isFirst = false;
-						date.setDate(date.getDate() + 1);
 					}
-					return days;
+					return tags;
 				},
 				containerStyle: function ()
 				{
@@ -6111,7 +6177,11 @@ function ClipTimeline()
 				},
 				currentTimeStr: function ()
 				{
-					return GetTimeStr(new Date(this.currentTime));
+					var date = new Date(this.currentTime);
+					if (this.showSelectedDate)
+						return GetShortDateOrToday(date) + '\n' + GetTimeStr(date);
+					else
+						return GetTimeStr(date);
 				}
 			},
 			watch:
@@ -6121,7 +6191,7 @@ function ClipTimeline()
 		Vue.component('clip-timeline-loader', {
 			template: ''
 				+ '<div class="timelineLoader timelineContent">'
-				+ '	<div class="timelineLoaderDay" v-for="day in days" :key="day.start" :style="day.style" :class="{ timelineLoaderDayError: day.error }">'
+				+ '	<div class="timelineLoaderTag" v-for="day in days" :key="day.start" :style="day.style" :class="{ timelineLoaderTagError: day.error }">'
 				+ '		<div v-if="day.loading" class="spin1s">'
 				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
 				+ '		</div>'
@@ -6158,8 +6228,9 @@ function ClipTimeline()
 					{
 						var day = {};
 						day.start = date.getTime();
-						date.setDate(date.getDate() + 1);
 						var state = this.dayLoadingStatus[day.start];
+						while(date.getTime() < this.right && state === this.dayLoadingStatus[date.getTime()])
+							date.setDate(date.getDate() + 1);
 						// states:
 						// undefined: Date not (yet) processed by timeline engine
 						// 0: not loading
@@ -28989,10 +29060,26 @@ function GetDateDisplayStr(date, includeWeekday)
 	var sameDay = isSameDay(date, GetServerDate(new Date()));
 	return (sameDay ? "Today, " : "") + date.getMonthName() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear()) + (includeWeekday ? ' <span class="dayNameShort">(' + date.getDayNameShort() + ')</span><span class="dayNameFull">(' + date.getDayName() + ')</span>' : '');
 }
-function GetDateDisplayStrShort(date)
+function GetDateDisplayStrShort(date, includeDayNameShort)
 {
 	var sameDay = isSameDay(date, GetServerDate(new Date()));
-	return (sameDay ? "Today, " : "") + date.getMonthNameShort() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear()) + ' (' + date.getDayNameShort() + ')';
+	return (sameDay ? "Today, " : "") + date.getMonthNameShort() + " " + date.getDate() + (sameDay ? "" : (", " + date.getFullYear())) + (includeDayNameShort ? ' (' + (date.getDayNameShort() + ')') : '');
+}
+function GetShortDateOrToday(date)
+{
+	var sameDay = isSameDay(date, GetServerDate(new Date()));
+	if (sameDay)
+		return "Today";
+	else
+		return date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate();
+}
+function GetWeekDisplayStr(date)
+{
+	return "Week of " + date.getMonthNameShort() + " " + date.getDate() + ", " + date.getFullYear();
+}
+function GetMonthDisplayStr(date, longMonthName)
+{
+	return (longMonthName ? date.getMonthName() : date.getMonthNameShort()) + " " + date.getFullYear();
 }
 function GetPaddedDateStr(date, includeMilliseconds)
 {
@@ -29438,6 +29525,7 @@ function GetServerTimeOffset()
 	/// var serverTime = new Date(utcMs + GetServerTimeOffset());
 	/// console.log(serverTime.toString());
 	/// </summary>
+	return 43200000;
 	var localOffsetMs = new Date().getTimezoneOffset() * 60000;
 	var serverOffsetMs = serverTimeZoneOffsetMs;
 	return localOffsetMs - serverOffsetMs;

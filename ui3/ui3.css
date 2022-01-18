@@ -295,7 +295,6 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	background-color: var(--panel-bg-color);
 	left: 256px;
 	bottom: 0px;
-	overflow: hidden;
 }
 
 .sideBarRight #layoutleft
@@ -2918,10 +2917,11 @@ div.invisibleLabel
 .timelineCurrentTimeWrapper
 {
 	display: flex;
-	align-items: center;
+	align-items: flex-end;
 	justify-content: center;
 	width: 100%;
 	height: 16px;
+	overflow: hidden;
 }
 
 .timelineCurrentTime
@@ -2936,16 +2936,26 @@ div.invisibleLabel
 	height: 16px;
 	box-sizing: border-box;
 	overflow: hidden;
+	white-space: pre-line;
+	text-align: center;
 }
-
-.timelineMain
+.timelineCurrentTimeWrapper.withDate
 {
-	width: 100%;
-	height: 80px;
-	background-color: var(--timeline-background-color);
-	position: relative;
-	z-index: 1;
+	overflow: visible;
 }
+	.timelineCurrentTimeWrapper.withDate .timelineCurrentTime
+	{
+		height: 30px;
+	}
+
+	.timelineMain
+	{
+		width: 100%;
+		height: 80px;
+		background-color: var(--timeline-background-color);
+		position: relative;
+		z-index: 1;
+	}
 
 .timelineLoader
 {
@@ -2954,7 +2964,7 @@ div.invisibleLabel
 	position: absolute;
 }
 
-.timelineLoaderDay
+.timelineLoaderTag
 {
 	position: absolute;
 	top: 0px;
