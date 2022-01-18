@@ -5286,112 +5286,246 @@ var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAA
 	+ "/Guwov8DJuWsAj/MQzvEpFP6ein4pTXMZc1PIGTwd7ErfdxiEe4+BPT/Etnbilg1VspaL+S4RJPMQmVlPxvZUg110pyhQxxwbIuIgHWMPbdkxbNIVPWE/FL/8gYxzPUzn/0EEq7OO9/3AGBF9Ja3vb+5oAAAAASUVORK5CYII=";
 var reduceTimeline = true;
 var timelineThrottleRate = 1000 / 240; // 240 FPS throttle rate.  As a future improvement, this could be made to auto-adjust based on measured timeline rendering speed. E.g. throttle it for 50% CPU usage... a.k.a. one draw per every (avg render ms * 2) ms.
-function GetTimelineData_Ponyfill()
+function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackError)
 {
-	// This ponyfill creates a "timeline" command response without requiring serverside support, subject to some limitations:
-	// 1. Clips created by combining smaller clips will cause the timeline to show video where there is none.
-	// 2. The "All cameras" group must be accessible to the session.
-	function getClips(startdate, enddate, collected)
+	var self = this;
+	function GetTimelineData_Ponyfill()
 	{
-		if (!collected)
-			collected = [];
-		var args = { cmd: "cliplist", camera: "index", view: "all", startdate: startdate, enddate: enddate };
-		return ExecJSONPromise(args)
-			.then(function (response)
-			{
-				if (response.result !== "success")
-					return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
-				if (typeof response.data === "undefined")
-					return collected; // This happens if you request a future date, or perhaps any date with no data.
+		// This ponyfill creates a "timeline" command response without requiring serverside support, subject to some limitations:
+		// 1. Clips created by combining smaller clips will cause the timeline to show video where there is none.
+		// 2. The "All cameras" group must be accessible to the session.
+		function getClips(startdate, enddate, collected)
+		{
+			if (!collected)
+				collected = [];
+			var args = { cmd: "cliplist", camera: "index", view: "all", startdate: startdate, enddate: enddate };
+			return ExecJSONPromise(args)
+				.then(function (response)
+				{
+					if (response.result !== "success")
+						return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
+					if (typeof response.data === "undefined")
+						return collected; // This happens if you request a future date, or perhaps any date with no data.
 
-				for (var i = 0; i < response.data.length; i++)
+					for (var i = 0; i < response.data.length; i++)
+					{
+						if (collected.length && collected[collected.length - 1].path === response.data[i].path)
+							continue;
+						collected.push(response.data[i]);
+					}
+					if (response.data.length >= 1000)
+					{
+						for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
+							if (typeof response.data[i].newalerts === "undefined")
+							{
+								enddate = response.data[i].date;
+								return getClips(startdate, enddate, collected);
+							}
+					}
+					collected.sort(function (a, b) { return a.date - b.date; });
+					return collected;
+				});
+		}
+		function getAlerts(startdate, enddate, collected)
+		{
+			if (!collected)
+				collected = [];
+			var args = { cmd: "alertlist", camera: "index", startdate: startdate, enddate: enddate };
+			return ExecJSONPromise(args)
+				.then(function (response)
 				{
-					if (collected.length && collected[collected.length - 1].path === response.data[i].path)
-						continue;
-					collected.push(response.data[i]);
-				}
-				if (response.data.length >= 1000)
+					if (response.result !== "success")
+						return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
+					if (typeof response.data === "undefined")
+						return collected; // This happens if you request a future date, or perhaps any date with no data.
+
+					for (var i = 0; i < response.data.length; i++)
+					{
+						if (collected.length && collected[collected.length - 1].path === response.data[i].path)
+							continue;
+						collected.push(response.data[i]);
+					}
+					if (response.data.length >= 1000)
+					{
+						for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
+							if (typeof response.data[i].newalerts === "undefined")
+							{
+								enddate = response.data[i].date;
+								return getAlerts(startdate, enddate, collected);
+							}
+					}
+					collected.sort(function (a, b) { return a.date - b.date; });
+					return collected;
+				});
+		}
+		this.getSimulatedTimelineData = function (startdate, enddate)
+		{
+			var promise_clips = getClips(Math.floor(startdate / 1000), Math.ceil(enddate / 1000));
+			var promise_alerts = getAlerts(Math.floor(startdate / 1000), Math.ceil(enddate / 1000));
+			return Promise.all([promise_clips, promise_alerts])
+				.then(function (result)
 				{
-					for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
-						if (typeof response.data[i].newalerts === "undefined")
+					var clips = result[0];
+					var alerts = result[1];
+					var response = { result: "success", data: { alerts: [], ranges: [] } };
+
+					// Convert from "cliplist" response format to proposed "timeline" response format.
+					for (var i = 0; i < clips.length; i++)
+					{
+						var src = clips[i];
+						var clip = { cam: src.camera, color: src.color, time: src.date * 1000, len: src.msec };
+						response.data.ranges.push(clip);
+					}
+
+					// Convert from "alertlist" response format to proposed "timeline" response format.
+					for (var i = 0; i < alerts.length; i++)
+					{
+						var src = alerts[i];
+						var alert = { cam: src.camera, time: src.date * 1000 };
+						response.data.alerts.push(alert);
+					}
+
+					return response;
+				});
+		}
+	}
+	var getTimelineData_ponyfill;
+	function GetTimelineData(startdate, enddate)
+	{
+		if (!getTimelineData_ponyfill)
+			getTimelineData_ponyfill = new GetTimelineData_Ponyfill();
+		return getTimelineData_ponyfill.getSimulatedTimelineData(startdate, enddate);
+	}
+	/** Precise leftmost date currently visible. */
+	var left = GetServerDate(new Date());
+	var startOfLeftDate = new Date(left.getFullYear(), left.getMonth(), left.getDate());
+	/** Precise rightmost date currently visible. */
+	var right = GetServerDate(new Date());
+	/** Object indicating loading status of every day. Keyed on timestamp of midnight of each day. Status 1: loading, 2: loaded, 3: error. */
+	var dayLoadingStatus = {};
+	/** True if a loading operation is currently active. */
+	var isRunning = false;
+	/** Optionally provides a date visibility update update. */
+	this.Update = function (visibleRange)
+	{
+		if (visibleRange)
+		{
+			left = new Date(visibleRange.left);
+			startOfLeftDate = new Date(left.getFullYear(), left.getMonth(), left.getDate());
+			right = new Date(visibleRange.right);
+		}
+		if (!isRunning)
+		{
+			var next = getNextDataToLoad();
+			if (next)
+			{
+				isRunning = true;
+				for (var i = 0; i < next.days.length; i++)
+					dayLoadingStatus[next.days[i]] = 1;
+				callbackStartedLoading(next.days);
+				GetTimelineData(next.start, next.end)
+					.then(function (response)
+					{
+						if (response.result !== "success")
 						{
-							enddate = response.data[i].date;
-							return getClips(startdate, enddate, collected);
+							for (var i = 0; i < next.days.length; i++)
+								dayLoadingStatus[next.days[i]] = 3;
+							callbackError(next.days, htmlEncode('Server response did not indicate "success" result: ' + JSON.stringify(response)));
 						}
-				}
-				collected.sort(function (a, b) { return a.date - b.date; });
-				return collected;
-			});
-	}
-	function getAlerts(startdate, enddate, collected)
-	{
-		if (!collected)
-			collected = [];
-		var args = { cmd: "alertlist", camera: "index", startdate: startdate, enddate: enddate };
-		return ExecJSONPromise(args)
-			.then(function (response)
-			{
-				if (response.result !== "success")
-					return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
-				if (typeof response.data === "undefined")
-					return collected; // This happens if you request a future date, or perhaps any date with no data.
-
-				for (var i = 0; i < response.data.length; i++)
-				{
-					if (collected.length && collected[collected.length - 1].path === response.data[i].path)
-						continue;
-					collected.push(response.data[i]);
-				}
-				if (response.data.length >= 1000)
-				{
-					for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
-						if (typeof response.data[i].newalerts === "undefined")
+						else
 						{
-							enddate = response.data[i].date;
-							return getAlerts(startdate, enddate, collected);
+							for (var i = 0; i < next.days.length; i++)
+								dayLoadingStatus[next.days[i]] = 2;
+							callbackGotData(next.days, response.data);
 						}
-				}
-				collected.sort(function (a, b) { return a.date - b.date; });
-				return collected;
-			});
+					})
+					.catch(function (err)
+					{
+						var errHtml;
+						if (typeof err === "string")
+							errHtml = err;
+						else
+							errHtml = htmlEncode("An unexpected error occurred loading timeline data: " + err);
+						callbackError(next.days, errHtml);
+					})
+					.finally(function ()
+					{
+						isRunning = false;
+						self.Update();
+					});
+			}
+		}
 	}
-	this.getSimulatedTimelineData = function (startdate, enddate)
+	function getNextDataToLoad()
 	{
-		var promise_clips = getClips(startdate, enddate);
-		var promise_alerts = getAlerts(startdate, enddate);
-		return Promise.all([promise_clips, promise_alerts])
-			.then(function (result)
+		var date = new Date(left.getFullYear(), left.getMonth(), left.getDate());
+		var daysNeedingToLoad = [];
+		while (date < right)
+		{
+			if (!dayLoadingStatus[date.getTime()]) // Days where loading has not started
+				daysNeedingToLoad.push(date.getTime());
+			date.setDate(date.getDate() + 1);
+		}
+		if (daysNeedingToLoad.length === 0)
+		{
+			date = new Date(left.getFullYear(), left.getMonth(), left.getDate());
+			while (date < right)
 			{
-				var clips = result[0];
-				var alerts = result[1];
-				var response = { result: "success", data: { alerts: [], ranges: [] } };
+				if (dayLoadingStatus[date.getTime()] === 3) // Days where loading resulted in error
+					daysNeedingToLoad.push(date.getTime());
+				date.setDate(date.getDate() + 1);
+			}
+		}
+		if (daysNeedingToLoad.length === 0)
+			return null;
 
-				// Convert from "cliplist" response format to proposed "timeline" response format.
-				for (var i = 0; i < clips.length; i++)
-				{
-					var src = clips[i];
-					var clip = { cam: src.camera, color: src.color, time: src.date * 1000, len: src.msec };
-					response.data.ranges.push(clip);
-				}
+		// Find the date that needs to load which is closest to now, but preferably earlier than now.
+		var now = GetServerDate(new Date());
+		var idx = binarySearch(daysNeedingToLoad, now.getTime(), NumberCompare);
+		if (idx < 0)
+			idx = (-idx - 1); // Match was approximate. This calculation gets us the closest match index.
+		if (idx >= daysNeedingToLoad.length)
+			idx = daysNeedingToLoad.length - 1;
+		if (daysNeedingToLoad[idx] > now)
+			idx = Math.max(0, idx - 1); // Closest match was in the future.  Go back by one.
 
-				// Convert from "alertlist" response format to proposed "timeline" response format.
-				for (var i = 0; i < alerts.length; i++)
-				{
-					var src = alerts[i];
-					var alert = { cam: src.camera, time: src.date * 1000 };
-					response.data.alerts.push(alert);
-				}
+		var next = {
+			days: [daysNeedingToLoad[idx]],
+			start: new Date(daysNeedingToLoad[idx]),
+			end: new Date(daysNeedingToLoad[idx])
+		};
+		next.end.setDate(next.end.getDate() + 1);
 
-				return response;
-			});
+		// Expand the date range to include nearby consecutive days if possible.
+		var maxDays = Clamp((daysNeedingToLoad.length / 2) | 0, 1, 30); // | 0 is a cheap way of rounding down to 32 bit signed integer
+
+		// Check earlier days.
+		date = new Date(next.start.getTime());
+		date.setDate(date.getDate() - 1);
+		while (next.days.length < maxDays && DateNeedsToLoad(date))
+		{
+			next.days.push(date.getTime());
+			next.start = new Date(date.getTime());
+			date.setDate(date.getDate() - 1);
+		}
+		// Check later days.
+		date = new Date(next.end.getTime());
+		while (next.days.length < maxDays && DateNeedsToLoad(date))
+		{
+			next.days.push(date.getTime());
+			date.setDate(date.getDate() + 1);
+			next.end = new Date(date.getTime());
+		}
+		next.days.sort();
+		return next;
 	}
-}
-var getTimelineData_ponyfill;
-function GetTimelineData(startdate, enddate)
-{
-	if (!getTimelineData_ponyfill)
-		getTimelineData_ponyfill = new GetTimelineData_Ponyfill();
-	return getTimelineData_ponyfill.getSimulatedTimelineData(startdate, enddate);
+	function DateNeedsToLoad(date)
+	{
+		if (date < startOfLeftDate || date >= right)
+			return false;
+		var status = dayLoadingStatus[date.getTime()];
+		return !status || status === 3;
+	}
 }
 function ClipTimeline()
 {
@@ -5406,6 +5540,8 @@ function ClipTimeline()
 	var alertImgLoaded = false;
 	var srcdata = { alerts: [], colorMap: {} };
 	var $tl_root = $();
+	var timelineDataLoader = null;
+
 	this.getSrcData = function ()
 	{
 		return srcdata;
@@ -5485,7 +5621,8 @@ function ClipTimeline()
 			created: function ()
 			{
 				timeline = this;
-				BI_CustomEvent.AddListener("afterResize", timeline.AfterResize);
+				BI_CustomEvent.AddListener("afterResize", this.AfterResize);
+				timelineDataLoader = new TimelineDataLoader(this.callbackStartedLoading, this.callbackGotData, this.callbackError);
 			},
 			mounted: function ()
 			{
@@ -5532,41 +5669,61 @@ function ClipTimeline()
 					var enddate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
 					Vue.set(timeline.dayLoadingStatus, dayId, 1);
 					GetTimelineData(startdate.getTime() / 1000, enddate.getTime() / 1000)
-						.then(function (response)
-						{
-							if (response.result !== "success")
-							{
-								Vue.set(timeline.dayLoadingStatus, dayId, 3);
-								timeline.errorHtml = args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response));
-								return;
-							}
+				},
+				/**
+				 * Called when data begins loading for a set of days.
+				 * @param {Array} days Array of timestamps of days at midnight.
+				 */
+				callbackStartedLoading: function (days)
+				{
+					for (var i = 0; i < days.length; i++)
+						Vue.set(timeline.dayLoadingStatus, days[i], 1);
+				},
+				/**
+				 * Called when data is received for a set of days.
+				 * @param {Array} days Array of timestamps of days at midnight.
+				 * @param {Object} data Data from the server.
+				 */
+				callbackGotData: function (days, data)
+				{
+					timeline.errorHtml = "";
 
-							Vue.set(timeline.dayLoadingStatus, dayId, 2);
-							if (typeof response.data === "undefined")
-								return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
+					for (var i = 0; i < days.length; i++)
+						Vue.set(timeline.dayLoadingStatus, days[i], 2);
 
-							// Ingest ranges array
-							var ranges = response.data.ranges;
-							for (var i = 0; i < ranges.length; i++)
-								timeline.AddRange(ranges[i]);
-							timeline.FinalizeAfterAddingRanges();
+					if (typeof data === "undefined")
+						return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
 
-							// Ingest alerts array
-							var alerts = response.data.alerts;
-							for (var i = 0; i < alerts.length; i++)
-								timeline.AddAlert(alerts[i]);
-							timeline.FinalizeAfterAddingAlerts();
+					// Ingest ranges array
+					var ranges = data.ranges;
+					for (var i = 0; i < ranges.length; i++)
+						timeline.AddRange(ranges[i]);
+					timeline.FinalizeAfterAddingRanges();
 
-							timeline.newDataNotifier++;
-							console.log("Added date: " + date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate());
-						})
-						.catch(function (err)
-						{
-							if (typeof err === "string")
-								timeline.errorHtml = err;
-							else
-								timeline.errorHtml = htmlEncode(JSON.stringify(err));
-						});
+					// Ingest alerts array
+					var alerts = data.alerts;
+					for (var i = 0; i < alerts.length; i++)
+						timeline.AddAlert(alerts[i]);
+					timeline.FinalizeAfterAddingAlerts();
+
+					timeline.newDataNotifier++;
+					//for (var i = 0; i < days.length; i++)
+					//{
+					//	var date = new Date(days[i]);
+					//	console.log("Added date: " + date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate());
+					//}
+				},
+				/**
+				 * Called when an error occurs when loading data for a set of days.
+				 * @param {Array} days Array of timestamps of days at midnight.
+				 * @param {String} errHtml HTML error message.
+				 */
+				callbackError: function (days, errHtml)
+				{
+					for (var i = 0; i < days.length; i++)
+						Vue.set(timeline.dayLoadingStatus, days[i], 3);
+					timeline.errorHtml = errHtml;
+					console.log(htmlDecode(errHtml));
 				},
 				AddRange: function (range)
 				{
@@ -5839,9 +5996,6 @@ function ClipTimeline()
 					// If the range being added starts after the latest range but overlaps with the latest range, modify the latest range and do not add a new range object. 
 					// If the range being added starts after the latest range, and does not overlap, then just push it onto the array.
 
-					// OPTIMIZATION PLAN C:
-					// Set up an orderly queue to load new days of data one at a time, prioritizing the most recent.  No more wild-west loading like it is right now.
-
 					var allRanges = srcdata.colorMap;
 					var allReducedRanges = {};
 					var perfBeforeReduce = performance.now();
@@ -5948,20 +6102,13 @@ function ClipTimeline()
 				{
 					return this.currentTime + (this.visibleMilliseconds / 2);
 				},
-				VisibleDays: function ()
+				/** Timestamps of the left and right edges of the timeline */
+				visibleRange: function ()
 				{
-					var days = [];
-					var date = new Date(this.left);
-					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-					while (date.getTime() < this.right)
-					{
-						var day = {};
-						day.start = date.getTime();
-						date.setDate(date.getDate() + 1);
-						day.end = date.getTime();
-						days.push(day);
-					}
-					return days;
+					return {
+						left: this.left,
+						right: this.right,
+					};
 				},
 				TimelineColorbarHeight: function ()
 				{
@@ -6012,12 +6159,9 @@ function ClipTimeline()
 					this.timeBase = this.currentTime;
 					this.drawCanvas();
 				},
-				VisibleDays: function ()
+				visibleRange: function ()
 				{
-					for (var i = 0; i < this.VisibleDays.length; i++)
-					{
-						this.LoadTimelineData(new Date(this.VisibleDays[i].start));
-					}
+					timelineDataLoader.Update(this.visibleRange);
 				},
 				timelineContentLeft: function ()
 				{
@@ -6190,12 +6334,15 @@ function ClipTimeline()
 		});
 		Vue.component('clip-timeline-loader', {
 			template: ''
-				+ '<div class="timelineLoader timelineContent">'
-				+ '	<div class="timelineLoaderTag" v-for="tag in tags" :key="tag.id" :style="tag.style" :class="{ timelineLoaderTagError: tag.error }">'
-				+ '		<div v-if="tag.loading" class="spin1s">'
+				+ '<div class="timelineLoader timelineContent" v-show="!!tags.length">'
+				+ '	<div class="timelineLoaderTag" v-for="tag in tags" :key="tag.id" :style="tag.style" :class="{ timelineLoaderTagWaiting: !tag.state, timelineLoaderTagLoading: tag.state === 1, timelineLoaderTagError: tag.state === 3 }" :title="tag.title">'
+				+ '		<div v-if="!tag.state" class="timelineLoaderWaiting">'
+				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_mio_pending"></use></svg>'
+				+ '		</div>'
+				+ '		<div v-if="tag.state === 1" class="spin1s">'
 				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
 				+ '		</div>'
-				+ '		<div v-else-if="tag.error" class="timelineLoaderError">'
+				+ '		<div v-else-if="tag.state === 3" class="timelineLoaderError">'
 				+ '			<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_closeBtn"></use></svg>'
 				+ '		</div>'
 				+ '	</div>'
@@ -6230,24 +6377,28 @@ function ClipTimeline()
 						var tag = { id: idCtr++ };
 						tag.start = date.getTime();
 						var state = this.dayLoadingStatus[tag.start];
+						tag.state = state;
 						while (date.getTime() < this.right && state === this.dayLoadingStatus[date.getTime()])
 							date.setDate(date.getDate() + 1);
 						// states:
-						// undefined: Date not (yet) processed by timeline engine
-						// 0: not loading
+						// undefined or 0: not loading
 						// 1: loading
 						// 2: loaded
 						// 3: error
-						if (state === 0 || state === 1 || state === 3)
+						if (state !== 2)
 						{
 							tag.end = date.getTime();
 							tag.style = {
 								left: ((tag.start - this.timeBase) / this.zoomFactor) + 'px',
 								width: ((tag.end - tag.start) / this.zoomFactor) + 'px'
 							};
-							tag.loading = state === 1;
-							tag.error = state === 3;
 							tags.push(tag);
+							if (!state)
+								tag.title = "queued";
+							if (state === 1)
+								tag.title = "loading";
+							if (state === 2)
+								tag.title = "error";
 						}
 					}
 					return tags;
@@ -29299,6 +29450,10 @@ function binarySearch(ar, el, compare_fn)
 			return k;
 	}
 	return -m - 1;
+}
+function NumberCompare(a, b)
+{
+	return a - b;
 }
 function getBytesFromBISizeStr(str)
 {

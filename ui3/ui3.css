@@ -1338,7 +1338,6 @@ div.invisibleLabel
 {
 	padding-bottom: 0px;
 	position: absolute;
-	bottom: 15px; /* Coupled: #sidebarPortraitDragbar top and height, #layoutleft margin-top, #statusArea bottom */
 	background-color: var(--panel-bg-color);
 	z-index: 50;
 	overflow: visible;
@@ -1355,6 +1354,11 @@ div.invisibleLabel
 .sizeSmall #statusArea
 {
 	padding-bottom: 4px;
+}
+
+.portrait #statusArea
+{
+	bottom: 15px; /* Coupled: #sidebarPortraitDragbar top and height, #layoutleft margin-top, #statusArea bottom */
 }
 
 
@@ -2939,29 +2943,32 @@ div.invisibleLabel
 	white-space: pre-line;
 	text-align: center;
 }
+
 .timelineCurrentTimeWrapper.withDate
 {
 	overflow: visible;
 }
+
 	.timelineCurrentTimeWrapper.withDate .timelineCurrentTime
 	{
 		height: 30px;
 	}
 
-	.timelineMain
-	{
-		width: 100%;
-		height: 80px;
-		background-color: var(--timeline-background-color);
-		position: relative;
-		z-index: 1;
-	}
+.timelineMain
+{
+	width: 100%;
+	height: 80px;
+	background-color: var(--timeline-background-color);
+	position: relative;
+	z-index: 1;
+}
 
 .timelineLoader
 {
 	height: 100%;
 	width: 100%;
 	position: absolute;
+	animation: fadeInOpacity .8s;
 }
 
 .timelineLoaderTag
@@ -2977,7 +2984,16 @@ div.invisibleLabel
 	justify-content: center;
 	align-items: stretch;
 	opacity: 1;
-	animation: fadeInOpacity .8s;
+}
+
+.timelineLoaderTagLoading
+{
+	background-color: rgba(0,255,0,0.15);
+}
+
+.timelineLoaderWaiting
+{
+	margin: 10px;
 }
 
 @keyframes fadeInOpacity
@@ -3027,6 +3043,10 @@ div.invisibleLabel
 .timelineError
 {
 	font-size: 12px;
+	text-shadow: 0px 0px 4px #000000;
+	position: absolute;
+	top: 0px;
+	left: 0px;
 }
 /* Toasts */
 #toast-container
