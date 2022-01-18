@@ -5394,7 +5394,9 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	{
 		if (useNativeTimelineCommand)
 		{
-			return ExecJSONPromise({ cmd: "timeline", start: startdate, end: enddate });
+			var args = { cmd: "timeline", start: startdate.getTime(), end: enddate.getTime() };
+			console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span at ' + GetTimeStr(new Date()) + ': ' + JSON.stringify(args));
+			return ExecJSONPromise(args);
 		}
 		else
 		{
@@ -5435,11 +5437,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 					.then(function (response)
 					{
 						if (response.result !== "success")
-						{
-							for (var i = 0; i < next.days.length; i++)
-								dayLoadingStatus[next.days[i]] = 3;
-							callbackError(next.days, htmlEncode('Server response did not indicate "success" result: ' + JSON.stringify(response)));
-						}
+							return Promise.reject(htmlEncode('Server response did not indicate "success" result: ' + JSON.stringify(response)));
 						else
 						{
 							for (var i = 0; i < next.days.length; i++)
@@ -5449,12 +5447,20 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 					})
 					.catch(function (err)
 					{
+						for (var i = 0; i < next.days.length; i++)
+							dayLoadingStatus[next.days[i]] = 3;
 						var errHtml;
 						if (typeof err === "string")
 							errHtml = err;
 						else
 							errHtml = htmlEncode("An unexpected error occurred loading timeline data: " + err);
 						callbackError(next.days, errHtml);
+						// Wait a moment, then allow these days to be requested again.
+						setTimeout(function ()
+						{
+							for (var i = 0; i < next.days.length; i++)
+								dayLoadingStatus[next.days[i]] = 0;
+						}, 2500);
 					})
 					.finally(function ()
 					{
@@ -5473,16 +5479,6 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 			if (!dayLoadingStatus[date.getTime()]) // Days where loading has not started
 				daysNeedingToLoad.push(date.getTime());
 			date.setDate(date.getDate() + 1);
-		}
-		if (daysNeedingToLoad.length === 0)
-		{
-			date = new Date(left.getFullYear(), left.getMonth(), left.getDate());
-			while (date < right)
-			{
-				if (dayLoadingStatus[date.getTime()] === 3) // Days where loading resulted in error
-					daysNeedingToLoad.push(date.getTime());
-				date.setDate(date.getDate() + 1);
-			}
 		}
 		if (daysNeedingToLoad.length === 0)
 			return null;
@@ -5504,8 +5500,8 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		};
 		next.end.setDate(next.end.getDate() + 1);
 
-		// Expand the date range to include nearby consecutive days if possible.
-		var maxDays = Clamp((daysNeedingToLoad.length / 2) | 0, 1, 365); // | 0 is a cheap way of rounding down to 32 bit signed integer
+		// Expand the date range to include adjacent days if needed.
+		var maxDays = Clamp(daysNeedingToLoad.length, 1, 365);
 
 		// Check earlier days.
 		date = new Date(next.start.getTime());
@@ -5531,8 +5527,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	{
 		if (date < startOfLeftDate || date >= right)
 			return false;
-		var status = dayLoadingStatus[date.getTime()];
-		return !status || status === 3;
+		return !dayLoadingStatus[date.getTime()];
 	}
 }
 function ClipTimeline()
