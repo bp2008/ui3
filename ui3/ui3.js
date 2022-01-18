@@ -5285,6 +5285,113 @@ var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAA
 	+ "87rcb74dou9238/Fdd1cTxLUXdPo4WasfmMRS9k5d3C1NR/hdSpOc7gM4z5GGmNsYw8apzHMIsX8Bb1UfG2LbuFGK2oXO82Q666MuxiN3Q9s4HMjqnAJ9zAUu4/4gOm6C75VuB5xDVewgn7UsJYxEw8NHUzgGk7Qq8L+SQimMI8LsV"
 	+ "/Guwov8DJuWsAj/MQzvEpFP6ein4pTXMZc1PIGTwd7ErfdxiEe4+BPT/Etnbilg1VspaL+S4RJPMQmVlPxvZUg110pyhQxxwbIuIgHWMPbdkxbNIVPWE/FL/8gYxzPUzn/0EEq7OO9/3AGBF9Ja3vb+5oAAAAASUVORK5CYII=";
 var reduceTimeline = true;
+function GetTimelineData_Ponyfill()
+{
+	// This ponyfill creates a "timeline" command response without requiring serverside support, subject to some limitations:
+	// 1. Clips created by combining smaller clips will cause the timeline to show video where there is none.
+	// 2. The "All cameras" group must be accessible to the session.
+	function getClips(startdate, enddate, collected)
+	{
+		if (!collected)
+			collected = [];
+		var args = { cmd: "cliplist", camera: "index", view: "all", startdate: startdate, enddate: enddate };
+		return ExecJSONPromise(args)
+			.then(function (response)
+			{
+				if (response.result !== "success")
+					return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
+				if (typeof response.data === "undefined")
+					return collected; // This happens if you request a future date, or perhaps any date with no data.
+
+				for (var i = 0; i < response.data.length; i++)
+				{
+					if (collected.length && collected[collected.length - 1].path === response.data[i].path)
+						continue;
+					collected.push(response.data[i]);
+				}
+				if (response.data.length >= 1000)
+				{
+					for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
+						if (typeof response.data[i].newalerts === "undefined")
+						{
+							enddate = response.data[i].date;
+							return getClips(startdate, enddate, collected);
+						}
+				}
+				collected.sort(function (a, b) { return a.date - b.date; });
+				return collected;
+			});
+	}
+	function getAlerts(startdate, enddate, collected)
+	{
+		if (!collected)
+			collected = [];
+		var args = { cmd: "alertlist", camera: "index", startdate: startdate, enddate: enddate };
+		return ExecJSONPromise(args)
+			.then(function (response)
+			{
+				if (response.result !== "success")
+					return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
+				if (typeof response.data === "undefined")
+					return collected; // This happens if you request a future date, or perhaps any date with no data.
+
+				for (var i = 0; i < response.data.length; i++)
+				{
+					if (collected.length && collected[collected.length - 1].path === response.data[i].path)
+						continue;
+					collected.push(response.data[i]);
+				}
+				if (response.data.length >= 1000)
+				{
+					for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
+						if (typeof response.data[i].newalerts === "undefined")
+						{
+							enddate = response.data[i].date;
+							return getAlerts(startdate, enddate, collected);
+						}
+				}
+				collected.sort(function (a, b) { return a.date - b.date; });
+				return collected;
+			});
+	}
+	this.getSimulatedTimelineData = function (startdate, enddate)
+	{
+		var promise_clips = getClips(startdate, enddate);
+		var promise_alerts = getAlerts(startdate, enddate);
+		return Promise.all([promise_clips, promise_alerts])
+			.then(function (result)
+			{
+				var clips = result[0];
+				var alerts = result[1];
+				var response = { result: "success", data: { alerts: [], ranges: [] } };
+
+				// Convert from "cliplist" response format to proposed "timeline" response format.
+				for (var i = 0; i < clips.length; i++)
+				{
+					var src = clips[i];
+					var clip = { cam: src.camera, color: src.color, time: src.date * 1000, len: src.msec };
+					response.data.ranges.push(clip);
+				}
+
+				// Convert from "alertlist" response format to proposed "timeline" response format.
+				for (var i = 0; i < alerts.length; i++)
+				{
+					var src = alerts[i];
+					var alert = { cam: src.camera, time: src.date * 1000 };
+					response.data.alerts.push(alert);
+				}
+
+				return response;
+			});
+	}
+}
+var getTimelineData_ponyfill;
+function GetTimelineData(startdate, enddate)
+{
+	if (!getTimelineData_ponyfill)
+		getTimelineData_ponyfill = new GetTimelineData_Ponyfill();
+	return getTimelineData_ponyfill.getSimulatedTimelineData(startdate, enddate);
+}
 function ClipTimeline()
 {
 	// TODO: Periodically refresh the current day. Update existing records.
@@ -5296,7 +5403,11 @@ function ClipTimeline()
 	var dynStyle = null;
 	var alertImg = new Image();
 	var alertImgLoaded = false;
-
+	var srcdata = { alerts: [], colorMap: {} };
+	this.getSrcData = function ()
+	{
+		return srcdata;
+	}
 	this.Initialize = function ()
 	{
 		if (initialized)
@@ -5312,12 +5423,13 @@ function ClipTimeline()
 		alertImg.src = timelineAlertImgSrc;
 		dynStyle = InjectStyleBlock("");
 		BI_CustomEvent.AddListener("FinishedLoading", finishInit);
+		$.getScript('ui3/libs-src/promise.polyfill.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 		$.getScript('ui3/libs-src/hammer.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 		$.getScript('ui3/libs-src/vue.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 	}
 	var finishInit = function ()
 	{
-		if (scriptsLoaded < 2)
+		if (scriptsLoaded < 3)
 			return;
 		if (!loadingHelper.DidLoadingFinish())
 			return;
@@ -5338,9 +5450,9 @@ function ClipTimeline()
 					/** Object indicating loading status of every day. */
 					dayLoadingStatus: {},
 					/** Array of alert objects.  */
-					alerts: [],
+					//alerts: [],
 					/** Contains arrays of range objects, keyed by the color assigned to them.  Each range object represents a time range that is recorded on video. */
-					ranges: {},
+					//ranges: {},
 					/** Array of colors. These are the keys for the ranges object, in the order they should be drawn.  */
 					colors: [],
 					errorHtml: "",
@@ -5412,12 +5524,9 @@ function ClipTimeline()
 					if (timeline.dayLoadingStatus[dayId] > 0)
 						return;
 					var enddate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
-					var args = { cmd: "cliplist", camera: "index", view: "all" };
-					args.startdate = startdate.getTime() / 1000;
-					args.enddate = enddate.getTime() / 1000;
 					Vue.set(timeline.dayLoadingStatus, dayId, 1);
-					ExecJSON(args
-						, function (response)
+					GetTimelineData(startdate.getTime() / 1000, enddate.getTime() / 1000)
+						.then(function (response)
 						{
 							if (response.result !== "success")
 							{
@@ -5428,91 +5537,44 @@ function ClipTimeline()
 
 							Vue.set(timeline.dayLoadingStatus, dayId, 2);
 							if (typeof response.data === "undefined")
-								return; // This happens if you request a future date, or perhaps any date with no data.
+								return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
 
-							// Convert from "cliplist" response format to proposed "timeline" response format.
-							var clips = [];
-
-							for (var clipIdx = 0; clipIdx < response.data.length; clipIdx++)
+							// Ingest ranges array
+							var ranges = response.data.ranges;
+							for (var i = 0; i < ranges.length; i++)
 							{
-								var src = response.data[clipIdx];
-								var clip = { cam: src.camera, color: src.color, start: src.date * 1000, len: src.msec, thumb: src.path };
-								clips.push(clip);
+								timeline.AddRange(ranges[i]);
 							}
-
-							// Ingest clips array
-							//var clips = response.data.clips;
-							for (var clipIdx = 0; clipIdx < clips.length; clipIdx++)
-							{
-								clips[clipIdx].color = BlueIrisColorToCssColor(clips[clipIdx].color);
-								timeline.AddRange(clips[clipIdx]);
-							}
-
 							timeline.FinalizeAfterAddingRanges();
-							timeline.newDataNotifier++;
-							console.log("Added date");
-						}
-						, function (jqXHR, textStatus, errorThrown)
-						{
-							Vue.set(timeline.dayLoadingStatus, dayId, 3);
-							timeline.errorHtml = jqXHR.ErrorMessageHtml;
-						});
-					this.LoadTimelineAlerts(date);
-				},
-				LoadTimelineAlerts: function (date)
-				{
-					if (!date)
-						date = new Date();
-					var args = { cmd: "alertlist", camera: "index" };
-					var startdate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-					var enddate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
-					args.startdate = startdate.getTime() / 1000;
-					args.enddate = enddate.getTime() / 1000;
-					ExecJSON(args
-						, function (response)
-						{
-							if (response.result !== "success")
-							{
-								timeline.errorHtml = args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response));
-								return;
-							}
-
-							if (typeof response.data === "undefined")
-								return; // This happens if you request a future date, or perhaps any date with no data.
-
-							// Convert from "alertlist" response format to proposed "timeline" response format.
-							var alerts = [];
-
-							for (var i = 0; i < response.data.length; i++)
-							{
-								var src = response.data[i];
-								var alert = src.date * 1000;
-								alerts.push(alert);
-							}
 
 							// Ingest alerts array
-							//var alerts = response.data.alerts;
+							var alerts = response.data.alerts;
 							for (var i = 0; i < alerts.length; i++)
-								timeline.AddAlert(alerts[i]);
-
+								timeline.AddAlert(alerts[i].time);
 							timeline.FinalizeAfterAddingAlerts();
+
 							timeline.newDataNotifier++;
-						}
-						, function (jqXHR, textStatus, errorThrown)
+							console.log("Added date: " + date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate());
+						})
+						.catch(function (err)
 						{
-							timeline.errorHtml = jqXHR.ErrorMessageHtml;
+							if (typeof err === "string")
+								timeline.errorHtml = err;
+							else
+								timeline.errorHtml = htmlEncode(JSON.stringify(err));
 						});
 				},
 				AddRange: function (range)
 				{
-					var rangesByColor = timeline.ranges[range.color];
+					range.color = BlueIrisColorToCssColor(range.color);
+					var rangesByColor = srcdata.colorMap[range.color];
 					if (typeof rangesByColor === "undefined")
 					{
 						timeline.colors.push(range.color);
 						timeline.colors.sort();
 						rangesByColor = [];
 
-						Vue.set(timeline.ranges, range.color, rangesByColor);
+						srcdata.colorMap[range.color] = rangesByColor;
 					}
 					rangesByColor.push(range);
 					//var rangesByDay = rangesByColor[GetTimestampWithDayPrecision(range.start)];
@@ -5522,28 +5584,28 @@ function ClipTimeline()
 					//	timeline.colors.sort();
 					//	rangesByColor = [];
 
-					//	Vue.set(timeline.ranges, range.color, rangesByColor);
+					//	srcdata.colorMap[range.color] = rangesByColor;
 					//}
 				},
 				AddAlert: function (alert)
 				{
-					timeline.alerts.push(alert);
+					srcdata.alerts.push(alert);
 				},
 				FinalizeAfterAddingRanges: function ()
 				{
 					for (var i = 0; i < timeline.colors.length; i++)
-						timeline.ranges[timeline.colors[i]].sort(function (a, b) { return a.start - b.start; });
+						srcdata.colorMap[timeline.colors[i]].sort(function (a, b) { return a.time - b.time; });
 
-					//var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
-					//var firstAlert = timeline.alerts.length ? timeline.alerts[0] : Date.now();
+					//var firstRange = srcdata.colorMap.length ? srcdata.colorMap[0].start : Date.now();
+					//var firstAlert = srcdata.alerts.length ? srcdata.alerts[0] : Date.now();
 					//timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
 				FinalizeAfterAddingAlerts: function ()
 				{
-					timeline.alerts.sort(function (a, b) { return a - b; });
+					srcdata.alerts.sort(function (a, b) { return a - b; });
 
-					//var firstRange = timeline.ranges.length ? timeline.ranges[0].start : Date.now();
-					//var firstAlert = timeline.alerts.length ? timeline.alerts[0].start : Date.now();
+					//var firstRange = srcdata.colorMap.length ? srcdata.colorMap[0].start : Date.now();
+					//var firstAlert = srcdata.alerts.length ? srcdata.alerts[0].start : Date.now();
 					//timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
 				AfterResize: function ()
@@ -5698,7 +5760,6 @@ function ClipTimeline()
 					var canvas = this.$refs.clipTimelineCanvas;
 					if (!canvas)
 						return;
-					console.log("drawCanvas");
 					var ctx = canvas.getContext("2d");
 					ctx.clearRect(0, 0, canvas.width, canvas.height);
 					ctx.fillStyle = "#000000";
@@ -5708,7 +5769,6 @@ function ClipTimeline()
 					var right = this.right;
 
 					// Draw alert icons
-					var alerts = this.alerts;
 					if (alertImgLoaded)
 					{
 						var alertImgScale = alertImg.naturalHeight / 11;
@@ -5720,6 +5780,7 @@ function ClipTimeline()
 						var nextAllowedX = 0;
 						var x;
 
+						var alerts = srcdata.alerts;
 						for (var i = 0; i < alerts.length; i++)
 						{
 							var alert = alerts[i];
@@ -5746,12 +5807,13 @@ function ClipTimeline()
 					// Just scanning over all the time ranges is slow.
 
 					// OPTIMIZATION PLAN A:
-					// Further split the ranges by day:
+					// Further split the ranges by camera and by day:
 					// 1. The structure will be:
-					//	data.ranges = {}
-					//	data.ranges[color] = {object}
-					//  data.ranges[color][day] = array
-					//  data.ranges[color][day][i] = range
+					//	data.ranges = object
+					//	data.ranges[color] = object
+					//  data.ranges[color][camera] = object
+					//  data.ranges[color][camera][day] = array
+					//  data.ranges[color][camera][day][i] = range
 					// 2. When retrieving data from the server, any ranges that cross a day boundary will need to be split at the day boundary.
 					// 3. Note that a range could cross one, two, or more day boundaries. Test the splitting algorithm with such a case.
 					// 4. When retrieving range datasets, we can retrieve just the days we need, and therefore we will have <= 2 days of extra data to iterate across.
@@ -5761,8 +5823,8 @@ function ClipTimeline()
 
 					// OPTIMIZATION PLAN B:
 					// Range add optimization to remove the need to sort.
-					// Always add ranges from oldest to newest (complete REFACTORING PLAN D first).
-					// We don't actually care what camera/thumb is there.  We only need color, start, len.  Remove other fields from spec sheet.
+					// Always add ranges from oldest to newest.
+					// We don't actually care what thumb is there.  We only need camera, color, time, len.  Remove other fields from spec sheet.
 					// If the range being added starts before the latest range, then find where the new range needs to go and insert it with splice().  Care should be taken so this never happens by design, as it will be slow and it will not take into account overlapping with other ranges. Pop up a warning message or log it to console or something.
 					// If the range being added starts after the latest range but overlaps with the latest range, modify the latest range and do not add a new range object. 
 					// If the range being added starts after the latest range, and does not overlap, then just push it onto the array.
@@ -5770,10 +5832,7 @@ function ClipTimeline()
 					// OPTIMIZATION PLAN C:
 					// Set up an orderly queue to load new days of data one at a time, prioritizing the most recent.  No more wild-west loading like it is right now.
 
-					// REFACTORING PLAN D:
-					// Properly separate the "cliplist" and "alertlist" based loading of timeline data into a ponyfill.
-
-					var allRanges = this.ranges;
+					var allRanges = srcdata.colorMap;
 					var allReducedRanges = {};
 					var perfBeforeReduce = performance.now();
 					if (reduceTimeline)
@@ -5793,9 +5852,9 @@ function ClipTimeline()
 							for (var i = 0; i < ranges.length; i++)
 							{
 								var range = ranges[i];
-								if (range.start <= right && range.start + range.len >= left)
+								if (range.time <= right && range.time + range.len >= left)
 								{
-									var leftOffsetMs = range.start - left;
+									var leftOffsetMs = range.time - left;
 									var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
 									var firstBucketIdx = (leftOffsetMs / bucketSize) | 0; // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
 									var lastBucketIdx = (rightOffsetMs / bucketSize) | 0;
@@ -5815,7 +5874,7 @@ function ClipTimeline()
 										continue;
 									else
 									{
-										currentRange.start = left + (i * bucketSize);
+										currentRange.time = left + (i * bucketSize);
 										inBucket = true;
 									}
 								}
@@ -5825,7 +5884,7 @@ function ClipTimeline()
 										continue;
 									else
 									{
-										currentRange.len = (left + (i * bucketSize)) - currentRange.start;
+										currentRange.len = (left + (i * bucketSize)) - currentRange.time;
 										reducedRanges.push(currentRange);
 										currentRange = { color: colorKey };
 										inBucket = false;
@@ -5834,7 +5893,7 @@ function ClipTimeline()
 							}
 							if (inBucket)
 							{
-								currentRange.len = (i * bucketSize) - currentRange.start;
+								currentRange.len = (i * bucketSize) - currentRange.time;
 								reducedRanges.push(currentRange);
 							}
 						}
@@ -5851,7 +5910,7 @@ function ClipTimeline()
 						{
 							var range = ranges[i];
 							ctx.fillStyle = "#" + range.color;
-							var x = ((range.start - left) / timeline.zoomFactor);
+							var x = ((range.time - left) / timeline.zoomFactor);
 							var y = 12 + (ci * timeline.TimelineColorbarHeight);
 							var w = Math.max(0.5, range.len / timeline.zoomFactor);
 							var h = timeline.TimelineColorbarHeight;
@@ -5859,7 +5918,7 @@ function ClipTimeline()
 						}
 					}
 					var perfEnd = performance.now();
-					console.log("Reduce took " + (perfBeforeRender - perfBeforeReduce) + " ms. Render took " + (perfEnd - perfBeforeRender) + " ms.");
+					//console.log("Reduce took " + (perfBeforeRender - perfBeforeReduce) + " ms. Render took " + (perfEnd - perfBeforeRender) + " ms.");
 				}
 			},
 			computed:
@@ -5894,41 +5953,6 @@ function ClipTimeline()
 					}
 					return days;
 				},
-				//VisibleTimelineRanges: function ()
-				//{
-				//	// Filter to only the ranges that overlap the visible area of the timeline.
-				//	var left = this.left;
-				//	var right = this.right;
-				//	var allRanges = this.ranges;
-				//	var allVisibleRanges = {};
-				//	for (var ci = 0; ci < this.colors.length; ci++)
-				//	{
-				//		var colorKey = this.colors[ci];
-				//		var ranges = allRanges[colorKey];
-				//		var reducedRanges = allVisibleRanges[colorKey] = [];
-				//		for (var i = 0; i < ranges.length; i++)
-				//		{
-				//			var range = ranges[i];
-				//			if (range.start + range.len >= left && range.start <= right)
-				//				reducedRanges.push(range);
-				//		}
-				//	}
-				//	return allVisibleRanges;
-				//},
-				//VisibleTimelineAlerts: function () // This computed property would provide little benefit over just filtering in-place when we draw the canvas.  And this would probably be slower.
-				//{
-				//	var allAlerts = this.alerts;
-				//	var visibleAlerts = [];
-				//	for (var i = 0; i < alerts.length; i++)
-				//	{
-				//		var alert = alerts[i];
-				//		if (alert >= left && alert <= right)
-				//		{
-				//			visibleAlerts.push(allAlerts);
-				//		}
-				//	}
-				//	return visibleAlerts;
-				//},
 				TimelineColorbarHeight: function ()
 				{
 					return (80 / this.colors.length);
@@ -24135,6 +24159,21 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 			if (callbackFail)
 				callbackFail(jqXHR, textStatus, errorThrown);
 		}
+	});
+}
+function ExecJSONPromise(args)
+{
+	return new Promise(function (resolve, reject)
+	{
+		ExecJSON(args
+			, function (response)
+			{
+				resolve(response);
+			}
+			, function (jqXHR, textStatus, errorThrown)
+			{
+				reject(jqXHR.ErrorMessageHtml);
+			});
 	});
 }
 function IsGroupableConnectionError(jqXHR)
