@@ -5336,23 +5336,23 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 				{
 					if (response.result !== "success")
 						return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
-					if (typeof response.data === "undefined")
-						return collected; // This happens if you request a future date, or perhaps any date with no data.
-
-					for (var i = 0; i < response.data.length; i++)
+					if (typeof response.data !== "undefined") // undefined happens if you request a future date, or perhaps any date with no data.
 					{
-						if (collected.length && collected[collected.length - 1].path === response.data[i].path)
-							continue;
-						collected.push(response.data[i]);
-					}
-					if (response.data.length >= 1000)
-					{
-						for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
-							if (typeof response.data[i].newalerts === "undefined")
-							{
-								enddate = response.data[i].date;
-								return getClips(startdate, enddate, collected);
-							}
+						for (var i = 0; i < response.data.length; i++)
+						{
+							if (collected.length && collected[collected.length - 1].path === response.data[i].path)
+								continue;
+							collected.push(response.data[i]);
+						}
+						if (response.data.length >= 1000)
+						{
+							for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
+								if (typeof response.data[i].newalerts === "undefined")
+								{
+									enddate = response.data[i].date;
+									return getClips(startdate, enddate, collected);
+								}
+						}
 					}
 					collected.sort(function (a, b) { return a.date - b.date; });
 					return collected;
@@ -5368,23 +5368,23 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 				{
 					if (response.result !== "success")
 						return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
-					if (typeof response.data === "undefined")
-						return collected; // This happens if you request a future date, or perhaps any date with no data.
-
-					for (var i = 0; i < response.data.length; i++)
+					if (typeof response.data !== "undefined") // undefined happens if you request a future date, or perhaps any date with no data.
 					{
-						if (collected.length && collected[collected.length - 1].path === response.data[i].path)
-							continue;
-						collected.push(response.data[i]);
-					}
-					if (response.data.length >= 1000)
-					{
-						for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
-							if (typeof response.data[i].newalerts === "undefined")
-							{
-								enddate = response.data[i].date;
-								return getAlerts(startdate, enddate, collected);
-							}
+						for (var i = 0; i < response.data.length; i++)
+						{
+							if (collected.length && collected[collected.length - 1].path === response.data[i].path)
+								continue;
+							collected.push(response.data[i]);
+						}
+						if (response.data.length >= 1000)
+						{
+							for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
+								if (typeof response.data[i].newalerts === "undefined")
+								{
+									enddate = response.data[i].date;
+									return getAlerts(startdate, enddate, collected);
+								}
+						}
 					}
 					collected.sort(function (a, b) { return a.date - b.date; });
 					return collected;
@@ -5465,7 +5465,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 				isRunning = true;
 				for (var i = 0; i < next.days.length; i++)
 					dayLoadingStatus[next.days[i]] = 1;
-				callbackStartedLoading(next.days);
+				callbackStartedLoading(next);
 				GetTimelineData(next.start, next.end)
 					.then(function (response)
 					{
@@ -5475,7 +5475,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 						{
 							for (var i = 0; i < next.days.length; i++)
 								dayLoadingStatus[next.days[i]] = 2;
-							callbackGotData(next.days, response.data);
+							callbackGotData(next, response.data);
 						}
 					})
 					.catch(function (err)
@@ -5487,7 +5487,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 							errHtml = err;
 						else
 							errHtml = htmlEncode("An unexpected error occurred loading timeline data: " + err);
-						callbackError(next.days, errHtml);
+						callbackError(next, errHtml);
 						// Wait a moment, then allow these days to be requested again.
 						setTimeout(function ()
 						{
@@ -5714,94 +5714,157 @@ function ClipTimeline()
 				},
 				/**
 				 * Called when data begins loading for a set of days.
-				 * @param {Array} days Array of timestamps of days at midnight.
+				 * @param {Object} requestInfo Object containing days, start, end.
 				 */
-				callbackStartedLoading: function (days)
+				callbackStartedLoading: function (requestInfo)
 				{
-					for (var i = 0; i < days.length; i++)
-						Vue.set(timeline.dayLoadingStatus, days[i], 1);
+					for (var i = 0; i < requestInfo.days.length; i++)
+						Vue.set(timeline.dayLoadingStatus, requestInfo.days[i], 1);
 				},
 				/**
 				 * Called when data is received for a set of days.
-				 * @param {Array} days Array of timestamps of days at midnight.
+				 * @param {Object} requestInfo Object containing days, start, end.
 				 * @param {Object} data Data from the server.
 				 */
-				callbackGotData: function (days, data)
+				callbackGotData: function (requestInfo, data)
 				{
 					timeline.errorHtml = "";
 
-					for (var i = 0; i < days.length; i++)
-						Vue.set(timeline.dayLoadingStatus, days[i], 2);
+					for (var i = 0; i < requestInfo.days.length; i++)
+						Vue.set(timeline.dayLoadingStatus, requestInfo.days[i], 2);
 
 					if (typeof data === "undefined")
 						return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
 
+					var start = requestInfo.start.getTime();
+					var end = requestInfo.end.getTime();
+
 					// Ingest ranges array
 					var ranges = data.ranges;
 					for (var i = 0; i < ranges.length; i++)
-						timeline.AddRange(ranges[i]);
-					timeline.FinalizeAfterAddingRanges();
+						timeline.AddRange(ranges[i], start, end, requestInfo.days);
 
 					// Ingest alerts array
 					var alerts = data.alerts;
 					for (var i = 0; i < alerts.length; i++)
-						timeline.AddAlert(alerts[i]);
+						timeline.AddAlert(alerts[i], start, end, requestInfo.days);
 					timeline.FinalizeAfterAddingAlerts();
 
 					timeline.newDataNotifier++;
-					//for (var i = 0; i < days.length; i++)
+					//for (var i = 0; i < requestInfo.days.length; i++)
 					//{
-					//	var date = new Date(days[i]);
+					//	var date = new Date(requestInfo.days[i]);
 					//	console.log("Added date: " + date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate());
 					//}
 				},
 				/**
 				 * Called when an error occurs when loading data for a set of days.
-				 * @param {Array} days Array of timestamps of days at midnight.
+				 * @param {Object} requestInfo Object containing days, start, end.
 				 * @param {String} errHtml HTML error message.
 				 */
-				callbackError: function (days, errHtml)
+				callbackError: function (requestInfo, errHtml)
 				{
-					for (var i = 0; i < days.length; i++)
-						Vue.set(timeline.dayLoadingStatus, days[i], 3);
+					for (var i = 0; i < requestInfo.days.length; i++)
+						Vue.set(timeline.dayLoadingStatus, requestInfo.days[i], 3);
 					timeline.errorHtml = errHtml;
 					console.log(htmlDecode(errHtml));
 				},
-				AddRange: function (range)
+				/**
+				 * 
+				 * @param {any} range A range object.
+				 * @param {any} start Point in time marking the start of the requested time range.
+				 * @param {any} end Point in time marking the end of the requested time range.
+				 * @param {Array} cutpoints Array of timestamps marking the start of new days within the requested time range.  Ranges that span any of these cutpoints must be split into multiple ranges.
+				 */
+				AddRange: function (range, start, end, cutpoints)
 				{
 					range.color = BlueIrisColorToCssColor(range.color);
-					var rangesByColor = srcdata.colorMap[range.color];
-					if (typeof rangesByColor === "undefined")
+
+					// Bounds check.  Any range that starts before the requested time range should be truncated.  The truncated portion will be added later if we load the previous time range.
+					if (range.time < start)
+					{
+						var diff = start - range.time;
+						range.time = start;
+						range.len -= diff;
+						if (range.len <= 0)
+							return;
+					}
+					// Bounds check.  Any range that ends after the requested time range should be truncated.  The truncated portion will be added later if we load the next time range.
+					if (range.time + range.len > end)
+					{
+						var diff = (range.time + range.len) - end;
+						range.len -= diff;
+						if (range.len <= 0)
+							return;
+					}
+					// If the range spans a cutpoint timestamp, we should cut it into multiple ranges and add each of them separately.
+					for (var i = 1; i < cutpoints.length; i++) // Begin loop at index 1 because the 0th cutpoint is equal to [start].
+					{
+						var cut = cutpoints[i];
+						if (range.time < cut && range.time + range.len > cut)
+						{
+							//console.log("Range ", range, "spans cutpoint " + GetDateDisplayStrShort(new Date(cut)));
+							// This range spans the cutpoint. Make a copy that goes up to the cutpoint, and add the copy separately to our source data.
+							var copy = JSON.parse(JSON.stringify(range));
+							copy.len = cut - copy.time;
+							this.AddRangeInternal(copy);
+
+							// Truncate original range.
+							range.time = cut;
+							range.len -= copy.len;
+						}
+					}
+					this.AddRangeInternal(range);
+				},
+				AddRangeInternal: function (range)
+				{
+					// Ranges are organized under several levels of structure.
+					// srcdata.colorMap[color][camera][day] = [range, range, range, ...]
+					var map_of_cameras_to_days = srcdata.colorMap[range.color];
+					if (typeof map_of_cameras_to_days === "undefined")
 					{
 						timeline.colors.push(range.color);
 						timeline.colors.sort();
-						rangesByColor = [];
-
-						srcdata.colorMap[range.color] = rangesByColor;
+						srcdata.colorMap[range.color] = map_of_cameras_to_days = [];
 					}
-					rangesByColor.push(range);
-					//var rangesByDay = rangesByColor[GetTimestampWithDayPrecision(range.time)];
-					//if (typeof rangesByColor === "undefined")
-					//{
-					//	timeline.colors.push(range.color);
-					//	timeline.colors.sort();
-					//	rangesByColor = [];
 
-					//	srcdata.colorMap[range.color] = rangesByColor;
-					//}
+					var map_of_days_to_ranges = map_of_cameras_to_days[range.cam];
+					if (typeof map_of_days_to_ranges === "undefined")
+						map_of_cameras_to_days[range.cam] = map_of_days_to_ranges = [];
+
+					var preciseDate = new Date(range.time);
+					var date = new Date(preciseDate.getFullYear(), preciseDate.getMonth(), preciseDate.getDate());
+					var day = date.getTime();
+					var ranges = map_of_days_to_ranges[day];
+					if (typeof ranges === "undefined")
+						map_of_days_to_ranges[day] = ranges = [];
+
+					if (!ranges.length)
+						ranges.push(range); // First range in this array.
+					else
+					{
+						var last = ranges[ranges.length - 1];
+						if (last.time < range.time) // Normal case. New range goes on end of array. Sort order is maintained.
+							ranges.push(range);
+						else if (last.time > range.time) // New range is out of order!
+						{
+							var idx = binarySearch(ranges, range, RangeCompare);
+							if (idx < 0)
+								idx = -idx - 1; // Match was approximate. This calculation gets us the closest match index.
+							if (idx >= ranges.length)
+								idx = ranges.length - 1;
+							if (ranges[idx].time < range.time)
+								idx++;
+							console.log("Timeline item was added out of order at index " + idx + " out of " + ranges.length, last, range);
+							ranges.splice(idx, 0, range);
+						}
+						else // New range has same exact time as last added range. Update last added range len field.
+							last.len = range.len;
+					}
 				},
 				AddAlert: function (alert)
 				{
 					srcdata.alerts.push(alert.time);
-				},
-				FinalizeAfterAddingRanges: function ()
-				{
-					for (var i = 0; i < timeline.colors.length; i++)
-						srcdata.colorMap[timeline.colors[i]].sort(function (a, b) { return a.time - b.time; });
-
-					//var firstRange = srcdata.colorMap.length ? srcdata.colorMap[0].time : Date.now();
-					//var firstAlert = srcdata.alerts.length ? srcdata.alerts[0] : Date.now();
-					//timeline.leftmostTime = Math.min(firstRange, firstAlert);
 				},
 				FinalizeAfterAddingAlerts: function ()
 				{
@@ -5978,6 +6041,14 @@ function ClipTimeline()
 
 					var left = this.left;
 					var right = this.right;
+					var visibleDayTimestamps = [];
+					var date = new Date(this.left);
+					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					while (date.getTime() < right)
+					{
+						visibleDayTimestamps.push(date.getTime());
+						date.setDate(date.getDate() + 1);
+					}
 
 					// Draw alert icons
 					if (alertImgLoaded)
@@ -6012,102 +6083,84 @@ function ClipTimeline()
 
 					// Motion-triggered systems can have hundreds of thousands of time ranges when the timeline is zoomed out.
 					// This is far too much to render efficiently.
-					// If we combine close-together ranges, we don't have to draw as many objects.
+					// We combine close-together ranges so we don't have to draw as many objects.
 
-					// This is still too slow when there's a lot of data loaded.
-					// Just scanning over all the time ranges is slow.
-
-					// OPTIMIZATION PLAN A:
-					// Further split the ranges by camera and by day:
-					// 1. The structure will be:
-					//	data.ranges = object
-					//	data.ranges[color] = object
-					//  data.ranges[color][camera] = object
-					//  data.ranges[color][camera][day] = array
-					//  data.ranges[color][camera][day][i] = range
-					// 2. When retrieving data from the server, any ranges that cross a day boundary will need to be split at the day boundary.
-					// 3. Note that a range could cross one, two, or more day boundaries. Test the splitting algorithm with such a case.
-					// 4. When retrieving range datasets, we can retrieve just the days we need, and therefore we will have <= 2 days of extra data to iterate across.
-					// 5. Segregating data by day also means we don't have to sort as large of a collection when adding new data.
-					//
-					// If the above works well for ranges, repeat it for the alerts collection, splitting them by day (we don't care about color for alerts).
-
-					// OPTIMIZATION PLAN B:
-					// Range add optimization to remove the need to sort.
-					// Always add ranges from oldest to newest.
-					// We don't actually care what thumb is there.  We only need camera, color, time, len.  Remove other fields from spec sheet.
-					// If the range being added starts before the latest range, then find where the new range needs to go and insert it with splice().  Care should be taken so this never happens by design, as it will be slow and it will not take into account overlapping with other ranges. Pop up a warning message or log it to console or something.
-					// If the range being added starts after the latest range but overlaps with the latest range, modify the latest range and do not add a new range object. 
-					// If the range being added starts after the latest range, and does not overlap, then just push it onto the array.
-
-					var allRanges = srcdata.colorMap;
 					var allReducedRanges = {};
 					var perfBeforeReduce = performance.now();
-					if (reduceTimeline)
+					for (var ci = 0; ci < this.colors.length; ci++)
 					{
-						for (var ci = 0; ci < this.colors.length; ci++)
+						var colorKey = this.colors[ci];
+						var reducedRanges = allReducedRanges[colorKey] = [];
+						var map_of_cameras_to_days = srcdata.colorMap[colorKey];
+						if (!map_of_cameras_to_days)
+							continue;
+						for (var cam in map_of_cameras_to_days)
 						{
-							var colorKey = this.colors[ci];
-							var ranges = allRanges[colorKey];
-							var reducedRanges = allReducedRanges[colorKey] = [];
-
-							// We're reducing the dataset by creating an array of true/false buckets.
-							// Each bucket represents a time slot and the bucket is filled (set = true) if the time slot contains any video.
-							var bucketSize = timeline.zoomFactor / 2; // One bucket represents this many milliseconds.
-							var buckets = new Array((timeline.visibleMilliseconds / bucketSize) | 0);
-
-							// Set the value = true for every bucket that has some video data.
-							for (var i = 0; i < ranges.length; i++)
+							var map_of_days_to_ranges = map_of_cameras_to_days[cam];
+							if (!map_of_days_to_ranges)
+								continue;
+							for (var tsIdx = 0; tsIdx < visibleDayTimestamps.length; tsIdx++)
 							{
-								var range = ranges[i];
-								if (range.time <= right && range.time + range.len >= left)
-								{
-									var leftOffsetMs = range.time - left;
-									var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
-									var firstBucketIdx = Clamp((leftOffsetMs / bucketSize) | 0, 0, buckets.length - 1); // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
-									var lastBucketIdx = Clamp((rightOffsetMs / bucketSize) | 0, 0, buckets.length - 1);
-									for (var n = firstBucketIdx; n <= lastBucketIdx; n++)
-										buckets[n] = true;
-								}
-							}
+								var ranges = map_of_days_to_ranges[visibleDayTimestamps[tsIdx]];
+								if (!ranges)
+									continue;
 
-							// Build an array containing the minimum number of ranges required to draw these buckets.
-							var inBucket = false;
-							var currentRange = { color: colorKey };
-							for (var i = 0; i < buckets.length; i++)
-							{
-								if (buckets[i])
+								// We're reducing the dataset by creating an array of true/false buckets.
+								// Each bucket represents a time slot and the bucket is filled (set = true) if the time slot contains any video.
+								var bucketSize = timeline.zoomFactor / 2; // One bucket represents this many milliseconds.
+								var buckets = new Array((timeline.visibleMilliseconds / bucketSize) | 0);
+
+								// Set the value = true for every bucket that has some video data.
+								for (var i = 0; i < ranges.length; i++)
 								{
-									if (inBucket)
-										continue;
-									else
+									var range = ranges[i];
+									if (range.time <= right && range.time + range.len >= left)
 									{
-										currentRange.time = left + (i * bucketSize);
-										inBucket = true;
+										var leftOffsetMs = range.time - left;
+										var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
+										var firstBucketIdx = Clamp((leftOffsetMs / bucketSize) | 0, 0, buckets.length - 1); // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
+										var lastBucketIdx = Clamp((rightOffsetMs / bucketSize) | 0, 0, buckets.length - 1);
+										for (var n = firstBucketIdx; n <= lastBucketIdx; n++)
+											buckets[n] = true;
 									}
 								}
-								else
+
+								// Build an array containing the minimum number of ranges required to draw these buckets.
+								var inBucket = false;
+								var currentRange = { color: colorKey };
+								for (var i = 0; i < buckets.length; i++)
 								{
-									if (!inBucket)
-										continue;
+									if (buckets[i])
+									{
+										if (inBucket)
+											continue;
+										else
+										{
+											currentRange.time = left + (i * bucketSize);
+											inBucket = true;
+										}
+									}
 									else
 									{
-										currentRange.len = (left + (i * bucketSize)) - currentRange.time;
-										reducedRanges.push(currentRange);
-										currentRange = { color: colorKey };
-										inBucket = false;
+										if (!inBucket)
+											continue;
+										else
+										{
+											currentRange.len = (left + (i * bucketSize)) - currentRange.time;
+											reducedRanges.push(currentRange);
+											currentRange = { color: colorKey };
+											inBucket = false;
+										}
 									}
 								}
-							}
-							if (inBucket)
-							{
-								currentRange.len = (left + (i * bucketSize)) - currentRange.time;
-								reducedRanges.push(currentRange);
+								if (inBucket)
+								{
+									currentRange.len = (left + (i * bucketSize)) - currentRange.time;
+									reducedRanges.push(currentRange);
+								}
 							}
 						}
 					}
-					else
-						allReducedRanges = allRanges;
 					var perfBeforeRender = performance.now();
 
 					for (var ci = 0; ci < this.colors.length; ci++)
@@ -6126,7 +6179,7 @@ function ClipTimeline()
 						}
 					}
 					var perfEnd = performance.now();
-					//console.log("Reduce took " + (perfBeforeRender - perfBeforeReduce) + " ms. Render took " + (perfEnd - perfBeforeRender) + " ms.");
+					console.log("Reduce took " + (perfBeforeRender - perfBeforeReduce) + " ms. Render took " + (perfEnd - perfBeforeRender) + " ms.");
 				}
 			},
 			computed:
@@ -6540,6 +6593,10 @@ function ClipTimeline()
 	this.pointInsideTimeline = function (x, y)
 	{
 		return $tl_root.length && pointInsideElement($tl_root, x, y);
+	}
+	function RangeCompare(a, b)
+	{
+		return a.time - b.time;
 	}
 	if (enabled)
 		self.Initialize();
