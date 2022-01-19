@@ -29824,7 +29824,6 @@ function GetServerTimeOffset()
 	/// var serverTime = new Date(utcMs + GetServerTimeOffset());
 	/// console.log(serverTime.toString());
 	/// </summary>
-	return 43200000;
 	var localOffsetMs = new Date().getTimezoneOffset() * 60000;
 	var serverOffsetMs = serverTimeZoneOffsetMs;
 	return localOffsetMs - serverOffsetMs;
