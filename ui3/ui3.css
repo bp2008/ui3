@@ -2913,9 +2913,18 @@ div.invisibleLabel
 	color: var(--text-active-color);
 	border-left: 1px solid var(--text-active-color);
 	padding-left: 2px;
+	padding-right: 4px;
 	font-size: 12px;
 	white-space: nowrap;
 	box-shadow: -3px 0px 4px var(--datetile-bg-color);
+	z-index: 2;
+}
+
+.timelineLabelMinor
+{
+	z-index: 0;
+	color: var(--text-color);
+	border-color: var(--text-color);
 }
 
 .timelineCurrentTimeWrapper
@@ -2925,7 +2934,6 @@ div.invisibleLabel
 	justify-content: center;
 	width: 100%;
 	height: 16px;
-	overflow: hidden;
 }
 
 .timelineCurrentTime
@@ -2933,26 +2941,17 @@ div.invisibleLabel
 	border: 1px solid var(--button-color);
 	padding: 0px 4px;
 	box-shadow: 0px 0px 9px #000000;
-	background-color: #000000;
+	background-color: rgba(0,0,0,0.8);
 	color: var(--text-active-color);
 	font-size: 12px;
-	z-index: 1;
-	height: 16px;
+	z-index: 2;
+	height: 30px;
+	margin-bottom: 16px;
 	box-sizing: border-box;
 	overflow: hidden;
 	white-space: pre-line;
 	text-align: center;
 }
-
-.timelineCurrentTimeWrapper.withDate
-{
-	overflow: visible;
-}
-
-	.timelineCurrentTimeWrapper.withDate .timelineCurrentTime
-	{
-		height: 30px;
-	}
 
 .timelineMain
 {
@@ -3038,6 +3037,7 @@ div.invisibleLabel
 	height: 100%;
 	width: 2px;
 	background-color: rgba(0,213,255,0.75);
+	z-index: 1;
 }
 
 .timelineError

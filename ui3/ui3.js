@@ -563,6 +563,8 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// BUG: If you let a clip play to the end and stop, then reload the page, UI3 tries to open the clip at the very end and it doesn't play any video.  The "video lost" sound plays.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -3225,6 +3227,10 @@ function resized()
 	var layoutsidebar = $("#layoutleft");
 	var layoutbody = $("#layoutbody");
 	var layoutbottom = $("#layoutbottom");
+	InitSavedBounds(layoutbody);
+	InitSavedBounds(layoutbottom);
+	var el_layoutbody = layoutbody.get(0);
+	var el_layoutbottom = layoutbottom.get(0);
 	var statusArea = $("#statusArea");
 	var llrControls = $("#layoutLeftRecordingsControls");
 	var systemnamewrapper = $("#systemnamewrapper");
@@ -3283,7 +3289,7 @@ function resized()
 	var sidebarT = topH;
 	if (portrait)
 	{
-		sidebarH = sidebarResizeBar.getSidebarSize() * (windowH - topH - botH);
+		sidebarH = Math.round(sidebarResizeBar.getSidebarSize() * (windowH - topH - botH));
 		sidebarT = windowH - sidebarH;
 	}
 	layoutsidebar.css("top", sidebarT + "px");
@@ -3343,6 +3349,7 @@ function resized()
 	layoutbody.css("left", bodyL + "px");
 	layoutbody.css("width", bodyW + "px");
 	layoutbody.css("height", bodyH + "px");
+	el_layoutbody.savedBounds = { x: bodyL, y: bodyT, w: bodyW, h: bodyH };
 
 	// Size camimg_loading_anim
 	var camimg_loading_anim_Size = Clamp(Math.min(bodyW, bodyH), 10, 120);
@@ -3373,18 +3380,29 @@ function resized()
 	if (portrait)
 	{
 		layoutbottom.css("width", windowW + "px");
+		el_layoutbottom.savedBounds.w = windowW;
 		layoutbottom.css("left", "0px");
+		el_layoutbottom.savedBounds.x = 0;
 		layoutbottom.css("bottom", windowH - sidebarT + "px");
 	}
 	else
 	{
 		layoutbottom.css("width", windowW - sidebarW + "px");
+		el_layoutbottom.savedBounds.w = windowW - sidebarW;
 		if (sideBarRight)
+		{
 			layoutbottom.css("left", "0px");
+			el_layoutbottom.savedBounds.x = 0;
+		}
 		else
+		{
 			layoutbottom.css("left", sidebarW + "px");
+			el_layoutbottom.savedBounds.x = sidebarW;
+		}
 		layoutbottom.css("bottom", "0px");
 	}
+	el_layoutbottom.savedBounds.h = botH;
+	el_layoutbottom.savedBounds.y = layoutbottom.offset().top;
 
 	// Size misc items
 	imageRenderer.ImgResized(false);
@@ -3395,6 +3413,15 @@ function resized()
 	clipLoader.resizeClipList();
 	$.CustomScroll.callMeOnContainerResize();
 	BI_CustomEvent.Invoke("afterResize");
+}
+function InitSavedBounds($el)
+{
+	var el = $el.get(0);
+	if (el && !el.savedBounds)
+	{
+		var o = $el.offset();
+		el.savedBounds = { w: $el.width(), h: $el.height(), x: o ? o.left : 0, y: o ? o.top : 0 };
+	}
 }
 function UiSizeHelper()
 {
@@ -4625,6 +4652,11 @@ function PtzButtons()
 		ele.parentNode.graphicObjects[ele.svgid] = ele;
 	});
 
+	BI_CustomEvent.AddListener("afterResize", function ()
+	{
+		var o = $ptzGraphicWrapper.offset();
+		$ptzGraphicWrapper.get(0).savedBounds = { x: o ? o.left : 0, y: o ? o.top : 0, w: $ptzGraphicWrapper.width(), h: $ptzGraphicWrapper.height() };
+	});
 	// PTZ button input events //
 
 	// onHoverEnter called whenever a mouse pointer begins hovering over any button.
@@ -5584,13 +5616,13 @@ function ClipTimeline()
 		Vue.component('clip-timeline', {
 			template: ''
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
-				+ ' <clip-timeline-legend :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :showSelectedDate="showSelectedDate" />'
+				+ ' <clip-timeline-legend :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :showSelectedTime="showSelectedTime" />'
 				+ ' <div class="timelineMain">'
 				+ '		<clip-timeline-loader :width="timelineWidth" :timeBase="timeBase" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :dayLoadingStatus="dayLoadingStatus" />'
 				+ '		<canvas ref="clipTimelineCanvas" class="clipTimelineCanvas" />'
-				+ '		<div class="timelineCenterBar" :style="CenterBarStyle"></div>'
 				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
 				+ '	</div>'
+				+ '	<div class="timelineCenterBar" :style="CenterBarStyle"></div>'
 				+ '</div>',
 			data: function ()
 			{
@@ -5781,10 +5813,12 @@ function ClipTimeline()
 				},
 				AfterResize: function ()
 				{
-					if (timeline.$refs.tl_root)
+					if (this.$refs.tl_root)
 					{
-						timeline.timelineWidth = timeline.$refs.tl_root.offsetWidth;
-						timeline.timelineHeight = timeline.$refs.tl_root.offsetHeight;
+						var o = $tl_root.offset();
+						this.$refs.tl_root.savedBounds = { x: o ? o.left : 0, y: o ? o.top : 0, w: this.$refs.tl_root.offsetWidth, h: this.$refs.tl_root.offsetHeight };
+						this.timelineWidth = this.$refs.tl_root.savedBounds.w;
+						this.timelineHeight = this.$refs.tl_root.savedBounds.h;
 					}
 				},
 				mouseDown: function (e)
@@ -6157,7 +6191,7 @@ function ClipTimeline()
 					else
 						return "grabcursor";
 				},
-				showSelectedDate: function ()
+				showSelectedTime: function ()
 				{
 					return this.dragState.isDragging || this.isHovered;
 				}
@@ -6211,9 +6245,9 @@ function ClipTimeline()
 			template: ''
 				+ '<div class="timelineLegendBar">'
 				+ '	<div class="timelineLegend timelineContent">'
-				+ '		<div class="timelineLabel" v-for="tag in tags" :key="tag.time" :style="tag.style">{{tag.label}}</div>'
+				+ '		<div class="timelineLabel" v-for="tag in tags" :key="tag.time" :style="tag.style" :class="{ timelineLabelMinor: tag.minor }">{{tag.label}}</div>'
 				+ '	</div>'
-				+ '	<div class="timelineCurrentTimeWrapper" :class="{ withDate: showSelectedDate }"><div class="timelineCurrentTime">{{currentTimeStr}}</div></div>'
+				+ '	<div class="timelineCurrentTimeWrapper" v-show="showSelectedTime"><div class="timelineCurrentTime">{{currentTimeStr}}</div></div>'
 				+ '</div>',
 			data: function ()
 			{
@@ -6235,7 +6269,7 @@ function ClipTimeline()
 				/** Timestamp of the center (current time) */
 				currentTime: Number,
 				/** If true, the date should be shown in the selected time label */
-				showSelectedDate: Boolean
+				showSelectedTime: Boolean
 			},
 			created: function ()
 			{
@@ -6248,11 +6282,54 @@ function ClipTimeline()
 			},
 			methods:
 			{
+				generateTickMarks: function ()
+				{
+					/** The number of hours we must skip between tags in order to fit 45px tags together tightly */
+					var hourPrecisionAvailable = (this.zoomFactor * 45 / 1000 / 60 / 60);
+					var hourInterval = Clamp(Math.ceil(hourPrecisionAvailable), 1, 4);
+					if (hourInterval === 4)
+						hourInterval = 12;
+					var minutePrecisionAvailable = (this.zoomFactor * 100 / 1000 / 60);
+					var minuteInterval;
+					if (minutePrecisionAvailable <= 1)
+						minuteInterval = 1;
+					else if (minutePrecisionAvailable <= 5)
+						minuteInterval = 5;
+					else if (minutePrecisionAvailable <= 10)
+						minuteInterval = 10;
+					else if (minutePrecisionAvailable <= 15)
+						minuteInterval = 15;
+					else if (minutePrecisionAvailable <= 30)
+						minuteInterval = 30;
+					else
+						minuteInterval = 0;
+					var times = [];
+					var date = new Date(this.left);
+					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					while (date.getTime() < this.right)
+					{
+						if (date.getHours() > 0 || date.getMinutes() > 0)
+						{
+							var tag = { time: date.getTime(), minor: true };
+							tag.label = GetHourStr(date, minuteInterval > 0);
+							tag.style = {
+								left: ((tag.time - this.timeBase) / this.zoomFactor) + 'px'
+							};
+							times.push(tag);
+						}
+						if (minuteInterval > 0)
+							date.setMinutes(date.getMinutes() + minuteInterval);
+						else
+							date.setHours(date.getHours() + hourInterval);
+					}
+					return times;
+				}
 			},
 			computed:
 			{
 				tags: function ()
 				{
+					var timingTickMarksCutoff = 350000;
 					var dayWeekCutoff = 1122000;
 					var weekMonthCutoff = 4544278;
 					var monthYearCutoff = 50000000;
@@ -6318,6 +6395,12 @@ function ClipTimeline()
 
 						isFirst = false;
 					}
+					if (this.zoomFactor < timingTickMarksCutoff)
+					{
+						var tickMarks = this.generateTickMarks();
+						for (var i = 0; i < tickMarks.length; i++)
+							tags.push(tickMarks[i]);
+					}
 					return tags;
 				},
 				containerStyle: function ()
@@ -6332,10 +6415,7 @@ function ClipTimeline()
 				currentTimeStr: function ()
 				{
 					var date = new Date(this.currentTime);
-					if (this.showSelectedDate)
-						return GetShortDateOrToday(date) + '\n' + GetTimeStr(date);
-					else
-						return GetTimeStr(date);
+					return GetShortDateOrToday(date) + '\n' + GetTimeStr(date);
 				}
 			},
 			watch:
@@ -6456,6 +6536,10 @@ function ClipTimeline()
 	this.getVue = function ()
 	{
 		return timeline;
+	}
+	this.pointInsideTimeline = function (x, y)
+	{
+		return $tl_root.length && pointInsideElement($tl_root, x, y);
 	}
 	if (enabled)
 		self.Initialize();
@@ -6652,6 +6736,7 @@ function PlaybackControls()
 	this.hideTimeMs_Live = 1500;
 	this.hideTimeMs_Recordings = 3000;
 	var $layoutbody = $("#layoutbody");
+	var $layoutbottom = $("#layoutbottom");
 	var $pc = $("#playbackControls");
 	var $playbackSettings = $();
 	var buttonContainer = $("#pcButtonContainer");
@@ -6691,7 +6776,8 @@ function PlaybackControls()
 		var paddingSize = $pc.innerWidth() - $pc.width();
 		var width = $pc.parent().width() - paddingSize;
 		$pc.css("width", width + "px");
-
+		var o = $pc.offset();
+		$pc.get(0).savedBounds = { x: o ? o.left : 0, y: o ? o.top : 0, w: width, h: $pc.height() };
 		if (width > 475)
 			$("#volumeBar").addClass("wide");
 		else
@@ -6855,16 +6941,18 @@ function PlaybackControls()
 		else
 			$btn.removeAttr("download");
 	}
-	$layoutbody.on("mouseleave", function (e)
+	var mouseLeave = function (e)
 	{
 		mouseCoordFixer.fix(e);
-		if (pointInsideElement($layoutbody, e.mouseX, e.mouseY))
+		if (pointInsideElement($layoutbody, e.mouseX, e.mouseY) || pointInsideElement($layoutbottom, e.mouseX, e.mouseY))
 			return;
 		CloseSettings();
 		clearHideTimout();
 		self.FadeOut();
-	});
-	BindEventsPassive($layoutbody.get(0), "mouseenter mousemove mouseup touchmove touchend touchcancel", function (e)
+	}
+	$layoutbody.on("mouseleave", mouseLeave);
+	$layoutbottom.on("mouseleave", mouseLeave);
+	var mouseAction = function (e)
 	{
 		mouseCoordFixer.fix(e);
 		showTimeouts.push(setTimeout(self.FadeIn, 30)); // This is carefully tuned to prevent accidental clicks on playback controls that were invisible when the touch began.  Prior to v81 we did this by stopping/preventing the click event, but due to a chrome pinch zooming bug we must use a passive listener for this, which can't cancel the click event.
@@ -6872,13 +6960,16 @@ function PlaybackControls()
 
 		if (!self.MouseInPlaybackControls(e))
 			hideAfterTimeout();
-	});
+	}
+	BindEventsPassive($layoutbody.get(0), "mouseenter mousemove mouseup touchmove touchend touchcancel", mouseAction);
+	BindEventsPassive($layoutbottom.get(0), "mouseenter mousemove mouseup touchmove touchend touchcancel", mouseAction);
 	this.MouseInPlaybackControls = function (e)
 	{
 		mouseCoordFixer.fix(e);
 		return pointInsideElement($pc, e.mouseX, e.mouseY)
 			|| pointInsideElement($playbackSettings, e.mouseX, e.mouseY)
 			|| pointInsideElement(playbackHeader.Get$Ref(), e.mouseX, e.mouseY)
+			|| clipTimeline.pointInsideTimeline(e.mouseX, e.mouseY);
 	}
 	$(document).mouseup(function (e)
 	{
@@ -7192,6 +7283,8 @@ function PlaybackHeader()
 	});
 	this.resized = function ()
 	{
+		var o = $ph.offset();
+		$ph.get(0).savedBounds = { x: o ? o.left : 0, y: o ? o.top : 0, w: $ph.width(), h: $ph.height() };
 	}
 	this.Show = function ()
 	{
@@ -28919,9 +29012,20 @@ function pointInsideElement($ele, pX, pY)
 {
 	if ($ele.length == 0)
 		return false;
-	var o = $ele.offset();
-	var w = $ele.outerWidth(true);
-	var h = $ele.outerHeight(true);
+	var ele = $ele.get(0);
+	var o, w, h;
+	if (ele.savedBounds)
+	{
+		o = { left: ele.savedBounds.x, top: ele.savedBounds.y };
+		w = ele.savedBounds.w;
+		h = ele.savedBounds.h;
+	}
+	else
+	{
+		o = $ele.offset();
+		w = $ele.outerWidth(true);
+		h = $ele.outerHeight(true);
+	}
 	return pX >= o.left && pX < o.left + w && pY >= o.top && pY < o.top + h;
 }
 function pointInsideElementBorder($ele, pX, pY)
@@ -29246,6 +29350,35 @@ function GetMonthDisplayStr(date, longMonthName)
 function GetPaddedDateStr(date, includeMilliseconds)
 {
 	var str = date.getFullYear() + "/" + (date.getMonth() + 1).toString().padLeft(2, '0') + "/" + date.getDate().toString().padLeft(2, '0') + " " + GetTimeStr(date, includeMilliseconds);
+	return str;
+}
+function GetHourStr(date, includeMinutes)
+{
+	var ampm = "";
+	var hour = date.getHours();
+	if (!use24HourTime)
+	{
+		if (hour == 0)
+		{
+			hour = 12;
+			ampm = " AM";
+		}
+		else if (hour == 12)
+		{
+			ampm = " PM";
+		}
+		else if (hour > 12)
+		{
+			hour -= 12;
+			ampm = " PM";
+		}
+		else
+		{
+			ampm = " AM";
+		}
+	}
+
+	var str = hour.toString() + (includeMinutes ? (":" + date.getMinutes().toString().padLeft(2, '0')) : "") + ampm;
 	return str;
 }
 Date.prototype.getMonthName = function ()
