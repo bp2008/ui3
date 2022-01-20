@@ -5767,7 +5767,7 @@ function ClipTimeline()
 					for (var i = 0; i < requestInfo.days.length; i++)
 						Vue.set(timeline.dayLoadingStatus, requestInfo.days[i], 3);
 					timeline.errorHtml = errHtml;
-					console.log(htmlDecode(errHtml));
+					console.error(htmlDecode(errHtml));
 				},
 				/**
 				 * 
@@ -5818,27 +5818,37 @@ function ClipTimeline()
 				},
 				AddRangeInternal: function (range)
 				{
-					// Ranges are organized under several levels of structure.
-					// srcdata.colorMap[color][camera][day] = [range, range, range, ...]
+					// This timeline is designed to handle 100,000+ records efficiently.
+					// Ranges are organized under several levels of structure to provide a balance between loading speed and reading speed.
+					// srcdata.colorMap = {}				(keyed on color hex)
+					//	-> map_of_cameras_to_days = {}		(keyed on camera short name)
+					//		-> rangeChunkCollection = []	(contains day-sized chunks of time ranges, sorted by timestamp of the day)
+					//			-> chunk = []				(contains time ranges confined to the bounds of one day)
+					//				-> range
 					var map_of_cameras_to_days = srcdata.colorMap[range.color];
-					if (typeof map_of_cameras_to_days === "undefined")
+					if (!map_of_cameras_to_days)
 					{
 						timeline.colors.push(range.color);
 						timeline.colors.sort();
-						srcdata.colorMap[range.color] = map_of_cameras_to_days = [];
+						srcdata.colorMap[range.color] = map_of_cameras_to_days = {};
 					}
 
-					var map_of_days_to_ranges = map_of_cameras_to_days[range.cam];
-					if (typeof map_of_days_to_ranges === "undefined")
-						map_of_cameras_to_days[range.cam] = map_of_days_to_ranges = [];
+					var rangeChunkCollection = map_of_cameras_to_days[range.cam];
+					if (!rangeChunkCollection)
+						map_of_cameras_to_days[range.cam] = rangeChunkCollection = [];
 
 					var preciseDate = new Date(range.time);
 					var date = new Date(preciseDate.getFullYear(), preciseDate.getMonth(), preciseDate.getDate());
 					var day = date.getTime();
-					var ranges = map_of_days_to_ranges[day];
-					if (typeof ranges === "undefined")
-						map_of_days_to_ranges[day] = ranges = [];
+					var chunkIdx = binarySearch(rangeChunkCollection, { ts: day }, CompareRangeChunks);
+					if (chunkIdx < 0)
+					{
+						chunkIdx = -chunkIdx - 1;
+						rangeChunkCollection.splice(chunkIdx, 0, new RangeChunk(day));
+					}
+					var chunk = rangeChunkCollection[chunkIdx];
 
+					var ranges = chunk.ranges;
 					if (!ranges.length)
 						ranges.push(range); // First range in this array.
 					else
@@ -5846,7 +5856,7 @@ function ClipTimeline()
 						var last = ranges[ranges.length - 1];
 						if (last.time < range.time) // Normal case. New range goes on end of array. Sort order is maintained.
 							ranges.push(range);
-						else if (last.time > range.time) // New range is out of order!
+						else if (last.time > range.time) // New range is out of order! We try not to let this happen.
 						{
 							var idx = binarySearch(ranges, range, RangeCompare);
 							if (idx < 0)
@@ -5855,7 +5865,7 @@ function ClipTimeline()
 								idx = ranges.length - 1;
 							if (ranges[idx].time < range.time)
 								idx++;
-							console.log("Timeline item was added out of order at index " + idx + " out of " + ranges.length, last, range);
+							console.log("Slow operation warning: Timeline item was added out of order at index " + idx + " out of " + ranges.length, last, range, chunk);
 							ranges.splice(idx, 0, range);
 						}
 						else // New range has same exact time as last added range. Update last added range len field.
@@ -6041,14 +6051,16 @@ function ClipTimeline()
 
 					var left = this.left;
 					var right = this.right;
-					var visibleDayTimestamps = [];
-					var date = new Date(this.left);
-					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-					while (date.getTime() < right)
-					{
-						visibleDayTimestamps.push(date.getTime());
-						date.setDate(date.getDate() + 1);
-					}
+
+					//var visibleDayTimestamps = [];
+					var leftmostDate = new Date(this.left);
+					leftmostDate = new Date(leftmostDate.getFullYear(), leftmostDate.getMonth(), leftmostDate.getDate());
+					var leftmostDateTs = leftmostDate.getTime();
+					//while (date.getTime() < right)
+					//{
+					//	visibleDayTimestamps.push(date.getTime());
+					//	date.setDate(date.getDate() + 1);
+					//}
 
 					// Draw alert icons
 					if (alertImgLoaded)
@@ -6090,75 +6102,74 @@ function ClipTimeline()
 					for (var ci = 0; ci < this.colors.length; ci++)
 					{
 						var colorKey = this.colors[ci];
-						var reducedRanges = allReducedRanges[colorKey] = [];
 						var map_of_cameras_to_days = srcdata.colorMap[colorKey];
-						if (!map_of_cameras_to_days)
-							continue;
+						var reducedRanges = allReducedRanges[colorKey] = [];
+
+						// We're reducing the dataset by creating an array of true/false buckets.
+						// Each bucket represents a time slot and the bucket is filled (set = true) if the time slot contains any video.
+						var bucketSize = timeline.zoomFactor / 2; // One bucket represents this many milliseconds.
+						var buckets = new Array((timeline.visibleMilliseconds / bucketSize) | 0);
 						for (var cam in map_of_cameras_to_days)
 						{
-							var map_of_days_to_ranges = map_of_cameras_to_days[cam];
-							if (!map_of_days_to_ranges)
+							var rangeChunkCollection = map_of_cameras_to_days[cam];
+							if (!rangeChunkCollection)
 								continue;
-							for (var tsIdx = 0; tsIdx < visibleDayTimestamps.length; tsIdx++)
+							for (var chunkIdx = 0; chunkIdx < rangeChunkCollection.length; chunkIdx++)
 							{
-								var ranges = map_of_days_to_ranges[visibleDayTimestamps[tsIdx]];
-								if (!ranges)
-									continue;
-
-								// We're reducing the dataset by creating an array of true/false buckets.
-								// Each bucket represents a time slot and the bucket is filled (set = true) if the time slot contains any video.
-								var bucketSize = timeline.zoomFactor / 2; // One bucket represents this many milliseconds.
-								var buckets = new Array((timeline.visibleMilliseconds / bucketSize) | 0);
-
-								// Set the value = true for every bucket that has some video data.
-								for (var i = 0; i < ranges.length; i++)
+								var chunk = rangeChunkCollection[chunkIdx];
+								if (chunk.ts < right && chunk.ts >= leftmostDateTs)
 								{
-									var range = ranges[i];
-									if (range.time <= right && range.time + range.len >= left)
+									var ranges = chunk.ranges;
+									// Set the value = true for every bucket that has some video data.
+									for (var i = 0; i < ranges.length; i++)
 									{
-										var leftOffsetMs = range.time - left;
-										var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
-										var firstBucketIdx = Clamp((leftOffsetMs / bucketSize) | 0, 0, buckets.length - 1); // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
-										var lastBucketIdx = Clamp((rightOffsetMs / bucketSize) | 0, 0, buckets.length - 1);
-										for (var n = firstBucketIdx; n <= lastBucketIdx; n++)
-											buckets[n] = true;
-									}
-								}
-
-								// Build an array containing the minimum number of ranges required to draw these buckets.
-								var inBucket = false;
-								var currentRange = { color: colorKey };
-								for (var i = 0; i < buckets.length; i++)
-								{
-									if (buckets[i])
-									{
-										if (inBucket)
-											continue;
-										else
+										var range = ranges[i];
+										if (range.time <= right && range.time + range.len >= left)
 										{
-											currentRange.time = left + (i * bucketSize);
-											inBucket = true;
-										}
-									}
-									else
-									{
-										if (!inBucket)
-											continue;
-										else
-										{
-											currentRange.len = (left + (i * bucketSize)) - currentRange.time;
-											reducedRanges.push(currentRange);
-											currentRange = { color: colorKey };
-											inBucket = false;
+											var leftOffsetMs = range.time - left;
+											var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
+											var firstBucketIdx = Clamp((leftOffsetMs / bucketSize) | 0, 0, buckets.length - 1); // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
+											var lastBucketIdx = Clamp((rightOffsetMs / bucketSize) | 0, 0, buckets.length - 1);
+											for (var n = firstBucketIdx; n <= lastBucketIdx; n++)
+												buckets[n] = true;
 										}
 									}
 								}
+							}
+						}
+
+						// Build an array containing the minimum number of ranges required to draw these buckets.
+						var inBucket = false;
+						var currentRange = { color: colorKey };
+						for (var i = 0; i < buckets.length; i++)
+						{
+							if (buckets[i])
+							{
 								if (inBucket)
+									continue;
+								else
+								{
+									currentRange.time = left + (i * bucketSize);
+									inBucket = true;
+								}
+							}
+							else
+							{
+								if (!inBucket)
+									continue;
+								else
 								{
 									currentRange.len = (left + (i * bucketSize)) - currentRange.time;
 									reducedRanges.push(currentRange);
+									currentRange = { color: colorKey };
+									inBucket = false;
 								}
 							}
+						}
+						if (inBucket)
+						{
+							currentRange.len = (left + (i * bucketSize)) - currentRange.time;
+							reducedRanges.push(currentRange);
 						}
 					}
 					var perfBeforeRender = performance.now();
@@ -6600,6 +6611,16 @@ function ClipTimeline()
 	}
 	if (enabled)
 		self.Initialize();
+}
+function RangeChunk(ts)
+{
+	/** Key (timestamp of the day this chunk represents) */
+	this.ts = ts;
+	this.ranges = [];
+}
+function CompareRangeChunks(a, b)
+{
+	return a.ts - b.ts;
 }
 ///////////////////////////////////////////////////////////////
 // Zebra Date Picker //////////////////////////////////////////
@@ -29634,6 +29655,14 @@ function isSameDay(date1, date2)
 		return false;
 	return true;
 }
+/**
+ * Performs binary search and returns the index of a matching element.
+ * If there is no match, the returned index will be negative and you can negate it 
+ * and subtract 1 ((-idx - 1)) to get the index where the item should be inserted.
+ * @param {Array} ar Array
+ * @param {any} el Value to find
+ * @param {Function} compare_fn A function that compares two values of the appropriate type.  Should return a positive number if the first argument is greater, negative number if the first argument is lesser.
+ */
 function binarySearch(ar, el, compare_fn)
 {
 	var m = 0;
