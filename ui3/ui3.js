@@ -503,6 +503,7 @@ var mediaSessionController = null;
 var pictureInPictureController = null;
 var statusLoader = null;
 var cameraListLoader = null;
+var clipCalendar = null;
 var clipLoader = null;
 var clipThumbnailVideoPreview = null;
 var nerdStats = null;
@@ -2951,6 +2952,8 @@ $(function ()
 	pictureInPictureController = new PictureInPictureController();
 
 	cameraListLoader = new CameraListLoader();
+
+	clipCalendar = new ClipCalendar();
 
 	clipLoader = new ClipLoader("#clipsbody");
 
@@ -6633,8 +6636,8 @@ function DateFilter(dateRangeLabelSelector)
 	var suppressDatePickerCallbacks = false;
 	var $dateRangeLabel = $(dateRangeLabelSelector);
 	var $datePickerDialog = $("#datePickerDialog");
-	var dp1 = new DatePicker("datePicker1Container", 1, self);
-	var dp2 = new DatePicker("datePicker2Container", 2, self);
+	var dp1;
+	var dp2;
 	var timeClosed = 0;
 	var mayClose = true;
 	var isVisible = false;
@@ -6658,6 +6661,8 @@ function DateFilter(dateRangeLabelSelector)
 			self.CloseDatePicker();
 		else if (performance.now() - 33 > timeClosed)
 		{
+			dp1 = new DatePicker("datePicker1Container", 1, self);
+			dp2 = new DatePicker("datePicker2Container", 2, self);
 			var $ele = $(ele);
 			var offset = $ele.offset();
 			var wW = $(window).width();
@@ -6690,11 +6695,12 @@ function DateFilter(dateRangeLabelSelector)
 			isVisible = false;
 			$datePickerDialog.hide();
 			timeClosed = performance.now();
+			dp1 = dp2 = null;
 		}
 	};
 	this.SelectToday = function ()
 	{
-		if (suppressDatePickerCallbacks)
+		if (suppressDatePickerCallbacks || !dp1)
 			return;
 		suppressDatePickerCallbacks = true;
 		dp1.SelectToday();
@@ -6703,7 +6709,7 @@ function DateFilter(dateRangeLabelSelector)
 	}
 	this.Clear = function ()
 	{
-		if (suppressDatePickerCallbacks)
+		if (suppressDatePickerCallbacks || !dp1)
 			return;
 		suppressDatePickerCallbacks = true;
 		dp1.Clear();
@@ -6717,7 +6723,7 @@ function DateFilter(dateRangeLabelSelector)
 	}
 	this.OnSelect = function (dateCustom, dateYMD, noonDateObj, ele, datePickerNum)
 	{
-		if (suppressDatePickerCallbacks)
+		if (suppressDatePickerCallbacks || !dp1)
 			return;
 		var startOfDay = GetReverseServerDate(new Date(noonDateObj.getFullYear(), noonDateObj.getMonth(), noonDateObj.getDate()));
 		if ($dateRangeLabel.hasClass("oneLine"))
@@ -6766,6 +6772,7 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 	$dateInput.Zebra_DatePicker({
 		always_visible: $calendarContainer
 		, first_day_of_week: 0
+		, custom_classes: { dateHasClip: clipCalendar.GetDatesWithClips() }
 		, onClear: function (ele)
 		{
 			if (suppressDatePickerCallbacks)
@@ -8440,6 +8447,8 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (!videoPlayer.Loading().cam)
 			return; // UI hasn't loaded far enough yet.
+		if (!clipCalendar.hasLoaded)
+			clipCalendar.LoadData();
 		if (currentPrimaryTab !== "clips" || self.suppressClipListLoad)
 		{
 			QueuedClipListLoad = null;
@@ -10116,6 +10125,106 @@ function GetThumbnailPath(thumbPath, nativeRes)
 		nativeRes = clipData.hasHighResJpeg;
 	}
 	return currentServer.remoteBaseURL + (nativeRes ? "alerts" : "thumbs") + "/" + thumbPath + "?" + (nativeRes ? "fulljpeg" : "") + currentServer.GetAPISessionArg("&");
+}
+///////////////////////////////////////////////////////////////
+// Remember Which Days Have Clips /////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipCalendar()
+{
+	var self = this;
+	var datesWithClips = [];
+	var addedDates = {};
+	var camsToLoad;
+	this.hasLoaded = false;
+	this.LoadData = function ()
+	{
+		// We don't have a dependable way to query for clip calendar dates for all cameras at once.
+		// So we need to figure out which groups or cameras to load data for.
+		var srcCamList = cameraListLoader.GetLastResponse() ? cameraListLoader.GetLastResponse().data : [];
+		var allGroups = [];
+		var allCams = [];
+		for (var i = 0; i < srcCamList.length; i++)
+		{
+			var c = srcCamList[i];
+			if (cameraListLoader.CameraIsGroup(c))
+				allGroups.push(c);
+			else if (!cameraListLoader.CameraIsCycle(c))
+				allCams.push(c);
+		}
+
+		var biggestGroup = null;
+		for (var i = 0; i < allGroups.length; i++)
+		{
+			if (!biggestGroup || biggestGroup.group.length < allGroups[i].group.length)
+				biggestGroup = allGroups[i];
+		}
+
+		camsToLoad = new Queue();
+		var matchedCameras = {};
+		// Load the biggest group...
+		if (biggestGroup)
+		{
+			for (var i = 0; i < biggestGroup.group.length; i++)
+				matchedCameras[biggestGroup.group[i]] = true;
+			camsToLoad.enqueue(biggestGroup.optionValue);
+		}
+
+		// Then load any cameras that weren't in the biggest group.
+		for (var i = 0; i < allCams.length; i++)
+		{
+			if (!matchedCameras[allCams[i].optionValue])
+				camsToLoad.enqueue(allCams[i].optionValue);
+		}
+
+		this.hasLoaded = true;
+		LoadNextCamera();
+	}
+	function LoadNextCamera()
+	{
+		var args = {
+			cmd: "cliplist",
+			view: "all",
+			camera: camsToLoad.dequeue(),
+			tiles: true
+		};
+		console.log("LoadNextCamera", args.camera);
+		if (args.camera)
+		{
+			ExecJSON(args
+				, function (response)
+				{
+					if (response.result !== "success")
+					{
+						console.log("ClipCalendar data load did not have success response", args, response);
+					}
+					else
+					{
+						var allClips = response.data ? response.data : [];
+						for (var i = 0; i < allClips.length; i++)
+						{
+							var date = GetServerDate(new Date(allClips[i].date * 1000));
+							var dateStr = date.getDate() + " " + (date.getMonth() + 1) + " " + date.getFullYear();
+							if (!addedDates[dateStr])
+							{
+								addedDates[dateStr] = true;
+								datesWithClips.push(dateStr);
+							}
+						}
+					}
+					datesWithClips.sort();
+					LoadNextCamera();
+				}
+				, function (jqXHR)
+				{
+					console.log("Failed to load ClipCalendar data for", args, htmlDecode(jqXHR.ErrorMessageHtml));
+					LoadNextCamera();
+				});
+		}
+	}
+	this.GetDatesWithClips = function ()
+	{
+		return datesWithClips;
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Clip Res Parser ////////////////////////////////////////////

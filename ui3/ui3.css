@@ -2182,6 +2182,8 @@ div.invisibleLabel
 	.Zebra_DatePicker td
 	{
 		padding: 4px 0;
+		border: 1px solid #707070 !important;
+		position: relative;
 	}
 
 .sizeMedium .Zebra_DatePicker
@@ -2205,6 +2207,14 @@ div.invisibleLabel
 	{
 		padding: 0px 0;
 	}
+
+.Zebra_DatePicker .dp_daypicker td.dateHasClip::before
+{
+	content: url("data:image/svg+xml,<svg width='6' viewBox='0 0 6 6' xmlns='http://www.w3.org/2000/svg'><circle cx='3' cy='3' r='3' fill='red'/></svg>");
+	position: absolute;
+	top: -9px;
+	left: 12px;
+}
 /* Camera Name Labels */
 #cameraLabelsWrapper
 {
