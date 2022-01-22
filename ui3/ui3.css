@@ -2208,8 +2208,7 @@ div.invisibleLabel
 		padding: 0px 0;
 	}
 
-.Zebra_DatePicker .dp_daypicker td:before,
-.Zebra_DatePicker .dp_daypicker td::before
+.Zebra_DatePicker .dp_daypicker td.dateHasClip::before
 {
 	content: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAMElEQVQI123MwQkAIADDwNPZnFqczfoRVDBQ0leEFnqY280+udZLmCgOqRhehl9zAc+PHc8EYIPyAAAAAElFTkSuQmCC");
 	position: absolute;

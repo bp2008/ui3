@@ -6682,12 +6682,11 @@ function DateFilter(dateRangeLabelSelector)
 			$datePickerDialog.show();
 			dp1.Update([]);
 			dp2.Update([]);
-			ClipCalendarLoadData(videoPlayer.Loading().image.id
-				, function (dates)
-				{
-					dp1.Update(dates);
-					dp2.Update(dates);
-				}
+			ClipCalendarLoadData(function (dates)
+			{
+				dp1.Update(dates);
+				dp2.Update(dates);
+			}
 				, function (errorHtml)
 				{
 					toaster.Warning(errorHtml);
@@ -10145,8 +10144,12 @@ function GetThumbnailPath(thumbPath, nativeRes)
 ///////////////////////////////////////////////////////////////
 // Learn Which Days Have Clips ////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ClipCalendarLoadData(camera, callbackSuccess, callbackFailure)
+function ClipCalendarLoadData(callbackSuccess, callbackFailure)
 {
+	var camera = clipLoader.GetCurrentFilteredCamera();
+	var loading = videoPlayer.Loading();
+	if (loading.image && loading.image.isLive)
+		camera = loading.image.id;
 	var args = {
 		cmd: "cliplist",
 		view: "all",
