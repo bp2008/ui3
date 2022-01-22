@@ -2210,10 +2210,10 @@ div.invisibleLabel
 
 .Zebra_DatePicker .dp_daypicker td.dateHasClip::before
 {
-	content: url("data:image/svg+xml,<svg width='6' viewBox='0 0 6 6' xmlns='http://www.w3.org/2000/svg'><circle cx='3' cy='3' r='3' fill='red'/></svg>");
+	content: url("data:image/svg+xml,<svg width='6' viewBox='0 0 6 6' xmlns='http://www.w3.org/2000/svg'><circle cx='3' cy='2.5' r='2.5' fill='red'/></svg>");
 	position: absolute;
-	top: -9px;
-	left: 12px;
+	bottom: -3px;
+	right: 0px;
 }
 /* Camera Name Labels */
 #cameraLabelsWrapper

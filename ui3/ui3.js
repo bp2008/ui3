@@ -6695,6 +6695,8 @@ function DateFilter(dateRangeLabelSelector)
 			isVisible = false;
 			$datePickerDialog.hide();
 			timeClosed = performance.now();
+			dp1.Destroy();
+			dp2.Destroy();
 			dp1 = dp2 = null;
 		}
 	};
@@ -6772,7 +6774,6 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 	$dateInput.Zebra_DatePicker({
 		always_visible: $calendarContainer
 		, first_day_of_week: 0
-		, custom_classes: { dateHasClip: clipCalendar.GetDatesWithClips() }
 		, onClear: function (ele)
 		{
 			if (suppressDatePickerCallbacks)
@@ -6790,6 +6791,16 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 			suppressDatePickerCallbacks = false;
 		}
 	});
+
+
+	//setTimeout(() =>
+	//{
+		this.zebra = $dateInput.data('Zebra_DatePicker');
+		this.zebra.update({ custom_classes: { dateHasClip: clipCalendar.GetDatesWithClips() } });
+		//this.zebra.hide();
+		this.zebra.show();
+	//}, 2000);
+
 	this.Clear = function ()
 	{
 		if (suppressDatePickerCallbacks)
@@ -6809,6 +6820,11 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 		suppressDatePickerCallbacks = true;
 		$dateInput.data('Zebra_DatePicker').set_date(dateYMD);
 		suppressDatePickerCallbacks = false;
+	}
+	this.Destroy = function ()
+	{
+		this.zebra.destroy();
+		this.zebra = null;
 	}
 }
 ///////////////////////////////////////////////////////////////
