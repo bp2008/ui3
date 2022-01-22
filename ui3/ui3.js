@@ -503,7 +503,6 @@ var mediaSessionController = null;
 var pictureInPictureController = null;
 var statusLoader = null;
 var cameraListLoader = null;
-var clipCalendar = null;
 var clipLoader = null;
 var clipThumbnailVideoPreview = null;
 var nerdStats = null;
@@ -2952,8 +2951,6 @@ $(function ()
 	pictureInPictureController = new PictureInPictureController();
 
 	cameraListLoader = new CameraListLoader();
-
-	clipCalendar = new ClipCalendar();
 
 	clipLoader = new ClipLoader("#clipsbody");
 
@@ -6636,8 +6633,8 @@ function DateFilter(dateRangeLabelSelector)
 	var suppressDatePickerCallbacks = false;
 	var $dateRangeLabel = $(dateRangeLabelSelector);
 	var $datePickerDialog = $("#datePickerDialog");
-	var dp1;
-	var dp2;
+	var dp1 = new DatePicker("datePicker1Container", 1, self);
+	var dp2 = new DatePicker("datePicker2Container", 2, self);
 	var timeClosed = 0;
 	var mayClose = true;
 	var isVisible = false;
@@ -6661,8 +6658,6 @@ function DateFilter(dateRangeLabelSelector)
 			self.CloseDatePicker();
 		else if (performance.now() - 33 > timeClosed)
 		{
-			dp1 = new DatePicker("datePicker1Container", 1, self);
-			dp2 = new DatePicker("datePicker2Container", 2, self);
 			var $ele = $(ele);
 			var offset = $ele.offset();
 			var wW = $(window).width();
@@ -6685,6 +6680,18 @@ function DateFilter(dateRangeLabelSelector)
 			}
 			$datePickerDialog.css("top", offset.top + "px");
 			$datePickerDialog.show();
+			dp1.Update([]);
+			dp2.Update([]);
+			ClipCalendarLoadData(videoPlayer.Loading().image.id
+				, function (dates)
+				{
+					dp1.Update(dates);
+					dp2.Update(dates);
+				}
+				, function (errorHtml)
+				{
+					toaster.Warning(errorHtml);
+				});
 			isVisible = true;
 		}
 	};
@@ -6695,14 +6702,11 @@ function DateFilter(dateRangeLabelSelector)
 			isVisible = false;
 			$datePickerDialog.hide();
 			timeClosed = performance.now();
-			dp1.Destroy();
-			dp2.Destroy();
-			dp1 = dp2 = null;
 		}
 	};
 	this.SelectToday = function ()
 	{
-		if (suppressDatePickerCallbacks || !dp1)
+		if (suppressDatePickerCallbacks)
 			return;
 		suppressDatePickerCallbacks = true;
 		dp1.SelectToday();
@@ -6711,7 +6715,7 @@ function DateFilter(dateRangeLabelSelector)
 	}
 	this.Clear = function ()
 	{
-		if (suppressDatePickerCallbacks || !dp1)
+		if (suppressDatePickerCallbacks)
 			return;
 		suppressDatePickerCallbacks = true;
 		dp1.Clear();
@@ -6725,7 +6729,7 @@ function DateFilter(dateRangeLabelSelector)
 	}
 	this.OnSelect = function (dateCustom, dateYMD, noonDateObj, ele, datePickerNum)
 	{
-		if (suppressDatePickerCallbacks || !dp1)
+		if (suppressDatePickerCallbacks)
 			return;
 		var startOfDay = GetReverseServerDate(new Date(noonDateObj.getFullYear(), noonDateObj.getMonth(), noonDateObj.getDate()));
 		if ($dateRangeLabel.hasClass("oneLine"))
@@ -6792,14 +6796,7 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 		}
 	});
 
-
-	//setTimeout(() =>
-	//{
-		this.zebra = $dateInput.data('Zebra_DatePicker');
-		this.zebra.update({ custom_classes: { dateHasClip: clipCalendar.GetDatesWithClips() } });
-		//this.zebra.hide();
-		this.zebra.show();
-	//}, 2000);
+	this.zebra = $dateInput.data('Zebra_DatePicker');
 
 	this.Clear = function ()
 	{
@@ -6820,6 +6817,11 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 		suppressDatePickerCallbacks = true;
 		$dateInput.data('Zebra_DatePicker').set_date(dateYMD);
 		suppressDatePickerCallbacks = false;
+	}
+	/** Updates the date picker with a new set of dates to mark. */
+	this.Update = function (dates)
+	{
+		this.zebra.update({ custom_classes: { dateHasClip: dates } });
 	}
 	this.Destroy = function ()
 	{
@@ -8463,8 +8465,6 @@ function ClipLoader(clipsBodySelector)
 	{
 		if (!videoPlayer.Loading().cam)
 			return; // UI hasn't loaded far enough yet.
-		if (!clipCalendar.hasLoaded)
-			clipCalendar.LoadData();
 		if (currentPrimaryTab !== "clips" || self.suppressClipListLoad)
 		{
 			QueuedClipListLoad = null;
@@ -10143,104 +10143,47 @@ function GetThumbnailPath(thumbPath, nativeRes)
 	return currentServer.remoteBaseURL + (nativeRes ? "alerts" : "thumbs") + "/" + thumbPath + "?" + (nativeRes ? "fulljpeg" : "") + currentServer.GetAPISessionArg("&");
 }
 ///////////////////////////////////////////////////////////////
-// Remember Which Days Have Clips /////////////////////////////
+// Learn Which Days Have Clips ////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ClipCalendar()
+function ClipCalendarLoadData(camera, callbackSuccess, callbackFailure)
 {
-	var self = this;
-	var datesWithClips = [];
-	var addedDates = {};
-	var camsToLoad;
-	this.hasLoaded = false;
-	this.LoadData = function ()
-	{
-		// We don't have a dependable way to query for clip calendar dates for all cameras at once.
-		// So we need to figure out which groups or cameras to load data for.
-		var srcCamList = cameraListLoader.GetLastResponse() ? cameraListLoader.GetLastResponse().data : [];
-		var allGroups = [];
-		var allCams = [];
-		for (var i = 0; i < srcCamList.length; i++)
-		{
-			var c = srcCamList[i];
-			if (cameraListLoader.CameraIsGroup(c))
-				allGroups.push(c);
-			else if (!cameraListLoader.CameraIsCycle(c))
-				allCams.push(c);
-		}
+	var args = {
+		cmd: "cliplist",
+		view: "all",
+		camera: camera,
+		tiles: true
+	};
 
-		var biggestGroup = null;
-		for (var i = 0; i < allGroups.length; i++)
+	ExecJSON(args
+		, function (response)
 		{
-			if (!biggestGroup || biggestGroup.group.length < allGroups[i].group.length)
-				biggestGroup = allGroups[i];
-		}
-
-		camsToLoad = new Queue();
-		var matchedCameras = {};
-		// Load the biggest group...
-		if (biggestGroup)
-		{
-			for (var i = 0; i < biggestGroup.group.length; i++)
-				matchedCameras[biggestGroup.group[i]] = true;
-			camsToLoad.enqueue(biggestGroup.optionValue);
-		}
-
-		// Then load any cameras that weren't in the biggest group.
-		for (var i = 0; i < allCams.length; i++)
-		{
-			if (!matchedCameras[allCams[i].optionValue])
-				camsToLoad.enqueue(allCams[i].optionValue);
-		}
-
-		this.hasLoaded = true;
-		LoadNextCamera();
-	}
-	function LoadNextCamera()
-	{
-		var args = {
-			cmd: "cliplist",
-			view: "all",
-			camera: camsToLoad.dequeue(),
-			tiles: true
-		};
-		console.log("LoadNextCamera", args.camera);
-		if (args.camera)
-		{
-			ExecJSON(args
-				, function (response)
+			if (response.result !== "success")
+			{
+				callbackFailure("Clip calendar data load did not have success response: " + htmlEncode(JSON.stringify(response)));
+			}
+			else
+			{
+				var addedDates = {};
+				var datesWithClips = [];
+				var allClips = response.data ? response.data : [];
+				for (var i = 0; i < allClips.length; i++)
 				{
-					if (response.result !== "success")
+					var date = GetServerDate(new Date(allClips[i].date * 1000));
+					var dateStr = date.getDate() + " " + (date.getMonth() + 1) + " " + date.getFullYear();
+					if (!addedDates[dateStr])
 					{
-						console.log("ClipCalendar data load did not have success response", args, response);
+						addedDates[dateStr] = true;
+						datesWithClips.push(dateStr);
 					}
-					else
-					{
-						var allClips = response.data ? response.data : [];
-						for (var i = 0; i < allClips.length; i++)
-						{
-							var date = GetServerDate(new Date(allClips[i].date * 1000));
-							var dateStr = date.getDate() + " " + (date.getMonth() + 1) + " " + date.getFullYear();
-							if (!addedDates[dateStr])
-							{
-								addedDates[dateStr] = true;
-								datesWithClips.push(dateStr);
-							}
-						}
-					}
-					datesWithClips.sort();
-					LoadNextCamera();
 				}
-				, function (jqXHR)
-				{
-					console.log("Failed to load ClipCalendar data for", args, htmlDecode(jqXHR.ErrorMessageHtml));
-					LoadNextCamera();
-				});
+				callbackSuccess(datesWithClips, camera);
+			}
 		}
-	}
-	this.GetDatesWithClips = function ()
-	{
-		return datesWithClips;
-	}
+		, function (jqXHR)
+		{
+			console.log("Failed to load list of dates with clips for the calendar.", args);
+			callbackFailure("Failed to load list of dates with clips for the calendar. " + jqXHR.ErrorMessageHtml);
+		});
 }
 ///////////////////////////////////////////////////////////////
 // Clip Res Parser ////////////////////////////////////////////

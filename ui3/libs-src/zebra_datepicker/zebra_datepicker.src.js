@@ -1679,7 +1679,8 @@
 
             // reinitialize the object with the new options
             init(true);
-
+            
+            manage_views();
         };
 
         /**

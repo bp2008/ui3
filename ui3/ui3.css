@@ -2212,8 +2212,8 @@ div.invisibleLabel
 {
 	content: url("data:image/svg+xml,<svg width='6' viewBox='0 0 6 6' xmlns='http://www.w3.org/2000/svg'><circle cx='3' cy='2.5' r='2.5' fill='red'/></svg>");
 	position: absolute;
-	bottom: -3px;
-	right: 0px;
+	top: -8px;
+	left: 12px;
 }
 /* Camera Name Labels */
 #cameraLabelsWrapper
