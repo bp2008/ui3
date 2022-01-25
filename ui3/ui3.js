@@ -1571,6 +1571,15 @@ var defaultSettings =
 			, actionDown: BI_Hotkey_Load_Tab_Clips
 			, category: "Hotkeys"
 		}
+		//, { /* TIMELINE_READY */
+		//	key: "ui3_hotkey_tab_timeline"
+		//	, value: "0|0|0|114" // 114: F3
+		//	, hotkey: true
+		//	, label: "Load Tab: Timeline"
+		//	, hint: "Opens the Timeline tab"
+		//	, actionDown: BI_Hotkey_Load_Tab_Timeline
+		//	, category: "Hotkeys"
+		//}
 		, {
 			key: "ui3_hotkey_cameraLabels"
 			, value: "1|0|0|76" // 76: L
@@ -2827,14 +2836,23 @@ $(function ()
 		{
 			$("#layoutleftLive").show();
 			$("#layoutleftRecordings").hide();
-			//$("#layoutbottom").hide();
+			$("#layoutbottom").hide();
+			$("body").removeClass("tabTimeline");
 		}
-		else
+		else if (currentPrimaryTab == "clips")
 		{
 			$("#layoutleftLive").hide();
 			$("#layoutleftRecordings").show();
-			//$("#layoutbottom").show();
+			$("#layoutbottom").hide();
+			$("body").removeClass("tabTimeline");
 			$("#recordingsFilterByHeading").text("Filter by:");
+		}
+		else if (currentPrimaryTab == "timeline")
+		{
+			$("#layoutleftLive").hide();
+			$("#layoutleftRecordings").hide();
+			$("#layoutbottom").show();
+			$("body").addClass("tabTimeline");
 		}
 
 		if (!skipLoadingFirstVideoStream && (settings.ui3_openARecording === "First" || settings.ui3_openARecording === "Last"))
@@ -3006,6 +3024,14 @@ $(function ()
 
 	$(window).resize(resized);
 	$(window).resize(debounce(AfterWindowResized, 250));
+	if (UrlParameters.Get("timeline") === "") /* TIMELINE_READY */
+	{
+		$("#topbar_tab_timeline").remove();
+		if (currentPrimaryTab === "timeline")
+			currentPrimaryTab = "live";
+	}
+	else
+		$("#topbar_tab_timeline").css("opacity", "1");
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
 
 	window.addEventListener("beforeunload", function ()
@@ -3034,7 +3060,7 @@ function ValidateTabName(tabName)
 		settings.ui3_current_dbView = "alerts";
 		return "clips";
 	}
-	if (tabName === "live" || tabName === "clips")
+	if (tabName === "live" || tabName === "clips" || tabName === "timeline")
 		return tabName;
 	return "live";
 }
@@ -3094,6 +3120,8 @@ function HandlePreLoadUrlParameters()
 			tab = "live";
 		if (tab.toUpperCase() === "C")
 			tab = "clips";
+		if (tab.toUpperCase() === "T")
+			tab = "timeline";
 		settings.ui3_defaultTab = tab;
 	}
 
@@ -3287,11 +3315,24 @@ function resized()
 
 	// Size layoutsidebar
 	var sidebarT = topH;
-	if (portrait)
+	var $dragBar = $("#sidebarPortraitDragbar");
+	if (currentPrimaryTab == "timeline")
+	{
+		if (portrait)
+			sidebarH = statusH;
+		else
+			sidebarH = botH;
+		sidebarT = windowH - sidebarH;
+		$dragBar.hide();
+	}
+	else if (portrait)
 	{
 		sidebarH = Math.round(sidebarResizeBar.getSidebarSize() * (windowH - topH - botH));
 		sidebarT = windowH - sidebarH;
+		$dragBar.show();
 	}
+	else
+		$dragBar.hide();
 	layoutsidebar.css("top", sidebarT + "px");
 	layoutsidebar.css("height", sidebarH + "px");
 
@@ -3313,7 +3354,7 @@ function resized()
 			sidebarStuff.css("margin", "");
 		}
 	}
-	else
+	else if (currentPrimaryTab == "clips")
 	{
 		var llrControlsH = llrControls.outerHeight(true);
 		if (portrait)
@@ -3337,13 +3378,13 @@ function resized()
 	statusArea.css("width", (sidebarW - statusArea_margins) + "px");
 
 	// Size layoutbody
-	var bodyL = (portrait || sideBarRight) ? 0 : sidebarW;
+	var bodyL = (portrait || sideBarRight || currentPrimaryTab == "timeline") ? 0 : sidebarW;
 	var bodyT = topH;
 	var bodyW = windowW;
 	var bodyH = windowH - topH - botH;
 	if (portrait)
 		bodyH -= sidebarH;
-	else
+	else if (currentPrimaryTab != "timeline")
 		bodyW -= sidebarW;
 	layoutbody.css("top", bodyT + "px");
 	layoutbody.css("left", bodyL + "px");
@@ -3503,9 +3544,15 @@ function UiSizeHelper()
 	{
 		var $roots = $('body');
 		if (portrait)
+		{
 			$roots.addClass("portrait");
+			$roots.removeClass("landscape");
+		}
 		else
+		{
 			$roots.removeClass("portrait");
+			$roots.addClass("landscape");
+		}
 	}
 
 	SetSize(settings.ui3_preferred_ui_scale);
@@ -5573,7 +5620,7 @@ function ClipTimeline()
 {
 	// TODO: Periodically refresh the current day. Update existing records.
 	var self = this;
-	var enabled = UrlParameters.Get("timeline") === "1" || UrlParameters.Get("timeline") === "2";
+	var enabled = !!UrlParameters.Get("timeline");
 	var timeline;
 	var initialized = false;
 	var scriptsLoaded = 0; // Development code
@@ -10538,7 +10585,7 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 
 	this.appearDisappearCheck = function ()
 	{
-		if (!self.AppearDisappearCheckEnabled || appearDisappearRegisteredObjects.length == 0 || currentPrimaryTab == "live")
+		if (!self.AppearDisappearCheckEnabled || appearDisappearRegisteredObjects.length == 0 || currentPrimaryTab != "clips")
 			return;
 		var scrollTop = $clipsbody.scrollTop();
 		var yMin = scrollTop - aboveAllowance;
@@ -11586,11 +11633,11 @@ function SessionManager()
 
 		if (permission_clips)
 		{
-			$("#topbar_tab_clips,#open_all_clips_btn,#open_alerts_btn").show();
+			$("#topbar_tab_clips,#topbar_tab_timeline,#open_all_clips_btn,#open_alerts_btn").show();
 		}
 		else
 		{
-			$("#topbar_tab_clips,#open_all_clips_btn,#open_alerts_btn").hide();
+			$("#topbar_tab_clips,#topbar_tab_timeline,#open_all_clips_btn,#open_alerts_btn").hide();
 			if (currentPrimaryTab != "live")
 				$("#topbar_tab_live").click();
 		}
@@ -23973,6 +24020,10 @@ function BI_Hotkey_Load_Tab_Live()
 function BI_Hotkey_Load_Tab_Clips()
 {
 	$('.topbar_tab[name="clips"]').click();
+}
+function BI_Hotkey_Load_Tab_Timeline()
+{
+	$('.topbar_tab[name="timeline"]').click();
 }
 function BI_Hotkey_Toggle_Camera_Labels()
 {
