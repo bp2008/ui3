@@ -5472,13 +5472,13 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	{
 		if (useNativeTimelineCommand)
 		{
-			var args = { cmd: "timeline", start: startdate.getTime(), end: enddate.getTime() };
-			console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span at ' + GetTimeStr(new Date()) + ': ' + JSON.stringify(args));
+			var args = { cmd: "timeline", start: startdate, end: enddate };
+			console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span: ' + JSON.stringify(args));
 			return ExecJSONPromise(args);
 		}
 		else
 		{
-			console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span at ' + GetTimeStr(new Date()) + ' using simulated timeline data ("cliplist" and "alertlist")');
+			console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span using simulated timeline data ("cliplist" and "alertlist")');
 			if (!getTimelineData_ponyfill)
 				getTimelineData_ponyfill = new GetTimelineData_Ponyfill();
 			return getTimelineData_ponyfill.getSimulatedTimelineData(startdate, enddate);
@@ -5487,11 +5487,11 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	var useNativeTimelineCommand = UrlParameters.Get("timeline") === "2";
 	/** Precise leftmost date currently visible. */
 	var left = GetServerDate(new Date());
-	var startOfLeftDate = new Date(left.getFullYear(), left.getMonth(), left.getDate());
+	var startOfLeftDateTs = new Date(left.getFullYear(), left.getMonth(), left.getDate()).getTime();
 	/** Precise rightmost date currently visible. */
-	var right = GetServerDate(new Date());
+	var rightTs = GetServerDate(new Date()).getTime();
 	/** Object indicating loading status of every day. Keyed on timestamp of midnight of each day. Status 1: loading, 2: loaded, 3: error. */
-	var dayLoadingStatus = new UI3Map();
+	var dayLoadingStatus = new WrapperMap();
 	/** True if a loading operation is currently active. */
 	var isRunning = false;
 	/** Optionally provides a date visibility update update. */
@@ -5500,8 +5500,8 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		if (visibleRange)
 		{
 			left = new Date(visibleRange.left);
-			startOfLeftDate = new Date(left.getFullYear(), left.getMonth(), left.getDate());
-			right = new Date(visibleRange.right);
+			startOfLeftDateTs = new Date(left.getFullYear(), left.getMonth(), left.getDate()).getTime();
+			rightTs = new Date(visibleRange.right).getTime();
 		}
 		if (!isRunning)
 		{
@@ -5551,15 +5551,15 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	}
 	function getNextDataToLoad()
 	{
-		var date = new Date(left.getFullYear(), left.getMonth(), left.getDate());
+		var d = dateProvider.get(left.getFullYear(), left.getMonth(), left.getDate());
 		var daysNeedingToLoad = [];
 		var visibleDayCount = 0;
-		while (date < right)
+		while (d.time < rightTs)
 		{
 			visibleDayCount++;
-			if (!dayLoadingStatus.get(date.getTime())) // Days where loading has not started
-				daysNeedingToLoad.push(date.getTime());
-			date.setDate(date.getDate() + 1);
+			if (!dayLoadingStatus.get(d.time)) // Days where loading has not started
+				daysNeedingToLoad.push(d.time);
+			d = dateProvider.nextDay(d);
 		}
 		if (daysNeedingToLoad.length === 0)
 			return null;
@@ -5576,30 +5576,30 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 
 		var next = {
 			days: [daysNeedingToLoad[idx]],
-			start: new Date(daysNeedingToLoad[idx]),
-			end: new Date(daysNeedingToLoad[idx])
+			start: daysNeedingToLoad[idx],
+			end: 0
 		};
-		next.end.setDate(next.end.getDate() + 1);
+		var start = dateProvider.get(next.start);
 
 		// Expand the date range to include adjacent days if needed.
 		var maxDays = Clamp(Math.round(SizeExpansionScaler_A(visibleDayCount)), 1, 365);
 
 		// Check earlier days.
-		date = new Date(next.start.getTime());
-		date.setDate(date.getDate() - 1);
-		while (next.days.length < maxDays && DateNeedsToLoad(date))
+		d = dateProvider.prevDay(start);
+		while (next.days.length < maxDays && DayNeedsToLoad(d.time))
 		{
-			next.days.push(date.getTime());
-			next.start = new Date(date.getTime());
-			date.setDate(date.getDate() - 1);
+			next.days.push(d.time);
+			next.start = d.time;
+			d = dateProvider.prevDay(d);
 		}
 		// Check later days.
-		date = new Date(next.end.getTime());
-		while (next.days.length < maxDays && DateNeedsToLoad(date))
+		d = dateProvider.nextDay(start);
+		next.end = d.time;
+		while (next.days.length < maxDays && DayNeedsToLoad(d.time))
 		{
-			next.days.push(date.getTime());
-			date.setDate(date.getDate() + 1);
-			next.end = new Date(date.getTime());
+			next.days.push(d.time);
+			d = dateProvider.nextDay(d);
+			next.end = d.time; // statement order is intentional.  When this loop exits, "end" will be the first millisecond of the day after our request range.
 		}
 		next.days.sort();
 		return next;
@@ -5608,11 +5608,11 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	{
 		return 1 + 0.035 * Math.pow(x, 1.25);
 	}
-	function DateNeedsToLoad(date)
+	function DayNeedsToLoad(time)
 	{
-		if (date < startOfLeftDate || date >= right)
+		if (time < startOfLeftDateTs || time >= rightTs)
 			return false;
-		return !dayLoadingStatus.get(date.getTime());
+		return !dayLoadingStatus.get(time);
 	}
 }
 function ClipTimeline()
@@ -5625,7 +5625,7 @@ function ClipTimeline()
 	var scriptsLoaded = 0; // Development code
 	var alertImg = new Image();
 	var alertImgLoaded = false;
-	var srcdata = { alerts: [], colorMap: new UI3Map() };
+	var srcdata = { alerts: [], colorMap: new WrapperMap() };
 	var $tl_root = $();
 	var timelineDataLoader = null;
 
@@ -5677,7 +5677,7 @@ function ClipTimeline()
 			{
 				return {
 					/** Object indicating loading status of every day. */
-					dayLoadingStatus: new FasterObjectMap(),
+					dayLoadingStatus: new WrapperMap(true),
 					/** Array of alert objects.  */
 					//alerts: [],
 					/** Contains arrays of range objects, keyed by the color assigned to them.  Each range object represents a time range that is recorded on video. */
@@ -5692,8 +5692,6 @@ function ClipTimeline()
 					timelineWidth: 0,
 					/** Height of the timeline canvas area in pixels. */
 					timelineHeight: 0,
-					/** Timestamp of the leftmost object. NOT CURRENTLY USED. */
-					leftmostTime: 0,
 					/** Millisecond timestamp that is currently selected in the timeline (at the center). */
 					lastSetTime: Date.now(),
 					dragState: { isDragging: false, startX: 0, offsetMs: 0, momentum: 0, accelInterval: null },
@@ -5754,7 +5752,7 @@ function ClipTimeline()
 				callbackStartedLoading: function (requestInfo)
 				{
 					for (var i = 0; i < requestInfo.days.length; i++)
-						Vue.set(timeline.dayLoadingStatus, requestInfo.days[i], 1);
+						timeline.dayLoadingStatus.set(requestInfo.days[i], 1);
 				},
 				/**
 				 * Called when data is received for a set of days.
@@ -5766,23 +5764,20 @@ function ClipTimeline()
 					timeline.errorHtml = "";
 
 					for (var i = 0; i < requestInfo.days.length; i++)
-						Vue.set(timeline.dayLoadingStatus, requestInfo.days[i], 2);
+						timeline.dayLoadingStatus.set(requestInfo.days[i], 2);
 
 					if (typeof data === "undefined")
 						return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
 
-					var start = requestInfo.start.getTime();
-					var end = requestInfo.end.getTime();
-
 					// Ingest ranges array
 					var ranges = data.ranges;
 					for (var i = 0; i < ranges.length; i++)
-						timeline.AddRange(ranges[i], start, end, requestInfo.days);
+						timeline.AddRange(ranges[i], requestInfo.start, requestInfo.end, requestInfo.days);
 
 					// Ingest alerts array
 					var alerts = data.alerts;
 					for (var i = 0; i < alerts.length; i++)
-						timeline.AddAlert(alerts[i], start, end, requestInfo.days);
+						timeline.AddAlert(alerts[i], requestInfo.start, requestInfo.end, requestInfo.days);
 					timeline.FinalizeAfterAddingAlerts();
 
 					timeline.newDataNotifier++;
@@ -5800,7 +5795,7 @@ function ClipTimeline()
 				callbackError: function (requestInfo, errHtml)
 				{
 					for (var i = 0; i < requestInfo.days.length; i++)
-						Vue.set(timeline.dayLoadingStatus, requestInfo.days[i], 3);
+						timeline.dayLoadingStatus.set(requestInfo.days[i], 3);
 					timeline.errorHtml = errHtml;
 					console.error(htmlDecode(errHtml));
 				},
@@ -5855,7 +5850,7 @@ function ClipTimeline()
 				{
 					// This timeline is designed to handle 100,000+ records efficiently.
 					// Ranges are organized under several levels of structure to provide a balance between loading speed and reading speed.
-					// srcdata.colorMap = UI3Map						(keyed on color hex)
+					// srcdata.colorMap = WrapperMap					(keyed on color hex)
 					//	-> map_of_cameras_to_days = FasterObjectMap		(keyed on camera short name)
 					//		-> rangeChunkCollection = []				(contains day-sized chunks of time ranges, sorted by timestamp of the day)
 					//			-> chunk = []							(contains time ranges confined to the bounds of one day)
@@ -6086,15 +6081,8 @@ function ClipTimeline()
 					var timelineColorbarHeight = this.TimelineColorbarHeight;
 					var visibleMilliseconds = this.visibleMilliseconds;
 
-					//var visibleDayTimestamps = [];
-					var leftmostDate = new Date(this.left);
-					leftmostDate = new Date(leftmostDate.getFullYear(), leftmostDate.getMonth(), leftmostDate.getDate());
-					var leftmostDateTs = leftmostDate.getTime();
-					//while (date.getTime() < right)
-					//{
-					//	visibleDayTimestamps.push(date.getTime());
-					//	date.setDate(date.getDate() + 1);
-					//}
+					var leftmostDate = new Date(left);
+					var leftmostDateTs = dateProvider.get(leftmostDate.getFullYear(), leftmostDate.getMonth(), leftmostDate.getDate()).time;
 
 					// Draw alert icons
 					if (alertImgLoaded)
@@ -6209,17 +6197,17 @@ function ClipTimeline()
 					}
 					var perfBeforeRender = performance.now();
 
+					var h = timelineColorbarHeight;
 					for (var ri = 0; ri < allReducedRanges.length; ri++)
 					{
 						var ranges = allReducedRanges[ri];
+						var y = 12 + (ri * timelineColorbarHeight);
 						for (var i = 0; i < ranges.length; i++)
 						{
 							var range = ranges[i];
 							ctx.fillStyle = "#" + range.color;
 							var x = ((range.time - left) / zoomFactor);
-							var y = 12 + (ri * timelineColorbarHeight);
 							var w = Math.max(0.5, range.len / zoomFactor);
-							var h = timelineColorbarHeight;
 							ctx.fillRect(x, y, w, h);
 						}
 					}
@@ -6540,19 +6528,19 @@ function ClipTimeline()
 				{
 					var tags = [];
 					var date = new Date(this.left);
-					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+					var d = dateProvider.get(date.getFullYear(), date.getMonth(), date.getDate());
 					var idCtr = 1;
-					while (date.getTime() < this.right)
+					while (d.time < this.right)
 					{
 						var tag = { id: idCtr++ };
-						tag.start = date.getTime();
-						var state = this.dayLoadingStatus[tag.start];
+						tag.start = d.time;
+						var state = this.dayLoadingStatus.get(tag.start);
 						tag.state = state;
 						do
 						{
-							date.setDate(date.getDate() + 1);
+							d = dateProvider.nextDay(d);
 						}
-						while (date.getTime() < this.right && state === this.dayLoadingStatus[date.getTime()])
+						while (d.time < this.right && state === this.dayLoadingStatus.get(d.time))
 						// states:
 						// undefined or 0: not loading
 						// 1: loading
@@ -6560,7 +6548,7 @@ function ClipTimeline()
 						// 3: error
 						if (state !== 2)
 						{
-							tag.end = date.getTime();
+							tag.end = d.time;
 							var l = ((tag.start - this.left) / this.zoomFactor);
 							var w = ((tag.end - tag.start) / this.zoomFactor);
 							if (l < 0)
@@ -30257,56 +30245,75 @@ function PreviewSpeedToDelayMs(speed)
 }
 function Benchmarks()
 {
-	//BenchmarkDate();
-	BenchmarkNMap();
-	//BenchmarkObject();
-	//BenchmarkObject2();
-	BenchmarkWrapperMap();
+	BenchmarkDate2Setup();
+	BenchmarkDate();
+	BenchmarkDate2();
+	BenchmarkDate3();
+	BenchmarkDate();
+	BenchmarkDate2();
+	BenchmarkDate3();
+	BenchmarkDate();
+	BenchmarkDate2();
+	BenchmarkDate3();
+	BenchmarkDate();
+	BenchmarkDate2();
+	BenchmarkDate3();
+	BenchmarkDate();
+	BenchmarkDate2();
+	BenchmarkDate3();
 }
 function BenchmarkDate()
 {
 	var start = performance.now();
 	var date = new Date(1970, 0, 1);
-	while (date.getFullYear() < 2130)
+	for (var i = 0; i < 100000; i++)
 	{
 		date.setDate(date.getDate() + 1);
 	}
 	var end = performance.now();
 	console.log("Date test time: ", end - start, date);
 }
-function BenchmarkNMap()
+function BenchmarkDate2()
 {
-	var dumbResult = 0;
 	var start = performance.now();
-	var map = new Map();
+	var d = dateProvider.get(1970, 0, 1);
 	for (var i = 0; i < 100000; i++)
 	{
-		map.set(i * 86400, i % 3);
-	}
-
-	for (var i = 0; i < 100000; i++)
-	{
-		dumbResult += map.get(i * 86400);
+		d = dateProvider.nextDay(d);
 	}
 	var end = performance.now();
-	console.log("Native Map test time: ", end - start, dumbResult);
+	console.log("dateProvider test time: ", end - start, d);
 }
-function BenchmarkUI3Map()
+function BenchmarkDate2Setup()
 {
-	var dumbResult = 0;
 	var start = performance.now();
-	var map = new UI3Map();
-	for (var i = 0; i < 100000; i++)
+	var d1 = new Date(2107, 0, 1);
+	var d2 = new Date(2107, 0, 1);
+	for (var i = 0; i < 50000; i++)
 	{
-		map.set(i * 86400, i % 3);
-	}
-
-	for (var i = 0; i < 100000; i++)
-	{
-		dumbResult += map.get(i * 86400);
+		dateProvider.get(d1.getFullYear(), d1.getMonth(), d1.getDate());
+		dateProvider.get(d2.getFullYear(), d2.getMonth(), d2.getDate());
+		d1.setDate(d1.getDate() - 1);
+		d2.setDate(d2.getDate() + 1);
 	}
 	var end = performance.now();
-	console.log("UI3Map test time: ", end - start, dumbResult);
+	console.log("dateProvider Setup time: ", end - start, d1, d2);
+}
+function BenchmarkMap()
+{
+	var start = performance.now();
+	var map = new WrapperMap();
+	var ctr = 0;
+	for (var i = 0; i < 100000; i++)
+	{
+		map.set(i, i % 3);
+	}
+	for (var i = 0; i < 100000; i++)
+	{
+		ctr += map.get(i);
+	}
+	var end = performance.now();
+	console.log("Map test time: ", end - start, ctr);
 }
 
 /**
@@ -30316,55 +30323,187 @@ function BenchmarkUI3Map()
 function FasterObjectMap() { }
 FasterObjectMap.prototype = Object.create(null);
 
-//if (typeof Map !== "function")
-//{
-//	window.Map = function ()
-//	{
-//		this.innerMap = new Object();
-//	}
-//	window.Map.prototype.get = function (key)
-//	{
-//		return map[key];
-//	};
-//	window.Map.prototype.set = function (key, value)
-//	{
-//		map[key] = value;
-//	};
-//	window.Map.prototype.has = function (key)
-//	{
-//		return this.innerMap.hasOwnProperty(key);
-//	};
-//	window.Map.prototype.delete = function (key)
-//	{
-//		delete this.innerMap[key];
-//	};
-//}
-
-function UI3Map()
+function WrapperMap(vueReactive)
 {
 	var map;
-	if (typeof Map === "function")
+	if (vueReactive)
 	{
-		map = new Map();
-		this.get = function (key)
+		if (typeof Map === "function")
 		{
-			return map.get(key);
-		};
-		this.set = function (key, value)
+			this.r = 1;
+			map = new Map();
+			this.get = function (key)
+			{
+				if (this.r)
+					return map.get(key);
+			};
+			this.set = function (key, value)
+			{
+				this.r = this.r === 2 ? 1 : 2;
+				map.set(key, value);
+			};
+		}
+		else
 		{
-			map.set(key, value);
-		};
+			map = new FasterObjectMap();
+			this.get = function (key)
+			{
+				if (this.r)
+					return map[key];
+			};
+			this.set = function (key, value)
+			{
+				this.r = this.r === 2 ? 1 : 2;
+				map[key] = value;
+			};
+		}
 	}
 	else
 	{
-		map = new FasterObjectMap();
-		this.get = function (key)
+		if (typeof Map === "function")
 		{
-			return map[key];
-		};
-		this.set = function (key, value)
+			map = new Map();
+			this.get = function (key)
+			{
+				return map.get(key);
+			};
+			this.set = function (key, value)
+			{
+				map.set(key, value);
+			};
+		}
+		else
 		{
-			map[key] = value;
-		};
+			map = new FasterObjectMap();
+			this.get = function (key)
+			{
+				return map[key];
+			};
+			this.set = function (key, value)
+			{
+				map[key] = value;
+			};
+		}
 	}
 }
+
+/**
+ * Date incrementing is surprisingly CPU intensive, so this object caches results to provide fast day iteration, forward and backward, using a doubly-linked list and a map.
+ */
+var dateProvider = new (function ()
+{
+	var first = null;
+	var last = null;
+	var map = new WrapperMap();
+	this.getFirst = function ()
+	{
+		return first;
+	}
+	this.getLast = function ()
+	{
+		return last;
+	}
+	this.getMap = function ()
+	{
+		return map;
+	}
+	/**
+	 * Returns an object containing properties: time, prev, next.
+	 * time is the millisecond timestamp relative to the epoch.
+	 * prev and next are references (maybe null) to the next and previous objects stored in the date provider, and may not be consecutive days.
+	 * To get the next or previous day, call the date provider's nextDay or prevDay functions.
+	 * 
+	 * Overload 1 args: (year, month, day)
+	 * Overload 2 args: (Date) <- MUST be exactly at midnight on a day.
+	 * Overload 3 args: (millisecondTimestamp) <- MUST be the exact timestamp of midnight on a day.
+	 * @param {any} arg1 The full year, or the millisecond timestamp, or a date object.
+	 * @param {Number} month
+	 * @param {Number} day
+	 */
+	this.get = function (arg1, month, day)
+	{
+		var time;
+		if (typeof arg1 === "number")
+		{
+			if (typeof month === "number")
+				time = new Date(arg1, month, day).getTime();
+			else
+				time = arg1;
+		}
+		else
+			time = arg1.getTime();
+		if (first)
+		{
+			var mapped = map.get(time);
+			if (mapped)
+				return mapped;
+			else if (time - first.time <= last.time - time)
+			{
+				// The requested date is probably closer to the first date than to the last date.
+				var d = first.next;
+				while (time > d.time)
+					d = d.next;
+				if (time === d.time)
+					return d;
+				var newDate = { time: time, prev: d, next: d.next };
+				newDate.prev.next = newDate.next.prev = newDate;
+				add(newDate);
+				return newDate;
+			}
+			else
+			{
+				var d = last.prev;
+				while (time < d.time)
+					d = d.prev;
+				if (time === d.time)
+					return d;
+				var newDate = { time: time, prev: d.prev, next: d };
+				newDate.prev.next = newDate.next.prev = newDate;
+				add(newDate);
+				return newDate;
+			}
+		}
+		else
+		{
+			first = last = { time: time, prev: null, next: null };
+			add(first);
+			return first;
+		}
+	}
+	this.nextDay = function (d)
+	{
+		if (d.next && Math.abs(d.next.time - d.time - 86400000) < 43200000)
+			return d.next;
+
+		var date = new Date(d.time);
+		date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+		var newDate = { time: date.getTime(), prev: d, next: d.next };
+		newDate.prev.next = newDate;
+		if (newDate.next)
+			newDate.next.prev = newDate;
+		else
+			last = newDate;
+		add(newDate);
+		return newDate;
+	}
+	this.prevDay = function (d)
+	{
+		if (d.prev && Math.abs(d.time - d.prev.time - 86400000) < 43200000)
+			return d.prev;
+
+		var date = new Date(d.time);
+		date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+		var newDate = { time: date.getTime(), prev: d.prev, next: d };
+		newDate.next.prev = newDate;
+		if (newDate.prev)
+			newDate.prev.next = newDate;
+		else
+			first = newDate;
+		add(newDate);
+		return newDate;
+	}
+	function add(d)
+	{
+		map.set(d.time, d);
+	}
+})();
