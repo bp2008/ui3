@@ -1268,8 +1268,8 @@ div.invisibleLabel
 
 .statusTiny .progressBarOuter
 {
-	width: 100%;
-	height: 2px;
+	width: 100% !important;
+	height: 2px !important;
 }
 
 .progressBarInner
@@ -1546,10 +1546,10 @@ div.invisibleLabel
 
 .statusBar.statusTiny
 {
-	padding-bottom: 0px;
-	font-size: 0px;
-	line-height: 0px;
-	height: 3px;
+	padding-bottom: 0px !important;
+	font-size: 0px !important;
+	line-height: 0px !important;
+	height: 3px !important;
 }
 
 @media (min-width: 320px)
@@ -2949,18 +2949,26 @@ div.invisibleLabel
 
 .clipTimeline
 {
+	position: relative;
+	width: 100%;
+	height: 100%;
 }
 
 .timelineLegendBar
 {
 	height: 16px;
-	width: 100%;
 	background-color: var(--datetile-bg-color);
+	position: relative;
 }
 
 .timelineLegend
 {
 	position: absolute;
+	top: 0px;
+	left: 0px;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
 }
 
 .timelineLabel
@@ -3014,7 +3022,6 @@ div.invisibleLabel
 
 .timelineMain
 {
-	width: 100%;
 	height: 80px;
 	background-color: var(--timeline-background-color);
 	position: relative;
@@ -3027,6 +3034,7 @@ div.invisibleLabel
 	width: 100%;
 	position: absolute;
 	animation: fadeInOpacity .8s;
+	overflow: hidden;
 }
 
 .timelineLoaderTag
@@ -3083,10 +3091,15 @@ div.invisibleLabel
 	color: rgba(255,52,52,0.5);
 }
 
-.clipTimelineCanvas
+.timelineButtonBar
 {
-	width: 100%;
+	position: absolute;
+	top: 0px;
 	height: 100%;
+	right: 0px;
+	width: 32px;
+	box-sizing: border-box;
+	border-left: var(--button-color);
 }
 
 .timelineCenterBar
