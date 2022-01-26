@@ -908,6 +908,10 @@ var defaultSettings =
 			, category: "Streaming Profiles" // This category isn't shown in UI Settings, but has special-case logic in ui3-local-overrides.js export.
 		}
 		, {
+			key: "ui3_timelineZoomFactor"
+			, value: 8192
+		}
+		, {
 			key: "ui3_timeout"
 			, value: 10
 			, inputType: "number"
@@ -3316,23 +3320,26 @@ function resized()
 	// Size layoutsidebar
 	var sidebarT = topH;
 	var $dragBar = $("#sidebarPortraitDragbar");
-	if (currentPrimaryTab == "timeline")
+	if (settings.ui3_is_maximized !== "1")
 	{
-		if (portrait)
-			sidebarH = statusH;
+		if (currentPrimaryTab == "timeline")
+		{
+			if (portrait)
+				sidebarH = statusH;
+			else
+				sidebarH = botH;
+			sidebarT = windowH - sidebarH;
+			$dragBar.hide();
+		}
+		else if (portrait)
+		{
+			sidebarH = Math.round(sidebarResizeBar.getSidebarSize() * (windowH - topH - botH));
+			sidebarT = windowH - sidebarH;
+			$dragBar.show();
+		}
 		else
-			sidebarH = botH;
-		sidebarT = windowH - sidebarH;
-		$dragBar.hide();
+			$dragBar.hide();
 	}
-	else if (portrait)
-	{
-		sidebarH = Math.round(sidebarResizeBar.getSidebarSize() * (windowH - topH - botH));
-		sidebarT = windowH - sidebarH;
-		$dragBar.show();
-	}
-	else
-		$dragBar.hide();
 	layoutsidebar.css("top", sidebarT + "px");
 	layoutsidebar.css("height", sidebarH + "px");
 
@@ -5628,6 +5635,10 @@ function ClipTimeline()
 	var srcdata = { alerts: [], colorMap: new WrapperMap() };
 	var $tl_root = $();
 	var timelineDataLoader = null;
+	var minZoomFactor = 256;
+	var maxZoomFactor = 1000000000;
+	var minSavedZoomFactor = 256;
+	var maxSavedZoomFactor = 524288;
 
 	this.getSrcData = function ()
 	{
@@ -5667,8 +5678,14 @@ function ClipTimeline()
 				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
 				+ '	</div>'
 				+ '	<div class="timelineButtonBar">'
-				+ '		<div class="timelineButton" @click="btnGoLive">'
-				+ '			<svg class="icon"><use xlink:href="#svg_mio_clock"></use></svg>'
+				+ '		<div class="timelineButton icon timelineGoLive" title="Go Live" @click="btnGoLive" :style="goLiveStyle">'
+				+ '			<svg class="icon noflip"><use xlink:href="#svg_mio_clock"></use></svg>'
+				+ '		</div>'
+				+ '		<div class="timelineButton icon" title="Zoom In" @click="btnZoom(1)">'
+				+ '			<svg class="icon noflip"><use xlink:href="#svg_mio_zoom_in_crop"></use></svg>'
+				+ '		</div>'
+				+ '		<div class="timelineButton icon" title="Zoom Out" @click="btnZoom(-1)">'
+				+ '			<svg class="icon noflip"><use xlink:href="#svg_mio_zoom_out_crop"></use></svg>'
 				+ '		</div>'
 				+ '	</div>'
 				+ '	<div class="timelineCenterBar" :style="CenterBarStyle"></div>'
@@ -5686,7 +5703,7 @@ function ClipTimeline()
 					colors: [],
 					errorHtml: "",
 					/** Number of milliseconds per pixel. */
-					zoomFactor: 10000,
+					zoomFactor: Clamp(parseInt(settings.ui3_timelineZoomFactor), minSavedZoomFactor, maxSavedZoomFactor),
 					pinchZoomState: { startingZoomFactor: 0 },
 					/** Width of the timeline canvas area in pixels. */
 					timelineWidth: 0,
@@ -5702,13 +5719,14 @@ function ClipTimeline()
 					/** Counter that is incremented when new range or alert data has been added. Modifying this counter causes the canvas to be redrawn.
 					 * Added because it wasn't behaving reliably when watching the data collections directly for changes. */
 					newDataNotifier: 0,
-					isHovered: true
+					isHovered: true,
+					/** True if the current video stream is live and is playing. */
+					isLive: false
 				};
 			},
 			created: function ()
 			{
 				timeline = this;
-				BI_CustomEvent.AddListener("afterResize", this.AfterResize);
 				timelineDataLoader = new TimelineDataLoader(this.callbackStartedLoading, this.callbackGotData, this.callbackError);
 			},
 			mounted: function ()
@@ -5725,13 +5743,21 @@ function ClipTimeline()
 				BindEventsPassive(document, "touchcancel", timeline.touchCancel);
 				BindEventsPassive(timeline.$refs.tl_root, "mouseleave", timeline.mouseLeave);
 				BindEvents(timeline.$refs.tl_root, "wheel", timeline.mouseWheel);
-				timeline.AfterResize();
+				BI_CustomEvent.AddListener("afterResize", this.AfterResize);
+				BI_CustomEvent.AddListener("OpenVideo", this.onOpenVideo);
+				BI_CustomEvent.AddListener("Playback_Play", this.onVideoPlay);
+				BI_CustomEvent.AddListener("Playback_Pause", this.onVideoPause);
+				this.AfterResize();
+				this.onOpenVideo();
 			},
 			beforeDestroy: function ()
 			{
 				timeline.hammertime.off('pinchstart pinchmove');
 				timeline.hammertime.get('pinch').set({ enable: false });
 				BI_CustomEvent.RemoveListener("afterResize", timeline.AfterResize);
+				BI_CustomEvent.RemoveListener("OpenVideo", this.onOpenVideo);
+				BI_CustomEvent.RemoveListener("Playback_Play", this.onVideoPlay);
+				BI_CustomEvent.RemoveListener("Playback_Pause", this.onVideoPause);
 				timeline.$refs.tl_root.removeEventListener("touchstart", timeline.mouseDown);
 				timeline.$refs.tl_root.removeEventListener("mousedown", timeline.mouseDown);
 				document.removeEventListener("touchmove", timeline.mouseMove);
@@ -5915,8 +5941,13 @@ function ClipTimeline()
 					if (this.$refs.tl_root)
 					{
 						var o = $tl_root.offset();
-						this.$refs.tl_root.savedBounds = { x: o ? o.left : 0, y: o ? o.top : 0, w: this.$refs.tl_root.offsetWidth, h: this.$refs.tl_root.offsetHeight };
-						this.timelineWidth = Math.max(0, this.$refs.tl_root.savedBounds.w - 32); // -32 for the button bar on the right side
+						this.$refs.tl_root.savedBounds = {
+							x: o ? o.left : 0,
+							y: o ? o.top : 0,
+							w: this.$refs.tl_root.offsetWidth - 36,// -36 for the button bar on the right side.  Subtracted here so the panning handler doesn't activate in the right margin area.
+							h: this.$refs.tl_root.offsetHeight
+						};
+						this.timelineWidth = Math.max(0, this.$refs.tl_root.savedBounds.w);
 						this.timelineHeight = Math.max(0, this.$refs.tl_root.savedBounds.h - 16); // -16 for the top bar containing labels
 					}
 				},
@@ -5930,15 +5961,18 @@ function ClipTimeline()
 						timeline.dragState.isDragging = false;
 						return;
 					}
-					timeline.dragState.startX = e.mouseX;
-					timeline.dragState.offsetMs = 0;
-					timeline.dragState.momentum = 0;
-					timeline.dragState.isDragging = true;
-					//clearInterval(timeline.dragState.accelInterval);
-					//if (touchEvents.isTouchEvent(e))
-					//	timeline.dragState.accelInterval = setInterval(timeline.handlePanAccel, 33);
-					//else
-					//	timeline.dragState.accelInterval = null;
+					if (pointInsideElement($tl_root, e.mouseX, e.mouseY))
+					{
+						timeline.dragState.startX = e.mouseX;
+						timeline.dragState.offsetMs = 0;
+						timeline.dragState.momentum = 0;
+						timeline.dragState.isDragging = true;
+						//clearInterval(timeline.dragState.accelInterval);
+						//if (touchEvents.isTouchEvent(e))
+						//	timeline.dragState.accelInterval = setInterval(timeline.handlePanAccel, 33);
+						//else
+						//	timeline.dragState.accelInterval = null;
+					}
 				},
 				mouseMove: function (e)
 				{
@@ -6050,7 +6084,7 @@ function ClipTimeline()
 						timeline.acceptZoomThrottled = throttle(function (newZoomFactor)
 						{
 							if (newZoomFactor)
-								timeline.zoomFactor = Clamp(newZoomFactor, 250, 1000000000);
+								timeline.setZoom_Internal(newZoomFactor);
 							if (timeline.accumulatedZoomDelta !== 0)
 							{
 								var speed = 1 + Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 0, 2000);
@@ -6059,11 +6093,16 @@ function ClipTimeline()
 									multiplier *= 1.191043354; // Painstakingly determined to make zooming out very similar in magnitude to zooming in.
 								newZoomFactor = timeline.zoomFactor + (timeline.zoomFactor * multiplier);
 								timeline.accumulatedZoomDelta = 0;
-								timeline.zoomFactor = Clamp(newZoomFactor, 250, 1000000000);
+								timeline.setZoom_Internal(newZoomFactor);
 							}
 						}, timelineThrottleRate);
 
 					timeline.acceptZoomThrottled(arg);
+				},
+				setZoom_Internal: function (zoom)
+				{
+					this.zoomFactor = Clamp(zoom, minZoomFactor, maxZoomFactor);
+					settings.ui3_timelineZoomFactor = Clamp(zoom, minSavedZoomFactor, maxSavedZoomFactor);
 				},
 				drawCanvas: function ()
 				{
@@ -6217,11 +6256,44 @@ function ClipTimeline()
 				},
 				FrameRendered: function (utc)
 				{
-					this.lastSetTime = utc;
+					this.lastSetTime = utc; // Rewrite this handler so it attaches to events instead of being called from outside.
 				},
 				btnGoLive: function ()
 				{
 					videoPlayer.goLive();
+				},
+				btnZoom: function (direction)
+				{
+					var zf = this.zoomFactor;
+					var target;
+					if (direction > 0) // Zoom in
+					{
+						var x = Math.floor(Math.log2(zf));
+						target = Math.pow(2, x);
+						if (zf === target)
+							target /= 2;
+					}
+					else
+					{
+						var x = Math.ceil(Math.log2(zf));
+						target = Math.pow(2, x);
+						if (zf === target)
+							target *= 2;
+					}
+					console.log("btnZoom(" + direction + ")", target);
+					this.setZoom_Internal(target);
+				},
+				onOpenVideo: function ()
+				{
+					this.isLive = videoPlayer.Loading().image.isLive;
+				},
+				onVideoPlay: function ()
+				{
+					this.isLive = videoPlayer.Loading().image.isLive;
+				},
+				onVideoPause: function ()
+				{
+					this.isLive = false;
 				}
 			},
 			computed:
@@ -6286,6 +6358,10 @@ function ClipTimeline()
 				timelineSize: function ()
 				{
 					return { w: this.timelineWidth, h: this.timelineHeight };
+				},
+				goLiveStyle: function ()
+				{
+					return { color: this.isLive ? '#71E068' : '' };
 				}
 			},
 			watch:
@@ -23823,9 +23899,9 @@ function MaximizedModeController()
 	this.loadMaximizeState = function ()
 	{
 		if (settings.ui3_is_maximized === "1")
-			$("#layoutleft,#layouttop").hide();
+			$("#layoutleft,#layouttop,#layoutbottom").hide();
 		else
-			$("#layoutleft,#layouttop").show();
+			$("#layoutleft,#layouttop,#layoutbottom").show();
 		this.updateMaximizeButtonState();
 		clipLoader && clipLoader.RedrawClipList();
 	}
@@ -30446,7 +30522,9 @@ var dateProvider = new (function ()
 				if (time === d.time)
 					return d;
 				var newDate = { time: time, prev: d, next: d.next };
-				newDate.prev.next = newDate.next.prev = newDate;
+				newDate.prev.next = newDate;
+				if (newDate.next)
+					newDate.next.prev = newDate;
 				add(newDate);
 				return newDate;
 			}
@@ -30458,7 +30536,9 @@ var dateProvider = new (function ()
 				if (time === d.time)
 					return d;
 				var newDate = { time: time, prev: d.prev, next: d };
-				newDate.prev.next = newDate.next.prev = newDate;
+				newDate.next.prev = newDate;
+				if (newDate.prev)
+					newDate.prev.next = newDate;
 				add(newDate);
 				return newDate;
 			}

@@ -3097,9 +3097,26 @@ div.invisibleLabel
 	top: 0px;
 	height: 100%;
 	right: 0px;
-	width: 32px;
+	width: 36px;
 	box-sizing: border-box;
-	border-left: var(--button-color);
+	border-top: 1px solid #383E47;
+	border-left: 1px solid #383E47;
+	padding-top: 1px;
+	background-color: var(--panel-bg-color);
+	cursor: default;
+}
+
+.timelineButton
+{
+	width: 22px;
+	height: 22px;
+	padding: 4px 7px 5px 6px;
+}
+
+.timelineGoLive svg
+{
+	transform: rotate(329deg);
+	transform-origin: center;
 }
 
 .timelineCenterBar
