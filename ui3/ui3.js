@@ -5458,7 +5458,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 					for (var i = 0; i < clips.length; i++)
 					{
 						var src = clips[i];
-						var clip = { cam: src.camera, color: src.color, time: src.date * 1000, len: src.msec };
+						var clip = { cam: src.camera, time: src.date * 1000, len: src.msec };
 						response.data.ranges.push(clip);
 					}
 
@@ -5632,7 +5632,13 @@ function ClipTimeline()
 	var scriptsLoaded = 0; // Development code
 	var alertImg = new Image();
 	var alertImgLoaded = false;
-	var srcdata = { alerts: [], colorMap: new WrapperMap() };
+	/**
+	 * Contains source data to draw the timeline from.
+	 * Alerts contains alerts.
+	 * colorMap contains video ranges.
+	 * colors is an array of all colors used as keys in colorMap, sorted in the order they should be drawn.
+	 */
+	var srcdata = { alerts: [], colorMap: new WrapperMap(), colors: [] };
 	var $tl_root = $();
 	var timelineDataLoader = null;
 	var minZoomFactor = 256;
@@ -5695,12 +5701,6 @@ function ClipTimeline()
 				return {
 					/** Object indicating loading status of every day. */
 					dayLoadingStatus: new WrapperMap(true),
-					/** Array of alert objects.  */
-					//alerts: [],
-					/** Contains arrays of range objects, keyed by the color assigned to them.  Each range object represents a time range that is recorded on video. */
-					//ranges: {},
-					/** Array of colors. These are the keys for the ranges object, in the order they should be drawn.  */
-					colors: [],
 					errorHtml: "",
 					/** Number of milliseconds per pixel. */
 					zoomFactor: Clamp(parseInt(settings.ui3_timelineZoomFactor), minSavedZoomFactor, maxSavedZoomFactor),
@@ -5721,7 +5721,8 @@ function ClipTimeline()
 					newDataNotifier: 0,
 					isHovered: true,
 					/** True if the current video stream is live and is playing. */
-					isLive: false
+					isLive: false,
+					filteredCameraId: null
 				};
 			},
 			created: function ()
@@ -5747,6 +5748,7 @@ function ClipTimeline()
 				BI_CustomEvent.AddListener("OpenVideo", this.onOpenVideo);
 				BI_CustomEvent.AddListener("Playback_Play", this.onVideoPlay);
 				BI_CustomEvent.AddListener("Playback_Pause", this.onVideoPause);
+				BI_CustomEvent.AddListener("DynamicGroupLayoutLoaded", this.onDynamicGroupLayoutLoaded);
 				this.AfterResize();
 				this.onOpenVideo();
 			},
@@ -5758,6 +5760,7 @@ function ClipTimeline()
 				BI_CustomEvent.RemoveListener("OpenVideo", this.onOpenVideo);
 				BI_CustomEvent.RemoveListener("Playback_Play", this.onVideoPlay);
 				BI_CustomEvent.RemoveListener("Playback_Pause", this.onVideoPause);
+				BI_CustomEvent.RemoveListener("DynamicGroupLayoutLoaded", this.onDynamicGroupLayoutLoaded);
 				timeline.$refs.tl_root.removeEventListener("touchstart", timeline.mouseDown);
 				timeline.$refs.tl_root.removeEventListener("mousedown", timeline.mouseDown);
 				document.removeEventListener("touchmove", timeline.mouseMove);
@@ -5834,8 +5837,6 @@ function ClipTimeline()
 				 */
 				AddRange: function (range, start, end, cutpoints)
 				{
-					range.color = BlueIrisColorToCssColor(range.color);
-
 					// Bounds check.  Any range that starts before the requested time range should be truncated.  The truncated portion will be added later if we load the previous time range.
 					if (range.time < start)
 					{
@@ -5876,17 +5877,18 @@ function ClipTimeline()
 				{
 					// This timeline is designed to handle 100,000+ records efficiently.
 					// Ranges are organized under several levels of structure to provide a balance between loading speed and reading speed.
-					// srcdata.colorMap = WrapperMap					(keyed on color hex)
+					// srcdata.colorMap = WrapperMap					(keyed on color int)
 					//	-> map_of_cameras_to_days = FasterObjectMap		(keyed on camera short name)
 					//		-> rangeChunkCollection = []				(contains day-sized chunks of time ranges, sorted by timestamp of the day)
 					//			-> chunk = []							(contains time ranges confined to the bounds of one day)
 					//				-> range
-					var map_of_cameras_to_days = srcdata.colorMap.get(range.color);
+					var color = cameraListLoader.GetCameraColor(range.cam);
+					var map_of_cameras_to_days = srcdata.colorMap.get(color);
 					if (!map_of_cameras_to_days)
 					{
-						timeline.colors.push(range.color);
-						timeline.colors.sort();
-						srcdata.colorMap.set(range.color, map_of_cameras_to_days = new FasterObjectMap());
+						srcdata.colors.push(color);
+						srcdata.colors.sort(CompareBlueIrisColors);
+						srcdata.colorMap.set(color, map_of_cameras_to_days = new FasterObjectMap());
 					}
 
 					var rangeChunkCollection = map_of_cameras_to_days[range.cam];
@@ -6117,8 +6119,8 @@ function ClipTimeline()
 					var left = this.left;
 					var right = this.right;
 					var zoomFactor = this.zoomFactor;
-					var timelineColorbarHeight = this.TimelineColorbarHeight;
 					var visibleMilliseconds = this.visibleMilliseconds;
+					var filters = GetTimelineFilters(this.filteredCameraId);
 
 					var leftmostDate = new Date(left);
 					var leftmostDateTs = dateProvider.get(leftmostDate.getFullYear(), leftmostDate.getMonth(), leftmostDate.getDate()).time;
@@ -6160,12 +6162,14 @@ function ClipTimeline()
 
 					var allReducedRanges = [];
 					var perfBeforeReduce = performance.now();
-					for (var ci = 0; ci < this.colors.length; ci++)
+					for (var ci = 0; ci < srcdata.colors.length; ci++)
 					{
-						var colorKey = this.colors[ci];
+						var colorKey = srcdata.colors[ci];
+						if (!filters.allowedColors[colorKey])
+							continue;
 						var map_of_cameras_to_days = srcdata.colorMap.get(colorKey);
 						var reducedRanges = [];
-						allReducedRanges.push(reducedRanges);
+						allReducedRanges.push({ ranges: reducedRanges, color: colorKey });
 
 						// We're reducing the dataset by creating an array of true/false buckets.
 						// Each bucket represents a time slot and the bucket is filled (set = true) if the time slot contains any video.
@@ -6173,6 +6177,8 @@ function ClipTimeline()
 						var buckets = new Array((visibleMilliseconds / bucketSize) | 0);
 						for (var cam in map_of_cameras_to_days)
 						{
+							if (!filters.allowedCameras[cam])
+								continue;
 							var rangeChunkCollection = map_of_cameras_to_days[cam];
 							if (!rangeChunkCollection)
 								continue;
@@ -6236,16 +6242,18 @@ function ClipTimeline()
 					}
 					var perfBeforeRender = performance.now();
 
+					var timelineColorbarHeight = ((this.timelineHeight - 12) / allReducedRanges.length); // -12 for the alert icon space
 					var h = timelineColorbarHeight;
 					for (var ri = 0; ri < allReducedRanges.length; ri++)
 					{
-						var ranges = allReducedRanges[ri];
+						var ranges = allReducedRanges[ri].ranges;
+						var color = "#" + BlueIrisColorToCssColor(allReducedRanges[ri].color);
 						var y = 12 + (ri * timelineColorbarHeight);
 						for (var i = 0; i < ranges.length; i++)
 						{
 							var range = ranges[i];
-							ctx.fillStyle = "#" + range.color;
-							var x = ((range.time - left) / zoomFactor);
+							ctx.fillStyle = color;
+							var x = (range.time - left) / zoomFactor;
 							var w = Math.max(0.5, range.len / zoomFactor);
 							ctx.fillRect(x, y, w, h);
 						}
@@ -6286,6 +6294,7 @@ function ClipTimeline()
 				onOpenVideo: function ()
 				{
 					this.isLive = videoPlayer.Loading().image.isLive;
+					this.filteredCameraId = clipLoader.GetCurrentFilteredCamera();
 				},
 				onVideoPlay: function ()
 				{
@@ -6294,6 +6303,10 @@ function ClipTimeline()
 				onVideoPause: function ()
 				{
 					this.isLive = false;
+				},
+				onDynamicGroupLayoutLoaded: function ()
+				{
+					this.drawCanvas();
 				}
 			},
 			computed:
@@ -6320,10 +6333,6 @@ function ClipTimeline()
 						left: this.left,
 						right: this.right,
 					};
-				},
-				TimelineColorbarHeight: function ()
-				{
-					return ((this.timelineHeight - 12) / this.colors.length); // -12 for the alert icon space
 				},
 				CenterBarCenterX: function ()
 				{
@@ -6388,6 +6397,10 @@ function ClipTimeline()
 					this.drawCanvas();
 				},
 				currentTime: function ()
+				{
+					this.drawCanvas();
+				},
+				filteredCameraId: function ()
 				{
 					this.drawCanvas();
 				}
@@ -6711,6 +6724,34 @@ function ClipTimeline()
 	function RangeCompare(a, b)
 	{
 		return a.time - b.time;
+	}
+	function GetTimelineFilters(filteredCameraId)
+	{
+		var allowedCameras = new FasterObjectMap();
+		var camObj = cameraListLoader.GetCameraWithId(filteredCameraId);
+		if (camObj)
+		{
+			if (cameraListLoader.CameraIsGroup(camObj))
+			{
+				var cams = cameraListLoader.GetGroupCams(camObj.optionValue);
+				for (var i = 0; i < cams.length; i++)
+					allowedCameras[cams[i]] = true;
+			}
+			else
+				allowedCameras[camObj.optionValue] = true;
+		}
+		else
+		{
+			var allCams = cameraListLoader.GetLastResponse().data;
+			for (var i = 0; i < allCams.length; i++)
+				if (!cameraListLoader.CameraIsGroupOrCycle(allCams[i]))
+					allowedCameras[allCams[i].optionValue] = true;
+		}
+		var allowedColors = new FasterObjectMap();
+		for (var camId in allowedCameras)
+			allowedColors[cameraListLoader.GetCameraColor(camId)] = true;
+
+		return { allowedCameras: allowedCameras, allowedColors: allowedColors };
 	}
 	if (enabled)
 		self.Initialize();
@@ -12348,6 +12389,13 @@ function CameraListLoader()
 		}
 		return null;
 	}
+	this.GetCameraColor = function (cameraId)
+	{
+		var cam = self.GetCameraWithId(cameraId);
+		if (cam)
+			return cam.color;
+		return 8151097; // Default camera color
+	}
 	this.MakeFakeCamBasedOnClip = function (clipData)
 	{
 		var clipRes = new ClipRes(clipData.res);
@@ -13047,7 +13095,7 @@ function VideoPlayerController()
 		dropdownBoxes.setLabelText("currentGroup", CleanUpGroupName(clc.optionDisplay));
 
 		if (clipLoader.GetCurrentFilteredCamera() !== cli.id)
-			clipLoader.LoadClips(); // This method does nothing if not on the clips/alerts tabs.
+			clipLoader.LoadClips(); // This method does not waste resources if not on the clips tab.
 
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (playerModule)
@@ -29333,6 +29381,11 @@ function BlueIrisColorToCssColor(biColor)
 	var colorHex = biColor.toString(16).padLeft(8, '0').substr(2);
 	return colorHex.substr(4, 2) + colorHex.substr(2, 2) + colorHex.substr(0, 2);
 }
+function BlueIrisColorToHsl(biColor)
+{
+	var o = HexColorToRgbObj(BlueIrisColorToCssColor(biColor));
+	return rgbToHsl(o.r, o.g, o.b);
+}
 function HexColorToRgbObj(c)
 {
 	if (c.startsWith('#'))
@@ -29364,7 +29417,21 @@ function GetReadableTextColorHexForBackgroundColorHex(c, dark, light)
 			return "DDDDDD";
 	}
 }
-function hslToRgb(h, s, l) { if (0 == s) l = s = h = l; else { var f = function (l, s, c) { 0 > c && (c += 1); 1 < c && --c; return c < 1 / 6 ? l + 6 * (s - l) * c : .5 > c ? s : c < 2 / 3 ? l + (s - l) * (2 / 3 - c) * 6 : l }, e = .5 > l ? l * (1 + s) : l + s - l * s, g = 2 * l - e; l = f(g, e, h + 1 / 3); s = f(g, e, h); h = f(g, e, h - 1 / 3) } return [255 * l, 255 * s, 255 * h] }
+function hslToRgb(h, s, l) { if (0 == s) l = s = h = l; else { var f = function (l, s, c) { 0 > c && (c += 1); 1 < c && --c; return c < 1 / 6 ? l + 6 * (s - l) * c : .5 > c ? s : c < 2 / 3 ? l + (s - l) * (2 / 3 - c) * 6 : l }, e = .5 > l ? l * (1 + s) : l + s - l * s, g = 2 * l - e; l = f(g, e, h + 1 / 3); s = f(g, e, h); h = f(g, e, h - 1 / 3) } return { r: Math.round(255 * l), g: Math.round(255 * s), b: Math.round(255 * h) } }
+function rgbToHsl(r, g, b) { r /= 255; g /= 255; b /= 255; var e = Math.max(r, g, b), a = Math.min(r, g, b), h = (e + a) / 2; if (e == a) var f = a = 0; else { var z = e - a; a = .5 < h ? z / (2 - e - a) : z / (e + a); switch (e) { case r: f = (g - b) / z + (g < b ? 6 : 0); break; case g: f = (b - r) / z + 2; break; case b: f = (r - g) / z + 4 }f /= 6 } return { h: f, s: a, l: h } };
+function CompareBlueIrisColors(a, b)
+{
+	return CompareHSLColors(BlueIrisColorToHsl(a), BlueIrisColorToHsl(b));
+}
+function CompareHSLColors(a, b)
+{
+	var diff = a.h - b.h;
+	if (diff === 0)
+		diff = a.s - b.s;
+	if (diff === 0)
+		diff = a.l - b.l;
+	return diff;
+}
 function PercentTo01Float(s, defaultValue)
 {
 	s = parseFloat(s) / 100;
@@ -30461,6 +30528,7 @@ function WrapperMap(vueReactive)
 			};
 		}
 	}
+	this.internalMap = map;
 }
 
 /**
