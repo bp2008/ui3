@@ -5608,7 +5608,9 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 			d = dateProvider.nextDay(d);
 			next.end = d.time; // statement order is intentional.  When this loop exits, "end" will be the first millisecond of the day after our request range.
 		}
-		next.days.sort();
+		next.days.sort(NumberCompare);
+		if (next.days[0] !== next.start || next.days[next.days.length - 1] >= next.end)
+			console.error("Timeline getNextDataToLoad() failure detected.", next);
 		return next;
 	}
 	function SizeExpansionScaler_A(x)
@@ -5896,8 +5898,8 @@ function ClipTimeline()
 						map_of_cameras_to_days[range.cam] = rangeChunkCollection = [];
 
 					var preciseDate = new Date(range.time);
-					var date = new Date(preciseDate.getFullYear(), preciseDate.getMonth(), preciseDate.getDate());
-					var day = date.getTime();
+					var date = dateProvider.get(preciseDate.getFullYear(), preciseDate.getMonth(), preciseDate.getDate());
+					var day = date.time;
 					var chunkIdx = binarySearch(rangeChunkCollection, { ts: day }, CompareRangeChunks);
 					if (chunkIdx < 0)
 					{
@@ -30581,32 +30583,41 @@ var dateProvider = new (function ()
 			var mapped = map.get(time);
 			if (mapped)
 				return mapped;
-			else if (time - first.time <= last.time - time)
+			else if (time < first.time)
 			{
-				// The requested date is probably closer to the first date than to the last date.
-				var d = first.next;
-				while (time > d.time)
-					d = d.next;
-				if (time === d.time)
-					return d;
-				var newDate = { time: time, prev: d, next: d.next };
-				newDate.prev.next = newDate;
-				if (newDate.next)
-					newDate.next.prev = newDate;
+				var newDate = { time: time, prev: null, next: first };
+				first.prev = newDate;
+				first = newDate;
+				add(newDate);
+				return newDate;
+			}
+			else if (time > last.time)
+			{
+				var newDate = { time: time, prev: last, next: null };
+				last.next = newDate;
+				last = newDate;
 				add(newDate);
 				return newDate;
 			}
 			else
 			{
-				var d = last.prev;
-				while (time < d.time)
-					d = d.prev;
-				if (time === d.time)
-					return d;
-				var newDate = { time: time, prev: d.prev, next: d };
-				newDate.next.prev = newDate;
-				if (newDate.prev)
-					newDate.prev.next = newDate;
+				var newDate;
+				if (time - first.time <= last.time - time)
+				{
+					// The requested date is closer to the first date than to the last date.
+					var d = first.next;
+					while (time > d.time)
+						d = d.next;
+					newDate = { time: time, prev: d.prev, next: d };
+				}
+				else
+				{
+					var d = last.prev;
+					while (time < d.time)
+						d = d.prev;
+					newDate = { time: time, prev: d, next: d.next };
+				}
+				newDate.prev.next = newDate.next.prev = newDate;
 				add(newDate);
 				return newDate;
 			}
@@ -30620,7 +30631,7 @@ var dateProvider = new (function ()
 	}
 	this.nextDay = function (d)
 	{
-		if (d.next && Math.abs(d.next.time - d.time - 86400000) < 43200000)
+		if (d.next && Math.abs((d.next.time - d.time) - 86400000) < 43200000)
 			return d.next;
 
 		var date = new Date(d.time);
@@ -30636,11 +30647,11 @@ var dateProvider = new (function ()
 	}
 	this.prevDay = function (d)
 	{
-		if (d.prev && Math.abs(d.time - d.prev.time - 86400000) < 43200000)
+		if (d.prev && Math.abs((d.time - d.prev.time) - 86400000) < 43200000)
 			return d.prev;
 
 		var date = new Date(d.time);
-		date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+		date = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1);
 		var newDate = { time: date.getTime(), prev: d.prev, next: d };
 		newDate.next.prev = newDate;
 		if (newDate.prev)
