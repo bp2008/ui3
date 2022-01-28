@@ -564,6 +564,16 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // BUG: If you let a clip play to the end and stop, then reload the page, UI3 tries to open the clip at the very end and it doesn't play any video.  The "video lost" sound plays.
+// Timeline: DPI awareness
+// Timeline: Clock sync with server for the purpose of setting the initial time, auto-refresh, and future time limiting.
+// Timeline: Do not request data before login is complete and a server time offset is learned.
+// Request: Current server time in status responses.
+// Timeline: Do not request timeline days beyond the day the UI loaded.  Loading this information will be the responsibility of the automatic refresh mechanism.
+// Timeline: Do not allow scrolling past current time.
+// Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
+// Timeline: Implement timeline video request at manually chosen offset.
+// Timeline: Implement timeline drag video visuals: Pause at dragStart. Update jpeg frames when seeking, like when updating the seek bar.
+// Timeline: Add a playback controls icon to select a different camera group.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -5682,7 +5692,7 @@ function ClipTimeline()
 				+ ' <clip-timeline-legend :width="timelineWidth" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :showSelectedTime="showSelectedTime" />'
 				+ ' <div class="timelineMain" :style="{ width: timelineWidth + \'px\' }">'
 				+ '		<clip-timeline-loader :width="timelineWidth" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :dayLoadingStatus="dayLoadingStatus" />'
-				+ '		<canvas ref="clipTimelineCanvas" class="clipTimelineCanvas" />'
+				+ '		<canvas ref="clipTimelineCanvas" class="clipTimelineCanvas" :style="timelineCanvasStyle" />'
 				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
 				+ '	</div>'
 				+ '	<div class="timelineButtonBar">'
@@ -5711,6 +5721,10 @@ function ClipTimeline()
 					timelineWidth: 0,
 					/** Height of the timeline canvas area in pixels. */
 					timelineHeight: 0,
+					/** Width of the timeline internal buffer in pixels. Affected by device pixel ratio. */
+					timelineInternalWidth: 0,
+					/** Height of the timeline internal buffer in pixels. Affected by device pixel ratio. */
+					timelineInternalHeight: 0,
 					/** Millisecond timestamp that is currently selected in the timeline (at the center). */
 					lastSetTime: Date.now(),
 					dragState: { isDragging: false, startX: 0, offsetMs: 0, momentum: 0, accelInterval: null },
@@ -5951,8 +5965,11 @@ function ClipTimeline()
 							w: this.$refs.tl_root.offsetWidth - 36,// -36 for the button bar on the right side.  Subtracted here so the panning handler doesn't activate in the right margin area.
 							h: this.$refs.tl_root.offsetHeight
 						};
-						this.timelineWidth = Math.max(0, this.$refs.tl_root.savedBounds.w);
-						this.timelineHeight = Math.max(0, this.$refs.tl_root.savedBounds.h - 16); // -16 for the top bar containing labels
+						var dpr = BI_GetDevicePixelRatio();
+						this.timelineInternalWidth = Math.ceil(Math.max(0, this.$refs.tl_root.savedBounds.w) * dpr);
+						this.timelineInternalHeight = Math.ceil(Math.max(0, this.$refs.tl_root.savedBounds.h - 16) * dpr); // -16 for the top bar containing labels
+						this.timelineWidth = this.timelineInternalWidth / dpr;
+						this.timelineHeight = this.timelineInternalHeight / dpr;
 					}
 				},
 				mouseDown: function (e)
@@ -6120,7 +6137,8 @@ function ClipTimeline()
 
 					var left = this.left;
 					var right = this.right;
-					var zoomFactor = this.zoomFactor;
+					var dpr = BI_GetDevicePixelRatio();
+					var zoomFactor = this.zoomFactor / dpr;
 					var visibleMilliseconds = this.visibleMilliseconds;
 					var filters = GetTimelineFilters(this.filteredCameraId);
 
@@ -6130,11 +6148,11 @@ function ClipTimeline()
 					// Draw alert icons
 					if (alertImgLoaded)
 					{
-						var alertImgScale = alertImg.naturalHeight / 12;
+						var alertImgScale = (alertImg.naturalHeight / 12) / dpr;
 						var alertImgW = alertImg.naturalWidth / alertImgScale;
 						var alertImgH = alertImg.naturalHeight / alertImgScale;
 						var alertImgXOffset = alertImgW / 2;
-						var alertImgYOffset = 0;
+						var alertImgYOffset = 0 * dpr;
 
 						var nextAllowedX = 0;
 						var x;
@@ -6244,13 +6262,14 @@ function ClipTimeline()
 					}
 					var perfBeforeRender = performance.now();
 
-					var timelineColorbarHeight = ((this.timelineHeight - 12) / allReducedRanges.length); // -12 for the alert icon space
+					var alertIconSpace = 12 * dpr;
+					var timelineColorbarHeight = ((this.timelineInternalHeight - alertIconSpace) / allReducedRanges.length);
 					var h = timelineColorbarHeight;
 					for (var ri = 0; ri < allReducedRanges.length; ri++)
 					{
 						var ranges = allReducedRanges[ri].ranges;
 						var color = "#" + BlueIrisColorToCssColor(allReducedRanges[ri].color);
-						var y = 12 + (ri * timelineColorbarHeight);
+						var y = alertIconSpace + (ri * timelineColorbarHeight);
 						for (var i = 0; i < ranges.length; i++)
 						{
 							var range = ranges[i];
@@ -6366,9 +6385,13 @@ function ClipTimeline()
 				{
 					return this.dragState.isDragging || this.isHovered;
 				},
-				timelineSize: function ()
+				timelineInternalSize: function ()
 				{
-					return { w: this.timelineWidth, h: this.timelineHeight };
+					return { w: this.timelineInternalWidth, h: this.timelineInternalHeight };
+				},
+				timelineCanvasStyle: function ()
+				{
+					return { width: this.timelineWidth + "px", height: this.timelineHeight + "px" };
 				},
 				goLiveStyle: function ()
 				{
@@ -6385,13 +6408,13 @@ function ClipTimeline()
 				{
 					timelineDataLoader.Update(this.visibleRange);
 				},
-				timelineSize: function ()
+				timelineInternalSize: function ()
 				{
 					var canvas = this.$refs.clipTimelineCanvas;
 					if (!canvas)
 						return;
-					canvas.width = this.timelineWidth;
-					canvas.height = this.timelineHeight;
+					canvas.width = this.timelineInternalWidth;
+					canvas.height = this.timelineInternalHeight;
 					this.drawCanvas();
 				},
 				newDataNotifier: function ()
@@ -16665,7 +16688,7 @@ function ImageRenderer()
 
 	this.zoomHandler = null;
 
-	this.GetSizeToRequest = function (modifyForJpegQualitySetting, ciLoading)
+	this.GetSizeToRequest = function (modifyForJpegQualitySetting, ciLoading, alreadyTriedResizableSource)
 	{
 		// Calculate the size of the image we need
 		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
@@ -16677,7 +16700,7 @@ function ImageRenderer()
 		var bodyH = $layoutbody.height();
 		var srcNativeWidth = ciLoading.fullwidth;
 		var srcNativeHeight = ciLoading.fullheight;
-		var resizableSource = cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
+		var resizableSource = !alreadyTriedResizableSource && cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
 		if (resizableSource)
 		{
 			var lockedResolution = groupCfg.GetLockedResolution(ciLoading.id);
@@ -16742,18 +16765,18 @@ function ImageRenderer()
 		}
 
 		// Now we have the size we need.  Determine what argument we will send to Blue Iris
-		return { w: parseInt(Math.round(imgDrawWidth)), h: parseInt(Math.round(imgDrawHeight)) };
+		var size = { w: parseInt(Math.round(imgDrawWidth)), h: parseInt(Math.round(imgDrawHeight)) };
+		if (resizableSource && (size.w < self.minGroupImageDimension || size.h < self.minGroupImageDimension))
+			return this.GetSizeToRequest(modifyForJpegQualitySetting, ciLoading, true);
+		return size;
 	}
 
 	this.ViewportCanSupportDynamicGroupLayout = function ()
 	{
-		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
-		if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
-			ssFactor = 1;
 		var bodyW = $layoutbody.width();
 		var bodyH = $layoutbody.height();
-		return (bodyW * dpiScalingFactor * ssFactor) >= self.minGroupImageDimension
-			&& (bodyH * dpiScalingFactor * ssFactor) >= self.minGroupImageDimension;
+		return (bodyW * dpiScalingFactor) >= self.minGroupImageDimension
+			&& (bodyH * dpiScalingFactor) >= self.minGroupImageDimension;
 	}
 	this.SetMousePos = function (x, y)
 	{
@@ -18512,10 +18535,6 @@ function StreamingProfile()
 			if (resizableSource)
 			{
 				var dpiScalingFactor = BI_GetDevicePixelRatio();
-				var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
-				if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
-					ssFactor = 1;
-				var zoomFactor = imageRenderer.zoomHandler.GetZoomFactor();
 				var $layoutbody = $("#layoutbody");
 				var bodyW = $layoutbody.width();
 				var bodyH = $layoutbody.height();
@@ -18526,12 +18545,12 @@ function StreamingProfile()
 					bodyH = lockedResolution.h;
 				}
 				resizableSource = resizableSource
-					&& (bodyW * dpiScalingFactor * ssFactor) >= imageRenderer.minGroupImageDimension
-					&& (bodyH * dpiScalingFactor * ssFactor) >= imageRenderer.minGroupImageDimension;
+					&& (bodyW * dpiScalingFactor) >= imageRenderer.minGroupImageDimension
+					&& (bodyH * dpiScalingFactor) >= imageRenderer.minGroupImageDimension;
 				if (resizableSource)
 				{
-					w = bodyW * dpiScalingFactor * ssFactor;
-					h = bodyH * dpiScalingFactor * ssFactor;
+					w = bodyW * dpiScalingFactor;
+					h = bodyH * dpiScalingFactor;
 				}
 			}
 

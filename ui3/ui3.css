@@ -3026,6 +3026,7 @@ div.invisibleLabel
 	background-color: var(--timeline-background-color);
 	position: relative;
 	z-index: 1;
+	overflow: hidden;
 }
 
 .timelineLoader
