@@ -564,7 +564,6 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // BUG: If you let a clip play to the end and stop, then reload the page, UI3 tries to open the clip at the very end and it doesn't play any video.  The "video lost" sound plays.
-// Timeline: DPI awareness
 // Timeline: Clock sync with server for the purpose of setting the initial time, auto-refresh, and future time limiting.
 // Timeline: Do not request data before login is complete and a server time offset is learned.
 // Request: Current server time in status responses.
@@ -16362,10 +16361,19 @@ function HTML5DelayCompensationHelper(player)
 	{
 		if (lastSetRate !== rate)
 		{
-			player.playbackRate = rate;
-			if (player.playbackRate !== rate)
+			var ex = null;
+			try
 			{
-				console.log("HTML5 Delay Compensator failed to set playback rate to " + rate, player.playbackRate);
+				player.playbackRate = rate;
+			}
+			catch (e)
+			{
+				ex = e;
+			}
+			if (ex || player.playbackRate !== rate)
+			{
+				var errMsg = ex ? ex : "no exception was thrown";
+				console.log("HTML5 Delay Compensator failed to set playback rate to " + rate, player.playbackRate, errMsg);
 				nextPlaybackRateChangeAllowedAt = performance.now() + 10000;
 			}
 			lastSetRate = rate;
