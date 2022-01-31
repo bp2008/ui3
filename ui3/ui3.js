@@ -513,13 +513,6 @@ var programmaticSoundPlayer = null;
 var sidebarResizeBar = null;
 
 var currentPrimaryTab = "";
-/** Millisecond offset to be added to the local clock to make it match the server clock. */
-var currentServerTimeOffset = 0;
-/** Gets the current time in milliseconds since the epoch, from the perspective of the server. */
-function GetServerTime()
-{
-	return Date.now() + currentServerTimeOffset;
-}
 
 var togglableUIFeatures =
 	[
@@ -570,14 +563,29 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// BUG: If you let a clip play to the end and stop, then reload the page, UI3 tries to open the clip at the very end and it doesn't play any video.  The "video lost" sound plays.
-// Timeline: Clock sync with server for the purpose of setting the initial time, auto-refresh, and future time limiting.
-// Timeline: Do not request data before login is complete and a server time offset is learned.
-// Request: Current server time in status responses.
+/////////////////////////////
+// Timeline Immediate TODO //
+/////////////////////////////
+
 // Timeline: Do not request timeline days beyond the day the UI loaded.  Loading this information will be the responsibility of the automatic refresh mechanism.
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
+
+/////////////////////////////////////
+// Timeline Pending Server Support //
+/////////////////////////////////////
+
+// Timeline: Clock sync with server for the purpose of setting the initial time, auto-refresh, and future time limiting.
+
 // Timeline: Implement timeline video request at manually chosen offset.
 // Timeline: Implement timeline drag video visuals: Pause at dragStart. Update jpeg frames when seeking, like when updating the seek bar.
+
+//////////////////////////
+// Timeline Pre-Release //
+//////////////////////////
+
+// Timeline: Move timeline supporting libraries to libs-ui3.js and remove the async script loaders from the ClipTimeline Initialize method.
+// Timeline: Remove "enabled" flag from ClipTimeline.
+// Timeline: Remove fallback "timeline" JSON data requests using cliplist and alertlist.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -5514,6 +5522,10 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 			left = new Date(visibleRange.left);
 			startOfLeftDateTs = new Date(left.getFullYear(), left.getMonth(), left.getDate()).getTime();
 			rightTs = new Date(visibleRange.right).getTime();
+			var finalDay = new Date(loadingHelper.GetLoadingFinishedTime());
+			var requestLimit = dateProvider.get(finalDay.getFullYear(), finalDay.getMonth(), finalDay.getDate() + 1).time;
+			if (rightTs > requestLimit)
+				rightTs = requestLimit;
 		}
 		if (!isRunning)
 		{
@@ -5673,6 +5685,7 @@ function ClipTimeline()
 		$.getScript('ui3/libs-src/promise.polyfill.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 		$.getScript('ui3/libs-src/hammer.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 		$.getScript('ui3/libs-src/vue.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
+		finishInit();
 	}
 	var finishInit = function ()
 	{
@@ -6246,6 +6259,19 @@ function ClipTimeline()
 							ctx.fillRect(x, y, w, h);
 						}
 					}
+					var futureTimePx = (this.currentTimeIfFuturePanningWasAllowed - this.currentTime) / zoomFactor;
+					if (futureTimePx > 0)
+					{
+						var x = (this.timelineInternalWidth - futureTimePx);
+						var y = 0;
+						var w = futureTimePx;
+						var h = this.timelineInternalHeight;
+						var grd = ctx.createLinearGradient(x, y, x + w, y);
+						grd.addColorStop(0, "rgba(0,0,0,0)");
+						grd.addColorStop(1, "rgba(62,95,138,1)");
+						ctx.fillStyle = grd;
+						ctx.fillRect(x, y, w, h);
+					}
 					var perfEnd = performance.now();
 					if (developerMode)
 						console.log("Reduce took " + (perfBeforeRender - perfBeforeReduce) + " ms. Render took " + (perfEnd - perfBeforeRender) + " ms.");
@@ -6339,12 +6365,19 @@ function ClipTimeline()
 						left: (this.CenterBarCenterX - 1) + 'px'
 					};
 				},
-				currentTime: function ()
+				/** Current clock time as it would be if it was allowed to pan into the future. */
+				currentTimeIfFuturePanningWasAllowed: function ()
 				{
 					var time = this.lastSetTime;
 					if (this.dragState.isDragging)
-					{
 						time += this.dragState.offsetMs;
+					return time;
+				},
+				currentTime: function ()
+				{
+					var time = this.currentTimeIfFuturePanningWasAllowed;
+					if (this.dragState.isDragging)
+					{
 						var serverTime = GetServerTime();
 						if (time > serverTime)
 							time = serverTime;
@@ -6621,7 +6654,13 @@ function ClipTimeline()
 					var date = new Date(this.left);
 					var d = dateProvider.get(date.getFullYear(), date.getMonth(), date.getDate());
 					var idCtr = 1;
-					while (d.time < this.right)
+					var rightmostTime = this.right;
+					var finalDay = new Date(loadingHelper.GetLoadingFinishedTime());
+					var requestLimit = dateProvider.get(finalDay.getFullYear(), finalDay.getMonth(), finalDay.getDate() + 1).time;
+					if (rightmostTime > requestLimit)
+						rightmostTime = requestLimit;
+
+					while (d.time < rightmostTime)
 					{
 						var tag = { id: idCtr++ };
 						tag.start = d.time;
@@ -6631,7 +6670,7 @@ function ClipTimeline()
 						{
 							d = dateProvider.nextDay(d);
 						}
-						while (d.time < this.right && state === this.dayLoadingStatus.get(d.time))
+						while (d.time < rightmostTime && state === this.dayLoadingStatus.get(d.time))
 						// states:
 						// undefined or 0: not loading
 						// 1: loading
@@ -10856,6 +10895,13 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 // Status Update //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var serverTimeZoneOffsetMs = 0;
+/** Millisecond offset to be added to the local clock to make it match the server clock. */
+var currentServerTimeOffset = 0;
+/** Gets the current time in milliseconds since the epoch, from the perspective of the server. */
+function GetServerTime()
+{
+	return Date.now() + currentServerTimeOffset;
+}
 function StatusLoader()
 {
 	var self = this;
@@ -10968,12 +11014,6 @@ function StatusLoader()
 			HandleChangesInStatus(lrSave, response);
 			if (response && response.data)
 			{
-				if (response.time)
-				{
-					var requestDuration = requestEnd - requestStart;
-					var timeOfRequest = Date.now() - (requestDuration / 2);
-					currentServerTimeOffset = Math.round(parseInt(response.time) - timeOfRequest);
-				}
 				$stoplightDiv.css("opacity", "");
 				if (response.data.signal == "0")
 					$stoplightRed.css("opacity", "1");
@@ -11047,6 +11087,12 @@ function StatusLoader()
 				UpdateScheduleStatus();
 				dropdownBoxes.listDefs["dbView"].rebuildItems();
 				serverTimeZoneOffsetMs = parseInt(parseFloat(response.data.tzone) * -60000);
+				if (response.time)
+				{
+					var requestDuration = requestEnd - requestStart;
+					var timeOfRequest = Date.now() - (requestDuration / 2);
+					currentServerTimeOffset = Math.round(parseInt(response.time) - timeOfRequest);
+				}
 			}
 			loadingHelper.SetLoadedStatus("status");
 			BI_CustomEvent.Invoke("StatusLoaded", response);
@@ -25310,6 +25356,7 @@ function LoadingHelper()
 {
 	var self = this;
 	var loadingFinished = false;
+	var loadingFinishedAtServerTime = 0;
 	var things =
 		[
 			// name, selector, isLoaded
@@ -25369,6 +25416,7 @@ function LoadingHelper()
 		}
 		ajaxHistoryManager = new AjaxHistoryManager();
 		loadingFinished = true;
+		loadingFinishedAtServerTime = GetServerTime();
 		$("#loadingmsgwrapper").remove();
 		resized();
 		videoPlayer.Initialize();
@@ -25378,6 +25426,10 @@ function LoadingHelper()
 	this.DidLoadingFinish = function ()
 	{
 		return loadingFinished;
+	}
+	this.GetLoadingFinishedTime = function ()
+	{
+		return loadingFinishedAtServerTime;
 	}
 	$(window).load(function ()
 	{
@@ -30199,15 +30251,19 @@ function GetReverseServerDate(date)
 	/// </summary>
 	return new Date(date.getTime() - GetServerTimeOffset());
 }
+/**
+ * Returns the difference in milliseconds between this browser's time zone and the server's time zone.
+ * 
+ * Timekeeping inaccuracy between the server and client is NOT accounted for by this method.  This is only for display purposes, to make the date appear as it would if the client was in the server's time zone.
+ * 
+ * The following code would print the date and time as if this machine was running in the server's time zone.
+ *
+ *	var utcMs = new Date().getTime();
+ *	var serverTime = new Date(utcMs + GetServerTimeOffset());
+ *	console.log(serverTime.toString());
+ */
 function GetServerTimeOffset()
 {
-	/// <summary>
-	/// Returns the difference in milliseconds between this browser's time zone and the server's time zone such that this code would print the date and time that it currently is on the server:
-	///
-	/// var utcMs = new Date().getTime();
-	/// var serverTime = new Date(utcMs + GetServerTimeOffset());
-	/// console.log(serverTime.toString());
-	/// </summary>
 	var localOffsetMs = new Date().getTimezoneOffset() * 60000;
 	var serverOffsetMs = serverTimeZoneOffsetMs;
 	return localOffsetMs - serverOffsetMs;
