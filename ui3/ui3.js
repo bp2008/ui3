@@ -572,7 +572,6 @@ var togglableUIFeatures =
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
 // Timeline: Implement timeline video request at manually chosen offset.
 // Timeline: Implement timeline drag video visuals: Pause at dragStart. Update jpeg frames when seeking, like when updating the seek bar.
-// Timeline: Add a playback controls icon to select a different camera group.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -3892,7 +3891,7 @@ function DropdownBoxes()
 {
 	var self = this;
 	var handleElements = {};
-	var $dropdownBoxes = $(".dropdownBox,#btn_main_menu,.dropdownTrigger");
+	var $dropdownBoxes = $(".dropdownBox,#btn_main_menu,.dropdownTrigger,#changeGroupButton");
 	var currentlyOpenList = null;
 	var preventDDLClose = false;
 
@@ -4221,6 +4220,7 @@ function DropdownBoxes()
 			return;
 		}
 		ele.extendLeft = $ele.attr("extendLeft") == "1";
+		ele.extendUp = $ele.attr("extendUp") == "1";
 		if ($ele.hasClass('dropdownBox'))
 		{
 			ele.$label = $('<div class="dropdownLabel"></div>');
@@ -4302,30 +4302,13 @@ function DropdownBoxes()
 				}
 			}
 	}
-	var getFirstVisibleEle = function (name)
+	var LoadDropdownList = function (name, $ele)
 	{
-		var handleEles = handleElements[name];
-		if (handleEles)
-			for (var i = 0; i < handleEles.length; i++)
-			{
-				var ele = handleEles[i];
-				if (ele && $(ele).is(":visible"))
-					return ele;
-			}
-		return null;
-	}
-	var LoadDropdownList = function (name, $parent)
-	{
-		var ele = getFirstVisibleEle(name);
-		if (ele == null)
-			return;
 		var listDef = self.listDefs[name];
 		if (listDef == null)
 			return;
 		if (new Date().getTime() - 33 <= listDef.timeClosed)
 			return;
-		var $ele = $(ele);
-		var offset = $ele.offset();
 
 		var $ddl = listDef.$currentListEle = $('<div class="dropdown_list"></div>');
 		$ddl.on("mouseup", function ()
@@ -4341,8 +4324,8 @@ function DropdownBoxes()
 
 		$("body").append($ddl);
 
-		if ($parent.length > 0)
-			$ddl.css('min-width', $parent.innerWidth() + "px");
+		if ($ele.length > 0)
+			$ddl.css('min-width', $ele.innerWidth() + "px");
 
 		if (name == "mainMenu")
 		{
@@ -4355,14 +4338,17 @@ function DropdownBoxes()
 		var windowW = $(window).width();
 		var width = $ddl.outerWidth();
 		var height = $ddl.outerHeight();
+		var offset = $ele.offset();
 		var top = (offset.top + $ele.outerHeight());
 		var left = offset.left;
-		if (ele.extendLeft)
+		if ($ele.get(0).extendLeft)
 		{
 			left = (left + $ele.outerWidth()) - width;
 			if ((BrowserIsIE() || BrowserIsEdgeLegacy()) && height > windowH)
 				left -= 20; // Workaround for Edge/IE bug that renders scroll bar offscreen
 		}
+		if ($ele.get(0).extendUp)
+			top = offset.top - height;
 
 		// Adjust box position so the box doesn't extend off the bottom, top, right, left, in that order.
 		if (top + height > windowH)

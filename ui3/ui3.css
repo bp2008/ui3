@@ -3830,6 +3830,16 @@ body + div
 		color: var(--seek-bar-color);
 	}
 
+.showOnTimeline
+{
+	display: none;
+}
+
+.tabTimeline .showOnTimeline
+{
+	display: initial;
+}
+
 /* Seek Bar */
 #seekBarWrapper
 {
