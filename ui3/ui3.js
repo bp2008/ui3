@@ -3220,7 +3220,11 @@ function StartupClipOpener(recId, offset)
 			else
 			{
 				if (offset && offset > 0)
+				{
+					if (offset > stats.msec || stats.msec - offset < 100)
+						offset = 0;
 					stats.offset = offset;
+				}
 			}
 			loadingHelper.SetLoadedStatus("startupClip");
 
@@ -13678,11 +13682,14 @@ function JpegVideoModule()
 			}
 			GetNewImage();
 		});
-		camObj.error(function ()
+		camObj.error(function (err)
 		{
-			programmaticSoundPlayer.NotifyDisconnected();
-			ClearImageLoadTimeout();
-			setTimeout(GetNewImage, 1000);
+			if (camObj.attr('loadingimg'))
+			{
+				programmaticSoundPlayer.NotifyDisconnected();
+				ClearImageLoadTimeout();
+				setTimeout(GetNewImage, 1000);
+			}
 		});
 	}
 	var Activate = function ()
