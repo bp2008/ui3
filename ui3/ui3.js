@@ -513,6 +513,13 @@ var programmaticSoundPlayer = null;
 var sidebarResizeBar = null;
 
 var currentPrimaryTab = "";
+/** Millisecond offset to be added to the local clock to make it match the server clock. */
+var currentServerTimeOffset = 0;
+/** Gets the current time in milliseconds since the epoch, from the perspective of the server. */
+function GetServerTime()
+{
+	return Date.now() + currentServerTimeOffset;
+}
 
 var togglableUIFeatures =
 	[
@@ -568,7 +575,6 @@ var togglableUIFeatures =
 // Timeline: Do not request data before login is complete and a server time offset is learned.
 // Request: Current server time in status responses.
 // Timeline: Do not request timeline days beyond the day the UI loaded.  Loading this information will be the responsibility of the automatic refresh mechanism.
-// Timeline: Do not allow scrolling past current time.
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
 // Timeline: Implement timeline video request at manually chosen offset.
 // Timeline: Implement timeline drag video visuals: Pause at dragStart. Update jpeg frames when seeking, like when updating the seek bar.
@@ -5625,7 +5631,6 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 }
 function ClipTimeline()
 {
-	// TODO: Periodically refresh the current day. Update existing records.
 	var self = this;
 	var enabled = !!UrlParameters.Get("timeline");
 	var timeline;
@@ -5715,8 +5720,8 @@ function ClipTimeline()
 					/** Height of the timeline internal buffer in pixels. Affected by device pixel ratio. */
 					timelineInternalHeight: 0,
 					/** Millisecond timestamp that is currently selected in the timeline (at the center). */
-					lastSetTime: Date.now(),
-					dragState: { isDragging: false, startX: 0, offsetMs: 0, momentum: 0, accelInterval: null },
+					lastSetTime: GetServerTime(),
+					dragState: { isDragging: false, startX: 0, offsetMs: 0 },
 					hammerTime: null,
 					acceptZoomThrottled: null,
 					accumulatedZoomDelta: 0,
@@ -5975,13 +5980,7 @@ function ClipTimeline()
 					{
 						timeline.dragState.startX = e.mouseX;
 						timeline.dragState.offsetMs = 0;
-						timeline.dragState.momentum = 0;
 						timeline.dragState.isDragging = true;
-						//clearInterval(timeline.dragState.accelInterval);
-						//if (touchEvents.isTouchEvent(e))
-						//	timeline.dragState.accelInterval = setInterval(timeline.handlePanAccel, 33);
-						//else
-						//	timeline.dragState.accelInterval = null;
 					}
 				},
 				mouseMove: function (e)
@@ -5997,10 +5996,6 @@ function ClipTimeline()
 							return;
 						}
 						var delta = (e.mouseX - timeline.dragState.startX);
-						if ((delta < 0 && timeline.dragState.momentum > 0) ||
-							(delta > 0 && timeline.dragState.momentum < 0))
-							timeline.dragState.momentum = 0;
-						timeline.dragState.momentum += delta;
 						timeline.pan(delta * -timeline.zoomFactor);
 					}
 					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
@@ -6018,7 +6013,11 @@ function ClipTimeline()
 					if (timeline.dragState.isDragging)
 					{
 						timeline.mouseMove(e);
-						timeline.lastSetTime += (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
+						var time = timeline.lastSetTime + (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
+						var serverTime = GetServerTime();
+						if (time > serverTime)
+							time = serverTime;
+						timeline.lastSetTime = time;
 						timeline.dragState.isDragging = false;
 					}
 					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
@@ -6056,27 +6055,6 @@ function ClipTimeline()
 				onPinchMove: function (e)
 				{
 					timeline.acceptZoom(timeline.pinchZoomState.startingZoomFactor / Math.max(0.001, e.scale * e.scale));
-				},
-				handlePanAccel: function ()
-				{
-					if (!timeline.dragState.isDragging)
-					{
-						if (Math.abs(timeline.dragState.momentum) < 1)
-						{
-							timeline.dragState.momentum = 0;
-							clearInterval(timeline.dragState.accelInterval);
-							timeline.dragState.accelInterval = null;
-						}
-						console.log("Momentum " + timeline.dragState.momentum);
-						timeline.lastSetTime += (timeline.dragState.momentum * -timeline.zoomFactor) / 100;
-					}
-					var accel = -100;
-					if (timeline.dragState.momentum < 0)
-						accel *= -1;
-					var newMomentum = timeline.dragState.momentum + accel;
-					if (Math.abs(newMomentum) < accel)
-						newMomentum = 0;
-					timeline.dragState.momentum = newMomentum;
 				},
 				pan: function (arg)
 				{
@@ -6274,6 +6252,13 @@ function ClipTimeline()
 				},
 				FrameRendered: function (utc)
 				{
+					var serverTime = GetServerTime();
+					if (utc > serverTime)
+					{
+						var newServerTimeOffset = Date.now() - utc;
+						console.log("Timeline FrameRendered function received a frame representing the future (wow!).  Server Time: " + serverTime + ".  Frame Time: " + utc + ".  Adjusting currentServerTimeOffset from " + currentServerTimeOffset + " to " + newServerTimeOffset + ".");
+						currentServerTimeOffset = newServerTimeOffset;
+					}
 					this.lastSetTime = utc; // Rewrite this handler so it attaches to events instead of being called from outside.
 				},
 				btnGoLive: function ()
@@ -6360,6 +6345,9 @@ function ClipTimeline()
 					if (this.dragState.isDragging)
 					{
 						time += this.dragState.offsetMs;
+						var serverTime = GetServerTime();
+						if (time > serverTime)
+							time = serverTime;
 					}
 					return time;
 				},
@@ -10964,8 +10952,10 @@ function StatusLoader()
 			else
 				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
 		}
+		var requestStart = performance.now();
 		ExecJSON(args, function (response)
 		{
+			var requestEnd = performance.now();
 			EndConnectionErrors();
 			lastStatusUpdateAt = performance.now();
 			if (response && typeof response.result != "undefined" && response.result == "fail")
@@ -10978,6 +10968,12 @@ function StatusLoader()
 			HandleChangesInStatus(lrSave, response);
 			if (response && response.data)
 			{
+				if (response.time)
+				{
+					var requestDuration = requestEnd - requestStart;
+					var timeOfRequest = Date.now() - (requestDuration / 2);
+					currentServerTimeOffset = Math.round(parseInt(response.time) - timeOfRequest);
+				}
 				$stoplightDiv.css("opacity", "");
 				if (response.data.signal == "0")
 					$stoplightRed.css("opacity", "1");
