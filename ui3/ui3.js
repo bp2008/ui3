@@ -567,7 +567,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Timeline: Do not request timeline days beyond the day the UI loaded.  Loading this information will be the responsibility of the automatic refresh mechanism.
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
 
 /////////////////////////////////////
