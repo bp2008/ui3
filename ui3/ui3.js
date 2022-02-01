@@ -5953,7 +5953,7 @@ function ClipTimeline()
 							if (idx < 0)
 							{
 								idx = -idx - 1; // Match was approximate. This calculation gets us the index we should insert at.
-								console.log("Slow operation warning: Timeline range was added out of order at index " + idx + " out of " + ranges.length, "last: " + last, "range: " + range, chunk);
+								console.log("Slow operation warning: Timeline range was added out of order at index " + idx + " out of " + ranges.length, "last: " + last, "range: " + JSON.stringify(range), chunk);
 								ranges.splice(idx, 0, range);
 							}
 							else
