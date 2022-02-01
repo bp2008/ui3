@@ -567,6 +567,7 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// Timeline: Organize alerts by camera then by date, similar to organization of time ranges.  Filter by camera when drawing alerts to canvas.
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
 
 /////////////////////////////////////
@@ -5655,7 +5656,7 @@ function ClipTimeline()
 	 * colorMap contains video ranges.
 	 * colors is an array of all colors used as keys in colorMap, sorted in the order they should be drawn.
 	 */
-	var srcdata = { alerts: [], colorMap: new WrapperMap(), colors: [] };
+	var srcdata = { alerts: new FasterObjectMap(), colorMap: new WrapperMap(), colors: [] };
 	var $tl_root = $();
 	var timelineDataLoader = null;
 	var minZoomFactor = 256;
@@ -5819,24 +5820,31 @@ function ClipTimeline()
 
 					if (typeof data === "undefined")
 						return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
+					try
+					{
+						// Ingest ranges array
+						var ranges = data.ranges;
+						for (var i = 0; i < ranges.length; i++)
+							timeline.AddRange(ranges[i], requestInfo.start, requestInfo.end, requestInfo.days);
+					}
+					catch (ex)
+					{
+						toaster.Error(ex, 10000);
+					}
 
-					// Ingest ranges array
-					var ranges = data.ranges;
-					for (var i = 0; i < ranges.length; i++)
-						timeline.AddRange(ranges[i], requestInfo.start, requestInfo.end, requestInfo.days);
-
-					// Ingest alerts array
-					var alerts = data.alerts;
-					for (var i = 0; i < alerts.length; i++)
-						timeline.AddAlert(alerts[i], requestInfo.start, requestInfo.end, requestInfo.days);
-					timeline.FinalizeAfterAddingAlerts();
+					try
+					{
+						// Ingest alerts array
+						var alerts = data.alerts;
+						for (var i = 0; i < alerts.length; i++)
+							timeline.AddAlert(alerts[i], requestInfo.start, requestInfo.end, requestInfo.days);
+					}
+					catch (ex)
+					{
+						toaster.Error(ex, 10000);
+					}
 
 					timeline.newDataNotifier++;
-					//for (var i = 0; i < requestInfo.days.length; i++)
-					//{
-					//	var date = new Date(requestInfo.days[i]);
-					//	console.log("Added date: " + date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate());
-					//}
 				},
 				/**
 				 * Called when an error occurs when loading data for a set of days.
@@ -5899,11 +5907,11 @@ function ClipTimeline()
 				{
 					// This timeline is designed to handle 100,000+ records efficiently.
 					// Ranges are organized under several levels of structure to provide a balance between loading speed and reading speed.
-					// srcdata.colorMap = WrapperMap					(keyed on color int)
-					//	-> map_of_cameras_to_days = FasterObjectMap		(keyed on camera short name)
-					//		-> rangeChunkCollection = []				(contains day-sized chunks of time ranges, sorted by timestamp of the day)
-					//			-> chunk = []							(contains time ranges confined to the bounds of one day)
-					//				-> range
+					// WrapperMap srcdata.colorMap						(keyed on color int)
+					//	-> FasterObjectMap map_of_cameras_to_days		(keyed on camera short name)
+					//		-> Array rangeChunkCollection				(contains day-sized chunks of time ranges, sorted by timestamp of the day)
+					//			-> RangeChunk chunk						(RangeChunk has fields `ts` (timestamp) and `ranges` (array of ranges))
+					//				-> range							(range has fields `time` and `len`)
 					var color = cameraListLoader.GetCameraColor(range.cam);
 					var map_of_cameras_to_days = srcdata.colorMap.get(color);
 					if (!map_of_cameras_to_days)
@@ -5928,6 +5936,7 @@ function ClipTimeline()
 					}
 					var chunk = rangeChunkCollection[chunkIdx];
 
+					range = { time: range.time, len: range.len }; // Recreate range object with only the fields we need to persist.
 					var ranges = chunk.ranges;
 					if (!ranges.length)
 						ranges.push(range); // First range in this array.
@@ -5940,25 +5949,69 @@ function ClipTimeline()
 						{
 							var idx = binarySearch(ranges, range, RangeCompare);
 							if (idx < 0)
-								idx = -idx - 1; // Match was approximate. This calculation gets us the closest match index.
-							if (idx >= ranges.length)
-								idx = ranges.length - 1;
-							if (ranges[idx].time < range.time)
-								idx++;
-							console.log("Slow operation warning: Timeline item was added out of order at index " + idx + " out of " + ranges.length, last, range, chunk);
-							ranges.splice(idx, 0, range);
+							{
+								idx = -idx - 1; // Match was approximate. This calculation gets us the index we should insert at.
+								console.log("Slow operation warning: Timeline range was added out of order at index " + idx + " out of " + ranges.length, "last: " + last, "range: " + range, chunk);
+								ranges.splice(idx, 0, range);
+							}
+							else
+							{
+								// This range already exists. Replace it.
+								ranges[idx] = range;
+							}
 						}
 						else // New range has same exact time as last added range. Update last added range len field.
-							last.len = range.len;
+							ranges[ranges.length - 1] = range.len;
 					}
 				},
 				AddAlert: function (alert)
 				{
-					srcdata.alerts.push(alert.time);
-				},
-				FinalizeAfterAddingAlerts: function ()
-				{
-					srcdata.alerts.sort(function (a, b) { return a - b; });
+					// Alerts are organized under two levels of structure:
+					// FasterObjectMap srcData.alerts	(keyed on camera short name)
+					//	-> Array alertChunkCollection	(contains day-sized chunks of alerts, sorted by timestamp of the day)
+					//		-> AlertChunk chunk			(AlertChunk has fields `ts` (timestamp) and `alerts` (array of alerts))
+					var alertChunkCollection = srcdata.alerts[alert.cam];
+					if (!alertChunkCollection)
+						srcdata.alerts[alert.cam] = alertChunkCollection = [];
+
+					var preciseDate = new Date(alert.time);
+					var date = dateProvider.get(preciseDate.getFullYear(), preciseDate.getMonth(), preciseDate.getDate());
+					var day = date.time;
+					var chunkIdx = binarySearch(alertChunkCollection, { ts: day }, CompareAlertChunks);
+					if (chunkIdx < 0)
+					{
+						chunkIdx = -chunkIdx - 1;
+						alertChunkCollection.splice(chunkIdx, 0, new AlertChunk(day));
+					}
+					var chunk = alertChunkCollection[chunkIdx];
+
+					var time = alert.time;
+					var alerts = chunk.alerts;
+					if (!alerts.length)
+						alerts.push(time); // First alert in this array.
+					else
+					{
+						var last = alerts[alerts.length - 1];
+						if (last < time) // Normal case. New alert goes on end of array. Sort order is maintained.
+							alerts.push(time);
+						else if (last > time) // New alert is out of order! We try not to let this happen.
+						{
+							var idx = binarySearch(alerts, time, NumberCompare);
+							if (idx < 0)
+							{
+								idx = -idx - 1; // Match was approximate. This calculation gets us the index we should insert at.
+								console.log("Slow operation warning: Timeline alert was added out of order at index " + idx + " out of " + alerts.length, "last: " + last, "alert: " + JSON.stringify(alert), chunk);
+								alerts.splice(idx, 0, time);
+							}
+							else
+							{
+								// This alert already exists. Replace it.
+								alerts[idx] = time;
+							}
+						}
+						else // New alert has same exact time as last added alert. Update last added alert len field.
+							alerts[alerts.length - 1] = time;
+					}
 				},
 				AfterResize: function ()
 				{
@@ -6125,6 +6178,7 @@ function ClipTimeline()
 					var leftmostDateTs = dateProvider.get(leftmostDate.getFullYear(), leftmostDate.getMonth(), leftmostDate.getDate()).time;
 
 					// Draw alert icons
+					var perfBeforeAlerts = performance.now();
 					if (alertImgLoaded)
 					{
 						var alertImgScale = (alertImg.naturalHeight / 12) / dpr;
@@ -6133,27 +6187,48 @@ function ClipTimeline()
 						var alertImgXOffset = alertImgW / 2;
 						var alertImgYOffset = 0 * dpr;
 
-						var nextAllowedX = 0;
+						// Each bucket can have only one alert drawn in it.
+						var bucketSize = alertImgW * 2; // One bucket represents this many milliseconds.
+						var buckets = new Array(Math.ceil(canvas.width / bucketSize));
+
 						var x;
 
-						var alerts = srcdata.alerts;
-						for (var i = 0; i < alerts.length; i++)
+						for (var cam in srcdata.alerts)
 						{
-							var alert = alerts[i];
-							if (alert >= left && alert <= right)
+							if (!filters.allowedCameras[cam])
+								continue;
+							var alertChunkCollection = srcdata.alerts[cam];
+							if (!alertChunkCollection)
+								continue;
+							for (var chunkIdx = findFirstChunkInChunkCollection(alertChunkCollection, leftmostDateTs); chunkIdx < alertChunkCollection.length; chunkIdx++)
 							{
-								x = ((alert - left) / zoomFactor) - alertImgXOffset;
-								// For speed and legibility, do not draw overlapping icons. 
-								// Also, leave 1 icon width of padding to the right of any drawn 
-								// icon, to achieve spacing similar to the local console.
-								if (x >= nextAllowedX)
+								var chunk = alertChunkCollection[chunkIdx];
+								if (chunk.ts >= right)
+									break;
+								var alerts = chunk.alerts;
+
+								for (var i = 0; i < alerts.length; i++)
 								{
-									nextAllowedX = x + (alertImgW * 2);
-									ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
+									var alert = alerts[i];
+									if (alert >= left && alert <= right)
+									{
+										x = ((alert - left) / zoomFactor) - alertImgXOffset;
+										// For speed and legibility, do not draw overlapping icons. 
+										// Also, leave 1 icon width of padding to the right of any drawn 
+										// icon, to achieve spacing similar to the local console.
+										var bucketIdx = Math.floor(x / bucketSize);
+										if (!buckets[bucketIdx])
+										{
+											buckets[bucketIdx] = true;
+											ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
+										}
+									}
 								}
+
 							}
 						}
 					}
+					var perfAfterAlerts = performance.now();
 
 					// Motion-triggered systems can have hundreds of thousands of time ranges when the timeline is zoomed out.
 					// This is far too much to render efficiently.
@@ -6181,25 +6256,25 @@ function ClipTimeline()
 							var rangeChunkCollection = map_of_cameras_to_days[cam];
 							if (!rangeChunkCollection)
 								continue;
-							for (var chunkIdx = 0; chunkIdx < rangeChunkCollection.length; chunkIdx++)
+							for (var chunkIdx = findFirstChunkInChunkCollection(rangeChunkCollection, leftmostDateTs); chunkIdx < rangeChunkCollection.length; chunkIdx++)
 							{
 								var chunk = rangeChunkCollection[chunkIdx];
-								if (chunk.ts < right && chunk.ts >= leftmostDateTs)
+								if (chunk.ts >= right)
+									break;
+
+								var ranges = chunk.ranges;
+								// Set the value = true for every bucket that has some video data.
+								for (var i = 0; i < ranges.length; i++)
 								{
-									var ranges = chunk.ranges;
-									// Set the value = true for every bucket that has some video data.
-									for (var i = 0; i < ranges.length; i++)
+									var range = ranges[i];
+									if (range.time <= right && range.time + range.len >= left)
 									{
-										var range = ranges[i];
-										if (range.time <= right && range.time + range.len >= left)
-										{
-											var leftOffsetMs = range.time - left;
-											var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
-											var firstBucketIdx = Clamp((leftOffsetMs / bucketSize) | 0, 0, buckets.length - 1); // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
-											var lastBucketIdx = Clamp((rightOffsetMs / bucketSize) | 0, 0, buckets.length - 1);
-											for (var n = firstBucketIdx; n <= lastBucketIdx; n++)
-												buckets[n] = true;
-										}
+										var leftOffsetMs = range.time - left;
+										var rightOffsetMs = leftOffsetMs + range.len - 1; // -1 millisecond so we don't accidentally mark a bucket that actually has no video
+										var firstBucketIdx = Clamp((leftOffsetMs / bucketSize) | 0, 0, buckets.length - 1); // Bitwise or with zero is a cheap way to round down, as long as numbers fit in a 32 bit signed int.
+										var lastBucketIdx = Clamp((rightOffsetMs / bucketSize) | 0, 0, buckets.length - 1);
+										for (var n = firstBucketIdx; n <= lastBucketIdx; n++)
+											buckets[n] = true;
 									}
 								}
 							}
@@ -6273,7 +6348,7 @@ function ClipTimeline()
 					}
 					var perfEnd = performance.now();
 					if (developerMode)
-						console.log("Reduce took " + (perfBeforeRender - perfBeforeReduce) + " ms. Render took " + (perfEnd - perfBeforeRender) + " ms.");
+						console.log("Alerts took " + (perfAfterAlerts - perfBeforeAlerts).toFixed(1) + " ms. Reduce took " + (perfBeforeRender - perfBeforeReduce).toFixed(1) + " ms. Render took " + (perfEnd - perfBeforeRender).toFixed(1) + " ms.");
 				},
 				FrameRendered: function (utc)
 				{
@@ -6805,6 +6880,27 @@ function RangeChunk(ts)
 function CompareRangeChunks(a, b)
 {
 	return a.ts - b.ts;
+}
+function AlertChunk(ts)
+{
+	/** Key (timestamp of the day this chunk represents) */
+	this.ts = ts;
+	this.alerts = [];
+}
+function CompareAlertChunks(a, b)
+{
+	return a.ts - b.ts;
+}
+function findFirstChunkInChunkCollection(collection, ts)
+{
+	var idx = binarySearch(collection, { ts: ts }, CompareRangeChunks);
+	if (idx < 0)
+	{
+		idx = -idx - 1;
+		if (idx > 0)
+			idx--;
+	}
+	return idx;
 }
 ///////////////////////////////////////////////////////////////
 // Zebra Date Picker //////////////////////////////////////////
