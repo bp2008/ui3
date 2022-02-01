@@ -6836,11 +6836,7 @@ function findFirstChunkInChunkCollection(collection, ts)
 {
 	var idx = binarySearch(collection, { ts: ts }, CompareRangeChunks);
 	if (idx < 0)
-	{
 		idx = -idx - 1;
-		if (idx > 0)
-			idx--;
-	}
 	return idx;
 }
 function AlertCompare(a, b)
@@ -6851,11 +6847,7 @@ function findFirstAlertSinceTime(collection, time)
 {
 	var idx = binarySearch(collection, { time: time }, AlertCompare);
 	if (idx < 0)
-	{
 		idx = -idx - 1;
-		if (idx > 0)
-			idx--;
-	}
 	return idx;
 }
 ///////////////////////////////////////////////////////////////
