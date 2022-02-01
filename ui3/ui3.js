@@ -567,7 +567,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Timeline: Organize alerts by camera then by date, similar to organization of time ranges.  Filter by camera when drawing alerts to canvas.
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
 
 /////////////////////////////////////
