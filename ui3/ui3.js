@@ -5655,8 +5655,9 @@ function ClipTimeline()
 	 * Alerts contains alerts.
 	 * colorMap contains video ranges.
 	 * colors is an array of all colors used as keys in colorMap, sorted in the order they should be drawn.
+	 * cameraNumbers is an object that maps camera short name to a unique number.
 	 */
-	var srcdata = { alerts: new FasterObjectMap(), colorMap: new WrapperMap(), colors: [] };
+	var srcdata = { alerts: [], colorMap: new WrapperMap(), colors: [], cameraNumbers: {} };
 	var $tl_root = $();
 	var timelineDataLoader = null;
 	var minZoomFactor = 256;
@@ -5838,6 +5839,8 @@ function ClipTimeline()
 						var alerts = data.alerts;
 						for (var i = 0; i < alerts.length; i++)
 							timeline.AddAlert(alerts[i], requestInfo.start, requestInfo.end, requestInfo.days);
+						if (alerts.length)
+							timeline.FinalizeAfterAddingAlerts();
 					}
 					catch (ex)
 					{
@@ -5966,52 +5969,15 @@ function ClipTimeline()
 				},
 				AddAlert: function (alert)
 				{
-					// Alerts are organized under two levels of structure:
-					// FasterObjectMap srcData.alerts	(keyed on camera short name)
-					//	-> Array alertChunkCollection	(contains day-sized chunks of alerts, sorted by timestamp of the day)
-					//		-> AlertChunk chunk			(AlertChunk has fields `ts` (timestamp) and `alerts` (array of alerts))
-					var alertChunkCollection = srcdata.alerts[alert.cam];
-					if (!alertChunkCollection)
-						srcdata.alerts[alert.cam] = alertChunkCollection = [];
-
-					var preciseDate = new Date(alert.time);
-					var date = dateProvider.get(preciseDate.getFullYear(), preciseDate.getMonth(), preciseDate.getDate());
-					var day = date.time;
-					var chunkIdx = binarySearch(alertChunkCollection, { ts: day }, CompareAlertChunks);
-					if (chunkIdx < 0)
-					{
-						chunkIdx = -chunkIdx - 1;
-						alertChunkCollection.splice(chunkIdx, 0, new AlertChunk(day));
-					}
-					var chunk = alertChunkCollection[chunkIdx];
-
-					var time = alert.time;
-					var alerts = chunk.alerts;
-					if (!alerts.length)
-						alerts.push(time); // First alert in this array.
-					else
-					{
-						var last = alerts[alerts.length - 1];
-						if (last < time) // Normal case. New alert goes on end of array. Sort order is maintained.
-							alerts.push(time);
-						else if (last > time) // New alert is out of order! We try not to let this happen.
-						{
-							var idx = binarySearch(alerts, time, NumberCompare);
-							if (idx < 0)
-							{
-								idx = -idx - 1; // Match was approximate. This calculation gets us the index we should insert at.
-								console.log("Slow operation warning: Timeline alert was added out of order at index " + idx + " out of " + alerts.length, "last: " + last, "alert: " + JSON.stringify(alert), chunk);
-								alerts.splice(idx, 0, time);
-							}
-							else
-							{
-								// This alert already exists. Replace it.
-								alerts[idx] = time;
-							}
-						}
-						else // New alert has same exact time as last added alert. Update last added alert len field.
-							alerts[alerts.length - 1] = time;
-					}
+					var camNum = srcdata.cameraNumbers[alert.cam];
+					if (!camNum)
+						camNum = srcdata.cameraNumbers[alert.cam] = Object.keys(srcdata.cameraNumbers).length + 1;
+					alert = { num: camNum, time: alert.time };
+					srcdata.alerts.push(alert);
+				},
+				FinalizeAfterAddingAlerts: function ()
+				{
+					srcdata.alerts.sort(AlertCompare);
 				},
 				AfterResize: function ()
 				{
@@ -6187,44 +6153,26 @@ function ClipTimeline()
 						var alertImgXOffset = alertImgW / 2;
 						var alertImgYOffset = 0 * dpr;
 
-						// Each bucket can have only one alert drawn in it.
-						var bucketSize = alertImgW * 2; // One bucket represents this many milliseconds.
-						var buckets = new Array(Math.ceil(canvas.width / bucketSize));
-
+						var nextAllowedX = 0;
 						var x;
 
-						for (var cam in srcdata.alerts)
+						var alerts = srcdata.alerts;
+						for (var i = findFirstAlertSinceTime(alerts, left); i < alerts.length; i++)
 						{
-							if (!filters.allowedCameras[cam])
-								continue;
-							var alertChunkCollection = srcdata.alerts[cam];
-							if (!alertChunkCollection)
-								continue;
-							for (var chunkIdx = findFirstChunkInChunkCollection(alertChunkCollection, leftmostDateTs); chunkIdx < alertChunkCollection.length; chunkIdx++)
+							var alert = alerts[i];
+							if (alert.time >= right)
+								break;
+							if (filters.allowedCameraNumbers[alert.num])
 							{
-								var chunk = alertChunkCollection[chunkIdx];
-								if (chunk.ts >= right)
-									break;
-								var alerts = chunk.alerts;
-
-								for (var i = 0; i < alerts.length; i++)
+								x = ((alert.time - left) / zoomFactor) - alertImgXOffset;
+								// For speed and legibility, do not draw overlapping icons. 
+								// Also, leave 1 icon width of padding to the right of any drawn 
+								// icon, to achieve spacing similar to the local console.
+								if (x >= nextAllowedX)
 								{
-									var alert = alerts[i];
-									if (alert >= left && alert <= right)
-									{
-										x = ((alert - left) / zoomFactor) - alertImgXOffset;
-										// For speed and legibility, do not draw overlapping icons. 
-										// Also, leave 1 icon width of padding to the right of any drawn 
-										// icon, to achieve spacing similar to the local console.
-										var bucketIdx = Math.floor(x / bucketSize);
-										if (!buckets[bucketIdx])
-										{
-											buckets[bucketIdx] = true;
-											ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
-										}
-									}
+									nextAllowedX = x + (alertImgW * 2);
+									ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
 								}
-
 							}
 						}
 					}
@@ -6866,7 +6814,11 @@ function ClipTimeline()
 		for (var camId in allowedCameras)
 			allowedColors[cameraListLoader.GetCameraColor(camId)] = true;
 
-		return { allowedCameras: allowedCameras, allowedColors: allowedColors };
+		var allowedCameraNumbers = new FasterObjectMap();
+		for (var camId in allowedCameras)
+			allowedCameraNumbers[srcdata.cameraNumbers[camId]] = true;
+
+		return { allowedCameras: allowedCameras, allowedColors: allowedColors, allowedCameraNumbers: allowedCameraNumbers };
 	}
 	if (enabled)
 		self.Initialize();
@@ -6881,19 +6833,24 @@ function CompareRangeChunks(a, b)
 {
 	return a.ts - b.ts;
 }
-function AlertChunk(ts)
-{
-	/** Key (timestamp of the day this chunk represents) */
-	this.ts = ts;
-	this.alerts = [];
-}
-function CompareAlertChunks(a, b)
-{
-	return a.ts - b.ts;
-}
 function findFirstChunkInChunkCollection(collection, ts)
 {
 	var idx = binarySearch(collection, { ts: ts }, CompareRangeChunks);
+	if (idx < 0)
+	{
+		idx = -idx - 1;
+		if (idx > 0)
+			idx--;
+	}
+	return idx;
+}
+function AlertCompare(a, b)
+{
+	return a.time - b.time;
+}
+function findFirstAlertSinceTime(collection, time)
+{
+	var idx = binarySearch(collection, { time: time }, AlertCompare);
 	if (idx < 0)
 	{
 		idx = -idx - 1;
