@@ -3840,6 +3840,10 @@ body + div
 	display: initial;
 }
 
+.tabTimeline .hideOnTimeline
+{
+	display: none;
+}
 /* Seek Bar */
 #seekBarWrapper
 {

@@ -576,8 +576,12 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// Review all "isLive" uses and add "isTimeline()" logic where appropriate.
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
 // Add timeline to Loading GUI (because of the web worker).
+// Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
+// Make timeline loading states prettier.  Softer edges.  Gradient perhaps.
+// Consider speeding up the mousewheel zoom.
 
 /////////////////////////////////////
 // Timeline Pending Server Support //
@@ -587,6 +591,9 @@ var togglableUIFeatures =
 
 // Timeline: Implement timeline video request at manually chosen offset.
 // Timeline: Implement timeline drag video visuals: Pause at dragStart. Update jpeg frames when seeking, like when updating the seek bar.
+
+// Disable reverse playback for timeline?  It would probably have unspeakably awful performance.
+// Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
 
 //////////////////////////
 // Timeline Pre-Release //
@@ -7691,7 +7698,7 @@ function SeekBar()
 			timeValue = 0;
 		else
 			timeValue = (msec - 1) * percentValue;
-		if (!videoPlayer.Loading().image.isLive)
+		if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 			playbackControls.SetProgressText(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
 	}
 	this.drawSeekbarAtTime = function (timeValue)
@@ -7709,7 +7716,7 @@ function SeekBar()
 		handle.css("left", x + "px");
 		if (timeValue == msec - 1)
 			timeValue = msec;
-		if (!videoPlayer.Loading().image.isLive)
+		if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 			playbackControls.SetProgressText(msToTime(timeValue, 0) + " / " + msToTime(msec, 0));
 	}
 	this.IsDragging = function ()
@@ -13239,17 +13246,25 @@ function VideoPlayerController()
 
 		RefreshFps(lastFrameLoadingTime);
 
-		if (currentlyLoadingImage.isLive && typeof lastFrameUtc === "number")
+		if (typeof lastFrameUtc === "number")
 		{
-			var str = "";
-			var w = $layoutbody.width();
-			if (w < 240)
-				str = "LIVE";
-			else if (w < 325)
-				str = "LIVE: " + GetTimeStr(GetServerDate(new Date(lastFrameUtc)));
-			else
-				str = "LIVE: " + GetDateStr(GetServerDate(new Date(lastFrameUtc)));
-			playbackControls.SetProgressText(str);
+			if (currentlyLoadingImage.isLive)
+			{
+				var str = "";
+				var w = $layoutbody.width();
+				if (w < 240)
+					str = "LIVE";
+				else if (w < 325)
+					str = "LIVE: " + GetTimeStr(GetServerDate(new Date(lastFrameUtc)));
+				else
+					str = "LIVE: " + GetDateStr(GetServerDate(new Date(lastFrameUtc)));
+				playbackControls.SetProgressText(str);
+			}
+			else if (currentlyLoadingImage.isTimeline())
+			{
+				var str = GetDateStr(GetServerDate(new Date(lastFrameUtc)));
+				playbackControls.SetProgressText(str);
+			}
 		}
 
 		if (currentlyLoadingImage.uniqueId != uniqueId)
