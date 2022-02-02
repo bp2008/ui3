@@ -5813,6 +5813,7 @@ function ClipTimeline()
 				BI_CustomEvent.AddListener("Playback_Pause", this.onVideoPause);
 				BI_CustomEvent.AddListener("DynamicGroupLayoutLoaded", this.onDynamicGroupLayoutLoaded);
 				BI_CustomEvent.AddListener("TabLoaded_timeline", this.requestCanvasDraw);
+				BI_CustomEvent.AddListener("ImageRendered", this.FrameRendered);
 				this.AfterResize();
 				this.onOpenVideo();
 			},
@@ -5826,6 +5827,7 @@ function ClipTimeline()
 				BI_CustomEvent.RemoveListener("Playback_Pause", this.onVideoPause);
 				BI_CustomEvent.RemoveListener("DynamicGroupLayoutLoaded", this.onDynamicGroupLayoutLoaded);
 				BI_CustomEvent.RemoveListener("TabLoaded_timeline", this.requestCanvasDraw);
+				BI_CustomEvent.RemoveListener("ImageRendered", this.FrameRendered);
 				timeline.$refs.tl_root.removeEventListener("touchstart", timeline.mouseDown);
 				timeline.$refs.tl_root.removeEventListener("mousedown", timeline.mouseDown);
 				document.removeEventListener("touchmove", timeline.mouseMove);
@@ -6146,19 +6148,24 @@ function ClipTimeline()
 					if (developerMode)
 						console.log("Render took " + (perfEnd - perfStart).toFixed(1) + " ms.");
 				},
-				FrameRendered: function (utc)
+				FrameRendered: function (data)
 				{
+					if (typeof data.utc !== "number")
+						return;
 					if (videoPlayer.CurrentPlayerModuleName() !== "jpeg")
 						return;
 					var serverTime = GetServerTime();
-					if (utc > serverTime)
+					if (data.utc > serverTime)
 					{
-						var newServerTimeOffset = utc - Date.now();
+						var newServerTimeOffset = data.utc - Date.now();
 						console.log("Timeline FrameRendered function received a frame representing the future (wow!).  Server Time: " + serverTime
-							+ ".  Frame Time: " + utc + ".  Adjusting currentServerTimeOffset from " + currentServerTimeOffset + " to " + newServerTimeOffset + ".");
+							+ ".  Frame Time: " + data.utc + ".  Adjusting currentServerTimeOffset from " + currentServerTimeOffset + " to " + newServerTimeOffset + ".");
 						currentServerTimeOffset = newServerTimeOffset;
 					}
-					this.lastSetTime = utc; // Rewrite this handler so it attaches to events instead of being called from outside.
+					this.lastSetTime = data.utc;
+
+					if (this.videoShouldBePaused && !videoPlayer.Playback_IsPaused())
+						videoPlayer.Playback_Pause();
 				},
 				btnGoLive: function ()
 				{
@@ -6285,6 +6292,10 @@ function ClipTimeline()
 				goLiveStyle: function ()
 				{
 					return { color: this.isLive ? '#71E068' : '' };
+				},
+				videoShouldBePaused: function ()
+				{
+					return this.dragState.isDragging || this.wheelPanState.isActive;
 				}
 			},
 			watch:
@@ -6313,6 +6324,11 @@ function ClipTimeline()
 				filteredCameraId: function ()
 				{
 					this.requestCanvasDraw();
+				},
+				videoShouldBePaused: function ()
+				{
+					if (this.videoShouldBePaused !== videoPlayer.Playback_IsPaused())
+						videoPlayer.Playback_PlayPause();
 				}
 			}
 		});
@@ -6601,14 +6617,9 @@ function ClipTimeline()
 	{
 		return $tl_root.length && pointInsideElement($tl_root, x, y);
 	}
-	this.FrameRendered = function (frame)
+	this.videoShouldBePaused = function ()
 	{
-		if (timeline)
-			timeline.FrameRendered(frame);
-	}
-	function RangeCompare(a, b)
-	{
-		return a.time - b.time;
+		return timeline && timeline.videoShouldBePaused;
 	}
 	function GetTimelineFilters(filteredCameraId)
 	{
@@ -12974,7 +12985,7 @@ function VideoPlayerController()
 		cli.aspectratio = clc.width / clc.height;
 		cli.path = clc.optionValue;
 		cli.uniqueId = clc.optionValue;
-		cli.isLive = true;
+		cli.isLive = typeof timelineMs !== "number";
 		cli.timelineStart = timelineMs;
 		cli.ptz = clc.ptz;
 		cli.audio = clc.audio;
@@ -13230,7 +13241,6 @@ function VideoPlayerController()
 
 		if (currentlyLoadingImage.isLive && typeof lastFrameUtc === "number")
 		{
-			clipTimeline.FrameRendered(lastFrameUtc);
 			var str = "";
 			var w = $layoutbody.width();
 			if (w < 240)
@@ -13250,6 +13260,8 @@ function VideoPlayerController()
 		videoOverlayHelper.HideLoadingOverlay();
 
 		mediaSessionController.setMediaState();
+
+		BI_CustomEvent.Invoke("ImageRendered", { id: uniqueId, w: width, h: height, loadingTime: lastFrameLoadingTime, utc: lastFrameUtc });
 	}
 	this.Playback_Ended = function (isLeftBoundary)
 	{
@@ -13352,7 +13364,7 @@ function BICameraData()
 	 * * Clip ID
 	 */
 	this.uniqueId = "";
-	/** True if this is a live stream or a timeline stream. False if this is a clip. */
+	/** True if this is a live stream. False if this is a clip or timeline stream. */
 	this.isLive = true;
 	/** If set to a number, this is a recorded timeline video feed that began at this time (some UI elements such as the progress bar should not be shown). */
 	this.timelineStart = false;
@@ -13743,7 +13755,7 @@ function JpegVideoModule()
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
 		var overlayArgs = "";
-		if (loading.isTimeline() || !loading.isLive)
+		if (!loading.isLive)
 		{
 			var timePassed = timeValue - timeLastClipFrame;
 			timeLastClipFrame = timeValue.toFixed(0);
@@ -13759,7 +13771,7 @@ function JpegVideoModule()
 			{
 				currentImageTimestampMs = clipPlaybackPosition;
 			}
-			else if (!loading.isLive)
+			else
 			{
 				var clipData = clipLoader.GetClipFromId(loading.uniqueId);
 				if (honorAlertOffset && clipData)
@@ -13870,7 +13882,7 @@ function JpegVideoModule()
 		lastStreamBeganAt = performance.now();
 		playbackPaused = false;
 		playbackControls.setPlayPauseButtonState(playbackPaused);
-		if (!loading.isLive)
+		if (!loading.isTimeline() && !loading.isLive)
 		{
 			if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
 				clipPlaybackPosition = 0;
@@ -14231,15 +14243,14 @@ function FetchH264VideoModule()
 			audioArg += "1";
 		var overlayArgs = "";
 		var videoUrl;
-		//if (loading.isTimeline())
-		//{
-		//	// This is a timeline historical video.
-		//	var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
-		//	videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&n=1&d=1";
-		//	loadDynamicGroupLayout = true;
-		//}
-		//else
-		if (loading.isLive)
+		if (loading.isTimeline())
+		{
+			// This is a timeline historical video.
+			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&n=1&d=1";
+			loadDynamicGroupLayout = true;
+		}
+		else if (loading.isLive)
 		{
 			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&extend=2";
@@ -17494,7 +17505,7 @@ function LiveVideoPausing()
 
 	BI_CustomEvent.AddListener("Playback_Pause", function (loading)
 	{
-		if (loading.isLive && !playbackPausedToast.isShowing())
+		if (loading.isLive && !clipTimeline.videoShouldBePaused() && !playbackPausedToast.isShowing())
 			self.showToast("Live video is paused. Click here to resume.");
 	});
 	BI_CustomEvent.AddListener("Playback_Play", function (loading)
