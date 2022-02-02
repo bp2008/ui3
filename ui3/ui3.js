@@ -5949,6 +5949,7 @@ function ClipTimeline()
 							time = serverTime;
 						timeline.lastSetTime = time;
 						timeline.dragState.isDragging = false;
+						timeline.userDidSetTime();
 					}
 					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
 				},
@@ -6013,6 +6014,7 @@ function ClipTimeline()
 							time = serverTime;
 						this.lastSetTime = time;
 						this.wheelPanState.isActive = false;
+						timeline.userDidSetTime();
 					}
 				},
 				onPinchStart: function (e)
@@ -6146,6 +6148,8 @@ function ClipTimeline()
 				},
 				FrameRendered: function (utc)
 				{
+					if (videoPlayer.CurrentPlayerModuleName() !== "jpeg")
+						return;
 					var serverTime = GetServerTime();
 					if (utc > serverTime)
 					{
@@ -6197,6 +6201,10 @@ function ClipTimeline()
 				onDynamicGroupLayoutLoaded: function ()
 				{
 					this.requestCanvasDraw();
+				},
+				userDidSetTime: function ()
+				{
+					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, this.lastSetTime);
 				}
 			},
 			computed:
@@ -6928,7 +6936,7 @@ function PlaybackControls()
 		}
 		else
 		{
-			if (loadingImg.isTimeline)
+			if (loadingImg.isTimeline())
 			{
 				playbackHeader.Hide();
 				$("#seekBarWrapper").hide();
@@ -6966,7 +6974,7 @@ function PlaybackControls()
 			self.resized();
 		}
 		var loadingImg = videoPlayer.Loading().image;
-		if (loadingImg.isLive || loadingImg.isTimeline)
+		if (loadingImg.isLive || loadingImg.isTimeline())
 			playbackHeader.Hide();
 		else
 			playbackHeader.FadeIn();
@@ -12967,7 +12975,7 @@ function VideoPlayerController()
 		cli.path = clc.optionValue;
 		cli.uniqueId = clc.optionValue;
 		cli.isLive = true;
-		cli.isTimeline = !!timelineMs;
+		cli.timelineStart = timelineMs;
 		cli.ptz = clc.ptz;
 		cli.audio = clc.audio;
 		cli.msec = -1;
@@ -13022,7 +13030,7 @@ function VideoPlayerController()
 			cli.path = clipData.path;
 			cli.uniqueId = clipData.recId;
 			cli.isLive = false;
-			cli.isTimeline = false;
+			cli.timelineStart = false;
 			cli.ptz = false;
 			cli.audio = clipData.audio || (!clipData.isClip && cli.audio); // Alerts never have the audio flag set.
 			cli.msec = parseInt(clipData.msec);
@@ -13189,7 +13197,7 @@ function VideoPlayerController()
 	}
 	var lastCycleWidth = 0;
 	var lastCycleHeight = 0;
-	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameDate)
+	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameUtc)
 	{
 		jpegPreviewModule.Hide();
 		if (currentlyLoadedImage.uniqueId != uniqueId)
@@ -13220,16 +13228,17 @@ function VideoPlayerController()
 
 		RefreshFps(lastFrameLoadingTime);
 
-		if (currentlyLoadingImage.isLive && lastFrameDate)
+		if (currentlyLoadingImage.isLive && typeof lastFrameUtc === "number")
 		{
+			clipTimeline.FrameRendered(lastFrameUtc);
 			var str = "";
 			var w = $layoutbody.width();
 			if (w < 240)
 				str = "LIVE";
 			else if (w < 325)
-				str = "LIVE: " + GetTimeStr(GetServerDate(lastFrameDate));
+				str = "LIVE: " + GetTimeStr(GetServerDate(new Date(lastFrameUtc)));
 			else
-				str = "LIVE: " + GetDateStr(GetServerDate(lastFrameDate));
+				str = "LIVE: " + GetDateStr(GetServerDate(new Date(lastFrameUtc)));
 			playbackControls.SetProgressText(str);
 		}
 
@@ -13318,23 +13327,47 @@ function VideoPlayerController()
 function BICameraData()
 {
 	var self = this;
+	/** Group Name or Cycle Name or Camera Short Name.  For recordings, this is the Camera Short Name. */
 	this.id = "";
-	this.fullwidth = 1280; // Native resolution of image; used when calculating with group rects and as a base for digital zoom
+	/** Native width of image.  Used when calculating with group rects and as a base for digital zoom. */
+	this.fullwidth = 1280;
+	/** Native height of image.  Used when calculating with group rects and as a base for digital zoom. */
 	this.fullheight = 720;
+	/** Aspect ratio of image. */
 	this.aspectratio = 1280 / 720;
-	this.actualwidth = 1280; // Actual size of image (can be smaller than fullwidth)
+	/** Actual width of image (can be smaller than fullwidth) */
+	this.actualwidth = 1280;
+	/** Actual width of image (can be smaller than fullheight) */
 	this.actualheight = 720;
-	this.intendedW = 0; // Special value to assist in digital zooming dynamically sized group frames.
+	/** Special value to assist in digital zooming dynamically sized group frames. */
+	this.intendedW = 0;
+	/** Special value to assist in digital zooming dynamically sized group frames. */
 	this.intendedH = 0;
+	/** Path component to use in URLs.  For live/timeline streams, this is the same as [id] and [uniqueId].  For clips, this is a string like "@12345.bvr". */
 	this.path = "";
+	/** Unique ID of the image provider. One of:
+	 * * Group Name
+	 * * Cycle Name
+	 * * Camera Short Name
+	 * * Clip ID
+	 */
 	this.uniqueId = "";
+	/** True if this is a live stream or a timeline stream. False if this is a clip. */
 	this.isLive = true;
-	this.isTimeline = false; // If true, this is a recorded timeline video feed (some UI elements such as the progress bar should not be shown).
+	/** If set to a number, this is a recorded timeline video feed that began at this time (some UI elements such as the progress bar should not be shown). */
+	this.timelineStart = false;
+	/** True if this image provider supports PTZ controls. */
 	this.ptz = false;
-	this.msec = 10000; // Millisecond duration of clips/alerts.  Ignore this if isLive is set.
+	/** Millisecond duration of clips/alerts.  Ignore this if isLive is set. */
+	this.msec = 10000;
+	/** True if this represents a group of cameras. */
 	this.isGroup = false;
+	/** True if this image provider supports audio. */
 	this.audio = false;
-
+	/**
+	 * Sets the property values of this instance to the same as another instance.
+	 * @param {Object} other Another BICameraData to copy values from.
+	 */
 	this.CopyValuesFrom = function (other)
 	{
 		self.id = other.id;
@@ -13348,11 +13381,16 @@ function BICameraData()
 		self.path = other.path;
 		self.uniqueId = other.uniqueId;
 		self.isLive = other.isLive;
-		self.isTimeline = other.isTimeline;
+		self.timelineStart = other.timelineStart;
 		self.ptz = other.ptz;
 		self.msec = other.msec;
 		self.isGroup = other.isGroup;
 		self.audio = other.audio;
+	}
+	/** Returns true if this is a historical timeline video provider ([timelineStart] is a number). */
+	this.isTimeline = function ()
+	{
+		return typeof self.timelineStart === "number";
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -13509,7 +13547,7 @@ function JpegVideoModule()
 					if (loading.isGroup)
 						Debounced_AsyncLoadDynamicGroupRects();
 				}
-				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, new Date(currentImageRequestedAtMs));
+				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, currentImageTimestampMs);
 
 				playbackControls.FrameTimestampUpdated(false);
 
@@ -13636,21 +13674,26 @@ function JpegVideoModule()
 		else
 			self.Playback_Play();
 		videoOverlayHelper.ShowLoadingOverlay(true);
-		var clipData = clipLoader.GetClipFromId(loading.uniqueId);
-		if (clipData && !clipData.isSnapshot && !clipData.isClip)
+		if (loading.isTimeline())
+			clipPlaybackPosition = loading.timelineStart;
+		else if (!loading.isLive)
 		{
-			if (honorAlertOffset && (clipData.flags & alert_flag_offsetMs) == 0)
-				toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
-			// Load clip stats for this alert.
-			clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
+			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
+			if (clipData && !clipData.isSnapshot && !clipData.isClip)
 			{
-				clipLoader.ApplyMissingStatsToClipData(stats, clipData);
-				if (loading.uniqueId == clipData.recId)
-					loading.msec = stats.msec;
-				var loadingImg = videoPlayer.Loading().image;
-				if (loadingImg.uniqueId == clipData.recId)
-					loadingImg.msec = stats.msec;
-			});
+				if (honorAlertOffset && (clipData.flags & alert_flag_offsetMs) == 0)
+					toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
+				// Load clip stats for this alert.
+				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
+				{
+					clipLoader.ApplyMissingStatsToClipData(stats, clipData);
+					if (loading.uniqueId == clipData.recId)
+						loading.msec = stats.msec;
+					var loadingImg = videoPlayer.Loading().image;
+					if (loadingImg.uniqueId == clipData.recId)
+						loadingImg.msec = stats.msec;
+				});
+			}
 		}
 		GetNewImage();
 		UpdateCurrentURL();
@@ -13700,7 +13743,7 @@ function JpegVideoModule()
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
 		var overlayArgs = "";
-		if (!loading.isLive)
+		if (loading.isTimeline() || !loading.isLive)
 		{
 			var timePassed = timeValue - timeLastClipFrame;
 			timeLastClipFrame = timeValue.toFixed(0);
@@ -13712,40 +13755,46 @@ function JpegVideoModule()
 				timePassed *= -1;
 			clipPlaybackPosition += timePassed;
 
-			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
-			if (honorAlertOffset && clipData != null)
+			if (loading.isTimeline())
 			{
-				clipPlaybackPosition = clipData.offsetMs; // This offset is where the alert begins within the clip.
-				if (playbackControls.GetPlayReverse()) // If playing in reverse, lets start at the end of the alert's bounds.
-					clipPlaybackPosition += clipData.roughLengthMs;
+				currentImageTimestampMs = clipPlaybackPosition;
 			}
-			honorAlertOffset = false;
+			else if (!loading.isLive)
+			{
+				var clipData = clipLoader.GetClipFromId(loading.uniqueId);
+				if (honorAlertOffset && clipData)
+				{
+					clipPlaybackPosition = clipData.offsetMs; // This offset is where the alert begins within the clip.
+					if (playbackControls.GetPlayReverse()) // If playing in reverse, lets start at the end of the alert's bounds.
+						clipPlaybackPosition += clipData.roughLengthMs;
+				}
+				honorAlertOffset = false;
 
-			if (clipPlaybackPosition < 0)
-			{
-				clipPlaybackPosition = 0;
-				videoPlayer.Playback_Ended(true);
+				if (clipPlaybackPosition < 0)
+				{
+					clipPlaybackPosition = 0;
+					videoPlayer.Playback_Ended(true);
+				}
+				else if (clipPlaybackPosition >= loading.msec)
+				{
+					clipPlaybackPosition = loading.msec - 1;
+					videoPlayer.Playback_Ended(false);
+				}
+				// Update currentImageTimestampMs so that saved snapshots know the time for file naming
+				if (clipData)
+				{
+					var offset = clipData.isClip ? 0 : clipData.offsetMs;
+					currentImageTimestampMs = (clipData.date.getTime() - offset) + clipPlaybackPosition;
+					isLoadingRecordedSnapshot = clipData.isSnapshot;
+					if (isLoadingRecordedSnapshot)
+						staticSnapshotId = loading.uniqueId;
+					else
+						staticSnapshotId = "";
+				}
+				if (clipData)
+					overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
 			}
-			else if (clipPlaybackPosition >= loading.msec)
-			{
-				clipPlaybackPosition = loading.msec - 1;
-				videoPlayer.Playback_Ended(false);
-			}
-
 			timeValue = clipPlaybackPosition;
-			// Update currentImageTimestampMs so that saved snapshots know the time for file naming
-			if (clipData != null)
-			{
-				var offset = clipData.isClip ? 0 : clipData.offsetMs;
-				currentImageTimestampMs = (clipData.date.getTime() - offset) + clipPlaybackPosition;
-				isLoadingRecordedSnapshot = clipData.isSnapshot;
-				if (isLoadingRecordedSnapshot)
-					staticSnapshotId = loading.uniqueId;
-				else
-					staticSnapshotId = "";
-			}
-			if (clipData)
-				overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
 		}
 
 		var sizeToRequest = imageRenderer.GetSizeToRequest(true, loading);
@@ -13757,7 +13806,12 @@ function JpegVideoModule()
 		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
-		if (loading.isLive)
+		if (loading.isTimeline())
+		{
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg=1&n=1&d=1&pos=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
+			//console.log("Requesting timeline jpeg at " + GetDateStr(new Date(timeValue), true));
+		}
+		else if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
@@ -14177,6 +14231,14 @@ function FetchH264VideoModule()
 			audioArg += "1";
 		var overlayArgs = "";
 		var videoUrl;
+		//if (loading.isTimeline())
+		//{
+		//	// This is a timeline historical video.
+		//	var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		//	videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&n=1&d=1";
+		//	loadDynamicGroupLayout = true;
+		//}
+		//else
 		if (loading.isLive)
 		{
 			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
@@ -14545,12 +14607,11 @@ function FetchH264VideoModule()
 		}
 
 		var timeNow = performance.now();
-		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, new Date(frame.utc));
+		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, frame.utc);
 		if (loading.isLive)
 			playbackControls.FrameTimestampUpdated(false);
 		else
 			playbackControls.FrameTimestampUpdated(frame.utc);
-		clipTimeline.FrameRendered(frame.utc);
 		writeNerdStats(frame, timeNow);
 		lastFrameAt = timeNow;
 		if (playbackPaused)
