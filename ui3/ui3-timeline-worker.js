@@ -1,5 +1,4 @@
-﻿
-/**
+﻿/**
  * FasterObjectMap can be used in lieu of regular empty objects as a slightly faster key/value map which does not require the use of hasOwnProperty when iterating over keys.
  * In fact it doesn't have a hasOwnProperty function. 
  */
@@ -44,6 +43,7 @@ function WrapperMap()
  * cameraNumbers is an object that maps camera short name to a unique number.
  */
 var srcdata = { alerts: [], colorMap: new WrapperMap(), colors: [], cameraNumbers: {} };
+var brokeAlertSortOrder = false;
 
 onmessage = function (e)
 {
@@ -60,7 +60,7 @@ function IngestTimelineData(requestInfo, data, cameraColorMap)
 		// Ingest ranges array
 		var ranges = data.ranges;
 		for (var i = 0; i < ranges.length; i++)
-			AddRange(ranges[i], requestInfo.start, requestInfo.end, requestInfo.days, cameraColorMap);
+			AddRange(ranges[i], requestInfo, cameraColorMap);
 	}
 	catch (ex)
 	{
@@ -92,24 +92,40 @@ function IngestTimelineData(requestInfo, data, cameraColorMap)
  * @param {Array} cutpoints Array of timestamps marking the start of new days within the requested time range.  Ranges that span any of these cutpoints must be split into multiple ranges.
  * @param {Object} cameraColorMap Map of camera short name to color int.
  */
-function AddRange(range, start, end, cutpoints, cameraColorMap)
+function AddRange(range, requestInfo, cameraColorMap)
 {
-	// Bounds check.  Any range that starts before the requested time range should be truncated.  The truncated portion will be added later if we load the previous time range.
-	if (range.time < start)
+	var cutpoints = requestInfo.days;
+	if (requestInfo.isRefresh)
 	{
-		var diff = start - range.time;
-		range.time = start;
-		range.len -= diff;
-		if (range.len <= 0)
-			return;
+		cutpoints = [];
+		var firstDay = new Date(requestInfo.start);
+		firstDay = timeCache.get(firstDay.getFullYear(), firstDay.getMonth(), firstDay.getDate());
+		cutpoints.push(firstDay);
+
+		var lastDay = new Date(requestInfo.end);
+		lastDay = timeCache.get(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate());
+		if (firstDay !== lastDay)
+			cutpoints.push(lastDay);
 	}
-	// Bounds check.  Any range that ends after the requested time range should be truncated.  The truncated portion will be added later if we load the next time range.
-	if (range.time + range.len > end)
+	else
 	{
-		var diff = (range.time + range.len) - end;
-		range.len -= diff;
-		if (range.len <= 0)
-			return;
+		// Bounds check.  Any range that starts before the requested time range should be truncated.  The truncated portion will be added later if we load the previous time range.
+		if (range.time < requestInfo.start)
+		{
+			var diff = requestInfo.start - range.time;
+			range.time = requestInfo.start;
+			range.len -= diff;
+			if (range.len <= 0)
+				return;
+		}
+		// Bounds check.  Any range that ends after the requested time range should be truncated.  The truncated portion will be added later if we load the next time range.
+		if (range.time + range.len > requestInfo.end)
+		{
+			var diff = (range.time + range.len) - requestInfo.end;
+			range.len -= diff;
+			if (range.len <= 0)
+				return;
+		}
 	}
 	// If the range spans a cutpoint timestamp, we should cut it into multiple ranges and add each of them separately.
 	for (var i = 1; i < cutpoints.length; i++) // Begin loop at index 1 because the 0th cutpoint is equal to [start].
@@ -120,17 +136,17 @@ function AddRange(range, start, end, cutpoints, cameraColorMap)
 			// This range spans the cutpoint. Make a copy that goes up to the cutpoint, and add the copy separately to our source data.
 			var copy = JSON.parse(JSON.stringify(range));
 			copy.len = cut - copy.time;
-			AddRangeInternal(copy, cameraColorMap);
+			AddRangeInternal(copy, requestInfo, cameraColorMap);
 
 			// Truncate original range.
 			range.time = cut;
 			range.len -= copy.len;
 		}
 	}
-	AddRangeInternal(range, cameraColorMap);
+	AddRangeInternal(range, requestInfo, cameraColorMap);
 }
 
-function AddRangeInternal(range, cameraColorMap)
+function AddRangeInternal(range, requestInfo, cameraColorMap)
 {
 	// This timeline is designed to handle 100,000+ records efficiently.
 	// Ranges are organized under several levels of structure to provide a balance between loading speed and reading speed.
@@ -171,13 +187,13 @@ function AddRangeInternal(range, cameraColorMap)
 		var last = ranges[ranges.length - 1];
 		if (last.time < range.time) // Normal case. New range goes on end of array. Sort order is maintained.
 			ranges.push(range);
-		else if (last.time > range.time) // New range is out of order! We try not to let this happen.
+		else if (last.time > range.time) // New range is out of order! We try not to let this happen except when refreshing the timeline.
 		{
 			var idx = binarySearch(ranges, range, RangeCompare);
 			if (idx < 0)
 			{
 				idx = -idx - 1; // Match was approximate. This calculation gets us the index we should insert at.
-				console.log("Slow operation warning: Timeline range was added out of order at index " + idx + " out of " + ranges.length, "last: " + last, "range: " + JSON.stringify(range), chunk);
+				console.log("Slow operation warning: Timeline range was added out of order at index " + idx + " out of " + ranges.length, "last: " + last, "range: " + JSON.stringify(range), "Request Info: " + JSON.stringify(requestInfo), chunk);
 				ranges.splice(idx, 0, range);
 			}
 			else
@@ -186,21 +202,40 @@ function AddRangeInternal(range, cameraColorMap)
 				ranges[idx] = range;
 			}
 		}
-		else // New range has same exact time as last added range. Update last added range len field.
-			ranges[ranges.length - 1] = range.len;
+		else // New range has same exact time as last added range. Replace it.
+			ranges[ranges.length - 1] = range;
 	}
 }
-function AddAlert(alert)
+function AddAlert(alert, requestInfo)
 {
 	var camNum = srcdata.cameraNumbers[alert.cam];
 	if (!camNum)
 		camNum = srcdata.cameraNumbers[alert.cam] = Object.keys(srcdata.cameraNumbers).length + 1;
 	alert = { num: camNum, time: alert.time };
+	if (requestInfo.isRefresh || !brokeAlertSortOrder)
+	{
+		// During a refresh, we'll be adding relatively few items and they should be in chronological order so we can binary search.
+		var idx = binarySearch(srcdata.alerts, alert, AlertCompare);
+		if (idx > -1)
+			return;
+	}
+	if (srcdata.alerts.length)
+	{
+		var last = srcdata.alerts[srcdata.alerts.length - 1].time;
+		if (last === alert.time)
+			return;
+		if (last > alert.time)
+			brokeAlertSortOrder = true;
+	}
 	srcdata.alerts.push(alert);
 }
 function FinalizeAfterAddingAlerts()
 {
-	srcdata.alerts.sort(AlertCompare);
+	if (brokeAlertSortOrder)
+	{
+		srcdata.alerts.sort(AlertCompare);
+		brokeAlertSortOrder = false;
+	}
 }
 
 function ReduceTimeline(args)
@@ -385,6 +420,10 @@ function findFirstChunkInChunkCollection(collection, ts)
 	return idx;
 }
 function AlertCompare(a, b)
+{
+	return a.time - b.time;
+}
+function RangeCompare(a, b)
 {
 	return a.time - b.time;
 }

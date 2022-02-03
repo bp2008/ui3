@@ -576,13 +576,13 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
+// Draw the current "Live" time as a red bar on the timeline, with a dull gradient extending over the previous 15s or whatever the no-go-zone is. Edge of gradient should be around 20% opacity I think.
 // Add timeline to Loading GUI (because of the web worker).
 // Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
 // Make timeline loading states prettier.  Softer edges.  Gradient perhaps.
 // Consider speeding up the mousewheel zoom.
-// Skip dead space in timeline playback, only while the player is in the playing state.
-// Clicking a camera while in timeline playback should retain existing position, not jump to live.
+// Skip dead space in timeline playback, only while the player is in the playing state, and we aren't close to "live".  Perhaps 30 seconds distance is safe.
+// Get the timeline working nicely when in a different time zone.  The UI should appear to be in the server's time zone.
 
 /////////////////////////////////////
 // Timeline Pending Server Support //
@@ -595,6 +595,10 @@ var togglableUIFeatures =
 
 // Disable reverse playback for timeline?  It would probably have unspeakably awful performance.
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
+
+// Clicking a camera while in timeline playback should retain existing position, not jump to live.
+
+// Test timeline with various amounts of clock drift.
 
 //////////////////////////
 // Timeline Pre-Release //
@@ -5538,6 +5542,8 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	var dayLoadingStatus = new WrapperMap();
 	/** True if a loading operation is currently active. */
 	var isRunning = false;
+	var refreshTimelineInterval = setInterval(RefreshTimeline, 11000);
+	var lastKnownTime = GetServerTime();
 	/** Call to request that new Timeline data be requested if necessary.  Optionally takes a new visible range argument. */
 	this.Update = function (visibleRange)
 	{
@@ -5569,6 +5575,9 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 						{
 							for (var i = 0; i < next.days.length; i++)
 								dayLoadingStatus.set(next.days[i], 2);
+
+							LearnLatestTime(response.data);
+
 							callbackGotData(next, response.data);
 						}
 					})
@@ -5596,6 +5605,52 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 					});
 			}
 		}
+	}
+	function RefreshTimeline()
+	{
+		if (documentIsHidden() || currentPrimaryTab !== "timeline")
+			return;
+		var next = {
+			days: [],
+			start: lastKnownTime - 60000,
+			end: GetServerTime() + 60000,
+			isRefresh: true
+		};
+		if (next.start >= next.end)
+			next.start = next.end - 360000;
+		GetTimelineData(next.start, next.end)
+			.then(function (response)
+			{
+				if (response.result !== "success")
+					return Promise.reject(htmlEncode('Server response did not indicate "success" result: ' + JSON.stringify(response)));
+				else
+				{
+					if (response.data.alerts.length || response.data.ranges.length)
+					{
+						LearnLatestTime(response.data);
+						callbackGotData(next, response.data);
+					}
+				}
+			})
+			.catch(function (err)
+			{
+				var errHtml;
+				if (typeof err === "string")
+					errHtml = err;
+				else
+					errHtml = htmlEncode("An unexpected error occurred loading timeline data: " + err);
+				callbackError(next, errHtml);
+			});
+	}
+	function LearnLatestTime(data)
+	{
+		var ranges = data.ranges;
+		if (ranges.length && ranges[ranges.length - 1].time > lastKnownTime)
+			lastKnownTime = ranges[ranges.length - 1].time;
+
+		var alerts = data.alerts;
+		if (alerts.length && alerts[alerts.length - 1].time > lastKnownTime)
+			lastKnownTime = alerts[alerts.length - 1].time;
 	}
 	function getNextDataToLoad()
 	{
@@ -30339,19 +30394,21 @@ function documentIsHidden()
 
 	return document[prop];
 }
+/**
+ * Given a date in local time, returns a new date with the time adjusted so that it reads as if the browser shared a time zone with the server.
+ * @param {Date} date Date in local time zone.
+ */
 function GetServerDate(date)
 {
-	/// <summary>
-	/// Given a date in local time, returns a new date with the time adjusted so that it reads as if the browser shared a time zone with the server.
-	/// </summary>
 	return new Date(date.getTime() + GetServerTimeOffset());
 }
+/**
+ * For use when GetServerDate() caused the date to be offset in the wrong direction for the desired effect.
+ * Due to complex time zone handling, sometimes you need to subtract the time zone offset instead of add it.  This method does that.
+ * @param {Date} date Date in server time zone (but local time zone is desired).
+ */
 function GetReverseServerDate(date)
 {
-	/// <summary>
-	/// For use when GetServerDate() caused the date to be offset in the wrong direction for the desired effect.
-	/// Due to complex time zone handling, sometimes you need to subtract the time zone offset instead of add it.  This method does that.
-	/// </summary>
 	return new Date(date.getTime() - GetServerTimeOffset());
 }
 /**
@@ -30371,9 +30428,12 @@ function GetServerTimeOffset()
 	var serverOffsetMs = serverTimeZoneOffsetMs;
 	return localOffsetMs - serverOffsetMs;
 }
+/**
+ * Returns the binary representation of a number.
+ * @param {Number} dec A number to print in binary as a string.
+ */
 function dec2bin(dec)
 {
-	/// <summary>Returns the binary representation of a number.</summary>
 	return (dec >>> 0).toString(2);
 }
 function InsertSpacesInBinary(binaryString, maxLength)
