@@ -576,8 +576,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Review all "isLive" uses and add "isTimeline()" logic where appropriate.
-// Existing context menus are not appropriate for timeline playback. Timeline video's context menu needs to be a hybrid of live/recording context menus.
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
 // Add timeline to Loading GUI (because of the web worker).
 // Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
@@ -614,6 +612,7 @@ var togglableUIFeatures =
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// CONSIDER: Motion/text overlay controls for timeline viewing.  Not sure if this will have serverside support.
 // CONSIDER: Advanced canvas-based clip list viewer.  It should use the entire video playback area (maybe hide the left bar too), be zoomable, and very responsive.  Navigate by keyboard or click-and-drag with inertia. Clips arranged like a timeline, with thumbnails moving across the screen horizontally (left = older, right = newer) with dotted vertical lines every minute/hour etc.  Each camera its own row.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
 // CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
@@ -13232,7 +13231,7 @@ function VideoPlayerController()
 	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameUtc)
 	{
 		jpegPreviewModule.Hide();
-		if (currentlyLoadedImage.uniqueId != uniqueId)
+		if (currentlyLoadedImage.uniqueId != uniqueId || currentlyLoadingImage.isTimeline() !== currentlyLoadedImage.isTimeline())
 			self.CameraOrResolutionChange();
 		else if (currentlyLoadingImage.isLive && uniqueId.startsWith("@"))
 		{
@@ -19384,9 +19383,10 @@ function JpegQualityHelper()
 ///////////////////////////////////////////////////////////////
 function CanvasContextMenu()
 {
+	var self = this;
 	var lastLiveContextMenuSelectedCamera = null;
 	var lastRecordContextMenuSelectedClip = null;
-	var self = this;
+	var lastTimelineContextMenuSelectedCamera = null;
 
 	var onShowLiveContextMenu = function (menu)
 	{
@@ -19459,26 +19459,6 @@ function CanvasContextMenu()
 	}
 	var onLiveContextMenuAction = function ()
 	{
-		if (this.data.alias.endsWith("_nopreference")
-			|| this.data.alias.endsWith("_off")
-			|| this.data.alias.endsWith("_on"))
-		{
-			var imgLoaded = videoPlayer.Loaded().image;
-			if (imgLoaded.isGroup)
-			{
-				var parts = this.data.alias.split('_');
-				var key = parts[0];
-				var value = 0;
-				if (parts[1] === "off")
-					value = 1;
-				if (parts[1] === "on")
-					value = 2;
-				console.log("Setting " + imgLoaded.id + "." + key + " = " + parts[1]);
-				groupCfg.Set(imgLoaded.id, key, value);
-				videoPlayer.ReopenStreamAtCurrentSeekPosition();
-			}
-			return;
-		}
 		switch (this.data.alias)
 		{
 			case "maximize":
@@ -19708,7 +19688,7 @@ function CanvasContextMenu()
 	{
 		alias: "cmroot_record", width: 200, items:
 			[
-				{ text: "Open image in new tab", icon: "", alias: "opennewtab", action: onRecordContextMenuAction }
+				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
 				, { text: 'Convert/export', icon: "#svg_mio_launch", iconClass: "noflip", alias: "convertexport", action: onRecordContextMenuAction }
@@ -19730,6 +19710,144 @@ function CanvasContextMenu()
 		, clickType: GetPreferredContextMenuTrigger()
 	};
 	$("#layoutbody").contextmenu(optionRecord);
+	
+	var onShowTimelineContextMenu = function (menu)
+	{
+		var imgLoaded = videoPlayer.Loaded().image;
+		if ((imgLoaded.isGroup && !videoPlayer.Loaded().cam.isFakeGroup) || cameraListLoader.isDynamicLayoutEligible(imgLoaded.id))
+			$("#submenu_trigger_timelineGroupSettings").closest('.b-m-item,.b-m-ifocus').show();
+		else
+			$("#submenu_trigger_timelineGroupSettings").closest('.b-m-item,.b-m-ifocus').hide();
+
+		var itemsToDisable = ["cameraname"];
+		if (lastTimelineContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastTimelineContextMenuSelectedCamera))
+		{
+			itemsToDisable = itemsToDisable.concat(["maximize", "properties"]);
+			menu.applyrule(
+				{
+					name: "disable_camera_buttons",
+					disable: true,
+					items: itemsToDisable
+				});
+		}
+		else
+		{
+			if (lastTimelineContextMenuSelectedCamera.isFakeGroup)
+				itemsToDisable.push("maximize");
+			menu.applyrule(
+				{
+					name: "disable_cameraname",
+					disable: true,
+					items: itemsToDisable
+				});
+		}
+	}
+	var onTriggerTimelineContextMenu = function (e)
+	{
+		if (!videoPlayer.Loading().image.isTimeline() || !videoPlayer.Loaded().image.isTimeline())
+			return false;
+
+		mouseCoordFixer.fix(e);
+
+		videoPlayer.suppressMouseHelper();
+		videoOverlayHelper.HideFalseLoadingOverlay();
+
+		var downloadButton = $("#cmroot_timelineview_downloadbutton_findme").closest(".b-m-item");
+		if (downloadButton.parent().attr("id") == "cmroot_timelineview_downloadlink")
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */);
+		else
+			downloadButton.wrap('<a id="cmroot_timelineview_downloadlink" style="display:block" href="'
+				+ videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */
+				+ '" onclick="saveSnapshot(&quot;#cmroot_timelineview_downloadlink&quot;)" target="_blank"></a>');
+		$("#cmroot_timelineview_downloadlink").attr("download", "temp.jpg");
+
+		var homeGroupObj = null;
+		var camData = videoPlayer.GetCameraUnderMousePointer(e);
+		if (camData == null)
+			camData = homeGroupObj = videoPlayer.GetCurrentHomeGroupObj();
+		lastTimelineContextMenuSelectedCamera = camData;
+		if (camData != null)
+		{
+			LoadDynamicManualRecordingButtonState(camData);
+			var camName = CleanUpGroupName(camData.optionDisplay);
+			$("#contextMenuTimelineCameraName").text(camName);
+			$("#contextMenuTimelineCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons below are specific to the camera: " + camName);
+			var $maximize = $("#contextMenuTimelineMaximize");
+			var isMaxAlready = (camData.optionValue == videoPlayer.Loaded().image.id && homeGroupObj == null);
+			$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
+			$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
+		}
+
+		return true;
+	}
+	var onTimelineContextMenuAction = function ()
+	{
+		switch (this.data.alias)
+		{
+			case "maximize":
+				if (!cameraListLoader.CameraIsAlone(lastTimelineContextMenuSelectedCamera))
+					toaster.Warning("Function is unavailable.");
+				else
+					videoPlayer.ImgClick_Camera(lastTimelineContextMenuSelectedCamera);
+				break;
+			case "properties":
+				if (!cameraListLoader.CameraIsAlone(lastTimelineContextMenuSelectedCamera))
+					toaster.Warning("You cannot view properties of cameras that are part of an auto-cycle.");
+				else
+					new CameraProperties(lastTimelineContextMenuSelectedCamera.optionValue);
+				break;
+			case "opennewtab":
+				window.open(videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"); /* LOC0 */
+				break;
+			case "copyimageaddress":
+				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"; /* LOC0 */
+				if (!relUrl.startsWith("/"))
+					relUrl = "/" + relUrl;
+				clipboardHelper.CopyText(location.origin + relUrl);
+				break;
+			case "saveas":
+				return true;
+			case "statsfornerds":
+				nerdStats.Open();
+				break;
+			case "group_settings_edit":
+				groupLayoutDialog.Show(videoPlayer.Loaded().image);
+				break;
+			case "golive":
+				videoPlayer.goLive();
+				break;
+			default:
+				toaster.Error(this.data.alias + " is not implemented!");
+				break;
+		}
+	}
+	var onCancelTimelineContextMenu = function ()
+	{
+	}
+	var optionTimeline =
+	{
+		alias: "cmroot_timeline", width: 200, items:
+			[
+				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onTimelineContextMenuAction }
+				, { text: '<div id="cmroot_timelineview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onTimelineContextMenuAction }
+				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onTimelineContextMenuAction }
+				, { text: "Go Live", icon: "#svg_mio_clock", iconClass: "noflip clockRotate", alias: "golive", action: onTimelineContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "<span id=\"submenu_trigger_timelineGroupSettings\">Group Settings</span>", icon: "#svg_mio_apps", iconClass: "noflip", alias: "group_settings_edit", action: onTimelineContextMenuAction }
+				, { text: "<span id=\"contextMenuTimelineCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuTimelineMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onTimelineContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onTimelineContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onTimelineContextMenuAction }
+			]
+		, onContextMenu: onTriggerTimelineContextMenu
+		, onCancelContextMenu: onCancelTimelineContextMenu
+		, onShow: onShowTimelineContextMenu
+		, clickType: GetPreferredContextMenuTrigger()
+	};
+	$("#layoutbody").contextmenu(optionTimeline);
 }
 var ThreeStateMenuItem = new (function ()
 {
