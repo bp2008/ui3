@@ -577,11 +577,14 @@ var togglableUIFeatures =
 /////////////////////////////
 
 // Review all "isLive" uses and add "isTimeline()" logic where appropriate.
+// Existing context menus are not appropriate for timeline playback. Timeline video's context menu needs to be a hybrid of live/recording context menus.
 // Timeline: Automatically refresh data from ([last known point] - X) to ([now] + Y).  If there is no last known point, assume that point to be the time the UI loaded.
 // Add timeline to Loading GUI (because of the web worker).
 // Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
 // Make timeline loading states prettier.  Softer edges.  Gradient perhaps.
 // Consider speeding up the mousewheel zoom.
+// Skip dead space in timeline playback, only while the player is in the playing state.
+// Clicking a camera while in timeline playback should retain existing position, not jump to live.
 
 /////////////////////////////////////
 // Timeline Pending Server Support //
@@ -599,6 +602,8 @@ var togglableUIFeatures =
 // Timeline Pre-Release //
 //////////////////////////
 
+// Check all TIMELINE-RELEASE code locations.
+// Verify correct behavior when playing timeline video and changing UI tabs.
 // Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
 // Verify behavior as intended in a browser without web worker support (IE 9).
 // Timeline: Move timeline supporting libraries to libs-ui3.js and remove the async script loaders from the ClipTimeline Initialize method.
@@ -7129,7 +7134,7 @@ function PlaybackControls()
 	{
 		if (new Date().getTime() - 33 <= settingsClosedAt)
 			return;
-		if (videoPlayer.Loading().image.isLive)
+		if (videoPlayer.Loading().image.isLive || videoPlayer.Loading().image.isTimeline())
 			return OpenQualityPanel();
 		RebuildSettingsPanelEmpty();
 		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
@@ -7170,11 +7175,19 @@ function PlaybackControls()
 	{
 		RebuildSettingsPanelEmpty();
 		$playbackSettings.addClass("speedPanel");
-		var $backBtn = $('<div class="playbackSettingsLine playbackSettingsHeading">'
-			+ '<div class="playbackSettingsLeftArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div> '
-			+ 'Speed</div>');
-		$backBtn.click(self.OpenSettingsPanel);
 		$playbackSettings.append($backBtn);
+		if (videoPlayer.Loading().image.isTimeline())
+		{
+			$playbackSettings.append('<div class="playbackSettingsLine playbackSettingsHeading" style="cursor: default;">Speed</div>');
+		}
+		else
+		{
+			var $backBtn = $('<div class="playbackSettingsLine playbackSettingsHeading">'
+				+ '<div class="playbackSettingsLeftArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div> '
+				+ 'Speed</div>');
+			$backBtn.click(self.OpenSettingsPanel);
+			$playbackSettings.append($backBtn);
+		}
 
 		for (var i = 0; i < SpeedOptions.length; i++)
 		{
@@ -7199,11 +7212,11 @@ function PlaybackControls()
 	{
 		RebuildSettingsPanelEmpty();
 		$playbackSettings.addClass("qualityPanel");
-		var live = videoPlayer.Loading().image.isLive;
+		var showBackBtn = !videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline();
 		var $backBtn = $('<div class="playbackSettingsLine playbackSettingsHeading">'
-			+ (live ? '' : '<div class="playbackSettingsLeftArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div> ')
+			+ (showBackBtn ? '<div class="playbackSettingsLeftArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalLeft"></use></svg></div> ' : '')
 			+ 'Quality</div>');
-		if (!live)
+		if (showBackBtn)
 			$backBtn.click(self.OpenSettingsPanel);
 		else
 			$backBtn.css('cursor', 'default');
@@ -7584,9 +7597,9 @@ function SeekBar()
 	{
 		if (!seekHintVisible)
 			return;
-		if (videoPlayer.Loading().image.isLive)
+		if (videoPlayer.Loading().image.isLive || videoPlayer.Loading().image.isTimeline())
 		{
-			console.log("Cannot update seek hint while loading live video");
+			console.log("Cannot update seek hint while loading live video or timeline video");
 			return;
 		}
 		// Update seek hint text and location
@@ -8676,7 +8689,7 @@ function ClipLoader(clipsBodySelector)
 						TotalUniqueClipsLoaded++;
 						clipListCache[clipData.camera][clipData.recId] = clipData;
 						clipListIdCache[clipData.recId] = clipData;
-						if (!isUpdateOfExistingList && previouslyOpenedClip == null && !loadingImage.isLive && loadingImage.uniqueId == clipData.recId)
+						if (!isUpdateOfExistingList && previouslyOpenedClip == null && !loadingImage.isLive && !loadingImage.isTimeline() && loadingImage.uniqueId == clipData.recId)
 							previouslyOpenedClip = clipData;
 					}
 				}
@@ -8729,7 +8742,7 @@ function ClipLoader(clipsBodySelector)
 				}
 			}
 
-			if (!isUpdateOfExistingList && previouslyOpenedClip == null && startupClipData && !loadingImage.isLive && loadingImage.uniqueId == startupClipData.recId)
+			if (!isUpdateOfExistingList && previouslyOpenedClip == null && startupClipData && !loadingImage.isLive && !loadingImage.isTimeline() && loadingImage.uniqueId == startupClipData.recId)
 				previouslyOpenedClip = startupClipData;
 
 			isLoadingAClipList = false;
@@ -8758,7 +8771,7 @@ function ClipLoader(clipsBodySelector)
 				tileLoader.AppearDisappearCheckEnabled = true;
 				tileLoader.appearDisappearCheck();
 
-				if (!loadingImage.isLive && !isUpdateOfExistingList)
+				if (!loadingImage.isLive && !loadingImage.isTimeline() && !isUpdateOfExistingList)
 				{
 					if (previouslyOpenedClip == null)
 						self.CloseCurrentClip();
@@ -9426,7 +9439,7 @@ function ClipLoader(clipsBodySelector)
 	this.FlagCurrentClip = function ()
 	{
 		var cli = videoPlayer.Loading().image;
-		if (cli.isLive)
+		if (cli.isLive || cli.isTimeline())
 			return;
 		var clipData = this.GetClipFromId(cli.uniqueId);
 		if (!sessionManager.IsAdministratorSession(cli.uniqueId))
@@ -9439,7 +9452,7 @@ function ClipLoader(clipsBodySelector)
 	this.ExportCurrentClip = function ()
 	{
 		var cli = videoPlayer.Loading().image;
-		if (cli.isLive)
+		if (cli.isLive || cli.isTimeline())
 			return;
 		exportControls.Enable(cli.uniqueId);
 	}
@@ -9700,7 +9713,7 @@ function ClipLoader(clipsBodySelector)
 	this.HideClipFlag = function (clipData)
 	{
 		var cli = videoPlayer.Loading().image;
-		if (!cli.isLive && cli.uniqueId === clipData.recId)
+		if (cli.uniqueId === clipData.recId)
 			$("#clipFlagButton").removeClass("flagged");
 		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
@@ -9711,7 +9724,7 @@ function ClipLoader(clipsBodySelector)
 	this.ShowClipFlag = function (clipData)
 	{
 		var cli = videoPlayer.Loading().image;
-		if (!cli.isLive && cli.uniqueId === clipData.recId)
+		if (cli.uniqueId === clipData.recId)
 			$("#clipFlagButton").addClass("flagged");
 		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
@@ -9848,7 +9861,7 @@ function ClipLoader(clipsBodySelector)
 			function ()
 			{
 				self.UnselectAllClips();
-				if (!videoPlayer.Loading().image.isLive)
+				if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 					clipLoader.SelectClipIdNoOpen(videoPlayer.Loading().image.uniqueId);
 				for (var i = 0; i < allSelectedClipIDs.length; i++)
 					self.DisableClipTileById(allSelectedClipIDs[i]);
@@ -9860,7 +9873,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.DeleteCurrentClip = function ()
 	{
-		if (!videoPlayer.Loading().image.isLive)
+		if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 		{
 			var clip_to_delete = videoPlayer.Loading().image.uniqueId;
 			var deleter = function ()
@@ -10035,7 +10048,7 @@ function ClipLoader(clipsBodySelector)
 	this.GetCurrentClipEle = function ()
 	{
 		var img = videoPlayer.Loading().image;
-		if (!img.isLive)
+		if (!img.isLive && !videoPlayer.Loading().image.isTimeline())
 		{
 			var $clip = $("#c" + img.uniqueId);
 			if ($clip.length)
@@ -12048,7 +12061,8 @@ function CameraListLoader()
 			if (!firstCameraListLoaded
 				|| (self.GetCameraWithId(videoPlayer.Loading().image.id) == null
 					&& videoPlayer.Loading().image
-					&& videoPlayer.Loading().image.isLive)) // isLive check allows recordings to continue playing if their camera instance is missing
+					&& (videoPlayer.Loading().image.isLive
+						|| videoPlayer.Loading().image.isTimeline()))) // isLive/isTimeline check allows clips to continue playing if their camera instance is missing
 			{
 				if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId) == null)
 				{
@@ -12573,9 +12587,9 @@ function VideoPlayerController()
 			, function (e, confirmed) // Single Click
 			{
 				videoOverlayHelper.HideFalseLoadingOverlay();
-				if (currentlyLoadingImage.isLive)
+				if (currentlyLoadingImage.isLive || currentlyLoadingImage.isTimeline())
 				{
-					// Live View
+					// Live View or Timeline
 					if (IsDoubleClickFullscreenEnabled())
 					{
 						if (confirmed)
@@ -12608,7 +12622,7 @@ function VideoPlayerController()
 				if (!IsDoubleClickFullscreenEnabled())
 					return;
 				videoOverlayHelper.HideFalseLoadingOverlay();
-				if (currentlyLoadingImage.isLive)
+				if (currentlyLoadingImage.isLive || currentlyLoadingImage.isTimeline())
 				{
 					fullScreenModeController.toggleFullScreen();
 				}
@@ -12716,7 +12730,7 @@ function VideoPlayerController()
 	{
 		if (settings.ui3_doubleClick_behavior === "Both")
 			return true;
-		if (currentlyLoadingImage.isLive)
+		if (currentlyLoadingImage.isLive || currentlyLoadingImage.isTimeline())
 			return settings.ui3_doubleClick_behavior === "Live View";
 		else
 			return settings.ui3_doubleClick_behavior === "Recordings";
@@ -12743,13 +12757,13 @@ function VideoPlayerController()
 	}
 	this.GetClipPlaybackPositionPercent = function ()
 	{
-		if (currentlyLoadingImage.isLive)
+		if (currentlyLoadingImage.isLive || currentlyLoadingImage.isTimeline())
 			return 0;
 		return playerModule.GetSeekPercent();
 	}
 	this.GetClipPlaybackPositionMs = function ()
 	{
-		if (currentlyLoadingImage.isLive)
+		if (currentlyLoadingImage.isLive || currentlyLoadingImage.isTimeline())
 			return 0;
 		return playerModule.GetClipPlaybackPositionMs();
 	}
@@ -12829,7 +12843,7 @@ function VideoPlayerController()
 	var DoThingIfImgClickEligible = function (event, thing)
 	{
 		/// <summary>A silly method that does all the validation and clicked-camera identification from the ImgClick function, then calls a callback method.</summary>
-		if (!currentlyLoadingImage.isLive)
+		if (!currentlyLoadingImage.isLive && !currentlyLoadingImage.isTimeline())
 			return;
 		// mouseCoordFixer.fix(event); // Don't call this more than once per event!
 		var camData = self.GetCameraUnderMousePointer(event);
@@ -12907,7 +12921,7 @@ function VideoPlayerController()
 	}
 	this.handleDisabledCamera = function (videoData)
 	{
-		if (videoData.isLive && !videoData.isGroup)
+		if (videoData.isLive && !videoData.isGroup) // TIMELINE-RELEASE - Behavior with disabled cameras needs to be tested and decisions made.
 		{
 			var camData = cameraListLoader.GetCameraWithId(videoData.id);
 			if (!camData || !camData.isEnabled || !camData.webcast)
@@ -13270,7 +13284,7 @@ function VideoPlayerController()
 		if (currentlyLoadingImage.uniqueId != uniqueId)
 			return;
 
-		if (!currentlyLoadedImage.isLive)
+		if (!currentlyLoadedImage.isLive && !currentlyLoadedImage.isTimeline())
 			seekBar.drawSeekbarAtPercent(playerModule.GetSeekPercent());
 		videoOverlayHelper.HideLoadingOverlay();
 
@@ -13596,7 +13610,7 @@ function JpegVideoModule()
 					nerdStats.BeginUpdate();
 					nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
 					nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
-					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "% (Frame Offset: " + Math.floor(clipPlaybackPosition) + "ms)"));
+					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "% (Frame Offset: " + Math.floor(clipPlaybackPosition) + "ms)")); // TIMELINE-RELEASE
 					nerdStats.UpdateStat("Codecs", "jpeg");
 					nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, msLoadingTime + "ms", true);
 					nerdStats.EndUpdate();
@@ -13839,7 +13853,7 @@ function JpegVideoModule()
 			//console.log("Requesting timeline jpeg at " + GetDateStr(new Date(timeValue), true));
 		}
 		else if (loading.isLive)
-			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true); // TIMELINE-RELEASE - This legacy code uses parameter "time" for cachebusting. If this isn't a problem, just delete this comment.
 		else
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg + groupArgs;
@@ -14508,7 +14522,7 @@ function FetchH264VideoModule()
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
-		if (loading.isLive)
+		if (loading.isLive) // TIMELINE-RELEASE - Needs implemented with timeline awareness.
 		{
 			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true);
@@ -14602,6 +14616,10 @@ function FetchH264VideoModule()
 	{
 		if (loading.isLive)
 			currentSeekPositionPercent = 0;
+		else if (loading.isTimeline())
+		{
+			// TIMELINE-RELEASE
+		}
 		else
 		{
 			if (currentSeekPositionPercent >= 1 && !playbackControls.GetPlayReverse())
@@ -14634,7 +14652,7 @@ function FetchH264VideoModule()
 
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, frame.utc);
-		if (loading.isLive)
+		if (loading.isLive || loading.isTimeline())
 			playbackControls.FrameTimestampUpdated(false);
 		else
 			playbackControls.FrameTimestampUpdated(frame.utc);
@@ -14698,6 +14716,11 @@ function FetchH264VideoModule()
 			volumeIconHelper.setColorIdle();
 		if (loading.isLive)
 			return;
+		if (loading.isTimeline())
+		{
+			toaster.Info("Timeline playback reached the end."); // TIMELINE-RELEASE - Test this behavior. Probably need to forcibly go live, maybe suppress a toast message.
+			return;
+		}
 		var reverse = playbackControls.GetPlayReverse();
 		if (reverse)
 			currentSeekPositionPercent = 0;
@@ -14737,7 +14760,7 @@ function FetchH264VideoModule()
 			nerdStats.BeginUpdate();
 			nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
 			nerdStats.UpdateStat("Stream Resolution", null, frame.width + "x" + frame.height + nativeRes);
-			nerdStats.UpdateStat("Seek Position", (loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%")) + " (Frame Offset: " + frame.timestamp + "ms)");
+			nerdStats.UpdateStat("Seek Position", (loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%")) + " (Frame Offset: " + frame.timestamp + "ms)"); // TIMELINE-RELEASE
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
 			nerdStats.UpdateStat("Codecs", codecs);
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
@@ -16572,7 +16595,7 @@ function NetDelayCalc()
 		{
 			var playSpeed = playbackControls.GetPlaybackSpeed();
 			if (playSpeed < 1)
-				realTimePassed *= playSpeed;
+				realTimePassed *= playSpeed; // TIMELINE-RELEASE - Timeline H.264 timestamp behavior is not yet confirmed.
 		}
 		var streamTimePassed = lastFrameTime - baseFrameTime;
 		var delay = realTimePassed - streamTimePassed;
@@ -19558,7 +19581,7 @@ function CanvasContextMenu()
 	}
 	var onTriggerRecordContextMenu = function (e)
 	{
-		if (videoPlayer.Loading().image.isLive)
+		if (videoPlayer.Loading().image.isLive || videoPlayer.Loading().image.isTimeline())
 			return false;
 
 		videoPlayer.suppressMouseHelper();
@@ -23638,7 +23661,7 @@ function MediaSessionController()
 			var duration = 86400;
 			var position = 86400;
 			var playbackRate = 1.0;
-			if (!videoPlayer.Loading().image.isLive)
+			if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 			{
 				var isPlaying = !videoPlayer.Playback_IsPaused();
 				duration = Clamp(videoPlayer.Loading().image.msec - 1, 0, Infinity);
@@ -23693,21 +23716,21 @@ function MediaSessionController()
 		{
 			navigator.mediaSession.setActionHandler('play', function ()
 			{
-				if (videoPlayer.Loading().image.isLive)
+				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 					videoPlayer.LoadHomeGroup();
 				else
 					videoPlayer.Playback_Play();
 			});
 			navigator.mediaSession.setActionHandler('pause', function ()
 			{
-				if (videoPlayer.Loading().image.isLive)
+				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 					videoPlayer.LoadHomeGroup();
 				else
 					videoPlayer.Playback_Pause();
 			});
 			navigator.mediaSession.setActionHandler('stop', function ()
 			{
-				if (videoPlayer.Loading().image.isLive)
+				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 					videoPlayer.goLive();
 				else
 					clipLoader.CloseCurrentClip();
@@ -23722,7 +23745,7 @@ function MediaSessionController()
 		{
 			navigator.mediaSession.setActionHandler('seekbackward', function (details)
 			{
-				if (!videoPlayer.Loading().image.isLive)
+				if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 				{
 					if (details.seekOffset && details.seekOffset > 0)
 						videoPlayer.SeekByMs(-1000 * details.seekOffset);
@@ -23732,7 +23755,7 @@ function MediaSessionController()
 			});
 			navigator.mediaSession.setActionHandler('seekforward', function (details)
 			{
-				if (!videoPlayer.Loading().image.isLive)
+				if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 				{
 					if (details.seekOffset && details.seekOffset > 0)
 						videoPlayer.SeekByMs(1000 * details.seekOffset);
@@ -23742,7 +23765,7 @@ function MediaSessionController()
 			});
 			navigator.mediaSession.setActionHandler('seekto', function (details)
 			{
-				if (!videoPlayer.Loading().image.isLive)
+				if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 				{
 					if (details.seekTime || details.seekTime === 0)
 					{
@@ -23766,7 +23789,7 @@ function MediaSessionController()
 		{
 			navigator.mediaSession.setActionHandler('previoustrack', function ()
 			{
-				if (videoPlayer.Loading().image.isLive)
+				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 					BI_Hotkey_PreviousCamera();
 				else
 					videoPlayer.Playback_PreviousClip();
@@ -23774,7 +23797,7 @@ function MediaSessionController()
 
 			navigator.mediaSession.setActionHandler('nexttrack', function ()
 			{
-				if (videoPlayer.Loading().image.isLive)
+				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
 					BI_Hotkey_NextCamera();
 				else
 					videoPlayer.Playback_NextClip();
@@ -24050,7 +24073,9 @@ function AjaxHistoryManager()
 	var BackButtonPressed = function ()
 	{
 		var loading = videoPlayer.Loading();
-		if (!loading.image.isLive)
+		if (loading.image.isTimeline()) // TIMELINE-RELEASE - This should also (or instead) cause single-camera views to return to group.
+			videoPlayer.goLive();
+		else if (!loading.image.isLive)
 			clipLoader.CloseCurrentClip();
 		else if (!loading.image.isGroup)
 			videoPlayer.LoadHomeGroup();
@@ -24091,7 +24116,14 @@ function UpdateCurrentURL()
 	if (m)
 		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
 	var cli = videoPlayer.Loading().image;
-	if (!cli.isLive)
+	if (cli.isTimeline())
+	{
+		// TIMELINE-RELEASE - This should modify the URL to have the current timeline playback position.
+		// TIMELINE-RELEASE - Timeline playback position should be read from the URL at startup.
+		// TIMELINE-RELEASE - UpdateCurrentURL_Throttled() needs to be called perhaps at every frame, from the timeline component.
+		// TIMELINE-RELEASE - UpdateCurrentURL_Throttled() should probably use the throttle() method provided by UI3 instead of rolling its own timeout behavior.
+	}
+	else if (!cli.isLive)
 	{
 		var clipData = clipLoader.GetClipFromId(cli.uniqueId);
 		if (clipData)
@@ -24165,7 +24197,7 @@ function LoadNextOrPreviousCamera(offset)
 	if (offset == 0)
 		return;
 	var loading = videoPlayer.Loading();
-	if (!loading.image.isLive || cameraListLoader.CameraIsCycle(loading.cam))
+	if (!loading.image.isLive || cameraListLoader.CameraIsCycle(loading.cam))  // TIMELINE-RELEASE - Investigate making this work during timeline playback, when timeline playback is working better.
 		return;
 	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
 	var idxCurrentMaximizedCamera = -1;
@@ -24217,7 +24249,7 @@ function BI_Hotkey_PreviousGroup()
 function LoadNextOrPreviousGroup(offset)
 {
 	var loading = videoPlayer.Loading();
-	if (!loading.image.isLive)
+	if (!loading.image.isLive) // TIMELINE-RELEASE - This should work during timeline playback too.
 		return;
 	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
 	var groupList = cameraListLoader.GetGroupAndCycleList();
@@ -24253,12 +24285,12 @@ function BI_Hotkey_Delete()
 }
 function BI_Hotkey_ToggleReverse()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 		playbackControls.ToggleReverse();
 }
 function BI_Hotkey_NextClip()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
 	{
 		if (settings.ui3_clip_navigation_direction === "Oldest First")
 			videoPlayer.Playback_NextClip();
@@ -24268,7 +24300,7 @@ function BI_Hotkey_NextClip()
 }
 function BI_Hotkey_PreviousClip()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
 	{
 		if (settings.ui3_clip_navigation_direction === "Oldest First")
 			videoPlayer.Playback_PreviousClip();
@@ -24278,12 +24310,12 @@ function BI_Hotkey_PreviousClip()
 }
 function BI_Hotkey_SkipAhead()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
 		videoPlayer.SeekByMs(1000 * GetSkipAmount());
 }
 function BI_Hotkey_SkipBack()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
 		videoPlayer.SeekByMs(-1000 * GetSkipAmount());
 }
 function GetSkipAmount()
@@ -24292,42 +24324,56 @@ function GetSkipAmount()
 }
 function BI_Hotkey_SkipAhead1Frame()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
 		videoPlayer.SeekByMs(videoPlayer.GetExpectedFrameIntervalOfCurrentCamera(), false);
 }
 function BI_Hotkey_SkipBack1Frame()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
 		videoPlayer.SeekByMs(-1 * videoPlayer.GetExpectedFrameIntervalOfCurrentCamera(), false);
 }
 function BI_Hotkey_PlaybackFaster()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
 		playbackControls.ChangePlaySpeed(1);
 }
 function BI_Hotkey_PlaybackSlower()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
 		playbackControls.ChangePlaySpeed(-1);
 }
 function BI_Hotkey_CloseClip()
 {
-	if (!videoPlayer.Loading().image.isLive)
+	if (suppress_Hotkey_CloseClip)
+		return;
+	if (videoPlayer.Loading().image.isTimeline()) // TIMELINE-RELEASE - This probably doesn't work as intended -- check when timeline playback works better.  When playing a single camera in timeline video, first ESC press should return to group, second press should go live.
+	{
+		videoPlayer.goLive();
+	}
+	else if (!videoPlayer.Loading().image.isLive)
 	{
 		clipLoader.CloseCurrentClip();
 		// Prevent this same hotkey event from closing the current camera, too.
-		suppress_Hotkey_CloseCamera = true;
-		setTimeout(function () { suppress_Hotkey_CloseCamera = false; }, 0);
+		clearTimeout(suppress_Hotkey_CloseCamera);
+		suppress_Hotkey_CloseCamera = setTimeout(function () { suppress_Hotkey_CloseCamera = null; }, 0);
 	}
 }
-var suppress_Hotkey_CloseCamera = false;
+var suppress_Hotkey_CloseClip = null;
+var suppress_Hotkey_CloseCamera = null;
 function BI_Hotkey_CloseCamera()
 {
 	if (suppress_Hotkey_CloseCamera)
 		return;
 	var loading = videoPlayer.Loading();
-	if (loading.image.isLive && !loading.image.isGroup)
-		videoPlayer.ImgClick_Camera(loading.cam);
+	if ((loading.image.isLive || videoPlayer.Loading().image.isTimeline()) && !loading.image.isGroup)
+	{
+		videoPlayer.ImgClick_Camera(loading.cam); // TIMELINE-RELEASE - This probably doesn't work as intended -- check when timeline playback works better.  When playing a single camera in timeline video, first ESC press should return to group, second press should go live.
+		if (videoPlayer.Loading().image.isTimeline())
+		{
+			clearTimeout(suppress_Hotkey_CloseClip);
+			suppress_Hotkey_CloseClip = setTimeout(function () { suppress_Hotkey_CloseClip = null; }, 0);
+		}
+	}
 }
 function BI_Hotkey_DigitalZoomIn()
 {
@@ -30376,78 +30422,6 @@ function PreviewSpeedToDelayMs(speed)
 	// exponential scaling
 	//var sqrt = Math.sqrt(scaled);
 	//return 1000 - Clamp(sqrt * 984, 0, 1000);
-}
-function Benchmarks()
-{
-	BenchmarkDate2Setup();
-	BenchmarkDate();
-	BenchmarkDate2();
-	BenchmarkDate3();
-	BenchmarkDate();
-	BenchmarkDate2();
-	BenchmarkDate3();
-	BenchmarkDate();
-	BenchmarkDate2();
-	BenchmarkDate3();
-	BenchmarkDate();
-	BenchmarkDate2();
-	BenchmarkDate3();
-	BenchmarkDate();
-	BenchmarkDate2();
-	BenchmarkDate3();
-}
-function BenchmarkDate()
-{
-	var start = performance.now();
-	var date = new Date(1970, 0, 1);
-	for (var i = 0; i < 100000; i++)
-	{
-		date.setDate(date.getDate() + 1);
-	}
-	var end = performance.now();
-	console.log("Date test time: ", end - start, date);
-}
-function BenchmarkDate2()
-{
-	var start = performance.now();
-	var d = dateProvider.get(1970, 0, 1);
-	for (var i = 0; i < 100000; i++)
-	{
-		d = dateProvider.nextDay(d);
-	}
-	var end = performance.now();
-	console.log("dateProvider test time: ", end - start, d);
-}
-function BenchmarkDate2Setup()
-{
-	var start = performance.now();
-	var d1 = new Date(2107, 0, 1);
-	var d2 = new Date(2107, 0, 1);
-	for (var i = 0; i < 50000; i++)
-	{
-		dateProvider.get(d1.getFullYear(), d1.getMonth(), d1.getDate());
-		dateProvider.get(d2.getFullYear(), d2.getMonth(), d2.getDate());
-		d1.setDate(d1.getDate() - 1);
-		d2.setDate(d2.getDate() + 1);
-	}
-	var end = performance.now();
-	console.log("dateProvider Setup time: ", end - start, d1, d2);
-}
-function BenchmarkMap()
-{
-	var start = performance.now();
-	var map = new WrapperMap();
-	var ctr = 0;
-	for (var i = 0; i < 100000; i++)
-	{
-		map.set(i, i % 3);
-	}
-	for (var i = 0; i < 100000; i++)
-	{
-		ctr += map.get(i);
-	}
-	var end = performance.now();
-	console.log("Map test time: ", end - start, ctr);
 }
 
 /**
