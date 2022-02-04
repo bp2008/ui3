@@ -5739,6 +5739,8 @@ function ClipTimeline()
 	var workerLoaded = false;
 	var canvasData = null;
 	var pendingTimelineReduces = 0;
+	/** Number of milliseconds prior to the "live" time that the timeline should not allow to be selected. */
+	this.keepOutTime = 15000; // Blue Iris updates db info every 10s I think, so the absolute minimum age of video should be 10s.
 
 	this.Initialize = function ()
 	{
@@ -5844,6 +5846,7 @@ function ClipTimeline()
 					lastSetTime: GetServerTime(),
 					dragState: { isDragging: false, startX: 0, offsetMs: 0 },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
+					canvasRedrawState: { isActive: false, lastRedraw: 0 },
 					hammerTime: null,
 					acceptZoomThrottled: null,
 					accumulatedZoomDelta: 0,
@@ -6175,6 +6178,8 @@ function ClipTimeline()
 
 					var dpr = BI_GetDevicePixelRatio();
 					var zoomFactor = this.zoomFactor / dpr;
+					var left = this.left;
+					var right = this.right;
 
 					if (canvasData)
 					{
@@ -6197,6 +6202,28 @@ function ClipTimeline()
 						}
 					}
 
+					var now = GetServerTime();
+					if (now > left && now <= right - self.keepOutTime)
+					{
+						var x = (now - left - self.keepOutTime) / zoomFactor;
+						var y = 0;
+						var w = self.keepOutTime / zoomFactor;
+						var h = this.timelineInternalHeight;
+						var grd = ctx.createLinearGradient(x, y, x + w, y);
+						grd.addColorStop(0, "rgba(123,133,180,0.0)");
+						grd.addColorStop(0.2, "rgba(123,133,180,0.3)");
+						grd.addColorStop(0.8, "rgba(70,130,255,0.8)");
+						grd.addColorStop(0.9, "rgba(100,255,255,0.9)");
+						grd.addColorStop(1, "rgba(255,255,255,1)");
+						ctx.fillStyle = grd;
+						ctx.fillRect(x, y, w, h);
+						if (zoomFactor > 1200)
+						{
+							ctx.fillStyle = "rgba(255,255,255,1)";
+							ctx.fillRect(x + w - 2 * dpr, y, 2 * dpr, h);
+						}
+					}
+
 					var futureTimePx = (this.currentTimeIfFuturePanningWasAllowed - this.currentTime) / zoomFactor;
 					if (futureTimePx > 0)
 					{
@@ -6213,12 +6240,28 @@ function ClipTimeline()
 					var perfEnd = performance.now();
 					if (developerMode)
 						console.log("Render took " + (perfEnd - perfStart).toFixed(1) + " ms.");
+
+					this.canvasRedrawState.lastRedraw = perfStart;
+				},
+				canvasRedrawLoop: function ()
+				{
+					if (this.shouldBeRedrawingCanvasRegularly)
+					{
+						if (!this.canvasRedrawState.isActive)
+							this.canvasRedrawState.isActive = true;
+
+						var now = performance.now();
+						if (now > this.canvasRedrawState.lastRedraw + 66.667)
+							this.drawCanvas();
+
+						requestAnimationFrame(this.canvasRedrawLoop);
+					}
+					else if (this.canvasRedrawState.isActive)
+						this.canvasRedrawState.isActive = false;
 				},
 				FrameRendered: function (data)
 				{
 					if (typeof data.utc !== "number")
-						return;
-					if (videoPlayer.CurrentPlayerModuleName() !== "jpeg")
 						return;
 					var serverTime = GetServerTime();
 					if (data.utc > serverTime)
@@ -6362,6 +6405,10 @@ function ClipTimeline()
 				videoShouldBePaused: function ()
 				{
 					return this.dragState.isDragging || this.wheelPanState.isActive;
+				},
+				shouldBeRedrawingCanvasRegularly: function ()
+				{
+					return this.dragState.isDragging || this.wheelPanState.isActive;
 				}
 			},
 			watch:
@@ -6395,6 +6442,11 @@ function ClipTimeline()
 				{
 					if (this.videoShouldBePaused !== videoPlayer.Playback_IsPaused())
 						videoPlayer.Playback_PlayPause();
+				},
+				shouldBeRedrawingCanvasRegularly: function ()
+				{
+					if (this.shouldBeRedrawingCanvasRegularly && !this.canvasRedrawState.isActive)
+						this.canvasRedrawLoop();
 				}
 			}
 		});
@@ -6719,8 +6771,8 @@ function ClipTimeline()
 	{
 		if (typeof timelineMs === "number")
 		{
-			var offset = GetServerTime() - timelineMs; // TODO: Test on a system with significant forward and backward clock drift compared to the BI server.
-			if (offset < 15000) // Blue Iris updates db info every 10s I think, so the absolute minimum age of video should be 10s.
+			var offset = GetServerTime() - timelineMs; // TIMELINE-RELEASE - Test on a system with significant forward and backward clock drift compared to the BI server.
+			if (offset < self.keepOutTime)
 				return undefined;
 			else
 				return timelineMs;
@@ -13925,7 +13977,7 @@ function JpegVideoModule()
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
 		{
-			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg=1&n=1&d=1&pos=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg=1&pos=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 			//console.log("Requesting timeline jpeg at " + GetDateStr(new Date(timeValue), true));
 		}
 		else if (loading.isLive)
@@ -14352,7 +14404,7 @@ function FetchH264VideoModule()
 		{
 			// This is a timeline historical video.
 			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&n=1&d=1";
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&extend=2";
 			loadDynamicGroupLayout = true;
 		}
 		else if (loading.isLive)
