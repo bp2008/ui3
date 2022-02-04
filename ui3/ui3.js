@@ -576,7 +576,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Draw the current "Live" time as a red bar on the timeline, with a dull gradient extending over the previous 15s or whatever the no-go-zone is. Edge of gradient should be around 20% opacity I think.
 // Add timeline to Loading GUI (because of the web worker).
 // Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
 // Make timeline loading states prettier.  Softer edges.  Gradient perhaps.
@@ -13977,7 +13976,7 @@ function JpegVideoModule()
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
 		{
-			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg=1&pos=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg=1&n=1&d=1&pos=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 			//console.log("Requesting timeline jpeg at " + GetDateStr(new Date(timeValue), true));
 		}
 		else if (loading.isLive)
@@ -14404,7 +14403,7 @@ function FetchH264VideoModule()
 		{
 			// This is a timeline historical video.
 			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&extend=2";
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&n=1&d=1&extend=2";
 			loadDynamicGroupLayout = true;
 		}
 		else if (loading.isLive)
