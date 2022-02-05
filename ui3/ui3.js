@@ -582,6 +582,7 @@ var togglableUIFeatures =
 // Consider speeding up the mousewheel zoom.
 // Skip dead space in timeline playback, only while the player is in the playing state, and we aren't close to "live".  Perhaps 30 seconds distance is safe.
 // Get the timeline working nicely when in a different time zone.  The UI should appear to be in the server's time zone.
+// Fill in the "future" area of the timeline with something.
 
 /////////////////////////////////////
 // Timeline Pending Server Support //
@@ -955,8 +956,8 @@ var defaultSettings =
 			, category: "Streaming Profiles" // This category isn't shown in UI Settings, but has special-case logic in ui3-local-overrides.js export.
 		}
 		, {
-			key: "ui3_timelineZoomFactor"
-			, value: 8192
+			key: "ui3_timelineZoomScaler"
+			, value: 13
 		}
 		, {
 			key: "ui3_timeout"
@@ -2444,7 +2445,7 @@ var defaultSettings =
 		, {
 			key: "ui3_wheelAdjustableSpeed"
 			, value: 400
-			, minValue: 0
+			, minValue: 20
 			, maxValue: 2000
 			, step: 1
 			, inputType: "range"
@@ -5730,10 +5731,10 @@ function ClipTimeline()
 	var alertImgLoaded = false;
 	var $tl_root = $();
 	var timelineDataLoader = null;
-	var minZoomFactor = 256;
-	var maxZoomFactor = 1000000000;
-	var minSavedZoomFactor = 256;
-	var maxSavedZoomFactor = 524288;
+	var minZoomScaler = 8;
+	var maxZoomScaler = 30;
+	var minSavedZoomScaler = 8;
+	var maxSavedZoomScaler = 19;
 	var worker;
 	var workerLoaded = false;
 	var canvasData = null;
@@ -5830,9 +5831,9 @@ function ClipTimeline()
 					/** Object indicating loading status of every day. */
 					dayLoadingStatus: new WrapperMap(true),
 					errorHtml: "",
-					/** Number of milliseconds per pixel. */
-					zoomFactor: Clamp(parseInt(settings.ui3_timelineZoomFactor), minSavedZoomFactor, maxSavedZoomFactor),
-					pinchZoomState: { startingZoomFactor: 0 },
+					/** Number that increases linearly to control zoom */
+					zoomScaler: Clamp(parseInt(settings.ui3_timelineZoomScaler), minSavedZoomScaler, maxSavedZoomScaler),
+					pinchZoomState: { startingZoomScaler: 0 },
 					/** Width of the timeline canvas area in pixels. */
 					timelineWidth: 0,
 					/** Height of the timeline canvas area in pixels. */
@@ -5843,6 +5844,8 @@ function ClipTimeline()
 					timelineInternalHeight: 0,
 					/** Millisecond timestamp that is currently selected in the timeline (at the center). */
 					lastSetTime: GetServerTime(),
+					/** Number that can be incremented to force the component to recompute the currentTime property. */
+					recomputeCurrentTime: 0,
 					dragState: { isDragging: false, startX: 0, offsetMs: 0 },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
 					canvasRedrawState: { isActive: false, lastRedraw: 0 },
@@ -6038,16 +6041,12 @@ function ClipTimeline()
 				mouseWheel: function (e)
 				{
 					e.preventDefault();
-					if (e.deltaX !== 0)
+					e = normalizeWheelEvent(e);
+					if (e.pixelX !== 0)
 					{
-						var dx = e.deltaX;
-						if (e.deltaMode === 1)
-							dx *= 33.333;
-						else if (e.deltaMode === 2)
-							dx *= 100;
+						var dx = e.pixelX;
 						if (settings.ui3_wheelZoomReverse === "1")
 							dx *= -1;
-						dx = Clamp(dx, -100, 100);
 
 						if (!this.wheelPanState.isActive)
 						{
@@ -6058,16 +6057,11 @@ function ClipTimeline()
 						clearTimeout(this.wheelPanState.timeout);
 						this.wheelPanState.timeout = setTimeout(this.finishWheelPan, 200);
 					}
-					if (e.deltaY !== 0)
+					if (e.spinY !== 0)
 					{
-						var dy = e.deltaY;
-						if (e.deltaMode === 1)
-							dy *= 33.333;
-						else if (e.deltaMode === 2)
-							dy *= 100;
+						var dy = e.spinY / 2;
 						if (settings.ui3_wheelZoomReverse === "1")
 							dy *= -1;
-						dy = Clamp(dy, -100, 100);
 						this.accumulatedZoomDelta += dy;
 						this.acceptZoom(null);
 						this.finishWheelPan();
@@ -6089,11 +6083,14 @@ function ClipTimeline()
 				},
 				onPinchStart: function (e)
 				{
-					timeline.pinchZoomState.startingZoomFactor = timeline.zoomFactor;
+					timeline.pinchZoomState.startingZoomScaler = timeline.zoomScaler;
 				},
 				onPinchMove: function (e)
 				{
-					timeline.acceptZoom(timeline.pinchZoomState.startingZoomFactor / Math.max(0.001, e.scale * e.scale));
+					var szf = Math.pow(2, timeline.pinchZoomState.startingZoomScaler);
+					var zf = szf / Math.max(0.001, e.scale * e.scale);
+					var zs = Math.log2(zf);
+					timeline.acceptZoom(zs);
 				},
 				pan: function (arg)
 				{
@@ -6108,19 +6105,18 @@ function ClipTimeline()
 				acceptZoom: function (arg)
 				{
 					if (!timeline.acceptZoomThrottled)
-						timeline.acceptZoomThrottled = throttle(function (newZoomFactor)
+						timeline.acceptZoomThrottled = throttle(function (newZoomScaler)
 						{
-							if (newZoomFactor)
-								timeline.setZoom_Internal(newZoomFactor);
+							if (newZoomScaler)
+								timeline.setZoom_Internal(newZoomScaler);
 							if (timeline.accumulatedZoomDelta !== 0)
 							{
-								var speed = 1 + Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 0, 2000);
-								var multiplier = ((timeline.accumulatedZoomDelta / 100) * speed) / 2500;
-								if (multiplier > 0)
-									multiplier *= 1.191043354; // Painstakingly determined to make zooming out very similar in magnitude to zooming in.
-								newZoomFactor = timeline.zoomFactor + (timeline.zoomFactor * multiplier);
+								var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
+								zoomSpeed /= 400;
+								var dz = timeline.accumulatedZoomDelta * zoomSpeed;
+								newZoomScaler = timeline.zoomScaler + dz;
 								timeline.accumulatedZoomDelta = 0;
-								timeline.setZoom_Internal(newZoomFactor);
+								timeline.setZoom_Internal(newZoomScaler);
 							}
 						}, timelineThrottleRate);
 
@@ -6128,8 +6124,8 @@ function ClipTimeline()
 				},
 				setZoom_Internal: function (zoom)
 				{
-					this.zoomFactor = Clamp(zoom, minZoomFactor, maxZoomFactor);
-					settings.ui3_timelineZoomFactor = Clamp(zoom, minSavedZoomFactor, maxSavedZoomFactor);
+					this.zoomScaler = Clamp(zoom, minZoomScaler, maxZoomScaler);
+					settings.ui3_timelineZoomScaler = Clamp(zoom, minSavedZoomScaler, maxSavedZoomScaler);
 				},
 				requestCanvasDraw: function ()
 				{
@@ -6153,8 +6149,6 @@ function ClipTimeline()
 						alertImgNaturalWidth: 0,
 						alertImgNaturalHeight: 0,
 						timelineInternalHeight: this.timelineInternalHeight,
-						currentTimeIfFuturePanningWasAllowed: this.currentTimeIfFuturePanningWasAllowed,
-						currentTime: this.currentTime,
 						developerMode: developerMode
 					};
 					if (alertImgLoaded)
@@ -6218,8 +6212,9 @@ function ClipTimeline()
 						ctx.fillRect(x, y, w, h);
 						if (zoomFactor > 1200)
 						{
-							ctx.fillStyle = "rgba(255,255,255,1)";
-							ctx.fillRect(x + w - 2 * dpr, y, 2 * dpr, h);
+							// We're zoomed out far enough that 15s is getting really small.  Draw a 2px line so the live point remains easily visible.
+							ctx.fillStyle = "rgba(100,255,255,1)";
+							ctx.fillRect(x + w - 1 * dpr, y, 2 * dpr, h);
 						}
 					}
 
@@ -6251,7 +6246,10 @@ function ClipTimeline()
 
 						var now = performance.now();
 						if (now > this.canvasRedrawState.lastRedraw + 66.667)
+						{
+							this.recomputeCurrentTime++;
 							this.drawCanvas();
+						}
 
 						requestAnimationFrame(this.canvasRedrawLoop);
 					}
@@ -6324,6 +6322,11 @@ function ClipTimeline()
 			},
 			computed:
 			{
+				/** Number of milliseconds per pixel. */
+				zoomFactor: function ()
+				{
+					return Math.pow(2, this.zoomScaler);
+				},
 				/** Number of milliseconds across the visible area of the timeline. */
 				visibleMilliseconds: function ()
 				{
@@ -6370,6 +6373,7 @@ function ClipTimeline()
 				currentTime: function ()
 				{
 					var time = this.currentTimeIfFuturePanningWasAllowed;
+					if (this.recomputeCurrentTime) { }
 					if (this.dragState.isDragging || this.wheelPanState.isActive)
 					{
 						var serverTime = GetServerTime();
@@ -17128,29 +17132,18 @@ function ImageRenderer()
 	}
 	$layoutbody.on('wheel', function (e)
 	{
-		if (typeof e.deltaY === "undefined")
-		{
-			e.deltaX = e.originalEvent.deltaX;
-			e.deltaY = -e.originalEvent.deltaY;
-			e.deltaMode = e.originalEvent.deltaMode;
-		}
-		handleMouseWheelEvent(e, e.delta, e.deltaX, e.deltaY, e.deltaMode);
-	});
-	var handleMouseWheelEvent = function (e, delta, deltaX, deltaY, deltaMode)
-	{
 		if (playbackControls.MouseInSettingsPanel(e))
 			return;
 		mouseCoordFixer.fix(e);
 		self.SetMousePos(e.mouseX, e.mouseY);
 		e.preventDefault();
-		if (deltaMode === 1)
-			deltaY *= 33.333;
-		else if (deltaMode === 2)
-			deltaY *= 100;
+		var ne = normalizeWheelEvent(e.originalEvent);
+		var deltaY = ne.spinY;
+		deltaY *= -1; // Invert wheel delta so that wheel up is zoom in by default.
 		if (settings.ui3_wheelZoomReverse === "1")
 			deltaY *= -1;
 		self.DigitalZoomNow(deltaY, false);
-	}
+	});
 	this.setZoomHandler = function ()
 	{
 		if (settings.ui3_wheelZoomMethod === "Adjustable")
@@ -17166,33 +17159,33 @@ function ImageRenderer()
 var zoomHandler_Adjustable = new (function ()
 {
 	var self = this;
-	var zoomIndex = 0; // All values less than 1 are treated as "zoom to fit".
-	var maxZoomFactor = Math.sqrt(Math.sqrt(50));
+	var zoomIndex = -1; // All values less than 0 are treated as "zoom to fit".
+	var maxZoomIndex = Math.log2(50); // About 5.6
+	var defaultZoomStep = maxZoomIndex / 29; // 30 zoom levels with a standard wheel mouse, including "fit", same as legacy zoom handler.
 	this.OffsetZoom = function (deltaY)
 	{
-		if (deltaY > 100)
-			deltaY = 100;
-		else if (deltaY < -100)
-			deltaY = -100;
-		var speed = Clamp(2001 - parseFloat(settings.ui3_wheelAdjustableSpeed), 1, 2000);
-		var delta = deltaY / speed;
-		if (delta > 0 && zoomIndex < 1)
-			zoomIndex = 1; // This ensures we always hit "1x" zoom precisely when zooming in.
+		var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
+		zoomSpeed /= 400;
+		// zoomSpeed is now a multiplier between 0.125 and 5.
+		var delta = deltaY * defaultZoomStep * zoomSpeed;
+
+		if (delta > 0 && zoomIndex < 0)
+			zoomIndex = 0; // This ensures we always hit "1x" zoom precisely when zooming in.
 		else
 		{
-			var wasGreaterThan1 = zoomIndex > 1;
+			var wasGreaterThan0 = zoomIndex > 0;
 			zoomIndex += delta;
-			if (zoomIndex < 1 && wasGreaterThan1)
-				zoomIndex = 1; // This ensures we always hit "1x" zoom precisely when zooming out.
-			if (zoomIndex < 1)
-				zoomIndex = 0;
-			if (zoomIndex > maxZoomFactor)
-				zoomIndex = maxZoomFactor;
+			if (zoomIndex < 0.071 && wasGreaterThan0)
+				zoomIndex = 0; // This ensures we always hit "1x" zoom precisely when zooming out.
+			if (zoomIndex < 0)
+				zoomIndex = -1;
+			if (zoomIndex > maxZoomIndex)
+				zoomIndex = maxZoomIndex;
 		}
 	}
 	this.GetZoomFactor = function ()
 	{
-		var zoomFactor = Math.pow(zoomIndex, 4);
+		var zoomFactor = Math.pow(2, zoomIndex);
 		if (zoomFactor < 1)
 			zoomFactor = 0;
 		else if (zoomFactor > 50)
@@ -17203,7 +17196,7 @@ var zoomHandler_Adjustable = new (function ()
 	}
 	this.ZoomToFit = function ()
 	{
-		zoomIndex = 0;
+		zoomIndex = -1;
 	}
 })();
 var zoomHandler_Legacy = new (function ()
@@ -24623,11 +24616,11 @@ function BI_Hotkey_CloseCamera()
 }
 function BI_Hotkey_DigitalZoomIn()
 {
-	imageRenderer.DigitalZoomNow(100, true);
+	imageRenderer.DigitalZoomNow(1, true);
 }
 function BI_Hotkey_DigitalZoomOut()
 {
-	imageRenderer.DigitalZoomNow(-100, true);
+	imageRenderer.DigitalZoomNow(-1, true);
 }
 function BI_Hotkey_DigitalPanUp()
 {
@@ -30880,3 +30873,47 @@ var dateProvider = new (function ()
 		map.set(d.time, d);
 	}
 })();
+
+function normalizeWheelEvent(e)
+{
+	var sX = 0, sY = 0, pX = 0, pY = 0;
+
+	if ('detail' in e) sY = e.detail;
+	if ('wheelDelta' in e) sY = -e.wheelDelta / 120;
+	if ('wheelDeltaY' in e) sY = -e.wheelDeltaY / 120;
+	if ('wheelDeltaX' in e) sX = -e.wheelDeltaX / 120;
+
+	pX = sX * 10;
+	pY = sY * 10;
+
+	if ('deltaY' in e) pY = e.deltaY;
+	if ('deltaX' in e) pX = e.deltaX;
+
+	if ((pX || pY) && e.deltaMode)
+	{
+		if (e.deltaMode === 1)
+		{
+			pX *= 40;
+			pY *= 40;
+		}
+		else if (e.deltaMode === 2)
+		{
+			pX *= 800;
+			pY *= 800;
+		}
+	}
+	if (pX && !sX) sX = (pX < 1) ? -1 : 1;
+	if (pY && !sY) sY = (pY < 1) ? -1 : 1;
+
+	// Galaxy Tabpro S touchpad pinch zoom in Win10/Chrome causes a spew of spinY @ 1.5 magnitude despite relatively small pixelY values.
+	// The zoom direction is also reversed, but I'm afraid that swapping it here might break it on more devices.
+	if (Math.abs(sX) > 1 && pX < 30) sX = pX * 0.02;
+	if (Math.abs(sY) > 1 && pY < 30) sY = pY * 0.02;
+
+	return {
+		spinX: sX, // Normalized to 1 for a wheel detent
+		spinY: sY, // Normalized to 1 for a wheel detent
+		pixelX: pX, // Arbitrary browser/os dependent number of pixels.
+		pixelY: pY // Arbitrary browser/os dependent number of pixels.
+	};
+}
