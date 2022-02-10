@@ -600,6 +600,8 @@ var togglableUIFeatures =
 
 // Test timeline with various amounts of clock drift.
 
+// Obtaining a new session should reset the timeline data cache and loading states.
+
 //////////////////////////
 // Timeline Pre-Release //
 //////////////////////////
@@ -20943,7 +20945,7 @@ function CameraProperties(camId)
 						$generalSection.append(GetCamPropCheckbox("webcast|" + camId, "Webcasting Enabled", cam.webcast, camPropAdminCommandOnOffBtnClick));
 						$generalSection.append(GetCamPropCheckbox("hide|" + camId, "Hidden", cam.hidden, camPropAdminCommandOnOffBtnClick));
 						$generalSection.append(GetCamPropCheckbox("schedule|" + camId, "Override Global Schedule", response.data.schedule, camPropOnOffBtnClick));
-						$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ preset cycle", response.data.ptzcycle, camPropOnOffBtnClick));
+						$generalSection.append(GetCamPropCheckbox("ptzcycle|" + camId, "PTZ auto-cycle", response.data.ptzcycle, camPropOnOffBtnClick));
 						$generalSection.append(GetCamPropCheckbox("ptzevents|" + camId, "PTZ event schedule", response.data.ptzevents, camPropOnOffBtnClick));
 						$generalSection.append(GetCamPropCheckbox("output|" + camId, "DIO output 1", response.data.output, camPropOnOffBtnClick));
 						$generalSection.append(GetCamPropCheckbox("push|" + camId, "Mobile App Push", response.data.push, camPropOnOffBtnClick));
