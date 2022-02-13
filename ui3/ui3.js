@@ -5493,13 +5493,13 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 				{
 					var clips = result[0];
 					var alerts = result[1];
-					var response = { result: "success", data: { alerts: [], ranges: [] } };
+					var response = { result: "success", data: { alerts: [], ranges: [], flags: [] } };
 
 					// Convert from "cliplist" response format to proposed "timeline" response format.
 					for (var i = 0; i < clips.length; i++)
 					{
 						var src = clips[i];
-						var clip = { cam: src.camera, time: src.date * 1000, len: src.msec };
+						var clip = { cam: cameraListLoader.GetCameraWithId(src.camera).number, time: src.date * 1000, len: src.msec };
 						response.data.ranges.push(clip);
 					}
 
@@ -5507,7 +5507,8 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 					for (var i = 0; i < alerts.length; i++)
 					{
 						var src = alerts[i];
-						var alert = { cam: src.camera, time: src.date * 1000 };
+						var roughLengthMs = GetClipLengthMs(GetClipLengthFromFileSize(src.filesize));
+						var alert = { cam: cameraListLoader.GetCameraWithId(src.camera).number, time: src.date * 1000, len: roughLengthMs };
 						response.data.alerts.push(alert);
 					}
 
@@ -5520,10 +5521,38 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	{
 		if (useNativeTimelineCommand)
 		{
-			var args = { cmd: "timeline", start: startdate, end: enddate };
+			var args = { cmd: "timeline", startdate: Math.floor(startdate / 1000), enddate: Math.ceil(enddate / 1000), raw: true };
 			if (developerMode)
 				console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span: ' + JSON.stringify(args));
-			return ExecJSONPromise(args);
+			return ExecJSONPromise(args).then(function (response)
+			{
+				if (!response.data)
+					response.data = {};
+				response.data.alerts = [];
+				response.data.ranges = [];
+				response.data.flags = [];
+				if (response.data.records)
+				{
+					var records = response.data.records;
+					delete response.data.records;
+					for (var i = 0; i < records.length; i++)
+					{
+						var r = records[i];
+						if ((r.flags & NO_SHOW_ON_TIMELINE) === 0)
+						{
+							var utc = (args.startdate * 1000) + r.utc;
+							if ((r.flags & BIDBFLAG_FLAGGED) > 0)
+								response.data.flags.push(utc);
+
+							if ((r.flags & BIDBFLAG_ALERT_TRIGGERBITS) > 0)
+								response.data.alerts.push({ time: utc, len: r.msec, cam: r.cam });
+							else
+								response.data.ranges.push({ time: utc, len: r.msec, cam: r.cam });
+						}
+					}
+				}
+				return response;
+			});
 		}
 		else
 		{
@@ -5687,7 +5716,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		var start = dateProvider.get(next.start);
 
 		// Expand the date range to include adjacent days if needed.
-		var maxDays = Clamp(Math.round(SizeExpansionScaler_A(visibleDayCount)), 1, 365);
+		var maxDays = Clamp(Math.round(SizeExpansionScaler_A(visibleDayCount)), 1, 24);
 
 		// Check earlier days.
 		d = dateProvider.prevDay(start);
@@ -5938,7 +5967,7 @@ function ClipTimeline()
 					if (typeof data === "undefined")
 						return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
 
-					worker.postMessage({ type: "timelineData", data: data, requestInfo: requestInfo, cameraColorMap: cameraListLoader.cameraColorMap });
+					worker.postMessage({ type: "timelineData", data: data, requestInfo: requestInfo, cameraColorMap: cameraListLoader.cameraColorsByNumber });
 				},
 				/**
 				 * Called when an error occurs when loading data for a set of days.
@@ -6754,21 +6783,21 @@ function ClipTimeline()
 			{
 				var cams = cameraListLoader.GetGroupCams(camObj.optionValue);
 				for (var i = 0; i < cams.length; i++)
-					allowedCameras[cams[i]] = true;
+					allowedCameras[cameraListLoader.GetCameraWithId(cams[i]).number] = true;
 			}
 			else
-				allowedCameras[camObj.optionValue] = true;
+				allowedCameras[camObj.number] = true;
 		}
 		else
 		{
 			var allCams = cameraListLoader.GetLastResponse().data;
 			for (var i = 0; i < allCams.length; i++)
 				if (!cameraListLoader.CameraIsGroupOrCycle(allCams[i]))
-					allowedCameras[allCams[i].optionValue] = true;
+					allowedCameras[allCams[i].number] = true;
 		}
 		var allowedColors = new FasterObjectMap();
-		for (var camId in allowedCameras)
-			allowedColors[cameraListLoader.GetCameraColor(camId)] = true;
+		for (var camNum in allowedCameras)
+			allowedColors[cameraListLoader.GetCameraColorFromNumber(parseInt(camNum))] = true;
 
 		return { allowedCameras: allowedCameras, allowedColors: allowedColors };
 	}
@@ -8085,7 +8114,7 @@ function ExportControls()
 
 		var startTime = 0;
 		var endTime = 1;
-		if ((clipData.flags & alert_flag_offsetMs) !== 0)
+		if ((clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) !== 0)
 		{
 			startTime = clipData.offsetMs / (fileDuration - 1);
 			endTime = (clipData.offsetMs + clipData.roughLengthMs) / (fileDuration - 1);
@@ -8536,7 +8565,7 @@ function ClipData(clip)
 	clipData.alertPath = clip.path; // Alert path if this is an alert, otherwise just another copy of the clip path.
 	clipData.offsetMs = clip.offset ? clip.offset : 0;
 	clipData.flags = clip.flags;
-	clipData.audio = (clip.flags & clip_flag_audio) > 0;
+	clipData.audio = (clip.flags & BIDBFLAG_AUDIO) > 0;
 	clipData.date = new Date(clip.date * 1000);
 	clipData.displayDate = GetServerDate(clipData.date);
 	clipData.colorHex = BlueIrisColorToCssColor(clip.color);
@@ -9582,13 +9611,13 @@ function ClipLoader(clipsBodySelector)
 	var GetClipIconClasses = function (clipData)
 	{
 		var classes = [];
-		if ((clipData.flags & clip_flag_flag) > 0)
+		if ((clipData.flags & BIDBFLAG_FLAGGED) > 0)
 			classes.push(GetClipIconClass("flag"));
-		if ((clipData.flags & clip_flag_protect) > 0)
+		if ((clipData.flags & BIDBFLAG_PROTECTED) > 0)
 			classes.push(GetClipIconClass("protect"));
 		if (clipData.isNew)
 			classes.push(GetClipIconClass("is_new"));
-		if ((clipData.flags & alert_flag_sentry_trigger) > 0)
+		if ((clipData.flags & BIDBFLAG_AI_CONFIRMED_X) > 0)
 			classes.push(GetClipIconClass("trigger_sentry"));
 		return classes.join(" ");
 	}
@@ -9601,21 +9630,21 @@ function ClipLoader(clipsBodySelector)
 		var icons = [];
 		if (settings.ui3_clipicon_trigger_sentry == "1")
 			icons.push(self.GetClipIcon("trigger_sentry"));
-		if ((clipData.flags & alert_flag_sentry_occupied) > 0 && settings.ui3_clipicon_trigger_sentry_occupied == "1")
+		if ((clipData.flags & BIDBFLAG_AI_OCCUPIED_X) > 0 && settings.ui3_clipicon_trigger_sentry_occupied == "1")
 			icons.push(self.GetClipIcon("trigger_sentry_occupied"));
-		if ((clipData.flags & alert_flag_trigger_motion) > 0 && settings.ui3_clipicon_trigger_motion == "1")
+		if ((clipData.flags & BIDBFLAG_ALERT_MOTION) > 0 && settings.ui3_clipicon_trigger_motion == "1")
 			icons.push(self.GetClipIcon("trigger_motion"));
-		if ((clipData.flags & alert_flag_trigger_audio) > 0 && settings.ui3_clipicon_trigger_audio == "1")
+		if ((clipData.flags & BIDBFLAG_ALERT_AUDIO) > 0 && settings.ui3_clipicon_trigger_audio == "1")
 			icons.push(self.GetClipIcon("trigger_audio"));
-		if ((clipData.flags & alert_flag_trigger_external) > 0 && settings.ui3_clipicon_trigger_external == "1")
+		if ((clipData.flags & BIDBFLAG_ALERT_EXTERNAL) > 0 && settings.ui3_clipicon_trigger_external == "1")
 			icons.push(self.GetClipIcon("trigger_external"));
-		if ((clipData.flags & alert_flag_trigger_group) > 0 && settings.ui3_clipicon_trigger_group == "1")
+		if ((clipData.flags & BIDBFLAG_ALERT_GROUP) > 0 && settings.ui3_clipicon_trigger_group == "1")
 			icons.push(self.GetClipIcon("trigger_group"));
-		if ((clipData.flags & clip_flag_audio) > 0 && settings.ui3_clipicon_clip_audio == "1")
+		if ((clipData.flags & BIDBFLAG_AUDIO) > 0 && settings.ui3_clipicon_clip_audio == "1")
 			icons.push(self.GetClipIcon("clip_audio"));
-		if ((clipData.flags & clip_flag_backingup) > 0 && settings.ui3_clipicon_clip_backingup == "1")
+		if ((clipData.flags & BIDBFLAG_ARCHIVE) > 0 && settings.ui3_clipicon_clip_backingup == "1")
 			icons.push(self.GetClipIcon("clip_backingup"));
-		if ((clipData.flags & clip_flag_backedup) > 0 && settings.ui3_clipicon_clip_backup == "1")
+		if ((clipData.flags & BIDBFLAG_ARCHIVED) > 0 && settings.ui3_clipicon_clip_backup == "1")
 			icons.push(self.GetClipIcon("clip_backedup"));
 		if (settings.ui3_clipicon_is_new === "1")
 			icons.push(self.GetClipIcon("is_new"));
@@ -9728,7 +9757,7 @@ function ClipLoader(clipsBodySelector)
 		else
 		{
 			// This is an alert we're trying to export.  We can probably set a range.
-			if ((clipData.flags & alert_flag_offsetMs) !== 0)
+			if ((clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) !== 0)
 			{
 				args.startms = clipData.offsetMs;
 				args.msec = clipData.roughLengthMs;
@@ -9787,7 +9816,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ToggleClipProtect = function (clipData, onSuccess, onFailure)
 	{
-		ToggleFlag(clipData, clip_flag_protect, function (clipData, flagIsSet)
+		ToggleFlag(clipData, BIDBFLAG_PROTECTED, function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
 				self.HideClipProtect(clipData);
@@ -9799,7 +9828,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ToggleClipFlag = function (clipData, onSuccess, onFailure)
 	{
-		ToggleFlag(clipData, clip_flag_flag, function (clipData, flagIsSet)
+		ToggleFlag(clipData, BIDBFLAG_FLAGGED, function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
 				self.HideClipFlag(clipData);
@@ -9811,7 +9840,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ToggleAlertAiConfirmed = function (clipData, onSuccess, onFailure)
 	{
-		ToggleFlag(clipData, alert_flag_sentry_trigger, function (clipData, flagIsSet)
+		ToggleFlag(clipData, BIDBFLAG_AI_CONFIRMED_X, function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
 				self.HideAiConfirmed(clipData);
@@ -9880,7 +9909,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ClipDataIndicatesFlagged = function (clipData)
 	{
-		return (clipData.flags & clip_flag_flag) > 0;
+		return (clipData.flags & BIDBFLAG_FLAGGED) > 0;
 	}
 	this.HideAiConfirmed = function (clipData)
 	{
@@ -9907,7 +9936,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.AlertDataIndicatesAIConfirmed = function (clipData)
 	{
-		return (clipData.flags & alert_flag_sentry_trigger) > 0;
+		return (clipData.flags & BIDBFLAG_AI_CONFIRMED_X) > 0;
 	}
 	this.Multi_Flag = function (clipIDs, flagEnable, idx, myToast)
 	{
@@ -10104,7 +10133,7 @@ function ClipLoader(clipsBodySelector)
 			}
 			else if (o.operation == "protect")
 			{
-				var isProtected = (clipData.flags & clip_flag_protect) > 0;
+				var isProtected = (clipData.flags & BIDBFLAG_PROTECTED) > 0;
 				if ((isProtected && !o.args.protectEnable) || (!isProtected && o.args.protectEnable))
 				{
 					self.ToggleClipProtect(clipData, function ()
@@ -11075,11 +11104,11 @@ function StatusLoader()
 				UpdateScheduleStatus();
 				dropdownBoxes.listDefs["dbView"].rebuildItems();
 				serverTimeZoneOffsetMs = parseInt(parseFloat(response.data.tzone) * -60000);
-				if (response.time)
+				if (response.data.time)
 				{
 					var requestDuration = requestEnd - requestStart;
 					var timeOfRequest = Date.now() - (requestDuration / 2);
-					currentServerTimeOffset = Math.round(parseInt(response.time) - timeOfRequest);
+					currentServerTimeOffset = Math.round(parseInt(response.data.time) - timeOfRequest);
 				}
 			}
 			loadingHelper.SetLoadedStatus("status");
@@ -12036,7 +12065,8 @@ function CameraListLoader()
 	this.clearNewAlertsCounterOnNextLoad = false;
 	var dynamicGroupLayout = {};
 	var badRectsToast = new PersistentToast("badRectsToast", "ERROR");
-	this.cameraColorMap = new Object();
+	this.cameraColorsByNumber = new Object();
+	this.camerasByNumber = new Object();
 
 	var CallScheduler = function (successCallbackFunc)
 	{
@@ -12096,6 +12126,8 @@ function CameraListLoader()
 			var camIdsInGroups = {};
 			var allCameras = {};
 			self.singleCameraGroupMap = {};
+			self.cameraColorsByNumber = {};
+			self.camerasByNumber = {};
 			// See what we've got
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
@@ -12103,7 +12135,6 @@ function CameraListLoader()
 				if (typeof o.webcast === "undefined")
 					o.webcast = true;
 				allCameras[o.optionValue] = o;
-				self.cameraColorMap[o.optionValue] = o.color;
 			}
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
@@ -12138,7 +12169,15 @@ function CameraListLoader()
 					}
 				}
 				else
+				{
+					if (typeof obj.number === "number")
+					{
+						self.camerasByNumber[obj.number] = obj;
+						if (typeof obj.color !== "undefined")
+							self.cameraColorsByNumber[obj.number] = obj.color;
+					}
 					numCameras++;
+				}
 			}
 			// Is this a single-camera system without a visible camera group?
 			if (numGroups === 0 && numCameras > 0)
@@ -12437,12 +12476,16 @@ function CameraListLoader()
 		}
 		return null;
 	}
-	this.GetCameraColor = function (cameraId)
+	this.GetCameraColorFromNumber = function (cameraId)
 	{
-		var color = self.cameraColorMap[cameraId];
+		var color = self.cameraColorsByNumber[cameraId];
 		if (typeof color !== "undefined")
 			return color;
 		return 8151097; // Default camera color
+	}
+	this.GetCameraWithNumber = function (number)
+	{
+		return self.camerasByNumber[number];
 	}
 	this.MakeFakeCamBasedOnClip = function (clipData)
 	{
@@ -13151,7 +13194,7 @@ function VideoPlayerController()
 	this.LoadClip = function (clipData)
 	{
 		var fileTypeInfo = clipLoader.GetClipFileTypeInfo(clipData);
-		if ((clipData.flags & clip_flag_is_recording) > 0 && !fileTypeInfo.isBVR)
+		if ((clipData.flags & BIDBFLAG_RECORDING) > 0 && !fileTypeInfo.isBVR)
 		{
 			toaster.Info("Unable to open this " + (clipData.isClip ? "clip" : "alert") + " because the clip is still recording and the file type is not bvr.");
 			return;
@@ -13840,7 +13883,7 @@ function JpegVideoModule()
 			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
 			if (clipData && !clipData.isSnapshot && !clipData.isClip)
 			{
-				if (honorAlertOffset && (clipData.flags & alert_flag_offsetMs) == 0)
+				if (honorAlertOffset && (clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) == 0)
 					toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
 				// Load clip stats for this alert.
 				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
@@ -14447,7 +14490,7 @@ function FetchH264VideoModule()
 				if (honorAlertOffset && !clipData.isSnapshot)
 				{
 					var offsetMs = clipData.offsetMs;
-					if (!clipData.isClip && (clipData.flags & alert_flag_offsetMs) == 0)
+					if (!clipData.isClip && (clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) == 0)
 					{
 						toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
 						path = clipData.alertPath;
@@ -20157,11 +20200,11 @@ function ClipListContextMenu()
 			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
 			if (clipData)
 			{
-				if ((clipData.flags & clip_flag_flag) == 0)
+				if ((clipData.flags & BIDBFLAG_FLAGGED) == 0)
 					flagEnable = true;
-				if ((clipData.flags & clip_flag_protect) == 0)
+				if ((clipData.flags & BIDBFLAG_PROTECTED) == 0)
 					protectEnable = true;
-				if ((clipData.flags & alert_flag_sentry_trigger) == 0)
+				if ((clipData.flags & BIDBFLAG_AI_CONFIRMED_X) == 0)
 					aiConfirm = true;
 			}
 		}
@@ -21412,31 +21455,31 @@ function ClipProperties()
 			else
 				$camprop.append(GetInfo("Zones", new AlertZonesMask(clipData.rawData.zones).toString()));
 
-			if ((clipData.flags & alert_flag_sentry_trigger) > 0)
+			if ((clipData.flags & BIDBFLAG_AI_CONFIRMED_X) > 0)
 				$camprop.append(GetIcon("trigger_sentry", "AI-verified alert"));
-			if ((clipData.flags & alert_flag_sentry_occupied) > 0)
+			if ((clipData.flags & BIDBFLAG_AI_OCCUPIED_X) > 0)
 				$camprop.append(GetIcon("trigger_sentry_occupied", "AI-verified continuation of a previous alert"));
-			if ((clipData.flags & alert_flag_trigger_motion) > 0)
+			if ((clipData.flags & BIDBFLAG_ALERT_MOTION) > 0)
 				$camprop.append(GetIcon("trigger_motion", "Triggered by motion detection"));
-			if ((clipData.flags & alert_flag_trigger_audio) > 0)
+			if ((clipData.flags & BIDBFLAG_ALERT_AUDIO) > 0)
 				$camprop.append(GetIcon("trigger_audio", "Triggered by audio"));
-			if ((clipData.flags & alert_flag_trigger_external) > 0)
+			if ((clipData.flags & BIDBFLAG_ALERT_EXTERNAL) > 0)
 				$camprop.append(GetIcon("trigger_external", "Triggered by external source such as DIO or manual trigger"));
-			if ((clipData.flags & alert_flag_trigger_group) > 0)
+			if ((clipData.flags & BIDBFLAG_ALERT_GROUP) > 0)
 				$camprop.append(GetIcon("trigger_group", "The group was triggered"));
-			if ((clipData.flags & clip_flag_audio) > 0)
+			if ((clipData.flags & BIDBFLAG_AUDIO) > 0)
 				$camprop.append(GetIcon("clip_audio", "Clip has audio"));
-			if ((clipData.flags & clip_flag_backingup) > 0)
+			if ((clipData.flags & BIDBFLAG_ARCHIVE) > 0)
 				$camprop.append(GetIcon("clip_backingup", "Clip is currently being backed up"));
-			if ((clipData.flags & clip_flag_backedup) > 0)
+			if ((clipData.flags & BIDBFLAG_ARCHIVED) > 0)
 				$camprop.append(GetIcon("clip_backedup", "Clip has been backed up"));
-			if ((clipData.flags & clip_flag_protect) > 0)
+			if ((clipData.flags & BIDBFLAG_PROTECTED) > 0)
 				$camprop.append(GetIcon("protect", "Item is protected"));
-			if ((clipData.flags & clip_flag_flag) > 0)
+			if ((clipData.flags & BIDBFLAG_FLAGGED) > 0)
 				$camprop.append(GetIcon("flag", "Flagged"));
-			if ((clipData.flags & clip_flag_is_recording) > 0)
+			if ((clipData.flags & BIDBFLAG_RECORDING) > 0)
 				$camprop.append(GetIcon("is_recording", "Clip is still recording"));
-			if ((clipData.flags & alert_flag_nosignal) > 0)
+			if ((clipData.flags & BIDBFLAG_ALERT_NOSIGNAL) > 0)
 				$camprop.append(GetIcon("nosignal", "Camera had no signal"));
 			if (clipData.isNew)
 				$camprop.append(GetIcon("is_new", "Alert is newer than you have seen before"));
@@ -29062,38 +29105,58 @@ function CollapsibleSection(id, htmlTitle, dialogToNotify, permanentOpen, onTogg
 // Binary Constants ///////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var b0000_0001 = 1;
-var b0000_0010 = 2;
-var b0000_0100 = 4;
-var b0000_1000 = 8;
-var b0001_0000 = 16;
-var b0010_0000 = 32;
-var b0100_0000 = 64;
-var b1000_0000 = 128;
-var b0001_0000_0000 = 256;
-var b0000_0000_0100_0000_0000_0000 = 16384;
-var b0000_0000_1000_0000_0000_0000 = 32768;
-var b0000_0001_0000_0000_0000_0000 = 65536;
-var b0000_0010_0000_0000_0000_0000 = 131072;
-var b0000_0100_0000_0000_0000_0000 = 262144;
-var b0000_1000_0000_0000_0000_0000 = 524288;
-var b0001_0000_0000_0000_0000_0000 = 1048576;
-var b0010_0000_0000_0000_0000_0000 = 2097152;
-var b0100_0000_0000_0000_0000_0000 = 4194304;
-var b1000_0000_0000_0000_0000_0000 = 8388608;
-var clip_flag_audio = b0000_0001;
-var clip_flag_flag = b0000_0010;
-var clip_flag_protect = b0000_0100;
-var clip_flag_backingup = b0100_0000;
-var clip_flag_backedup = b1000_0000;
-var clip_flag_is_recording = b0001_0000_0000;
-var alert_flag_sentry_trigger = b0000_0000_0100_0000_0000_0000;
-var alert_flag_sentry_occupied = b0000_0000_1000_0000_0000_0000;
-var alert_flag_offsetMs = b0000_0001_0000_0000_0000_0000;
-var alert_flag_trigger_motion = b0000_0010_0000_0000_0000_0000;
-var alert_flag_nosignal = b0000_0100_0000_0000_0000_0000;
-var alert_flag_trigger_audio = b0000_1000_0000_0000_0000_0000;
-var alert_flag_trigger_external = b0001_0000_0000_0000_0000_0000;
-var alert_flag_trigger_group = b0100_0000_0000_0000_0000_0000;
+var b0000_0010 = 1 << 1; // 2
+var b0000_0100 = 1 << 2; // 4
+var b0000_1000 = 1 << 3; // 8
+var b0001_0000 = 1 << 4; // 16
+var b0010_0000 = 1 << 5; // 32
+var b0100_0000 = 1 << 6; // 64
+var b1000_0000 = 1 << 7; // 128
+
+var BIDBFLAG_AUDIO = 1;
+var BIDBFLAG_FLAGGED = 1 << 1;
+var BIDBFLAG_PROTECTED = 1 << 2;
+var BIDBFLAG_CORRUPT = 1 << 3;
+var BIDBFLAG_DELETE = 1 << 4;
+var BIDBFLAG_DELETED = 1 << 5;
+var BIDBFLAG_ARCHIVE = 1 << 6;
+var BIDBFLAG_ARCHIVED = 1 << 7;
+var BIDBFLAG_RECORDING = 1 << 8;
+var BIDBFLAG_EXPORT = 1 << 9;
+var BIDBFLAG_EXPORTED = 1 << 10;
+var BIDBFLAG_SPECIALOBJ = 1 << 11;
+
+var BIDBFLAG_AI_CONFIRMED_X = 1 << 14;
+var BIDBFLAG_AI_OCCUPIED_X = 1 << 15;
+
+var BIDBFLAG_ALERT_OFFSETTIME = 1 << 16;
+var BIDBFLAG_ALERT_MOTION = 1 << 17;
+var BIDBFLAG_ALERT_ONVIF = 1 << 18;
+var BIDBFLAG_ALERT_AUDIO = 1 << 19;
+var BIDBFLAG_ALERT_EXTERNAL = 1 << 20;
+var BIDBFLAG_ALERT_DIO = 1 << 21;
+var BIDBFLAG_ALERT_GROUP = 1 << 22;
+var BIDBFLAG_ALERT_CANCELLED = 1 << 23;
+var BIDBFLAG_ALERT_NOSIGNAL = 1 << 24;
+var BIDBFLAG_ALERT_HIDDEN = 1 << 24;
+
+var BIDBFLAG_AI_PERSON = 1 << 26;
+var BIDBFLAG_AI_VEHICLE = 1 << 27;
+var BIDBFLAG_AI_CONFIRMED = 1 << 28;
+var BIDBFLAG_AI_OCCUPIED = 1 << 29;
+
+
+var BIDBFLAG_ALERT_TRIGGERBITS = (BIDBFLAG_ALERT_MOTION
+	| BIDBFLAG_ALERT_NOSIGNAL
+	| BIDBFLAG_ALERT_AUDIO
+	| BIDBFLAG_ALERT_EXTERNAL
+	| BIDBFLAG_ALERT_ONVIF
+	| BIDBFLAG_ALERT_DIO
+	| BIDBFLAG_ALERT_GROUP
+	| BIDBFLAG_ALERT_CANCELLED);
+
+var NO_SHOW_ON_TIMELINE = BIDBFLAG_DELETED | BIDBFLAG_ALERT_HIDDEN;
+
 var TRIGGER_SOURCE_MOTION = (1 << 1);
 var TRIGGER_SOURCE_ONVIF = (1 << 2);
 var TRIGGER_SOURCE_AUDIO = (1 << 3);

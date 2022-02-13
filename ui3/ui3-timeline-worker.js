@@ -40,9 +40,8 @@ function WrapperMap()
  * Alerts contains alerts.
  * colorMap contains video ranges.
  * colors is an array of all colors used as keys in colorMap, sorted in the order they should be drawn.
- * cameraNumbers is an object that maps camera short name to a unique number.
  */
-var srcdata = { alerts: [], colorMap: new WrapperMap(), colors: [], cameraNumbers: {} };
+var srcdata = { alerts: [], colorMap: new WrapperMap(), colors: [], flags: [] };
 var brokeAlertSortOrder = false;
 
 onmessage = function (e)
@@ -151,11 +150,11 @@ function AddRangeInternal(range, requestInfo, cameraColorMap)
 	// This timeline is designed to handle 100,000+ records efficiently.
 	// Ranges are organized under several levels of structure to provide a balance between loading speed and reading speed.
 	// WrapperMap srcdata.colorMap						(keyed on color int)
-	//	-> FasterObjectMap map_of_cameras_to_days		(keyed on camera short name)
+	//	-> FasterObjectMap map_of_cameras_to_days		(keyed on camera number)
 	//		-> Array rangeChunkCollection				(contains day-sized chunks of time ranges, sorted by timestamp of the day)
 	//			-> RangeChunk chunk						(RangeChunk has fields `ts` (timestamp) and `ranges` (array of ranges))
 	//				-> range							(range has fields `time` and `len`)
-	var color = GetCameraColor(cameraColorMap, range.cam);
+	var color = GetCameraColorFromNumber(cameraColorMap, range.cam);
 	var map_of_cameras_to_days = srcdata.colorMap.get(color);
 	if (!map_of_cameras_to_days)
 	{
@@ -193,7 +192,7 @@ function AddRangeInternal(range, requestInfo, cameraColorMap)
 			if (idx < 0)
 			{
 				idx = -idx - 1; // Match was approximate. This calculation gets us the index we should insert at.
-				console.log("Slow operation warning: Timeline range was added out of order at index " + idx + " out of " + ranges.length, "last: " + last, "range: " + JSON.stringify(range), "Request Info: " + JSON.stringify(requestInfo), chunk);
+				console.log("Slow operation warning: Timeline range was added out of order at index " + idx + " out of " + ranges.length, "last: " + JSON.stringify(last), "range: " + JSON.stringify(range), "Request Info: " + JSON.stringify(requestInfo), chunk);
 				ranges.splice(idx, 0, range);
 			}
 			else
@@ -208,10 +207,7 @@ function AddRangeInternal(range, requestInfo, cameraColorMap)
 }
 function AddAlert(alert, requestInfo)
 {
-	var camNum = srcdata.cameraNumbers[alert.cam];
-	if (!camNum)
-		camNum = srcdata.cameraNumbers[alert.cam] = Object.keys(srcdata.cameraNumbers).length + 1;
-	alert = { num: camNum, time: alert.time };
+	alert = { cam: alert.cam, time: alert.time, len: alert.len };
 	if (requestInfo.isRefresh || !brokeAlertSortOrder)
 	{
 		// During a refresh, we'll be adding relatively few items and they should be in chronological order so we can binary search.
@@ -246,9 +242,6 @@ function ReduceTimeline(args)
 	var zoomFactor = args.zoomFactor / dpr;
 	var visibleMilliseconds = args.visibleMilliseconds;
 	var filters = args.filters;
-	filters.allowedCameraNumbers = new FasterObjectMap();
-	for (var camId in filters.allowedCameras)
-		filters.allowedCameraNumbers[srcdata.cameraNumbers[camId]] = true;
 
 	var alertImgNaturalWidth = args.alertImgNaturalWidth;
 	var alertImgNaturalHeight = args.alertImgNaturalHeight;
@@ -278,7 +271,7 @@ function ReduceTimeline(args)
 			var alert = alerts[i];
 			if (alert.time >= right)
 				break;
-			if (filters.allowedCameraNumbers[alert.num])
+			if (filters.allowedCameras[alert.cam])
 			{
 				x = ((alert.time - left) / zoomFactor) - alertImgXOffset;
 				// For speed and legibility, do not draw overlapping icons. 
@@ -315,6 +308,7 @@ function ReduceTimeline(args)
 		var buckets = new Array((visibleMilliseconds / bucketSize) | 0);
 		for (var cam in map_of_cameras_to_days)
 		{
+			cam = parseInt(cam);
 			if (!filters.allowedCameras[cam])
 				continue;
 			var rangeChunkCollection = map_of_cameras_to_days[cam];
@@ -434,9 +428,9 @@ function findFirstAlertSinceTime(collection, time)
 		idx = -idx - 1;
 	return idx;
 }
-function GetCameraColor(cameraColorMap, cameraId)
+function GetCameraColorFromNumber(cameraColorMap, cameraNumber)
 {
-	var color = cameraColorMap[cameraId];
+	var color = cameraColorMap[cameraNumber];
 	if (typeof color !== "undefined")
 		return color;
 	return 8151097; // Default camera color
