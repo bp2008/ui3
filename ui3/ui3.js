@@ -55,7 +55,6 @@ var streaming_supported = false; // fetch and readablestream
 var h264_js_player_supported = false; // JS H.264 player
 var audio_playback_supported = false;
 var web_workers_supported = false;
-var timeline_supported = false;
 var export_blob_supported = false;
 var exporting_clips_to_avi_supported = false;
 var html5HistorySupported = false;
@@ -94,7 +93,6 @@ function DoUIFeatureDetection()
 			browser_is_ios = BrowserIsIOS();
 			browser_is_android = BrowserIsAndroid();
 			web_workers_supported = typeof Worker !== "undefined";
-			timeline_supported = web_workers_supported;
 			export_blob_supported = detectIfCanExportBlob();
 			fetch_supported = typeof fetch == "function";
 			if (fetch_supported && BrowserIsEdgeLegacy())
@@ -213,13 +211,6 @@ function DoUIFeatureDetection()
 				if (fetch_streams_cant_close_bug)
 				{
 					ul_root.append('<li>This browser has a compatibility issue which makes H.264 streams not close properly, leading to stability problems.  H.264 playback is disabled by default, but may be re-enabled in UI Settings -&gt; Video Player.</li>');
-				}
-				if (!timeline_supported)
-				{
-					var ul = $('<ul></ul>');
-					if (!web_workers_supported)
-						ul.append('<li>Web Workers</li>');
-					ul_root.append($('<li>The Timeline requires these unsupported features:</li>').append(ul));
 				}
 				if (ul_root.children().length > 0)
 				{
@@ -576,7 +567,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Add timeline to Loading GUI (because of the web worker).
 // Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
 // Make timeline loading states prettier.  Softer edges.  Gradient perhaps.
 // Consider speeding up the mousewheel zoom.
@@ -609,7 +599,6 @@ var togglableUIFeatures =
 // Check all TIMELINE-RELEASE code locations.
 // Verify correct behavior when playing timeline video and changing UI tabs.
 // Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
-// Verify behavior as intended in a browser without web worker support (IE 9).
 // Timeline: Move timeline supporting libraries to libs-ui3.js and remove the async script loaders from the ClipTimeline Initialize method.
 // Timeline: Remove "enabled" flag from ClipTimeline.
 // Timeline: Remove fallback "timeline" JSON data requests using cliplist and alertlist.
@@ -5410,257 +5399,68 @@ var ptzPresetThumbLoader = new (function ()
 ///////////////////////////////////////////////////////////////
 var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAYBAMAAAABjmA/AAAAHlBMVEUAAQAeBQA4DgBbHABpIwB3JwCaNQC9QwDVTQD8XQCSYQG/AAAAf0lEQVQI12NgAAFGIwYIYE2CMiI"
 	+ "CoAIdClCBaVCBzmaowMxCMM3SOROi1mPmDAWowDSowMxpTgIMDMydM2fOnFEWzGAxEwymMWRAGMUMym4VQMnpBkDVQh4gARCIhAgwMGTOhNjF1DkDIsAyswViOdsMBwhDAyrA4A4VYHABkwCNgSZ0AKh3jQAAAABJRU5ErkJggg==";
-var reduceTimeline = true;
-var timelineThrottleRate = 1000 / 240; // 240 FPS throttle rate.  As a future improvement, this could be made to auto-adjust based on measured timeline rendering speed. E.g. throttle it for 50% CPU usage... a.k.a. one draw per every (avg render ms * 2) ms.
 function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackError)
 {
-	var self = this;
-	function GetTimelineData_Ponyfill()
-	{
-		// This ponyfill creates a "timeline" command response without requiring serverside support, subject to some limitations:
-		// 1. Clips created by combining smaller clips will cause the timeline to show video where there is none.
-		// 2. The "All cameras" group must be accessible to the session.
-		function getClips(startdate, enddate, collected)
-		{
-			if (!collected)
-				collected = [];
-			var args = { cmd: "cliplist", camera: "index", view: "all", startdate: startdate, enddate: enddate };
-			return ExecJSONPromise(args)
-				.then(function (response)
-				{
-					if (response.result !== "success")
-						return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
-					if (typeof response.data !== "undefined") // undefined happens if you request a future date, or perhaps any date with no data.
-					{
-						for (var i = 0; i < response.data.length; i++)
-						{
-							if (collected.length && collected[collected.length - 1].path === response.data[i].path)
-								continue;
-							collected.push(response.data[i]);
-						}
-						if (response.data.length >= 1000)
-						{
-							for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
-								if (typeof response.data[i].newalerts === "undefined")
-								{
-									enddate = response.data[i].date;
-									return getClips(startdate, enddate, collected);
-								}
-						}
-					}
-					collected.sort(function (a, b) { return a.date - b.date; });
-					return collected;
-				});
-		}
-		function getAlerts(startdate, enddate, collected)
-		{
-			if (!collected)
-				collected = [];
-			var args = { cmd: "alertlist", camera: "index", startdate: startdate, enddate: enddate };
-			return ExecJSONPromise(args)
-				.then(function (response)
-				{
-					if (response.result !== "success")
-						return Promise.reject(args.cmd + ' response did not indicate "success" result: ' + htmlEncode(JSON.stringify(response)));
-					if (typeof response.data !== "undefined") // undefined happens if you request a future date, or perhaps any date with no data.
-					{
-						for (var i = 0; i < response.data.length; i++)
-						{
-							if (collected.length && collected[collected.length - 1].path === response.data[i].path)
-								continue;
-							collected.push(response.data[i]);
-						}
-						if (response.data.length >= 1000)
-						{
-							for (var i = response.data.length - 1; i >= 0 && i >= response.data.length - 200; i--)
-								if (typeof response.data[i].newalerts === "undefined")
-								{
-									enddate = response.data[i].date;
-									return getAlerts(startdate, enddate, collected);
-								}
-						}
-					}
-					collected.sort(function (a, b) { return a.date - b.date; });
-					return collected;
-				});
-		}
-		this.getSimulatedTimelineData = function (startdate, enddate)
-		{
-			var promise_clips = getClips(Math.floor(startdate / 1000), Math.ceil(enddate / 1000));
-			var promise_alerts = getAlerts(Math.floor(startdate / 1000), Math.ceil(enddate / 1000));
-			return Promise.all([promise_clips, promise_alerts])
-				.then(function (result)
-				{
-					var clips = result[0];
-					var alerts = result[1];
-					var response = { result: "success", data: { alerts: [], ranges: [], flags: [] } };
-
-					// Convert from "cliplist" response format to proposed "timeline" response format.
-					for (var i = 0; i < clips.length; i++)
-					{
-						var src = clips[i];
-						var clip = { cam: cameraListLoader.GetCameraWithId(src.camera).number, time: src.date * 1000, len: src.msec };
-						response.data.ranges.push(clip);
-					}
-
-					// Convert from "alertlist" response format to proposed "timeline" response format.
-					for (var i = 0; i < alerts.length; i++)
-					{
-						var src = alerts[i];
-						var roughLengthMs = GetClipLengthMs(GetClipLengthFromFileSize(src.filesize));
-						var alert = { cam: cameraListLoader.GetCameraWithId(src.camera).number, time: src.date * 1000, len: roughLengthMs };
-						response.data.alerts.push(alert);
-					}
-
-					return response;
-				});
-		}
-	}
-	var getTimelineData_ponyfill;
-	function GetTimelineData(startdate, enddate)
-	{
-		if (useNativeTimelineCommand)
-		{
-			var args = { cmd: "timeline", startdate: Math.floor(startdate / 1000), enddate: Math.ceil(enddate / 1000), raw: true };
-			if (developerMode)
-				console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span: ' + JSON.stringify(args));
-			return ExecJSONPromise(args).then(function (response)
-			{
-				if (!response.data)
-					response.data = {};
-				response.data.alerts = [];
-				response.data.ranges = [];
-				response.data.flags = [];
-				if (response.data.records)
-				{
-					var records = response.data.records;
-					delete response.data.records;
-					for (var i = 0; i < records.length; i++)
-					{
-						var r = records[i];
-						if ((r.flags & NO_SHOW_ON_TIMELINE) === 0)
-						{
-							var utc = (args.startdate * 1000) + r.utc;
-							if ((r.flags & BIDBFLAG_FLAGGED) > 0)
-								response.data.flags.push(utc);
-
-							if ((r.flags & BIDBFLAG_ALERT_TRIGGERBITS) > 0)
-								response.data.alerts.push({ time: utc, len: r.msec, cam: r.cam });
-							else
-								response.data.ranges.push({ time: utc, len: r.msec, cam: r.cam });
-						}
-					}
-				}
-				return response;
-			});
-		}
-		else
-		{
-			if (developerMode)
-				console.log('Requesting ' + Math.round((enddate - startdate) / 86400000) + ' day span using simulated timeline data ("cliplist" and "alertlist")');
-			if (!getTimelineData_ponyfill)
-				getTimelineData_ponyfill = new GetTimelineData_Ponyfill();
-			return getTimelineData_ponyfill.getSimulatedTimelineData(startdate, enddate);
-		}
-	}
-	var useNativeTimelineCommand = UrlParameters.Get("timeline") === "2";
-	/** Precise leftmost date currently visible. */
-	var left = GetServerDate(new Date());
-	var startOfLeftDateTs = new Date(left.getFullYear(), left.getMonth(), left.getDate()).getTime();
-	/** Precise rightmost date currently visible. */
-	var rightTs = GetServerDate(new Date()).getTime();
-	/** Object indicating loading status of every day. Keyed on timestamp of midnight of each day. Status 1: loading, 2: loaded, 3: error. */
-	var dayLoadingStatus = new WrapperMap();
+	/** The most recent timeline parameters. */
+	var parameters = { camera: null, left: 0, right: 0, zoomScaler: 0 };
+	/** Specifications of the most recently loaded timeline dataset. */
+	var loadedState = { camera: null, left: 0, right: 0, zoomScaler: 0, loadedAt: -99999 };
 	/** True if a loading operation is currently active. */
 	var isRunning = false;
-	var refreshTimelineInterval = setInterval(RefreshTimeline, 11000);
+	var refreshTimelineInterval = setInterval(Update, 1001);
 	var lastKnownTime = GetServerTime();
 	/** Call to request that new Timeline data be requested if necessary.  Optionally takes a new visible range argument. */
-	this.Update = function (visibleRange)
+	this.NewParameters = function (left, right, zoomScaler, camera)
 	{
-		if (visibleRange)
-		{
-			left = new Date(visibleRange.left);
-			startOfLeftDateTs = new Date(left.getFullYear(), left.getMonth(), left.getDate()).getTime();
-			rightTs = new Date(visibleRange.right).getTime();
-			var finalDay = new Date(loadingHelper.GetLoadingFinishedTime());
-			var requestLimit = dateProvider.get(finalDay.getFullYear(), finalDay.getMonth(), finalDay.getDate() + 1).time;
-			if (rightTs > requestLimit)
-				rightTs = requestLimit;
-		}
-		if (!isRunning)
-		{
-			var next = getNextDataToLoad();
-			if (next)
-			{
-				isRunning = true;
-				for (var i = 0; i < next.days.length; i++)
-					dayLoadingStatus.set(next.days[i], 1);
-				callbackStartedLoading(next);
-				GetTimelineData(next.start, next.end)
-					.then(function (response)
-					{
-						if (response.result !== "success")
-							return Promise.reject(htmlEncode('Server response did not indicate "success" result: ' + JSON.stringify(response)));
-						else
-						{
-							for (var i = 0; i < next.days.length; i++)
-								dayLoadingStatus.set(next.days[i], 2);
-
-							LearnLatestTime(response.data);
-
-							callbackGotData(next, response.data);
-						}
-					})
-					.catch(function (err)
-					{
-						for (var i = 0; i < next.days.length; i++)
-							dayLoadingStatus.set(next.days[i], 3);
-						var errHtml;
-						if (typeof err === "string")
-							errHtml = err;
-						else
-							errHtml = htmlEncode("An unexpected error occurred loading timeline data: " + err);
-						callbackError(next, errHtml);
-						// Wait a moment, then allow these days to be requested again.
-						setTimeout(function ()
-						{
-							for (var i = 0; i < next.days.length; i++)
-								dayLoadingStatus.set(next.days[i], 0);
-						}, 2500);
-					})
-					.finally(function ()
-					{
-						isRunning = false;
-						self.Update();
-					});
-			}
-		}
+		parameters.camera = camera;
+		parameters.left = left;
+		parameters.right = right;
+		parameters.zoomScaler = zoomScaler;
+		Update();
 	}
-	function RefreshTimeline()
+	function Update()
 	{
 		if (documentIsHidden() || currentPrimaryTab !== "timeline")
 			return;
-		var next = {
-			days: [],
-			start: lastKnownTime - 60000,
-			end: GetServerTime() + 60000,
-			isRefresh: true
-		};
-		if (next.start >= next.end)
-			next.start = next.end - 360000;
-		GetTimelineData(next.start, next.end)
+		if (isRunning || parameters.camera === null)
+			return;
+
+		var live = GetServerDate(new Date()).getTime();
+
+		var loadingParams = JSON.parse(JSON.stringify(parameters));
+		if (loadingParams.left > live)
+			loadingParams.left = live;
+		if (loadingParams.right > live)
+			loadingParams.right = live;
+		if (loadingParams.right <= loadingParams.left)
+			return;
+
+		if (loadedState.camera !== null)
+		{
+			// We've loaded data before.
+			// Decide if the already-loaded data is sufficient to render the timeline with its current parameters.
+			var msecpp = Math.pow(2, parameters.zoomScaler);
+			var significantMs = Math.max(msecpp * 5, 10000);
+			if (loadingParams.camera === loadedState.camera
+				&& loadingParams.left > loadedState.left - significantMs
+				&& loadingParams.right < loadedState.right + significantMs
+				&& Math.abs(loadingParams.zoomScaler - loadedState.zoomScaler) <= 0.25)
+			{
+				// Parameters have not changed sufficiently. Cancel update.
+				return;
+			}
+		}
+		isRunning = true;
+		callbackStartedLoading();
+		GetTimelineData(loadingParams.left, loadingParams.right, loadingParams.zoomScaler, loadingParams.camera)
 			.then(function (response)
 			{
 				if (response.result !== "success")
 					return Promise.reject(htmlEncode('Server response did not indicate "success" result: ' + JSON.stringify(response)));
 				else
 				{
-					if (response.data.alerts.length || response.data.ranges.length)
-					{
-						LearnLatestTime(response.data);
-						callbackGotData(next, response.data);
-					}
+					loadedState = loadingParams;
+					callbackGotData(response.data);
 				}
 			})
 			.catch(function (err)
@@ -5670,91 +5470,79 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 					errHtml = err;
 				else
 					errHtml = htmlEncode("An unexpected error occurred loading timeline data: " + err);
-				callbackError(next, errHtml);
+				callbackError(errHtml);
+			})
+			.finally(function ()
+			{
+				isRunning = false;
+				Update();
 			});
 	}
-	function LearnLatestTime(data)
-	{
-		var ranges = data.ranges;
-		if (ranges.length && ranges[ranges.length - 1].time > lastKnownTime)
-			lastKnownTime = ranges[ranges.length - 1].time;
 
-		var alerts = data.alerts;
-		if (alerts.length && alerts[alerts.length - 1].time > lastKnownTime)
-			lastKnownTime = alerts[alerts.length - 1].time;
-	}
-	function getNextDataToLoad()
+	/**
+	 * Returns a promise that resolves with timeline data that has been converted to the format UI3 wants.
+	 * @param {Number} left leftmost millisecond since epoch
+	 * @param {Number} right rightmost millisecond since epoch
+	 * @param {Number} zoomScaler Zoom scaler
+	 * @param {String} camera Camera short name or group name
+	 */
+	function GetTimelineData(left, right, zoomScaler, camera)
 	{
-		var d = dateProvider.get(left.getFullYear(), left.getMonth(), left.getDate());
-		var daysNeedingToLoad = [];
-		var visibleDayCount = 0;
-		while (d.time < rightTs)
+		var msecpp = Math.round(Math.pow(2, zoomScaler));
+		var args = { cmd: "timeline", startdate: Math.floor(left / 1000), enddate: Math.ceil(right / 1000), msecpp: msecpp, camera: camera };
+		//if (developerMode)
+		console.log('Requesting timeline data ' + JSON.stringify(args));
+		return ExecJSONPromise(args).then(function (response)
 		{
-			visibleDayCount++;
-			if (!dayLoadingStatus.get(d.time)) // Days where loading has not started
-				daysNeedingToLoad.push(d.time);
-			d = dateProvider.nextDay(d);
-		}
-		if (daysNeedingToLoad.length === 0)
-			return null;
-
-		// Find the date that needs to load which is closest to now, but preferably earlier than now.
-		var now = GetServerDate(new Date());
-		var idx = binarySearch(daysNeedingToLoad, now.getTime(), NumberCompare);
-		if (idx < 0)
-			idx = (-idx - 1); // Match was approximate. This calculation gets us the closest match index.
-		if (idx >= daysNeedingToLoad.length)
-			idx = daysNeedingToLoad.length - 1;
-		if (daysNeedingToLoad[idx] > now)
-			idx = Math.max(0, idx - 1); // Closest match was in the future.  Go back by one.
-
-		var next = {
-			days: [daysNeedingToLoad[idx]],
-			start: daysNeedingToLoad[idx],
-			end: 0
-		};
-		var start = dateProvider.get(next.start);
-
-		// Expand the date range to include adjacent days if needed.
-		var maxDays = Clamp(Math.round(SizeExpansionScaler_A(visibleDayCount)), 1, 24);
-
-		// Check earlier days.
-		d = dateProvider.prevDay(start);
-		while (next.days.length < maxDays && DayNeedsToLoad(d.time))
-		{
-			next.days.push(d.time);
-			next.start = d.time;
-			d = dateProvider.prevDay(d);
-		}
-		// Check later days.
-		d = dateProvider.nextDay(start);
-		next.end = d.time;
-		while (next.days.length < maxDays && DayNeedsToLoad(d.time))
-		{
-			next.days.push(d.time);
-			d = dateProvider.nextDay(d);
-			next.end = d.time; // statement order is intentional.  When this loop exits, "end" will be the first millisecond of the day after our request range.
-		}
-		next.days.sort(NumberCompare);
-		if (next.days[0] !== next.start || next.days[next.days.length - 1] >= next.end)
-			console.error("Timeline getNextDataToLoad() failure detected.", next);
-		return next;
-	}
-	function SizeExpansionScaler_A(x)
-	{
-		return 1 + 0.035 * Math.pow(x, 1.25);
-	}
-	function DayNeedsToLoad(time)
-	{
-		if (time < startOfLeftDateTs || time >= rightTs)
-			return false;
-		return !dayLoadingStatus.get(time);
+			var processed = { colors: [], alerts: [], clips: [] };
+			// A "track" is an index in the colors array. Also specifies draw order.
+			// Processed Format:
+			//  colors: ["#FF0000:"]
+			//  alerts: [{ time: 1000, len: 1000, isFlag: false, tracks: bitmask }] 
+			//  clips: [{ time: 1000, len: 1000, track: 3 }]
+			if (response.data)
+			{
+				var timeOffset = args.startdate * 1000;
+				if (response.data.colors)
+				{
+					for (var i = 0; i < response.data.colors.length; i++)
+						processed.colors.push("#" + BlueIrisColorToCssColor(response.data.colors[i]));
+				}
+				if (response.data.alerts)
+				{
+					for (var i = 0; i < response.data.alerts.length; i++)
+					{
+						var a = response.data.alerts[i];
+						processed.alerts.push({
+							time: timeOffset + (a.x1 * msecpp),
+							len: (a.x2 - a.x1) * msecpp,
+							isFlag: (a.type & BIDBFLAG_FLAGGED) > 0,
+							tracks: a.tracks
+						});
+					}
+				}
+				if (response.data.clips)
+				{
+					for (var i = 0; i < response.data.clips.length; i++)
+					{
+						var c = response.data.clips[i];
+						processed.clips.push({
+							time: timeOffset + (c.x1 * msecpp),
+							len: (c.x2 - c.x1) * msecpp,
+							track: c.track - 1
+						});
+					}
+				}
+			}
+			response.data = processed;
+			return response;
+		});
 	}
 }
 function ClipTimeline()
 {
 	var self = this;
-	var enabled = timeline_supported && !!UrlParameters.Get("timeline");
+	var enabled = !!UrlParameters.Get("timeline");
 	var timeline;
 	var initialized = false;
 	var scriptsLoaded = 0; // Development code
@@ -5766,10 +5554,7 @@ function ClipTimeline()
 	var maxZoomScaler = 30;
 	var minSavedZoomScaler = 8;
 	var maxSavedZoomScaler = 19;
-	var worker;
-	var workerLoaded = false;
 	var canvasData = null;
-	var pendingTimelineReduces = 0;
 	/** Number of milliseconds prior to the "live" time that the timeline should not allow to be selected. */
 	this.keepOutTime = 15000; // Blue Iris updates db info every 10s I think, so the absolute minimum age of video should be 10s.
 
@@ -5782,8 +5567,8 @@ function ClipTimeline()
 		alertImg.onload = function ()
 		{
 			alertImgLoaded = true;
-			if (timeline && typeof timeline.requestCanvasDraw === "function")
-				timeline.requestCanvasDraw();
+			if (timeline && typeof timeline.drawCanvas === "function")
+				timeline.drawCanvas();
 		};
 		alertImg.src = timelineAlertImgSrc;
 		BI_CustomEvent.AddListener("FinishedLoading", finishInit);
@@ -5791,46 +5576,11 @@ function ClipTimeline()
 		$.getScript('ui3/libs-src/hammer.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 		$.getScript('ui3/libs-src/vue.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
 
-		worker = new Worker("ui3/ui3-timeline-worker.js?v=" + combined_version + local_bi_session_arg);
-		worker.onmessage = OnWorkerMessage;
-		worker.onerror = OnWorkerError;
-
 		finishInit();
-	}
-	function OnWorkerMessage(e)
-	{
-		var m = e.data;
-		switch (m.type)
-		{
-			case "workerLoaded":
-				workerLoaded = true;
-				finishInit();
-				break;
-			case "timelineDataProcessed":
-				timeline.requestCanvasDraw();
-				break;
-			case "timelineReduced":
-				pendingTimelineReduces--;
-				if (pendingTimelineReduces > 0)
-				{
-					pendingTimelineReduces = 1;
-					timeline.timelineReduceOnWorker();
-				}
-				canvasData = m.data;
-				timeline.drawCanvas();
-				break;
-			case "error":
-				toaster.Error(m.ex, 10000);
-				break;
-		}
-	}
-	function OnWorkerError(e)
-	{
-		toaster.Error("Timeline worker error: " + e.message + " (" + e.filename + ":" + e.lineno + ")", 10000);
 	}
 	var finishInit = function ()
 	{
-		if (scriptsLoaded < 3 || !workerLoaded)
+		if (scriptsLoaded < 3)
 			return;
 		if (!loadingHelper.DidLoadingFinish())
 			return;
@@ -5839,7 +5589,7 @@ function ClipTimeline()
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
 				+ ' <clip-timeline-legend :width="timelineWidth" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :showSelectedTime="showSelectedTime" />'
 				+ ' <div class="timelineMain" :style="{ width: timelineWidth + \'px\' }">'
-				+ '		<clip-timeline-loader :width="timelineWidth" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :dayLoadingStatus="dayLoadingStatus" />'
+				+ '		<clip-timeline-loader :width="timelineWidth" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" />'
 				+ '		<canvas ref="clipTimelineCanvas" class="clipTimelineCanvas" :style="timelineCanvasStyle" />'
 				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
 				+ '	</div>'
@@ -5859,8 +5609,6 @@ function ClipTimeline()
 			data: function ()
 			{
 				return {
-					/** Object indicating loading status of every day. */
-					dayLoadingStatus: new WrapperMap(true),
 					errorHtml: "",
 					/** Number that increases linearly to control zoom */
 					zoomScaler: Clamp(parseInt(settings.ui3_timelineZoomScaler), minSavedZoomScaler, maxSavedZoomScaler),
@@ -5881,13 +5629,10 @@ function ClipTimeline()
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
 					canvasRedrawState: { isActive: false, lastRedraw: 0 },
 					hammerTime: null,
-					acceptZoomThrottled: null,
 					accumulatedZoomDelta: 0,
-					panThrottled: null,
 					isHovered: true,
 					/** True if the current video stream is live and is playing. */
-					isLive: false,
-					filteredCameraId: null
+					isLive: false
 				};
 			},
 			created: function ()
@@ -5913,8 +5658,7 @@ function ClipTimeline()
 				BI_CustomEvent.AddListener("OpenVideo", this.onOpenVideo);
 				BI_CustomEvent.AddListener("Playback_Play", this.onVideoPlay);
 				BI_CustomEvent.AddListener("Playback_Pause", this.onVideoPause);
-				BI_CustomEvent.AddListener("DynamicGroupLayoutLoaded", this.onDynamicGroupLayoutLoaded);
-				BI_CustomEvent.AddListener("TabLoaded_timeline", this.requestCanvasDraw);
+				BI_CustomEvent.AddListener("TabLoaded_timeline", this.drawCanvas);
 				BI_CustomEvent.AddListener("ImageRendered", this.FrameRendered);
 				this.AfterResize();
 				this.onOpenVideo();
@@ -5927,8 +5671,7 @@ function ClipTimeline()
 				BI_CustomEvent.RemoveListener("OpenVideo", this.onOpenVideo);
 				BI_CustomEvent.RemoveListener("Playback_Play", this.onVideoPlay);
 				BI_CustomEvent.RemoveListener("Playback_Pause", this.onVideoPause);
-				BI_CustomEvent.RemoveListener("DynamicGroupLayoutLoaded", this.onDynamicGroupLayoutLoaded);
-				BI_CustomEvent.RemoveListener("TabLoaded_timeline", this.requestCanvasDraw);
+				BI_CustomEvent.RemoveListener("TabLoaded_timeline", this.drawCanvas);
 				BI_CustomEvent.RemoveListener("ImageRendered", this.FrameRendered);
 				timeline.$refs.tl_root.removeEventListener("touchstart", timeline.mouseDown);
 				timeline.$refs.tl_root.removeEventListener("mousedown", timeline.mouseDown);
@@ -5943,41 +5686,35 @@ function ClipTimeline()
 			},
 			methods:
 			{
-				/**
-				 * Called when data begins loading for a set of days.
-				 * @param {Object} requestInfo Object containing days, start, end.
-				 */
-				callbackStartedLoading: function (requestInfo)
+				newTimelineParameters: function ()
 				{
-					for (var i = 0; i < requestInfo.days.length; i++)
-						timeline.dayLoadingStatus.set(requestInfo.days[i], 1);
+					timelineDataLoader.NewParameters(this.visibleRange.left, this.visibleRange.right, this.zoomScaler, videoPlayer.Loading().cam.optionValue);
+				},
+				/**
+				 * Called when data begins loading for the current timeline view.
+				 */
+				callbackStartedLoading: function ()
+				{
 				},
 				/**
 				 * Called when data is received for a set of days.
-				 * @param {Object} requestInfo Object containing days, start, end.
 				 * @param {Object} data Data from the server.
 				 */
-				callbackGotData: function (requestInfo, data)
+				callbackGotData: function (data)
 				{
 					timeline.errorHtml = "";
-
-					for (var i = 0; i < requestInfo.days.length; i++)
-						timeline.dayLoadingStatus.set(requestInfo.days[i], 2);
 
 					if (typeof data === "undefined")
 						return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
 
-					worker.postMessage({ type: "timelineData", data: data, requestInfo: requestInfo, cameraColorMap: cameraListLoader.cameraColorsByNumber });
+					canvasData = data;
 				},
 				/**
 				 * Called when an error occurs when loading data for a set of days.
-				 * @param {Object} requestInfo Object containing days, start, end.
 				 * @param {String} errHtml HTML error message.
 				 */
-				callbackError: function (requestInfo, errHtml)
+				callbackError: function (errHtml)
 				{
-					for (var i = 0; i < requestInfo.days.length; i++)
-						timeline.dayLoadingStatus.set(requestInfo.days[i], 3);
 					timeline.errorHtml = errHtml;
 					console.error(htmlDecode(errHtml));
 				},
@@ -6123,72 +5860,28 @@ function ClipTimeline()
 					var zs = Math.log2(zf);
 					timeline.acceptZoom(zs);
 				},
-				pan: function (arg)
+				pan: function (offsetMs)
 				{
-					if (!timeline.panThrottled)
-						timeline.panThrottled = throttle(function (offsetMs)
-						{
-							timeline.dragState.offsetMs = offsetMs;
-						}, timelineThrottleRate);
-
-					timeline.panThrottled(arg);
+					timeline.dragState.offsetMs = offsetMs;
 				},
-				acceptZoom: function (arg)
+				acceptZoom: function (newZoomScaler)
 				{
-					if (!timeline.acceptZoomThrottled)
-						timeline.acceptZoomThrottled = throttle(function (newZoomScaler)
-						{
-							if (newZoomScaler)
-								timeline.setZoom_Internal(newZoomScaler);
-							if (timeline.accumulatedZoomDelta !== 0)
-							{
-								var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
-								zoomSpeed /= 400;
-								var dz = timeline.accumulatedZoomDelta * zoomSpeed;
-								newZoomScaler = timeline.zoomScaler + dz;
-								timeline.accumulatedZoomDelta = 0;
-								timeline.setZoom_Internal(newZoomScaler);
-							}
-						}, timelineThrottleRate);
-
-					timeline.acceptZoomThrottled(arg);
+					if (newZoomScaler)
+						timeline.setZoom_Internal(newZoomScaler);
+					if (timeline.accumulatedZoomDelta !== 0)
+					{
+						var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
+						zoomSpeed /= 400;
+						var dz = timeline.accumulatedZoomDelta * zoomSpeed;
+						newZoomScaler = timeline.zoomScaler + dz;
+						timeline.accumulatedZoomDelta = 0;
+						timeline.setZoom_Internal(newZoomScaler);
+					}
 				},
 				setZoom_Internal: function (zoom)
 				{
 					this.zoomScaler = Clamp(zoom, minZoomScaler, maxZoomScaler);
 					settings.ui3_timelineZoomScaler = Clamp(zoom, minSavedZoomScaler, maxSavedZoomScaler);
-				},
-				requestCanvasDraw: function ()
-				{
-					var canvas = this.$refs.clipTimelineCanvas;
-					if (!canvas || currentPrimaryTab !== "timeline")
-						return;
-
-					pendingTimelineReduces++;
-					if (pendingTimelineReduces === 1)
-						this.timelineReduceOnWorker();
-				},
-				timelineReduceOnWorker: function ()
-				{
-					var args = {
-						left: this.left,
-						right: this.right,
-						dpr: BI_GetDevicePixelRatio(),
-						zoomFactor: this.zoomFactor,
-						visibleMilliseconds: this.visibleMilliseconds,
-						filters: GetTimelineFilters(this.filteredCameraId),
-						alertImgNaturalWidth: 0,
-						alertImgNaturalHeight: 0,
-						timelineInternalHeight: this.timelineInternalHeight,
-						developerMode: developerMode
-					};
-					if (alertImgLoaded)
-					{
-						args.alertImgNaturalWidth = alertImg.naturalWidth;
-						args.alertImgNaturalHeight = alertImg.naturalHeight;
-					}
-
-					worker.postMessage({ type: "timelineReduce", args: args });
 				},
 				drawCanvas: function ()
 				{
@@ -6204,24 +5897,54 @@ function ClipTimeline()
 					var zoomFactor = this.zoomFactor / dpr;
 					var left = this.left;
 					var right = this.right;
+					var timelineInternalHeight = this.timelineInternalHeight;
+					var timelineInternalWidth = this.timelineInternalWidth;
 
 					if (canvasData)
 					{
-						// Draw alert icons
-						for (var i = 0; i < canvasData.alerts.length; i++)
+						var alertIconSpace = 12 * dpr;
+						var timelineColorbarHeight = ((timelineInternalHeight - alertIconSpace) / canvasData.colors.length);
+
+						// Draw clip rectangles
+						for (var n = 0; n < canvasData.clips.length; n++)
 						{
-							var a = canvasData.alerts[i];
-							ctx.drawImage(alertImg, a.x, a.y, a.w, a.h);
+							var clip = canvasData.clips[n];
+							var x = (clip.time - left) / zoomFactor;
+							var y = alertIconSpace + (timelineColorbarHeight * clip.track);
+							var w = clip.len / zoomFactor;
+							ctx.fillStyle = canvasData.colors[clip.track];
+							ctx.fillRect(x, y, w, timelineColorbarHeight);
 						}
 
-						for (var n = 0; n < canvasData.colorSets.length; n++)
+						// Draw alert rectangles
+						ctx.fillStyle = "#8E3510";
+						var y = alertIconSpace * 0.125;
+						var h = alertIconSpace * 0.75;
+						for (var n = 0; n < canvasData.alerts.length; n++)
 						{
-							var colorSet = canvasData.colorSets[n];
-							ctx.fillStyle = colorSet.color;
-							for (var i = 0; i < colorSet.rects.length; i++)
+							var alert = canvasData.alerts[n];
+							var x = (alert.time - left) / zoomFactor;
+							var w = alert.len / zoomFactor;
+							ctx.fillRect(x, y, w, h);
+						}
+
+						// Draw alert icons
+						if (alertImg.naturalWidth && alertImg.naturalHeight)
+						{
+							var alertImgScale = (alertImg.naturalHeight / 12) / dpr;
+							var alertImgW = alertImg.naturalWidth / alertImgScale;
+							var alertImgH = alertImg.naturalHeight / alertImgScale;
+							var alertImgXOffset = alertImgW / 2;
+							var alertImgYOffset = 0 * dpr;
+
+							for (var n = 0; n < canvasData.alerts.length; n++)
 							{
-								var r = colorSet.rects[i];
-								ctx.fillRect(r.x, r.y, r.w, r.h);
+								var a = canvasData.alerts[n];
+								//if (!a.isFlag)
+								{
+									var x = ((a.time - left) / zoomFactor) - alertImgXOffset;
+									ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
+								}
 							}
 						}
 					}
@@ -6232,7 +5955,7 @@ function ClipTimeline()
 						var x = (now - left - self.keepOutTime) / zoomFactor;
 						var y = 0;
 						var w = self.keepOutTime / zoomFactor;
-						var h = this.timelineInternalHeight;
+						var h = timelineInternalHeight;
 						var grd = ctx.createLinearGradient(x, y, x + w, y);
 						grd.addColorStop(0, "rgba(123,133,180,0.0)");
 						grd.addColorStop(0.2, "rgba(123,133,180,0.3)");
@@ -6252,10 +5975,10 @@ function ClipTimeline()
 					var futureTimePx = (this.currentTimeIfFuturePanningWasAllowed - this.currentTime) / zoomFactor;
 					if (futureTimePx > 0)
 					{
-						var x = (this.timelineInternalWidth - futureTimePx);
+						var x = (timelineInternalWidth - futureTimePx);
 						var y = 0;
 						var w = futureTimePx;
-						var h = this.timelineInternalHeight;
+						var h = timelineInternalHeight;
 						var grd = ctx.createLinearGradient(x, y, x + w, y);
 						grd.addColorStop(0, "rgba(0,0,0,0)");
 						grd.addColorStop(1, "rgba(62,95,138,1)");
@@ -6332,7 +6055,7 @@ function ClipTimeline()
 				onOpenVideo: function ()
 				{
 					this.isLive = videoPlayer.Loading().image.isLive;
-					this.filteredCameraId = clipLoader.GetCurrentFilteredCamera();
+					this.newTimelineParameters();
 				},
 				onVideoPlay: function ()
 				{
@@ -6341,10 +6064,6 @@ function ClipTimeline()
 				onVideoPause: function ()
 				{
 					this.isLive = false;
-				},
-				onDynamicGroupLayoutLoaded: function ()
-				{
-					this.requestCanvasDraw();
 				},
 				userDidSetTime: function ()
 				{
@@ -6449,11 +6168,13 @@ function ClipTimeline()
 			{
 				zoomFactor: function ()
 				{
-					this.requestCanvasDraw();
+					this.newTimelineParameters();
+					this.drawCanvas();
 				},
 				visibleRange: function ()
 				{
-					timelineDataLoader.Update(this.visibleRange);
+					this.newTimelineParameters();
+					this.drawCanvas();
 				},
 				timelineInternalSize: function ()
 				{
@@ -6462,15 +6183,11 @@ function ClipTimeline()
 						return;
 					canvas.width = this.timelineInternalWidth;
 					canvas.height = this.timelineInternalHeight;
-					this.requestCanvasDraw();
+					this.drawCanvas();
 				},
 				currentTime: function ()
 				{
-					this.requestCanvasDraw();
-				},
-				filteredCameraId: function ()
-				{
-					this.requestCanvasDraw();
+					this.drawCanvas();
 				},
 				videoShouldBePaused: function ()
 				{
@@ -6685,72 +6402,13 @@ function ClipTimeline()
 				/** Timestamp of the right edge */
 				right: Number,
 				/** Timestamp of the center (current time) */
-				currentTime: Number,
-				/** Object indicating loading status of every day. */
-				dayLoadingStatus: Object
+				currentTime: Number
 			},
 			computed:
 			{
 				tags: function ()
 				{
-					var tags = [];
-					var date = new Date(this.left);
-					var d = dateProvider.get(date.getFullYear(), date.getMonth(), date.getDate());
-					var idCtr = 1;
-					var rightmostTime = this.right;
-					var finalDay = new Date(loadingHelper.GetLoadingFinishedTime());
-					var requestLimit = dateProvider.get(finalDay.getFullYear(), finalDay.getMonth(), finalDay.getDate() + 1).time;
-					if (rightmostTime > requestLimit)
-						rightmostTime = requestLimit;
-
-					while (d.time < rightmostTime)
-					{
-						var tag = { id: idCtr++ };
-						tag.start = d.time;
-						var state = this.dayLoadingStatus.get(tag.start);
-						tag.state = state;
-						do
-						{
-							d = dateProvider.nextDay(d);
-						}
-						while (d.time < rightmostTime && state === this.dayLoadingStatus.get(d.time))
-						// states:
-						// undefined or 0: not loading
-						// 1: loading
-						// 2: loaded
-						// 3: error
-						if (state !== 2)
-						{
-							tag.end = d.time;
-							var l = ((tag.start - this.left) / this.zoomFactor);
-							var w = ((tag.end - tag.start) / this.zoomFactor);
-							if (l < 0)
-							{
-								w += l;
-								l = 0;
-							}
-							if (l + w > this.width)
-								w = this.width - l;
-							tag.style = {
-								left: l + 'px',
-								width: w + 'px'
-							};
-							if (BrowserIsIE())
-							{
-								tag.svgStyle = {
-									width: w + 'px' // IE hack to make SVG rendering a little better.
-								};
-							}
-							tags.push(tag);
-							if (!state)
-								tag.title = "queued";
-							if (state === 1)
-								tag.title = "loading";
-							if (state === 2)
-								tag.title = "error";
-						}
-					}
-					return tags;
+					return [];
 				}
 			}
 		});
@@ -6772,34 +6430,6 @@ function ClipTimeline()
 	this.videoShouldBePaused = function ()
 	{
 		return timeline && timeline.videoShouldBePaused;
-	}
-	function GetTimelineFilters(filteredCameraId)
-	{
-		var allowedCameras = new FasterObjectMap();
-		var camObj = cameraListLoader.GetCameraWithId(filteredCameraId);
-		if (camObj)
-		{
-			if (cameraListLoader.CameraIsGroup(camObj))
-			{
-				var cams = cameraListLoader.GetGroupCams(camObj.optionValue);
-				for (var i = 0; i < cams.length; i++)
-					allowedCameras[cameraListLoader.GetCameraWithId(cams[i]).number] = true;
-			}
-			else
-				allowedCameras[camObj.number] = true;
-		}
-		else
-		{
-			var allCams = cameraListLoader.GetLastResponse().data;
-			for (var i = 0; i < allCams.length; i++)
-				if (!cameraListLoader.CameraIsGroupOrCycle(allCams[i]))
-					allowedCameras[allCams[i].number] = true;
-		}
-		var allowedColors = new FasterObjectMap();
-		for (var camNum in allowedCameras)
-			allowedColors[cameraListLoader.GetCameraColorFromNumber(parseInt(camNum))] = true;
-
-		return { allowedCameras: allowedCameras, allowedColors: allowedColors };
 	}
 	this.BoundsCheckTimelineMs = function (timelineMs)
 	{
@@ -12065,8 +11695,6 @@ function CameraListLoader()
 	this.clearNewAlertsCounterOnNextLoad = false;
 	var dynamicGroupLayout = {};
 	var badRectsToast = new PersistentToast("badRectsToast", "ERROR");
-	this.cameraColorsByNumber = new Object();
-	this.camerasByNumber = new Object();
 
 	var CallScheduler = function (successCallbackFunc)
 	{
@@ -12126,8 +11754,6 @@ function CameraListLoader()
 			var camIdsInGroups = {};
 			var allCameras = {};
 			self.singleCameraGroupMap = {};
-			self.cameraColorsByNumber = {};
-			self.camerasByNumber = {};
 			// See what we've got
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
@@ -12169,15 +11795,7 @@ function CameraListLoader()
 					}
 				}
 				else
-				{
-					if (typeof obj.number === "number")
-					{
-						self.camerasByNumber[obj.number] = obj;
-						if (typeof obj.color !== "undefined")
-							self.cameraColorsByNumber[obj.number] = obj.color;
-					}
 					numCameras++;
-				}
 			}
 			// Is this a single-camera system without a visible camera group?
 			if (numGroups === 0 && numCameras > 0)
@@ -12475,17 +12093,6 @@ function CameraListLoader()
 				return cameraIdToCameraMap[id];
 		}
 		return null;
-	}
-	this.GetCameraColorFromNumber = function (cameraId)
-	{
-		var color = self.cameraColorsByNumber[cameraId];
-		if (typeof color !== "undefined")
-			return color;
-		return 8151097; // Default camera color
-	}
-	this.GetCameraWithNumber = function (number)
-	{
-		return self.camerasByNumber[number];
 	}
 	this.MakeFakeCamBasedOnClip = function (clipData)
 	{
@@ -30804,140 +30411,6 @@ function WrapperMap(vueReactive)
 	}
 	this.internalMap = map;
 }
-
-/**
- * Date incrementing is surprisingly CPU intensive, so this object caches results to provide fast day iteration, forward and backward, using a doubly-linked list and a map.
- */
-var dateProvider = new (function ()
-{
-	var first = null;
-	var last = null;
-	var map = new WrapperMap();
-	this.getFirst = function ()
-	{
-		return first;
-	}
-	this.getLast = function ()
-	{
-		return last;
-	}
-	this.getMap = function ()
-	{
-		return map;
-	}
-	/**
-	 * Returns an object containing properties: time, prev, next.
-	 * time is the millisecond timestamp relative to the epoch.
-	 * prev and next are references (maybe null) to the next and previous objects stored in the date provider, and may not be consecutive days.
-	 * To get the next or previous day, call the date provider's nextDay or prevDay functions.
-	 * 
-	 * Overload 1 args: (year, month, day)
-	 * Overload 2 args: (Date) <- MUST be exactly at midnight on a day.
-	 * Overload 3 args: (millisecondTimestamp) <- MUST be the exact timestamp of midnight on a day.
-	 * @param {any} arg1 The full year, or the millisecond timestamp, or a date object.
-	 * @param {Number} month The month where 0 is January.
-	 * @param {Number} day The day of the month (e.g. 1-31).
-	 */
-	this.get = function (arg1, month, day)
-	{
-		var time;
-		if (typeof arg1 === "number")
-		{
-			if (typeof month === "number")
-				time = new Date(arg1, month, day).getTime();
-			else
-				time = arg1;
-		}
-		else
-			time = arg1.getTime();
-		if (first)
-		{
-			var mapped = map.get(time);
-			if (mapped)
-				return mapped;
-			else if (time < first.time)
-			{
-				var newDate = { time: time, prev: null, next: first };
-				first.prev = newDate;
-				first = newDate;
-				add(newDate);
-				return newDate;
-			}
-			else if (time > last.time)
-			{
-				var newDate = { time: time, prev: last, next: null };
-				last.next = newDate;
-				last = newDate;
-				add(newDate);
-				return newDate;
-			}
-			else
-			{
-				var newDate;
-				if (time - first.time <= last.time - time)
-				{
-					// The requested date is closer to the first date than to the last date.
-					var d = first.next;
-					while (time > d.time)
-						d = d.next;
-					newDate = { time: time, prev: d.prev, next: d };
-				}
-				else
-				{
-					var d = last.prev;
-					while (time < d.time)
-						d = d.prev;
-					newDate = { time: time, prev: d, next: d.next };
-				}
-				newDate.prev.next = newDate.next.prev = newDate;
-				add(newDate);
-				return newDate;
-			}
-		}
-		else
-		{
-			first = last = { time: time, prev: null, next: null };
-			add(first);
-			return first;
-		}
-	}
-	this.nextDay = function (d)
-	{
-		if (d.next && Math.abs((d.next.time - d.time) - 86400000) < 43200000)
-			return d.next;
-
-		var date = new Date(d.time);
-		date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
-		var newDate = { time: date.getTime(), prev: d, next: d.next };
-		newDate.prev.next = newDate;
-		if (newDate.next)
-			newDate.next.prev = newDate;
-		else
-			last = newDate;
-		add(newDate);
-		return newDate;
-	}
-	this.prevDay = function (d)
-	{
-		if (d.prev && Math.abs((d.time - d.prev.time) - 86400000) < 43200000)
-			return d.prev;
-
-		var date = new Date(d.time);
-		date = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1);
-		var newDate = { time: date.getTime(), prev: d.prev, next: d };
-		newDate.next.prev = newDate;
-		if (newDate.prev)
-			newDate.prev.next = newDate;
-		else
-			first = newDate;
-		add(newDate);
-		return newDate;
-	}
-	function add(d)
-	{
-		map.set(d.time, d);
-	}
-})();
 
 function normalizeWheelEvent(e)
 {
