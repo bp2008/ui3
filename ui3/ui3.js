@@ -5401,9 +5401,9 @@ var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAA
 	+ "CoAIdClCBaVCBzmaowMxCMM3SOROi1mPmDAWowDSowMxpTgIMDMydM2fOnFEWzGAxEwymMWRAGMUMym4VQMnpBkDVQh4gARCIhAgwMGTOhNjF1DkDIsAyswViOdsMBwhDAyrA4A4VYHABkwCNgSZ0AKh3jQAAAABJRU5ErkJggg==";
 function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackError)
 {
-	/** The most recent timeline parameters. */
+	/** The most recent timeline parameters defining the timeline view we require. */
 	var parameters = { camera: null, left: 0, right: 0, zoomScaler: 0 };
-	/** Specifications of the most recently loaded timeline dataset. */
+	/** Specifications of the current timeline dataset. */
 	var loadedState = { camera: null, left: 0, right: 0, zoomScaler: 0, loadedAt: -99999 };
 	/** True if a loading operation is currently active. */
 	var isRunning = false;
@@ -5424,42 +5424,36 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 			return;
 		if (isRunning || parameters.camera === null)
 			return;
-
-		var live = GetServerDate(new Date()).getTime();
-
-		var loadingParams = JSON.parse(JSON.stringify(parameters));
-		if (loadingParams.left > live)
-			loadingParams.left = live;
-		if (loadingParams.right > live)
-			loadingParams.right = live;
-		if (loadingParams.right <= loadingParams.left)
+		if (!RequiresUpdatedView())
 			return;
 
-		if (loadedState.camera !== null)
-		{
-			// We've loaded data before.
-			// Decide if the already-loaded data is sufficient to render the timeline with its current parameters.
-			var msecpp = Math.pow(2, parameters.zoomScaler);
-			var significantMs = Math.max(msecpp * 5, 10000);
-			if (loadingParams.camera === loadedState.camera
-				&& loadingParams.left > loadedState.left - significantMs
-				&& loadingParams.right < loadedState.right + significantMs
-				&& Math.abs(loadingParams.zoomScaler - loadedState.zoomScaler) <= 0.25)
-			{
-				// Parameters have not changed sufficiently. Cancel update.
-				return;
-			}
-		}
+		var reqParams = JSON.parse(JSON.stringify(parameters));
+
+		// Expand left and right borders.  We need to expand by AT LEAST as much as the safety buffer.
+		var safetyMs = GetSafetyBufferMs();
+		var expandBy = safetyMs * 2;
+		reqParams.left -= expandBy;
+		reqParams.right += expandBy;
+
+		var live = GetServerDate(new Date()).getTime();
+		if (reqParams.left >= live)
+			return;
+		if (reqParams.right > live)
+			reqParams.right = live;
+
 		isRunning = true;
 		callbackStartedLoading();
-		GetTimelineData(loadingParams.left, loadingParams.right, loadingParams.zoomScaler, loadingParams.camera)
+		var requestTime = performance.now();
+		GetTimelineData(reqParams.left, reqParams.right, reqParams.zoomScaler, reqParams.camera)
 			.then(function (response)
 			{
 				if (response.result !== "success")
 					return Promise.reject(htmlEncode('Server response did not indicate "success" result: ' + JSON.stringify(response)));
 				else
 				{
-					loadedState = loadingParams;
+					if (developerMode)
+						console.log('<<< Received timeline data in ' + (performance.now() - requestTime).toFixed() + ' ms <<<');
+					loadedState = reqParams;
 					callbackGotData(response.data);
 				}
 			})
@@ -5480,6 +5474,57 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	}
 
 	/**
+	 * Returns true if the current timeline parameters warrant downloading a new timeline view.
+	 */
+	function RequiresUpdatedView()
+	{
+		if (parameters.camera === null)
+			return false; // We don't require data yet.
+
+		if (loadedState.camera === null)
+			return true; // We haven't loaded data yet.
+
+		if (parameters.camera !== loadedState.camera)
+			return true; // We need data for a different camera or group.
+
+		if (Math.abs(parameters.zoomScaler - loadedState.zoomScaler) > 0.25)
+			return true; // We need data at a significantly different zoom scale.
+
+		// Left boundary check
+		var safetyMs = GetSafetyBufferMs();
+		var loadToLeft = parameters.left - safetyMs;
+		if (loadToLeft < loadedState.left)
+			return true; // New data required to satisfy left boundary requirements.
+
+		// Right boundary check
+		var loadToRight = parameters.right + safetyMs;
+		if (loadToRight > loadedState.right)
+		{
+			// New data is required to satisfy right boundary requirements.
+			// But it is possible that the [live] timestamp falls within our proposed right boundary, in which case it is impossible to load all the data we want.
+			var live = GetServerDate(new Date()).getTime(); // Current clock time.
+			if (live >= loadToRight)
+				return true; // [live] timestamp does not affect decision. Get new data.
+
+			// [live] timestamp falls within the desired time span.  We still need new data, but for throttling purposes we should only request new data if the current dataset is missing a significant amount of time before [live].
+
+			var msecpp = Math.pow(2, parameters.zoomScaler); // Milliseconds per pixel at the current zoom scale.
+			var significantMs = Math.max(msecpp * 5, 10000); // "Significant" is here defined to be the greater of [5px] or [10s].
+			if (loadedState.right < live - significantMs)
+				return true;
+		}
+		return false;
+	}
+
+	function GetSafetyBufferMs()
+	{
+		var msecpp = Math.pow(2, parameters.zoomScaler); // Milliseconds per pixel at the current zoom scale.
+		var viewportWidthMs = parameters.right - parameters.left;
+		var safetyMs = Math.max(200 * msecpp, viewportWidthMs * 0.25); // Try to always have this much data loaded offscreen when possible. Larger of [200px] or [25% of viewport width].
+		return safetyMs;
+	}
+
+	/**
 	 * Returns a promise that resolves with timeline data that has been converted to the format UI3 wants.
 	 * @param {Number} left leftmost millisecond since epoch
 	 * @param {Number} right rightmost millisecond since epoch
@@ -5490,8 +5535,6 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	{
 		var msecpp = Math.round(Math.pow(2, zoomScaler));
 		var args = { cmd: "timeline", startdate: Math.floor(left / 1000), enddate: Math.ceil(right / 1000), msecpp: msecpp, camera: camera };
-		//if (developerMode)
-		console.log('Requesting timeline data ' + JSON.stringify(args));
 		return ExecJSONPromise(args).then(function (response)
 		{
 			var processed = { colors: [], alerts: [], clips: [] };
@@ -5529,7 +5572,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 						processed.clips.push({
 							time: timeOffset + (c.x1 * msecpp),
 							len: (c.x2 - c.x1) * msecpp,
-							track: c.track - 1
+							track: c.track
 						});
 					}
 				}
@@ -5702,12 +5745,13 @@ function ClipTimeline()
 				 */
 				callbackGotData: function (data)
 				{
-					timeline.errorHtml = "";
+					this.errorHtml = "";
 
 					if (typeof data === "undefined")
 						return; // (unconfirmed with live API) This may happen if you request a future date, or perhaps any date with no data.
 
 					canvasData = data;
+					this.drawCanvas();
 				},
 				/**
 				 * Called when an error occurs when loading data for a set of days.
