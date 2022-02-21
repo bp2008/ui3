@@ -5397,6 +5397,14 @@ var ptzPresetThumbLoader = new (function ()
 ///////////////////////////////////////////////////////////////
 // Timeline ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+/**
+	A value that is added to the zoomScaler when requesting timeline data, to affect precision.
+	+2 for 0.25x precision
+	+1 for 0.5x precision
+	-1 for 2x precision
+	-2 for 4x precision
+ */
+var timelineDataZoomMultiplier = 0;
 var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAYBAMAAAABjmA/AAAAHlBMVEUAAQAeBQA4DgBbHABpIwB3JwCaNQC9QwDVTQD8XQCSYQG/AAAAf0lEQVQI12NgAAFGIwYIYE2CMiI"
 	+ "CoAIdClCBaVCBzmaowMxCMM3SOROi1mPmDAWowDSowMxpTgIMDMydM2fOnFEWzGAxEwymMWRAGMUMym4VQMnpBkDVQh4gARCIhAgwMGTOhNjF1DkDIsAyswViOdsMBwhDAyrA4A4VYHABkwCNgSZ0AKh3jQAAAABJRU5ErkJggg==";
 function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackError)
@@ -5533,6 +5541,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	 */
 	function GetTimelineData(left, right, zoomScaler, camera)
 	{
+		zoomScaler += timelineDataZoomMultiplier;
 		var msecpp = Math.round(Math.pow(2, zoomScaler));
 		var args = { cmd: "timeline", startdate: Math.floor(left / 1000), enddate: Math.ceil(right / 1000), msecpp: msecpp, camera: camera };
 		return ExecJSONPromise(args).then(function (response)
@@ -5954,10 +5963,17 @@ function ClipTimeline()
 						{
 							var clip = canvasData.clips[n];
 							var x = (clip.time - left) / zoomFactor;
-							var y = alertIconSpace + (timelineColorbarHeight * clip.track);
 							var w = clip.len / zoomFactor;
-							ctx.fillStyle = canvasData.colors[clip.track];
-							ctx.fillRect(x, y, w, timelineColorbarHeight);
+							if (x < timelineInternalWidth && x + w > 0)
+							{
+								var y = alertIconSpace + (timelineColorbarHeight * clip.track);
+
+								ctx.fillStyle = canvasData.colors[clip.track];
+								if (self.drawRoundedRectangles)
+									roundRect(ctx, x, y, w, timelineColorbarHeight, 2);
+								else
+									ctx.fillRect(x, y, w, timelineColorbarHeight);
+							}
 						}
 
 						// Draw alert rectangles
@@ -5969,7 +5985,13 @@ function ClipTimeline()
 							var alert = canvasData.alerts[n];
 							var x = (alert.time - left) / zoomFactor;
 							var w = alert.len / zoomFactor;
-							ctx.fillRect(x, y, w, h);
+							if (x < timelineInternalWidth && x + w > 0)
+							{
+								if (self.drawRoundedRectangles)
+									roundRect(ctx, x, y, w, h, 2);
+								else
+									ctx.fillRect(x, y, w, h);
+							}
 						}
 
 						// Draw alert icons
@@ -6486,6 +6508,34 @@ function ClipTimeline()
 				return timelineMs;
 		}
 		return undefined;
+	}
+	this.drawRoundedRectangles = false;
+	/**
+	 * Draws a rounded rectangle using the current state of the canvas.
+	 * If you omit the last three params, it will draw a rectangle
+	 * outline with a 5 pixel border radius
+	 * @param {CanvasRenderingContext2D} ctx
+	 * @param {Number} x The top left x coordinate
+	 * @param {Number} y The top left y coordinate
+	 * @param {Number} width The width of the rectangle
+	 * @param {Number} height The height of the rectangle
+	 * @param {Number} [radius = 5] The corner radius; It can also be an object 
+	 *                 to specify different radii for corners
+	 */
+	function roundRect(ctx, x, y, width, height, radius)
+	{
+		ctx.beginPath();
+		ctx.moveTo(x + radius, y);
+		ctx.lineTo(x + width - radius, y);
+		ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+		ctx.lineTo(x + width, y + height - radius);
+		ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+		ctx.lineTo(x + radius, y + height);
+		ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+		ctx.lineTo(x, y + radius);
+		ctx.quadraticCurveTo(x, y, x + radius, y);
+		ctx.closePath();
+		ctx.fill();
 	}
 	if (enabled)
 		self.Initialize();
