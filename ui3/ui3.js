@@ -5597,7 +5597,6 @@ function ClipTimeline()
 	var enabled = !!UrlParameters.Get("timeline");
 	var timeline;
 	var initialized = false;
-	var scriptsLoaded = 0; // Development code
 	var alertImg = new Image();
 	var alertImgLoaded = false;
 	var $tl_root = $();
@@ -5628,16 +5627,10 @@ function ClipTimeline()
 		};
 		alertImg.src = timelineAlertImgSrc;
 		BI_CustomEvent.AddListener("FinishedLoading", finishInit);
-		$.getScript('ui3/libs-src/promise.polyfill.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
-		$.getScript('ui3/libs-src/hammer.min.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
-		$.getScript('ui3/libs-src/vue.js?v=' + combined_version + local_bi_session_arg, function () { scriptsLoaded++; finishInit(); });
-
 		finishInit();
 	}
 	var finishInit = function ()
 	{
-		if (scriptsLoaded < 3)
-			return;
 		if (!loadingHelper.DidLoadingFinish())
 			return;
 		Vue.component('clip-timeline', {
