@@ -563,6 +563,9 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// Jpeg loader needs revised to provide access to HTTP headers at the same time as the decoded image.
+// Jpeg loader needs to call videoPlayer.GroupLayoutMetadataReceived(loading.id, headers.get("X-CAMLIST"), headers.get("X-RECLIST"));
+
 /////////////////////////////
 // Timeline Immediate TODO //
 /////////////////////////////
@@ -11826,8 +11829,6 @@ function CameraListLoader()
 	var cameraListUpdateTimeout = null;
 	var webcastingWarning;
 	this.clearNewAlertsCounterOnNextLoad = false;
-	var dynamicGroupLayout = {};
-	var badRectsToast = new PersistentToast("badRectsToast", "ERROR");
 
 	var CallScheduler = function (successCallbackFunc)
 	{
@@ -12034,129 +12035,30 @@ function CameraListLoader()
 		}
 		cams.splice(i, 0, fakeGroup);
 	}
-	this.AsyncLoadDynamicGroupRects = function (groupId, resolution)
+	this.GetGroupRects = function (groupId)
 	{
-		if (!resolution || !self.isDynamicLayoutEnabled(groupId))
-			return;
+		// Get from dynamic layout
+		var imgLoading = videoPlayer.Loading().image;
+		if (imgLoading.id === groupId && imgLoading.rects)
+			return imgLoading.rects;
+
+		// Get from default layout
 		var cam = self.GetCameraWithId(groupId);
 		if (cam)
-		{
-			if (!self.CameraIsGroup(cam))
-				return;
-			var g = dynamicGroupLayout[groupId];
-			if (!g)
-				g = dynamicGroupLayout[groupId] = {};
-			if (g[resolution] === "pending")
-				return;
-			if (!g[resolution])
-				g[resolution] = "pending";
-			ExecJSON({ cmd: "ptz", camera: groupId }, function (response)
-			{
-				if (g[resolution] === "pending")
-					g[resolution] = null;
-				if (videoPlayer.Loading().image.id == groupId)
-				{
-					if (response.result === "success")
-					{
-						var rects = response.data.rects;
-						var cams = response.data.cams;
-						if (rects && cams && rects.length === cams.length)
-						{
-							g[resolution] = g["latest"] = { cams: cams, rects: rects };
-							BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
-							badRectsToast.hide();
-						}
-						else
-						{
-							g[resolution] = null;
-							var cause = "missing";
-							if (rects || cams)
-								cause = "invalid";
-							var errMsg = 'Group layout metadata is ' + cause + ' for "' + groupId + '".';
-							console.log(errMsg, rects, cams);
-							badRectsToast.showText(errMsg + ' Probably a Blue Iris bug.');
-						}
-					}
-					else
-						toaster.Warning("Failed to load layout information for group: " + groupId + "<br/>" + JSON.stringify(response));
-				}
-			}, function (jqXHR, textStatus, errorThrown)
-			{
-				if (g[resolution] === "pending")
-					g[resolution] = null;
-				if (videoPlayer.Loading().image.id == groupId)
-					toaster.Warning("Failed to load layout information for group: " + groupId + "<br/>" + jqXHR.ErrorMessageHtml);
-			});
-		}
-		else
-			toaster.Warning("Failed to load group layout information for group that does not exist: " + groupId);
-	}
-	this.GetGroupRects = function (groupId, resolution)
-	{
-		var rects = self.GetDynamicGroupRects(groupId, resolution);
-		if (!rects)
-		{
-			var cam = self.GetCameraWithId(groupId);
-			if (cam)
-				rects = cam.rects;
-		}
-		return rects;
-	}
-	this.GetDynamicGroupRects = function (groupId, resolution)
-	{
-		if (self.isDynamicLayoutEnabled(groupId))
-		{
-			if (!resolution)
-			{
-				var loadedImg = videoPlayer.Loaded().image;
-				if (loadedImg.id === groupId)
-					resolution = loadedImg.actualwidth + "x" + loadedImg.actualheight;
-			}
-			if (resolution)
-			{
-				var g = dynamicGroupLayout[groupId];
-				if (g)
-				{
-					var d = g[resolution];
-					if (d && d !== "pending")
-						return d.rects;
-				}
-			}
-		}
+			return cam.rects;
 		return null;
 	}
-	this.GetGroupCams = function (groupId, resolution)
+	this.GetGroupCams = function (groupId)
 	{
-		var cams = self.GetDynamicGroupCams(groupId, resolution);
-		if (!cams)
-		{
-			var cam = self.GetCameraWithId(groupId);
-			if (cam)
-				cams = cam.group;
-		}
-		return cams;
-	}
-	this.GetDynamicGroupCams = function (groupId, resolution)
-	{
-		if (self.isDynamicLayoutEnabled(groupId))
-		{
-			if (!resolution)
-			{
-				var loadedImg = videoPlayer.Loaded().image;
-				if (loadedImg.id === groupId)
-					resolution = loadedImg.actualwidth + "x" + loadedImg.actualheight;
-			}
-			if (resolution)
-			{
-				var g = dynamicGroupLayout[groupId];
-				if (g)
-				{
-					var d = g[resolution];
-					if (d && d !== "pending")
-						return d.cams;
-				}
-			}
-		}
+		// Get from dynamic layout
+		var imgLoading = videoPlayer.Loading().image;
+		if (imgLoading.id === groupId && imgLoading.cams)
+			return imgLoading.cams;
+
+		// Get from default layout
+		var cam = self.GetCameraWithId(groupId);
+		if (cam)
+			return cam.group;
 		return null;
 	}
 	this.isDynamicLayoutEligible = function (groupId)
@@ -12185,10 +12087,10 @@ function CameraListLoader()
 		if (webcastingWarning)
 			webcastingWarning.remove();
 	}
-	this.GetCameraBoundsInCurrentGroupImageScaled = function (cameraId, groupId, resolution)
+	this.GetCameraBoundsInCurrentGroupImageScaled = function (cameraId, groupId)
 	{
 		var coordScale = self.isDynamicLayoutEnabled(groupId) ? 1 : (videoPlayer.Loaded().image.actualwidth / videoPlayer.Loaded().image.fullwidth);
-		var unscaled = self.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId, resolution);
+		var unscaled = self.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
 		if (unscaled == null)
 			return null;
 		// The first line of the array definition must be on the same line as the return statement
@@ -12197,15 +12099,13 @@ function CameraListLoader()
 			, Math.round(unscaled[2] * coordScale)
 			, Math.round(unscaled[3] * coordScale)];
 	}
-	this.GetCameraBoundsInCurrentGroupImageUnscaled = function (cameraId, groupId, resolution)
+	this.GetCameraBoundsInCurrentGroupImageUnscaled = function (cameraId, groupId)
 	{
 		var camData = self.GetCameraWithId(groupId);
-		var cams = self.GetGroupCams(groupId, resolution);
+		var cams = self.GetGroupCams(groupId);
 		if (cams)
 		{
-			var rects = self.GetGroupRects(groupId, resolution);
-			if (!rects)
-				rects = camData.rects;
+			var rects = self.GetGroupRects(groupId);
 			if (rects)
 				for (var j = 0; j < rects.length; j++)
 					if (cams[j] == cameraId)
@@ -12796,7 +12696,7 @@ function VideoPlayerController()
 			{
 				var loadedImg = videoPlayer.Loaded().image;
 				if (loadedImg.id)
-					playerModule.DrawThumbAsFullCamera(camData.optionValue, loadedImg.id, loadedImg.actualwidth + "x" + loadedImg.actualheight);
+					playerModule.DrawThumbAsFullCamera(camData.optionValue, loadedImg.id);
 			}
 			self.LoadLiveCamera(camData);
 			if (playerModule.DrawThumbAsFullCamera)
@@ -12913,6 +12813,8 @@ function VideoPlayerController()
 		cli.audio = clc.audio;
 		cli.msec = -1;
 		cli.isGroup = clc.group ? true : false;
+		cli.cams = null;
+		cli.rects = null;
 
 		lastLiveCameraOrGroupId = clc.optionValue;
 
@@ -12968,6 +12870,8 @@ function VideoPlayerController()
 			cli.audio = clipData.audio || (!clipData.isClip && cli.audio); // Alerts never have the audio flag set.
 			cli.msec = parseInt(clipData.msec);
 			cli.isGroup = false;
+			cli.cams = null;
+			cli.rects = null;
 
 			playbackHeader.SetClipName(clipData);
 			playbackControls.Recording(clipData);
@@ -13265,6 +13169,40 @@ function VideoPlayerController()
 		else
 			$("#prioritizeTriggeredButton").removeClass("on");
 	}
+	this.GroupLayoutMetadataReceived = function (camId, xCamList, xRecList)
+	{
+		if (!xCamList || !xRecList)
+			return;
+		console.log(camId + " -> X-CAMLIST: " + xCamList);
+		console.log(camId + " -> X-RECLIST: " + xRecList);
+		try
+		{
+			var cams = xCamList ? JSON.parse('[' + xCamList + ']') : null;
+			var rects = xRecList ? JSON.parse('[' + xRecList + ']') : null;
+			if (!cams.length || !rects.length)
+				return;
+			if (currentlyLoadingImage.id === camId)
+			{
+				var oldSerialized = JSON.stringify(currentlyLoadingImage.cams) + JSON.stringify(currentlyLoadingImage.rects);
+				var newSerialized = JSON.stringify(cams) + JSON.stringify(rects);
+				if (oldSerialized !== newSerialized)
+				{
+					currentlyLoadingImage.cams = cams;
+					currentlyLoadingImage.rects = rects;
+					BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
+				}
+			}
+			if (currentlyLoadedImage.id === camId)
+			{
+				currentlyLoadedImage.cams = cams;
+				currentlyLoadedImage.rects = rects;
+			}
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
+	}
 }
 function BICameraData()
 {
@@ -13300,12 +13238,23 @@ function BICameraData()
 	this.timelineStart = false;
 	/** True if this image provider supports PTZ controls. */
 	this.ptz = false;
+	/** True if this image provider supports audio. */
+	this.audio = false;
 	/** Millisecond duration of clips/alerts.  Ignore this if isLive is set. */
 	this.msec = 10000;
 	/** True if this represents a group of cameras. */
 	this.isGroup = false;
-	/** True if this image provider supports audio. */
-	this.audio = false;
+	/**
+	 This is the dynamic cams array defining the cameras visible in the group, in order from left to right, top to bottom.
+	 Populated when HTTP headers arrive with a video frame/stream.
+	 If null, you should fall back to the default layout for the group.
+	 */
+	this.cams = null;
+	/**
+	 This is the dynamic rects array defining the coordinates of cameras visible in the group, in order matching the [cams] array.
+	 Populated when HTTP headers arrive with a video frame/stream.
+	 If null, you should fall back to the default layout for the group.*/
+	this.rects = null;
 	/**
 	 * Sets the property values of this instance to the same as another instance.
 	 * @param {Object} other Another BICameraData to copy values from.
@@ -13325,9 +13274,11 @@ function BICameraData()
 		self.isLive = other.isLive;
 		self.timelineStart = other.timelineStart;
 		self.ptz = other.ptz;
+		self.audio = other.audio;
 		self.msec = other.msec;
 		self.isGroup = other.isGroup;
-		self.audio = other.audio;
+		self.cams = other.cams;
+		self.rects = other.rects;
 	}
 	/** Returns true if this is a historical timeline video provider ([timelineStart] is a number). */
 	this.isTimeline = function ()
@@ -13486,8 +13437,6 @@ function JpegVideoModule()
 				{
 					lastReceivedSize.w = this.naturalWidth;
 					lastReceivedSize.h = this.naturalHeight;
-					if (loading.isGroup)
-						Debounced_AsyncLoadDynamicGroupRects();
 				}
 				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, currentImageTimestampMs);
 
@@ -13562,12 +13511,6 @@ function JpegVideoModule()
 	{
 		return loadedFirstFrame;
 	}
-	var Debounced_AsyncLoadDynamicGroupRects = debounce(function ()
-	{
-		var loadedImg = videoPlayer.Loaded().image;
-		if (cameraListLoader.isDynamicLayoutEnabled(loadedImg.id))
-			cameraListLoader.AsyncLoadDynamicGroupRects(loadedImg.id, loadedImg.actualwidth + "x" + loadedImg.actualheight);
-	}, 250);
 	var openVideoTimeout = null;
 	var lastOpenVideoCallAt = -60000;
 	var lastStreamBeganAt = 0;
@@ -13891,9 +13834,9 @@ function JpegVideoModule()
 		var context2d = canvas.getContext("2d");
 		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
 	}
-	this.DrawThumbAsFullCamera = function (cameraId, groupId, resolution)
+	this.DrawThumbAsFullCamera = function (cameraId, groupId)
 	{
-		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId, groupId, resolution);
+		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId, groupId);
 		if (!thumbBounds)
 			return;
 		var cameraObj = cameraListLoader.GetCameraWithId(cameraId);
@@ -13989,7 +13932,6 @@ function FetchH264VideoModule()
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
 	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, rawtime: 0, utc: Date.now(), expectedInterframe: 100 };
 	var audioCodec = "";
-	var loadDynamicGroupLayout = false;
 
 	var loading = new BICameraData();
 
@@ -14193,13 +14135,11 @@ function FetchH264VideoModule()
 			// This is a timeline historical video.
 			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&n=1&d=1&extend=2";
-			loadDynamicGroupLayout = true;
 		}
 		else if (loading.isLive)
 		{
 			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&extend=2";
-			loadDynamicGroupLayout = true;
 		}
 		else
 		{
@@ -14303,7 +14243,7 @@ function FetchH264VideoModule()
 		if (startPaused)
 		{
 			self.Playback_Pause(); // If opening the stream while paused, the stream will stop after one frame.
-			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+			safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 		}
 		else
 		{
@@ -14311,10 +14251,14 @@ function FetchH264VideoModule()
 			playbackControls.setPlayPauseButtonState(playbackPaused);
 			// Calling StopStream before opening the new stream will drop any buffered frames in the decoder, allowing the new stream to begin playback immediately.
 			StopStreaming();
-			safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+			safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 		}
 		UpdateCurrentURL();
 		BI_CustomEvent.Invoke("OpenVideo", loading);
+	}
+	var headerCallback = function (headers)
+	{
+		videoPlayer.GroupLayoutMetadataReceived(loading.id, headers.get("X-CAMLIST"), headers.get("X-RECLIST"));
 	}
 	var acceptFrame = function (frame, streams)
 	{
@@ -14559,12 +14503,6 @@ function FetchH264VideoModule()
 
 		currentImageDateMs = frame.utc;
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
-
-		if (loadDynamicGroupLayout)
-		{
-			loadDynamicGroupLayout = false;
-			cameraListLoader.AsyncLoadDynamicGroupRects(loading.uniqueId, frame.width + "x" + frame.height);
-		}
 
 		var timeNow = performance.now();
 		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, frame.utc);
@@ -17029,7 +16967,6 @@ function CameraNameLabels()
 
 	BI_CustomEvent.AddListener("ImageResized", onui3_cameraLabelsChanged);
 	BI_CustomEvent.AddListener("CameraListLoaded", onui3_cameraLabelsChanged);
-	BI_CustomEvent.AddListener("DynamicGroupLayoutLoaded", onui3_cameraLabelsChanged);
 
 	this.show = function (isHotkeyShow)
 	{
@@ -22099,7 +22036,9 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 			console.log("Closed stream");
 		}
 	}
-
+	var headerCallback = function (headers)
+	{
+	}
 	var acceptFrame = function (frame, streams)
 	{
 		if (!exportCompleteCb)
@@ -22212,7 +22151,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 		var recordArg = useTranscodeMethod ? "" : "&record=1";
 		var audioArg = "&audio=" + (includeAudio ? "1" : "0");
 		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + recordArg + audioArg + "&speed=100&stream=0&extend=2&time=" + startTimeMs;
-		safeFetch.OpenStream(videoUrl, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+		safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
 	}
 	if (recordingOffsetWorkaround)
 		DoExportRecordingOffsetWorkaround(beginRecording, path, startTimeMs);
@@ -22232,7 +22171,7 @@ function DoExportRecordingOffsetWorkaround(callbackMethod, path, startTimeMs)
 		}
 	}
 	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + "&speed=0&audio=0&stream=0&extend=2&w=160&q=10&time=" + startTimeMs;
-	safeFetch.OpenStream(videoUrl, anyCallback, anyCallback, anyCallback, anyCallback);
+	safeFetch.OpenStream(videoUrl, anyCallback, anyCallback, anyCallback, anyCallback, anyCallback);
 }
 ///////////////////////////////////////////////////////////////
 // Camera Pause Dialog ////////////////////////////////////////
@@ -24225,7 +24164,7 @@ function LoadNextOrPreviousCamera(offset)
 		return;
 	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
 	var idxCurrentMaximizedCamera = -1;
-	var cams = cameraListLoader.GetGroupCams(groupCamera.optionValue, "latest");
+	var cams = cameraListLoader.GetGroupCams(groupCamera.optionValue);
 	if (!cams)
 	{
 		toaster.Error('Can not load next or previous camera because group "' + groupCamera.optionDisplay + '" has invalid layout metadata.');
@@ -25637,9 +25576,9 @@ var safeFetch = new (function ()
 	var queuedRequest = null;
 	var stopTimeout = null;
 	var streamEndedCbForActiveFetch = null;
-	this.OpenStream = function (url, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded)
+	this.OpenStream = function (url, headerCallback, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded)
 	{
-		queuedRequest = { url: url, frameCallback: frameCallback, statusBlockCallback: statusBlockCallback, streamInfoCallback: streamInfoCallback, streamEnded: streamEnded, activated: false };
+		queuedRequest = { url: url, headerCallback: headerCallback, frameCallback: frameCallback, statusBlockCallback: statusBlockCallback, streamInfoCallback: streamInfoCallback, streamEnded: streamEnded, activated: false };
 		if (streamer)
 		{
 			// A fetch stream is currently active.  Try to stop it.
@@ -25673,7 +25612,7 @@ var safeFetch = new (function ()
 		}
 		queuedRequest.activated = true;
 		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
-		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, queuedRequest.streamInfoCallback, StreamEndedWrapper);
+		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.headerCallback, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, queuedRequest.streamInfoCallback, StreamEndedWrapper);
 	}
 	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
 	{
@@ -25694,7 +25633,7 @@ var safeFetch = new (function ()
 	}
 })();
 var UINT32_MAX = 4294967296;
-function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded)
+function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded)
 {
 	var self = this;
 	var cancel_streaming = false;
@@ -25796,48 +25735,60 @@ function FetchVideoH264Streamer(url, frameCallback, statusBlockCallback, streamI
 					HandleGroupableConnectionError();
 					CallStreamEnded("Server responded saying service is unavailable");
 				}
-				else if (res.headers.get("Content-Type") == "image/jpeg")
+				else
 				{
-					var blobPromise = res.blob();
-					blobPromise.then(function (jpegBlob)
+					try
 					{
-						try
+						headerCallback(res.headers);
+					}
+					catch (e)
+					{
+						toaster.Error(e);
+					}
+
+					if (res.headers.get("Content-Type") == "image/jpeg")
+					{
+						var blobPromise = res.blob();
+						blobPromise.then(function (jpegBlob)
 						{
-							if (!currentServer.isUsingRemoteServer && parseInt(res.headers.get("Content-Length")) != jpegBlob.size)
-							{
-								// Apparently we aren't allowed to read the Content-Length header if this is a remote server.
-								CallStreamEnded("fetch graceful exit (jpeg incomplete)", true, true);
-								return;
-							}
-							var jpegObjectURL = URL.createObjectURL(jpegBlob);
 							try
 							{
-								CallFrameCallback({ startTime: startTime, jpeg: jpegObjectURL, isVideo: true }, 1);
+								if (!currentServer.isUsingRemoteServer && parseInt(res.headers.get("Content-Length")) != jpegBlob.size)
+								{
+									// Apparently we aren't allowed to read the Content-Length header if this is a remote server.
+									CallStreamEnded("fetch graceful exit (jpeg incomplete)", true, true);
+									return;
+								}
+								var jpegObjectURL = URL.createObjectURL(jpegBlob);
+								try
+								{
+									CallFrameCallback({ startTime: startTime, jpeg: jpegObjectURL, isVideo: true }, 1);
+								}
+								catch (e)
+								{
+									toaster.Error(e);
+								}
+								CallStreamEnded("fetch graceful exit (jpeg)", true, true);
 							}
 							catch (e)
 							{
 								toaster.Error(e);
 							}
-							CallStreamEnded("fetch graceful exit (jpeg)", true, true);
-						}
-						catch (e)
+						})
+						["catch"](function (e)
 						{
-							toaster.Error(e);
-						}
-					})
-					["catch"](function (e)
+							CallStreamEnded(e);
+						});
+						return blobPromise;
+					}
+					else
 					{
-						CallStreamEnded(e);
-					});
-					return blobPromise;
-				}
-				else
-				{
-					if (!res.ok)
-						responseError = res.status + " " + res.statusText;
-					// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
-					reader = res.body.getReader();
-					return pump(reader);
+						if (!res.ok)
+							responseError = res.status + " " + res.statusText;
+						// Do NOT return before the first reader.read() or the fetch can be left in a bad state!
+						reader = res.body.getReader();
+						return pump(reader);
+					}
 				}
 			}
 			catch (e)
