@@ -5609,6 +5609,10 @@ function ClipTimeline()
 	var canvasData = null;
 	/** Number of milliseconds prior to the "live" time that the timeline should not allow to be selected. */
 	this.keepOutTime = 15000; // Blue Iris updates db info every 10s I think, so the absolute minimum age of video should be 10s.
+	var averageCanvasDrawTime = new RollingAverage(30);
+	var averageCanvasCpuUsage = new RollingAverage(30);
+	var canvasDrawFps = new FPSCounter1();
+	var drawRoundedRectangles = true;
 
 	this.Initialize = function ()
 	{
@@ -5679,7 +5683,10 @@ function ClipTimeline()
 					recomputeCurrentTime: 0,
 					dragState: { isDragging: false, startX: 0, offsetMs: 0 },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
+					/** Helps trigger additional canvas draws while the timeline is being dragged. */
 					canvasRedrawState: { isActive: false, lastRedraw: 0 },
+					/** Helps throttle canvas drawing to once per frame */
+					canvasThrottle: { didDrawAlreadyThisFrame: false, queuedDraw: false },
 					hammerTime: null,
 					accumulatedZoomDelta: 0,
 					isHovered: true,
@@ -5938,6 +5945,17 @@ function ClipTimeline()
 				},
 				drawCanvas: function ()
 				{
+					if (this.canvasThrottle.didDrawAlreadyThisFrame)
+					{
+						this.canvasThrottle.queuedDraw = true;
+						return;
+					}
+					else
+					{
+						this.canvasThrottle.queuedDraw = false;
+						this.canvasThrottle.didDrawAlreadyThisFrame = true;
+						requestAnimationFrame(this.nextCanvasDrawFrame);
+					}
 					var canvas = this.$refs.clipTimelineCanvas;
 					if (!canvas || currentPrimaryTab !== "timeline")
 						return;
@@ -5956,7 +5974,8 @@ function ClipTimeline()
 					if (canvasData)
 					{
 						var alertIconSpace = 12 * dpr;
-						var timelineColorbarHeight = ((timelineInternalHeight - alertIconSpace) / canvasData.colors.length);
+						var clipDrawRegionHeight = timelineInternalHeight - alertIconSpace;
+						var timelineColorbarHeight = clipDrawRegionHeight / canvasData.colors.length;
 
 						// Draw clip rectangles
 						for (var n = 0; n < canvasData.clips.length; n++)
@@ -5966,20 +5985,21 @@ function ClipTimeline()
 							var w = clip.len / zoomFactor;
 							if (x < timelineInternalWidth && x + w > 0)
 							{
-								var y = alertIconSpace + (timelineColorbarHeight * clip.track);
+								var y1 = Math.round(clip.track * timelineColorbarHeight);
+								var y2 = Math.round((clip.track + 1) * timelineColorbarHeight);
 
 								ctx.fillStyle = canvasData.colors[clip.track];
-								if (self.drawRoundedRectangles)
-									roundRect(ctx, x, y, w, timelineColorbarHeight, 2);
+								if (drawRoundedRectangles)
+									roundRect(ctx, x, alertIconSpace + y1, w, y2 - y1);
 								else
-									ctx.fillRect(x, y, w, timelineColorbarHeight);
+									ctx.fillRect(x, alertIconSpace + y1, w, y2 - y1);
 							}
 						}
 
 						// Draw alert rectangles
 						ctx.fillStyle = "#8E3510";
-						var y = alertIconSpace * 0.125;
-						var h = alertIconSpace * 0.75;
+						var y = Math.round(alertIconSpace * 0.125);
+						var h = alertIconSpace - y - y;
 						for (var n = 0; n < canvasData.alerts.length; n++)
 						{
 							var alert = canvasData.alerts[n];
@@ -5987,8 +6007,8 @@ function ClipTimeline()
 							var w = alert.len / zoomFactor;
 							if (x < timelineInternalWidth && x + w > 0)
 							{
-								if (self.drawRoundedRectangles)
-									roundRect(ctx, x, y, w, h, 2);
+								if (drawRoundedRectangles)
+									roundRect(ctx, x, y, w, h);
 								else
 									ctx.fillRect(x, y, w, h);
 							}
@@ -6052,10 +6072,28 @@ function ClipTimeline()
 						ctx.fillRect(x, y, w, h);
 					}
 					var perfEnd = performance.now();
+					// Decide whether to render curved corners.
+					var renderTime = perfEnd - perfStart;
+					averageCanvasDrawTime.Add(renderTime);
+					var fps = canvasDrawFps.getFPS(renderTime);
+					var averageRenderTime = averageCanvasDrawTime.Get();
+					var cpuUsage = (averageRenderTime * fps) / 1000;
+					averageCanvasCpuUsage.Add(cpuUsage);
+					var averageCpuUsage = averageCanvasCpuUsage.Get();
+					if (drawRoundedRectangles && averageCpuUsage > 0.2)
+						drawRoundedRectangles = false;
+					else if (!drawRoundedRectangles && fps >= 30 && averageCpuUsage < 0.05)
+						drawRoundedRectangles = true;
 					if (developerMode)
-						console.log("Render took " + (perfEnd - perfStart).toFixed(1) + " ms.");
+						console.log("Canvas Render: " + renderTime.toFixed(1) + " ms (avg " + averageRenderTime.toFixed(1) + "ms).\nFPS: " + fps.toFixed(0) + ". CPU: " + (cpuUsage * 100).toFixed(1) + "% (avg " + (averageCpuUsage * 100).toFixed(1) + "%)");
 
 					this.canvasRedrawState.lastRedraw = perfStart;
+				},
+				nextCanvasDrawFrame: function ()
+				{
+					this.canvasThrottle.didDrawAlreadyThisFrame = false;
+					if (this.canvasThrottle.queuedDraw)
+						this.drawCanvas();
 				},
 				canvasRedrawLoop: function ()
 				{
@@ -6176,7 +6214,7 @@ function ClipTimeline()
 						left: (this.CenterBarCenterX - 1) + 'px'
 					};
 				},
-				/** Current clock time as it would be if it was allowed to pan into the future. */
+				/** Currently highlighted time as it would be if it was allowed to pan into the future. */
 				currentTimeIfFuturePanningWasAllowed: function ()
 				{
 					var time = this.lastSetTime;
@@ -6186,6 +6224,7 @@ function ClipTimeline()
 						time += this.wheelPanState.accumulatedX * this.zoomFactor;
 					return time;
 				},
+				/** Currently highlighted time */
 				currentTime: function ()
 				{
 					var time = this.currentTimeIfFuturePanningWasAllowed;
@@ -6235,7 +6274,6 @@ function ClipTimeline()
 				zoomFactor: function ()
 				{
 					this.newTimelineParameters();
-					this.drawCanvas();
 				},
 				visibleRange: function ()
 				{
@@ -6249,10 +6287,6 @@ function ClipTimeline()
 						return;
 					canvas.width = this.timelineInternalWidth;
 					canvas.height = this.timelineInternalHeight;
-					this.drawCanvas();
-				},
-				currentTime: function ()
-				{
 					this.drawCanvas();
 				},
 				videoShouldBePaused: function ()
@@ -6509,33 +6543,45 @@ function ClipTimeline()
 		}
 		return undefined;
 	}
-	this.drawRoundedRectangles = false;
 	/**
-	 * Draws a rounded rectangle using the current state of the canvas.
-	 * If you omit the last three params, it will draw a rectangle
-	 * outline with a 5 pixel border radius
-	 * @param {CanvasRenderingContext2D} ctx
-	 * @param {Number} x The top left x coordinate
-	 * @param {Number} y The top left y coordinate
-	 * @param {Number} width The width of the rectangle
-	 * @param {Number} height The height of the rectangle
-	 * @param {Number} [radius = 5] The corner radius; It can also be an object 
-	 *                 to specify different radii for corners
+	 * Efficiently draws a rounded-corner rectangle on a canvas 2d context.
+	 * It is a very trivial rounded corner algorithm with an emphasis on speed and matching Blue Iris's visual style.
 	 */
-	function roundRect(ctx, x, y, width, height, radius)
+	function roundRect(ctx, x, y, w, h)
 	{
-		ctx.beginPath();
-		ctx.moveTo(x + radius, y);
-		ctx.lineTo(x + width - radius, y);
-		ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-		ctx.lineTo(x + width, y + height - radius);
-		ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-		ctx.lineTo(x + radius, y + height);
-		ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-		ctx.lineTo(x, y + radius);
-		ctx.quadraticCurveTo(x, y, x + radius, y);
-		ctx.closePath();
-		ctx.fill();
+		var lhc = 1, rhc = 1; // Horizontal cutout
+		if (w < 2)
+			rhc = 0;
+		if (w < 3)
+			lhc = 0;
+		var vc = 1; // Vertical cutout
+		if (h < 3)
+		{
+			if (h < 2)
+				vc = 0;
+			else
+				vc = h / 3;
+		}
+		// Draw top
+		ctx.fillRect(x + lhc, y, w - lhc - rhc, vc);
+		// Draw middle
+		ctx.fillRect(x, y + vc, w, h - vc - vc);
+		// Draw bottom
+		ctx.fillRect(x + lhc, (y + h) - vc, w - lhc - rhc, vc);
+
+		//var r = 2;
+		//ctx.beginPath();
+		//ctx.moveTo(x + r, y);
+		//ctx.lineTo(x + w - r, y);
+		//ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+		//ctx.lineTo(x + w, y + h - r);
+		//ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+		//ctx.lineTo(x + r, y + h);
+		//ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+		//ctx.lineTo(x, y + r);
+		//ctx.quadraticCurveTo(x, y, x + r, y);
+		//ctx.closePath();
+		//ctx.fill();
 	}
 	if (enabled)
 		self.Initialize();
@@ -25069,9 +25115,9 @@ function RollingAverage(MAXSAMPLES)
 		return (ticksum / numTicks);
 	}
 }
-///////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
 // Efficient Timed Average Calculator ///////////////////////
-///////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
 function TimedAverage(maxMs, minRecords)
 {
 	/// <summary>Calculates the average of values provided for a limited time. The timer starts upon the first Add operation.</summary>
