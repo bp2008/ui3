@@ -576,6 +576,7 @@ var togglableUIFeatures =
 // Skip dead space in timeline playback, only while the player is in the playing state, and we aren't close to "live".  Perhaps 30 seconds distance is safe.
 // Get the timeline working nicely when in a different time zone.  The UI should appear to be in the server's time zone.
 // Fill in the "future" area of the timeline with something.
+// addmotion/addoverlay arguments are supported for the timeline, so UI3 should use them.
 
 /////////////////////////////////////
 // Timeline Pending Server Support //
@@ -5408,8 +5409,20 @@ var ptzPresetThumbLoader = new (function ()
 	-2 for 4x precision
  */
 var timelineDataZoomMultiplier = 0;
-var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAYBAMAAAABjmA/AAAAHlBMVEUAAQAeBQA4DgBbHABpIwB3JwCaNQC9QwDVTQD8XQCSYQG/AAAAf0lEQVQI12NgAAFGIwYIYE2CMiI"
-	+ "CoAIdClCBaVCBzmaowMxCMM3SOROi1mPmDAWowDSowMxpTgIMDMydM2fOnFEWzGAxEwymMWRAGMUMym4VQMnpBkDVQh4gARCIhAgwMGTOhNjF1DkDIsAyswViOdsMBwhDAyrA4A4VYHABkwCNgSZ0AKh3jQAAAABJRU5ErkJggg==";
+var timelineAlertImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAYCAMAAADNlS1EAAABd1BMVEVHcEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	+ "FAQAAAAAAAAAAAAADAAAAAAAAAAAAAAAUAwA1DQAZBAANAgAKAQAMAQAAAAAAAAAAAAAJAQBmIQAqCQBVGgD/XwD8XgD9XgBhHwD7XQD6XQD4XADRTACPMgB7KgBpIgDSTAD+XwAAAADO"
+	+ "SwBiHwDuWAD2WwA5DwC9RABbHQDNSwBPGAD+XgDxWQD0WwCvPgDjVAD1WwCZNQDZTwBEEwAyDABvJQAuCwDpVgB+KwCXNQBXGwDRTQB1JwD3XABwJQB4KABtJABoIgDWTgBBEgDhUwDTT"
+	+ "QCyQABzJgDtWADkVAAhBgDgUwDeUgDdUQBdHQDaUACbNgDLSgAgBQDXTwBRGABxJgAOAgDMSgDJSQBaHADGSADERwD5XABVGgBUGgDsVwBsIwBrIwBmIQCkOgBjIACeOAA8EADKSQDbUA"
+	+ "BcHQCdNwDARQCQMgDqVwCjOgC/RQB9KgCZkaUQAAAAIHRSTlMAId69+SfYBsM8QvnwOdz5twWa/f7++fn5Y77k2P7+/ou/Tl8AAAEdSURBVBjTXdHVcsMwEAVQyZHsxA6VuVUMcZiTclN"
+	+ "mZmZm5o+vrJkkcu/jmZXu7CwA5UiyUDdeK2LARXI568Njwzak1hieGEUOaDPfzEa0KMgSb8rkZnq3gRukhqa3Ymvb3KBlQzuqvrxeqbEsMqCS1RXUDDmbm1dJbC/T0oSlsiWXAoT0heJI"
+	+ "cMgYSsy0KDXS1a8t7PsE0Q8BdKC3hGWks3vkIPv+20HLsJjL66QU1fj6Zvj5mpoKlDT4U2DYfjgb6kn0Bpl9FKztoV8Uve6awcgitcuLa+R00XaIsafaHT9KEWKcXzFjqfJ4jx8MYpyeV"
+	+ "QzQj59Nop/keKOHuL3R8xpvdAHlKW0+2oy+zryY93ajmMze/TOAW9s0hbM/fBwr4p3w8DUAAAAASUVORK5CYII=";
+var timelineFlagImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAYCAYAAAARfGZ1AAACCElEQVRIx8XUPWgUQRTA8f/M7oYLG+40RxQTkRiQCIJa5EjUJmoh"
+	+ "FiKIhSBELETBSqwESyvBQiutAgmBIILFgaZQUCQgBjniokSMCmdUkBjMfeV2d3bG5oSAnNzmFnztDL+Z98ETQA64JJBpkBhUFXgEHJF0ZDWBIUYIbGFQJeCuDVwcsi6cG3AOWhjDh/CFX"
+	+ "9Djm7aJ3OFhZyydkpk4NtooFsKn0Rs9ZWyHbHrQOWrtdU+iTUS9VBMFPe5kRb/c556iy+qJha+q73xSLzXwywaMxEYKq5GWWJeihUC2DPu6glfLMx898IBJCbFK2jSUCfBqeWbDe19CVm"
+	+ "4Bb2USsDaKJX+eOX9qddl4N4GHgEoE/xkWeV67XftoZiaB+8AagEzi15/9WTw9vQDcAX78OWsbF0LSJbewmd09wMB6s30cyc7UCEPO2e3AdWB/YjhAp5Vh2B0Th6wrB4BrQF9iOEDG7mX"
+	+ "EPW/tkaePNx7olq0k3lp5BFudQUY7r7o7xOgZ4ITd7HKEwjclbN0RK4Nup49+K5ctqmfHmuH1op4rzZRvWA6peKOJ5qv2ysBiM7xQZWmiEE24bGw/LAOv/8Ib0gqQB3Q7TZb/6GLbGy2x"
+	+ "UfwfuNjAVLcWtiYgNGtoo4iMQuEnh0eUF9+Fj6tBpeIqE/A+elIHqkngAugFLgO7GqP3CpgGvrWL/wa9grsEBYmdaQAAAABJRU5ErkJggg==";
 function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackError)
 {
 	/** The most recent timeline parameters defining the timeline view we require. */
@@ -5602,6 +5615,8 @@ function ClipTimeline()
 	var initialized = false;
 	var alertImg = new Image();
 	var alertImgLoaded = false;
+	var flagImg = new Image();
+	var flagImgLoaded = false;
 	var $tl_root = $();
 	var timelineDataLoader = null;
 	var minZoomScaler = 8;
@@ -5629,6 +5644,14 @@ function ClipTimeline()
 				timeline.drawCanvas();
 		};
 		alertImg.src = timelineAlertImgSrc;
+
+		flagImg.onload = function ()
+		{
+			flagImgLoaded = true;
+			if (timeline && typeof timeline.drawCanvas === "function")
+				timeline.drawCanvas();
+		};
+		flagImg.src = timelineFlagImgSrc;
 		BI_CustomEvent.AddListener("FinishedLoading", finishInit);
 		finishInit();
 	}
@@ -6011,7 +6034,7 @@ function ClipTimeline()
 						}
 
 						// Draw alert icons
-						if (alertImg.naturalWidth && alertImg.naturalHeight)
+						if (alertImg.naturalWidth && alertImg.naturalHeight && flagImg.naturalWidth && flagImg.naturalHeight)
 						{
 							var alertImgScale = (alertImg.naturalHeight / 12) / dpr;
 							var alertImgW = alertImg.naturalWidth / alertImgScale;
@@ -6019,10 +6042,21 @@ function ClipTimeline()
 							var alertImgXOffset = alertImgW / 2;
 							var alertImgYOffset = 0 * dpr;
 
+							var flagImgScale = (flagImg.naturalHeight / 12) / dpr;
+							var flagImgW = flagImg.naturalWidth / flagImgScale;
+							var flagImgH = flagImg.naturalHeight / flagImgScale;
+							var flagImgXOffset = flagImgW / 2;
+							var flagImgYOffset = 0 * dpr;
+
 							for (var n = 0; n < canvasData.alerts.length; n++)
 							{
 								var a = canvasData.alerts[n];
-								//if (!a.isFlag)
+								if (a.isFlag)
+								{
+									var x = ((a.time - left) / zoomFactor) - flagImgXOffset;
+									ctx.drawImage(flagImg, x, flagImgYOffset, flagImgW, flagImgH);
+								}
+								else
 								{
 									var x = ((a.time - left) / zoomFactor) - alertImgXOffset;
 									ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
@@ -13708,7 +13742,7 @@ function JpegVideoModule()
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
 		{
-			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg=1&n=1&d=1&pos=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg=1&n=0&d=0&pos=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 			//console.log("Requesting timeline jpeg at " + GetDateStr(new Date(timeValue), true));
 		}
 		else if (loading.isLive)
