@@ -13531,10 +13531,14 @@ function JpegVideoModule()
 		promise
 			.then(function (result)
 			{
+				if (imageLoadingState.loadingUrl !== url)
+					return; // A new image began loading before this one completed; this result is no longer needed.
 				return LoadImagePromise(result.dataUri, result.headers);
 			})
 			.then(function (data)
 			{
+				if (imageLoadingState.loadingUrl !== url)
+					return; // A new image began loading before this one completed; this result is no longer needed.
 				var image = data.image;
 				var headers = data.headers;
 
@@ -25637,7 +25641,7 @@ function DownloadToDataUri(url)
 			{
 				var arr;
 				var dataUri;
-				var start = performance.now();
+				//var start = performance.now();
 				if (hasUint8Array)
 				{
 					var arr = new Uint8Array(xhr.response);
@@ -25648,8 +25652,8 @@ function DownloadToDataUri(url)
 				{
 					var arr = xhr.responseBody.toArray(); dataUri = "data:image/jpg;base64," + base64Array(arr);
 				}
-				var end = performance.now();
-				console.log(arr.length + " bytes to base64 took " + (end - start).toFixed(1) + "ms");
+				//var end = performance.now();
+				//console.log(arr.length + " bytes to base64 took " + (end - start).toFixed(1) + "ms");
 				var headerStr = xhr.getAllResponseHeaders();
 				var headerArr = headerStr.trim().split(/[\r\n]+/);
 				var headerMap = {};
