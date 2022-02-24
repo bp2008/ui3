@@ -13501,7 +13501,8 @@ function JpegVideoModule()
 	var $camimg_canvas;
 	var camimg_canvas_ele;
 	var backbuffer_canvas;
-	var camimg_ele;
+	// Contains URLs of the last image we started loading and the last image we loaded.
+	var imageLoadingState = { loadingUrl: "", loadedUrl: "" };
 
 	var Initialize = function ()
 	{
@@ -13511,75 +13512,89 @@ function JpegVideoModule()
 		// Do one-time initialization here
 		$camimg_canvas = $('<canvas id="camimg_canvas" class="videoCanvas"></canvas>');
 		camimg_canvas_ele = $camimg_canvas.get(0);
-		var camObj = $('<img crossOrigin="Anonymous" id="camimg" src="" alt="" style="display: none;" />');
 		var $backbuffer_canvas = $('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
 		backbuffer_canvas = $backbuffer_canvas.get(0);
 		$camimg_store.append($camimg_canvas);
-		$camimg_store.append(camObj);
 		$camimg_store.append($backbuffer_canvas);
+	}
+	function LoadImageFromUrl(url)
+	{
+		imageLoadingState.loadingUrl = url;
 
-		camimg_ele = camObj.get(0);
-		camimg_ele = new ImageWithHeaders(camimg_ele);
-		camimg_ele.onload = function (headers)
-		{
-			ClearImageLoadTimeout();
-			if (!isCurrentlyActive)
-				return;
-			if (!this.complete || typeof this.naturalWidth == "undefined" || this.naturalWidth == 0)
+		var loadWithHeaders = true;
+		var promise;
+		if (loadWithHeaders)
+			promise = DownloadToDataUri(url);
+		else
+			promise = new Promise(function (resolve, reject) { resolve({ dataUri: url, headers: null }); });
+
+		promise
+			.then(function (result)
 			{
-				// Failed
-				programmaticSoundPlayer.NotifyDisconnected();
-			}
-			else
+				return LoadImagePromise(result.dataUri, result.headers);
+			})
+			.then(function (data)
 			{
-				programmaticSoundPlayer.NotifyReconnected();
-				loadedFirstFrame = true;
-				var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
-				if (lastReceivedSize.w !== this.naturalWidth || lastReceivedSize.h !== this.naturalHeight)
+				var image = data.image;
+				var headers = data.headers;
+
+				ClearImageLoadTimeout();
+				if (!isCurrentlyActive)
+					return;
+
+				if (!image.complete || typeof image.naturalWidth == "undefined" || image.naturalWidth == 0)
 				{
-					lastReceivedSize.w = this.naturalWidth;
-					lastReceivedSize.h = this.naturalHeight;
+					// Failed
+					programmaticSoundPlayer.NotifyDisconnected();
 				}
-				if (headers)
-					videoPlayer.GroupLayoutMetadataReceived(loading.id, headers["x-camlist"], headers["x-reclist"]);
-				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, currentImageTimestampMs);
-				playbackControls.FrameTimestampUpdated(false);
-
-				CopyImageToCanvas(camimg_ele.internalImage(), camimg_canvas_ele);
-
-				if (nerdStats.IsOpen())
+				else
 				{
-					var loaded = videoPlayer.Loaded().image;
-					var nativeRes = "";
-					if (cameraListLoader.isDynamicLayoutEligible(loaded.id))
-						nativeRes = " (dynamically sized group)";
-					else
+					programmaticSoundPlayer.NotifyReconnected();
+					loadedFirstFrame = true;
+					imageLoadingState.loadedUrl = url;
+					var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
+					if (lastReceivedSize.w !== image.naturalWidth || lastReceivedSize.h !== image.naturalHeight)
 					{
-						nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
-						if (loading.fullwidth !== loaded.actualwidth || loading.fullheight !== loaded.actualheight)
-							nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
+						lastReceivedSize.w = image.naturalWidth;
+						lastReceivedSize.h = image.naturalHeight;
 					}
+					if (headers)
+						videoPlayer.GroupLayoutMetadataReceived(loading.id, headers["x-camlist"], headers["x-reclist"]);
+					videoPlayer.ImageRendered(loading.uniqueId, image.naturalWidth, image.naturalHeight, msLoadingTime, currentImageTimestampMs);
+					playbackControls.FrameTimestampUpdated(false);
 
-					nerdStats.BeginUpdate();
-					nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
-					nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
-					nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "% (Frame Offset: " + Math.floor(clipPlaybackPosition) + "ms)")); // TIMELINE-RELEASE
-					nerdStats.UpdateStat("Codecs", "jpeg");
-					nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, msLoadingTime + "ms", true);
-					nerdStats.EndUpdate();
+					CopyImageToCanvas(image, camimg_canvas_ele);
+
+					if (nerdStats.IsOpen())
+					{
+						var loaded = videoPlayer.Loaded().image;
+						var nativeRes = "";
+						if (cameraListLoader.isDynamicLayoutEligible(loaded.id))
+							nativeRes = " (dynamically sized group)";
+						else
+						{
+							nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
+							if (loading.fullwidth !== loaded.actualwidth || loading.fullheight !== loaded.actualheight)
+								nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
+						}
+
+						nerdStats.BeginUpdate();
+						nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
+						nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
+						nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "% (Frame Offset: " + Math.floor(clipPlaybackPosition) + "ms)")); // TIMELINE-RELEASE
+						nerdStats.UpdateStat("Codecs", "jpeg");
+						nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, msLoadingTime + "ms", true);
+						nerdStats.EndUpdate();
+					}
 				}
-			}
-			GetNewImage();
-		};
-		camimg_ele.onerror = function (err)
-		{
-			if (camObj.attr('loadingimg'))
+				GetNewImage();
+			})
+			.catch(function (data)
 			{
 				programmaticSoundPlayer.NotifyDisconnected();
 				ClearImageLoadTimeout();
 				setTimeout(GetNewImage, 1000);
-			}
-		};
+			});
 	}
 	var Activate = function ()
 	{
@@ -13802,7 +13817,6 @@ function JpegVideoModule()
 
 		var sizeToRequest = imageRenderer.GetSizeToRequest(true, loading);
 		var sizeArgs = "&w=" + sizeToRequest.w + (cameraListLoader.isDynamicLayoutEnabled(loading.id) ? "&h=" + sizeToRequest.h : "");
-		$("#camimg").attr('loadingimg', loading.id);
 
 		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 
@@ -13820,7 +13834,7 @@ function JpegVideoModule()
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg + groupArgs;
 
-		if (camimg_ele.src == imgSrcPath)
+		if (imageLoadingState.loadedUrl == imgSrcPath)
 		{
 			videoOverlayHelper.HideLoadingOverlay();
 			GetNewImageAfterTimeout();
@@ -13845,7 +13859,7 @@ function JpegVideoModule()
 				repeatedSameImageURLs = 1;
 				SetImageLoadTimeout();
 				lastLoadedTimeValue = timeValue;
-				camimg_ele.src = imgSrcPath;
+				LoadImageFromUrl(imgSrcPath);
 			}
 		}
 	}
@@ -25597,94 +25611,12 @@ function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 // Load jpeg images with HTTP headers /////////////////////////
 ///////////////////////////////////////////////////////////////
 /**
- * Construct with `new ImageWithHeaders()`, optionally passing in an existing Image instance.
- * @param {HTMLImageElement} image Optional existing Image instance.
- */
-function ImageWithHeaders(image)
-{
-	var self = this;
-
-	this.headers = {};
-
-	if (!image)
-		image = new Image();
-
-	this.onload = function (headers) { };
-	this.onerror = function () { };
-
-	var loading = false;
-	var complete = false;
-	var queuedSrc;
-	var mySrc = '';
-	Object.defineProperty(this, "src", {
-		get: function () { return mySrc; },
-		set: function (value)
-		{
-			if (loading)
-			{
-				queuedSrc = value;
-				return;
-			}
-			queuedSrc = undefined;
-			if (mySrc === value)
-				self.onload();
-			else
-			{
-				complete = false;
-				loading = true;
-				mySrc = value;
-				LoadAsDataUri(mySrc)
-					.then(function (result)
-					{
-						self.headers = result.headers;
-						image.src = result.dataUri;
-					})
-					.catch(function (err)
-					{
-						image.src = undefined;
-					});
-			}
-		}
-	});
-
-	var loadingEnded = function ()
-	{
-		loading = false;
-		var q = queuedSrc;
-		if (queuedSrc !== undefined)
-			self.src = queuedSrc;
-	}
-
-	Object.defineProperty(this, "complete", { get: function () { return complete; } });
-	Object.defineProperty(this, "naturalWidth", { get: function () { return image.naturalWidth; } });
-	Object.defineProperty(this, "naturalHeight", { get: function () { return image.naturalHeight; } });
-
-	image.onload = function ()
-	{
-		if (image.src.substr(0, 5) === "blob:")
-			URL.revokeObjectURL(image.src);
-		complete = true;
-		self.onload.call(self, self.headers);
-		loadingEnded();
-	};
-	image.onerror = function ()
-	{
-		self.onerror.call(self);
-		loadingEnded();
-	};
-
-	this.internalImage = function ()
-	{
-		return image;
-	}
-}
-/**
  * Loads the specified resource as a Data URI and provides access to the response headers.
  * Returns a promise that resolves with { dataUri: "...", headers: { key: value } }
  * Most rejections will include an argument that has status and statusText fields.
  * @param {String} url URL of any resource that can be downloaded and converted into a Data URI.
  */
-function LoadAsDataUri(url)
+function DownloadToDataUri(url)
 {
 	return new Promise(function (resolve, reject)
 	{
@@ -25741,6 +25673,32 @@ function LoadAsDataUri(url)
 			reject(failure);
 		};
 		xhr.send();
+	});
+}
+/**
+ * Loads the image described by the specified Uri. Also accepts a headers object which will be passed through to the resolve or reject handlers of the promise.
+ * Returns a promise that resolves or rejects with the argument { image: HTMLImageElement, headers: headers }
+ * @param {String} url Image Uri
+ * @param {Object} headers Optional object containing HTTP headers to deliver along with the final image.
+ */
+function LoadImagePromise(url, headers)
+{
+	return new Promise(function (resolve, reject)
+	{
+		var image = new Image();
+		image.setAttribute("crossOrigin", "Anonymous");
+		image.onload = function ()
+		{
+			if (image.complete && image.naturalWidth && image.naturalHeight)
+				resolve({ image: image, headers: headers });
+			else
+				reject({ image: image, headers: headers });
+		};
+		image.onerror = function ()
+		{
+			reject({ image: image, headers: headers });
+		};
+		image.src = url;
 	});
 }
 ///////////////////////////////////////////////////////////////

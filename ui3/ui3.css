@@ -3177,11 +3177,6 @@ div.invisibleLabel
 	display: none;
 }
 
-#camimg
-{
-	display: none;
-}
-
 .videoCanvas,
 #videoElement_wrapper,
 #videoElement_wrapper video
