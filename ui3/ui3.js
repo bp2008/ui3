@@ -12,6 +12,73 @@ if (navigator.cookieEnabled)
 	NavRemoveUrlParams("session");
 }
 ///////////////////////////////////////////////////////////////
+// Host Redirection, Proxy Handling ///////////////////////////
+///////////////////////////////////////////////////////////////
+var currentServer =
+{
+	remoteBaseURL: GetAppPath()
+	, remoteServerName: ""
+	, remoteServerUser: ""
+	, remoteServerPass: ""
+	, isLoggingOut: false
+	, isUsingRemoteServer: false
+	, GetAPISessionArg: function (prefix, forceAddArg)
+	{
+		if (currentServer.isUsingRemoteServer || !navigator.cookieEnabled || forceAddArg)
+			return prefix + "session=" + sessionManager.GetAPISession();
+		return "";
+	}
+	, GetLocalSessionArg: function (prefix, forceAddArg)
+	{
+		if (!navigator.cookieEnabled || forceAddArg)
+		{
+			if (sessionManager)
+				return prefix + "session=" + sessionManager.GetLocalSession();
+			else
+				toaster.Error("Attempted to access sessionManager before it was initialized.");
+		}
+		return "";
+	}
+	, SetRemoteServer: function (serverName, baseUrl, user, pass)
+	{
+		if (!currentServer.ValidateRemoteServerNameSimpleRules(serverName))
+		{
+			toaster.Error("Unable to validate remote server name. Connecting to local server instead.", 10000);
+			serverName = "";
+		}
+		if (serverName == "")
+		{
+			currentServer.remoteBaseURL = GetAppPath();
+			currentServer.remoteServerName = "";
+			currentServer.remoteServerUser = "";
+			currentServer.remoteServerPass = "";
+			currentServer.isUsingRemoteServer = false;
+		}
+		else
+		{
+			currentServer.remoteBaseURL = baseUrl;
+			currentServer.remoteServerName = serverName;
+			currentServer.remoteServerUser = user;
+			currentServer.remoteServerPass = pass;
+			currentServer.isUsingRemoteServer = true;
+		}
+	}
+	, ValidateRemoteServerNameSimpleRules: function (val)
+	{
+		if (val.length == 0)
+			return false;
+		if (val.length > 16)
+			return false;
+		for (var i = 0; i < val.length; i++)
+		{
+			var c = val.charAt(i);
+			if ((c < "a" || c > "z") && (c < "A" || c > "Z") && (c < "0" || c > "9") && c != " ")
+				return false;
+		}
+		return true;
+	}
+};
+///////////////////////////////////////////////////////////////
 // Feature Detect /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var _browser_is_ie = -1;
@@ -85,6 +152,8 @@ function DoUIFeatureDetection()
 		requestAnimationFramePolyFill();
 		if (!isCanvasSupported())
 			MissingRequiredFeature("HTML5 Canvas"); // Excludes IE 8
+		else if (!window.Uint8Array && !window.VBArray)
+			MissingRequiredFeature("Uint8Array or VBArray", "One of these is required for the Jpeg video player since UI3-197.");
 		else
 		{
 			// All critical tests pass
@@ -562,9 +631,6 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-
-// Jpeg loader needs revised to provide access to HTTP headers at the same time as the decoded image.
-// Jpeg loader needs to call videoPlayer.GroupLayoutMetadataReceived(loading.id, headers.get("X-CAMLIST"), headers.get("X-RECLIST"));
 
 /////////////////////////////
 // Timeline Immediate TODO //
@@ -13207,8 +13273,8 @@ function VideoPlayerController()
 	{
 		if (!xCamList || !xRecList)
 			return;
-		console.log(camId + " -> X-CAMLIST: " + xCamList);
-		console.log(camId + " -> X-RECLIST: " + xRecList);
+		//console.log(camId + " -> X-CAMLIST: " + xCamList);
+		//console.log(camId + " -> X-RECLIST: " + xRecList);
 		try
 		{
 			var cams = xCamList ? JSON.parse('[' + xCamList + ']') : null;
@@ -13435,6 +13501,7 @@ function JpegVideoModule()
 	var $camimg_canvas;
 	var camimg_canvas_ele;
 	var backbuffer_canvas;
+	var camimg_ele;
 
 	var Initialize = function ()
 	{
@@ -13451,8 +13518,9 @@ function JpegVideoModule()
 		$camimg_store.append(camObj);
 		$camimg_store.append($backbuffer_canvas);
 
-		var camimg_ele = camObj.get(0);
-		camObj.load(function ()
+		camimg_ele = camObj.get(0);
+		camimg_ele = new ImageWithHeaders(camimg_ele);
+		camimg_ele.onload = function (headers)
 		{
 			ClearImageLoadTimeout();
 			if (!isCurrentlyActive)
@@ -13472,11 +13540,12 @@ function JpegVideoModule()
 					lastReceivedSize.w = this.naturalWidth;
 					lastReceivedSize.h = this.naturalHeight;
 				}
+				if (headers)
+					videoPlayer.GroupLayoutMetadataReceived(loading.id, headers["x-camlist"], headers["x-reclist"]);
 				videoPlayer.ImageRendered(loading.uniqueId, this.naturalWidth, this.naturalHeight, msLoadingTime, currentImageTimestampMs);
-
 				playbackControls.FrameTimestampUpdated(false);
 
-				CopyImageToCanvas(camimg_ele, camimg_canvas_ele);
+				CopyImageToCanvas(camimg_ele.internalImage(), camimg_canvas_ele);
 
 				if (nerdStats.IsOpen())
 				{
@@ -13501,8 +13570,8 @@ function JpegVideoModule()
 				}
 			}
 			GetNewImage();
-		});
-		camObj.error(function (err)
+		};
+		camimg_ele.onerror = function (err)
 		{
 			if (camObj.attr('loadingimg'))
 			{
@@ -13510,7 +13579,7 @@ function JpegVideoModule()
 				ClearImageLoadTimeout();
 				setTimeout(GetNewImage, 1000);
 			}
-		});
+		};
 	}
 	var Activate = function ()
 	{
@@ -13751,7 +13820,7 @@ function JpegVideoModule()
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg + groupArgs;
 
-		if ($("#camimg").attr('src') == imgSrcPath)
+		if (camimg_ele.src == imgSrcPath)
 		{
 			videoOverlayHelper.HideLoadingOverlay();
 			GetNewImageAfterTimeout();
@@ -13776,7 +13845,7 @@ function JpegVideoModule()
 				repeatedSameImageURLs = 1;
 				SetImageLoadTimeout();
 				lastLoadedTimeValue = timeValue;
-				$("#camimg").attr('src', imgSrcPath);
+				camimg_ele.src = imgSrcPath;
 			}
 		}
 	}
@@ -25143,74 +25212,6 @@ function FailLimiter(maxFailsInTimePeriod, timePeriodMs)
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Host Redirection ///////////////////////////////////////////
-// Incomplete / Placeholder ///////////////////////////////////
-///////////////////////////////////////////////////////////////
-var currentServer =
-{
-	remoteBaseURL: GetAppPath()
-	, remoteServerName: ""
-	, remoteServerUser: ""
-	, remoteServerPass: ""
-	, isLoggingOut: false
-	, isUsingRemoteServer: false
-	, GetAPISessionArg: function (prefix, forceAddArg)
-	{
-		if (currentServer.isUsingRemoteServer || !navigator.cookieEnabled || forceAddArg)
-			return prefix + "session=" + sessionManager.GetAPISession();
-		return "";
-	}
-	, GetLocalSessionArg: function (prefix, forceAddArg)
-	{
-		if (!navigator.cookieEnabled || forceAddArg)
-		{
-			if (sessionManager)
-				return prefix + "session=" + sessionManager.GetLocalSession();
-			else
-				toaster.Error("Attempted to access sessionManager before it was initialized.");
-		}
-		return "";
-	}
-	, SetRemoteServer: function (serverName, baseUrl, user, pass)
-	{
-		if (!currentServer.ValidateRemoteServerNameSimpleRules(serverName))
-		{
-			toaster.Error("Unable to validate remote server name. Connecting to local server instead.", 10000);
-			serverName = "";
-		}
-		if (serverName == "")
-		{
-			currentServer.remoteBaseURL = GetAppPath();
-			currentServer.remoteServerName = "";
-			currentServer.remoteServerUser = "";
-			currentServer.remoteServerPass = "";
-			currentServer.isUsingRemoteServer = false;
-		}
-		else
-		{
-			currentServer.remoteBaseURL = baseUrl;
-			currentServer.remoteServerName = serverName;
-			currentServer.remoteServerUser = user;
-			currentServer.remoteServerPass = pass;
-			currentServer.isUsingRemoteServer = true;
-		}
-	}
-	, ValidateRemoteServerNameSimpleRules: function (val)
-	{
-		if (val.length == 0)
-			return false;
-		if (val.length > 16)
-			return false;
-		for (var i = 0; i < val.length; i++)
-		{
-			var c = val.charAt(i);
-			if ((c < "a" || c > "z") && (c < "A" || c > "Z") && (c < "0" || c > "9") && c != " ")
-				return false;
-		}
-		return true;
-	}
-};
-///////////////////////////////////////////////////////////////
 // Custom Events //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var BI_CustomEvent =
@@ -25591,6 +25592,156 @@ function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 		}
 	});
 	$tmpImg.attr("src", url);
+}
+///////////////////////////////////////////////////////////////
+// Load jpeg images with HTTP headers /////////////////////////
+///////////////////////////////////////////////////////////////
+/**
+ * Construct with `new ImageWithHeaders()`, optionally passing in an existing Image instance.
+ * @param {HTMLImageElement} image Optional existing Image instance.
+ */
+function ImageWithHeaders(image)
+{
+	var self = this;
+
+	this.headers = {};
+
+	if (!image)
+		image = new Image();
+
+	this.onload = function (headers) { };
+	this.onerror = function () { };
+
+	var loading = false;
+	var complete = false;
+	var queuedSrc;
+	var mySrc = '';
+	Object.defineProperty(this, "src", {
+		get: function () { return mySrc; },
+		set: function (value)
+		{
+			if (loading)
+			{
+				queuedSrc = value;
+				return;
+			}
+			queuedSrc = undefined;
+			if (mySrc === value)
+				self.onload();
+			else
+			{
+				complete = false;
+				loading = true;
+				mySrc = value;
+				LoadAsDataUri(mySrc)
+					.then(function (result)
+					{
+						self.headers = result.headers;
+						image.src = result.dataUri;
+					})
+					.catch(function (err)
+					{
+						image.src = undefined;
+					});
+			}
+		}
+	});
+
+	var loadingEnded = function ()
+	{
+		loading = false;
+		var q = queuedSrc;
+		if (queuedSrc !== undefined)
+			self.src = queuedSrc;
+	}
+
+	Object.defineProperty(this, "complete", { get: function () { return complete; } });
+	Object.defineProperty(this, "naturalWidth", { get: function () { return image.naturalWidth; } });
+	Object.defineProperty(this, "naturalHeight", { get: function () { return image.naturalHeight; } });
+
+	image.onload = function ()
+	{
+		if (image.src.substr(0, 5) === "blob:")
+			URL.revokeObjectURL(image.src);
+		complete = true;
+		self.onload.call(self, self.headers);
+		loadingEnded();
+	};
+	image.onerror = function ()
+	{
+		self.onerror.call(self);
+		loadingEnded();
+	};
+
+	this.internalImage = function ()
+	{
+		return image;
+	}
+}
+/**
+ * Loads the specified resource as a Data URI and provides access to the response headers.
+ * Returns a promise that resolves with { dataUri: "...", headers: { key: value } }
+ * Most rejections will include an argument that has status and statusText fields.
+ * @param {String} url URL of any resource that can be downloaded and converted into a Data URI.
+ */
+function LoadAsDataUri(url)
+{
+	return new Promise(function (resolve, reject)
+	{
+		// Handles most browsers with a fallback for IE9
+		var hasUint8Array = !!window.Uint8Array;
+		if (!window.Uint8Array && !window.VBArray)
+		{
+			reject({ status: 0, statusText: "Unsupported web browser" });
+			return;
+		}
+		var xhr = new XMLHttpRequest();
+		xhr.open("GET", url, true);
+		if (hasUint8Array)
+			xhr.responseType = "arraybuffer";
+		xhr.onload = function ()
+		{
+			if (xhr.status >= 200 && xhr.status < 300)
+			{
+				var arr;
+				var dataUri;
+				var start = performance.now();
+				if (hasUint8Array)
+				{
+					var arr = new Uint8Array(xhr.response);
+					var imgData = new Blob([arr], { type: "application/octet-binary" });
+					dataUri = URL.createObjectURL(imgData);
+				}
+				else
+				{
+					var arr = xhr.responseBody.toArray(); dataUri = "data:image/jpg;base64," + base64Array(arr);
+				}
+				var end = performance.now();
+				console.log(arr.length + " bytes to base64 took " + (end - start).toFixed(1) + "ms");
+				var headerStr = xhr.getAllResponseHeaders();
+				var headerArr = headerStr.trim().split(/[\r\n]+/);
+				var headerMap = {};
+				for (var i = 0; i < headerArr.length; i++)
+				{
+					var parts = headerArr[i].split(': ');
+					var header = parts.shift().toLowerCase();
+					var value = parts.join(': ');
+					headerMap[header] = value;
+				}
+				resolve({ dataUri: dataUri, headers: headerMap });
+			}
+			else
+				reject({ status: xhr.status, statusText: xhr.statusText });
+		};
+		xhr.onerror = function ()
+		{
+			var failure = { status: xhr.status, statusText: xhr.statusText };
+			if (failure.status === 0 && !failure.statusText)
+				failure.statusText = "Connection timed out";
+			reject(failure);
+		};
+		xhr.send();
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Fetch /video/ h.264 streaming //////////////////////////////
