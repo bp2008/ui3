@@ -650,7 +650,6 @@ var togglableUIFeatures =
 
 // Timeline: Clock sync with server for the purpose of setting the initial time, auto-refresh, and future time limiting.
 
-// Timeline: Implement timeline video request at manually chosen offset.
 // Timeline: Implement timeline drag video visuals: Pause at dragStart. Update jpeg frames when seeking, like when updating the seek bar.
 
 // Disable reverse playback for timeline?  It would probably have unspeakably awful performance.
@@ -660,8 +659,6 @@ var togglableUIFeatures =
 
 // Test timeline with various amounts of clock drift.
 
-// Obtaining a new session should reset the timeline data cache and loading states.
-
 //////////////////////////
 // Timeline Pre-Release //
 //////////////////////////
@@ -669,7 +666,6 @@ var togglableUIFeatures =
 // Check all TIMELINE-RELEASE code locations.
 // Verify correct behavior when playing timeline video and changing UI tabs.
 // Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
-// Timeline: Move timeline supporting libraries to libs-ui3.js and remove the async script loaders from the ClipTimeline Initialize method.
 // Timeline: Remove "enabled" flag from ClipTimeline.
 // Timeline: Remove fallback "timeline" JSON data requests using cliplist and alertlist.
 
@@ -5738,10 +5734,10 @@ function ClipTimeline()
 				+ '		<div class="timelineButton icon timelineGoLive" title="Go Live" @click="btnGoLive" :style="goLiveStyle">'
 				+ '			<svg class="icon noflip"><use xlink:href="#svg_mio_clock"></use></svg>'
 				+ '		</div>'
-				+ '		<div class="timelineButton icon" title="Zoom In" @click="btnZoom(1)">'
+				+ '		<div class="timelineButton icon" title="Zoom In" @click="btnZoom(-1)">'
 				+ '			<svg class="icon noflip"><use xlink:href="#svg_mio_zoom_in_crop"></use></svg>'
 				+ '		</div>'
-				+ '		<div class="timelineButton icon" title="Zoom Out" @click="btnZoom(-1)">'
+				+ '		<div class="timelineButton icon" title="Zoom Out" @click="btnZoom(1)">'
 				+ '			<svg class="icon noflip"><use xlink:href="#svg_mio_zoom_out_crop"></use></svg>'
 				+ '		</div>'
 				+ '	</div>'
@@ -6233,24 +6229,7 @@ function ClipTimeline()
 				},
 				btnZoom: function (direction)
 				{
-					var zf = this.zoomFactor;
-					var target;
-					if (direction > 0) // Zoom in
-					{
-						var x = Math.floor(Math.log2(zf));
-						target = Math.pow(2, x);
-						if (zf === target)
-							target /= 2;
-					}
-					else
-					{
-						var x = Math.ceil(Math.log2(zf));
-						target = Math.pow(2, x);
-						if (zf === target)
-							target *= 2;
-					}
-					console.log("btnZoom(" + direction + ")", target);
-					this.setZoom_Internal(target);
+					this.acceptZoom(this.zoomScaler + (direction > 0 ? 1 : -1));
 				},
 				onOpenVideo: function ()
 				{
