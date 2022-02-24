@@ -25558,7 +25558,6 @@ function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 	var tmpImg = document.createElement("img");
 	tmpImg.crossOrigin = "Anonymous";
 	var $tmpImg = $(tmpImg);
-	$("#preloadcontainer").append(tmpImg);
 	$tmpImg.load(function ()
 	{
 		if (!this.complete || typeof this.naturalWidth == "undefined" || this.naturalWidth == 0)
