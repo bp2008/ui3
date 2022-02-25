@@ -636,7 +636,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Click to position should work if there was no horizontal drag performed.
 // Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
 // Make timeline loading states prettier.  Softer edges.  Gradient perhaps.
 // Consider speeding up the mousewheel zoom.
@@ -5770,7 +5769,7 @@ function ClipTimeline()
 					lastSetTime: GetServerTime(),
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
-					dragState: { isDragging: false, startX: 0, offsetMs: 0 },
+					dragState: { isDragging: false, startX: 0, offsetMs: 0, hasPanned: false },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
 					/** Helps trigger additional canvas draws while the timeline is being dragged. */
 					canvasRedrawState: { isActive: false, lastRedraw: 0 },
@@ -5900,6 +5899,7 @@ function ClipTimeline()
 						timeline.dragState.startX = e.mouseX;
 						timeline.dragState.offsetMs = 0;
 						timeline.dragState.isDragging = true;
+						timeline.dragState.hasPanned = false;
 					}
 				},
 				mouseMove: function (e)
@@ -5915,6 +5915,8 @@ function ClipTimeline()
 							return;
 						}
 						var delta = (e.mouseX - timeline.dragState.startX);
+						if (delta !== 0)
+							timeline.dragState.hasPanned = true;
 						timeline.pan(delta * -timeline.zoomFactor);
 						this.finishWheelPan();
 					}
@@ -5933,7 +5935,11 @@ function ClipTimeline()
 					if (timeline.dragState.isDragging)
 					{
 						timeline.mouseMove(e);
-						var time = timeline.lastSetTime + (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
+						var time;
+						if (timeline.dragState.hasPanned)
+							time = timeline.lastSetTime + (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
+						else
+							time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
 						timeline.assignLastSetTime(time);
 						timeline.dragState.isDragging = false;
 						timeline.userDidSetTime();
@@ -29551,6 +29557,26 @@ function pointInsideElement($ele, pX, pY)
 		h = $ele.outerHeight(true);
 	}
 	return pX >= o.left && pX < o.left + w && pY >= o.top && pY < o.top + h;
+}
+function pointToElementRelative($ele, pX, pY)
+{
+	if ($ele.length == 0)
+		return false;
+	var ele = $ele.get(0);
+	var o, w, h;
+	if (ele.savedBounds)
+	{
+		o = { left: ele.savedBounds.x, top: ele.savedBounds.y };
+		w = ele.savedBounds.w;
+		h = ele.savedBounds.h;
+	}
+	else
+	{
+		o = $ele.offset();
+		w = $ele.outerWidth(true);
+		h = $ele.outerHeight(true);
+	}
+	return { x: pX - o.left, y: pY - o.top };
 }
 function pointInsideElementBorder($ele, pX, pY)
 {
