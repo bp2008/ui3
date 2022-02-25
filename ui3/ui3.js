@@ -636,6 +636,7 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// Click to position should work if there was no horizontal drag performed.
 // Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
 // Make timeline loading states prettier.  Softer edges.  Gradient perhaps.
 // Consider speeding up the mousewheel zoom.
@@ -5510,8 +5511,6 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 			return;
 		if (isRunning || parameters.camera === null)
 			return;
-		if (!RequiresUpdatedView())
-			return;
 
 		var reqParams = JSON.parse(JSON.stringify(parameters));
 
@@ -5526,6 +5525,13 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 			return;
 		if (reqParams.right > live)
 			reqParams.right = live;
+		if (reqParams.left < 0)
+			reqParams.left = 0;
+		if (reqParams.right < 128000)
+			reqParams.right = 128000;
+
+		if (!RequiresUpdatedView())
+			return;
 
 		isRunning = true;
 		callbackStartedLoading();
@@ -5576,14 +5582,16 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		if (Math.abs(parameters.zoomScaler - loadedState.zoomScaler) > 0.25)
 			return true; // We need data at a significantly different zoom scale.
 
-		// Left boundary check
+		// Boundary checks
 		var safetyMs = GetSafetyBufferMs();
-		var loadToLeft = parameters.left - safetyMs;
+
+		// Left boundary check
+		var loadToLeft = Math.max(parameters.left - safetyMs, 0);
 		if (loadToLeft < loadedState.left)
 			return true; // New data required to satisfy left boundary requirements.
 
 		// Right boundary check
-		var loadToRight = parameters.right + safetyMs;
+		var loadToRight = Math.max(parameters.right + safetyMs, 128000);
 		if (loadToRight > loadedState.right)
 		{
 			// New data is required to satisfy right boundary requirements.
@@ -5926,10 +5934,7 @@ function ClipTimeline()
 					{
 						timeline.mouseMove(e);
 						var time = timeline.lastSetTime + (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
-						var serverTime = GetServerTime();
-						if (time > serverTime)
-							time = serverTime;
-						timeline.lastSetTime = time;
+						timeline.assignLastSetTime(time);
 						timeline.dragState.isDragging = false;
 						timeline.userDidSetTime();
 					}
@@ -5982,10 +5987,7 @@ function ClipTimeline()
 					if (this.wheelPanState.isActive && this.wheelPanState.accumulatedX !== 0)
 					{
 						var time = this.lastSetTime + this.wheelPanState.accumulatedX * this.zoomFactor;
-						var serverTime = GetServerTime();
-						if (time > serverTime)
-							time = serverTime;
-						this.lastSetTime = time;
+						this.assignLastSetTime(time);
 						this.wheelPanState.isActive = false;
 						timeline.userDidSetTime();
 					}
@@ -6023,6 +6025,18 @@ function ClipTimeline()
 				{
 					this.zoomScaler = Clamp(zoom, minZoomScaler, maxZoomScaler);
 					settings.ui3_timelineZoomScaler = Clamp(zoom, minSavedZoomScaler, maxSavedZoomScaler);
+				},
+				assignLastSetTime: function (time)
+				{
+					if (time < 0)
+						time = 0;
+					else
+					{
+						var serverTime = GetServerTime();
+						if (time > serverTime)
+							time = serverTime;
+					}
+					this.lastSetTime = time;
 				},
 				drawCanvas: function ()
 				{
@@ -6150,7 +6164,9 @@ function ClipTimeline()
 						}
 					}
 
-					var futureTimePx = (this.currentTimeIfFuturePanningWasAllowed - this.currentTime) / zoomFactor;
+					var outOfBoundsTime = this.currentTimeIfFuturePanningWasAllowed;
+					var currentTime = this.currentTime;
+					var futureTimePx = (outOfBoundsTime - currentTime) / zoomFactor;
 					if (futureTimePx > 0)
 					{
 						var x = (timelineInternalWidth - futureTimePx);
@@ -6160,6 +6176,19 @@ function ClipTimeline()
 						var grd = ctx.createLinearGradient(x, y, x + w, y);
 						grd.addColorStop(0, "rgba(0,0,0,0)");
 						grd.addColorStop(1, "rgba(62,95,138,1)");
+						ctx.fillStyle = grd;
+						ctx.fillRect(x, y, w, h);
+					}
+					var pastTimePx = -outOfBoundsTime / zoomFactor;
+					if (pastTimePx > 0)
+					{
+						var x = 0;
+						var y = 0;
+						var w = pastTimePx;
+						var h = timelineInternalHeight;
+						var grd = ctx.createLinearGradient(x, y, x + w, y);
+						grd.addColorStop(0, "rgba(138,95,62,1)");
+						grd.addColorStop(1, "rgba(0,0,0,0)");
 						ctx.fillStyle = grd;
 						ctx.fillRect(x, y, w, h);
 					}
@@ -6302,10 +6331,13 @@ function ClipTimeline()
 				/** Currently highlighted time */
 				currentTime: function ()
 				{
+					if (this.recomputeCurrentTime) { } // Reactively update currentTime when recomputeCurrentTime value changes
+
 					var time = this.currentTimeIfFuturePanningWasAllowed;
-					if (this.recomputeCurrentTime) { }
 					if (this.dragState.isDragging || this.wheelPanState.isActive)
 					{
+						if (time < 0)
+							time = 0;
 						var serverTime = GetServerTime();
 						if (time > serverTime)
 							time = serverTime;
