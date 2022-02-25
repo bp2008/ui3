@@ -637,27 +637,21 @@ var togglableUIFeatures =
 /////////////////////////////
 
 // Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
-// Make timeline loading states prettier.  Softer edges.  Gradient perhaps.
-// Consider speeding up the mousewheel zoom.
-// Skip dead space in timeline playback, only while the player is in the playing state, and we aren't close to "live".  Perhaps 30 seconds distance is safe.
-// Get the timeline working nicely when in a different time zone.  The UI should appear to be in the server's time zone.
-// Fill in the "future" area of the timeline with something.
+
+// Skip dead-air should be available in the Video Player section of UI Settings, 3-state toggle button defaulted to inherit. &skipdeadair=1 or 0
 // addmotion/addoverlay arguments are supported for the timeline, so UI3 should use them.
 
-/////////////////////////////////////
-// Timeline Pending Server Support //
-/////////////////////////////////////
+// Once H.264 /time/ streaming is more stable, implement jpeg video module /time/ streaming.
+// * when pausing the jpeg stream, send the /time/set command with a speed of 0 so the server doesn't waste resources continuing to encode.
 
-// Timeline: Clock sync with server for the purpose of setting the initial time, auto-refresh, and future time limiting.
+// Timeline: Implement timeline drag video visuals: Update view with jpeg frames when seeking.
 
-// Timeline: Implement timeline drag video visuals: Pause at dragStart. Update jpeg frames when seeking, like when updating the seek bar.
-
+// Clicking a camera while in timeline playback should retain existing position, not jump to live.
 // Disable reverse playback for timeline?  It would probably have unspeakably awful performance.
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
 
-// Clicking a camera while in timeline playback should retain existing position, not jump to live.
-
-// Test timeline with various amounts of clock drift.
+// Fill in the "future" area of the timeline with something.
+// Revamp or just delete the timeline loading state component.
 
 //////////////////////////
 // Timeline Pre-Release //
@@ -668,6 +662,7 @@ var togglableUIFeatures =
 // Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
 // Timeline: Remove "enabled" flag from ClipTimeline.
 // Timeline: Remove fallback "timeline" JSON data requests using cliplist and alertlist.
+// Test timeline with clock drift and a different timezone.  This was fine as of 2022-02-25.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
@@ -5494,7 +5489,6 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	/** True if a loading operation is currently active. */
 	var isRunning = false;
 	var refreshTimelineInterval = setInterval(Update, 1001);
-	var lastKnownTime = GetServerTime();
 	/** Call to request that new Timeline data be requested if necessary.  Optionally takes a new visible range argument. */
 	this.NewParameters = function (left, right, zoomScaler, camera)
 	{
@@ -5519,7 +5513,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		reqParams.left -= expandBy;
 		reqParams.right += expandBy;
 
-		var live = GetServerDate(new Date()).getTime();
+		var live = GetUtcNow();
 		if (reqParams.left >= live)
 			return;
 		if (reqParams.right > live)
@@ -5595,7 +5589,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		{
 			// New data is required to satisfy right boundary requirements.
 			// But it is possible that the [live] timestamp falls within our proposed right boundary, in which case it is impossible to load all the data we want.
-			var live = GetServerDate(new Date()).getTime(); // Current clock time.
+			var live = GetUtcNow(); // Current clock time.
 			if (live >= loadToRight)
 				return true; // [live] timestamp does not affect decision. Get new data.
 
@@ -5766,7 +5760,7 @@ function ClipTimeline()
 					/** Height of the timeline internal buffer in pixels. Affected by device pixel ratio. */
 					timelineInternalHeight: 0,
 					/** Millisecond timestamp that is currently selected in the timeline (at the center). */
-					lastSetTime: GetServerTime(),
+					lastSetTime: GetUtcNow(),
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
 					dragState: { isDragging: false, startX: 0, offsetMs: 0, hasPanned: false },
@@ -6038,7 +6032,7 @@ function ClipTimeline()
 						time = 0;
 					else
 					{
-						var serverTime = GetServerTime();
+						var serverTime = GetUtcNow();
 						if (time > serverTime)
 							time = serverTime;
 					}
@@ -6147,7 +6141,7 @@ function ClipTimeline()
 						}
 					}
 
-					var now = GetServerTime();
+					var now = GetUtcNow();
 					if (now > left && now <= right - self.keepOutTime)
 					{
 						var x = (now - left - self.keepOutTime) / zoomFactor;
@@ -6245,7 +6239,7 @@ function ClipTimeline()
 				{
 					if (typeof data.utc !== "number")
 						return;
-					var serverTime = GetServerTime();
+					var serverTime = GetUtcNow();
 					if (data.utc > serverTime)
 					{
 						var newServerTimeOffset = data.utc - Date.now();
@@ -6344,7 +6338,7 @@ function ClipTimeline()
 					{
 						if (time < 0)
 							time = 0;
-						var serverTime = GetServerTime();
+						var serverTime = GetUtcNow();
 						if (time > serverTime)
 							time = serverTime;
 					}
@@ -6476,19 +6470,21 @@ function ClipTimeline()
 						minuteInterval = 30;
 					else
 						minuteInterval = 0;
+					var left = GetServerDate(new Date(this.left)).getTime();
+					var right = GetServerDate(new Date(this.right)).getTime();
 					var times = [];
-					var date = new Date(this.left);
+					var date = new Date(left);
 					date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-					while (date.getTime() < this.right)
+					while (date.getTime() < right)
 					{
-						if (date.getTime() > this.left)
+						if (date.getTime() > left)
 						{
 							if (date.getHours() > 0 || date.getMinutes() > 0)
 							{
 								var tag = { time: date.getTime(), minor: true };
 								tag.label = GetHourStr(date, minuteInterval > 0);
 								tag.style = {
-									left: ((tag.time - this.left) / this.zoomFactor) + 'px'
+									left: ((tag.time - left) / this.zoomFactor) + 'px'
 								};
 								times.push(tag);
 							}
@@ -6509,8 +6505,10 @@ function ClipTimeline()
 					var dayWeekCutoff = 1122000;
 					var weekMonthCutoff = 4544278;
 					var monthYearCutoff = 50000000;
+					var left = GetServerDate(new Date(this.left)).getTime();
+					var right = GetServerDate(new Date(this.right)).getTime();
 					var tags = [];
-					var date = new Date(this.left);
+					var date = GetServerDate(new Date(left));
 					if (this.zoomFactor < dayWeekCutoff)
 					{
 						// Show full days
@@ -6534,7 +6532,7 @@ function ClipTimeline()
 						date = new Date(date.getFullYear(), 0, 1);
 					}
 					var isFirst = true;
-					while (date.getTime() < this.right)
+					while (date.getTime() < right)
 					{
 						var tag = { time: date.getTime() };
 						if (this.zoomFactor < dayWeekCutoff)
@@ -6563,7 +6561,7 @@ function ClipTimeline()
 						}
 
 						tag.style = {
-							left: ((tag.time - this.left) / this.zoomFactor) + 'px'
+							left: ((tag.time - left) / this.zoomFactor) + 'px'
 						};
 						if (isFirst)
 							tag.style.left = '-1px';
@@ -6581,7 +6579,7 @@ function ClipTimeline()
 				},
 				currentTimeStr: function ()
 				{
-					var date = new Date(this.currentTime);
+					var date = GetServerDate(new Date(this.currentTime));
 					return GetShortDateOrToday(date) + '\n' + GetTimeStr(date);
 				}
 			},
@@ -6648,7 +6646,7 @@ function ClipTimeline()
 	{
 		if (typeof timelineMs === "number")
 		{
-			var offset = GetServerTime() - timelineMs; // TIMELINE-RELEASE - Test on a system with significant forward and backward clock drift compared to the BI server.
+			var offset = GetUtcNow() - timelineMs; // TIMELINE-RELEASE - Test on a system with significant forward and backward clock drift compared to the BI server.
 			if (offset < self.keepOutTime)
 				return undefined;
 			else
@@ -6923,7 +6921,7 @@ function PlaybackControls()
 	var hideTimeout = null;
 	var showTimeouts = [];
 	var isVisible = $pc.is(":visible");
-	var settingsClosedAt = 0;
+	var settingsClosedAt = -9999;
 	var playReverse = settings.ui3_playback_reverse == "1";
 	var autoplay = settings.ui3_playback_autoplay == "1";
 	var loopingEnabled = settings.ui3_playback_loop == "1";
@@ -7167,7 +7165,7 @@ function PlaybackControls()
 	});
 	this.OpenSettingsPanel = function ()
 	{
-		if (new Date().getTime() - 33 <= settingsClosedAt)
+		if (performance.now() - 33 <= settingsClosedAt)
 			return;
 		if (videoPlayer.Loading().image.isLive || videoPlayer.Loading().image.isTimeline())
 			return OpenQualityPanel();
@@ -7309,7 +7307,7 @@ function PlaybackControls()
 		{
 			$playbackSettings.remove();
 			$playbackSettings = $();
-			settingsClosedAt = new Date().getTime();
+			settingsClosedAt = performance.now();
 		}
 	}
 	var RebuildSettingsPanelEmpty = function ()
@@ -10797,10 +10795,15 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 var serverTimeZoneOffsetMs = 0;
 /** Millisecond offset to be added to the local clock to make it match the server clock. */
 var currentServerTimeOffset = 0;
-/** Gets the current time in milliseconds since the epoch, from the perspective of the server. */
-function GetServerTime()
+/** Gets the current time in milliseconds since the epoch, from the perspective of the server. This method corrects clock sync differences between client and server. */
+function GetUtcNow()
 {
-	return Date.now() + currentServerTimeOffset;
+	return GetSyncedTime(Date.now());
+}
+/** Offsets the given client timestamp to correct for time sync error between client and server (trusts server clock). */
+function GetSyncedTime(time)
+{
+	return time + currentServerTimeOffset;
 }
 function StatusLoader()
 {
@@ -14752,8 +14755,14 @@ function FetchH264VideoModule()
 			nerdStats.BeginUpdate();
 			nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
 			nerdStats.UpdateStat("Stream Resolution", null, frame.width + "x" + frame.height + nativeRes);
-			nerdStats.UpdateStat("Seek Position", (loading.isLive ? "LIVE" : ((frame.pos / 100).toFixed() + "%")) + " (Frame Offset: " + frame.timestamp + "ms)"); // TIMELINE-RELEASE
+			if (loading.isLive)
+				nerdStats.UpdateStat("Seek Position", "LIVE");
+			else if (loading.isTimeline())
+				nerdStats.UpdateStat("Seek Position", MsToDHMS(clipTimeline.getVue().currentTime - GetUtcNow(), false, true));
+			else
+				nerdStats.UpdateStat("Seek Position", (frame.pos / 100).toFixed() + "%");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
+			nerdStats.UpdateStat("Stream Timestamp", frame.timestamp + "ms");
 			nerdStats.UpdateStat("Codecs", codecs);
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
@@ -25412,7 +25421,7 @@ function LoadingHelper()
 		}
 		ajaxHistoryManager = new AjaxHistoryManager();
 		loadingFinished = true;
-		loadingFinishedAtServerTime = GetServerTime();
+		loadingFinishedAtServerTime = GetUtcNow();
 		$("#loadingmsgwrapper").remove();
 		resized();
 		videoPlayer.Initialize();
@@ -26532,6 +26541,7 @@ function UI3NerdStats()
 			, "Stream Resolution"
 			, "Seek Position"
 			, "Frame Time"
+			, "Stream Timestamp"
 			, "Codecs"
 			, "Jpeg Loading Time"
 			, "Video Bit Rate"
@@ -29766,6 +29776,34 @@ function GetTimeFromBIStr(str)
 
 	return { hours: hours, minutes: minutes, seconds: seconds };
 }
+function MsToDHMS(ms, includeMilliseconds, includeSpaces)
+{
+	var negative = "";
+	if (ms < 0)
+	{
+		negative = "-";
+		ms *= -1;
+	}
+	var space = includeSpaces ? " " : "";
+	var days = Math.floor(ms / 86400000);
+	ms = ms % 86400000;
+	var hours = Math.floor(ms / 3600000);
+	ms = ms % 3600000;
+	var minutes = Math.floor(ms / 60000);
+	ms = ms % 60000;
+	var seconds = Math.floor(ms / 1000);
+	ms = ms % 1000;
+
+	var str = "";
+	if (days > 0)
+		str += days + "d" + space;
+	if (str.length > 0 || hours > 0)
+		str += hours + "h" + space;
+	if (str.length > 0 || minutes > 0)
+		str += minutes + "m" + space;
+	str += seconds + (includeMilliseconds && ms > 0 ? "." + ms.toString().padLeft(3, "0") : "") + "s";
+	return negative + str;
+}
 function GetClipFileSize(fileSize)
 {
 	var parentheticals = fileSize.match(/\(.*?\)$/);
@@ -29892,17 +29930,17 @@ function GetDateStr(date, includeMilliseconds)
 }
 function GetDateDisplayStr(date, includeWeekday)
 {
-	var sameDay = isSameDay(date, GetServerDate(new Date()));
+	var sameDay = isSameDay(date, GetServerDate(GetUtcNow()));
 	return (sameDay ? "Today, " : "") + date.getMonthName() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear()) + (includeWeekday ? ' <span class="dayNameShort">(' + date.getDayNameShort() + ')</span><span class="dayNameFull">(' + date.getDayName() + ')</span>' : '');
 }
 function GetDateDisplayStrShort(date, includeDayNameShort)
 {
-	var sameDay = isSameDay(date, GetServerDate(new Date()));
+	var sameDay = isSameDay(date, GetServerDate(new Date(GetUtcNow())));
 	return (sameDay ? "Today, " : "") + date.getMonthNameShort() + " " + date.getDate() + (sameDay ? "" : (", " + date.getFullYear())) + (includeDayNameShort ? ' (' + (date.getDayNameShort() + ')') : '');
 }
 function GetShortDateOrToday(date)
 {
-	var sameDay = isSameDay(date, GetServerDate(new Date()));
+	var sameDay = isSameDay(date, GetServerDate(new Date(GetUtcNow())));
 	if (sameDay)
 		return "Today";
 	else
@@ -30378,7 +30416,7 @@ function documentIsHidden()
 	return document[prop];
 }
 /**
- * Given a date in local time, returns a new date with the time adjusted so that it reads as if the browser shared a time zone with the server.
+ * Given a date in local time, returns a new date with the time adjusted so that it reads as if the browser shared a time zone with the server. Does not correct clock sync.
  * @param {Date} date Date in local time zone.
  */
 function GetServerDate(date)
@@ -30386,7 +30424,7 @@ function GetServerDate(date)
 	return new Date(date.getTime() + GetServerTimeOffset());
 }
 /**
- * For use when GetServerDate() caused the date to be offset in the wrong direction for the desired effect.
+ * For use when GetServerDate() caused the date to be offset in the wrong direction for the desired effect. Does not correct clock sync.
  * Due to complex time zone handling, sometimes you need to subtract the time zone offset instead of add it.  This method does that.
  * @param {Date} date Date in server time zone (but local time zone is desired).
  */
