@@ -636,13 +636,14 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway.
+// Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway. Use URL parameter &jump=1 or -1 with the query and Blue Iris will jump to the next or previous clip.
 
 // Skip dead-air should be available in the Video Player section of UI Settings, 3-state toggle button defaulted to inherit. &skipdeadair=1 or 0
 // addmotion/addoverlay arguments are supported for the timeline, so UI3 should use them.
 
 // Once H.264 /time/ streaming is more stable, implement jpeg video module /time/ streaming.
 // * when pausing the jpeg stream, send the /time/set command with a speed of 0 so the server doesn't waste resources continuing to encode.
+// * isolated jpeg frames (seeking, downloading, etc) should use "&isolate" URL parameter.  no parameter value is said to be required. Same with "&jpeg".
 
 // Timeline: Implement timeline drag video visuals: Update view with jpeg frames when seeking.
 
@@ -5773,7 +5774,9 @@ function ClipTimeline()
 					accumulatedZoomDelta: 0,
 					isHovered: true,
 					/** True if the current video stream is live and is playing. */
-					isLive: false
+					isLive: false,
+					seekPreviewFrameTime: -1,
+					seekPreviewLoading: false
 				};
 			},
 			created: function ()
@@ -6276,6 +6279,56 @@ function ClipTimeline()
 				userDidSetTime: function ()
 				{
 					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, this.lastSetTime);
+				},
+				updateSeekPreview: function ()
+				{
+					if (!this.videoShouldBePaused || this.seekPreviewLoading)
+						return;
+
+					var requestMs = clipTimeline.BoundsCheckTimelineMs(this.currentTime);
+					if (!requestMs || this.seekPreviewFrameTime === requestMs)
+						return;
+
+					var largestDimensionKey;
+					var largestDimensionValue;
+					var loadingImg = videoPlayer.Loading().image;
+					if (loadingImg.aspectratio >= 1)
+					{
+						largestDimensionKey = "w";
+						largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).w;
+					}
+					else
+					{
+						largestDimensionKey = "h";
+						largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).h;
+					}
+
+					videoOverlayHelper.ShowLoadingOverlay(true, true);
+					var subStreamArg = settings.ui3_seek_with_substream === "1" ? "&decode=-1" : "";
+					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue) + subStreamArg;
+					var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
+					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&isolate&pos=' + requestMs + groupArgs + qualityArgs + currentServer.GetAPISessionArg("&", true);
+					var uniqueId = loadingImg.uniqueId;
+					var startTime = performance.now();
+					this.seekPreviewLoading = true;
+					DownloadToDataUri(seekImgUrl)
+						.then(function (result)
+						{
+							if (videoPlayer.Loading().image.uniqueId !== uniqueId)
+								return;
+							jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri);
+						})
+						.catch(function (err)
+						{
+							if (videoPlayer.Loading().image.uniqueId !== uniqueId)
+								return;
+							videoOverlayHelper.HideLoadingOverlay();
+						})
+						.finally(function ()
+						{
+							timeline.seekPreviewFrameTime = requestMs;
+							timeline.seekPreviewLoading = false;
+						});
 				}
 			},
 			computed:
@@ -6405,6 +6458,14 @@ function ClipTimeline()
 				{
 					if (this.shouldBeRedrawingCanvasRegularly && !this.canvasRedrawState.isActive)
 						this.canvasRedrawLoop();
+				},
+				seekPreviewFrameTime: function ()
+				{
+					this.updateSeekPreview();
+				},
+				currentTime: function ()
+				{
+					this.updateSeekPreview();
 				}
 			}
 		});
@@ -6646,7 +6707,7 @@ function ClipTimeline()
 	{
 		if (typeof timelineMs === "number")
 		{
-			var offset = GetUtcNow() - timelineMs; // TIMELINE-RELEASE - Test on a system with significant forward and backward clock drift compared to the BI server.
+			var offset = GetUtcNow() - timelineMs;
 			if (offset < self.keepOutTime)
 				return undefined;
 			else
@@ -12715,10 +12776,6 @@ function VideoPlayerController()
 	{
 		return playerModule.Playback_IsPaused();
 	}
-	this.GetCurrentImageTimeMs = function ()
-	{
-		return playerModule.GetCurrentImageTimeMs();
-	}
 	/**
 	 * Returns the number of milliseconds that have passed since the most recent stream was started.
 	 */
@@ -13154,6 +13211,7 @@ function VideoPlayerController()
 	}
 	var lastCycleWidth = 0;
 	var lastCycleHeight = 0;
+	this.lastFrameUtc = 0;
 	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameUtc)
 	{
 		jpegPreviewModule.Hide();
@@ -13187,6 +13245,7 @@ function VideoPlayerController()
 
 		if (typeof lastFrameUtc === "number")
 		{
+			self.lastFrameUtc = lastFrameUtc;
 			if (currentlyLoadingImage.isLive)
 			{
 				var str = "";
@@ -13431,6 +13490,8 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 		var myImgEle_ele = $myImgEle.get(0);
 		$myImgEle.load(function ()
 		{
+			if (myImgEle_ele.src.substr(5) === "blob:")
+				URL.revokeObjectURL(myImgEle_ele.src);
 			var img = $myImgEle.get(0);
 			if (!img.complete || typeof img.naturalWidth == "undefined" || img.naturalWidth == 0)
 			{
@@ -13502,8 +13563,7 @@ function JpegVideoModule()
 	var lastReceivedSize = { w: 0, h: 0 };
 	var lastLoadedTimeValue = -1;
 
-	var currentImageTimestampMs = new Date().getTime();
-	var currentImageRequestedAtMs = new Date().getTime();
+	var currentImageRequestedAtMs = performance.now();
 	var staticSnapshotId = "";
 	var lastSnapshotUrl = "";
 	var lastSnapshotFullUrl = "";
@@ -13576,7 +13636,7 @@ function JpegVideoModule()
 					programmaticSoundPlayer.NotifyReconnected();
 					loadedFirstFrame = true;
 					imageLoadingState.loadedUrl = url;
-					var msLoadingTime = new Date().getTime() - currentImageRequestedAtMs;
+					var msLoadingTime = performance.now() - currentImageRequestedAtMs;
 					if (lastReceivedSize.w !== image.naturalWidth || lastReceivedSize.h !== image.naturalHeight)
 					{
 						lastReceivedSize.w = image.naturalWidth;
@@ -13584,7 +13644,8 @@ function JpegVideoModule()
 					}
 					if (headers)
 						videoPlayer.GroupLayoutMetadataReceived(loading.id, headers["x-camlist"], headers["x-reclist"]);
-					videoPlayer.ImageRendered(loading.uniqueId, image.naturalWidth, image.naturalHeight, msLoadingTime, currentImageTimestampMs);
+					var frameUtc = parseInt(headers["x-utc"]);
+					videoPlayer.ImageRendered(loading.uniqueId, image.naturalWidth, image.naturalHeight, msLoadingTime, frameUtc);
 					playbackControls.FrameTimestampUpdated(false);
 
 					CopyImageToCanvas(image, camimg_canvas_ele);
@@ -13702,26 +13763,36 @@ function JpegVideoModule()
 			self.Playback_Play();
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (loading.isTimeline())
+		{
+			videoPlayer.lastFrameUtc = loading.timelineStart
 			clipPlaybackPosition = loading.timelineStart;
+		}
 		else if (!loading.isLive)
 		{
 			var clipData = clipLoader.GetClipFromId(loading.uniqueId);
-			if (clipData && !clipData.isSnapshot && !clipData.isClip)
+			if (clipData)
 			{
-				if (honorAlertOffset && (clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) == 0)
-					toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
-				// Load clip stats for this alert.
-				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
+				var offset = clipData.isClip ? 0 : clipData.offsetMs;
+				videoPlayer.lastFrameUtc = (clipData.date.getTime() - offset) + clipPlaybackPosition;
+				if (!clipData.isSnapshot && !clipData.isClip)
 				{
-					clipLoader.ApplyMissingStatsToClipData(stats, clipData);
-					if (loading.uniqueId == clipData.recId)
-						loading.msec = stats.msec;
-					var loadingImg = videoPlayer.Loading().image;
-					if (loadingImg.uniqueId == clipData.recId)
-						loadingImg.msec = stats.msec;
-				});
+					if (honorAlertOffset && (clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) == 0)
+						toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
+					// Load clip stats for this alert.
+					clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
+					{
+						clipLoader.ApplyMissingStatsToClipData(stats, clipData);
+						if (loading.uniqueId == clipData.recId)
+							loading.msec = stats.msec;
+						var loadingImg = videoPlayer.Loading().image;
+						if (loadingImg.uniqueId == clipData.recId)
+							loadingImg.msec = stats.msec;
+					});
+				}
 			}
 		}
+		else
+			videoPlayer.lastFrameUtc = GetUtcNow();
 		GetNewImage();
 		UpdateCurrentURL();
 		BI_CustomEvent.Invoke("OpenVideo", loading);
@@ -13750,10 +13821,6 @@ function JpegVideoModule()
 	{
 		return staticSnapshotId;
 	}
-	this.GetCurrentImageTimeMs = function ()
-	{
-		return currentImageTimestampMs;
-	}
 	this.GetOffsetFromStartMs = function ()
 	{
 		if (self.Playback_IsPaused())
@@ -13766,20 +13833,16 @@ function JpegVideoModule()
 		ClearGetNewImageTimeout();
 		if (currentServer.isLoggingOut || !isCurrentlyActive)
 			return;
-		var timeValue = currentImageTimestampMs = currentImageRequestedAtMs = new Date().getTime();
+		currentImageRequestedAtMs = performance.now();
+		var timeValue = new Date().getTime();
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
 		var overlayArgs = "";
+		var timelineSpeedArg = "";
+		var timelinePosArg = "";
 
 		if (loading.isTimeline())
 		{
-			var timePassed = timeValue - timeLastClipFrame;
-			timeLastClipFrame = timeValue.toFixed(0);
-			var speedMultiplier = playbackControls.GetPlaybackSpeed();
-			timePassed *= speedMultiplier;
-			if (playbackPaused || playbackControls.IsSeekbarDragging() || !isVisible)
-				timePassed = 0;
-			clipPlaybackPosition += timePassed;
 			if (clipPlaybackPosition)
 			{
 				clipPlaybackPosition = clipTimeline.BoundsCheckTimelineMs(clipPlaybackPosition);
@@ -13789,8 +13852,26 @@ function JpegVideoModule()
 					return;
 				}
 			}
-			currentImageTimestampMs = clipPlaybackPosition;
-			timeValue = clipPlaybackPosition;
+
+			if (playbackPaused || playbackControls.IsSeekbarDragging() || !isVisible)
+			{
+				// TIMELINE-RELEASE - We need to pause timeline playback here.
+			}
+			else
+			{
+				// TIMELINE-RELEASE - We need to figure out if we've already started playback
+				var playbackAlreadyStarted = false;
+				if (playbackAlreadyStarted)
+				{
+					timelinePosArg = "&nc=" + timeValue; // "nc" is an argument that is added simply for cache busting.
+				}
+				else
+				{
+					var speedMultiplier = playbackControls.GetPlaybackSpeed();
+					timelineSpeedArg = "&speed=" + Math.round(100 * speedMultiplier);
+					timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
+				}
+			}
 		}
 		else if (!loading.isLive)
 		{
@@ -13824,19 +13905,15 @@ function JpegVideoModule()
 				videoPlayer.Playback_Ended(false);
 			}
 			timeValue = clipPlaybackPosition;
-			// Update currentImageTimestampMs so that saved snapshots know the time for file naming
 			if (clipData)
 			{
-				var offset = clipData.isClip ? 0 : clipData.offsetMs;
-				currentImageTimestampMs = (clipData.date.getTime() - offset) + clipPlaybackPosition;
 				isLoadingRecordedSnapshot = clipData.isSnapshot;
 				if (isLoadingRecordedSnapshot)
 					staticSnapshotId = loading.uniqueId;
 				else
 					staticSnapshotId = "";
-			}
-			if (clipData)
 				overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
+			}
 		}
 
 		var sizeToRequest = imageRenderer.GetSizeToRequest(true, loading);
@@ -13848,10 +13925,7 @@ function JpegVideoModule()
 
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
-		{
-			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg=1&n=0&d=0&pos=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
-			//console.log("Requesting timeline jpeg at " + GetDateStr(new Date(timeValue), true));
-		}
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true);
 		else if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true); // TIMELINE-RELEASE - This legacy code uses parameter "time" for cachebusting. If this isn't a problem, just delete this comment.
 		else
@@ -14063,7 +14137,6 @@ function FetchH264VideoModule()
 	var lastNerdStatsUpdate = performance.now();
 	var isLoadingRecordedSnapshot = false;
 	var endSnapshotDisplayTimeout = null;
-	var currentImageDateMs = GetServerDate(new Date()).getTime();
 	var failLimiter = new FailLimiter(5, 20000);
 	var reconnectDelayedToast = new PersistentToast("reconnectDelayedToast", "ERROR", true);
 	var reconnectingToast = new PersistentToast("reconnectingToast", "WARNING");
@@ -14255,7 +14328,6 @@ function FetchH264VideoModule()
 			offsetPercent = 1;
 		currentSeekPositionPercent = Clamp(offsetPercent, 0, 1);
 		lastStreamBeganAt = lastFrameAt = performance.now();
-		currentImageDateMs = Date.now();
 		isLoadingRecordedSnapshot = false;
 		clearTimeout(failureRecoveryTimeout);
 		clearTimeout(endSnapshotDisplayTimeout);
@@ -14271,15 +14343,17 @@ function FetchH264VideoModule()
 			audioArg += "1";
 		var overlayArgs = "";
 		var videoUrl;
+		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 		if (loading.isTimeline())
 		{
 			// This is a timeline historical video.
-			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&n=1&d=1&extend=2";
+			videoPlayer.lastFrameUtc = loading.timelineStart;
+			var speedArg = "&speed=" + Math.round(100 * playbackControls.GetPlaybackSpeed());
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + "&extend=2";
 		}
 		else if (loading.isLive)
 		{
-			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+			videoPlayer.lastFrameUtc = GetUtcNow();
 			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&extend=2";
 		}
 		else
@@ -14330,7 +14404,7 @@ function FetchH264VideoModule()
 					else
 						currentSeekPositionPercent = Clamp(offsetMs / lastMs, 0, 1);
 				}
-				currentImageDateMs = clipData.date.getTime() + (currentSeekPositionPercent * lastMs);
+				videoPlayer.lastFrameUtc = clipData.date.getTime() + (currentSeekPositionPercent * lastMs);
 				overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
 			}
 			if (speed !== 100)
@@ -14523,11 +14597,11 @@ function FetchH264VideoModule()
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
-		if (loading.isLive) // TIMELINE-RELEASE - Needs implemented with timeline awareness.
-		{
-			var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		if (loading.isLive)
 			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true);
-		}
+		else if (loading.isTimeline())
+			return currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg&isolate&pos=' + videoPlayer.lastFrameUtc + groupArgs + currentServer.GetAPISessionArg("&", true);
 		else
 			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs(loading.id);
 	}
@@ -14545,10 +14619,6 @@ function FetchH264VideoModule()
 			return loading.uniqueId;
 		else
 			return "";
-	}
-	this.GetCurrentImageTimeMs = function ()
-	{
-		return currentImageDateMs;
 	}
 	this.GetOffsetFromStartMs = function ()
 	{
@@ -14642,7 +14712,6 @@ function FetchH264VideoModule()
 		lastFrameMetadata.size = frame.size;
 		lastFrameMetadata.expectedInterframe = frame.expectedInterframe;
 
-		currentImageDateMs = frame.utc;
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
 
 		var timeNow = performance.now();
@@ -18816,35 +18885,57 @@ function GenericQualityHelper()
 			var bitRateMbps = (bitRate_Video + bitRate_Audio) / 1000000;
 			var sizeLimit;
 			var quality;
-			if (bitRateMbps < 0.5)
+			if (currentPrimaryTab === "timeline")
 			{
-				sizeLimit = Math.min(dimValue, 320);
-				quality = 20;
+				// Timeline video on many systems is mostly static and black, so we expect to see low bit rates.
+				if (bitRateMbps < 0.1)
+				{
+					sizeLimit = Math.min(dimValue, 640);
+					quality = 50;
+				}
+				else if (bitRateMbps < 0.5)
+				{
+					sizeLimit = Math.min(dimValue, 1280);
+					quality = 60;
+				}
+				else // Plenty of bandwidth. Get whatever resolution fits best.
+				{
+					sizeLimit = dimValue;
+					quality = 75;
+				}
 			}
-			else if (bitRateMbps < 1)
+			else
 			{
-				sizeLimit = Math.min(dimValue, 480);
-				quality = 20;
-			}
-			else if (bitRateMbps < 1.67)
-			{
-				sizeLimit = Math.min(dimValue, 640);
-				quality = 25;
-			}
-			else if (bitRateMbps < 2.33)
-			{
-				sizeLimit = Math.min(dimValue, 640);
-				quality = 50;
-			}
-			else if (bitRateMbps < 3.5)
-			{
-				sizeLimit = Math.min(dimValue, 1280);
-				quality = 60;
-			}
-			else // Plenty of bandwidth. Get whatever resolution fits best.
-			{
-				sizeLimit = dimValue;
-				quality = 75;
+				if (bitRateMbps < 0.07)
+				{
+					sizeLimit = Math.min(dimValue, 320);
+					quality = 20;
+				}
+				else if (bitRateMbps < 0.15)
+				{
+					sizeLimit = Math.min(dimValue, 480);
+					quality = 20;
+				}
+				else if (bitRateMbps < 0.33)
+				{
+					sizeLimit = Math.min(dimValue, 640);
+					quality = 25;
+				}
+				else if (bitRateMbps < 0.5)
+				{
+					sizeLimit = Math.min(dimValue, 640);
+					quality = 50;
+				}
+				else if (bitRateMbps < 1)
+				{
+					sizeLimit = Math.min(dimValue, 1280);
+					quality = 60;
+				}
+				else // Plenty of bandwidth. Get whatever resolution fits best.
+				{
+					sizeLimit = dimValue;
+					quality = 75;
+				}
 			}
 			return "&" + dimKey + "=" + sizeLimit + "&q=" + quality;
 		}
@@ -23537,7 +23628,7 @@ function saveSnapshot(btnSelector)
 	if (typeof btnSelector == "undefined")
 		btnSelector = "#save_snapshot_btn";
 	var camName = cameraListLoader.GetCameraName(videoPlayer.Loading().image.id);
-	var date = GetPaddedDateStr(new Date(videoPlayer.GetCurrentImageTimeMs() + GetServerTimeOffset()), true);
+	var date = GetPaddedDateStr(new Date(videoPlayer.lastFrameUtc + GetServerTimeOffset()), true);
 	date = FormatFileName(date);
 	var fileName = camName + " " + date + ".jpg";
 	var q = Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100);
@@ -25718,6 +25809,8 @@ function LoadImagePromise(url, headers)
 		image.setAttribute("crossOrigin", "Anonymous");
 		image.onload = function ()
 		{
+			if (image.src.substr(5) === "blob:")
+				URL.revokeObjectURL(image.src);
 			if (image.complete && image.naturalWidth && image.naturalHeight)
 				resolve({ image: image, headers: headers });
 			else
@@ -29930,7 +30023,7 @@ function GetDateStr(date, includeMilliseconds)
 }
 function GetDateDisplayStr(date, includeWeekday)
 {
-	var sameDay = isSameDay(date, GetServerDate(GetUtcNow()));
+	var sameDay = isSameDay(date, GetServerDate(new Date(GetUtcNow())));
 	return (sameDay ? "Today, " : "") + date.getMonthName() + " " + date.getDate() + (sameDay ? "" : ", " + date.getFullYear()) + (includeWeekday ? ' <span class="dayNameShort">(' + date.getDayNameShort() + ')</span><span class="dayNameFull">(' + date.getDayName() + ')</span>' : '');
 }
 function GetDateDisplayStrShort(date, includeDayNameShort)
