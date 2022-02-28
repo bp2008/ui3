@@ -636,8 +636,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Implement "Next Clip" and "Previous Clip" buttons when using the timeline.  These should seek to the next or previous range start.  No special behavior for reverse playback, which will probably be disabled anyway. Use URL parameter &jump=1 or -1 with the query and Blue Iris will jump to the next or previous clip.
-
 // Skip dead-air should be available in the Video Player section of UI Settings, 3-state toggle button defaulted to inherit. &skipdeadair=1 or 0
 // addmotion/addoverlay arguments are supported for the timeline, so UI3 should use them.
 
@@ -6278,7 +6276,7 @@ function ClipTimeline()
 				},
 				userDidSetTime: function ()
 				{
-					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, this.lastSetTime);
+					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, { timelineMs: this.lastSetTime });
 				},
 				updateSeekPreview: function ()
 				{
@@ -12952,14 +12950,18 @@ function VideoPlayerController()
 			}
 		}
 	}
-	this.LoadLiveCamera = function (camData, timelineMs)
+	this.LoadLiveCamera = function (camData, timelineArgs)
 	{
 		if (camData == null)
 		{
 			toaster.Error("The target camera or group could not be found.");
 			return;
 		}
-		timelineMs = clipTimeline.BoundsCheckTimelineMs(timelineMs);
+		timelineArgs = Object.assign({
+			timelineMs: undefined,
+			timelineJump: undefined
+		}, timelineArgs);
+		timelineArgs.timelineMs = clipTimeline.BoundsCheckTimelineMs(timelineArgs.timelineMs);
 
 		if ((!camData.isEnabled || !camData.webcast) && !cameraListLoader.CameraIsGroupOrCycle(camData))
 		{
@@ -12984,8 +12986,9 @@ function VideoPlayerController()
 		cli.aspectratio = clc.width / clc.height;
 		cli.path = clc.optionValue;
 		cli.uniqueId = clc.optionValue;
-		cli.isLive = typeof timelineMs !== "number";
-		cli.timelineStart = timelineMs;
+		cli.isLive = typeof timelineArgs.timelineMs !== "number";
+		cli.timelineStart = timelineArgs.timelineMs;
+		cli.timelineJump = timelineArgs.timelineJump;
 		cli.ptz = clc.ptz;
 		cli.audio = clc.audio;
 		cli.msec = -1;
@@ -13070,7 +13073,38 @@ function VideoPlayerController()
 
 		fullScreenModeController.updateFullScreenButtonState();
 	}
-
+	this.TimelineJump = function (direction)
+	{
+		if (!currentlyLoadingImage.isTimeline())
+			return;
+		direction = (direction > 0 ? 1 : -1);
+		if (self.Playback_IsPaused())
+			self.LoadLiveCamera(currentlyLoadingCamera, { timelineMs: self.lastFrameUtc, timelineJump: direction });
+		else
+			self.TimelineSet("&jump=" + direction);
+	}
+	this.TimelineSeek = function (pos)
+	{
+		if (self.lastFrameUtc === pos)
+			return;
+		self.lastFrameUtc = pos;
+		var speedArg = "&speed=" + Math.round(100 * playbackControls.GetPlaybackSpeed());
+		self.TimelineSet("&pos=" + parseInt(pos));
+	}
+	this.TimelineSet = function (urlParams)
+	{
+		if (!currentlyLoadingImage.isTimeline())
+			return;
+		var url = currentServer.remoteBaseURL + "time/set" + currentServer.GetAPISessionArg("?", true) + urlParams;
+		$.ajax(url)
+			.fail(function (jqXHR, textStatus, errorThrown)
+			{
+				if (jqXHR && jqXHR.status !== 0)
+					toaster.Error("Blue Iris failed to modify the timeline video stream. HTTP " + jqXHR.status + " " + jqXHR.statusText);
+				else
+					toaster.Error("Unable to contact Blue Iris to modify the timeline video stream.");
+			});
+	}
 	this.SeekToPercent = function (pos, play)
 	{
 		pos = Clamp(pos, 0, 1);
@@ -13112,39 +13146,49 @@ function VideoPlayerController()
 	}
 	this.Playback_NextClip = function ()
 	{
-		var clipEle = clipLoader.GetCurrentClipEle();
-		if (clipEle && clipLoader.GetAllSelected().length <= 1)
+		if (videoPlayer.Loading().image.isTimeline())
+			videoPlayer.TimelineJump(1);
+		else
 		{
-			if (clipLoader.GetAllSelected().length === 0 || clipLoader.IsClipSelected(clipEle.id.substr(1)))
+			var clipEle = clipLoader.GetCurrentClipEle();
+			if (clipEle && clipLoader.GetAllSelected().length <= 1)
 			{
-				var $clip;
-				if (settings.ui3_clip_navigation_direction === "Oldest First")
-					$clip = clipLoader.GetClipAboveClip($(clipEle));
-				else
-					$clip = clipLoader.GetClipBelowClip($(clipEle));
-				if (Playback_ClipObj($clip))
-					return;
+				if (clipLoader.GetAllSelected().length === 0 || clipLoader.IsClipSelected(clipEle.id.substr(1)))
+				{
+					var $clip;
+					if (settings.ui3_clip_navigation_direction === "Oldest First")
+						$clip = clipLoader.GetClipAboveClip($(clipEle));
+					else
+						$clip = clipLoader.GetClipBelowClip($(clipEle));
+					if (Playback_ClipObj($clip))
+						return;
+				}
 			}
+			self.Playback_Pause();
 		}
-		self.Playback_Pause();
 	}
 	this.Playback_PreviousClip = function ()
 	{
-		var clipEle = clipLoader.GetCurrentClipEle();
-		if (clipEle && clipLoader.GetAllSelected().length <= 1)
+		if (videoPlayer.Loading().image.isTimeline())
+			videoPlayer.TimelineJump(-1);
+		else
 		{
-			if (clipLoader.GetAllSelected().length === 0 || clipLoader.IsClipSelected(clipEle.id.substr(1)))
+			var clipEle = clipLoader.GetCurrentClipEle();
+			if (clipEle && clipLoader.GetAllSelected().length <= 1)
 			{
-				var $clip;
-				if (settings.ui3_clip_navigation_direction === "Oldest First")
-					$clip = clipLoader.GetClipBelowClip($(clipEle));
-				else
-					$clip = clipLoader.GetClipAboveClip($(clipEle));
-				if (Playback_ClipObj($clip))
-					return;
+				if (clipLoader.GetAllSelected().length === 0 || clipLoader.IsClipSelected(clipEle.id.substr(1)))
+				{
+					var $clip;
+					if (settings.ui3_clip_navigation_direction === "Oldest First")
+						$clip = clipLoader.GetClipBelowClip($(clipEle));
+					else
+						$clip = clipLoader.GetClipAboveClip($(clipEle));
+					if (Playback_ClipObj($clip))
+						return;
+				}
 			}
+			self.Playback_Pause();
 		}
-		self.Playback_Pause();
 	}
 	var Playback_ClipObj = function ($clip)
 	{
@@ -13415,6 +13459,8 @@ function BICameraData()
 	this.isLive = true;
 	/** If set to a number, this is a recorded timeline video feed that began at this time (some UI elements such as the progress bar should not be shown). */
 	this.timelineStart = false;
+	/** If 1, playback should seek to the next clip.  If -1, playback should seek to the previous clip. */
+	this.timelineJump = 0;
 	/** True if this image provider supports PTZ controls. */
 	this.ptz = false;
 	/** True if this image provider supports audio. */
@@ -13452,6 +13498,7 @@ function BICameraData()
 		self.uniqueId = other.uniqueId;
 		self.isLive = other.isLive;
 		self.timelineStart = other.timelineStart;
+		self.timelineJump = other.timelineJump;
 		self.ptz = other.ptz;
 		self.audio = other.audio;
 		self.msec = other.msec;
@@ -13764,7 +13811,7 @@ function JpegVideoModule()
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		if (loading.isTimeline())
 		{
-			videoPlayer.lastFrameUtc = loading.timelineStart
+			videoPlayer.lastFrameUtc = loading.timelineStart;
 			clipPlaybackPosition = loading.timelineStart;
 		}
 		else if (!loading.isLive)
@@ -13870,6 +13917,12 @@ function JpegVideoModule()
 					var speedMultiplier = playbackControls.GetPlaybackSpeed();
 					timelineSpeedArg = "&speed=" + Math.round(100 * speedMultiplier);
 					timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
+					if (loading.timelineJump)
+					{
+						timelinePosArg += "&jump=" + loading.timelineJump;
+						loading.timelineJump = 0;
+					}
+
 				}
 			}
 		}
@@ -14346,10 +14399,27 @@ function FetchH264VideoModule()
 		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 		if (loading.isTimeline())
 		{
-			// This is a timeline historical video.
+			// Seeking with /time/set is disabled because its performance was terrible during testing. 
+			// Besides, the video stream ends when the user begins to seek, so /time/set is not even 
+			// appropriate unless we change how pausing works just for the timeline stream... yuck.
+			//var loaded = videoPlayer.Loaded().image;
+			//if (loaded.isTimeline() && loaded.id === loading.id && !self.Playback_IsPaused())
+			//{
+			//	videoPlayer.TimelineSeek(loading.timelineStart);
+			//	return;
+			//}
 			videoPlayer.lastFrameUtc = loading.timelineStart;
-			var speedArg = "&speed=" + Math.round(100 * playbackControls.GetPlaybackSpeed());
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + "&extend=2";
+			var speed = 100 * playbackControls.GetPlaybackSpeed();
+			if (startPaused)
+				speed = 0;
+			var speedArg = "&speed=" + Math.round(speed);
+			var jumpArg = "";
+			if (loading.timelineJump)
+			{
+				jumpArg = "&jump=" + loading.timelineJump;
+				loading.timelineJump = 0;
+			}
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + "&extend=2";
 		}
 		else if (loading.isLive)
 		{
@@ -14445,7 +14515,7 @@ function FetchH264VideoModule()
 				offsetArg = "&time=" + reqMs;
 				loading.requestedMs = reqMs;
 			}
-			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg + overlayArgs;
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + Math.round(speed) + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg + overlayArgs;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -14689,7 +14759,8 @@ function FetchH264VideoModule()
 			currentSeekPositionPercent = 0;
 		else if (loading.isTimeline())
 		{
-			// TIMELINE-RELEASE
+			loading.timelineStart = videoPlayer.lastFrameUtc;
+			self.OpenVideo(loading, currentSeekPositionPercent, playbackPaused);
 		}
 		else
 		{
