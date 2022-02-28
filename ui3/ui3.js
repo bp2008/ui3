@@ -5517,8 +5517,8 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 			return;
 		if (reqParams.right > live)
 			reqParams.right = live;
-		if (reqParams.left < 0)
-			reqParams.left = 0;
+		if (reqParams.left < 1)
+			reqParams.left = 1;
 		if (reqParams.right < 128000)
 			reqParams.right = 128000;
 
@@ -5578,7 +5578,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 		var safetyMs = GetSafetyBufferMs();
 
 		// Left boundary check
-		var loadToLeft = Math.max(parameters.left - safetyMs, 0);
+		var loadToLeft = Math.max(parameters.left - safetyMs, 1);
 		if (loadToLeft < loadedState.left)
 			return true; // New data required to satisfy left boundary requirements.
 
@@ -6387,8 +6387,8 @@ function ClipTimeline()
 					var time = this.currentTimeIfFuturePanningWasAllowed;
 					if (this.dragState.isDragging || this.wheelPanState.isActive)
 					{
-						if (time < 0)
-							time = 0;
+						if (time < 1)
+							time = 1;
 						var serverTime = GetUtcNow();
 						if (time > serverTime)
 							time = serverTime;
@@ -13611,6 +13611,7 @@ function JpegVideoModule()
 	var lastLoadedTimeValue = -1;
 
 	var currentImageRequestedAtMs = performance.now();
+	var currentImageTimestampGuessUtc = -1;
 	var staticSnapshotId = "";
 	var lastSnapshotUrl = "";
 	var lastSnapshotFullUrl = "";
@@ -13691,7 +13692,7 @@ function JpegVideoModule()
 					}
 					if (headers)
 						videoPlayer.GroupLayoutMetadataReceived(loading.id, headers["x-camlist"], headers["x-reclist"]);
-					var frameUtc = parseInt(headers["x-utc"]);
+					var frameUtc = currentImageTimestampGuessUtc >= 0 ? currentImageTimestampGuessUtc : parseInt(headers["x-utc"]);
 					videoPlayer.ImageRendered(loading.uniqueId, image.naturalWidth, image.naturalHeight, msLoadingTime, frameUtc);
 					playbackControls.FrameTimestampUpdated(false);
 
@@ -13917,7 +13918,6 @@ function JpegVideoModule()
 						timelinePosArg += "&jump=" + loading.timelineJump;
 						loading.timelineJump = 0;
 					}
-
 				}
 				else
 				{
@@ -14009,6 +14009,7 @@ function JpegVideoModule()
 				repeatedSameImageURLs = 1;
 				SetImageLoadTimeout();
 				lastLoadedTimeValue = timeValue;
+				currentImageTimestampGuessUtc = loading.isLive ? GetUtcNow() : -1;
 				LoadImageFromUrl(imgSrcPath);
 			}
 		}
