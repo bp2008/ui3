@@ -13803,7 +13803,7 @@ function JpegVideoModule()
 		if (playbackControls.GetPlayReverse() && offsetPercent === 0)
 			offsetPercent = 1;
 		clipPlaybackPosition = Clamp(offsetPercent, 0, 1) * (loading.msec - 1);
-		timeLastClipFrame = Date.now();
+		timeLastClipFrame = performance.now();
 		if (startPaused)
 			self.Playback_Pause();
 		else
@@ -13813,6 +13813,7 @@ function JpegVideoModule()
 		{
 			videoPlayer.lastFrameUtc = loading.timelineStart;
 			clipPlaybackPosition = loading.timelineStart;
+			loading.newTimelineStream = true;
 		}
 		else if (!loading.isLive)
 		{
@@ -13880,8 +13881,7 @@ function JpegVideoModule()
 		ClearGetNewImageTimeout();
 		if (currentServer.isLoggingOut || !isCurrentlyActive)
 			return;
-		currentImageRequestedAtMs = performance.now();
-		var timeValue = new Date().getTime();
+		var timeValue = currentImageRequestedAtMs = performance.now();
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
 		var overlayArgs = "";
@@ -13906,14 +13906,9 @@ function JpegVideoModule()
 			}
 			else
 			{
-				// TIMELINE-RELEASE - We need to figure out if we've already started playback
-				var playbackAlreadyStarted = false;
-				if (playbackAlreadyStarted)
+				if (loading.newTimelineStream)
 				{
-					timelinePosArg = "&nc=" + timeValue; // "nc" is an argument that is added simply for cache busting.
-				}
-				else
-				{
+					loading.newTimelineStream = false;
 					var speedMultiplier = playbackControls.GetPlaybackSpeed();
 					timelineSpeedArg = "&speed=" + Math.round(100 * speedMultiplier);
 					timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
@@ -13923,6 +13918,10 @@ function JpegVideoModule()
 						loading.timelineJump = 0;
 					}
 
+				}
+				else
+				{
+					timelinePosArg = "&nc=" + timeValue.dropDecimalsStr(); // "nc" is an argument that is added simply for cache busting.
 				}
 			}
 		}
