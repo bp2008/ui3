@@ -5762,7 +5762,7 @@ function ClipTimeline()
 					lastSetTime: GetUtcNow(),
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
-					dragState: { isDragging: false, startX: 0, offsetMs: 0, hasPanned: false },
+					dragState: { isDragging: false, startX: 0, offsetMs: 0, hasPanned: false, previewBaseResolution: { w: 1, h: 1 } },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
 					/** Helps trigger additional canvas draws while the timeline is being dragged. */
 					canvasRedrawState: { isActive: false, lastRedraw: 0 },
@@ -5893,6 +5893,7 @@ function ClipTimeline()
 					{
 						timeline.dragState.startX = e.mouseX;
 						timeline.dragState.offsetMs = 0;
+						timeline.dragState.previewBaseResolution = { w: videoPlayer.Loaded().image.actualwidth, h: videoPlayer.Loaded().image.actualheight };
 						timeline.dragState.isDragging = true;
 						timeline.dragState.hasPanned = false;
 					}
@@ -6280,53 +6281,63 @@ function ClipTimeline()
 				},
 				updateSeekPreview: function ()
 				{
-					if (!this.videoShouldBePaused || this.seekPreviewLoading)
-						return;
-
-					var requestMs = clipTimeline.BoundsCheckTimelineMs(this.currentTime);
-					if (!requestMs || this.seekPreviewFrameTime === requestMs)
-						return;
-
-					var largestDimensionKey;
-					var largestDimensionValue;
-					var loadingImg = videoPlayer.Loading().image;
-					if (loadingImg.aspectratio >= 1)
+					timelineSync.run(this, function ()
 					{
-						largestDimensionKey = "w";
-						largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).w;
-					}
-					else
-					{
-						largestDimensionKey = "h";
-						largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).h;
-					}
+						if (!this.videoShouldBePaused || this.seekPreviewLoading)
+						{
+							timelineSync.unlock();
+							return;
+						}
 
-					videoOverlayHelper.ShowLoadingOverlay(true, true);
-					var subStreamArg = settings.ui3_seek_with_substream === "1" ? "&decode=-1" : "";
-					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue) + subStreamArg;
-					var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
-					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&isolate&pos=' + requestMs + groupArgs + qualityArgs + currentServer.GetAPISessionArg("&", true);
-					var uniqueId = loadingImg.uniqueId;
-					var startTime = performance.now();
-					this.seekPreviewLoading = true;
-					DownloadToDataUri(seekImgUrl)
-						.then(function (result)
+						var requestMs = clipTimeline.BoundsCheckTimelineMs(this.currentTime);
+						if (!requestMs || this.seekPreviewFrameTime === requestMs)
 						{
-							if (videoPlayer.Loading().image.uniqueId !== uniqueId)
-								return;
-							jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri);
-						})
-						.catch(function (err)
+							timelineSync.unlock();
+							return;
+						}
+
+						var largestDimensionKey;
+						var largestDimensionValue;
+						var loadingImg = videoPlayer.Loading().image;
+						if (loadingImg.aspectratio >= 1)
 						{
-							if (videoPlayer.Loading().image.uniqueId !== uniqueId)
-								return;
-							videoOverlayHelper.HideLoadingOverlay();
-						})
-						.finally(function ()
+							largestDimensionKey = "w";
+							largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).w;
+						}
+						else
 						{
-							timeline.seekPreviewFrameTime = requestMs;
-							timeline.seekPreviewLoading = false;
-						});
+							largestDimensionKey = "h";
+							largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).h;
+						}
+
+						videoOverlayHelper.ShowLoadingOverlay(true, true);
+						// previewBaseResolution will be the resolution of the last frame we received.  That may even be a jpeg preview frame.
+						var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue, this.dragState.previewBaseResolution.w, this.dragState.previewBaseResolution.h);
+						var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
+						var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + qualityArgs + groupArgs;
+						var uniqueId = loadingImg.uniqueId;
+						var startTime = performance.now();
+						this.seekPreviewLoading = true;
+						DownloadToDataUri(seekImgUrl)
+							.then(function (result)
+							{
+								if (videoPlayer.Loading().image.uniqueId !== uniqueId)
+									return;
+								jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri);
+							})
+							.catch(function (err)
+							{
+								if (videoPlayer.Loading().image.uniqueId !== uniqueId)
+									return;
+								videoOverlayHelper.HideLoadingOverlay();
+							})
+							.finally(function ()
+							{
+								timeline.seekPreviewFrameTime = requestMs;
+								timeline.seekPreviewLoading = false;
+								timelineSync.unlock();
+							});
+					});
 				}
 			},
 			computed:
@@ -6420,7 +6431,7 @@ function ClipTimeline()
 				},
 				videoShouldBePaused: function ()
 				{
-					return this.dragState.isDragging || this.wheelPanState.isActive;
+					return this.dragState.isDragging || this.wheelPanState.isActive || this.seekPreviewLoading;
 				},
 				shouldBeRedrawingCanvasRegularly: function ()
 				{
@@ -6713,6 +6724,13 @@ function ClipTimeline()
 		}
 		return undefined;
 	}
+	this.getCurrentTime = function ()
+	{
+		if (timeline)
+			return timeline.currentTime;
+		else
+			return GetUtcNow();
+	}
 	/**
 	 * Efficiently draws a rounded-corner rectangle on a canvas 2d context.
 	 * It is a very trivial rounded corner algorithm with an emphasis on speed and matching Blue Iris's visual style.
@@ -6756,6 +6774,57 @@ function ClipTimeline()
 	if (enabled)
 		self.Initialize();
 }
+var timelineSync = new (function ()
+{
+	var queue = new Queue();
+	var locked = false;
+	/**
+	 * Helps guarantee synchronous timeline access by only allowing one thing at a time to access timeline video in Blue Iris.
+	 * This function queues the passed-in function to run as soon as possible. 
+	 * The internal state is set to "locked" just before the passed function is called.
+	 * The passed function must call [unlock] when it is done accessing timeline video from Blue Iris.
+	 * @param {Function} fn Function to run.
+	 */
+	this.run = function (thisArg, fn)
+	{
+		queue.enqueue({ thisArg: thisArg, fn: fn });
+		processQueue();
+	}
+	/** Returns true if the current state is "locked". */
+	this.islocked = function ()
+	{
+		return locked;
+	}
+	/** Call this to just set the current state to "locked". You must call [unlock] later. */
+	this.lock = function ()
+	{
+		locked = true;
+	}
+	/** Call this when you are done accessing timeline video and it is safe to run another function from the queue. */
+	this.unlock = function ()
+	{
+		locked = false;
+		processQueue();
+	}
+	function processQueue()
+	{
+		if (locked)
+			return;
+		var item = queue.dequeue();
+		if (!item)
+			return;
+		locked = true;
+		try
+		{
+			item.fn.apply(item.thisArg);
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+			locked = false;
+		}
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // Zebra Date Picker //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -13727,6 +13796,10 @@ function JpegVideoModule()
 				programmaticSoundPlayer.NotifyDisconnected();
 				ClearImageLoadTimeout();
 				setTimeout(GetNewImage, 1000);
+			})
+			.finally(function ()
+			{
+				timelineSync.unlock();
 			});
 	}
 	var Activate = function ()
@@ -13901,9 +13974,9 @@ function JpegVideoModule()
 				}
 			}
 
-			if (playbackPaused || playbackControls.IsSeekbarDragging() || !isVisible)
+			if (playbackPaused || clipTimeline.videoShouldBePaused() || !isVisible)
 			{
-				// TIMELINE-RELEASE - We need to pause timeline playback here.
+				self.Playback_Pause();
 			}
 			else
 			{
@@ -13921,7 +13994,7 @@ function JpegVideoModule()
 				}
 				else
 				{
-					timelinePosArg = "&nc=" + timeValue.dropDecimalsStr(); // "nc" is an argument that is added simply for cache busting.
+					timelinePosArg = "&nc=" + timeValue.dropDecimalsStr(); // "nc" is for redundant cache-busting and also so some later code knows the player isn't paused.
 				}
 			}
 		}
@@ -13979,7 +14052,7 @@ function JpegVideoModule()
 		if (loading.isTimeline())
 			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true);
 		else if (loading.isLive)
-			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true); // TIMELINE-RELEASE - This legacy code uses parameter "time" for cachebusting. If this isn't a problem, just delete this comment.
+			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?nc=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true); // TIMELINE-RELEASE - This legacy code uses parameter "time" for cachebusting. If this isn't a problem, just delete this comment.
 		else
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg + groupArgs;
@@ -13996,7 +14069,8 @@ function JpegVideoModule()
 				&& !CouldBenefitFromSizeChange(sizeToRequest)
 				&& loadedFirstFrame)
 				|| !isVisible
-				|| (playbackPaused && loading.isLive) // Live video can be paused since UI3-175
+				|| playbackPaused // Live video can be paused since UI3-175
+				|| timelineSync.islocked()
 			)
 			{
 				if (isLoadingRecordedSnapshot)
@@ -14010,6 +14084,7 @@ function JpegVideoModule()
 				SetImageLoadTimeout();
 				lastLoadedTimeValue = timeValue;
 				currentImageTimestampGuessUtc = loading.isLive ? GetUtcNow() : -1;
+				timelineSync.lock();
 				LoadImageFromUrl(imgSrcPath);
 			}
 		}
@@ -14029,25 +14104,36 @@ function JpegVideoModule()
 	}
 	this.Playback_Pause = function ()
 	{
-		playbackPaused = true;
-		playbackControls.setPlayPauseButtonState(playbackPaused);
-		BI_CustomEvent.Invoke("Playback_Pause", loading);
+		if (!playbackPaused)
+		{
+			playbackPaused = true;
+			playbackControls.setPlayPauseButtonState(playbackPaused);
+			BI_CustomEvent.Invoke("Playback_Pause", loading);
+		}
 	}
 	this.Playback_Play = function ()
 	{
-		lastStreamBeganAt = performance.now();
-		playbackPaused = false;
-		playbackControls.setPlayPauseButtonState(playbackPaused);
-		if (!loading.isTimeline() && !loading.isLive)
+		if (playbackPaused)
 		{
-			if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
-				clipPlaybackPosition = 0;
-			else if (clipPlaybackPosition <= 0 && playbackControls.GetPlayReverse())
-				clipPlaybackPosition = loading.msec - 1;
-			if (clipPlaybackPosition < 0)
-				clipPlaybackPosition = 0;
+			lastStreamBeganAt = performance.now();
+			playbackPaused = false;
+			playbackControls.setPlayPauseButtonState(playbackPaused);
+			if (loading.isTimeline())
+			{
+				loading.newTimelineStream = true;
+				clipPlaybackPosition = clipTimeline.getCurrentTime();
+			}
+			else if (!loading.isLive)
+			{
+				if (clipPlaybackPosition >= loading.msec - 1 && !playbackControls.GetPlayReverse())
+					clipPlaybackPosition = 0;
+				else if (clipPlaybackPosition <= 0 && playbackControls.GetPlayReverse())
+					clipPlaybackPosition = loading.msec - 1;
+				if (clipPlaybackPosition < 0)
+					clipPlaybackPosition = 0;
+			}
+			BI_CustomEvent.Invoke("Playback_Play", loading);
 		}
-		BI_CustomEvent.Invoke("Playback_Play", loading);
 	}
 	this.NotifyClipMetadataChanged = function (clipData)
 	{
@@ -18825,6 +18911,8 @@ function GenericQualityHelper()
 	var self = this;
 	self.profiles = new Array();
 
+	var $layoutbody = $("#layoutbody");
+
 	this.GetCurrentProfile = function ()
 	{
 		if (!self.profiles || self.profiles.length === 0)
@@ -18946,37 +19034,51 @@ function GenericQualityHelper()
 				return self.profiles[i];
 		return null;
 	}
-	this.getSeekPreviewQualityArgs = function (dimKey, dimValue)
+	this.getSeekPreviewQualityArgs = function (dimKey, dimValue, videoWidth, videoHeight)
 	{
 		var playerId = self.GetCurrentProfile().vcodec;
 		if (playerId == "h264")
 		{
+			var profile = self.GetCurrentProfile();
 			var bitRate_Video = bitRateCalc_Video.GetBestGuess() * 8;
 			var bitRate_Audio = bitRateCalc_Audio.GetBestGuess() * 8;
 			var bitRateMbps = (bitRate_Video + bitRate_Audio) / 1000000;
-			var sizeLimit;
-			var quality;
 			if (currentPrimaryTab === "timeline")
 			{
-				// Timeline video on many systems is mostly static and black, so we expect to see low bit rates.
-				if (bitRateMbps < 0.1)
+				if (profile.kbps)
+					bitRateMbps = profile.kbps / 1000;
+				var a = videoWidth / videoHeight;
+				var dpr = BI_GetDevicePixelRatio();
+				var zoomFactor = imageRenderer.zoomHandler.GetZoomFactor();
+				var vw = zoomFactor >= 1 ? videoWidth : ($layoutbody.width() * dpr);
+				var vh = zoomFactor >= 1 ? videoHeight : ($layoutbody.height() * dpr);
+				var va = vw / vh;
+				if (va > a)
 				{
-					sizeLimit = Math.min(dimValue, 640);
-					quality = 50;
+					// Viewport height is the limiting factor
+					videoHeight = Math.min(videoHeight, vh);
+					videoWidth = videoHeight * a;
 				}
-				else if (bitRateMbps < 0.5)
+				else
 				{
-					sizeLimit = Math.min(dimValue, 1280);
-					quality = 60;
+					// Viewport width is the limiting factor
+					videoWidth = Math.min(videoWidth, vw);
+					videoHeight = videoWidth / a;
 				}
-				else // Plenty of bandwidth. Get whatever resolution fits best.
-				{
-					sizeLimit = dimValue;
-					quality = 75;
-				}
+
+				// Now videoWidth and videoHeight represent the full-scale resolution we'd like to request.
+				var scale = Clamp(bitRateMbps / 4.096, 0, 1);
+				var h = Math.max(80, videoHeight);
+				h = h - h % 8;
+				var w = Math.round(h * a);
+				var q = Clamp(Math.round(60 * scale), 10, 60);
+				console.log("Preview args at " + scale.toFixed(2) + " scale: " + "&w=" + w + "&h=" + h + "&q=" + quality);
+				return "&w=" + w + "&h=" + h + "&stream=" + profile.stream + "&q=" + quality;
 			}
 			else
 			{
+				var sizeLimit;
+				var quality;
 				if (bitRateMbps < 0.07)
 				{
 					sizeLimit = Math.min(dimValue, 320);
@@ -19007,8 +19109,8 @@ function GenericQualityHelper()
 					sizeLimit = dimValue;
 					quality = 75;
 				}
+				return "&" + dimKey + "=" + sizeLimit + "&stream=" + profile.stream + "&q=" + quality;
 			}
-			return "&" + dimKey + "=" + sizeLimit + "&q=" + quality;
 		}
 		else
 			return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimKey, dimValue) + jpegQualityHelper.getQualityArg();
