@@ -6283,7 +6283,7 @@ function ClipTimeline()
 				{
 					timelineSync.run(this, function ()
 					{
-						if (!this.videoShouldBePaused || this.seekPreviewLoading)
+						if (!this.videoShouldBePaused || this.seekPreviewLoading || safeFetch.IsActive())
 						{
 							timelineSync.unlock();
 							return;
