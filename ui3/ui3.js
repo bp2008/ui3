@@ -641,13 +641,13 @@ var togglableUIFeatures =
 
 // Once H.264 /time/ streaming is more stable, implement jpeg video module /time/ streaming.
 // * when pausing the jpeg stream, send the /time/set command with a speed of 0 so the server doesn't waste resources continuing to encode.
-// * isolated jpeg frames (seeking, downloading, etc) should use "&isolate" URL parameter.  no parameter value is said to be required. Same with "&jpeg".
-
-// Timeline: Implement timeline drag video visuals: Update view with jpeg frames when seeking.
+// * isolated jpeg frames (downloading, etc) should use "&isolate" URL parameter.  no parameter value is required. Same with "&jpeg".
 
 // Clicking a camera while in timeline playback should retain existing position, not jump to live.
 // Disable reverse playback for timeline?  It would probably have unspeakably awful performance.
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
+
+// When seeking is over, the zoom position is lost.
 
 // Fill in the "future" area of the timeline with something.
 // Revamp or just delete the timeline loading state component.
@@ -13730,7 +13730,7 @@ function JpegVideoModule()
 			{
 				if (imageLoadingState.loadingUrl !== url)
 					return; // A new image began loading before this one completed; this result is no longer needed.
-				return LoadImagePromise(result.dataUri, result.headers);
+				return LoadImagePromise(result.dataUri, result.headers, result.imageSizeBytes);
 			})
 			.then(function (data)
 			{
@@ -13738,6 +13738,11 @@ function JpegVideoModule()
 					return; // A new image began loading before this one completed; this result is no longer needed.
 				var image = data.image;
 				var headers = data.headers;
+				var imageSizeBytes = data.imageSizeBytes;
+				if (!imageSizeBytes)
+					imageSizeBytes = 0;
+				else
+					bitRateCalc_Video.AddDataPoint(imageSizeBytes);
 
 				ClearImageLoadTimeout();
 				if (!isCurrentlyActive)
@@ -13780,12 +13785,16 @@ function JpegVideoModule()
 								nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
 						}
 
+						var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
+
 						nerdStats.BeginUpdate();
 						nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
 						nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
 						nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "% (Frame Offset: " + Math.floor(clipPlaybackPosition) + "ms)")); // TIMELINE-RELEASE
 						nerdStats.UpdateStat("Codecs", "jpeg");
-						nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, msLoadingTime + "ms", true);
+						nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
+						nerdStats.UpdateStat("Frame Size", imageSizeBytes, formatBytes(imageSizeBytes, 2), true);
+						nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, Math.round(msLoadingTime) + "ms", true);
 						nerdStats.EndUpdate();
 					}
 				}
@@ -16949,13 +16958,13 @@ function ImageRenderer()
 		{
 			if (modifyForJpegQualitySetting)
 				imgDrawHeight = jpegQualityHelper.ModifyImageDimension("h", imgDrawHeight);
-			imgDrawWidth = imgDrawHeight * srcNativeAspect;
+			imgDrawWidth = MakeDivisibleBy8(imgDrawHeight * srcNativeAspect);
 		}
 		else
 		{
 			if (modifyForJpegQualitySetting)
 				imgDrawWidth = jpegQualityHelper.ModifyImageDimension("w", imgDrawWidth);
-			imgDrawHeight = imgDrawWidth / srcNativeAspect;
+			imgDrawHeight = MakeDivisibleBy8(imgDrawWidth / srcNativeAspect);
 		}
 
 		// Do not request a dimension larger than 7680.  Resizable group streams will revert to a standard size.
@@ -18812,9 +18821,17 @@ function StreamingProfile()
 					sizeToRequest.h = imageRenderer.maxGroupImageDimension;
 					sizeToRequest.w = sizeToRequest.h * aspect;
 				}
+				sizeToRequest.w = MakeDivisibleBy8(sizeToRequest.w);
+				sizeToRequest.h = MakeDivisibleBy8(sizeToRequest.h);
+
 				sb.Append("&w=").Append(parseInt(Math.round(sizeToRequest.w)));
 
 				SetIntendedSize(loading, sizeToRequest.w, sizeToRequest.h);
+			}
+			else
+			{
+				sizeToRequest.w = MakeDivisibleBy8(sizeToRequest.w);
+				sizeToRequest.h = MakeDivisibleBy8(sizeToRequest.h);
 			}
 			sb.Append("&h=").Append(parseInt(Math.round(sizeToRequest.h)));
 
@@ -19037,45 +19054,26 @@ function GenericQualityHelper()
 	this.getSeekPreviewQualityArgs = function (dimKey, dimValue, videoWidth, videoHeight)
 	{
 		var playerId = self.GetCurrentProfile().vcodec;
+		var profile = self.GetCurrentProfile();
+		var bitRate_Video = bitRateCalc_Video.GetBestGuess() * 8;
+		var bitRateMbps = bitRate_Video / 1000000;
 		if (playerId == "h264")
 		{
-			var profile = self.GetCurrentProfile();
-			var bitRate_Video = bitRateCalc_Video.GetBestGuess() * 8;
 			var bitRate_Audio = bitRateCalc_Audio.GetBestGuess() * 8;
-			var bitRateMbps = (bitRate_Video + bitRate_Audio) / 1000000;
-			if (currentPrimaryTab === "timeline")
-			{
-				if (profile.kbps)
-					bitRateMbps = profile.kbps / 1000;
-				var a = videoWidth / videoHeight;
-				var dpr = BI_GetDevicePixelRatio();
-				var zoomFactor = imageRenderer.zoomHandler.GetZoomFactor();
-				var vw = zoomFactor >= 1 ? videoWidth : ($layoutbody.width() * dpr);
-				var vh = zoomFactor >= 1 ? videoHeight : ($layoutbody.height() * dpr);
-				var va = vw / vh;
-				if (va > a)
-				{
-					// Viewport height is the limiting factor
-					videoHeight = Math.min(videoHeight, vh);
-					videoWidth = videoHeight * a;
-				}
-				else
-				{
-					// Viewport width is the limiting factor
-					videoWidth = Math.min(videoWidth, vw);
-					videoHeight = videoWidth / a;
-				}
+			bitRateMbps += bitRate_Audio / 1000000;
+		}
+		if (currentPrimaryTab === "timeline")
+		{
+			if (profile.kbps)
+				bitRateMbps = profile.kbps / 1000;
 
-				// Now videoWidth and videoHeight represent the full-scale resolution we'd like to request.
-				var scale = Clamp(bitRateMbps / 4.096, 0, 1);
-				var h = Math.max(80, videoHeight);
-				h = h - h % 8;
-				var w = Math.round(h * a);
-				var q = Clamp(Math.round(60 * scale), 10, 60);
-				console.log("Preview args at " + scale.toFixed(2) + " scale: " + "&w=" + w + "&h=" + h + "&q=" + quality);
-				return "&w=" + w + "&h=" + h + "&stream=" + profile.stream + "&q=" + quality;
-			}
-			else
+			var scale = Clamp(bitRateMbps / 4.096, 0, 1);
+			var q = playerId == "h264" ? 40 : jpegQualityHelper.getQualityArg();
+			return "&w=" + videoWidth + "&h=" + videoHeight + "&stream=" + profile.stream + "&q=" + q;
+		}
+		else
+		{
+			if (playerId == "h264")
 			{
 				var sizeLimit;
 				var quality;
@@ -19111,9 +19109,9 @@ function GenericQualityHelper()
 				}
 				return "&" + dimKey + "=" + sizeLimit + "&stream=" + profile.stream + "&q=" + quality;
 			}
+			else
+				return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimKey, dimValue) + jpegQualityHelper.getQualityArg();
 		}
-		else
-			return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimKey, dimValue) + jpegQualityHelper.getQualityArg();
 	}
 
 	var Create_4K_VBR = function ()
@@ -19621,16 +19619,20 @@ function JpegQualityHelper()
 		if (dimKey === "w")
 		{
 			if (p.w > 0)
-				return Math.min(dimValue, p.w);
-			return dimValue;
+				return MakeDivisibleBy8(Math.min(dimValue, p.w));
+			return MakeDivisibleBy8(dimValue);
 		}
 		else
 		{
 			if (p.h > 0)
-				return Math.min(dimValue, p.h);
-			return dimValue;
+				return MakeDivisibleBy8(Math.min(dimValue, p.h));
+			return MakeDivisibleBy8(dimValue);
 		}
 	}
+}
+function MakeDivisibleBy8(num)
+{
+	return num - num % 8;
 }
 ///////////////////////////////////////////////////////////////
 // Video Canvas Context Menu //////////////////////////////////
@@ -25933,13 +25935,14 @@ function DownloadToDataUri(url)
 				//var start = performance.now();
 				if (hasUint8Array)
 				{
-					var arr = new Uint8Array(xhr.response);
+					arr = new Uint8Array(xhr.response);
 					var imgData = new Blob([arr], { type: "application/octet-binary" });
 					dataUri = URL.createObjectURL(imgData);
 				}
 				else
 				{
-					var arr = xhr.responseBody.toArray(); dataUri = "data:image/jpg;base64," + base64Array(arr);
+					arr = xhr.responseBody.toArray();
+					dataUri = "data:image/jpg;base64," + base64Array(arr);
 				}
 				//var end = performance.now();
 				//console.log(arr.length + " bytes to base64 took " + (end - start).toFixed(1) + "ms");
@@ -25953,7 +25956,7 @@ function DownloadToDataUri(url)
 					var value = parts.join(': ');
 					headerMap[header] = value;
 				}
-				resolve({ dataUri: dataUri, headers: headerMap });
+				resolve({ dataUri: dataUri, headers: headerMap, imageSizeBytes: arr.length });
 			}
 			else
 				reject({ status: xhr.status, statusText: xhr.statusText });
@@ -25973,8 +25976,9 @@ function DownloadToDataUri(url)
  * Returns a promise that resolves or rejects with the argument { image: HTMLImageElement, headers: headers }
  * @param {String} url Image Uri
  * @param {Object} headers Optional object containing HTTP headers to deliver along with the final image.
+ * @param {Number} imageSizeBytes Size of the image, in bytes. Omit if unknown.
  */
-function LoadImagePromise(url, headers)
+function LoadImagePromise(url, headers, imageSizeBytes)
 {
 	return new Promise(function (resolve, reject)
 	{
@@ -25982,16 +25986,18 @@ function LoadImagePromise(url, headers)
 		image.setAttribute("crossOrigin", "Anonymous");
 		image.onload = function ()
 		{
-			if (image.src.substr(5) === "blob:")
-				URL.revokeObjectURL(image.src);
+			if (url.substr(5) === "blob:")
+				URL.revokeObjectURL(url);
 			if (image.complete && image.naturalWidth && image.naturalHeight)
-				resolve({ image: image, headers: headers });
+				resolve({ image: image, headers: headers, imageSizeBytes: imageSizeBytes });
 			else
-				reject({ image: image, headers: headers });
+				reject({ image: image, headers: headers, imageSizeBytes: imageSizeBytes });
 		};
 		image.onerror = function ()
 		{
-			reject({ image: image, headers: headers });
+			if (url.substr(5) === "blob:")
+				URL.revokeObjectURL(url);
+			reject({ image: image, headers: headers, imageSizeBytes: imageSizeBytes });
 		};
 		image.src = url;
 	});
@@ -26809,11 +26815,11 @@ function UI3NerdStats()
 			, "Frame Time"
 			, "Stream Timestamp"
 			, "Codecs"
-			, "Jpeg Loading Time"
 			, "Video Bit Rate"
 			, "Audio Bit Rate"
 			, "Audio Buffer"
 			, "Frame Size"
+			, "Jpeg Loading Time"
 			, "Inter-Frame Time"
 			, "Frame Timing Error"
 			, "Network Delay"
