@@ -5767,8 +5767,8 @@ function ClipTimeline()
 					recomputeCurrentTime: 0,
 					dragState: { isDragging: false, startX: 0, offsetMs: 0, hasPanned: false, previewBaseResolution: { w: 1, h: 1 } },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
-					/** Helps trigger additional canvas draws while the timeline is being dragged. */
-					canvasRedrawState: { isActive: false, lastRedraw: 0 },
+					/** Helps maintain a decent timeline frame rate while nothing is interacting with the timeline. */
+					canvasRedrawState: { interval: null, lastRedraw: 0 },
 					/** Helps throttle canvas drawing to once per frame */
 					canvasThrottle: { didDrawAlreadyThisFrame: false, queuedDraw: false },
 					hammerTime: null,
@@ -5807,9 +5807,11 @@ function ClipTimeline()
 				BI_CustomEvent.AddListener("ImageRendered", this.FrameRendered);
 				this.AfterResize();
 				this.onOpenVideo();
+				this.canvasRedrawState.interval = setInterval(this.canvasRedraw, 66);
 			},
 			beforeDestroy: function ()
 			{
+				clearInterval(this.canvasRedrawState.interval);
 				timeline.hammertime.off('pinchstart pinchmove');
 				timeline.hammertime.get('pinch').set({ enable: false });
 				BI_CustomEvent.RemoveListener("afterResize", timeline.AfterResize);
@@ -6252,24 +6254,15 @@ function ClipTimeline()
 					if (this.canvasThrottle.queuedDraw)
 						this.drawCanvas();
 				},
-				canvasRedrawLoop: function ()
+				canvasRedraw: function ()
 				{
-					if (this.shouldBeRedrawingCanvasRegularly)
+					var now = performance.now();
+					if (now > this.canvasRedrawState.lastRedraw + 50)
 					{
-						if (!this.canvasRedrawState.isActive)
-							this.canvasRedrawState.isActive = true;
-
-						var now = performance.now();
-						if (now > this.canvasRedrawState.lastRedraw + 66.667)
-						{
+						var live = GetUtcNow();
+						if (this.left < live && this.right > live + self.keepOutTime)
 							this.recomputeCurrentTime++;
-							this.drawCanvas();
-						}
-
-						requestAnimationFrame(this.canvasRedrawLoop);
 					}
-					else if (this.canvasRedrawState.isActive)
-						this.canvasRedrawState.isActive = false;
 				},
 				FrameRendered: function (data)
 				{
@@ -6466,10 +6459,6 @@ function ClipTimeline()
 				videoShouldBePaused: function ()
 				{
 					return this.dragState.isDragging || this.wheelPanState.isActive || this.seekPreviewLoading;
-				},
-				shouldBeRedrawingCanvasRegularly: function ()
-				{
-					return this.dragState.isDragging || this.wheelPanState.isActive;
 				}
 			},
 			watch:
@@ -6496,11 +6485,6 @@ function ClipTimeline()
 				{
 					if (this.videoShouldBePaused !== videoPlayer.Playback_IsPaused())
 						videoPlayer.Playback_PlayPause();
-				},
-				shouldBeRedrawingCanvasRegularly: function ()
-				{
-					if (this.shouldBeRedrawingCanvasRegularly && !this.canvasRedrawState.isActive)
-						this.canvasRedrawLoop();
 				},
 				seekPreviewFrameTime: function ()
 				{
@@ -6936,7 +6920,6 @@ function StarfieldGenerator(blockSize, density, seedStr)
 
 	this.draw = function (ctx, dx, dy, dw, dh, offsetX)
 	{
-		console.log("Starfield draw ", dx, dy, dw, dh, offsetX, BI_GetDevicePixelRatio());
 		var dpr = BI_GetDevicePixelRatio();
 		while (dh / dpr > blocksHigh * blockSize)
 			addRow();
