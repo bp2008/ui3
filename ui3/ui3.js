@@ -6172,7 +6172,7 @@ function ClipTimeline()
 						ctx.fillStyle = "rgba(138,95,62,1)";
 						ctx.fillRect((-left / zoomFactor) - (2 * dpr), 0, 2 * dpr, canvas.height);
 					}
-					if (now > left && now <= right - self.keepOutTime)
+					if (now > left && now - self.keepOutTime <= right)
 					{
 						bet.start("Draw 'live' time indicator");
 						var x = (now - left - self.keepOutTime) / zoomFactor;
@@ -6260,7 +6260,7 @@ function ClipTimeline()
 					if (now > this.canvasRedrawState.lastRedraw + 50)
 					{
 						var live = GetUtcNow();
-						if (this.left < live && this.right > live + self.keepOutTime)
+						if (this.left < live && this.right > live - self.keepOutTime)
 							this.recomputeCurrentTime++;
 					}
 				},
@@ -6898,7 +6898,6 @@ function StarfieldGenerator(blockSize, density, seedStr)
 		var requiredBackBufferSize = blocksWide + "x" + blocksHigh + "@" + dpr;
 		if (lastDrawnBackBufferSize !== requiredBackBufferSize)
 		{
-			var startTime = performance.now();
 			lastDrawnBackBufferSize = requiredBackBufferSize;
 			backBuffer.width = blockSize * blocksWide * dpr;
 			backBuffer.height = blockSize * blocksHigh * dpr;
@@ -6914,7 +6913,6 @@ function StarfieldGenerator(blockSize, density, seedStr)
 				bb.fillStyle = "hsl(" + star.hue + ", " + star.sat + "%, " + star.lig + "%)";
 				bb.fill();
 			}
-			console.log("Drew " + stars.length + " stars in " + (performance.now() - startTime).toFixed(1) + " ms");
 		}
 	}
 
