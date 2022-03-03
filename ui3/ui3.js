@@ -5692,8 +5692,7 @@ function ClipTimeline()
 	var canvasDrawFps = new FPSCounter1();
 	var drawRoundedRectangles = true;
 
-	var starfieldLeft = null;
-	var starfieldRight = null;
+	var starfield = null;
 
 	this.Initialize = function ()
 	{
@@ -6058,50 +6057,45 @@ function ClipTimeline()
 					var canvas = this.$refs.clipTimelineCanvas;
 					if (!canvas || currentPrimaryTab !== "timeline")
 						return;
+
 					var perfStart = performance.now();
+					var bet = new BasicEventTimer();
+					bet.start("Draw Background");
 					var ctx = canvas.getContext("2d");
-					ctx.fillStyle = "#000000";
-					ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 					var dpr = BI_GetDevicePixelRatio();
 					var zoomFactor = this.zoomFactor / dpr;
 					var left = this.left;
 					var right = this.right;
-					var timelineInternalHeight = this.timelineInternalHeight;
-					var timelineInternalWidth = this.timelineInternalWidth;
 					var now = GetUtcNow();
 
-					// Draw something interesting beyond the boundaries.
-					if (left < 0)
-					{
-						// Left boundary visible
-						if (!starfieldLeft)
-							starfieldLeft = new StarfieldGenerator(80, 0.003, "bp2008");
-						starfieldLeft.draw(ctx, 0, 0, -(left / zoomFactor), timelineInternalHeight);
-					}
-					var starfieldFutureIntrusion = self.keepOutTime * 0.75;
-					if (now < (right - starfieldFutureIntrusion))
-					{
-						// Right boundary visible
-						if (!starfieldRight)
-							starfieldRight = new StarfieldGenerator(80, 0.003, "bp2008", true);
-						var size = (right - now + starfieldFutureIntrusion) / zoomFactor;
-						starfieldRight.draw(ctx, timelineInternalWidth - size, 0, size, timelineInternalHeight);
-					}
+					if (!starfield)
+						starfield = new StarfieldGenerator(80, 0.003, "bp2008");
+					starfield.draw(ctx, 0, 0, canvas.width, canvas.height);
+
+					bet.stop();
 
 					if (canvasData)
 					{
+						// Draw partially-transparent black overlay behind loadable timeline area.
+						var overlayLeft = Math.max(0, -left / zoomFactor);
+						var overlayWidth = Math.min(canvas.width, (now - left) / zoomFactor);
+						var stepsFromMaxZoomout = maxZoomScaler - this.zoomScaler;
+						var blackBackgroundOpacity = Clamp(stepsFromMaxZoomout / 10, 0, 0.8) + 0.2;
+						ctx.fillStyle = "rgba(0,0,0," + blackBackgroundOpacity + ")";
+						ctx.fillRect(overlayLeft, 0, overlayWidth, canvas.height);
 						var alertIconSpace = 12 * dpr;
-						var clipDrawRegionHeight = timelineInternalHeight - alertIconSpace;
+						var clipDrawRegionHeight = canvas.height - alertIconSpace;
 						var timelineColorbarHeight = clipDrawRegionHeight / canvasData.colors.length;
 
+						bet.start("Draw clips and alerts");
 						// Draw clip rectangles
 						for (var n = 0; n < canvasData.clips.length; n++)
 						{
 							var clip = canvasData.clips[n];
 							var x = (clip.time - left) / zoomFactor;
 							var w = clip.len / zoomFactor;
-							if (x < timelineInternalWidth && x + w > 0)
+							if (x < canvas.width && x + w > 0)
 							{
 								var y1 = Math.round(clip.track * timelineColorbarHeight);
 								var y2 = Math.round((clip.track + 1) * timelineColorbarHeight);
@@ -6123,7 +6117,7 @@ function ClipTimeline()
 							var alert = canvasData.alerts[n];
 							var x = (alert.time - left) / zoomFactor;
 							var w = alert.len / zoomFactor;
-							if (x < timelineInternalWidth && x + w > 0)
+							if (x < canvas.width && x + w > 0)
 							{
 								if (drawRoundedRectangles)
 									roundRect(ctx, x, y, w, h);
@@ -6162,14 +6156,22 @@ function ClipTimeline()
 								}
 							}
 						}
+						bet.stop();
 					}
-
+					
+					if (left < 0 && right > 0)
+					{
+						// Left boundary is visible.
+						ctx.fillStyle = "rgba(138,95,62,1)";
+						ctx.fillRect((-left / zoomFactor) - (2 * dpr), 0, 2 * dpr, canvas.height);
+					}
 					if (now > left && now <= right - self.keepOutTime)
 					{
+						bet.start("Draw 'live' time indicator");
 						var x = (now - left - self.keepOutTime) / zoomFactor;
 						var y = 0;
 						var w = self.keepOutTime / zoomFactor;
-						var h = timelineInternalHeight;
+						var h = canvas.height;
 						var grd = ctx.createLinearGradient(x, y, x + w, y);
 						grd.addColorStop(0, "rgba(123,133,180,0.0)");
 						grd.addColorStop(0.2, "rgba(123,133,180,0.3)");
@@ -6184,6 +6186,7 @@ function ClipTimeline()
 							ctx.fillStyle = "rgba(100,255,255,1)";
 							ctx.fillRect(x + w - 1 * dpr, y, 2 * dpr, h);
 						}
+						bet.stop();
 					}
 
 					// Draw a gradient if we've panned beyond a boundary.
@@ -6192,28 +6195,32 @@ function ClipTimeline()
 					var futureTimePx = (outOfBoundsTime - currentTime) / zoomFactor;
 					if (futureTimePx > 0)
 					{
-						var x = (timelineInternalWidth - futureTimePx);
+						bet.start("Draw future overscroll gradient");
+						var x = (canvas.width - futureTimePx);
 						var y = 0;
 						var w = futureTimePx;
-						var h = timelineInternalHeight;
+						var h = canvas.height;
 						var grd = ctx.createLinearGradient(x, y, x + w, y);
 						grd.addColorStop(0, "rgba(0,0,0,0)");
 						grd.addColorStop(1, "rgba(62,95,138,1)");
 						ctx.fillStyle = grd;
 						ctx.fillRect(x, y, w, h);
+						bet.stop();
 					}
 					var pastTimePx = -outOfBoundsTime / zoomFactor;
 					if (pastTimePx > 0)
 					{
+						bet.start("Draw past overscroll gradient");
 						var x = 0;
 						var y = 0;
 						var w = pastTimePx;
-						var h = timelineInternalHeight;
+						var h = canvas.height;
 						var grd = ctx.createLinearGradient(x, y, x + w, y);
 						grd.addColorStop(0, "rgba(138,95,62,1)");
 						grd.addColorStop(1, "rgba(0,0,0,0)");
 						ctx.fillStyle = grd;
 						ctx.fillRect(x, y, w, h);
+						bet.stop();
 					}
 					var perfEnd = performance.now();
 
@@ -6230,7 +6237,7 @@ function ClipTimeline()
 					else if (!drawRoundedRectangles && fps >= 30 && averageCpuUsage < 0.05)
 						drawRoundedRectangles = true;
 					if (developerMode)
-						console.log("Canvas Render: " + renderTime.toFixed(1) + " ms (avg " + averageRenderTime.toFixed(1) + "ms).\nFPS: " + fps.toFixed(0) + ". CPU: " + (cpuUsage * 100).toFixed(1) + "% (avg " + (averageCpuUsage * 100).toFixed(1) + "%)");
+						bet.log("Canvas Render: " + renderTime.toFixed(1) + " ms (avg " + averageRenderTime.toFixed(1) + "ms).\nFPS: " + fps.toFixed(0) + ". CPU: " + (cpuUsage * 100).toFixed(1) + "% (avg " + (averageCpuUsage * 100).toFixed(1) + "%)");
 
 					this.canvasRedrawState.lastRedraw = perfStart;
 				},
@@ -6847,7 +6854,7 @@ var timelineSync = new (function ()
 		}
 	}
 })();
-function StarfieldGenerator(blockSize, density, seedStr, attachRight, attachBottom)
+function StarfieldGenerator(blockSize, density, seedStr)
 {
 	blockSize = Clamp(blockSize, 1, 7680);
 	density = Clamp(density, 0.00001, 0.5);
@@ -6872,9 +6879,7 @@ function StarfieldGenerator(blockSize, density, seedStr, attachRight, attachBott
 			backBuffer.height = blockSize * blocksHigh * dpr;
 
 			var bb = backBuffer.getContext("2d");
-			bb.translate(attachRight ? backBuffer.width : 0, attachBottom ? backBuffer.height : 0);
-			bb.scale(attachRight ? -1 : 1, attachBottom ? -1 : 1);
-			bb.fillStyle = "transparent";
+			bb.fillStyle = "#000000";
 			bb.fillRect(0, 0, backBuffer.width, backBuffer.height);
 			for (var i = 0; i < stars.length; i++)
 			{
@@ -6916,21 +6921,21 @@ function StarfieldGenerator(blockSize, density, seedStr, attachRight, attachBott
 				y: yOffset + r.rand() * blockSize,
 				m: r.rand() * 1.2,
 				hue: hues[randInt(0, hues.length)],
-				sat: randInt(0, 51),
-				lig: randInt(40, 89)
+				sat: randInt(0, 31),
+				lig: randInt(20, 60)
 			});
 		}
 	}
 
-	this.draw = function (ctx, dx, dy, dw, dh)
+	this.draw = function (ctx, dx, dy, dw, dh, offsetX, offsetY)
 	{
 		while (dh > blocksHigh * blockSize)
 			addRow();
 		while (dw > blocksWide * blockSize)
 			addColumn();
 		DrawBackBufferIfNecessary();
-		var sx = attachRight ? backBuffer.width - dw : 0;
-		var sy = attachBottom ? backBuffer.height - dh : 0;
+		var sx = 0;
+		var sy = 0;
 		var sw = dw;
 		var sh = dh;
 		ctx.drawImage(backBuffer, sx, sy, sw, sh, dx, dy, dw, dh);
