@@ -649,7 +649,6 @@ var togglableUIFeatures =
 
 // When seeking is over, the zoom position is lost.
 
-// Fill in the "future" area of the timeline with something.
 // Revamp or just delete the timeline loading state component.
 
 //////////////////////////
@@ -5693,6 +5692,9 @@ function ClipTimeline()
 	var canvasDrawFps = new FPSCounter1();
 	var drawRoundedRectangles = true;
 
+	var starfieldLeft = null;
+	var starfieldRight = null;
+
 	this.Initialize = function ()
 	{
 		if (initialized || !enabled)
@@ -6067,6 +6069,25 @@ function ClipTimeline()
 					var right = this.right;
 					var timelineInternalHeight = this.timelineInternalHeight;
 					var timelineInternalWidth = this.timelineInternalWidth;
+					var now = GetUtcNow();
+
+					// Draw something interesting beyond the boundaries.
+					if (left < 0)
+					{
+						// Left boundary visible
+						if (!starfieldLeft)
+							starfieldLeft = new StarfieldGenerator(80, 0.003, "bp2008");
+						starfieldLeft.draw(ctx, 0, 0, -(left / zoomFactor), timelineInternalHeight);
+					}
+					var starfieldFutureIntrusion = self.keepOutTime * 0.75;
+					if (now < (right - starfieldFutureIntrusion))
+					{
+						// Right boundary visible
+						if (!starfieldRight)
+							starfieldRight = new StarfieldGenerator(80, 0.003, "bp2008", true);
+						var size = (right - now + starfieldFutureIntrusion) / zoomFactor;
+						starfieldRight.draw(ctx, timelineInternalWidth - size, 0, size, timelineInternalHeight);
+					}
 
 					if (canvasData)
 					{
@@ -6143,7 +6164,6 @@ function ClipTimeline()
 						}
 					}
 
-					var now = GetUtcNow();
 					if (now > left && now <= right - self.keepOutTime)
 					{
 						var x = (now - left - self.keepOutTime) / zoomFactor;
@@ -6166,6 +6186,7 @@ function ClipTimeline()
 						}
 					}
 
+					// Draw a gradient if we've panned beyond a boundary.
 					var outOfBoundsTime = this.currentTimeIfFuturePanningWasAllowed;
 					var currentTime = this.currentTime;
 					var futureTimePx = (outOfBoundsTime - currentTime) / zoomFactor;
@@ -6195,7 +6216,8 @@ function ClipTimeline()
 						ctx.fillRect(x, y, w, h);
 					}
 					var perfEnd = performance.now();
-					// Decide whether to render curved corners.
+
+					// Decide whether to render curved corners next time.
 					var renderTime = perfEnd - perfStart;
 					averageCanvasDrawTime.Add(renderTime);
 					var fps = canvasDrawFps.getFPS(renderTime);
@@ -6825,6 +6847,95 @@ var timelineSync = new (function ()
 		}
 	}
 })();
+function StarfieldGenerator(blockSize, density, seedStr, attachRight, attachBottom)
+{
+	blockSize = Clamp(blockSize, 1, 7680);
+	density = Clamp(density, 0.00001, 0.5);
+	var hues = [0, 60, 240];
+	var stars = [];
+	var blocksWide = 0;
+	var blocksHigh = 0;
+	var starsPerBlock = Math.round(blockSize * blockSize * density);
+
+	var lastDrawnBackBufferSize = "";
+	var backBuffer = document.createElement('canvas');
+
+	function DrawBackBufferIfNecessary()
+	{
+		var dpr = BI_GetDevicePixelRatio();
+		var requiredBackBufferSize = blocksWide + "x" + blocksHigh + "@" + dpr;
+		if (lastDrawnBackBufferSize !== requiredBackBufferSize)
+		{
+			var startTime = performance.now();
+			lastDrawnBackBufferSize = requiredBackBufferSize;
+			backBuffer.width = blockSize * blocksWide * dpr;
+			backBuffer.height = blockSize * blocksHigh * dpr;
+
+			var bb = backBuffer.getContext("2d");
+			bb.translate(attachRight ? backBuffer.width : 0, attachBottom ? backBuffer.height : 0);
+			bb.scale(attachRight ? -1 : 1, attachBottom ? -1 : 1);
+			bb.fillStyle = "transparent";
+			bb.fillRect(0, 0, backBuffer.width, backBuffer.height);
+			for (var i = 0; i < stars.length; i++)
+			{
+				var star = stars[i];
+				bb.beginPath();
+				bb.arc(star.x * dpr, star.y * dpr, star.m * dpr, 0, 360);
+				bb.fillStyle = "hsl(" + star.hue + ", " + star.sat + "%, " + star.lig + "%)";
+				bb.fill();
+			}
+			console.log("Drew " + stars.length + " stars in " + (performance.now() - startTime).toFixed(1) + " ms");
+		}
+	}
+
+	var r = new SeededRandom(seedStr);
+	function randInt(min, maxPlusOne)
+	{
+		return min + Math.floor(r.rand() * (maxPlusOne - min));
+	}
+	function addRow()
+	{
+		for (var i = 0; i < blocksWide; i++)
+			generateBlock(i, blocksHigh);
+		blocksHigh++;
+	}
+	function addColumn()
+	{
+		for (var i = 0; i < blocksHigh; i++)
+			generateBlock(blocksWide, i);
+		blocksWide++;
+	}
+	function generateBlock(x, y)
+	{
+		var xOffset = x * blockSize;
+		var yOffset = y * blockSize;
+		for (var i = 0; i < starsPerBlock; i++)
+		{
+			stars.push({
+				x: xOffset + r.rand() * blockSize,
+				y: yOffset + r.rand() * blockSize,
+				m: r.rand() * 1.2,
+				hue: hues[randInt(0, hues.length)],
+				sat: randInt(0, 51),
+				lig: randInt(40, 89)
+			});
+		}
+	}
+
+	this.draw = function (ctx, dx, dy, dw, dh)
+	{
+		while (dh > blocksHigh * blockSize)
+			addRow();
+		while (dw > blocksWide * blockSize)
+			addColumn();
+		DrawBackBufferIfNecessary();
+		var sx = attachRight ? backBuffer.width - dw : 0;
+		var sy = attachBottom ? backBuffer.height - dh : 0;
+		var sw = dw;
+		var sh = dh;
+		ctx.drawImage(backBuffer, sx, sy, sw, sh, dx, dy, dw, dh);
+	};
+}
 ///////////////////////////////////////////////////////////////
 // Zebra Date Picker //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////

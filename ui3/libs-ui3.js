@@ -246,3 +246,6 @@ window.location.origin||(window.location.origin=window.location.protocol+"//"+wi
 function base64Array(a){for(var d="",b=0;b<a.length;b+=30750)d+=btoa(String.fromCharCode.apply(null,a.slice(b,b+30750)));return d};
 "function"!==typeof btoa&&(window.btoa=function(a){for(var d=a.length-1,b=-1,c=[];b<d;){var e=a.charCodeAt(++b)<<16|a.charCodeAt(++b)<<8|a.charCodeAt(++b);c.push("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="[e>>>18&63]+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="[e>>>12&63]+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="[e>>>6&63]+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="[e&63])}c=c.join("");a=a.length%3;if(0<
 a)for(c=c.slice(0,a-3);0!==c.length%4;)c+="=";return c});
+// seeded-random.js
+function SeededRandom(c){if("string"!==typeof c)throw Error("SeededRandom requires a seed string");c=function(d){for(var b=0,a=1779033703^d.length;b<d.length;b++)a=Math.imul(a^d.charCodeAt(b),3432918353),a=a<<13|a>>>19;return function(){a=Math.imul(a^a>>>16,2246822507);a=Math.imul(a^a>>>13,3266489909);return(a^=a>>>16)>>>0}}(c);this.rand=function(d,b,a,e){return function(){d>>>=0;b>>>=0;a>>>=0;e>>>=0;var f=d+b|0;d=b^b>>>9;b=a+(a<<3)|0;a=a<<21|a>>>11;e=e+1|0;f=f+e|0;a=a+f|0;return(f>>>0)/4294967296}}(c(),
+c(),c(),c())};
