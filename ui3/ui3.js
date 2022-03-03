@@ -5691,6 +5691,8 @@ function ClipTimeline()
 	var averageCanvasCpuUsage = new RollingAverage(30);
 	var canvasDrawFps = new FPSCounter1();
 	var drawRoundedRectangles = true;
+	var timelineStarfieldOffset = 0;
+	var lastTimelineDrawCurrentTime = -1;
 
 	var starfield = null;
 
@@ -6031,12 +6033,12 @@ function ClipTimeline()
 				},
 				assignLastSetTime: function (time)
 				{
-					if (time < 0)
-						time = 0;
+					if (time < 1)
+						time = 1;
 					else
 					{
 						var serverTime = GetUtcNow();
-						if (time > serverTime)
+						if (time > serverTime - self.keepOutTime)
 							time = serverTime;
 					}
 					this.lastSetTime = time;
@@ -6071,7 +6073,10 @@ function ClipTimeline()
 
 					if (!starfield)
 						starfield = new StarfieldGenerator(80, 0.003, "bp2008");
-					starfield.draw(ctx, 0, 0, canvas.width, canvas.height);
+					if (lastTimelineDrawCurrentTime > -1)
+						timelineStarfieldOffset += (this.currentTime - lastTimelineDrawCurrentTime) / zoomFactor;
+					lastTimelineDrawCurrentTime = this.currentTime;
+					starfield.draw(ctx, 0, 0, canvas.width, canvas.height, timelineStarfieldOffset);
 
 					bet.stop();
 
@@ -6079,7 +6084,7 @@ function ClipTimeline()
 					{
 						// Draw partially-transparent black overlay behind loadable timeline area.
 						var overlayLeft = Math.max(0, -left / zoomFactor);
-						var overlayWidth = Math.min(canvas.width, (now - left) / zoomFactor);
+						var overlayWidth = Math.min(canvas.width, (now - (self.keepOutTime * 0.8) - left) / zoomFactor);
 						var stepsFromMaxZoomout = maxZoomScaler - this.zoomScaler;
 						var blackBackgroundOpacity = Clamp(stepsFromMaxZoomout / 10, 0, 0.8) + 0.2;
 						ctx.fillStyle = "rgba(0,0,0," + blackBackgroundOpacity + ")";
@@ -6158,7 +6163,7 @@ function ClipTimeline()
 						}
 						bet.stop();
 					}
-					
+
 					if (left < 0 && right > 0)
 					{
 						// Left boundary is visible.
@@ -6856,7 +6861,9 @@ var timelineSync = new (function ()
 })();
 function StarfieldGenerator(blockSize, density, seedStr)
 {
-	blockSize = Clamp(blockSize, 1, 7680);
+	// There are some very minor (cosmetic) continuity issues when the starfield expands, caused by the offsetX argument.
+	// We could mitigate that by separating horizontal and vertical block sizes and using a much larger horizontal block size so that expansion happens less often.
+	blockSize = Math.max(40, blockSize);
 	density = Clamp(density, 0.00001, 0.5);
 	var hues = [0, 60, 240];
 	var stars = [];
@@ -6866,32 +6873,6 @@ function StarfieldGenerator(blockSize, density, seedStr)
 
 	var lastDrawnBackBufferSize = "";
 	var backBuffer = document.createElement('canvas');
-
-	function DrawBackBufferIfNecessary()
-	{
-		var dpr = BI_GetDevicePixelRatio();
-		var requiredBackBufferSize = blocksWide + "x" + blocksHigh + "@" + dpr;
-		if (lastDrawnBackBufferSize !== requiredBackBufferSize)
-		{
-			var startTime = performance.now();
-			lastDrawnBackBufferSize = requiredBackBufferSize;
-			backBuffer.width = blockSize * blocksWide * dpr;
-			backBuffer.height = blockSize * blocksHigh * dpr;
-
-			var bb = backBuffer.getContext("2d");
-			bb.fillStyle = "#000000";
-			bb.fillRect(0, 0, backBuffer.width, backBuffer.height);
-			for (var i = 0; i < stars.length; i++)
-			{
-				var star = stars[i];
-				bb.beginPath();
-				bb.arc(star.x * dpr, star.y * dpr, star.m * dpr, 0, 360);
-				bb.fillStyle = "hsl(" + star.hue + ", " + star.sat + "%, " + star.lig + "%)";
-				bb.fill();
-			}
-			console.log("Drew " + stars.length + " stars in " + (performance.now() - startTime).toFixed(1) + " ms");
-		}
-	}
 
 	var r = new SeededRandom(seedStr);
 	function randInt(min, maxPlusOne)
@@ -6927,18 +6908,57 @@ function StarfieldGenerator(blockSize, density, seedStr)
 		}
 	}
 
-	this.draw = function (ctx, dx, dy, dw, dh, offsetX, offsetY)
+	function DrawBackBufferIfNecessary()
 	{
-		while (dh > blocksHigh * blockSize)
+		var dpr = BI_GetDevicePixelRatio();
+		var requiredBackBufferSize = blocksWide + "x" + blocksHigh + "@" + dpr;
+		if (lastDrawnBackBufferSize !== requiredBackBufferSize)
+		{
+			var startTime = performance.now();
+			lastDrawnBackBufferSize = requiredBackBufferSize;
+			backBuffer.width = blockSize * blocksWide * dpr;
+			backBuffer.height = blockSize * blocksHigh * dpr;
+
+			var bb = backBuffer.getContext("2d");
+			bb.fillStyle = "#000000";
+			bb.fillRect(0, 0, backBuffer.width, backBuffer.height);
+			for (var i = 0; i < stars.length; i++)
+			{
+				var star = stars[i];
+				bb.beginPath();
+				bb.arc(star.x * dpr, star.y * dpr, star.m * dpr, 0, 360);
+				bb.fillStyle = "hsl(" + star.hue + ", " + star.sat + "%, " + star.lig + "%)";
+				bb.fill();
+			}
+			console.log("Drew " + stars.length + " stars in " + (performance.now() - startTime).toFixed(1) + " ms");
+		}
+	}
+
+	this.draw = function (ctx, dx, dy, dw, dh, offsetX)
+	{
+		console.log("Starfield draw ", dx, dy, dw, dh, offsetX, BI_GetDevicePixelRatio());
+		var dpr = BI_GetDevicePixelRatio();
+		while (dh / dpr > blocksHigh * blockSize)
 			addRow();
-		while (dw > blocksWide * blockSize)
+		while (dw / dpr > blocksWide * blockSize)
 			addColumn();
 		DrawBackBufferIfNecessary();
-		var sx = 0;
+		offsetX = ui3Modulus(offsetX, backBuffer.width);
+		var sx = offsetX;
 		var sy = 0;
-		var sw = dw;
+		var sw = Math.min(dw, backBuffer.width - sx);
 		var sh = dh;
-		ctx.drawImage(backBuffer, sx, sy, sw, sh, dx, dy, dw, dh);
+		var firstDrawW = sw;
+		ctx.drawImage(backBuffer, sx, sy, sw, sh, dx, dy, firstDrawW, dh);
+		var rem = dw - firstDrawW;
+		if (rem)
+		{
+			sx = 0;
+			sw = rem;
+			ctx.drawImage(backBuffer, sx, sy, sw, sh, dx + firstDrawW, dy, rem, dh);
+		}
+		//ctx.fillStyle = "rgba(138,95,62,1)";
+		//ctx.fillRect(dx + firstDrawW, dy, 1, dh);
 	};
 }
 ///////////////////////////////////////////////////////////////
@@ -31147,4 +31167,8 @@ function normalizeWheelEvent(e)
 		pixelX: pX, // Arbitrary browser/os dependent number of pixels.
 		pixelY: pY // Arbitrary browser/os dependent number of pixels.
 	};
+}
+function ui3Modulus(n, m)
+{
+	return ((n % m) + m) % m;
 }
