@@ -636,7 +636,8 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Skip dead-air should be available in the Video Player section of UI Settings, 3-state toggle button defaulted to inherit. &skipdeadair=1 or 0
+// timelineStart should be a separate argument to the OpenVideo function, maybe. Otherwise it needs updated to the latest timeline selected position when calling OpenVideo in a bunch of places.
+// Add a context menu to the timeline control, granting access to the "Skip dead-air" and "Boring Timeline Mode" settings.
 // addmotion/addoverlay arguments are supported for the timeline, so UI3 should use them.
 
 // Isolated jpeg frames (downloading, etc) should use "&isolate" URL parameter.  no parameter value is required. Same with "&jpeg".
@@ -751,7 +752,7 @@ var Zoom1xOptions = {
 	Stream: "Stream"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -789,10 +790,6 @@ var defaultSettings =
 		, {
 			key: "ui3_playback_loop"
 			, value: "0"
-		}
-		, {
-			key: "ui3_playback_skipDeadAir"
-			, value: "1"
 		}
 		, {
 			key: "ui3_current_dbView"
@@ -1221,6 +1218,21 @@ var defaultSettings =
 			, label: 'Dynamic Group Layout<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Dynamic Group Layout\')">(learn more)</a></div>'
 			, onChange: OnChange_ui3_dynamicGroupLayout
 			, category: "Video Player"
+		}
+		, {
+			key: "ui3_playback_skipDeadAir"
+			, value: 0
+			, inputType: "threeState"
+			, label: 'Skip dead-air during playback'
+			, onChange: OnChange_ui3_playback_skipDeadAir
+			, category: "Timeline"
+		}
+		, {
+			key: "ui3_timeline_boringMode"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Boring Timeline Mode<div class="settingDesc">for those who don\'t like the starfield background</div>'
+			, category: "Timeline"
 		}
 		, {
 			key: "ui3_uiStatusSounds"
@@ -1675,15 +1687,15 @@ var defaultSettings =
 			, actionDown: BI_Hotkey_Load_Tab_Clips
 			, category: "Hotkeys"
 		}
-		//, { /* TIMELINE_READY */
-		//	key: "ui3_hotkey_tab_timeline"
-		//	, value: "0|0|0|114" // 114: F3
-		//	, hotkey: true
-		//	, label: "Load Tab: Timeline"
-		//	, hint: "Opens the Timeline tab"
-		//	, actionDown: BI_Hotkey_Load_Tab_Timeline
-		//	, category: "Hotkeys"
-		//}
+		, {
+			key: "ui3_hotkey_tab_timeline"
+			, value: "0|0|0|114" // 114: F3
+			, hotkey: true
+			, label: "Load Tab: Timeline"
+			, hint: "Opens the Timeline tab"
+			, actionDown: BI_Hotkey_Load_Tab_Timeline
+			, category: "Hotkeys"
+		}
 		, {
 			key: "ui3_hotkey_cameraLabels"
 			, value: "1|0|0|76" // 76: L
@@ -3128,14 +3140,6 @@ $(function ()
 
 	$(window).resize(resized);
 	$(window).resize(debounce(AfterWindowResized, 250));
-	if (UrlParameters.Get("timeline") === "") /* TIMELINE_READY */
-	{
-		$("#topbar_tab_timeline").remove();
-		if (currentPrimaryTab === "timeline")
-			currentPrimaryTab = "live";
-	}
-	else
-		$("#topbar_tab_timeline").css("opacity", "1");
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
 
 	window.addEventListener("beforeunload", function ()
@@ -5673,7 +5677,6 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 function ClipTimeline()
 {
 	var self = this;
-	var enabled = !!UrlParameters.Get("timeline");
 	var timeline;
 	var initialized = false;
 	var alertImg = new Image();
@@ -5700,7 +5703,7 @@ function ClipTimeline()
 
 	this.Initialize = function ()
 	{
-		if (initialized || !enabled)
+		if (initialized)
 			return;
 		initialized = true;
 
@@ -6074,25 +6077,40 @@ function ClipTimeline()
 					var left = this.left;
 					var right = this.right;
 					var now = GetUtcNow();
+					var boringMode = settings.ui3_timeline_boringMode === "1";
 
-					if (!starfield)
-						starfield = new StarfieldGenerator(80, 0.003, "bp2008");
 					if (lastTimelineDrawCurrentTime > -1)
 						timelineStarfieldOffset += (this.currentTime - lastTimelineDrawCurrentTime) / zoomFactor;
 					lastTimelineDrawCurrentTime = this.currentTime;
-					starfield.draw(ctx, 0, 0, canvas.width, canvas.height, timelineStarfieldOffset);
+
+					if (boringMode)
+					{
+						ctx.fillStyle = "#000000";
+						ctx.fillRect(0, 0, canvas.width, canvas.height);
+					}
+					else
+					{
+						if (!starfield)
+							starfield = new StarfieldGenerator(80, 0.003, "bp2008");
+						starfield.draw(ctx, 0, 0, canvas.width, canvas.height, timelineStarfieldOffset);
+					}
+
 
 					bet.stop();
 
 					if (canvasData)
 					{
-						// Draw partially-transparent black overlay behind loadable timeline area.
-						var overlayLeft = Math.max(0, -left / zoomFactor);
-						var overlayWidth = Math.min(canvas.width, (now - (self.keepOutTime * 0.8) - left) / zoomFactor);
-						var stepsFromMaxZoomout = maxZoomScaler - this.zoomScaler;
-						var blackBackgroundOpacity = Clamp(stepsFromMaxZoomout / 10, 0, 0.8) + 0.2;
-						ctx.fillStyle = "rgba(0,0,0," + blackBackgroundOpacity + ")";
-						ctx.fillRect(overlayLeft, 0, overlayWidth, canvas.height);
+						if (!boringMode)
+						{
+							// Draw partially-transparent black overlay behind loadable timeline area.
+							var overlayLeft = Math.max(0, -left / zoomFactor);
+							var overlayWidth = Math.min(canvas.width, (now - (self.keepOutTime * 0.8) - left) / zoomFactor);
+							var stepsFromMaxZoomout = maxZoomScaler - this.zoomScaler;
+							var blackBackgroundOpacity = Clamp(stepsFromMaxZoomout / 10, 0, 0.8) + 0.2;
+							ctx.fillStyle = "rgba(0,0,0," + blackBackgroundOpacity + ")";
+							ctx.fillRect(overlayLeft, 0, overlayWidth, canvas.height);
+						}
+
 						var alertIconSpace = 12 * dpr;
 						var clipDrawRegionHeight = canvas.height - alertIconSpace;
 						var timelineColorbarHeight = clipDrawRegionHeight / canvasData.colors.length;
@@ -6270,13 +6288,15 @@ function ClipTimeline()
 				{
 					if (typeof data.utc !== "number")
 						return;
-					var serverTime = GetUtcNow();
-					if (data.utc > serverTime)
+
+					if (videoPlayer.Loaded().image.isTimeline())
 					{
-						var newServerTimeOffset = data.utc - Date.now();
-						console.log("Timeline FrameRendered function received a frame representing the future (wow!).  Server Time: " + serverTime
-							+ ".  Frame Time: " + data.utc + ".  Adjusting currentServerTimeOffset from " + currentServerTimeOffset + " to " + newServerTimeOffset + ".");
-						currentServerTimeOffset = newServerTimeOffset;
+						var serverTime = GetUtcNow();
+						if (data.utc > serverTime - self.keepOutTime)
+						{
+							console.log("Timeline video frame (" + GetDateStr(new Date(data.utc), true) + ") rendered after the start of the keep-out zone (" + GetDateStr(new Date(serverTime - self.keepOutTime), true) + "). Going to live view.");
+							videoPlayer.goLive();
+						}
 					}
 					this.lastSetTime = data.utc;
 
@@ -6776,23 +6796,8 @@ function ClipTimeline()
 		ctx.fillRect(x, y + vc, w, h - vc - vc);
 		// Draw bottom
 		ctx.fillRect(x + lhc, (y + h) - vc, w - lhc - rhc, vc);
-
-		//var r = 2;
-		//ctx.beginPath();
-		//ctx.moveTo(x + r, y);
-		//ctx.lineTo(x + w - r, y);
-		//ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-		//ctx.lineTo(x + w, y + h - r);
-		//ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-		//ctx.lineTo(x + r, y + h);
-		//ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-		//ctx.lineTo(x, y + r);
-		//ctx.quadraticCurveTo(x, y, x + r, y);
-		//ctx.closePath();
-		//ctx.fill();
 	}
-	if (enabled)
-		self.Initialize();
+	self.Initialize();
 }
 var timelineSync = new (function ()
 {
@@ -7172,7 +7177,6 @@ function PlaybackControls()
 	var playReverse = settings.ui3_playback_reverse == "1";
 	var autoplay = settings.ui3_playback_autoplay == "1";
 	var loopingEnabled = settings.ui3_playback_loop == "1";
-	var skipDeadAirEnabled = settings.ui3_playback_skipDeadAir == "1";
 	var SpeedOptions =
 		[
 			0.125, 0.25, 0.5, 1, 2, 4, 6, 8, 16, 32, 64, 128, 256
@@ -7440,12 +7444,24 @@ function PlaybackControls()
 				+ '<label for="cbLoop"><span class="ui"></span>Loop<div class="playbackSettingsSpacer"></div></label>'
 				+ '</div>');
 		if (isTimeline)
-			$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
-				+ '<input id="cbSkipDeadAir" type="checkbox" class="sliderCb" onclick="playbackControls.SkipDeadAirClicked()" '
-				+ (skipDeadAirEnabled ? ' checked="checked"' : '')
-				+ '/>'
-				+ '<label for="cbSkipDeadAir"><span class="ui"></span>Skip dead-air<div class="playbackSettingsSpacer"></div></label>'
-				+ '</div>');
+		{
+			var $line = $('<label class="playbackSettingsLine">Skip dead-air</label>');
+			var $wrapper = $('<span class="playbackSettingsFloatRight"></span>');
+			$line.append($wrapper);
+			$wrapper.append(UIFormField({
+				inputType: "threeState"
+				, value: settings.ui3_playback_skipDeadAir
+				, tag: "skipDeadAir",
+				onChange: function (e, value, $btn)
+				{
+					self.FadeIn();
+					hideAfterTimeout();
+					settings.ui3_playback_skipDeadAir = value.toString();
+					OnChange_ui3_playback_skipDeadAir();
+				}
+			}));
+			$playbackSettings.append($line);
+		}
 		var $speedBtn = $('<div class="playbackSettingsLine speedBtn">'
 			+ 'Speed<div class="playbackSettingsFloatRight">'
 			+ (playSpeed == 1 ? "Normal" : playSpeed)
@@ -7616,13 +7632,6 @@ function PlaybackControls()
 		loopingEnabled = $("#cbLoop").is(":checked");
 		settings.ui3_playback_loop = loopingEnabled ? "1" : "0";
 	}
-	this.SkipDeadAirClicked = function ()
-	{
-		self.FadeIn();
-		hideAfterTimeout();
-		skipDeadAirEnabled = $("#cbSkipDeadAir").is(":checked");
-		settings.ui3_playback_skipDeadAir = skipDeadAirEnabled ? "1" : "0";
-	}
 	this.MouseInSettingsPanel = function (e)
 	{
 		mouseCoordFixer.fix(e);
@@ -7648,9 +7657,18 @@ function PlaybackControls()
 	{
 		return loopingEnabled;
 	}
-	this.GetSkipDeadAirEnabled = function ()
+	this.GetSkipDeadAirState = function ()
 	{
-		return skipDeadAirEnabled;
+		return settings.ui3_playback_skipDeadAir;
+	}
+	this.GetSkipDeadAirArg = function ()
+	{
+		if (settings.ui3_playback_skipDeadAir === "2")
+			return "&skipdeadair=1";
+		else if (settings.ui3_playback_skipDeadAir === "1")
+			return "&skipdeadair=0";
+		else
+			return "";
 	}
 	this.ChangePlaySpeed = function (offset)
 	{
@@ -13857,6 +13875,10 @@ function JpegVideoModule()
 	var backbuffer_canvas;
 	// Contains URLs of the last image we started loading and the last image we loaded.
 	var imageLoadingState = { loadingUrl: "", loadedUrl: "" };
+	/** A counter that is incremented each time we open a new video stream. Frames that arrive from a previous stream are discarded without being rendered.
+	 * This was made necessary in Feb 2022 due to Jpeg video player changes to support the timeline. Specifically when timelineSync was added, it added an 
+	 * unpredictable delay between updating the [loading] field and updating the [imageLoadingState] field... it is complicated. */
+	var currentStreamId = 0;
 
 	var Initialize = function ()
 	{
@@ -13871,7 +13893,7 @@ function JpegVideoModule()
 		$camimg_store.append($camimg_canvas);
 		$camimg_store.append($backbuffer_canvas);
 	}
-	function LoadImageFromUrl(url)
+	function LoadImageFromUrl(url, streamId)
 	{
 		imageLoadingState.loadingUrl = url;
 
@@ -13885,13 +13907,13 @@ function JpegVideoModule()
 		promise
 			.then(function (result)
 			{
-				if (imageLoadingState.loadingUrl !== url)
+				if (currentStreamId !== streamId || imageLoadingState.loadingUrl !== url)
 					return; // A new image began loading before this one completed; this result is no longer needed.
 				return LoadImagePromise(result.dataUri, result.headers, result.imageSizeBytes);
 			})
 			.then(function (data)
 			{
-				if (imageLoadingState.loadingUrl !== url)
+				if (currentStreamId !== streamId || imageLoadingState.loadingUrl !== url)
 					return; // A new image began loading before this one completed; this result is no longer needed.
 				var image = data.image;
 				var headers = data.headers;
@@ -14039,6 +14061,7 @@ function JpegVideoModule()
 
 		if (videoPlayer.handleDisabledCamera(videoData))
 			return;
+		var previousStreamWasTimeline = loading && loading.isTimeline();
 		loading.CopyValuesFrom(videoData);
 		honorAlertOffset = offsetPercent === -1;
 		if (!offsetPercent)
@@ -14055,6 +14078,7 @@ function JpegVideoModule()
 		else
 			self.Playback_Play();
 		videoOverlayHelper.ShowLoadingOverlay(true);
+		currentStreamId++;
 		if (loading.isTimeline())
 		{
 			videoPlayer.lastFrameUtc = loading.timelineStart;
@@ -14154,15 +14178,16 @@ function JpegVideoModule()
 			{
 				if (loading.newTimelineStream)
 				{
+					currentStreamId++;
 					var speedMultiplier = playbackControls.GetPlaybackSpeed();
 					timelineSpeedArg = "&speed=" + (Math.round(100 * speedMultiplier) * (playbackControls.GetPlayReverse() ? -1 : 1));
 					timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
+					timelinePosArg += playbackControls.GetSkipDeadAirArg();
 					if (loading.timelineJump)
 					{
 						timelinePosArg += "&jump=" + loading.timelineJump;
 						loading.timelineJump = 0;
 					}
-					timelinePosArg += "&skipdeadair=" + (playbackControls.GetSkipDeadAirEnabled() ? "1" : "0");
 				}
 				else
 				{
@@ -14258,7 +14283,7 @@ function JpegVideoModule()
 				lastLoadedTimeValue = timeValue;
 				currentImageTimestampGuessUtc = loading.isLive ? GetUtcNow() : -1;
 				timelineSync.lock();
-				LoadImageFromUrl(imgSrcPath);
+				LoadImageFromUrl(imgSrcPath, currentStreamId);
 			}
 		}
 	}
@@ -14681,7 +14706,7 @@ function FetchH264VideoModule()
 				jumpArg = "&jump=" + loading.timelineJump;
 				loading.timelineJump = 0;
 			}
-			var skipDeadAirArg = "&skipdeadair=" + (playbackControls.GetSkipDeadAirEnabled() ? "1" : "0");
+			var skipDeadAirArg = playbackControls.GetSkipDeadAirArg();
 			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + skipDeadAirArg + "&extend=2";
 		}
 		else if (loading.isLive)
@@ -28106,6 +28131,11 @@ function UISettingsPanel()
 					}
 					$row.append(UIFormField(formFields));
 				}
+				else if (s.inputType === "threeState")
+				{
+					formFields.onChange = ThreeStateChanged;
+					$row.append(UIFormField(formFields));
+				}
 				else if (s.inputType === "comment")
 				{
 					var comment = typeof s.comment === "function" ? s.comment() : s.comment;
@@ -28407,6 +28437,11 @@ function UISettingsPanel()
 	var TextChanged = function (e, s, $input)
 	{
 		settings.setItem(s.key, $input.val());
+		CallOnChangeCallback(s);
+	}
+	var ThreeStateChanged = function (s, value, $input)
+	{
+		settings.setItem(s.key, value.toString());
 		CallOnChangeCallback(s);
 	}
 	var HandleHotkeyChange = function (e, s, $input)
@@ -28781,6 +28816,10 @@ function OnChange_ui3_prioritizeTriggered()
 {
 	videoPlayer.PrioritizeTriggeredWasToggled();
 }
+function OnChange_ui3_playback_skipDeadAir()
+{
+	videoPlayer.RefreshVideoStream();
+}
 ///////////////////////////////////////////////////////////////
 // Form Field Helpers /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -28927,10 +28966,12 @@ function UIFormField(args)
 			$input.on('click', function (e) { if ($input.attr("disabled") !== "disabled") { return o.onChange(o.tag, $input); } });
 		}
 
-		var $label = $('<label class="dialogOption_label"> ' + o.label + '</label>');
-
 		var $row = $('<div class="dialogOption_item dialogOption_item_btn' + disabledClass + '"></div>');
-		$row.append($label);
+		if (o.label)
+		{
+			var $label = $('<label class="dialogOption_label">' + o.label + ' </label>');
+			$row.append($label);
+		}
 		$row.append($input);
 		return $row;
 	}

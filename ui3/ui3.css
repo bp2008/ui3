@@ -13,7 +13,7 @@
 	--text-active-color: #FFFFFF;
 	--pctext-color: #E8E8E8;
 	--pctext-hover-color: #FFFFFF;
-	--audio-playing-color: #63C35B;
+	.ui --audio-playing-color: #63C35B;
 	--audio-loading-color: #F0F000;
 	--audio-error-color: #F00000;
 	--audio-idle-color: var(--button-color);
@@ -472,13 +472,12 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	font-size: 14px;
 }
 
-#topbar_tab_timeline /* TIMELINE_READY */
+#topbar_tab_timeline
 {
-	opacity: 0;
 	position: relative;
 }
 
-@media (min-width: 850px) /* TIMELINE_READY */
+@media (min-width: 850px) /* TIMELINE-RELEASE */
 {
 	#topbar_tab_timeline::before
 	{
@@ -3533,6 +3532,7 @@ body + div
 
 .playbackSettingsLine
 {
+	display: block;
 	cursor: pointer;
 	padding: 10px;
 }
@@ -3602,6 +3602,17 @@ body + div
 	line-height: 18.4px;
 	margin-left: 10px;
 }
+
+	.playbackSettingsFloatRight .dialogOption_item_btn
+	{
+		padding: 0px;
+		margin: -3px 0px 0px 10px;
+	}
+
+		.playbackSettingsFloatRight .dialogOption_item_btn input[type="button"]
+		{
+			margin: 0px;
+		}
 
 .playbackSettingsRightArrow
 {
