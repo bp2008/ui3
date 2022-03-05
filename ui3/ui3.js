@@ -636,8 +636,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Add a context menu to the timeline control, granting access to the "Skip dead-air" and "Boring Timeline Mode" settings.
-
 // Isolated jpeg frames (downloading, etc) should use "&isolate" URL parameter.  no parameter value is required. Same with "&jpeg".
 
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
@@ -5896,6 +5894,8 @@ function ClipTimeline()
 						timeline.dragState.isDragging = false;
 						return;
 					}
+					if (e.button === 2)
+						return;
 					if (pointInsideElement($tl_root, e.mouseX, e.mouseY))
 					{
 						timeline.dragState.startX = e.mouseX;
@@ -6732,9 +6732,49 @@ function ClipTimeline()
 		});
 
 		$("#layoutbottomTimeline").show();
-		var timelineComponent = new Vue({
-			el: "#layoutbottomTimeline"
-		});
+		// The [timeline] field will contain a reference to the component, set by the component after its creation.
+		new Vue({ el: "#layoutbottomTimeline" });
+
+		var optionTimeline =
+		{
+			alias: "cmroot_timeline", width: 200, items:
+				[
+					ThreeStateMenuItem.Create("timeline_skipDeadAir", "Skip dead-air", function ()
+					{
+						switch (this.data.alias)
+						{
+							case "timeline_skipDeadAir_nopreference":
+								settings.ui3_playback_skipDeadAir = "0";
+								videoPlayer.RefreshVideoStream();
+								break;
+							case "timeline_skipDeadAir_off":
+								settings.ui3_playback_skipDeadAir = "1";
+								videoPlayer.RefreshVideoStream();
+								break;
+							case "timeline_skipDeadAir_on":
+								settings.ui3_playback_skipDeadAir = "2";
+								videoPlayer.RefreshVideoStream();
+								break;
+						}
+					}),
+					{
+						text: '<span id="timeline_boringMode_menuitem">Boring Timeline Mode</span>', iconClass: "noflip", icon: "#svg_mio_cbUnchecked", alias: "boringTimelineMode",
+						tooltip: 'Boring Timeline Mode disables the starfield background',
+						action: function () { settings.ui3_timeline_boringMode = settings.ui3_timeline_boringMode === "1" ? "0" : "1"; }
+					}
+				]
+			, onContextMenu: function ()
+			{
+				var $boringMode = $("#timeline_boringMode_menuitem");
+				$boringMode.parent().prev().find("use").attr("xlink:href", settings.ui3_timeline_boringMode === "1" ? "#svg_mio_cbChecked" : "#svg_mio_cbUnchecked");
+
+				ThreeStateMenuItem.Refresh("timeline_skipDeadAir", parseInt(settings.ui3_playback_skipDeadAir));
+				return true;
+			}
+			, clickType: GetPreferredContextMenuTrigger()
+		};
+		$("#layoutbottomTimeline").contextmenu(optionTimeline);
+
 		resized();
 	}
 	this.getVue = function ()
@@ -20311,7 +20351,7 @@ function CanvasContextMenu()
 	}
 	var optionTimeline =
 	{
-		alias: "cmroot_timeline", width: 200, items:
+		alias: "cmroot_timelinecanvas", width: 200, items:
 			[
 				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onTimelineContextMenuAction }
 				, { text: '<div id="cmroot_timelineview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onTimelineContextMenuAction }
