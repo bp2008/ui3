@@ -636,7 +636,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// timelineStart should be a separate argument to the OpenVideo function, maybe. Otherwise it needs updated to the latest timeline selected position when calling OpenVideo in a bunch of places.
 // Add a context menu to the timeline control, granting access to the "Skip dead-air" and "Boring Timeline Mode" settings.
 // addmotion/addoverlay arguments are supported for the timeline, so UI3 should use them.
 
@@ -12731,12 +12730,12 @@ function VideoPlayerController()
 		if (!playerModule)
 			toaster.Error("Video Player was asked to load module \"" + moduleName + "\" which does not exist.", 30000);
 		else if (refreshVideoNow)
-			playerModule.OpenVideo(currentlyLoadingImage, position, paused);
+			playerModule.OpenVideo(currentlyLoadingImage.UpdateTimelineStart(), position, paused);
 	}
 	this.RefreshVideoStream = function ()
 	{
 		if (playerModule)
-			playerModule.OpenVideo(currentlyLoadingImage, playerModule.GetSeekPercent(), playerModule.Playback_IsPaused());
+			playerModule.OpenVideo(currentlyLoadingImage.UpdateTimelineStart(), playerModule.GetSeekPercent(), playerModule.Playback_IsPaused());
 	}
 	this.PreLoadPlayerModules = function ()
 	{
@@ -13349,7 +13348,7 @@ function VideoPlayerController()
 	{
 		pos = Clamp(pos, 0, 1);
 		seekBar.drawSeekbarAtPercent(pos);
-		playerModule.OpenVideo(currentlyLoadingImage, pos, !play);
+		playerModule.OpenVideo(currentlyLoadingImage.UpdateTimelineStart(), pos, !play);
 	}
 	this.SeekByMs = function (offset, play)
 	{
@@ -13754,6 +13753,13 @@ function BICameraData()
 	this.isTimeline = function ()
 	{
 		return typeof self.timelineStart === "number";
+	}
+	/** If [isTimeline], then sets [timelineStart] = videoPlayer.lastFrameUtc. Returns a reference to this instance. */
+	this.UpdateTimelineStart = function ()
+	{
+		if (self.isTimeline())
+			self.timelineStart = videoPlayer.lastFrameUtc;
+		return self;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -14605,7 +14611,7 @@ function FetchH264VideoModule()
 		if (visible && isCurrentlyActive)
 		{
 			if (loading.isLive)
-				self.OpenVideo(loading);
+				self.OpenVideo(loading.UpdateTimelineStart());
 			else if (!playbackPaused)
 				self.Playback_Play();
 		}
@@ -15047,8 +15053,6 @@ function FetchH264VideoModule()
 			currentSeekPositionPercent = 0;
 		else if (loading.isTimeline())
 		{
-			loading.timelineStart = videoPlayer.lastFrameUtc;
-			self.OpenVideo(loading, currentSeekPositionPercent, playbackPaused);
 		}
 		else
 		{
@@ -15058,7 +15062,7 @@ function FetchH264VideoModule()
 				currentSeekPositionPercent = 1;
 			currentSeekPositionPercent = Clamp(currentSeekPositionPercent, 0, 1);
 		}
-		self.OpenVideo(loading, currentSeekPositionPercent, playbackPaused);
+		self.OpenVideo(loading.UpdateTimelineStart(), currentSeekPositionPercent, playbackPaused);
 	}
 	var FrameRendered = function (frame)
 	{
