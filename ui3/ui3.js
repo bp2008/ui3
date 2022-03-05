@@ -651,8 +651,6 @@ var togglableUIFeatures =
 // Check all TIMELINE-RELEASE code locations.
 // Verify correct behavior when playing timeline video and changing UI tabs.
 // Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
-// Timeline: Remove "enabled" flag from ClipTimeline.
-// Timeline: Remove fallback "timeline" JSON data requests using cliplist and alertlist.
 // Test timeline with clock drift and a different timezone.  This was fine as of 2022-02-25.
 
 ///////////////////////////////////////////////////////////////
