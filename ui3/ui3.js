@@ -639,9 +639,7 @@ var togglableUIFeatures =
 // Skip dead-air should be available in the Video Player section of UI Settings, 3-state toggle button defaulted to inherit. &skipdeadair=1 or 0
 // addmotion/addoverlay arguments are supported for the timeline, so UI3 should use them.
 
-// Once H.264 /time/ streaming is more stable, implement jpeg video module /time/ streaming.
-// * when pausing the jpeg stream, send the /time/set command with a speed of 0 so the server doesn't waste resources continuing to encode.
-// * isolated jpeg frames (downloading, etc) should use "&isolate" URL parameter.  no parameter value is required. Same with "&jpeg".
+// Isolated jpeg frames (downloading, etc) should use "&isolate" URL parameter.  no parameter value is required. Same with "&jpeg".
 
 // Clicking a camera while in timeline playback should retain existing position, not jump to live.
 // Disable reverse playback for timeline?  It would probably have unspeakably awful performance.
@@ -13275,21 +13273,33 @@ function VideoPlayerController()
 			return;
 		self.lastFrameUtc = pos;
 		var speedArg = "&speed=" + Math.round(100 * playbackControls.GetPlaybackSpeed());
-		self.TimelineSet("&pos=" + parseInt(pos));
+		self.TimelineSet(speedArg + "&pos=" + parseInt(pos));
+	}
+	/** Instructs Blue Iris to stop the current timeline stream. Useful only for Jpeg streams. */
+	this.TimelineStop = function ()
+	{
+		self.TimelineSet("&speed=0");
 	}
 	this.TimelineSet = function (urlParams)
 	{
 		if (!currentlyLoadingImage.isTimeline())
 			return;
-		var url = currentServer.remoteBaseURL + "time/set" + currentServer.GetAPISessionArg("?", true) + urlParams;
-		$.ajax(url)
-			.fail(function (jqXHR, textStatus, errorThrown)
-			{
-				if (jqXHR && jqXHR.status !== 0)
-					toaster.Error("Blue Iris failed to modify the timeline video stream. HTTP " + jqXHR.status + " " + jqXHR.statusText);
-				else
-					toaster.Error("Unable to contact Blue Iris to modify the timeline video stream.");
-			});
+		timelineSync.run(this, function ()
+		{
+			var url = currentServer.remoteBaseURL + "time/set" + currentServer.GetAPISessionArg("?", true) + urlParams;
+			$.ajax(url)
+				.fail(function (jqXHR, textStatus, errorThrown)
+				{
+					if (jqXHR && jqXHR.status !== 0)
+						toaster.Error("Blue Iris failed to modify the timeline video stream. HTTP " + jqXHR.status + " " + jqXHR.statusText);
+					else
+						toaster.Error("Unable to contact Blue Iris to modify the timeline video stream.");
+				})
+				.always(function ()
+				{
+					timelineSync.unlock();
+				});
+		});
 	}
 	this.SeekToPercent = function (pos, play)
 	{
@@ -14108,7 +14118,6 @@ function JpegVideoModule()
 			{
 				if (loading.newTimelineStream)
 				{
-					loading.newTimelineStream = false;
 					var speedMultiplier = playbackControls.GetPlaybackSpeed();
 					timelineSpeedArg = "&speed=" + Math.round(100 * speedMultiplier);
 					timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
@@ -14205,6 +14214,7 @@ function JpegVideoModule()
 			}
 			else
 			{
+				loading.newTimelineStream = false;
 				lastRequestedSize = sizeToRequest;
 				repeatedSameImageURLs = 1;
 				SetImageLoadTimeout();
@@ -14234,6 +14244,7 @@ function JpegVideoModule()
 		{
 			playbackPaused = true;
 			playbackControls.setPlayPauseButtonState(playbackPaused);
+			videoPlayer.TimelineStop();
 			BI_CustomEvent.Invoke("Playback_Pause", loading);
 		}
 	}
