@@ -636,13 +636,10 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// clicking a camera while in a /time/ stream should retain the current time position.
 // Add a context menu to the timeline control, granting access to the "Skip dead-air" and "Boring Timeline Mode" settings.
 
 // Isolated jpeg frames (downloading, etc) should use "&isolate" URL parameter.  no parameter value is required. Same with "&jpeg".
 
-// Clicking a camera while in timeline playback should retain existing position, not jump to live.
-// Disable reverse playback for timeline?  It would probably have unspeakably awful performance.
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
 
 // When seeking is over, the zoom position is lost.
@@ -4049,7 +4046,7 @@ function DropdownBoxes()
 				{
 					var camData = cameraListLoader.GetCameraWithId(item.id);
 					if (camData)
-						videoPlayer.LoadLiveCamera(camData);
+						videoPlayer.LoadLiveCamera(camData, clipTimeline.getTimelineArgsForCameraSwitch());
 					else
 						videoPlayer.LoadHomeGroup();
 				}
@@ -6770,6 +6767,13 @@ function ClipTimeline()
 			return timeline.currentTime;
 		else
 			return GetUtcNow();
+	}
+	/** Returns a timelineArgs object that will persist the current timeline playback position if sent to videoPlayer.LoadLiveCamera. */
+	this.getTimelineArgsForCameraSwitch = function ()
+	{
+		if (timeline && videoPlayer.Loading().image.isTimeline())
+			return { timelineMs: timeline.currentTime };
+		return null;
 	}
 	/**
 	 * Efficiently draws a rounded-corner rectangle on a canvas 2d context.
@@ -12390,7 +12394,7 @@ function CameraListLoader()
 					if (self.CameraIsGroup(lastResponse.data[0]))
 						videoPlayer.SelectCameraGroup(lastResponse.data[0].optionValue);
 					else
-						videoPlayer.LoadLiveCamera(lastResponse.data[0]);
+						videoPlayer.LoadLiveCamera(lastResponse.data[0], clipTimeline.getTimelineArgsForCameraSwitch());
 				}
 				else
 					videoPlayer.SelectCameraGroup(settings.ui3_defaultCameraGroupId);
@@ -13088,7 +13092,7 @@ function VideoPlayerController()
 				return;
 			if (scaleOut && playerModule.DrawFullCameraAsThumb)
 				playerModule.DrawFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
-			self.LoadLiveCamera(camData);
+			self.LoadLiveCamera(camData, clipTimeline.getTimelineArgsForCameraSwitch());
 			if (scaleOut && playerModule.DrawFullCameraAsThumb)
 				self.CameraOrResolutionChange();
 		}
@@ -13101,7 +13105,7 @@ function VideoPlayerController()
 				if (loadedImg.id)
 					playerModule.DrawThumbAsFullCamera(camData.optionValue, loadedImg.id);
 			}
-			self.LoadLiveCamera(camData);
+			self.LoadLiveCamera(camData, clipTimeline.getTimelineArgsForCameraSwitch());
 			if (playerModule.DrawThumbAsFullCamera)
 				self.CameraOrResolutionChange();
 		}
@@ -13146,7 +13150,7 @@ function VideoPlayerController()
 	{
 		if (typeof groupId == "undefined")
 			groupId = currentlySelectedHomeGroupId;
-		self.LoadLiveCamera(cameraListLoader.GetGroupCamera(groupId));
+		self.LoadLiveCamera(cameraListLoader.GetGroupCamera(groupId), clipTimeline.getTimelineArgsForCameraSwitch());
 	}
 	this.LoadFirstAvailableCameraGroup = function ()
 	{
@@ -13172,7 +13176,7 @@ function VideoPlayerController()
 				{
 					settings.ui3_defaultCameraGroupId = currentlySelectedHomeGroupId = groupId;
 
-					self.LoadLiveCamera(camList.data[i]);
+					self.LoadLiveCamera(camList.data[i], clipTimeline.getTimelineArgsForCameraSwitch());
 					break;
 				}
 			}
@@ -14195,7 +14199,7 @@ function JpegVideoModule()
 						timelinePosArg += "&jump=" + loading.timelineJump;
 						loading.timelineJump = 0;
 					}
-					overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
+					overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 				}
 				else
 				{
