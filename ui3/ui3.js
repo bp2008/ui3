@@ -791,6 +791,10 @@ var defaultSettings =
 			, value: "0"
 		}
 		, {
+			key: "ui3_playback_skipDeadAir"
+			, value: "1"
+		}
+		, {
 			key: "ui3_current_dbView"
 			, value: "all"
 		}
@@ -7168,6 +7172,7 @@ function PlaybackControls()
 	var playReverse = settings.ui3_playback_reverse == "1";
 	var autoplay = settings.ui3_playback_autoplay == "1";
 	var loopingEnabled = settings.ui3_playback_loop == "1";
+	var skipDeadAirEnabled = settings.ui3_playback_skipDeadAir == "1";
 	var SpeedOptions =
 		[
 			0.125, 0.25, 0.5, 1, 2, 4, 6, 8, 16, 32, 64, 128, 256
@@ -7410,27 +7415,37 @@ function PlaybackControls()
 	{
 		if (performance.now() - 33 <= settingsClosedAt)
 			return;
-		if (videoPlayer.Loading().image.isLive || videoPlayer.Loading().image.isTimeline())
+		if (videoPlayer.Loading().image.isLive)
 			return OpenQualityPanel();
 		RebuildSettingsPanelEmpty();
-		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
-			+ '<input id="cbAutoplay" type="checkbox" class="sliderCb" onclick="playbackControls.AutoplayClicked()" '
-			+ (autoplay ? ' checked="checked"' : '')
-			+ '/>'
-			+ '<label for="cbAutoplay"><span class="ui"></span>Autoplay<div class="playbackSettingsSpacer"></div></label>'
-			+ '</div>');
+		var isTimeline = videoPlayer.Loading().image.isTimeline();
+		if (!isTimeline)
+			$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
+				+ '<input id="cbAutoplay" type="checkbox" class="sliderCb" onclick="playbackControls.AutoplayClicked()" '
+				+ (autoplay ? ' checked="checked"' : '')
+				+ '/>'
+				+ '<label for="cbAutoplay"><span class="ui"></span>Autoplay<div class="playbackSettingsSpacer"></div></label>'
+				+ '</div>');
 		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
 			+ '<input id="cbReverse" type="checkbox" class="sliderCb" onclick="playbackControls.ReverseClicked()" '
 			+ (playReverse ? ' checked="checked"' : '')
 			+ '/>'
 			+ '<label for="cbReverse"><span class="ui"></span>Reverse<div class="playbackSettingsSpacer"></div></label>'
 			+ '</div>');
-		$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
-			+ '<input id="cbLoop" type="checkbox" class="sliderCb" onclick="playbackControls.LoopClicked()" '
-			+ (loopingEnabled ? ' checked="checked"' : '')
-			+ '/>'
-			+ '<label for="cbLoop"><span class="ui"></span>Loop<div class="playbackSettingsSpacer"></div></label>'
-			+ '</div>');
+		if (!isTimeline)
+			$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
+				+ '<input id="cbLoop" type="checkbox" class="sliderCb" onclick="playbackControls.LoopClicked()" '
+				+ (loopingEnabled ? ' checked="checked"' : '')
+				+ '/>'
+				+ '<label for="cbLoop"><span class="ui"></span>Loop<div class="playbackSettingsSpacer"></div></label>'
+				+ '</div>');
+		if (isTimeline)
+			$playbackSettings.append('<div class="playbackSettingsCheckboxWrapper">'
+				+ '<input id="cbSkipDeadAir" type="checkbox" class="sliderCb" onclick="playbackControls.SkipDeadAirClicked()" '
+				+ (skipDeadAirEnabled ? ' checked="checked"' : '')
+				+ '/>'
+				+ '<label for="cbSkipDeadAir"><span class="ui"></span>Skip dead-air<div class="playbackSettingsSpacer"></div></label>'
+				+ '</div>');
 		var $speedBtn = $('<div class="playbackSettingsLine speedBtn">'
 			+ 'Speed<div class="playbackSettingsFloatRight">'
 			+ (playSpeed == 1 ? "Normal" : playSpeed)
@@ -7601,6 +7616,13 @@ function PlaybackControls()
 		loopingEnabled = $("#cbLoop").is(":checked");
 		settings.ui3_playback_loop = loopingEnabled ? "1" : "0";
 	}
+	this.SkipDeadAirClicked = function ()
+	{
+		self.FadeIn();
+		hideAfterTimeout();
+		skipDeadAirEnabled = $("#cbSkipDeadAir").is(":checked");
+		settings.ui3_playback_skipDeadAir = skipDeadAirEnabled ? "1" : "0";
+	}
 	this.MouseInSettingsPanel = function (e)
 	{
 		mouseCoordFixer.fix(e);
@@ -7625,6 +7647,10 @@ function PlaybackControls()
 	this.GetLoopingEnabled = function ()
 	{
 		return loopingEnabled;
+	}
+	this.GetSkipDeadAirEnabled = function ()
+	{
+		return skipDeadAirEnabled;
 	}
 	this.ChangePlaySpeed = function (offset)
 	{
@@ -13516,6 +13542,10 @@ function VideoPlayerController()
 
 		BI_CustomEvent.Invoke("ImageRendered", { id: uniqueId, w: width, h: height, loadingTime: lastFrameLoadingTime, utc: lastFrameUtc });
 	}
+	/**
+	 * Called when clip playback ends. Not called for live or timeline video.
+	 * @param {any} isLeftBoundary Playback ended at the start of the clip.
+	 */
 	this.Playback_Ended = function (isLeftBoundary)
 	{
 		// The module may call this repeatedly 
@@ -13917,7 +13947,13 @@ function JpegVideoModule()
 						nerdStats.BeginUpdate();
 						nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
 						nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
-						nerdStats.UpdateStat("Seek Position", loading.isLive ? "LIVE" : (parseInt(self.GetSeekPercent() * 100) + "% (Frame Offset: " + Math.floor(clipPlaybackPosition) + "ms)")); // TIMELINE-RELEASE
+						if (loading.isLive)
+							nerdStats.UpdateStat("Seek Position", "LIVE");
+						else if (loading.isTimeline())
+							nerdStats.UpdateStat("Seek Position", MsToDHMS(frameUtc - GetUtcNow(), false, true));
+						else
+							nerdStats.UpdateStat("Seek Position", (self.GetSeekPercent() * 100).toFixed() + "%");
+						nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frameUtc + GetServerTimeOffset()), true));
 						nerdStats.UpdateStat("Codecs", "jpeg");
 						nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 						nerdStats.UpdateStat("Frame Size", imageSizeBytes, formatBytes(imageSizeBytes, 2), true);
@@ -14119,13 +14155,14 @@ function JpegVideoModule()
 				if (loading.newTimelineStream)
 				{
 					var speedMultiplier = playbackControls.GetPlaybackSpeed();
-					timelineSpeedArg = "&speed=" + Math.round(100 * speedMultiplier);
+					timelineSpeedArg = "&speed=" + (Math.round(100 * speedMultiplier) * (playbackControls.GetPlayReverse() ? -1 : 1));
 					timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
 					if (loading.timelineJump)
 					{
 						timelinePosArg += "&jump=" + loading.timelineJump;
 						loading.timelineJump = 0;
 					}
+					timelinePosArg += "&skipdeadair=" + (playbackControls.GetSkipDeadAirEnabled() ? "1" : "0");
 				}
 				else
 				{
@@ -14633,6 +14670,8 @@ function FetchH264VideoModule()
 			//}
 			videoPlayer.lastFrameUtc = loading.timelineStart;
 			var speed = 100 * playbackControls.GetPlaybackSpeed();
+			if (playbackControls.GetPlayReverse())
+				speed *= -1;
 			if (startPaused)
 				speed = 0;
 			var speedArg = "&speed=" + Math.round(speed);
@@ -14642,7 +14681,8 @@ function FetchH264VideoModule()
 				jumpArg = "&jump=" + loading.timelineJump;
 				loading.timelineJump = 0;
 			}
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + "&extend=2";
+			var skipDeadAirArg = "&skipdeadair=" + (playbackControls.GetSkipDeadAirEnabled() ? "1" : "0");
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + skipDeadAirArg + "&extend=2";
 		}
 		else if (loading.isLive)
 		{
@@ -15121,7 +15161,7 @@ function FetchH264VideoModule()
 			if (loading.isLive)
 				nerdStats.UpdateStat("Seek Position", "LIVE");
 			else if (loading.isTimeline())
-				nerdStats.UpdateStat("Seek Position", MsToDHMS(clipTimeline.getVue().currentTime - GetUtcNow(), false, true));
+				nerdStats.UpdateStat("Seek Position", MsToDHMS(videoPlayer.lastFrameAt - GetUtcNow(), false, true));
 			else
 				nerdStats.UpdateStat("Seek Position", (frame.pos / 100).toFixed() + "%");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
