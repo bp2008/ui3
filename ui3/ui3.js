@@ -636,8 +636,8 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// clicking a camera while in a /time/ stream should retain the current time position.
 // Add a context menu to the timeline control, granting access to the "Skip dead-air" and "Boring Timeline Mode" settings.
-// addmotion/addoverlay arguments are supported for the timeline, so UI3 should use them.
 
 // Isolated jpeg frames (downloading, etc) should use "&isolate" URL parameter.  no parameter value is required. Same with "&jpeg".
 
@@ -664,6 +664,7 @@ var togglableUIFeatures =
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// BUG: UI3's camera labels draw incorrectly during transition from H.264 dynamic group to single camera.
 // CONSIDER: Motion/text overlay controls for timeline viewing.  Not sure if this will have serverside support.
 // CONSIDER: Advanced canvas-based clip list viewer.  It should use the entire video playback area (maybe hide the left bar too), be zoomable, and very responsive.  Navigate by keyboard or click-and-drag with inertia. Clips arranged like a timeline, with thumbnails moving across the screen horizontally (left = older, right = newer) with dotted vertical lines every minute/hour etc.  Each camera its own row.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
@@ -14194,6 +14195,7 @@ function JpegVideoModule()
 						timelinePosArg += "&jump=" + loading.timelineJump;
 						loading.timelineJump = 0;
 					}
+					overlayArgs = clipOverlayCfg.GetUrlArgs(clipData.camera);
 				}
 				else
 				{
@@ -14713,7 +14715,8 @@ function FetchH264VideoModule()
 				loading.timelineJump = 0;
 			}
 			var skipDeadAirArg = playbackControls.GetSkipDeadAirArg();
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + skipDeadAirArg + "&extend=2";
+			overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
 		}
 		else if (loading.isLive)
 		{
@@ -14965,7 +14968,7 @@ function FetchH264VideoModule()
 		if (loading.isLive)
 			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true);
 		else if (loading.isTimeline())
-			return currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg&isolate&pos=' + videoPlayer.lastFrameUtc + groupArgs + currentServer.GetAPISessionArg("&", true);
+			return currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg&isolate&pos=' + videoPlayer.lastFrameUtc + groupArgs + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 		else
 			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs(loading.id);
 	}
@@ -15190,7 +15193,7 @@ function FetchH264VideoModule()
 			if (loading.isLive)
 				nerdStats.UpdateStat("Seek Position", "LIVE");
 			else if (loading.isTimeline())
-				nerdStats.UpdateStat("Seek Position", MsToDHMS(videoPlayer.lastFrameAt - GetUtcNow(), false, true));
+				nerdStats.UpdateStat("Seek Position", MsToDHMS(videoPlayer.lastFrameUtc - GetUtcNow(), false, true));
 			else
 				nerdStats.UpdateStat("Seek Position", (frame.pos / 100).toFixed() + "%");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
@@ -18343,36 +18346,34 @@ function ClipOverlayCfg()
 	}
 	var Set = function (camId, type, val)
 	{
-		var camData = cameraListLoader.GetCameraWithId(camId);
-		if (camData)
+		var isTimelinePseudo = camId === "*ui3_timeline_pseudocam";
+		var camData = isTimelinePseudo ? null : cameraListLoader.GetCameraWithId(camId);
+		if (isTimelinePseudo || (camData && !cameraListLoader.CameraIsGroupOrCycle(camData)))
 		{
-			if (!cameraListLoader.CameraIsGroupOrCycle(camData))
+			if ((type === "t" || type === "m")
+				&& typeof val === "number")
 			{
-				if ((type === "t" || type === "m")
-					&& typeof val === "number")
+				var camCfg = cfg[camId];
+				if (!camCfg)
+					cfg[camId] = camCfg = {};
+				camCfg[type] = val;
+
+				if (val === 0)
+					delete camCfg[type];
+
+				var hasAnyProps = false;
+				for (var id in camCfg)
 				{
-					var camCfg = cfg[camId];
-					if (!camCfg)
-						cfg[camId] = camCfg = {};
-					camCfg[type] = val;
-
-					if (val === 0)
-						delete camCfg[type];
-
-					var hasAnyProps = false;
-					for (var id in camCfg)
+					if (camCfg.hasOwnProperty(id))
 					{
-						if (camCfg.hasOwnProperty(id))
-						{
-							hasAnyProps = true;
-							break;
-						}
+						hasAnyProps = true;
+						break;
 					}
-					if (!hasAnyProps)
-						delete cfg[camId];
-
-					settings.ui3_clipOverlayCfg = JSON.stringify(cfg);
 				}
+				if (!hasAnyProps)
+					delete cfg[camId];
+
+				settings.ui3_clipOverlayCfg = JSON.stringify(cfg);
 			}
 		}
 	}
@@ -20231,6 +20232,9 @@ function CanvasContextMenu()
 			$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
 		}
 
+		ThreeStateMenuItem.Refresh("timeline_motionoverlays", clipOverlayCfg.GetMotionOverlay("*ui3_timeline_pseudocam"));
+		ThreeStateMenuItem.Refresh("timeline_textoverlays", clipOverlayCfg.GetTextOverlay("*ui3_timeline_pseudocam"));
+
 		return true;
 	}
 	var onTimelineContextMenuAction = function ()
@@ -20269,6 +20273,30 @@ function CanvasContextMenu()
 			case "golive":
 				videoPlayer.goLive();
 				break;
+			case "timeline_motionoverlays_nopreference":
+				clipOverlayCfg.SetMotionOverlay("*ui3_timeline_pseudocam", 0);
+				videoPlayer.RefreshVideoStream();
+				break;
+			case "timeline_motionoverlays_off":
+				clipOverlayCfg.SetMotionOverlay("*ui3_timeline_pseudocam", 1);
+				videoPlayer.RefreshVideoStream();
+				break;
+			case "timeline_motionoverlays_on":
+				clipOverlayCfg.SetMotionOverlay("*ui3_timeline_pseudocam", 2);
+				videoPlayer.RefreshVideoStream();
+				break;
+			case "timeline_textoverlays_nopreference":
+				clipOverlayCfg.SetTextOverlay("*ui3_timeline_pseudocam", 0);
+				videoPlayer.RefreshVideoStream();
+				break;
+			case "timeline_textoverlays_off":
+				clipOverlayCfg.SetTextOverlay("*ui3_timeline_pseudocam", 1);
+				videoPlayer.RefreshVideoStream();
+				break;
+			case "timeline_textoverlays_on":
+				clipOverlayCfg.SetTextOverlay("*ui3_timeline_pseudocam", 2);
+				videoPlayer.RefreshVideoStream();
+				break;
 			default:
 				toaster.Error(this.data.alias + " is not implemented!");
 				break;
@@ -20287,6 +20315,9 @@ function CanvasContextMenu()
 				, { text: "Go Live", icon: "#svg_mio_clock", iconClass: "noflip clockRotate", alias: "golive", action: onTimelineContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"submenu_trigger_timelineGroupSettings\">Group Settings</span>", icon: "#svg_mio_apps", iconClass: "noflip", alias: "group_settings_edit", action: onTimelineContextMenuAction }
+				, ThreeStateMenuItem.Create("timeline_motionoverlays", "Motion overlays", onTimelineContextMenuAction)
+				, ThreeStateMenuItem.Create("timeline_textoverlays", "Text/graphic overlays", onTimelineContextMenuAction)
+				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuTimelineCameraName\">Camera Name</span>", icon: "", alias: "cameraname" }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuTimelineMaximize\">Maximize</span>", icon: "#svg_mio_Fullscreen", iconClass: "noflip", alias: "maximize", action: onTimelineContextMenuAction }
