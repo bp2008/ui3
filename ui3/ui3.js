@@ -657,7 +657,6 @@ var togglableUIFeatures =
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// BUG: UI3's camera labels draw incorrectly during transition from H.264 dynamic group to single camera.
 // CONSIDER: Motion/text overlay controls for timeline viewing.  Not sure if this will have serverside support.
 // CONSIDER: Advanced canvas-based clip list viewer.  It should use the entire video playback area (maybe hide the left bar too), be zoomable, and very responsive.  Navigate by keyboard or click-and-drag with inertia. Clips arranged like a timeline, with thumbnails moving across the screen horizontally (left = older, right = newer) with dotted vertical lines every minute/hour etc.  Each camera its own row.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
@@ -1221,10 +1220,10 @@ var defaultSettings =
 			, category: "Timeline"
 		}
 		, {
-			key: "ui3_timeline_boringMode"
-			, value: "0"
+			key: "ui3_timeline_starfield"
+			, value: "1"
 			, inputType: "checkbox"
-			, label: 'Boring Timeline Mode<div class="settingDesc">for those who don\'t like the starfield background</div>'
+			, label: 'Starfield Background<div class="settingDesc">a little visual flair outside the timeline boundaries</div>'
 			, category: "Timeline"
 		}
 		, {
@@ -6072,13 +6071,13 @@ function ClipTimeline()
 					var left = this.left;
 					var right = this.right;
 					var now = GetUtcNow();
-					var boringMode = settings.ui3_timeline_boringMode === "1";
+					var showStarfield = settings.ui3_timeline_starfield === "1";
 
 					if (lastTimelineDrawCurrentTime > -1)
 						timelineStarfieldOffset += (this.currentTime - lastTimelineDrawCurrentTime) / zoomFactor;
 					lastTimelineDrawCurrentTime = this.currentTime;
 
-					if (boringMode)
+					if (!showStarfield)
 					{
 						ctx.fillStyle = "#000000";
 						ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -6095,7 +6094,7 @@ function ClipTimeline()
 
 					if (canvasData)
 					{
-						if (!boringMode)
+						if (showStarfield)
 						{
 							// Draw partially-transparent black overlay behind loadable timeline area.
 							var overlayLeft = Math.max(0, -left / zoomFactor);
@@ -6756,15 +6755,15 @@ function ClipTimeline()
 						}
 					}),
 					{
-						text: '<span id="timeline_boringMode_menuitem">Boring Timeline Mode</span>', iconClass: "noflip", icon: "#svg_mio_cbUnchecked", alias: "boringTimelineMode",
-						tooltip: 'Boring Timeline Mode disables the starfield background',
-						action: function () { settings.ui3_timeline_boringMode = settings.ui3_timeline_boringMode === "1" ? "0" : "1"; }
+						text: '<span id="timeline_starfield_menuitem">Starfield Background</span>', iconClass: "noflip", icon: "#svg_mio_cbUnchecked", alias: "boringTimelineMode",
+						tooltip: 'The starfield background adds a little visual flair outside the timeline boundaries and when zoomed out a long way.',
+						action: function () { settings.ui3_timeline_starfield = settings.ui3_timeline_starfield === "1" ? "0" : "1"; }
 					}
 				]
 			, onContextMenu: function ()
 			{
-				var $boringMode = $("#timeline_boringMode_menuitem");
-				$boringMode.parent().prev().find("use").attr("xlink:href", settings.ui3_timeline_boringMode === "1" ? "#svg_mio_cbChecked" : "#svg_mio_cbUnchecked");
+				var $boringMode = $("#timeline_starfield_menuitem");
+				$boringMode.parent().prev().find("use").attr("xlink:href", settings.ui3_timeline_starfield === "1" ? "#svg_mio_cbChecked" : "#svg_mio_cbUnchecked");
 
 				ThreeStateMenuItem.Refresh("timeline_skipDeadAir", parseInt(settings.ui3_playback_skipDeadAir));
 				return true;
@@ -12487,6 +12486,10 @@ function CameraListLoader()
 	this.GetGroupRects = function (groupId)
 	{
 		// Get from dynamic layout
+		var imgLoaded = videoPlayer.Loaded().image;
+		if (imgLoaded.id === groupId && imgLoaded.rects)
+			return imgLoaded.rects;
+
 		var imgLoading = videoPlayer.Loading().image;
 		if (imgLoading.id === groupId && imgLoading.rects)
 			return imgLoading.rects;
@@ -12500,6 +12503,10 @@ function CameraListLoader()
 	this.GetGroupCams = function (groupId)
 	{
 		// Get from dynamic layout
+		var imgLoaded = videoPlayer.Loaded().image;
+		if (imgLoaded.id === groupId && imgLoaded.cams)
+			return imgLoaded.cams;
+
 		var imgLoading = videoPlayer.Loading().image;
 		if (imgLoading.id === groupId && imgLoading.cams)
 			return imgLoading.cams;
@@ -12550,7 +12557,6 @@ function CameraListLoader()
 	}
 	this.GetCameraBoundsInCurrentGroupImageUnscaled = function (cameraId, groupId)
 	{
-		var camData = self.GetCameraWithId(groupId);
 		var cams = self.GetGroupCams(groupId);
 		if (cams)
 		{
@@ -13250,6 +13256,7 @@ function VideoPlayerController()
 		imageRenderer.zoomHandler.ZoomToFit();
 		var cli = currentlyLoadingImage;
 		var clc = currentlyLoadingCamera = camData;
+		var previousId = cli.id;
 		cli.id = clc.optionValue;
 		cli.fullwidth = cli.actualwidth = clc.width;
 		cli.fullheight = cli.actualheight = clc.height;
@@ -13263,8 +13270,11 @@ function VideoPlayerController()
 		cli.audio = clc.audio;
 		cli.msec = -1;
 		cli.isGroup = clc.group ? true : false;
-		cli.cams = null;
-		cli.rects = null;
+		if (previousId !== cli.id)
+		{
+			cli.cams = null;
+			cli.rects = null;
+		}
 
 		lastLiveCameraOrGroupId = clc.optionValue;
 
@@ -17591,6 +17601,7 @@ function CameraNameLabels()
 
 	BI_CustomEvent.AddListener("ImageResized", onui3_cameraLabelsChanged);
 	BI_CustomEvent.AddListener("CameraListLoaded", onui3_cameraLabelsChanged);
+	BI_CustomEvent.AddListener("DynamicGroupLayoutLoaded", onui3_cameraLabelsChanged);
 
 	this.show = function (isHotkeyShow)
 	{
