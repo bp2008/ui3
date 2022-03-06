@@ -11,6 +11,7 @@ if (navigator.cookieEnabled)
 {
 	NavRemoveUrlParams("session");
 }
+var ui3InstanceId = Math.random();
 ///////////////////////////////////////////////////////////////
 // Host Redirection, Proxy Handling ///////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -6361,7 +6362,7 @@ function ClipTimeline()
 						// previewBaseResolution will be the resolution of the last frame we received.  That may even be a jpeg preview frame.
 						var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue, this.dragState.previewBaseResolution.w, this.dragState.previewBaseResolution.h);
 						var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
-						var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + qualityArgs + groupArgs;
+						var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?opaque=' + ui3InstanceId + '&jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + qualityArgs + groupArgs;
 						var uniqueId = loadingImg.uniqueId;
 						var startTime = performance.now();
 						this.seekPreviewLoading = true;
@@ -13386,7 +13387,7 @@ function VideoPlayerController()
 			return;
 		timelineSync.run(this, function ()
 		{
-			var url = currentServer.remoteBaseURL + "time/set" + currentServer.GetAPISessionArg("?", true) + urlParams;
+			var url = currentServer.remoteBaseURL + "time/set" + currentServer.GetAPISessionArg("?", true) + urlParams + '&opaque=' + ui3InstanceId;
 			$.ajax(url)
 				.fail(function (jqXHR, textStatus, errorThrown)
 				{
@@ -14339,7 +14340,7 @@ function JpegVideoModule()
 
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
-			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true) + overlayArgs;
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?opaque=' + ui3InstanceId + '&jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true) + overlayArgs;
 		else if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?nc=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
@@ -14802,7 +14803,7 @@ function FetchH264VideoModule()
 			}
 			var skipDeadAirArg = playbackControls.GetSkipDeadAirArg();
 			overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + "&pos=" + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + '&pos=' + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
 		}
 		else if (loading.isLive)
 		{
@@ -15055,7 +15056,7 @@ function FetchH264VideoModule()
 		if (loading.isLive)
 			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true);
 		else if (loading.isTimeline())
-			return currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg&isolate&pos=' + videoPlayer.lastFrameUtc.dropDecimalsStr() + groupArgs + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
+			return currentServer.remoteBaseURL + "time/" + loading.path + '?opaque=' + ui3InstanceId + '&jpeg&isolate&pos=' + videoPlayer.lastFrameUtc.dropDecimalsStr() + groupArgs + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 		else
 			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs(loading.id);
 	}
