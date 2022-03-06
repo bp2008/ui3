@@ -632,11 +632,15 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// Snapshots and stuff should be built using a dedicated "Jpeg Snapshot" profile which is not user-configurable. This will help deal with dynamic group frames, which currently get requested with only one size dimension specified so they end up not being the dimensions the user configured.
+
 /////////////////////////////
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Isolated jpeg frames (downloading, etc) should use "&isolate" URL parameter.  no parameter value is required. Same with "&jpeg".
+// Timeline video in the jpeg player currently breaks when resolution is changed. Workaround is commented out so Ken can try to fix (timelineCriticalArgs).
+// Scaling is bad when /time/ streaming single cameras in jpeg mode, probably because BI is returning an unexpected aspect ratio.
+// BI Bug: Isolated jpeg frames fail to load while an H.264 /time/ stream is active.
 
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
 
@@ -13934,6 +13938,8 @@ function JpegVideoModule()
 	var backbuffer_canvas;
 	// Contains URLs of the last image we started loading and the last image we loaded.
 	var imageLoadingState = { loadingUrl: "", loadedUrl: "" };
+	/** Contains critical timeline arguments which, if changed, will break the current timeline stream. If this string has changed, a new timeline stream must be started. */
+	var lastTimelineCriticalArgs = "";
 	/** A counter that is incremented each time we open a new video stream. Frames that arrive from a previous stream are discarded without being rendered.
 	 * This was made necessary in Feb 2022 due to Jpeg video player changes to support the timeline. Specifically when timelineSync was added, it added an 
 	 * unpredictable delay between updating the [loading] field and updating the [imageLoadingState] field... it is complicated. */
@@ -14005,6 +14011,8 @@ function JpegVideoModule()
 					if (headers)
 						videoPlayer.GroupLayoutMetadataReceived(loading.id, headers["x-camlist"], headers["x-reclist"]);
 					var frameUtc = currentImageTimestampGuessUtc >= 0 ? currentImageTimestampGuessUtc : parseInt(headers["x-utc"]);
+					if (loading.isTimeline())
+						clipPlaybackPosition = frameUtc;
 					videoPlayer.ImageRendered(loading.uniqueId, image.naturalWidth, image.naturalHeight, msLoadingTime, frameUtc);
 					playbackControls.FrameTimestampUpdated(false);
 
@@ -14184,7 +14192,20 @@ function JpegVideoModule()
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
-		return lastSnapshotUrl;
+		// This is the jpeg video player.
+		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		if (loading.isLive)
+			return lastSnapshotUrl + groupArgs;
+		else if (loading.isTimeline())
+		{
+			return lastSnapshotUrl
+				.replace(/&pos=\d+/gi, '')
+				.replace(/&speed=\d+/gi, '')
+				.replace(/&skipdeadair=\d/gi, '')
+				+ "&isolate&pos=" + videoPlayer.lastFrameUtc.dropDecimalsStr() + groupArgs;
+		}
+		else
+			return lastSnapshotUrl;
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
@@ -14213,9 +14234,14 @@ function JpegVideoModule()
 		var timeValue = currentImageRequestedAtMs = performance.now();
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
+
+		var sizeToRequest = imageRenderer.GetSizeToRequest(true, loading);
+		var sizeArgs = "&w=" + sizeToRequest.w + (cameraListLoader.isDynamicLayoutEnabled(loading.id) ? "&h=" + sizeToRequest.h : "");
+
 		var overlayArgs = "";
 		var timelineSpeedArg = "";
 		var timelinePosArg = "";
+		var timelineCriticalArgs = null;
 
 		if (loading.isTimeline())
 		{
@@ -14235,11 +14261,21 @@ function JpegVideoModule()
 			}
 			else
 			{
+				overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
+
+				var speedMultiplier = playbackControls.GetPlaybackSpeed();
+				var speedArg = "&speed=" + (Math.round(100 * speedMultiplier) * (playbackControls.GetPlayReverse() ? -1 : 1));
+				timelineCriticalArgs = overlayArgs/* + sizeArgs*/ + speedArg;
+				if (lastTimelineCriticalArgs !== timelineCriticalArgs)
+				{
+					clipPlaybackPosition = clipTimeline.getCurrentTime();
+					loading.newTimelineStream = true;
+				}
+
 				if (loading.newTimelineStream)
 				{
 					currentStreamId++;
-					var speedMultiplier = playbackControls.GetPlaybackSpeed();
-					timelineSpeedArg = "&speed=" + (Math.round(100 * speedMultiplier) * (playbackControls.GetPlayReverse() ? -1 : 1));
+					timelineSpeedArg = speedArg;
 					timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
 					timelinePosArg += playbackControls.GetSkipDeadAirArg();
 					if (loading.timelineJump)
@@ -14247,7 +14283,6 @@ function JpegVideoModule()
 						timelinePosArg += "&jump=" + loading.timelineJump;
 						loading.timelineJump = 0;
 					}
-					overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 				}
 				else
 				{
@@ -14298,18 +14333,15 @@ function JpegVideoModule()
 			}
 		}
 
-		var sizeToRequest = imageRenderer.GetSizeToRequest(true, loading);
-		var sizeArgs = "&w=" + sizeToRequest.w + (cameraListLoader.isDynamicLayoutEnabled(loading.id) ? "&h=" + sizeToRequest.h : "");
-
 		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 
 		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
-			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true);
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true) + overlayArgs;
 		else if (loading.isLive)
-			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?nc=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true); // TIMELINE-RELEASE - This legacy code uses parameter "time" for cachebusting. If this isn't a problem, just delete this comment.
+			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?nc=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg + groupArgs;
@@ -14336,6 +14368,8 @@ function JpegVideoModule()
 			}
 			else
 			{
+				if (timelineCriticalArgs !== null)
+					lastTimelineCriticalArgs = timelineCriticalArgs;
 				loading.newTimelineStream = false;
 				lastRequestedSize = sizeToRequest;
 				repeatedSameImageURLs = 1;
@@ -15016,11 +15050,12 @@ function FetchH264VideoModule()
 	}
 	this.GetLastSnapshotUrl = function ()
 	{
+		// This is the H.264 video player.
 		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 		if (loading.isLive)
 			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true);
 		else if (loading.isTimeline())
-			return currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg&isolate&pos=' + videoPlayer.lastFrameUtc + groupArgs + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
+			return currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg&isolate&pos=' + videoPlayer.lastFrameUtc.dropDecimalsStr() + groupArgs + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 		else
 			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs(loading.id);
 	}
