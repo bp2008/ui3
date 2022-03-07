@@ -11,7 +11,13 @@ if (navigator.cookieEnabled)
 {
 	NavRemoveUrlParams("session");
 }
+/**
+ * Uniquely identifies each UI3 instance.
+ * This is sent to /time/ APIs as the argument "opaque" so BI can tell UI3 instances apart when they share the same session.
+ * Otherwise the instances interfere with each other's timeline playback state.
+ */
 var ui3InstanceId = Math.random();
+//
 ///////////////////////////////////////////////////////////////
 // Host Redirection, Proxy Handling ///////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -627,18 +633,19 @@ var togglableUIFeatures =
 // Notes that require BI changes //////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// TODO: Around May 11, 2018 with BI 4.7.4.1, Blue Iris began enforcing a default jpeg height of 720px sourced from the Streaming 0 profile's frame size setting and I haven't been able to talk the developer out of it.  UI3 now works around this by appending w=99999 to jpeg requests that are intended to be native resolution.  If this limit goes away, the workarounds should be removed.  The workarounds are tagged with "LOC0" (approximately 9 locations).  Since shortly after, this affects quality too, so a q=85 argument has been added at LOC0 locations too.
-
 ///////////////////////////////////////////////////////////////
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
 // Snapshots and stuff should be built using a dedicated "Jpeg Snapshot" profile which is not user-configurable. This will help deal with dynamic group frames, which currently get requested with only one size dimension specified so they end up not being the dimensions the user configured.
+// Stats for nerds needs to keep separate graph state for jpeg and h.264 players; the shared Video Bit Rate and Frame Size graphs get out of sync otherwise.
 
 /////////////////////////////
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// Accommodate users who double-click the timeline.  It should not cause them to seek twice.
+// Timeline clicking needs to be more tolerant of tiny movements, which means not actually starting the timeline drag until the mouse has moved a bit.  Damn it.
 // Timeline video in the jpeg player currently breaks when resolution is changed. Workaround is commented out so Ken can try to fix (timelineCriticalArgs).
 // Scaling is bad when /time/ streaming single cameras in jpeg mode, probably because BI is returning an unexpected aspect ratio.
 // BI Bug: Isolated jpeg frames fail to load while an H.264 /time/ stream is active.
@@ -662,13 +669,13 @@ var togglableUIFeatures =
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// CONSIDER: Motion/text overlay controls for timeline viewing.  Not sure if this will have serverside support.
+// KNOWN: Around May 11, 2018 with BI 4.7.4.1, Blue Iris began imposing Streaming 0's frame size and quality settings on jpeg frames, and I wasn't able to talk the developer out of it.  UI3 works around this by always requesting jpeg snapshots with explicit dimensions and quality.
 // CONSIDER: Advanced canvas-based clip list viewer.  It should use the entire video playback area (maybe hide the left bar too), be zoomable, and very responsive.  Navigate by keyboard or click-and-drag with inertia. Clips arranged like a timeline, with thumbnails moving across the screen horizontally (left = older, right = newer) with dotted vertical lines every minute/hour etc.  Each camera its own row.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
 // CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
 // KNOWN: Black frame shown when pausing HTML5 player before first frame is rendered. This is caused by destroying the jmuxer instance before the frame has rendered. Skipping or delaying the destroy causes camera-changing weirdness, so this is the lesser nuisance.
 // CONSIDER: Expandable clip list. ("Show more clips")
-
+// KNOWN: Jpeg snapshots of dynamic groups often are missing some labels because BI returned the frame before drawing them.
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -6362,7 +6369,7 @@ function ClipTimeline()
 						// previewBaseResolution will be the resolution of the last frame we received.  That may even be a jpeg preview frame.
 						var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue, this.dragState.previewBaseResolution.w, this.dragState.previewBaseResolution.h);
 						var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
-						var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?opaque=' + ui3InstanceId + '&jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + qualityArgs + groupArgs;
+						var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs;
 						var uniqueId = loadingImg.uniqueId;
 						var startTime = performance.now();
 						this.seekPreviewLoading = true;
@@ -13387,7 +13394,7 @@ function VideoPlayerController()
 			return;
 		timelineSync.run(this, function ()
 		{
-			var url = currentServer.remoteBaseURL + "time/set" + currentServer.GetAPISessionArg("?", true) + urlParams + '&opaque=' + ui3InstanceId;
+			var url = currentServer.remoteBaseURL + "time/set" + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + urlParams;
 			$.ajax(url)
 				.fail(function (jqXHR, textStatus, errorThrown)
 				{
@@ -14194,19 +14201,22 @@ function JpegVideoModule()
 	this.GetLastSnapshotUrl = function ()
 	{
 		// This is the jpeg video player.
+		var sizeQualityArgs = JpegSnapshotArgs(loading);
 		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 		if (loading.isLive)
-			return lastSnapshotUrl + groupArgs;
+			return lastSnapshotUrl + sizeQualityArgs + groupArgs;
 		else if (loading.isTimeline())
 		{
 			return lastSnapshotUrl
 				.replace(/&pos=\d+/gi, '')
 				.replace(/&speed=\d+/gi, '')
 				.replace(/&skipdeadair=\d/gi, '')
-				+ "&isolate&pos=" + videoPlayer.lastFrameUtc.dropDecimalsStr() + groupArgs;
+				.replace(/&opaque=\d+?\.?\d+?/gi, '')
+				+ "&isolate&pos=" + videoPlayer.lastFrameUtc.dropDecimalsStr()
+				+ sizeQualityArgs + groupArgs;
 		}
 		else
-			return lastSnapshotUrl;
+			return lastSnapshotUrl + sizeQualityArgs;
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
@@ -14236,7 +14246,7 @@ function JpegVideoModule()
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
 
-		var sizeToRequest = imageRenderer.GetSizeToRequest(true, loading);
+		var sizeToRequest = imageRenderer.GetSizeToRequest(genericQualityHelper.GetCurrentProfile(), loading);
 		var sizeArgs = "&w=" + sizeToRequest.w + (cameraListLoader.isDynamicLayoutEnabled(loading.id) ? "&h=" + sizeToRequest.h : "");
 
 		var overlayArgs = "";
@@ -14340,7 +14350,7 @@ function JpegVideoModule()
 
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
-			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?opaque=' + ui3InstanceId + '&jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true) + overlayArgs;
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + overlayArgs;
 		else if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?nc=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
@@ -15052,13 +15062,14 @@ function FetchH264VideoModule()
 	this.GetLastSnapshotUrl = function ()
 	{
 		// This is the H.264 video player.
+		var sizeQualityArgs = JpegSnapshotArgs(loading);
 		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 		if (loading.isLive)
-			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true);
+			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true) + sizeQualityArgs;
 		else if (loading.isTimeline())
-			return currentServer.remoteBaseURL + "time/" + loading.path + '?opaque=' + ui3InstanceId + '&jpeg&isolate&pos=' + videoPlayer.lastFrameUtc.dropDecimalsStr() + groupArgs + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
+			return currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg&isolate&pos=' + videoPlayer.lastFrameUtc.dropDecimalsStr() + groupArgs + currentServer.GetAPISessionArg("&", true) + sizeQualityArgs + clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 		else
-			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true) + clipOverlayCfg.GetUrlArgs(loading.id);
+			return currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + self.GetClipPlaybackPositionMs() + currentServer.GetAPISessionArg("&", true) + sizeQualityArgs + clipOverlayCfg.GetUrlArgs(loading.id);
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
@@ -17195,7 +17206,13 @@ function ImageRenderer()
 
 	this.zoomHandler = null;
 
-	this.GetSizeToRequest = function (modifyForJpegQualitySetting, ciLoading, alreadyTriedResizableSource)
+	/**
+	 * Returns dimensions to request.
+	 * @param {any} streamingProfile Optional jpeg streaming profile to confine the returned dimensions.
+	 * @param {any} ciLoading
+	 * @param {any} alreadyTriedResizableSource
+	 */
+	this.GetSizeToRequest = function (streamingProfile, ciLoading, alreadyTriedResizableSource)
 	{
 		// Calculate the size of the image we need
 		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
@@ -17226,7 +17243,14 @@ function ImageRenderer()
 		var imgDrawWidth = srcNativeWidth * dpiScalingFactor * ssFactor;
 		var imgDrawHeight = srcNativeHeight * dpiScalingFactor * ssFactor;
 
-		SetIntendedSize(ciLoading, imgDrawWidth, imgDrawHeight);
+		if (!streamingProfile.isHQSnapshot)
+			SetIntendedSize(ciLoading, imgDrawWidth, imgDrawHeight);
+
+		if (streamingProfile.isHQSnapshot)
+		{
+			zoomFactor = 0;
+			bodyW = bodyH = 65535;
+		}
 
 		imgDrawWidth *= zoomFactor;
 		imgDrawHeight *= zoomFactor;
@@ -17244,14 +17268,14 @@ function ImageRenderer()
 		}
 		if (srcNativeAspect < 1)
 		{
-			if (modifyForJpegQualitySetting)
-				imgDrawHeight = jpegQualityHelper.ModifyImageDimension("h", imgDrawHeight);
+			if (streamingProfile)
+				imgDrawHeight = jpegQualityHelper.ModifyImageDimension("h", imgDrawHeight, streamingProfile);
 			imgDrawWidth = MakeDivisibleBy8(imgDrawHeight * srcNativeAspect);
 		}
 		else
 		{
-			if (modifyForJpegQualitySetting)
-				imgDrawWidth = jpegQualityHelper.ModifyImageDimension("w", imgDrawWidth);
+			if (streamingProfile)
+				imgDrawWidth = jpegQualityHelper.ModifyImageDimension("w", imgDrawWidth, streamingProfile);
 			imgDrawHeight = MakeDivisibleBy8(imgDrawWidth / srcNativeAspect);
 		}
 
@@ -17272,9 +17296,9 @@ function ImageRenderer()
 		}
 
 		// Now we have the size we need.  Determine what argument we will send to Blue Iris
-		var size = { w: parseInt(Math.round(imgDrawWidth)), h: parseInt(Math.round(imgDrawHeight)) };
+		var size = { w: Math.round(imgDrawWidth), h: Math.round(imgDrawHeight) };
 		if (resizableSource && (size.w < self.minGroupImageDimension || size.h < self.minGroupImageDimension))
-			return this.GetSizeToRequest(modifyForJpegQualitySetting, ciLoading, true);
+			return this.GetSizeToRequest(streamingProfile, ciLoading, true);
 		return size;
 	}
 
@@ -19207,6 +19231,22 @@ function SetIntendedSize(loading, w, h)
 		imgLoaded.intendedH = h;
 	}
 }
+function JpegSnapshotArgs(loadingImg)
+{
+	var p = new StreamingProfile();
+	p.isHQSnapshot = true;
+	p.name = "Jpeg Snapshot";
+	p.vcodec = "jpeg";
+	p.abbr = "SS";
+	p.aClr = "#000000";
+	p.w = 3840;
+	p.h = 3840;
+	p.q = Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100);
+
+	var sizeToRequest = imageRenderer.GetSizeToRequest(p, loadingImg);
+	var sizeArgs = "&decode=1&w=" + sizeToRequest.w + (cameraListLoader.isDynamicLayoutEnabled(loadingImg.id) ? "&h=" + sizeToRequest.h : "");
+	return sizeArgs + p.GetUrlArgs(loadingImg);
+}
 ///////////////////////////////////////////////////////////////
 // Generic Quality Helper /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -19233,7 +19273,6 @@ function GenericQualityHelper()
 	this.GetAnyCompatibleProfile = function (didRestoreDefaults)
 	{
 		// Try to find the best profile
-		// First, one with a max bit rate nearest 1000
 		var best = null;
 		if (any_h264_playback_supported)
 		{
@@ -19397,7 +19436,7 @@ function GenericQualityHelper()
 				return "&" + dimKey + "=" + sizeLimit + "&stream=" + profile.stream + "&q=" + quality;
 			}
 			else
-				return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimKey, dimValue) + jpegQualityHelper.getQualityArg();
+				return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimKey, dimValue, profile) + jpegQualityHelper.getQualityArg();
 		}
 	}
 
@@ -19900,19 +19939,18 @@ function JpegQualityHelper()
 		else
 			return "";
 	}
-	this.ModifyImageDimension = function (dimKey, dimValue)
+	this.ModifyImageDimension = function (dimKey, dimValue, streamingProfile)
 	{
-		var p = genericQualityHelper.GetCurrentProfile();
 		if (dimKey === "w")
 		{
-			if (p.w > 0)
-				return MakeDivisibleBy8(Math.min(dimValue, p.w));
+			if (streamingProfile.w > 0)
+				return MakeDivisibleBy8(Math.min(dimValue, streamingProfile.w));
 			return MakeDivisibleBy8(dimValue);
 		}
 		else
 		{
-			if (p.h > 0)
-				return MakeDivisibleBy8(Math.min(dimValue, p.h));
+			if (streamingProfile.h > 0)
+				return MakeDivisibleBy8(Math.min(dimValue, streamingProfile.h));
 			return MakeDivisibleBy8(dimValue);
 		}
 	}
@@ -19974,10 +20012,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_liveview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_liveview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
 		else
 			downloadButton.wrap('<a id="cmroot_liveview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */
+				+ videoPlayer.GetLastSnapshotUrl()
 				+ '" onclick="saveSnapshot(&quot;#cmroot_liveview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_liveview_downloadlink").attr("download", "temp.jpg");
 
@@ -20041,10 +20079,10 @@ function CanvasContextMenu()
 					new CameraProperties(lastLiveContextMenuSelectedCamera.optionValue);
 				break;
 			case "opennewtab":
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"); /* LOC0 */
+				window.open(videoPlayer.GetLastSnapshotUrl());
 				break;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"; /* LOC0 */
+				var relUrl = videoPlayer.GetLastSnapshotUrl();
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -20116,10 +20154,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
 		else
 			downloadButton.wrap('<a id="cmroot_recordview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */
+				+ videoPlayer.GetLastSnapshotUrl()
 				+ '" onclick="saveSnapshot(&quot;#cmroot_recordview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_recordview_downloadlink").attr("download", "temp.jpg");
 
@@ -20151,7 +20189,7 @@ function CanvasContextMenu()
 				break;
 			case "opennewtab":
 				videoPlayer.Playback_Pause();
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"); /* LOC0 */
+				window.open(videoPlayer.GetLastSnapshotUrl());
 				break;
 			case "saveas":
 				return true;
@@ -20174,7 +20212,7 @@ function CanvasContextMenu()
 				nerdStats.Open();
 				return;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"; /* LOC0 */
+				var relUrl = videoPlayer.GetLastSnapshotUrl();
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -20297,10 +20335,10 @@ function CanvasContextMenu()
 
 		var downloadButton = $("#cmroot_timelineview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_timelineview_downloadlink")
-			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */);
+			downloadButton.parent().attr("href", videoPlayer.GetLastSnapshotUrl());
 		else
 			downloadButton.wrap('<a id="cmroot_timelineview_downloadlink" style="display:block" href="'
-				+ videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85" /* LOC0 */
+				+ videoPlayer.GetLastSnapshotUrl()
 				+ '" onclick="saveSnapshot(&quot;#cmroot_timelineview_downloadlink&quot;)" target="_blank"></a>');
 		$("#cmroot_timelineview_downloadlink").attr("download", "temp.jpg");
 
@@ -20343,10 +20381,10 @@ function CanvasContextMenu()
 					new CameraProperties(lastTimelineContextMenuSelectedCamera.optionValue);
 				break;
 			case "opennewtab":
-				window.open(videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"); /* LOC0 */
+				window.open(videoPlayer.GetLastSnapshotUrl());
 				break;
 			case "copyimageaddress":
-				var relUrl = videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=85"; /* LOC0 */
+				var relUrl = videoPlayer.GetLastSnapshotUrl();
 				if (!relUrl.startsWith("/"))
 					relUrl = "/" + relUrl;
 				clipboardHelper.CopyText(location.origin + relUrl);
@@ -24123,8 +24161,7 @@ function saveSnapshot(btnSelector)
 	var date = GetPaddedDateStr(new Date(videoPlayer.lastFrameUtc + GetServerTimeOffset()), true);
 	date = FormatFileName(date);
 	var fileName = camName + " " + date + ".jpg";
-	var q = Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100);
-	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl() + "&decode=1&w=99999&q=" + q /* LOC0 */);
+	$(btnSelector).attr("href", videoPlayer.GetLastSnapshotUrl());
 	if (settings.ui3_download_snapshot_method === "Local (JPEG)" || settings.ui3_download_snapshot_method === "Local (PNG)")
 	{
 		var playerEle = videoPlayer.GetPlayerElement();
