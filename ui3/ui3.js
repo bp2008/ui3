@@ -14207,7 +14207,7 @@ function JpegVideoModule()
 				.replace(/&pos=\d+/gi, '')
 				.replace(/&speed=\d+/gi, '')
 				.replace(/&skipdeadair=\d/gi, '')
-				.replace(/&opaque=\d+?\.?\d+?/gi, '')
+				.replace(/&opaque=[0-9.]+/gi, '')
 				+ "&isolate&pos=" + videoPlayer.lastFrameUtc.dropDecimalsStr()
 				+ sizeQualityArgs + groupArgs;
 		}
@@ -19390,8 +19390,8 @@ function GenericQualityHelper()
 				bitRateMbps = profile.kbps / 1000;
 
 			var scale = Clamp(bitRateMbps / 4.096, 0, 1);
-			var q = playerId == "h264" ? 40 : jpegQualityHelper.getQualityArg();
-			return "&w=" + videoWidth + "&h=" + videoHeight + "&stream=" + profile.stream + "&q=" + q;
+			var qualityArg = playerId == "h264" ? "&q=40" : jpegQualityHelper.getQualityArg();
+			return "&w=" + videoWidth + "&h=" + videoHeight + "&stream=" + profile.stream + qualityArg;
 		}
 		else
 		{
