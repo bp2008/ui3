@@ -665,12 +665,12 @@ var togglableUIFeatures =
 ///////////////////////////////////////////////////////////////
 
 // KNOWN: Around May 11, 2018 with BI 4.7.4.1, Blue Iris began imposing Streaming 0's frame size and quality settings on jpeg frames, and I wasn't able to talk the developer out of it.  UI3 works around this by always requesting jpeg snapshots with explicit dimensions and quality.
-// CONSIDER: Advanced canvas-based clip list viewer.  It should use the entire video playback area (maybe hide the left bar too), be zoomable, and very responsive.  Navigate by keyboard or click-and-drag with inertia. Clips arranged like a timeline, with thumbnails moving across the screen horizontally (left = older, right = newer) with dotted vertical lines every minute/hour etc.  Each camera its own row.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
-// CONSIDER: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
+// KNOWN: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
 // KNOWN: Black frame shown when pausing HTML5 player before first frame is rendered. This is caused by destroying the jmuxer instance before the frame has rendered. Skipping or delaying the destroy causes camera-changing weirdness, so this is the lesser nuisance.
 // CONSIDER: Expandable clip list. ("Show more clips")
 // KNOWN: Jpeg snapshots of dynamic groups often are missing some labels because BI returned the frame before drawing them.
+
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
