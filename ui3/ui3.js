@@ -637,22 +637,17 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// Snapshots and stuff should be built using a dedicated "Jpeg Snapshot" profile which is not user-configurable. This will help deal with dynamic group frames, which currently get requested with only one size dimension specified so they end up not being the dimensions the user configured.
-// Stats for nerds needs to keep separate graph state for jpeg and h.264 players; the shared Video Bit Rate and Frame Size graphs get out of sync otherwise.
-
 /////////////////////////////
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// Loading the UI on the timeline tab, the first dynamic group video frame is not sized wide enough.
 // Accommodate users who double-click the timeline.  It should not cause them to seek twice.
 // Timeline clicking needs to be more tolerant of tiny movements, which means not actually starting the timeline drag until the mouse has moved a bit.  Damn it.
 // Timeline video in the jpeg player currently breaks when resolution is changed. Workaround is commented out so Ken can try to fix (timelineCriticalArgs).
-// Scaling is bad when /time/ streaming single cameras in jpeg mode, probably because BI is returning an unexpected aspect ratio.
-// BI Bug: Isolated jpeg frames fail to load while an H.264 /time/ stream is active.
+// BI Bug: Isolated jpeg frames fail to load while an H.264 /time/ stream is active. (possibly obsolete. worked around via omitting new opaque argument)
 
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
-
-// When seeking is over, the zoom position is lost.
 
 // Revamp or just delete the timeline loading state component.
 
@@ -13265,7 +13260,6 @@ function VideoPlayerController()
 				camData = maybeCamData;
 		}
 
-		imageRenderer.zoomHandler.ZoomToFit();
 		var cli = currentlyLoadingImage;
 		var clc = currentlyLoadingCamera = camData;
 		var previousId = cli.id;
@@ -13284,6 +13278,7 @@ function VideoPlayerController()
 		cli.isGroup = clc.group ? true : false;
 		if (previousId !== cli.id)
 		{
+			imageRenderer.zoomHandler.ZoomToFit();
 			cli.cams = null;
 			cli.rects = null;
 		}
@@ -13552,7 +13547,8 @@ function VideoPlayerController()
 	// Callback methods for a player module to inform the VideoPlayerController of state changes.
 	this.CameraOrResolutionChange = function ()
 	{
-		imageRenderer.zoomHandler.ZoomToFit();
+		if (currentlyLoadedImage.uniqueId !== currentlyLoadingImage.uniqueId)
+			imageRenderer.zoomHandler.ZoomToFit();
 		currentlyLoadedImage.CopyValuesFrom(currentlyLoadingImage);
 		currentlyLoadedCamera = currentlyLoadingCamera;
 		resized();
@@ -14052,8 +14048,8 @@ function JpegVideoModule()
 							nerdStats.UpdateStat("Seek Position", (self.GetSeekPercent() * 100).toFixed() + "%");
 						nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frameUtc + GetServerTimeOffset()), true));
 						nerdStats.UpdateStat("Codecs", "jpeg");
-						nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
-						nerdStats.UpdateStat("Frame Size", imageSizeBytes, formatBytes(imageSizeBytes, 2), true);
+						nerdStats.UpdateStat("Jpeg Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
+						nerdStats.UpdateStat("Jpeg Frame Size", imageSizeBytes, formatBytes(imageSizeBytes, 2), true);
 						nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, Math.round(msLoadingTime) + "ms", true);
 						nerdStats.EndUpdate();
 					}
@@ -27173,12 +27169,14 @@ function UI3NerdStats()
 			, "Audio Bit Rate"
 			, "Audio Buffer"
 			, "Frame Size"
-			, "Jpeg Loading Time"
 			, "Inter-Frame Time"
 			, "Frame Timing Error"
 			, "Network Delay"
 			, "Player Delay"
 			, "Delayed Frames"
+			, "Jpeg Bit Rate"
+			, "Jpeg Frame Size"
+			, "Jpeg Loading Time"
 		];
 	this.statClickEvents = [
 		{ name: "Audio Bit Rate", handler: CreateAudioVisualizer },
@@ -27228,9 +27226,12 @@ function UI3NerdStats()
 	{
 		return dialog != null;
 	}
+	/**
+	 * Creates a row for the specified statistic if it does not already exist.
+	 * @param {String} name Row Name
+	 */
 	var CreateStat = function (name)
 	{
-		/// <summary>Creates a row for the specified statistic if it does not already exist.</summary>
 		if (!dialog)
 			return;
 		var row = statsRows[name];
@@ -27241,9 +27242,9 @@ function UI3NerdStats()
 			dialog.contentChanged(false, true);
 		}
 	}
+	/** Marks all rows to be hidden during [EndUpdate] unless their values are set during the update. */
 	this.BeginUpdate = function ()
 	{
-		/// <summary>Marks all rows to be hidden during [EndUpdate] unless their values are set during the update.</summary>
 		if (isUpdating)
 			return;
 		Initialize();
@@ -27252,9 +27253,9 @@ function UI3NerdStats()
 		for (var i = 0; i < self.orderedStatNames.length; i++)
 			hideOnEndUpdate[self.orderedStatNames[i]] = true;
 	}
+	/** Hides all rows that were not updated since [BeginUpdate] was called. */
 	this.EndUpdate = function ()
 	{
-		/// <summary>Hides all rows that were not updated since [BeginUpdate] was called.</summary>
 		if (!isUpdating)
 			return;
 		Initialize();
@@ -27269,9 +27270,15 @@ function UI3NerdStats()
 		if (hidSome)
 			dialog.contentChanged(false, true);
 	}
+	/**
+	 * Adds or updates the value with the specified name.
+	 * @param {String} name Row Name
+	 * @param {any} value Raw value
+	 * @param {any} htmlValue HTML-formatted value
+	 * @param {Boolean} onGraph If true, graph the raw value.
+	 */
 	this.UpdateStat = function (name, value, htmlValue, onGraph)
 	{
-		/// <summary>Adds or updates the value with the specified name.</summary>
 		if (!dialog)
 			return;
 		Initialize();
@@ -27286,9 +27293,12 @@ function UI3NerdStats()
 			hideOnEndUpdate[name] = false;
 		row.SetValue(value, htmlValue, onGraph);
 	}
+	/**
+	 * Immediately hides the specified row.  Designed to be called outside of an organized update.
+	 * @param {String} name Row Name
+	 */
 	this.HideStat = function (name)
 	{
-		/// <summary>Immediately hides the specified row.  Designed to be called outside of an organized update.</summary>
 		if (!dialog)
 			return;
 		Initialize();
