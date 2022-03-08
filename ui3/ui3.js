@@ -5678,6 +5678,7 @@ function ClipTimeline()
 	var self = this;
 	var timeline;
 	var initialized = false;
+	var didRunFinishInit = false;
 	var alertImg = new Image();
 	var alertImgLoaded = false;
 	var flagImg = new Image();
@@ -5721,13 +5722,15 @@ function ClipTimeline()
 				timeline.drawCanvas();
 		};
 		flagImg.src = timelineFlagImgSrc;
-		BI_CustomEvent.AddListener("FinishedLoading", finishInit);
+		BI_CustomEvent.AddListener("CameraListLoaded", finishInit);
 		finishInit();
 	}
 	var finishInit = function ()
 	{
-		if (!loadingHelper.DidLoadingFinish())
+		if (didRunFinishInit || !cameraListLoader || !cameraListLoader.GetLastResponse())
 			return;
+		didRunFinishInit = true;
+		BI_CustomEvent.RemoveListener("CameraListLoaded", finishInit);
 		Vue.component('clip-timeline', {
 			template: ''
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
@@ -5788,6 +5791,7 @@ function ClipTimeline()
 			{
 				timeline = this;
 				timelineDataLoader = new TimelineDataLoader(this.callbackStartedLoading, this.callbackGotData, this.callbackError);
+				loadingHelper.SetLoadedStatus("timeline");
 			},
 			mounted: function ()
 			{
@@ -25988,6 +25992,7 @@ function LoadingHelper()
 			, ["svg", "#loadingSVG", false]
 			, ["h264", "#loadingH264", false]
 			, ["startupClip", "#loadingStartupClip", false]
+			, ["timeline", "#loadingTimeline", false]
 		];
 
 	this.SetLoadedStatus = function (name)
