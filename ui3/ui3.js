@@ -6548,7 +6548,6 @@ function ClipTimeline()
 				},
 				timelineDidPauseVideo: function (newValue, oldValue)
 				{
-					console.log("timelineDidPauseVideo new " + newValue + " old " + oldValue);
 					if (newValue && !videoPlayer.Playback_IsPaused())
 						videoPlayer.Playback_Pause();
 					else if (oldValue && !newValue && videoPlayer.Playback_IsPaused())
