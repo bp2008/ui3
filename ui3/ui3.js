@@ -641,15 +641,9 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Jpeg player needs work to be able to load a timeline image while paused.
+// Jpeg player needs work to be able to load a timeline image while paused (when transitioning from H.264 to jpeg player module).
 
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
-
-// Revamp or just delete the timeline loading state component.
-
-// Previous pause state should be restored after timeline scrubbing.
-
-// Fix video remaining black when /time/ video is paused and changing player modules.
 
 // Timeline position should be in a URL parameter, periodically updated, and loaded when the UI loads.
 
@@ -5738,7 +5732,6 @@ function ClipTimeline()
 				+ '<div class="clipTimeline" ref="tl_root" :class="clipTimelineClasses">'
 				+ ' <clip-timeline-legend :width="timelineWidth" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" :showSelectedTime="showSelectedTime" />'
 				+ ' <div class="timelineMain" :style="{ width: timelineWidth + \'px\' }">'
-				+ '		<clip-timeline-loader :width="timelineWidth" :zoomFactor="zoomFactor" :left="left" :right="right" :currentTime="currentTime" />'
 				+ '		<canvas ref="clipTimelineCanvas" class="clipTimelineCanvas" :style="timelineCanvasStyle" />'
 				+ '		<div class="timelineError" v-if="errorHtml" v-html="errorHtml"></div>'
 				+ '	</div>'
@@ -6730,42 +6723,6 @@ function ClipTimeline()
 			},
 			watch:
 			{
-			}
-		});
-		Vue.component('clip-timeline-loader', {
-			template: ''
-				+ '<div class="timelineLoader" v-show="!!tags.length">'
-				+ '	<div class="timelineLoaderTag" v-for="tag in tags" :key="tag.id" :style="tag.style" :class="{ timelineLoaderTagWaiting: !tag.state, timelineLoaderTagLoading: tag.state === 1, timelineLoaderTagError: tag.state === 3 }" :title="tag.title">'
-				+ '		<div v-if="!tag.state" class="timelineLoaderWaiting">'
-				+ '			<svg class="icon noflip stroke" :style="tag.svgStyle"><use xlink:href="#svg_ellipsis"></use></svg>'
-				+ '		</div>'
-				+ '		<div v-if="tag.state === 1" class="spin1s">'
-				+ '			<svg class="icon noflip stroke" :style="tag.svgStyle"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
-				+ '		</div>'
-				+ '		<div v-else-if="tag.state === 3" class="timelineLoaderError">'
-				+ '			<svg class="icon noflip stroke" :style="tag.svgStyle"><use xlink:href="#svg_stroke_closeBtn"></use></svg>'
-				+ '		</div>'
-				+ '	</div>'
-				+ '</div>',
-			props:
-			{
-				/** Width of timeline in pixels */
-				width: Number,
-				/** Number of milliseconds per pixel. */
-				zoomFactor: Number,
-				/** Timestamp of the left edge */
-				left: Number,
-				/** Timestamp of the right edge */
-				right: Number,
-				/** Timestamp of the center (current time) */
-				currentTime: Number
-			},
-			computed:
-			{
-				tags: function ()
-				{
-					return [];
-				}
 			}
 		});
 
