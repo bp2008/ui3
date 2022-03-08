@@ -641,9 +641,7 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Loading the UI on the timeline tab, the first dynamic group video frame is not sized wide enough.
 // Accommodate users who double-click the timeline.  It should not cause them to seek twice.
-// Timeline clicking needs to be more tolerant of tiny movements, which means not actually starting the timeline drag until the mouse has moved a bit.  Damn it.
 // Timeline video in the jpeg player currently breaks when resolution is changed. Workaround is commented out so Ken can try to fix (timelineCriticalArgs).
 // BI Bug: Isolated jpeg frames fail to load while an H.264 /time/ stream is active. (possibly obsolete. worked around via omitting new opaque argument)
 
@@ -5772,7 +5770,7 @@ function ClipTimeline()
 					lastSetTime: GetUtcNow(),
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
-					dragState: { isDragging: false, startX: 0, offsetMs: 0, hasPanned: false, previewBaseResolution: { w: 1, h: 1 } },
+					dragState: { isMouseDown: false, isDragging: false, startX: 0, offsetMs: 0, previewBaseResolution: { w: 1, h: 1 } },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
 					/** Helps maintain a decent timeline frame rate while nothing is interacting with the timeline. */
 					canvasRedrawState: { interval: null, lastRedraw: 0 },
@@ -5899,7 +5897,7 @@ function ClipTimeline()
 						return;
 					if (touchEvents.isMultiTouch(e))
 					{
-						timeline.dragState.isDragging = false;
+						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 						return;
 					}
 					if (e.button === 2)
@@ -5909,8 +5907,8 @@ function ClipTimeline()
 						timeline.dragState.startX = e.mouseX;
 						timeline.dragState.offsetMs = 0;
 						timeline.dragState.previewBaseResolution = { w: videoPlayer.Loaded().image.actualwidth, h: videoPlayer.Loaded().image.actualheight };
-						timeline.dragState.isDragging = true;
-						timeline.dragState.hasPanned = false;
+						timeline.dragState.isMouseDown = true;
+						timeline.dragState.isDragging = false;
 					}
 				},
 				mouseMove: function (e)
@@ -5918,17 +5916,18 @@ function ClipTimeline()
 					mouseCoordFixer.fix(e);
 					if (touchEvents.Gate(e))
 						return;
-					if (timeline.dragState.isDragging)
+					if (timeline.dragState.isMouseDown)
 					{
 						if (touchEvents.isMultiTouch(e))
 						{
-							timeline.dragState.isDragging = false;
+							timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 							return;
 						}
 						var delta = (e.mouseX - timeline.dragState.startX);
-						if (delta !== 0)
-							timeline.dragState.hasPanned = true;
-						timeline.pan(delta * -timeline.zoomFactor);
+						if (Math.abs(delta) > 3)
+							timeline.dragState.isDragging = true;
+						if (timeline.dragState.isDragging)
+							timeline.pan(delta * -timeline.zoomFactor);
 						this.finishWheelPan();
 					}
 					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
@@ -5940,19 +5939,19 @@ function ClipTimeline()
 						return;
 					if (touchEvents.isMultiTouch(e))
 					{
-						timeline.dragState.isDragging = false;
+						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 						return;
 					}
-					if (timeline.dragState.isDragging)
+					if (timeline.dragState.isMouseDown)
 					{
 						timeline.mouseMove(e);
 						var time;
-						if (timeline.dragState.hasPanned)
+						if (timeline.dragState.isDragging)
 							time = timeline.lastSetTime + (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
 						else
 							time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
 						timeline.assignLastSetTime(time);
-						timeline.dragState.isDragging = false;
+						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 						timeline.userDidSetTime();
 					}
 					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
@@ -5962,8 +5961,8 @@ function ClipTimeline()
 					mouseCoordFixer.fix(e);
 					if (touchEvents.Gate(e))
 						return;
-					if (timeline.dragState.isDragging)
-						timeline.dragState.isDragging = false;
+					if (timeline.dragState.isMouseDown)
+						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 				},
 				mouseLeave: function (e)
 				{
