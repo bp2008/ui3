@@ -6310,7 +6310,7 @@ function ClipTimeline()
 				},
 				FrameRendered: function (data)
 				{
-					if (typeof data.utc !== "number" || this.ignoreFrameRenderedEvent || data.isSeekPreview)
+					if (typeof data.utc !== "number" || this.timelineIsBeingPanned || data.isSeekPreview)
 						return;
 
 					if (videoPlayer.Loaded().image.isTimeline())
@@ -6356,7 +6356,7 @@ function ClipTimeline()
 				{
 					timelineSync.run(this, function ()
 					{
-						if (!this.dragState.isDragging || this.seekPreviewLoading)
+						if (!this.timelineIsBeingPanned || this.seekPreviewLoading)
 						{
 							timelineSync.unlock();
 							return;
@@ -6513,7 +6513,7 @@ function ClipTimeline()
 				{
 					return { color: this.isLive ? '#71E068' : '' };
 				},
-				ignoreFrameRenderedEvent: function ()
+				timelineIsBeingPanned: function ()
 				{
 					return this.dragState.isMouseDown || this.wheelPanState.isActive || this.seekPreviewLoading;
 				}
