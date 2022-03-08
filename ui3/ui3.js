@@ -641,7 +641,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Accommodate users who double-click the timeline.  It should not cause them to seek twice.
 // Timeline video in the jpeg player currently breaks when resolution is changed. Workaround is commented out so Ken can try to fix (timelineCriticalArgs).
 // BI Bug: Isolated jpeg frames fail to load while an H.264 /time/ stream is active. (possibly obsolete. worked around via omitting new opaque argument)
 
@@ -5770,7 +5769,7 @@ function ClipTimeline()
 					lastSetTime: GetUtcNow(),
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
-					dragState: { isMouseDown: false, isDragging: false, startX: 0, offsetMs: 0, previewBaseResolution: { w: 1, h: 1 } },
+					dragState: { isMouseDown: false, isDragging: false, startX: 0, offsetMs: 0, previewBaseResolution: { w: 1, h: 1 }, lastClickAt: -9999, doubleClickTime: 400 },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
 					/** Helps maintain a decent timeline frame rate while nothing is interacting with the timeline. */
 					canvasRedrawState: { interval: null, lastRedraw: 0 },
@@ -5945,14 +5944,24 @@ function ClipTimeline()
 					if (timeline.dragState.isMouseDown)
 					{
 						timeline.mouseMove(e);
-						var time;
+						var time = null;
 						if (timeline.dragState.isDragging)
 							time = timeline.lastSetTime + (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
 						else
-							time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
-						timeline.assignLastSetTime(time);
+						{
+							var now = performance.now();
+							if (now - timeline.dragState.lastClickAt > timeline.dragState.doubleClickTime)
+							{
+								timeline.dragState.lastClickAt = now;
+								time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
+							}
+						}
 						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
-						timeline.userDidSetTime();
+						if (time !== null)
+						{
+							timeline.assignLastSetTime(time);
+							timeline.userDidSetTime();
+						}
 					}
 					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
 				},
