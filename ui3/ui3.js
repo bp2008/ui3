@@ -653,8 +653,6 @@ var togglableUIFeatures =
 
 // Timeline position should be in a URL parameter, periodically updated, and loaded when the UI loads.
 
-// Jpeg player's GetNewImage method needs to be completely timeline synced so it doesn't let pause events sneak in a TimelineStop method call.
-
 //////////////////////////
 // Timeline Pre-Release //
 //////////////////////////
@@ -14256,9 +14254,17 @@ function JpegVideoModule()
 	}
 	var GetNewImage = function ()
 	{
+		timelineSync.run(this, GNI_Internal);
+	}
+	/** Called by GetNewImage to do all the real work after obtaining the lock on timelineSync. */
+	var GNI_Internal = function ()
+	{
 		ClearGetNewImageTimeout();
 		if (currentServer.isLoggingOut || !isCurrentlyActive)
+		{
+			timelineSync.unlock();
 			return;
+		}
 		var timeValue = currentImageRequestedAtMs = performance.now();
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
@@ -14278,6 +14284,7 @@ function JpegVideoModule()
 				clipPlaybackPosition = clipTimeline.BoundsCheckTimelineMs(clipPlaybackPosition);
 				if (typeof clipPlaybackPosition === "undefined")
 				{
+					timelineSync.unlock();
 					videoPlayer.goLive();
 					return;
 				}
@@ -14378,6 +14385,7 @@ function JpegVideoModule()
 
 		if (imageLoadingState.loadedUrl == imgSrcPath)
 		{
+			timelineSync.unlock();
 			videoOverlayHelper.HideLoadingOverlay();
 			GetNewImageAfterTimeout();
 		}
@@ -14389,9 +14397,9 @@ function JpegVideoModule()
 				&& loadedFirstFrame)
 				|| !isVisible
 				|| playbackPaused // Live video can be paused since UI3-175
-				|| timelineSync.islocked()
 			)
 			{
+				timelineSync.unlock();
 				if (isLoadingRecordedSnapshot)
 					videoOverlayHelper.HideLoadingOverlay();
 				GetNewImageAfterTimeout();
@@ -14406,7 +14414,6 @@ function JpegVideoModule()
 				SetImageLoadTimeout();
 				lastLoadedTimeValue = timeValue;
 				currentImageTimestampGuessUtc = loading.isLive ? GetUtcNow() : -1;
-				timelineSync.lock();
 				LoadImageFromUrl(imgSrcPath, currentStreamId);
 			}
 		}
