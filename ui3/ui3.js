@@ -641,12 +641,13 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Timeline video in the jpeg player currently breaks when resolution is changed. Workaround is commented out so Ken can try to fix (timelineCriticalArgs).
-// BI Bug: Isolated jpeg frames fail to load while an H.264 /time/ stream is active. (possibly obsolete. worked around via omitting new opaque argument)
-
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
 
 // Revamp or just delete the timeline loading state component.
+
+// Previous pause state should be restored after timeline scrubbing.
+
+// Fix video remaining black when /time/ video is paused and changing player modules.
 
 //////////////////////////
 // Timeline Pre-Release //
@@ -14284,7 +14285,9 @@ function JpegVideoModule()
 
 				var speedMultiplier = playbackControls.GetPlaybackSpeed();
 				var speedArg = "&speed=" + (Math.round(100 * speedMultiplier) * (playbackControls.GetPlayReverse() ? -1 : 1));
-				timelineCriticalArgs = overlayArgs/* + sizeArgs*/ + speedArg;
+				timelineCriticalArgs = overlayArgs + speedArg;
+				if (cameraListLoader.CameraIsGroup(cameraListLoader.GetCameraWithId(loading.id)))
+					timelineCriticalArgs += sizeArgs;
 				if (lastTimelineCriticalArgs !== timelineCriticalArgs)
 				{
 					clipPlaybackPosition = clipTimeline.getCurrentTime();
