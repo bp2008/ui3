@@ -641,6 +641,8 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// Jpeg player needs work to be able to load a timeline image while paused.
+
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
 
 // Revamp or just delete the timeline loading state component.
@@ -648,6 +650,10 @@ var togglableUIFeatures =
 // Previous pause state should be restored after timeline scrubbing.
 
 // Fix video remaining black when /time/ video is paused and changing player modules.
+
+// Timeline position should be in a URL parameter, periodically updated, and loaded when the UI loads.
+
+// Jpeg player's GetNewImage method needs to be completely timeline synced so it doesn't let pause events sneak in a TimelineStop method call.
 
 //////////////////////////
 // Timeline Pre-Release //
@@ -5782,7 +5788,9 @@ function ClipTimeline()
 					/** True if the current video stream is live and is playing. */
 					isLive: false,
 					seekPreviewFrameTime: -1,
-					seekPreviewLoading: false
+					seekPreviewLoading: false,
+					/** True if the timeline is currently responsible for the video player being paused. */
+					timelineDidPauseVideo: false
 				};
 			},
 			created: function ()
@@ -5897,7 +5905,8 @@ function ClipTimeline()
 						return;
 					if (touchEvents.isMultiTouch(e))
 					{
-						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
+						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
+
 						return;
 					}
 					if (e.button === 2)
@@ -5909,6 +5918,7 @@ function ClipTimeline()
 						timeline.dragState.previewBaseResolution = { w: videoPlayer.Loaded().image.actualwidth, h: videoPlayer.Loaded().image.actualheight };
 						timeline.dragState.isMouseDown = true;
 						timeline.dragState.isDragging = false;
+						timeline.timelineDidPauseVideo = !videoPlayer.Playback_IsPaused();
 					}
 				},
 				mouseMove: function (e)
@@ -5920,7 +5930,7 @@ function ClipTimeline()
 					{
 						if (touchEvents.isMultiTouch(e))
 						{
-							timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
+							timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 							return;
 						}
 						var delta = (e.mouseX - timeline.dragState.startX);
@@ -5939,7 +5949,7 @@ function ClipTimeline()
 						return;
 					if (touchEvents.isMultiTouch(e))
 					{
-						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
+						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 						return;
 					}
 					if (timeline.dragState.isMouseDown)
@@ -5957,7 +5967,7 @@ function ClipTimeline()
 								time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
 							}
 						}
-						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
+						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 						if (time !== null)
 						{
 							timeline.assignLastSetTime(time);
@@ -5972,7 +5982,7 @@ function ClipTimeline()
 					if (touchEvents.Gate(e))
 						return;
 					if (timeline.dragState.isMouseDown)
-						timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
+						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 				},
 				mouseLeave: function (e)
 				{
@@ -6300,7 +6310,7 @@ function ClipTimeline()
 				},
 				FrameRendered: function (data)
 				{
-					if (typeof data.utc !== "number")
+					if (typeof data.utc !== "number" || this.ignoreFrameRenderedEvent || data.isSeekPreview)
 						return;
 
 					if (videoPlayer.Loaded().image.isTimeline())
@@ -6314,7 +6324,7 @@ function ClipTimeline()
 					}
 					this.lastSetTime = data.utc;
 
-					if (this.videoShouldBePaused && !videoPlayer.Playback_IsPaused())
+					if (this.timelineDidPauseVideo && !videoPlayer.Playback_IsPaused())
 						videoPlayer.Playback_Pause();
 				},
 				btnGoLive: function ()
@@ -6340,13 +6350,13 @@ function ClipTimeline()
 				},
 				userDidSetTime: function ()
 				{
-					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, { timelineMs: this.lastSetTime });
+					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, { timelineMs: this.lastSetTime, startPaused: videoPlayer.Playback_IsPaused() && !this.timelineDidPauseVideo });
 				},
 				updateSeekPreview: function ()
 				{
 					timelineSync.run(this, function ()
 					{
-						if (!this.videoShouldBePaused || this.seekPreviewLoading || safeFetch.IsActive())
+						if (!this.dragState.isDragging || this.seekPreviewLoading)
 						{
 							timelineSync.unlock();
 							return;
@@ -6359,48 +6369,59 @@ function ClipTimeline()
 							return;
 						}
 
-						var largestDimensionKey;
-						var largestDimensionValue;
-						var loadingImg = videoPlayer.Loading().image;
-						if (loadingImg.aspectratio >= 1)
-						{
-							largestDimensionKey = "w";
-							largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).w;
-						}
-						else
-						{
-							largestDimensionKey = "h";
-							largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).h;
-						}
-
-						videoOverlayHelper.ShowLoadingOverlay(true, true);
-						// previewBaseResolution will be the resolution of the last frame we received.  That may even be a jpeg preview frame.
-						var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue, this.dragState.previewBaseResolution.w, this.dragState.previewBaseResolution.h);
-						var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
-						var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs;
-						var uniqueId = loadingImg.uniqueId;
-						var startTime = performance.now();
-						this.seekPreviewLoading = true;
-						DownloadToDataUri(seekImgUrl)
-							.then(function (result)
-							{
-								if (videoPlayer.Loading().image.uniqueId !== uniqueId)
-									return;
-								jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri);
-							})
-							.catch(function (err)
-							{
-								if (videoPlayer.Loading().image.uniqueId !== uniqueId)
-									return;
-								videoOverlayHelper.HideLoadingOverlay();
-							})
-							.finally(function ()
-							{
-								timeline.seekPreviewFrameTime = requestMs;
-								timeline.seekPreviewLoading = false;
-								timelineSync.unlock();
-							});
+						this.downloadSeekPreview(requestMs);
 					});
+				},
+				/** Call to download and render a seek preview frame. You must already have obtained a timelineSync lock. The request will be aborted if a fetch video stream is currently pending. */
+				downloadSeekPreview: function (requestMs)
+				{
+					if (safeFetch.IsActive())
+					{
+						timelineSync.unlock();
+						return;
+					}
+					var largestDimensionKey;
+					var largestDimensionValue;
+					var loadingImg = videoPlayer.Loading().image;
+					if (loadingImg.aspectratio >= 1)
+					{
+						largestDimensionKey = "w";
+						largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).w;
+					}
+					else
+					{
+						largestDimensionKey = "h";
+						largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).h;
+					}
+
+					videoOverlayHelper.ShowLoadingOverlay(true, true);
+					// previewBaseResolution will be the resolution of the last frame we received.  That may even be a jpeg preview frame.
+					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue, this.dragState.previewBaseResolution.w, this.dragState.previewBaseResolution.h);
+					var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
+					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs;
+					var uniqueId = loadingImg.uniqueId;
+					var startTime = performance.now();
+					this.seekPreviewLoading = true;
+					DownloadToDataUri(seekImgUrl)
+						.then(function (result)
+						{
+							if (videoPlayer.Loading().image.uniqueId !== uniqueId)
+								return;
+							var frameUtc = parseInt(result.headers["x-utc"]);
+							jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri, frameUtc);
+						})
+						.catch(function (err)
+						{
+							if (videoPlayer.Loading().image.uniqueId !== uniqueId)
+								return;
+							videoOverlayHelper.HideLoadingOverlay();
+						})
+						.finally(function ()
+						{
+							timeline.seekPreviewFrameTime = requestMs;
+							timeline.seekPreviewLoading = false;
+							timelineSync.unlock();
+						});
 				}
 			},
 			computed:
@@ -6492,9 +6513,9 @@ function ClipTimeline()
 				{
 					return { color: this.isLive ? '#71E068' : '' };
 				},
-				videoShouldBePaused: function ()
+				ignoreFrameRenderedEvent: function ()
 				{
-					return this.dragState.isDragging || this.wheelPanState.isActive || this.seekPreviewLoading;
+					return this.dragState.isMouseDown || this.wheelPanState.isActive || this.seekPreviewLoading;
 				}
 			},
 			watch:
@@ -6517,11 +6538,6 @@ function ClipTimeline()
 					canvas.height = this.timelineInternalHeight;
 					this.drawCanvas();
 				},
-				videoShouldBePaused: function ()
-				{
-					if (this.videoShouldBePaused !== videoPlayer.Playback_IsPaused())
-						videoPlayer.Playback_PlayPause();
-				},
 				seekPreviewFrameTime: function ()
 				{
 					this.updateSeekPreview();
@@ -6529,6 +6545,14 @@ function ClipTimeline()
 				currentTime: function ()
 				{
 					this.updateSeekPreview();
+				},
+				timelineDidPauseVideo: function (newValue, oldValue)
+				{
+					console.log("timelineDidPauseVideo new " + newValue + " old " + oldValue);
+					if (newValue && !videoPlayer.Playback_IsPaused())
+						videoPlayer.Playback_Pause();
+					else if (oldValue && !newValue && videoPlayer.Playback_IsPaused())
+						videoPlayer.Playback_Play();
 				}
 			}
 		});
@@ -6802,9 +6826,10 @@ function ClipTimeline()
 	{
 		return $tl_root.length && pointInsideElement($tl_root, x, y);
 	}
-	this.videoShouldBePaused = function ()
+	/** Returns true if the timeline is currently responsible for pausing the video player. */
+	this.timelineDidPauseVideo = function ()
 	{
-		return timeline && timeline.videoShouldBePaused;
+		return timeline && timeline.timelineDidPauseVideo;
 	}
 	this.BoundsCheckTimelineMs = function (timelineMs)
 	{
@@ -6829,7 +6854,7 @@ function ClipTimeline()
 	this.getTimelineArgsForCameraSwitch = function ()
 	{
 		if (timeline && videoPlayer.Loading().image.isTimeline())
-			return { timelineMs: timeline.currentTime };
+			return { timelineMs: timeline.currentTime, startPaused: videoPlayer.Playback_IsPaused() && !timeline.timelineDidPauseVideo };
 		return null;
 	}
 	/**
@@ -13255,7 +13280,8 @@ function VideoPlayerController()
 		}
 		timelineArgs = Object.assign({
 			timelineMs: undefined,
-			timelineJump: undefined
+			timelineJump: undefined,
+			startPaused: false
 		}, timelineArgs);
 		timelineArgs.timelineMs = clipTimeline.BoundsCheckTimelineMs(timelineArgs.timelineMs);
 
@@ -13306,8 +13332,9 @@ function VideoPlayerController()
 			clipLoader.LoadClips(); // This method does not waste resources if not on the clips tab.
 
 		videoOverlayHelper.ShowLoadingOverlay(true);
+		var startPaused = false || timelineArgs.startPaused;
 		if (playerModule)
-			playerModule.OpenVideo(cli, 0, false);
+			playerModule.OpenVideo(cli, 0, startPaused);
 
 		fullScreenModeController.updateFullScreenButtonState();
 
@@ -13379,7 +13406,11 @@ function VideoPlayerController()
 			return;
 		direction = (direction > 0 ? 1 : -1);
 		if (self.Playback_IsPaused())
-			self.LoadLiveCamera(currentlyLoadingCamera, { timelineMs: self.lastFrameUtc, timelineJump: direction });
+		{
+			var args = clipTimeline.getTimelineArgsForCameraSwitch();
+			args.timelineJump = direction;
+			self.LoadLiveCamera(currentlyLoadingCamera, args);
+		}
 		else
 			self.TimelineSet("&jump=" + direction);
 	}
@@ -13569,7 +13600,7 @@ function VideoPlayerController()
 	var lastCycleWidth = 0;
 	var lastCycleHeight = 0;
 	this.lastFrameUtc = 0;
-	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameUtc)
+	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameUtc, isSeekPreview)
 	{
 		jpegPreviewModule.Hide();
 		if (currentlyLoadedImage.uniqueId != uniqueId || currentlyLoadingImage.isTimeline() !== currentlyLoadedImage.isTimeline())
@@ -13631,7 +13662,7 @@ function VideoPlayerController()
 
 		mediaSessionController.setMediaState();
 
-		BI_CustomEvent.Invoke("ImageRendered", { id: uniqueId, w: width, h: height, loadingTime: lastFrameLoadingTime, utc: lastFrameUtc });
+		BI_CustomEvent.Invoke("ImageRendered", { id: uniqueId, w: width, h: height, loadingTime: lastFrameLoadingTime, utc: lastFrameUtc, isSeekPreview: isSeekPreview });
 	}
 	/**
 	 * Called when clip playback ends. Not called for live or timeline video.
@@ -13839,55 +13870,19 @@ function BICameraData()
 ///////////////////////////////////////////////////////////////
 // Jpeg Preview Module ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+/** Manages showing and hiding a canvas as necessary to render seek previews in the full video area. */
 var jpegPreviewModule = new (function JpegPreviewModule()
 {
-	/// <summary>Manages showing and hiding a canvas as necessary to render seek previews in the full video area.</summary>
 	var self = this;
-	var isActivated = false;
-	var isInitialized = false;
 	var isVisible = false;
-	var $myImgEle = null;
 	var $camimg_wrapper = $("#camimg_wrapper");
 	var $camimg_store = $("#camimg_store");
 	var $camimg_preview = $('<canvas id="camimg_preview" class="videoCanvas"></canvas>');
 	var camimg_preview_ele = $camimg_preview.get(0);
-	var Initialize = function ()
-	{
-		if (isInitialized)
-			return;
-		isInitialized = true;
-		$camimg_store.append($camimg_preview);
-		$myImgEle = $('<img crossOrigin="Anonymous" id="jpegPreview_img" alt="" style="display: none;" />');
-		var myImgEle_ele = $myImgEle.get(0);
-		$myImgEle.load(function ()
-		{
-			if (myImgEle_ele.src.substr(5) === "blob:")
-				URL.revokeObjectURL(myImgEle_ele.src);
-			var img = $myImgEle.get(0);
-			if (!img.complete || typeof img.naturalWidth == "undefined" || img.naturalWidth == 0)
-			{
-				// Failed
-				toaster.Error("Unable to decode jpeg image.");
-			}
-			else
-			{
-				// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
-				videoPlayer.ImageRendered(img.myUniqueId, img.naturalWidth, img.naturalHeight, performance.now() - img.startTime, false);
-				// Rendering the image shows the jpegPreviewModule again.
-				self.RenderImage(myImgEle_ele);
-			}
-		});
-		$myImgEle.error(function ()
-		{
-			console.log('Bad image assigned to #jpegPreview_img.');
-		});
-		$camimg_store.append($myImgEle);
-	}
 	var Show = function ()
 	{
 		if (isVisible)
 			return;
-		Initialize();
 		isVisible = true;
 		$camimg_preview.appendTo($camimg_wrapper);
 	}
@@ -13895,25 +13890,39 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 	{
 		if (!isVisible)
 			return;
-		Initialize();
 		isVisible = false;
 		$camimg_preview.appendTo($camimg_store);
 	}
 	this.RenderImage = function (imgEle)
 	{
-		Initialize();
 		CopyImageToCanvas(imgEle, camimg_preview_ele);
 		Show();
 		videoOverlayHelper.HideLoadingOverlay();
 		playbackControls.FrameTimestampUpdated(false);
 	}
-	this.RenderDataURI = function (startTime, uniqueId, dataUri)
+	this.RenderDataURI = function (startTime, uniqueId, dataUri, utc)
 	{
-		Initialize();
-		var img = $("#jpegPreview_img").get(0);
-		img.startTime = startTime;
-		img.myUniqueId = uniqueId;
-		img.src = dataUri;
+		LoadImagePromise(dataUri)
+			.then(function (data)
+			{
+				var img = data.image;
+				if (!img.complete || typeof img.naturalWidth == "undefined" || img.naturalWidth == 0)
+				{
+					// Failed
+					toaster.Error("Unable to decode jpeg image.");
+				}
+				else
+				{
+					// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
+					videoPlayer.ImageRendered(uniqueId, img.naturalWidth, img.naturalHeight, performance.now() - startTime, utc, true);
+					// Rendering the image shows the jpegPreviewModule again.
+					self.RenderImage(img);
+				}
+			})
+			.catch(function (err)
+			{
+				console.log('Bad image assigned to jpegPreviewModule.RenderDataURI.');
+			});
 	}
 })();
 ///////////////////////////////////////////////////////////////
@@ -14275,7 +14284,7 @@ function JpegVideoModule()
 				}
 			}
 
-			if (playbackPaused || clipTimeline.videoShouldBePaused() || !isVisible)
+			if (playbackPaused || clipTimeline.timelineDidPauseVideo() || !isVisible)
 			{
 				self.Playback_Pause();
 			}
@@ -14810,11 +14819,18 @@ function FetchH264VideoModule()
 			//	return;
 			//}
 			videoPlayer.lastFrameUtc = loading.timelineStart;
+			if (startPaused)
+			{
+				// I hate hacks. This is definitely a hack.
+				StopStreaming();
+				reconnectDelayedToast.hide();
+				self.Playback_Pause();
+				clipTimeline.getVue().downloadSeekPreview(loading.timelineStart);
+				return;
+			}
 			var speed = 100 * playbackControls.GetPlaybackSpeed();
 			if (playbackControls.GetPlayReverse())
 				speed *= -1;
-			if (startPaused)
-				speed = 0;
 			var speedArg = "&speed=" + Math.round(speed);
 			var jumpArg = "";
 			if (loading.timelineJump)
@@ -18091,7 +18107,7 @@ function LiveVideoPausing()
 
 	BI_CustomEvent.AddListener("Playback_Pause", function (loading)
 	{
-		if (loading.isLive && !clipTimeline.videoShouldBePaused() && !playbackPausedToast.isShowing())
+		if (loading.isLive && !clipTimeline.timelineDidPauseVideo() && !playbackPausedToast.isShowing())
 			self.showToast("Live video is paused. Click here to resume.");
 	});
 	BI_CustomEvent.AddListener("Playback_Play", function (loading)
