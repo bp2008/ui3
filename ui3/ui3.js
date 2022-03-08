@@ -14820,7 +14820,7 @@ function FetchH264VideoModule()
 			videoPlayer.lastFrameUtc = loading.timelineStart;
 			if (startPaused)
 			{
-				// I hate hacks. This is definitely a hack.
+				// I hate hacks. This is definitely a hack, but it is a lot easier to load a scrubbing jpeg than it is to play one frame of H.264 video in the HTML5 player.
 				StopStreaming();
 				reconnectDelayedToast.hide();
 				self.Playback_Pause();
