@@ -641,11 +641,15 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Jpeg player needs work to be able to load a timeline image while paused (when transitioning from H.264 to jpeg player module).
-
 // Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
 
 // Timeline position should be in a URL parameter, periodically updated, and loaded when the UI loads.
+
+// Test changing between group/camera while timeline player is paused.
+
+// Do not request solo /time/ images or video bigger than camera's native resolution.
+
+// Do not request /time/ fixed groups bigger than 3000x3000px?  Probably doesn't actually matter?
 
 //////////////////////////
 // Timeline Pre-Release //
@@ -653,6 +657,7 @@ var togglableUIFeatures =
 
 // Check all TIMELINE-RELEASE code locations.
 // Verify correct behavior when playing timeline video and changing UI tabs.
+//   * Closing a clip while on the timeline tab should load a paused timeline stream at the current UTC position.
 // Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
 // Test timeline with clock drift and a different timezone.  This was fine as of 2022-02-25.
 
@@ -6399,7 +6404,7 @@ function ClipTimeline()
 							if (videoPlayer.Loading().image.uniqueId !== uniqueId)
 								return;
 							var frameUtc = parseInt(result.headers["x-utc"]);
-							jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri, frameUtc);
+							jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri, frameUtc, result.headers);
 						})
 						.catch(function (err)
 						{
@@ -13854,7 +13859,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 		videoOverlayHelper.HideLoadingOverlay();
 		playbackControls.FrameTimestampUpdated(false);
 	}
-	this.RenderDataURI = function (startTime, uniqueId, dataUri, utc)
+	this.RenderDataURI = function (startTime, uniqueId, dataUri, utc, headers)
 	{
 		LoadImagePromise(dataUri)
 			.then(function (data)
@@ -13867,6 +13872,8 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 				}
 				else
 				{
+					if (headers)
+						videoPlayer.GroupLayoutMetadataReceived(uniqueId, headers["x-camlist"], headers["x-reclist"]);
 					// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
 					videoPlayer.ImageRendered(uniqueId, img.naturalWidth, img.naturalHeight, performance.now() - startTime, utc, true);
 					// Rendering the image shows the jpegPreviewModule again.
@@ -14247,41 +14254,42 @@ function JpegVideoModule()
 				}
 			}
 
+			overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
+
+			var speedMultiplier = playbackControls.GetPlaybackSpeed();
 			if (playbackPaused || clipTimeline.timelineDidPauseVideo() || !isVisible)
 			{
 				self.Playback_Pause();
+				speedMultiplier = 0;
+				loading.newTimelineStream = true;
+			}
+			else
+				speedMultiplier = (Math.round(100 * speedMultiplier) * (playbackControls.GetPlayReverse() ? -1 : 1));
+			var speedArg = "&speed=" + speedMultiplier;
+			timelineCriticalArgs = overlayArgs + speedArg;
+			if (cameraListLoader.CameraIsGroup(cameraListLoader.GetCameraWithId(loading.id)))
+				timelineCriticalArgs += sizeArgs;
+			if (lastTimelineCriticalArgs !== timelineCriticalArgs)
+			{
+				clipPlaybackPosition = clipTimeline.getCurrentTime();
+				loading.newTimelineStream = true;
+			}
+
+			if (loading.newTimelineStream)
+			{
+				currentStreamId++;
+				timelineSpeedArg = speedArg;
+				timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
+				timelinePosArg += playbackControls.GetSkipDeadAirArg();
+				if (loading.timelineJump)
+				{
+					timelinePosArg += "&jump=" + loading.timelineJump;
+					loading.timelineJump = 0;
+				}
 			}
 			else
 			{
-				overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
-
-				var speedMultiplier = playbackControls.GetPlaybackSpeed();
-				var speedArg = "&speed=" + (Math.round(100 * speedMultiplier) * (playbackControls.GetPlayReverse() ? -1 : 1));
-				timelineCriticalArgs = overlayArgs + speedArg;
-				if (cameraListLoader.CameraIsGroup(cameraListLoader.GetCameraWithId(loading.id)))
-					timelineCriticalArgs += sizeArgs;
-				if (lastTimelineCriticalArgs !== timelineCriticalArgs)
-				{
-					clipPlaybackPosition = clipTimeline.getCurrentTime();
-					loading.newTimelineStream = true;
-				}
-
-				if (loading.newTimelineStream)
-				{
-					currentStreamId++;
-					timelineSpeedArg = speedArg;
-					timelinePosArg = "&pos=" + clipPlaybackPosition.dropDecimalsStr();
-					timelinePosArg += playbackControls.GetSkipDeadAirArg();
-					if (loading.timelineJump)
-					{
-						timelinePosArg += "&jump=" + loading.timelineJump;
-						loading.timelineJump = 0;
-					}
-				}
-				else
-				{
-					timelinePosArg = "&nc=" + timeValue.dropDecimalsStr(); // "nc" is for redundant cache-busting and also so some later code knows the player isn't paused.
-				}
+				timelinePosArg = "&nc=" + timeValue.dropDecimalsStr(); // "nc" is for redundant cache-busting and also so some later code knows the player isn't paused.
 			}
 		}
 		else if (!loading.isLive)
@@ -14353,7 +14361,7 @@ function JpegVideoModule()
 				&& !CouldBenefitFromSizeChange(sizeToRequest)
 				&& loadedFirstFrame)
 				|| !isVisible
-				|| playbackPaused // Live video can be paused since UI3-175
+				|| (playbackPaused && loading.isLive) // Live video can be paused since UI3-175
 			)
 			{
 				timelineSync.unlock();
@@ -14394,7 +14402,6 @@ function JpegVideoModule()
 		{
 			playbackPaused = true;
 			playbackControls.setPlayPauseButtonState(playbackPaused);
-			videoPlayer.TimelineStop();
 			BI_CustomEvent.Invoke("Playback_Pause", loading);
 		}
 	}
@@ -14958,7 +14965,7 @@ function FetchH264VideoModule()
 						PlaybackReachedNaturalEnd(1);
 					}, loading.msec);
 				}
-				jpegPreviewModule.RenderDataURI(frame.startTime, loading.uniqueId, frame.jpeg);
+				jpegPreviewModule.RenderDataURI(frame.startTime, loading.uniqueId, frame.jpeg, frame.utc);
 			}
 			else
 			{
