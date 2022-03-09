@@ -2969,7 +2969,7 @@ $(function ()
 			$("body").addClass("tabTimeline");
 		}
 
-		if (!skipLoadingFirstVideoStream && (settings.ui3_openARecording === "First" || settings.ui3_openARecording === "Last"))
+		if (!skipLoadingAllVideoStreams && !skipLoadingFirstVideoStream && (settings.ui3_openARecording === "First" || settings.ui3_openARecording === "Last"))
 			clipLoader.OpenARecordingAfterNextClipListLoad();
 
 		BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
@@ -3216,6 +3216,8 @@ function ReloadInterface()
 // Incoming URL Parameters ////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var skipLoadingFirstVideoStream = false;
+var skipLoadingAllVideoStreams = false;
+var startupTimelineMs = null;
 function HandlePreLoadUrlParameters()
 {
 	// Parameter "tab"
@@ -3284,6 +3286,24 @@ function HandlePreLoadUrlParameters()
 			recId = "@" + recId;
 		settings.ui3_defaultTab = "clips";
 		StartupClipOpener(recId, offset);
+	}
+	else
+	{
+		$("#loadingStartupClip").parent().hide();
+		loadingHelper.SetLoadedStatus("startupClip");
+	}
+
+	// Parameter "timeline", value is a millisecond timestamp
+	var timelineMs = UrlParameters.Get("timeline", "tl");
+	if (timelineMs !== '')
+	{
+		timelineMs = parseInt(timelineMs);
+		if (!isNaN(timelineMs) && timelineMs > 0)
+		{
+			settings.ui3_defaultTab = "timeline";
+			skipLoadingAllVideoStreams = true;
+			startupTimelineMs = timelineMs;
+		}
 	}
 	else
 	{
@@ -5792,6 +5812,12 @@ function ClipTimeline()
 				timeline = this;
 				timelineDataLoader = new TimelineDataLoader(this.callbackStartedLoading, this.callbackGotData, this.callbackError);
 				loadingHelper.SetLoadedStatus("timeline");
+				if (startupTimelineMs !== null)
+				{
+					skipLoadingAllVideoStreams = false;
+					this.assignLastSetTime(startupTimelineMs);
+					this.userDidSetTime();
+				}
 			},
 			mounted: function ()
 			{
@@ -13638,6 +13664,8 @@ function VideoPlayerController()
 
 		mediaSessionController.setMediaState();
 
+		UpdateCurrentURL_Throttled();
+
 		BI_CustomEvent.Invoke("ImageRendered", { id: uniqueId, w: width, h: height, loadingTime: lastFrameLoadingTime, utc: lastFrameUtc, isSeekPreview: isSeekPreview });
 	}
 	/**
@@ -14106,7 +14134,7 @@ function JpegVideoModule()
 	var timeBetweenOpenVideoCalls = 300;
 	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
-		if (skipLoadingFirstVideoStream)
+		if (skipLoadingFirstVideoStream || skipLoadingAllVideoStreams)
 		{
 			skipLoadingFirstVideoStream = false;
 			return;
@@ -14741,7 +14769,7 @@ function FetchH264VideoModule()
 	var openVideoTimeout = null;
 	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
-		if (skipLoadingFirstVideoStream)
+		if (skipLoadingFirstVideoStream || skipLoadingAllVideoStreams)
 		{
 			skipLoadingFirstVideoStream = false;
 			return;
@@ -24835,19 +24863,7 @@ function AjaxHistoryManager()
 //////////////////////////////////////////////////////////////////////
 var lastUpdateCurrentUrlTime = 0;
 var updateCurrentUrl_Timeout = null;
-function UpdateCurrentURL_Throttled()
-{
-	if (!html5HistorySupported)
-		return;
-	var t = performance.now() - lastUpdateCurrentUrlTime;
-	if (t > 1000)
-		UpdateCurrentURL();
-	else
-	{
-		if (!updateCurrentUrl_Timeout)
-			updateCurrentUrl_Timeout = setTimeout(UpdateCurrentURL, 1000 - t);
-	}
-}
+var UpdateCurrentURL_Throttled = throttle(UpdateCurrentURL, 1000);
 function UpdateCurrentURL()
 {
 	if (!html5HistorySupported)
@@ -24859,13 +24875,27 @@ function UpdateCurrentURL()
 	var m = search.match("([&?]rec=)[^#&?]*");
 	if (m)
 		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
+
+	m = search.match("([&?]timeline=)[^#&?]*");
+	if (m)
+		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
+
+	m = search.match("([&?]cam=)[^#&?]*");
+	if (m)
+		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
+
+	m = search.match("([&?]group=)[^#&?]*");
+	if (m)
+		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
+
 	var cli = videoPlayer.Loading().image;
 	if (cli.isTimeline())
 	{
-		// TIMELINE-RELEASE - This should modify the URL to have the current timeline playback position.
-		// TIMELINE-RELEASE - Timeline playback position should be read from the URL at startup.
-		// TIMELINE-RELEASE - UpdateCurrentURL_Throttled() needs to be called perhaps at every frame, from the timeline component.
-		// TIMELINE-RELEASE - UpdateCurrentURL_Throttled() should probably use the throttle() method provided by UI3 instead of rolling its own timeout behavior.
+		if (search === "")
+			search = "?";
+		else
+			search += "&";
+		search += "timeline=" + encodeURIComponent(clipTimeline.getCurrentTime());
 	}
 	else if (!cli.isLive)
 	{
@@ -24881,6 +24911,14 @@ function UpdateCurrentURL()
 			if (offset > 0)
 				search += "-" + offset;
 		}
+	}
+	if (cli.isLive || cli.isTimeline())
+	{
+		if (search === "")
+			search = "?";
+		else
+			search += "&";
+		search += (cli.isGroup ? "group" : "cam") + "=" + encodeURIComponent(cli.id);
 	}
 	var newUrl = location.origin + location.pathname + search + location.hash;
 	try
