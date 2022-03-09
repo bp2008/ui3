@@ -641,8 +641,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Implement the buttons and hotkeys to skip ahead and back by (n seconds) and by 1 frame.
-
 // Timeline position should be in a URL parameter, periodically updated, and loaded when the UI loads.
 
 // Test changing between group/camera while timeline player is paused.
@@ -6808,6 +6806,18 @@ function ClipTimeline()
 			return timeline.currentTime;
 		else
 			return GetUtcNow();
+	}
+	/**
+	 * Selects the given timestamp on the timeline.
+	 * @param {Number} timestampMs Milliseconds since unix epoch.
+	 */
+	this.seekTo = function (timestampMs)
+	{
+		if (timeline)
+		{
+			timeline.assignLastSetTime(timestampMs);
+			timeline.userDidSetTime();
+		}
 	}
 	/** Returns a timelineArgs object that will persist the current timeline playback position if sent to videoPlayer.LoadLiveCamera. */
 	this.getTimelineArgsForCameraSwitch = function ()
@@ -13011,6 +13021,8 @@ function VideoPlayerController()
 	}
 	this.GetExpectedFrameIntervalOfCurrentCamera = function ()
 	{
+		if (currentlyLoadingImage.isTimeline() && currentlyLoadingImage.isGroup)
+			return 1000 / 30; // Timeline groups are at 30 FPS as of 2022-03.
 		if (typeof currentlyLoadingCamera.FPS === "number")
 			return 1000 / currentlyLoadingCamera.FPS;
 		else
@@ -13415,15 +13427,20 @@ function VideoPlayerController()
 	}
 	this.SeekByMs = function (offset, play)
 	{
-		var msLength = currentlyLoadingImage.msec - 1;
-		if (msLength <= 0)
-			return;
-		var currentMs = playerModule.GetSeekPercent() * msLength;
-		var newPos = (currentMs + offset) / msLength;
-		newPos = Clamp(newPos, 0, 1);
-		if (typeof play == "undefined")
-			play = !playerModule.Playback_IsPaused();
-		self.SeekToPercent(newPos, play);
+		if (currentlyLoadingImage.isTimeline())
+			clipTimeline.seekTo(videoPlayer.lastFrameUtc + offset);
+		else
+		{
+			var msLength = currentlyLoadingImage.msec - 1;
+			if (msLength <= 0)
+				return;
+			var currentMs = playerModule.GetSeekPercent() * msLength;
+			var newPos = (currentMs + offset) / msLength;
+			newPos = Clamp(newPos, 0, 1);
+			if (typeof play == "undefined")
+				play = !playerModule.Playback_IsPaused();
+			self.SeekToPercent(newPos, play);
+		}
 	}
 	this.AudioToggleNotify = function (audioEnabled)
 	{
