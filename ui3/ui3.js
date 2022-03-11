@@ -640,6 +640,10 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// Load timeline video, select a disabled camera, and click the clock icon to go live.  It doesn't go live.  It just returns to the group.
+// Leaving fullscreen mode, the timeline appears on UI tabs where it shouldn't appear.
+// Timeline "&jump" needs to work while the H.264 player is paused.
+
 // BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
@@ -13191,7 +13195,7 @@ function VideoPlayerController()
 	}
 	this.handleDisabledCamera = function (videoData)
 	{
-		if (videoData.isLive && !videoData.isGroup) // TIMELINE-RELEASE - Behavior with disabled cameras needs to be tested and decisions made.
+		if (videoData.isLive && !videoData.isGroup)
 		{
 			var camData = cameraListLoader.GetCameraWithId(videoData.id);
 			if (!camData || !camData.isEnabled || !camData.webcast)
@@ -13255,10 +13259,13 @@ function VideoPlayerController()
 
 		if ((!camData.isEnabled || !camData.webcast) && !cameraListLoader.CameraIsGroupOrCycle(camData))
 		{
-			console.log("LoadLiveCamera will not try to load " + camData.optionValue + ".", "Enabled: " + camData.isEnabled, "Webcast: " + camData.webcast, "IsGroupOrCycle: " + cameraListLoader.CameraIsGroupOrCycle(camData));
-			if (!camData.webcast)
-				toaster.Warning("The camera you clicked has webcasting disabled. Enable it in Blue Iris Camera Properties > Webcast tab.", 15000);
-			return;
+			if (currentPrimaryTab !== "timeline")
+			{
+				console.log("LoadLiveCamera will not try to load " + camData.optionValue + ".", "Enabled: " + camData.isEnabled, "Webcast: " + camData.webcast, "IsGroupOrCycle: " + cameraListLoader.CameraIsGroupOrCycle(camData));
+				if (!camData.webcast)
+					toaster.Warning("The camera you clicked has webcasting disabled. Enable it in Blue Iris Camera Properties > Webcast tab.", 15000);
+				return;
+			}
 		}
 		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
 		{
@@ -14802,6 +14809,7 @@ function FetchH264VideoModule()
 		var videoUrl;
 		var groupArgs = groupCfg.GetUrlArgs(loading);
 		var profileArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
+		var fetchOptions = { timestampScale: 1 };
 		if (loading.isTimeline())
 		{
 			// Seeking with /time/set is disabled because its performance was terrible during testing. 
@@ -14932,7 +14940,9 @@ function FetchH264VideoModule()
 				offsetArg = "&time=" + reqMs;
 				loading.requestedMs = reqMs;
 			}
-			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + Math.round(speed) + audioArg + profileArgs + "&extend=2" + offsetArg + overlayArgs;
+			speed = Math.round(speed);
+			fetchOptions.timestampScale = speed / 100;
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + profileArgs + "&extend=2" + offsetArg + overlayArgs;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -14945,7 +14955,7 @@ function FetchH264VideoModule()
 		if (startPaused)
 		{
 			self.Playback_Pause(); // If opening the stream while paused, the stream will stop after one frame.
-			safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+			safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded, fetchOptions);
 		}
 		else
 		{
@@ -14953,7 +14963,7 @@ function FetchH264VideoModule()
 			playbackControls.setPlayPauseButtonState(playbackPaused);
 			// Calling StopStream before opening the new stream will drop any buffered frames in the decoder, allowing the new stream to begin playback immediately.
 			StopStreaming();
-			safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+			safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded, fetchOptions);
 		}
 		UpdateCurrentURL();
 		BI_CustomEvent.Invoke("OpenVideo", loading);
@@ -15270,7 +15280,7 @@ function FetchH264VideoModule()
 			return;
 		if (loading.isTimeline())
 		{
-			toaster.Info("Timeline playback reached the end."); // TIMELINE-RELEASE - Test this behavior. Probably need to forcibly go live, maybe suppress a toast message.
+			toaster.Info("Timeline playback ended unexpectedly."); // This toast message could be removed if it isn't helpful.
 			return;
 		}
 		var reverse = playbackControls.GetPlayReverse();
@@ -17153,7 +17163,7 @@ function NetDelayCalc()
 		{
 			var playSpeed = playbackControls.GetPlaybackSpeed();
 			if (playSpeed < 1)
-				realTimePassed *= playSpeed; // TIMELINE-RELEASE - Timeline H.264 timestamp behavior is not yet confirmed.
+				realTimePassed *= playSpeed;
 		}
 		var streamTimePassed = lastFrameTime - baseFrameTime;
 		var delay = realTimePassed - streamTimePassed;
@@ -22815,7 +22825,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 		var recordArg = useTranscodeMethod ? "" : "&record=1";
 		var audioArg = "&audio=" + (includeAudio ? "1" : "0");
 		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + recordArg + audioArg + "&speed=100&stream=0&extend=2&time=" + startTimeMs;
-		safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded);
+		safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded, {});
 	}
 	if (recordingOffsetWorkaround)
 		DoExportRecordingOffsetWorkaround(beginRecording, path, startTimeMs);
@@ -22835,7 +22845,7 @@ function DoExportRecordingOffsetWorkaround(callbackMethod, path, startTimeMs)
 		}
 	}
 	var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + "&speed=0&audio=0&stream=0&extend=2&w=160&q=10&time=" + startTimeMs;
-	safeFetch.OpenStream(videoUrl, anyCallback, anyCallback, anyCallback, anyCallback, anyCallback);
+	safeFetch.OpenStream(videoUrl, anyCallback, anyCallback, anyCallback, anyCallback, anyCallback, {});
 }
 ///////////////////////////////////////////////////////////////
 // Camera Pause Dialog ////////////////////////////////////////
@@ -24699,8 +24709,13 @@ function AjaxHistoryManager()
 	var BackButtonPressed = function ()
 	{
 		var loading = videoPlayer.Loading();
-		if (loading.image.isTimeline()) // TIMELINE-RELEASE - This should also (or instead) cause single-camera views to return to group.
-			videoPlayer.goLive();
+		if (loading.image.isTimeline())
+		{
+			if (!cameraListLoader.CameraIsGroupOrCycle(loading.cam))
+				videoPlayer.LoadHomeGroup();
+			else
+				videoPlayer.goLive();
+		}
 		else if (!loading.image.isLive)
 			clipLoader.CloseCurrentClip();
 		else if (!loading.image.isGroup)
@@ -24840,8 +24855,9 @@ function LoadNextOrPreviousCamera(offset)
 {
 	if (offset == 0)
 		return;
+	// Not supported during timeline playback, simply because the default hotkey for next/previous camera is shared with next/previous frame, and I can only choose one to work for timeline playback
 	var loading = videoPlayer.Loading();
-	if (!loading.image.isLive || cameraListLoader.CameraIsCycle(loading.cam))  // TIMELINE-RELEASE - Investigate making this work during timeline playback, when timeline playback is working better.
+	if (!loading.image.isLive || cameraListLoader.CameraIsCycle(loading.cam))
 		return;
 	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
 	var idxCurrentMaximizedCamera = -1;
@@ -24893,7 +24909,7 @@ function BI_Hotkey_PreviousGroup()
 function LoadNextOrPreviousGroup(offset)
 {
 	var loading = videoPlayer.Loading();
-	if (!loading.image.isLive) // TIMELINE-RELEASE - This should work during timeline playback too.
+	if (!loading.image.isLive && !loading.image.isTimeline())
 		return;
 	var groupCamera = videoPlayer.GetCurrentHomeGroupObj();
 	var groupList = cameraListLoader.GetGroupAndCycleList();
@@ -24934,7 +24950,7 @@ function BI_Hotkey_ToggleReverse()
 }
 function BI_Hotkey_NextClip()
 {
-	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
+	if (!videoPlayer.Loading().image.isLive)
 	{
 		if (settings.ui3_clip_navigation_direction === "Oldest First")
 			videoPlayer.Playback_NextClip();
@@ -24944,7 +24960,7 @@ function BI_Hotkey_NextClip()
 }
 function BI_Hotkey_PreviousClip()
 {
-	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
+	if (!videoPlayer.Loading().image.isLive)
 	{
 		if (settings.ui3_clip_navigation_direction === "Oldest First")
 			videoPlayer.Playback_PreviousClip();
@@ -24954,12 +24970,12 @@ function BI_Hotkey_PreviousClip()
 }
 function BI_Hotkey_SkipAhead()
 {
-	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
+	if (!videoPlayer.Loading().image.isLive)
 		videoPlayer.SeekByMs(1000 * GetSkipAmount());
 }
 function BI_Hotkey_SkipBack()
 {
-	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
+	if (!videoPlayer.Loading().image.isLive)
 		videoPlayer.SeekByMs(-1000 * GetSkipAmount());
 }
 function GetSkipAmount()
@@ -24968,31 +24984,32 @@ function GetSkipAmount()
 }
 function BI_Hotkey_SkipAhead1Frame()
 {
-	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
+	if (!videoPlayer.Loading().image.isLive)
 		videoPlayer.SeekByMs(videoPlayer.GetExpectedFrameIntervalOfCurrentCamera(), false);
 }
 function BI_Hotkey_SkipBack1Frame()
 {
-	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
+	if (!videoPlayer.Loading().image.isLive)
 		videoPlayer.SeekByMs(-1 * videoPlayer.GetExpectedFrameIntervalOfCurrentCamera(), false);
 }
 function BI_Hotkey_PlaybackFaster()
 {
-	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
+	if (!videoPlayer.Loading().image.isLive)
 		playbackControls.ChangePlaySpeed(1);
 }
 function BI_Hotkey_PlaybackSlower()
 {
-	if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Test functionality once buttons are implemented for timeline playback.
+	if (!videoPlayer.Loading().image.isLive)
 		playbackControls.ChangePlaySpeed(-1);
 }
 function BI_Hotkey_CloseClip()
 {
 	if (suppress_Hotkey_CloseClip)
 		return;
-	if (videoPlayer.Loading().image.isTimeline()) // TIMELINE-RELEASE - This probably doesn't work as intended -- check when timeline playback works better.  When playing a single camera in timeline video, first ESC press should return to group, second press should go live.
+	if (videoPlayer.Loading().image.isTimeline())
 	{
-		videoPlayer.goLive();
+		if (cameraListLoader.CameraIsGroupOrCycle(videoPlayer.Loading().cam))
+			videoPlayer.goLive();
 	}
 	else if (!videoPlayer.Loading().image.isLive)
 	{
@@ -25009,9 +25026,9 @@ function BI_Hotkey_CloseCamera()
 	if (suppress_Hotkey_CloseCamera)
 		return;
 	var loading = videoPlayer.Loading();
-	if ((loading.image.isLive || videoPlayer.Loading().image.isTimeline()) && !loading.image.isGroup)
+	if ((loading.image.isLive || videoPlayer.Loading().image.isTimeline()) && !cameraListLoader.CameraIsGroupOrCycle(videoPlayer.Loading().cam))
 	{
-		videoPlayer.ImgClick_Camera(loading.cam); // TIMELINE-RELEASE - This probably doesn't work as intended -- check when timeline playback works better.  When playing a single camera in timeline video, first ESC press should return to group, second press should go live.
+		videoPlayer.ImgClick_Camera(loading.cam);
 		if (videoPlayer.Loading().image.isTimeline())
 		{
 			clearTimeout(suppress_Hotkey_CloseClip);
@@ -26289,9 +26306,9 @@ var safeFetch = new (function ()
 	var queuedRequest = null;
 	var stopTimeout = null;
 	var streamEndedCbForActiveFetch = null;
-	this.OpenStream = function (url, headerCallback, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded)
+	this.OpenStream = function (url, headerCallback, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded, options)
 	{
-		queuedRequest = { url: url, headerCallback: headerCallback, frameCallback: frameCallback, statusBlockCallback: statusBlockCallback, streamInfoCallback: streamInfoCallback, streamEnded: streamEnded, activated: false };
+		queuedRequest = { url: url, headerCallback: headerCallback, frameCallback: frameCallback, statusBlockCallback: statusBlockCallback, streamInfoCallback: streamInfoCallback, streamEnded: streamEnded, options: options, activated: false };
 		if (streamer)
 		{
 			// A fetch stream is currently active.  Try to stop it.
@@ -26325,7 +26342,7 @@ var safeFetch = new (function ()
 		}
 		queuedRequest.activated = true;
 		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
-		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.headerCallback, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, queuedRequest.streamInfoCallback, StreamEndedWrapper);
+		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.headerCallback, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, queuedRequest.streamInfoCallback, StreamEndedWrapper, queuedRequest.options);
 	}
 	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
 	{
@@ -26346,7 +26363,7 @@ var safeFetch = new (function ()
 	}
 })();
 var UINT32_MAX = 4294967296;
-function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded)
+function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded, options)
 {
 	var self = this;
 	var cancel_streaming = false;
@@ -26378,13 +26395,10 @@ function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockC
 	var audioHeader = null;
 	var abort_controller = null;
 	var responseError = null;
-	var playRate = 1;
-	if (url)
-	{
-		var m = url.match(/[?&]speed=(-?\d+\.?\d*)/i);
-		if (m)
-			playRate = parseFloat(m[1]) / 100;
-	}
+
+	options = $.extend({
+		timestampScale: 1
+	}, options);
 
 	this.StopStreaming = function ()
 	{
@@ -26685,8 +26699,8 @@ function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockC
 								lastVideoFrameTime = currentVideoFrame.time;
 
 								currentVideoFrame.time -= baseVideoFrameTime;
-								if (playRate !== 0)
-									currentVideoFrame.time = Math.round(currentVideoFrame.time / playRate);
+								if (options.timestampScale !== 0)
+									currentVideoFrame.time = Math.round(currentVideoFrame.time / options.timestampScale);
 								currentVideoFrame.time = Math.abs(currentVideoFrame.time);
 							}
 

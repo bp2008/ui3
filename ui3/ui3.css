@@ -477,22 +477,6 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	position: relative;
 }
 
-@media (min-width: 850px) /* TIMELINE-RELEASE */
-{
-	#topbar_tab_timeline::before
-	{
-		content: 'Under Construction';
-		font-size: 11px;
-		line-height: 11px;
-		position: absolute;
-		left: 0px;
-		bottom: 3px;
-		width: 100%;
-		color: #f7c700;
-		font-weighT: bold;
-	}
-}
-
 .topbar_right_floating
 {
 	float: right;
