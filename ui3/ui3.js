@@ -646,10 +646,6 @@ var togglableUIFeatures =
 
 // Test changing between group/camera while timeline player is paused.
 
-// Do not request solo /time/ images or video bigger than camera's native resolution.
-
-// Do not request /time/ fixed groups bigger than 3000x3000px?  Probably doesn't actually matter?
-
 //////////////////////////
 // Timeline Pre-Release //
 //////////////////////////
