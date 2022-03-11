@@ -640,8 +640,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// When the jpeg player is paused and you seek, the play state gets broken.
-
 // BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
@@ -7420,15 +7418,20 @@ function PlaybackControls()
 			$("#pcPlay").hide();
 			$("#pcPause").hide();
 		}
-		else if (paused)
-		{
-			$("#pcPlay").show();
-			$("#pcPause").hide();
-		}
 		else
 		{
-			$("#pcPlay").hide();
-			$("#pcPause").show();
+			if (typeof paused === "undefined")
+				paused = videoPlayer.Playback_IsPaused();
+			if (paused)
+			{
+				$("#pcPlay").show();
+				$("#pcPause").hide();
+			}
+			else
+			{
+				$("#pcPlay").hide();
+				$("#pcPause").show();
+			}
 		}
 		mediaSessionController.setMediaState();
 	}
@@ -13058,7 +13061,7 @@ function VideoPlayerController()
 	}
 	this.Playback_IsPaused = function ()
 	{
-		return playerModule.Playback_IsPaused();
+		return !playerModule || playerModule.Playback_IsPaused();
 	}
 	/**
 	 * Returns the number of milliseconds that have passed since the most recent stream was started.
