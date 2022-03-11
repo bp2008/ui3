@@ -640,6 +640,7 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
+// Evaluate timeline audio capabilities.
 // BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
@@ -6391,6 +6392,8 @@ function ClipTimeline()
 						timelineSync.unlock();
 						return;
 					}
+					if (!jumpArg)
+						jumpArg = "";
 					var loadingImg = videoPlayer.Loading().image;
 					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(loadingImg);
 					var groupArgs = groupCfg.GetUrlArgs(loadingImg);
