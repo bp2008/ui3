@@ -640,8 +640,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Timeline "&jump" needs to work while the H.264 player is paused.
-
 // BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
@@ -6323,7 +6321,7 @@ function ClipTimeline()
 				},
 				FrameRendered: function (data)
 				{
-					if (typeof data.utc !== "number" || this.dragState.isMouseDown || this.timelineIsBeingPanned || data.isSeekPreview)
+					if (typeof data.utc !== "number" || this.dragState.isMouseDown || this.timelineIsBeingPanned || (data.isSeekPreview && !data.isTimelineJump))
 						return;
 
 					if (videoPlayer.Loaded().image.isTimeline())
@@ -6386,7 +6384,7 @@ function ClipTimeline()
 					});
 				},
 				/** Call to download and render a seek preview frame. You must already have obtained a timelineSync lock. The request will be aborted if a fetch video stream is currently pending. */
-				downloadSeekPreview: function (requestMs)
+				downloadSeekPreview: function (requestMs, jumpArg)
 				{
 					if (safeFetch.IsActive())
 					{
@@ -6397,7 +6395,7 @@ function ClipTimeline()
 					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(loadingImg);
 					var groupArgs = groupCfg.GetUrlArgs(loadingImg);
 					var overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
-					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs + overlayArgs;
+					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + jumpArg + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs + overlayArgs;
 					var uniqueId = loadingImg.uniqueId;
 					var startTime = performance.now();
 					this.seekPreviewLoading = true;
@@ -6409,7 +6407,7 @@ function ClipTimeline()
 							if (videoPlayer.Loading().image.uniqueId !== uniqueId)
 								return;
 							var frameUtc = parseInt(result.headers["x-utc"]);
-							jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri, frameUtc, result.headers);
+							jpegPreviewModule.RenderDataURI(startTime, uniqueId, result.dataUri, frameUtc, result.headers, !!jumpArg);
 						})
 						.catch(function (err)
 						{
@@ -13578,17 +13576,17 @@ function VideoPlayerController()
 	var lastCycleWidth = 0;
 	var lastCycleHeight = 0;
 	this.lastFrameUtc = 0;
-	this.ImageRendered = function (uniqueId, width, height, lastFrameLoadingTime, lastFrameUtc, isSeekPreview)
+	this.ImageRendered = function (properties)
 	{
 		jpegPreviewModule.Hide();
-		if (currentlyLoadedImage.uniqueId != uniqueId || currentlyLoadingImage.isTimeline() !== currentlyLoadedImage.isTimeline())
+		if (currentlyLoadedImage.uniqueId != properties.id || currentlyLoadingImage.isTimeline() !== currentlyLoadedImage.isTimeline())
 			self.CameraOrResolutionChange();
-		else if (currentlyLoadingImage.isLive && uniqueId.startsWith("@"))
+		else if (currentlyLoadingImage.isLive && properties.id.startsWith("@"))
 		{
-			if (lastCycleWidth != width || lastCycleHeight != height)
+			if (lastCycleWidth != properties.w || lastCycleHeight != properties.h)
 			{
-				lastCycleWidth = width;
-				lastCycleHeight = height;
+				lastCycleWidth = properties.w;
+				lastCycleHeight = properties.h;
 				currentlyLoadedImage.aspectratio = lastCycleWidth / lastCycleHeight;
 				resized();
 			}
@@ -13598,20 +13596,20 @@ function VideoPlayerController()
 			lastCycleWidth = lastCycleHeight = 0;
 		}
 
-		var imageSizeIsChanging = currentlyLoadedImage.actualwidth !== width || currentlyLoadedImage.actualheight !== height;
+		var imageSizeIsChanging = currentlyLoadedImage.actualwidth !== properties.w || currentlyLoadedImage.actualheight !== properties.h;
 
 		// actualwidth and actualheight must be set after [CameraOrResolutionChange]
-		currentlyLoadedImage.actualwidth = width;
-		currentlyLoadedImage.actualheight = height;
+		currentlyLoadedImage.actualwidth = properties.w;
+		currentlyLoadedImage.actualheight = properties.h;
 
 		if (imageSizeIsChanging)
 			imageRenderer.ImgResized(false);
 
-		RefreshFps(lastFrameLoadingTime);
+		RefreshFps(properties.loadingTime);
 
-		if (typeof lastFrameUtc === "number")
+		if (typeof properties.utc === "number")
 		{
-			self.lastFrameUtc = lastFrameUtc;
+			self.lastFrameUtc = properties.utc;
 			if (currentlyLoadingImage.isLive)
 			{
 				var str = "";
@@ -13619,19 +13617,19 @@ function VideoPlayerController()
 				if (w < 240)
 					str = "LIVE";
 				else if (w < 325)
-					str = "LIVE: " + GetTimeStr(GetServerDate(new Date(lastFrameUtc)));
+					str = "LIVE: " + GetTimeStr(GetServerDate(new Date(properties.utc)));
 				else
-					str = "LIVE: " + GetDateStr(GetServerDate(new Date(lastFrameUtc)));
+					str = "LIVE: " + GetDateStr(GetServerDate(new Date(properties.utc)));
 				playbackControls.SetProgressText(str);
 			}
 			else if (currentlyLoadingImage.isTimeline())
 			{
-				var str = GetDateStr(GetServerDate(new Date(lastFrameUtc)));
+				var str = GetDateStr(GetServerDate(new Date(properties.utc)));
 				playbackControls.SetProgressText(str);
 			}
 		}
 
-		if (currentlyLoadingImage.uniqueId != uniqueId)
+		if (currentlyLoadingImage.uniqueId != properties.id)
 			return;
 
 		if (!currentlyLoadedImage.isLive && !currentlyLoadedImage.isTimeline())
@@ -13642,7 +13640,7 @@ function VideoPlayerController()
 
 		UpdateCurrentURL_Throttled();
 
-		BI_CustomEvent.Invoke("ImageRendered", { id: uniqueId, w: width, h: height, loadingTime: lastFrameLoadingTime, utc: lastFrameUtc, isSeekPreview: isSeekPreview });
+		BI_CustomEvent.Invoke("ImageRendered", properties);
 	}
 	/**
 	 * Called when clip playback ends. Not called for live or timeline video.
@@ -13895,7 +13893,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 		videoOverlayHelper.HideLoadingOverlay();
 		playbackControls.FrameTimestampUpdated(false);
 	}
-	this.RenderDataURI = function (startTime, uniqueId, dataUri, utc, headers)
+	this.RenderDataURI = function (startTime, uniqueId, dataUri, utc, headers, isTimelineJump)
 	{
 		LoadImagePromise(dataUri)
 			.then(function (data)
@@ -13911,7 +13909,7 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 					if (headers)
 						videoPlayer.GroupLayoutMetadataReceived(uniqueId, headers["x-camlist"], headers["x-reclist"]);
 					// Calling ImageRendered will hide the jpegPreviewModule so we should call it before rendering the image
-					videoPlayer.ImageRendered(uniqueId, img.naturalWidth, img.naturalHeight, performance.now() - startTime, utc, true);
+					videoPlayer.ImageRendered({ id: uniqueId, w: img.naturalWidth, h: img.naturalHeight, loadingTime: performance.now() - startTime, utc: utc, isSeekPreview: true, isTimelineJump: !!isTimelineJump });
 					// Rendering the image shows the jpegPreviewModule again.
 					self.RenderImage(img);
 				}
@@ -14036,7 +14034,7 @@ function JpegVideoModule()
 					var frameUtc = currentImageTimestampGuessUtc >= 0 ? currentImageTimestampGuessUtc : parseInt(headers["x-utc"]);
 					if (loading.isTimeline())
 						clipPlaybackPosition = frameUtc;
-					videoPlayer.ImageRendered(loading.uniqueId, image.naturalWidth, image.naturalHeight, msLoadingTime, frameUtc);
+					videoPlayer.ImageRendered({ id: loading.uniqueId, w: image.naturalWidth, h: image.naturalHeight, loadingTime: msLoadingTime, utc: frameUtc });
 					playbackControls.FrameTimestampUpdated(false);
 
 					CopyImageToCanvas(image, camimg_canvas_ele);
@@ -14820,6 +14818,12 @@ function FetchH264VideoModule()
 			//	return;
 			//}
 			videoPlayer.lastFrameUtc = loading.timelineStart;
+			var jumpArg = "";
+			if (loading.timelineJump)
+			{
+				jumpArg = "&jump=" + loading.timelineJump;
+				loading.timelineJump = 0;
+			}
 			if (startPaused)
 			{
 				// I hate hacks. This is definitely a hack, but it is a lot easier to load a scrubbing jpeg than it is to play one frame of H.264 video in the HTML5 player.
@@ -14828,7 +14832,7 @@ function FetchH264VideoModule()
 				self.Playback_Pause();
 				timelineSync.run(this, function ()
 				{
-					clipTimeline.getVue().downloadSeekPreview(loading.timelineStart);
+					clipTimeline.getVue().downloadSeekPreview(loading.timelineStart, jumpArg);
 					BI_CustomEvent.Invoke("OpenVideo", loading);
 				});
 				return;
@@ -14837,12 +14841,6 @@ function FetchH264VideoModule()
 			if (playbackControls.GetPlayReverse())
 				speed *= -1;
 			var speedArg = "&speed=" + Math.round(speed);
-			var jumpArg = "";
-			if (loading.timelineJump)
-			{
-				jumpArg = "&jump=" + loading.timelineJump;
-				loading.timelineJump = 0;
-			}
 			var skipDeadAirArg = playbackControls.GetSkipDeadAirArg();
 			overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + '&pos=' + loading.timelineStart + jumpArg + audioArg + profileArgs + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
@@ -15211,7 +15209,7 @@ function FetchH264VideoModule()
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
 
 		var timeNow = performance.now();
-		videoPlayer.ImageRendered(loading.uniqueId, frame.width, frame.height, lastFrameAt - timeNow, frame.utc);
+		videoPlayer.ImageRendered({ id: loading.uniqueId, w: frame.width, h: frame.height, loadingTime: lastFrameAt - timeNow, utc: frame.utc });
 		if (loading.isLive || loading.isTimeline())
 			playbackControls.FrameTimestampUpdated(false);
 		else
