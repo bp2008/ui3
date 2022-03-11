@@ -640,14 +640,13 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Evaluate timeline audio capabilities.
+// BI Bug? Not implemented serverside? /time/ H.264 streams do not return an audio stream when audio is requested.
 // BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
 // Timeline Pre-Release //
 //////////////////////////
 
-// Check all TIMELINE-RELEASE code locations.
 // Verify correct behavior when playing timeline video and changing UI tabs.
 //   * Closing a clip while on the timeline tab should load a paused timeline stream at the current UTC position.
 // Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
@@ -663,6 +662,7 @@ var togglableUIFeatures =
 // KNOWN: Black frame shown when pausing HTML5 player before first frame is rendered. This is caused by destroying the jmuxer instance before the frame has rendered. Skipping or delaying the destroy causes camera-changing weirdness, so this is the lesser nuisance.
 // CONSIDER: Expandable clip list. ("Show more clips")
 // KNOWN: Jpeg snapshots of dynamic groups often are missing some labels because BI returned the frame before drawing them.
+// KNOWN: navigator.mediaSession doesn't work properly. Timeline playback has never been tested with it.
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -24296,7 +24296,7 @@ function MediaSessionController()
 			var duration = 86400;
 			var position = 86400;
 			var playbackRate = 1.0;
-			if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+			if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 			{
 				var isPlaying = !videoPlayer.Playback_IsPaused();
 				duration = Clamp(videoPlayer.Loading().image.msec - 1, 0, Infinity);
@@ -24351,23 +24351,23 @@ function MediaSessionController()
 		{
 			navigator.mediaSession.setActionHandler('play', function ()
 			{
-				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+				if (videoPlayer.Loading().image.isLive)
 					videoPlayer.LoadHomeGroup();
-				else
+				else if(!videoPlayer.Loading().image.isTimeline())
 					videoPlayer.Playback_Play();
 			});
 			navigator.mediaSession.setActionHandler('pause', function ()
 			{
-				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+				if (videoPlayer.Loading().image.isLive)
 					videoPlayer.LoadHomeGroup();
-				else
+				else if(!videoPlayer.Loading().image.isTimeline())
 					videoPlayer.Playback_Pause();
 			});
 			navigator.mediaSession.setActionHandler('stop', function ()
 			{
-				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+				if (videoPlayer.Loading().image.isLive)
 					videoPlayer.goLive();
-				else
+				else if(!videoPlayer.Loading().image.isTimeline())
 					clipLoader.CloseCurrentClip();
 			});
 		}
@@ -24380,7 +24380,7 @@ function MediaSessionController()
 		{
 			navigator.mediaSession.setActionHandler('seekbackward', function (details)
 			{
-				if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+				if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 				{
 					if (details.seekOffset && details.seekOffset > 0)
 						videoPlayer.SeekByMs(-1000 * details.seekOffset);
@@ -24390,7 +24390,7 @@ function MediaSessionController()
 			});
 			navigator.mediaSession.setActionHandler('seekforward', function (details)
 			{
-				if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+				if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 				{
 					if (details.seekOffset && details.seekOffset > 0)
 						videoPlayer.SeekByMs(1000 * details.seekOffset);
@@ -24400,7 +24400,7 @@ function MediaSessionController()
 			});
 			navigator.mediaSession.setActionHandler('seekto', function (details)
 			{
-				if (!videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+				if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
 				{
 					if (details.seekTime || details.seekTime === 0)
 					{
@@ -24424,17 +24424,17 @@ function MediaSessionController()
 		{
 			navigator.mediaSession.setActionHandler('previoustrack', function ()
 			{
-				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+				if (videoPlayer.Loading().image.isLive)
 					BI_Hotkey_PreviousCamera();
-				else
+				else if(!videoPlayer.Loading().image.isTimeline())
 					videoPlayer.Playback_PreviousClip();
 			});
 
 			navigator.mediaSession.setActionHandler('nexttrack', function ()
 			{
-				if (videoPlayer.Loading().image.isLive) // TIMELINE-RELEASE - Timeline playback needs to be closer to final before I investigate compatibility.
+				if (videoPlayer.Loading().image.isLive)
 					BI_Hotkey_NextCamera();
-				else
+				else if(!videoPlayer.Loading().image.isTimeline())
 					videoPlayer.Playback_NextClip();
 			});
 		}
