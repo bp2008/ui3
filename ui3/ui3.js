@@ -648,7 +648,6 @@ var togglableUIFeatures =
 //////////////////////////
 
 // Verify correct behavior when playing timeline video and changing UI tabs.
-//   * Closing a clip while on the timeline tab should load a paused timeline stream at the current UTC position.
 // Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
 // Test timeline with clock drift and a different timezone.  This was fine as of 2022-02-25.
 
@@ -9745,7 +9744,10 @@ function ClipLoader(clipsBodySelector)
 				$(currentClipEle).removeClass("opened");
 		}
 		this.SetStartupClip(null);
-		videoPlayer.goLive();
+		if (currentPrimaryTab === "timeline")
+			videoPlayer.openTimelineAt(videoPlayer.lastFrameUtc);
+		else
+			videoPlayer.goLive();
 	}
 	this.UnselectAllClips = function (alsoRemoveOpenedStatus)
 	{
@@ -13188,6 +13190,28 @@ function VideoPlayerController()
 			self.LoadLiveCamera(cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId));
 		}
 	}
+	this.openTimelineAt = function (timelineMs)
+	{
+		if (currentlyLoadingImage == null || currentlyLoadingImage.isLive)
+			return;
+		if (currentPrimaryTab !== "timeline")
+			$('.topbar_tab[name="timeline"]').click();
+		if (!timelineMs)
+			timelineMs = videoPlayer.lastFrameUtc;
+		var timelineArgs = clipTimeline.getTimelineArgsForCameraSwitch();
+		if (!timelineArgs)
+			timelineArgs = { timelineMs: timelineMs, startPaused: videoPlayer.Playback_IsPaused() && !clipTimeline.timelineDidPauseVideo() };
+		timelineArgs.timelineMs = timelineMs;
+		var camData = cameraListLoader.GetCameraWithId(lastLiveCameraOrGroupId);
+		if (camData && camData.isEnabled && camData.webcast)
+		{
+			self.LoadLiveCamera(camData, timelineArgs);
+		}
+		else
+		{
+			self.LoadLiveCamera(cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId), timelineArgs);
+		}
+	}
 	this.isLive = function ()
 	{
 		return currentlyLoadingImage != null && currentlyLoadingImage.isLive;
@@ -14833,11 +14857,16 @@ function FetchH264VideoModule()
 				StopStreaming();
 				reconnectDelayedToast.hide();
 				self.Playback_Pause();
-				timelineSync.run(this, function ()
+				// Must delay for a 0ms timeout so that StopStreaming() method has a chance to take effect (aborting a fetch is asynchronous, but otherwise should be immediate).
+				// Otherwise the downloadSeekPreview method will see a fetch is still active, and will not proceed.
+				setTimeout(function ()
 				{
-					clipTimeline.getVue().downloadSeekPreview(loading.timelineStart, jumpArg);
-					BI_CustomEvent.Invoke("OpenVideo", loading);
-				});
+					timelineSync.run(this, function ()
+					{
+						clipTimeline.getVue().downloadSeekPreview(loading.timelineStart, jumpArg);
+						BI_CustomEvent.Invoke("OpenVideo", loading);
+					});
+				}, 0);
 				return;
 			}
 			var speed = 100 * playbackControls.GetPlaybackSpeed();
@@ -24353,21 +24382,21 @@ function MediaSessionController()
 			{
 				if (videoPlayer.Loading().image.isLive)
 					videoPlayer.LoadHomeGroup();
-				else if(!videoPlayer.Loading().image.isTimeline())
+				else if (!videoPlayer.Loading().image.isTimeline())
 					videoPlayer.Playback_Play();
 			});
 			navigator.mediaSession.setActionHandler('pause', function ()
 			{
 				if (videoPlayer.Loading().image.isLive)
 					videoPlayer.LoadHomeGroup();
-				else if(!videoPlayer.Loading().image.isTimeline())
+				else if (!videoPlayer.Loading().image.isTimeline())
 					videoPlayer.Playback_Pause();
 			});
 			navigator.mediaSession.setActionHandler('stop', function ()
 			{
 				if (videoPlayer.Loading().image.isLive)
 					videoPlayer.goLive();
-				else if(!videoPlayer.Loading().image.isTimeline())
+				else if (!videoPlayer.Loading().image.isTimeline())
 					clipLoader.CloseCurrentClip();
 			});
 		}
@@ -24426,7 +24455,7 @@ function MediaSessionController()
 			{
 				if (videoPlayer.Loading().image.isLive)
 					BI_Hotkey_PreviousCamera();
-				else if(!videoPlayer.Loading().image.isTimeline())
+				else if (!videoPlayer.Loading().image.isTimeline())
 					videoPlayer.Playback_PreviousClip();
 			});
 
@@ -24434,7 +24463,7 @@ function MediaSessionController()
 			{
 				if (videoPlayer.Loading().image.isLive)
 					BI_Hotkey_NextCamera();
-				else if(!videoPlayer.Loading().image.isTimeline())
+				else if (!videoPlayer.Loading().image.isTimeline())
 					videoPlayer.Playback_NextClip();
 			});
 		}
