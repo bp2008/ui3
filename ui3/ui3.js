@@ -640,8 +640,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// 
-// Leaving fullscreen mode, the timeline appears on UI tabs where it shouldn't appear.
 // Timeline "&jump" needs to work while the H.264 player is paused.
 
 // BI Bug? Seeking often broken when jpeg player is playing.
@@ -24587,9 +24585,9 @@ function MaximizedModeController()
 	this.loadMaximizeState = function ()
 	{
 		if (settings.ui3_is_maximized === "1")
-			$("#layoutleft,#layouttop,#layoutbottom").hide();
+			$("#layoutleft,#layouttop").hide();
 		else
-			$("#layoutleft,#layouttop,#layoutbottom").show();
+			$("#layoutleft,#layouttop").show();
 		this.updateMaximizeButtonState();
 		clipLoader && clipLoader.RedrawClipList();
 	}
