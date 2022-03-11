@@ -640,15 +640,18 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// BI Bug? Not implemented serverside? /time/ H.264 streams do not return an audio stream when audio is requested.
+// /time/ H.264 streams do not return an audio stream when audio is requested. BI Bug? Not implemented serverside? 
 // BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
 // Timeline Pre-Release //
 //////////////////////////
 
-// Verify correct behavior when playing timeline video and changing UI tabs.
-// Ensure that zooming while panning behaves nicely. It is nice on touchpad two-finger movements at least while as there is no timeline video implemented.
+// Ensure that zooming while panning behaves nicely.
+//   * Click+drag + mousewheel
+//   * Touchpad gestures
+//   * Touchscreen gestures (Windows)
+//   * Touchscreen gestures (Android)
 // Test timeline with clock drift and a different timezone.  This was fine as of 2022-02-25.
 
 ///////////////////////////////////////////////////////////////
@@ -2945,6 +2948,8 @@ $(function ()
 			$("#layoutleftRecordings").hide();
 			$("#layoutbottom").hide();
 			$("body").removeClass("tabTimeline");
+			if (videoPlayer && videoPlayer.Loading().image.isTimeline())
+				videoPlayer.goLive();
 		}
 		else if (currentPrimaryTab == "clips")
 		{
@@ -2953,6 +2958,8 @@ $(function ()
 			$("#layoutbottom").hide();
 			$("body").removeClass("tabTimeline");
 			$("#recordingsFilterByHeading").text("Filter by:");
+			if (videoPlayer && videoPlayer.Loading().image.isTimeline())
+				videoPlayer.goLive();
 		}
 		else if (currentPrimaryTab == "timeline")
 		{
