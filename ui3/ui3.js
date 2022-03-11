@@ -642,9 +642,9 @@ var togglableUIFeatures =
 
 // When the jpeg player is paused and you seek, the play state gets broken.
 
-// GroupCfg should accept "*ui3_timeline_pseudocam" as a camera ID.
-
 // Test changing between group/camera while timeline player is paused.
+
+// BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
 // Timeline Pre-Release //
@@ -3147,7 +3147,7 @@ $(function ()
 });
 function AfterWindowResized()
 {
-	if (cameraListLoader.isDynamicLayoutEnabled(videoPlayer.Loading().image.id, true) && !groupCfg.GetLockedResolution(videoPlayer.Loading().image.id))
+	if (cameraListLoader.isDynamicLayoutEnabled(videoPlayer.Loading().image.id, true) && !groupCfg.GetLockedResolution(videoPlayer.Loading().image))
 		videoPlayer.ReopenStreamAtCurrentSeekPosition();
 }
 function OnChange_ui3_dynamicGroupLayout()
@@ -6397,7 +6397,7 @@ function ClipTimeline()
 					}
 					var loadingImg = videoPlayer.Loading().image;
 					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(loadingImg);
-					var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
+					var groupArgs = groupCfg.GetUrlArgs(loadingImg);
 					var overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs + overlayArgs;
 					var uniqueId = loadingImg.uniqueId;
@@ -14211,9 +14211,9 @@ function JpegVideoModule()
 	{
 		// This is the jpeg video player.
 		var sizeQualityArgs = JpegSnapshotArgs(loading);
-		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		var groupArgs = groupCfg.GetUrlArgs(loading);
 		if (loading.isLive)
-			return RemoveUrlParameters(lastSnapshotUrl, "w", "h", "q", "stream", "nc") + sizeQualityArgs + groupArgs;
+			return RemoveUrlParameters(lastSnapshotUrl, "w", "h", "q", "stream") + sizeQualityArgs + groupArgs;
 		else if (loading.isTimeline())
 			return RemoveUrlParameters(lastSnapshotUrl, "pos", "speed", "skipdeadair", "opaque", "w", "h", "q", "stream", "nc") + "&isolate&pos=" + videoPlayer.lastFrameUtc.dropDecimalsStr() + sizeQualityArgs + groupArgs;
 		else
@@ -14359,7 +14359,7 @@ function JpegVideoModule()
 
 		var qualityArg = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 
-		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		var groupArgs = groupCfg.GetUrlArgs(loading);
 
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
@@ -14799,7 +14799,7 @@ function FetchH264VideoModule()
 			audioArg += "1";
 		var overlayArgs = "";
 		var videoUrl;
-		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		var groupArgs = groupCfg.GetUrlArgs(loading);
 		var profileArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 		if (loading.isTimeline())
 		{
@@ -15085,7 +15085,7 @@ function FetchH264VideoModule()
 	{
 		// This is the H.264 video player.
 		var sizeQualityArgs = JpegSnapshotArgs(loading);
-		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		var groupArgs = groupCfg.GetUrlArgs(loading);
 		if (loading.isLive)
 			return currentServer.remoteBaseURL + "image/" + loading.path + '?time=' + Date.now() + groupArgs + currentServer.GetAPISessionArg("&", true) + sizeQualityArgs;
 		else if (loading.isTimeline())
@@ -17264,7 +17264,7 @@ function ImageRenderer()
 		var isDynamicResolutionSource = cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
 		if (isDynamicResolutionSource)
 		{
-			var lockedResolution = groupCfg.GetLockedResolution(ciLoading.id);
+			var lockedResolution = groupCfg.GetLockedResolution(ciLoading);
 			if (lockedResolution)
 				x = lockedResolution; // This dynamic-resolution video source has a preferred size saved.
 			else
@@ -18551,8 +18551,9 @@ function GroupCfg()
 	{
 		toaster.Error(ex);
 	}
-	this.Get = function (camId, key)
+	this.Get = function (image, key)
 	{
+		var camId = getImageId(image);
 		if (camId)
 		{
 			var camCfg = cfg[camId];
@@ -18566,57 +18567,54 @@ function GroupCfg()
 		}
 		return 0;
 	}
-	this.Set = function (camId, key, val)
+	this.Set = function (image, key, val)
 	{
-		var camData = cameraListLoader.GetCameraWithId(camId);
-		if (camData)
+		var camId = getImageId(image);
+		if (camId)
 		{
-			if (cameraListLoader.CameraIsGroupOrCycle(camData))
+			if (keyMap[key])
+				key = keyMap[key];
+			var camCfg = cfg[camId];
+			if (!camCfg)
+				cfg[camId] = camCfg = {};
+			camCfg[key] = val;
+
+			if (typeof val === "undefined" || val === null || val === 0)
+				delete camCfg[key];
+
+			var hasAnyProps = false;
+			for (var id in camCfg)
 			{
-				if (keyMap[key])
-					key = keyMap[key];
-				var camCfg = cfg[camId];
-				if (!camCfg)
-					cfg[camId] = camCfg = {};
-				camCfg[key] = val;
-
-				if (typeof val === "undefined" || val === null || val === 0)
-					delete camCfg[key];
-
-				var hasAnyProps = false;
-				for (var id in camCfg)
+				if (camCfg.hasOwnProperty(id))
 				{
-					if (camCfg.hasOwnProperty(id))
-					{
-						hasAnyProps = true;
-						break;
-					}
+					hasAnyProps = true;
+					break;
 				}
-				if (!hasAnyProps)
-					delete cfg[camId];
-
-				settings.ui3_groupCfg = JSON.stringify(cfg);
 			}
+			if (!hasAnyProps)
+				delete cfg[camId];
+
+			settings.ui3_groupCfg = JSON.stringify(cfg);
 		}
 	}
-	this.GetUrlArgs = function (camId)
+	this.GetUrlArgs = function (image)
 	{
 		var flagMask = { flags: 0, mask: 0 };
 
-		SetFlagMask(camId, flagMask, 0, "showCameraNames");
-		SetFlagMask(camId, flagMask, 1, "showCameraBorders");
-		SetFlagMask(camId, flagMask, 2, "showHiddenCameras");
-		SetFlagMask(camId, flagMask, 3, "hideDisabledCameras");
-		SetFlagMask(camId, flagMask, 4, "hideInactiveCamerasWithoutVideo");
+		SetFlagMask(image, flagMask, 0, "showCameraNames");
+		SetFlagMask(image, flagMask, 1, "showCameraBorders");
+		SetFlagMask(image, flagMask, 2, "showHiddenCameras");
+		SetFlagMask(image, flagMask, 3, "hideDisabledCameras");
+		SetFlagMask(image, flagMask, 4, "hideInactiveCamerasWithoutVideo");
 
 		var urlArgs = "";
 		if (flagMask.mask > 0)
 			urlArgs = "&flags=" + flagMask.flags + "&mask=" + flagMask.mask;
 		return urlArgs;
 	}
-	var SetFlagMask = function (camId, flagMask, index, key)
+	var SetFlagMask = function (image, flagMask, index, key)
 	{
-		var value = self.Get(camId, key);
+		var value = self.Get(image, key);
 		if (value === 1 || value === 2)
 		{
 			flagMask.mask |= (1 << index);
@@ -18637,19 +18635,19 @@ function GroupCfg()
 	}
 	this.LockResolution = function (image)
 	{
-		self.Set(image.id, "lockedResolution", self.GetResolutionThatWouldBeLockedIn(image));
+		self.Set(image, "lockedResolution", self.GetResolutionThatWouldBeLockedIn(image));
 	}
 	this.UnlockResolution = function (image)
 	{
-		self.Set(image.id, "lockedResolution", null);
+		self.Set(image, "lockedResolution", null);
 	}
 	/**
 	 * Returns the locked resolution for the camera if one is saved for it, otherwise null.
 	 * @param {String} camId Camera Short Name
 	 */
-	this.GetLockedResolution = function (camId)
+	this.GetLockedResolution = function (image)
 	{
-		var lockedResolution = self.Get(camId, "lockedResolution");
+		var lockedResolution = self.Get(image, "lockedResolution");
 		if (lockedResolution)
 		{
 			var parts = lockedResolution.split('x');
@@ -18657,10 +18655,22 @@ function GroupCfg()
 		}
 		return null;
 	}
-	this.SetLockedResolution = function (camId, width, height)
+	this.SetLockedResolution = function (image, width, height)
 	{
-		self.Set(camId, "lockedResolution", width + "x" + height);
+		self.Set(image, "lockedResolution", width + "x" + height);
 		return null;
+	}
+	var getImageId = function (image)
+	{
+		if (!image)
+			return "";
+		var camData = cameraListLoader.GetCameraWithId(image.id);
+		if (camData && cameraListLoader.CameraIsGroupOrCycle(camData))
+			return image.id;
+		else if (image.isTimeline())
+			return "*ui3_timeline_pseudocam";
+		else
+			return "";
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -19693,8 +19703,19 @@ function GroupLayoutDialog()
 		$content = $('<div class="groupLayoutUiPanelContent"></div>');
 		$dlg.append($content);
 
+		var camName;
+		var camData = cameraListLoader.GetCameraWithId(img.id);
+		if (camData && cameraListLoader.CameraIsGroupOrCycle(camData))
+			camName = '"' + cameraListLoader.GetCameraName(img.id) + '" Group Settings';
+		else if (img.isTimeline())
+			camName = "Timeline Solo-Camera Settings";
+		else
+		{
+			toaster.Error("Application error. GroupLayoutDialog does not support individual camera settings.");
+			return;
+		}
 		dialog = $dlg.dialog({
-			title: '"' + cameraListLoader.GetCameraName(img.id) + '" Group Settings'
+			title: camName
 			, overlayOpacity: 0.3
 			, closeOnOverlayClick: true
 		});
@@ -19702,7 +19723,7 @@ function GroupLayoutDialog()
 		// Load elements into dialog
 		if (cameraListLoader.isDynamicLayoutEligible(img.id))
 		{
-			var lockedResolution = groupCfg.GetLockedResolution(img.id);
+			var lockedResolution = groupCfg.GetLockedResolution(img);
 			var collapsible = new CollapsibleSection('grpLayout', "Camera Layout", dialog);
 			$content.append(collapsible.$heading);
 			$content.append(collapsible.$section);
@@ -19740,7 +19761,7 @@ function GroupLayoutDialog()
 				, tag: "width",
 				onChange: function (e, tag, $input)
 				{
-					groupCfg.SetLockedResolution(img.id, $layoutWidth.find('input').val(), $layoutHeight.find('input').val());
+					groupCfg.SetLockedResolution(img, $layoutWidth.find('input').val(), $layoutHeight.find('input').val());
 					videoPlayer.ReopenStreamAtCurrentSeekPosition();
 				}
 			});
@@ -19754,7 +19775,7 @@ function GroupLayoutDialog()
 				, tag: "height",
 				onChange: function (e, tag, $input)
 				{
-					groupCfg.SetLockedResolution(img.id, $layoutWidth.find('input').val(), $layoutHeight.find('input').val());
+					groupCfg.SetLockedResolution(img, $layoutWidth.find('input').val(), $layoutHeight.find('input').val());
 					videoPlayer.ReopenStreamAtCurrentSeekPosition();
 				}
 			});
@@ -19770,16 +19791,16 @@ function GroupLayoutDialog()
 			$layoutHeight = $();
 		}
 
-		if (img.isGroup)
+		if (img.isGroup || img.isTimeline())
 		{
 			var collapsible = new CollapsibleSection('grpDisp', "Display Options", dialog);
 			$content.append(collapsible.$heading);
 			$content.append(collapsible.$section);
-			collapsible.$section.append(ThreeStateFormField(img.id, "showCameraNames", "Show camera names"));
-			collapsible.$section.append(ThreeStateFormField(img.id, "showCameraBorders", "Show camera borders"));
-			collapsible.$section.append(ThreeStateFormField(img.id, "showHiddenCameras", "Show hidden cameras"));
-			collapsible.$section.append(ThreeStateFormField(img.id, "hideDisabledCameras", "Hide disabled cameras"));
-			collapsible.$section.append(ThreeStateFormField(img.id, "hideInactiveCamerasWithoutVideo", "Hide inactive cameras without video"));
+			collapsible.$section.append(ThreeStateFormField(img, "showCameraNames", "Show camera names"));
+			collapsible.$section.append(ThreeStateFormField(img, "showCameraBorders", "Show camera borders"));
+			collapsible.$section.append(ThreeStateFormField(img, "showHiddenCameras", "Show hidden cameras"));
+			collapsible.$section.append(ThreeStateFormField(img, "hideDisabledCameras", "Hide disabled cameras"));
+			collapsible.$section.append(ThreeStateFormField(img, "hideInactiveCamerasWithoutVideo", "Hide inactive cameras without video"));
 		}
 
 		if ($content.children().length === 0)
@@ -19787,9 +19808,9 @@ function GroupLayoutDialog()
 
 		dialog.contentChanged(true);
 	}
-	var ThreeStateFormField = function (camId, key, label)
+	var ThreeStateFormField = function (img, key, label)
 	{
-		var v = groupCfg.Get(camId, key);
+		var v = groupCfg.Get(img, key);
 		if (!v || v < 0 || v > 2)
 			v = 0;
 
@@ -19800,14 +19821,14 @@ function GroupLayoutDialog()
 			, tag: key,
 			onChange: function (e, value, $btn)
 			{
-				groupCfg.Set(camId, key, value);
+				groupCfg.Set(img, key, value);
 				videoPlayer.ReopenStreamAtCurrentSeekPosition();
 			}
 		})
 	}
 	var ResetResolutionInputVisibility = function ()
 	{
-		var lockedResolution = groupCfg.GetLockedResolution(img.id);
+		var lockedResolution = groupCfg.GetLockedResolution(img);
 		if (lockedResolution)
 		{
 			$layoutWidth.find('input').val(lockedResolution.w);
@@ -20167,11 +20188,12 @@ function CanvasContextMenu()
 
 	var onShowTimelineContextMenu = function (menu)
 	{
+		// 2022-03-11 - I'm letting the user configure group settings, such as display of labels, for solo-camera timeline views. It is hacky but it works.
 		var imgLoaded = videoPlayer.Loaded().image;
-		if ((imgLoaded.isGroup && !videoPlayer.Loaded().cam.isFakeGroup) || cameraListLoader.isDynamicLayoutEligible(imgLoaded.id))
-			$("#submenu_trigger_timelineGroupSettings").closest('.b-m-item,.b-m-ifocus').show();
+		if (cameraListLoader.GetGroupCamera(imgLoaded.id))
+			$("#submenu_trigger_timelineGroupSettings").text('Group Settings');
 		else
-			$("#submenu_trigger_timelineGroupSettings").closest('.b-m-item,.b-m-ifocus').hide();
+			$("#submenu_trigger_timelineGroupSettings").text('Solo-Camera Settings');
 
 		var itemsToDisable = ["cameraname"];
 		if (lastTimelineContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastTimelineContextMenuSelectedCamera))
