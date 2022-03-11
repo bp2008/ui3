@@ -642,8 +642,6 @@ var togglableUIFeatures =
 
 // When the jpeg player is paused and you seek, the play state gets broken.
 
-// Test changing between group/camera while timeline player is paused.
-
 // BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
