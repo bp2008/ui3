@@ -550,7 +550,6 @@ var cornerStatusIcons = null;
 var serverTimeLimiter = null;
 var liveVideoPausing = null;
 var genericQualityHelper = null;
-var jpegQualityHelper = null;
 var streamingProfileUI = null;
 var ptzButtons = null;
 var playbackHeader = null;
@@ -641,7 +640,9 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Timeline position should be in a URL parameter, periodically updated, and loaded when the UI loads.
+// When the jpeg player is paused and you seek, the play state gets broken.
+
+// GroupCfg should accept "*ui3_timeline_pseudocam" as a camera ID.
 
 // Test changing between group/camera while timeline player is paused.
 
@@ -3026,8 +3027,6 @@ $(function ()
 	liveVideoPausing = new LiveVideoPausing();
 
 	genericQualityHelper = new GenericQualityHelper();
-
-	jpegQualityHelper = new JpegQualityHelper();
 
 	streamingProfileUI = new StreamingProfileUI();
 
@@ -5790,7 +5789,7 @@ function ClipTimeline()
 					lastSetTime: GetUtcNow(),
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
-					dragState: { isMouseDown: false, isDragging: false, startX: 0, offsetMs: 0, previewBaseResolution: { w: 1, h: 1 }, lastClickAt: -9999, doubleClickTime: 400 },
+					dragState: { isMouseDown: false, isDragging: false, startX: 0, offsetMs: 0, lastClickAt: -9999, doubleClickTime: 400 },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
 					/** Helps maintain a decent timeline frame rate while nothing is interacting with the timeline. */
 					canvasRedrawState: { interval: null, lastRedraw: 0 },
@@ -5878,7 +5877,7 @@ function ClipTimeline()
 				{
 				},
 				/**
-				 * Called when data is received for a set of days.
+				 * Called when data is received for the current timeline view.
 				 * @param {Object} data Data from the server.
 				 */
 				callbackGotData: function (data)
@@ -5892,7 +5891,7 @@ function ClipTimeline()
 					this.drawCanvas();
 				},
 				/**
-				 * Called when an error occurs when loading data for a set of days.
+				 * Called when an error occurs when loading data for the current timeline view.
 				 * @param {String} errHtml HTML error message.
 				 */
 				callbackError: function (errHtml)
@@ -5935,7 +5934,6 @@ function ClipTimeline()
 					{
 						timeline.dragState.startX = e.mouseX;
 						timeline.dragState.offsetMs = 0;
-						timeline.dragState.previewBaseResolution = { w: videoPlayer.Loaded().image.actualwidth, h: videoPlayer.Loaded().image.actualheight };
 						timeline.dragState.isMouseDown = true;
 						timeline.dragState.isDragging = false;
 						timeline.timelineDidPauseVideo = !videoPlayer.Playback_IsPaused();
@@ -5987,12 +5985,13 @@ function ClipTimeline()
 								time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
 							}
 						}
-						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 						if (time !== null)
 						{
 							timeline.assignLastSetTime(time);
 							timeline.userDidSetTime();
 						}
+						// Order of setting timelineDidPauseVideo is important. userDidSetTime reads it and expects it to be unmodified
+						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
 					}
 					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
 				},
@@ -6330,7 +6329,7 @@ function ClipTimeline()
 				},
 				FrameRendered: function (data)
 				{
-					if (typeof data.utc !== "number" || this.timelineIsBeingPanned || data.isSeekPreview)
+					if (typeof data.utc !== "number" || this.dragState.isMouseDown || this.timelineIsBeingPanned || data.isSeekPreview)
 						return;
 
 					if (videoPlayer.Loaded().image.isTimeline())
@@ -6400,28 +6399,16 @@ function ClipTimeline()
 						timelineSync.unlock();
 						return;
 					}
-					var largestDimensionKey;
-					var largestDimensionValue;
 					var loadingImg = videoPlayer.Loading().image;
-					if (loadingImg.aspectratio >= 1)
-					{
-						largestDimensionKey = "w";
-						largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).w;
-					}
-					else
-					{
-						largestDimensionKey = "h";
-						largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).h;
-					}
-
-					videoOverlayHelper.ShowLoadingOverlay(true, true);
-					// previewBaseResolution will be the resolution of the last frame we received.  That may even be a jpeg preview frame.
-					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue, this.dragState.previewBaseResolution.w, this.dragState.previewBaseResolution.h);
+					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(loadingImg);
 					var groupArgs = loadingImg.isGroup ? groupCfg.GetUrlArgs(loadingImg.id) : "";
-					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs;
+					var overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
+					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs + overlayArgs;
 					var uniqueId = loadingImg.uniqueId;
 					var startTime = performance.now();
 					this.seekPreviewLoading = true;
+
+					videoOverlayHelper.ShowLoadingOverlay(true, true);
 					DownloadToDataUri(seekImgUrl)
 						.then(function (result)
 						{
@@ -6535,7 +6522,7 @@ function ClipTimeline()
 				},
 				timelineIsBeingPanned: function ()
 				{
-					return this.dragState.isMouseDown || this.wheelPanState.isActive || this.seekPreviewLoading;
+					return this.dragState.isDragging || this.wheelPanState.isActive || this.seekPreviewLoading;
 				}
 			},
 			watch:
@@ -8048,32 +8035,17 @@ function SeekBar()
 			seekHintInfo.loadingMsec = msec;
 			if (seekHintInfo.lastSnapshotId != "" && seekHintInfo.lastSnapshotId == videoPlayer.GetStaticSnapshotId())
 				return; // No need to load same snapshot as before
-			seekHintInfo.lastSnapshotId = videoPlayer.GetStaticSnapshotId();
-			var largestDimensionKey;
-			var largestDimensionValue;
-			var hintW;
-			var hintH;
+
 			var loadingImg = videoPlayer.Loading().image;
-			if (loadingImg.aspectratio >= 1)
-			{
-				largestDimensionKey = "w";
-				largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).w;
-				hintW = 160;
-				hintH = (hintW / videoPlayer.Loading().image.aspectratio);
-			}
-			else
-			{
-				largestDimensionKey = "h";
-				largestDimensionValue = imageRenderer.GetSizeToRequest(false, loadingImg).h;
-				hintH = 160;
-				hintW = (hintH * videoPlayer.Loading().image.aspectratio);
-			}
-			var hintMarginLeft = Clamp((160 - hintW) / 2, 0, 160);
-			seekhint_canvas.css("margin-left", hintMarginLeft + "px").css('width', hintW + 'px').css('height', hintH + 'px');
-			seekhint_loading.css("margin-left", hintMarginLeft + "px").css('width', hintW + 'px').css('height', hintH + 'px');
+			seekHintInfo.lastSnapshotId = videoPlayer.GetStaticSnapshotId();
+			var sizeToRequest = imageRenderer.GetSizeToRequest(loadingImg);
+			sizeToRequest.ApplyBoundingBox(new ui3Rect(160, 160));
+			var hintMarginLeft = Clamp((160 - sizeToRequest.w) / 2, 0, 160);
+			seekhint_canvas.css("margin-left", hintMarginLeft + "px").css('width', sizeToRequest.w + 'px').css('height', sizeToRequest.h + 'px');
+			seekhint_loading.css("margin-left", hintMarginLeft + "px").css('width', sizeToRequest.w + 'px').css('height', sizeToRequest.h + 'px');
 			if (seekHintInfo.canvasVisible)
 			{
-				var loadSize = Math.min(hintW, hintH);
+				var loadSize = Math.min(sizeToRequest.w, sizeToRequest.h);
 				$("#seekhint_loading_anim").css('width', loadSize + 'px').css('height', loadSize + 'px')
 				seekhint_loading.removeClass('hidden');
 			}
@@ -8083,11 +8055,13 @@ function SeekBar()
 				videoOverlayHelper.ShowLoadingOverlay(true, true);
 
 				var subStreamArg = settings.ui3_seek_with_substream === "1" ? "&decode=-1" : "";
-				qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(largestDimensionKey, largestDimensionValue) + subStreamArg;
+				qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(loadingImg) + subStreamArg;
 			}
 			else
-				qualityArgs = "&" + largestDimensionKey + "=160&q=50&decode=-1"
-			seekhint_img.attr('src', videoPlayer.GetLastSnapshotUrl().replace(/time=\d+/, "time=" + msec) + qualityArgs);
+				qualityArgs = "&w=" + sizeToRequest.w + "&h=" + sizeToRequest.h + "&q=50&stream=0&decode=-1";
+			var url = RemoveUrlParameters(videoPlayer.GetLastSnapshotUrl(), "time", "w", "h", "q", "stream");
+			url += "&time=" + msec + qualityArgs;
+			seekhint_img.attr('src', url);
 		}
 	}
 	this.resetSeekHintImg = function ()
@@ -8890,7 +8864,7 @@ function ClipLoader(clipsBodySelector)
 	this.LoadClips = function ()
 	{
 		var loading = videoPlayer.Loading();
-		if (loading.image && loading.image.isLive)
+		if (loading.image && (loading.image.isLive || loading.image.isTimeline()))
 			lastLoadedCameraFilter = loading.image.id;
 		loadClipsInternal(lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false, false, null, settings.ui3_current_dbView);
 	}
@@ -13870,6 +13844,21 @@ function BICameraData()
 			self.timelineStart = videoPlayer.lastFrameUtc;
 		return self;
 	}
+	/** Returns a new ui3Rect representing the native resolution of the image as defined by camera or clip metadata. */
+	this.getFullRect = function ()
+	{
+		return new ui3Rect(self.fullwidth, self.fullheight);
+	}
+	/** Returns a new ui3Rect representing the intended resolution of the image. The "intended" resolution is meaningful only for dynamically-sized group frames, and is quite hacky. */
+	this.getIntendedRect = function ()
+	{
+		return new ui3Rect(self.intendedwidth, self.intendedheight);
+	}
+	/** Returns a new ui3Rect representing the actual resolution of the last frame that was loaded for this video source.  If none has loaded yet, it will be equal to the native resolution. */
+	this.getIntendedRect = function ()
+	{
+		return new ui3Rect(self.actualwidth, self.actualheight);
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Jpeg Preview Module ////////////////////////////////////////
@@ -14228,19 +14217,11 @@ function JpegVideoModule()
 		var sizeQualityArgs = JpegSnapshotArgs(loading);
 		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
 		if (loading.isLive)
-			return lastSnapshotUrl + sizeQualityArgs + groupArgs;
+			return RemoveUrlParameters(lastSnapshotUrl, "w", "h", "q", "stream", "nc") + sizeQualityArgs + groupArgs;
 		else if (loading.isTimeline())
-		{
-			return lastSnapshotUrl
-				.replace(/&pos=\d+/gi, '')
-				.replace(/&speed=\d+/gi, '')
-				.replace(/&skipdeadair=\d/gi, '')
-				.replace(/&opaque=[0-9.]+/gi, '')
-				+ "&isolate&pos=" + videoPlayer.lastFrameUtc.dropDecimalsStr()
-				+ sizeQualityArgs + groupArgs;
-		}
+			return RemoveUrlParameters(lastSnapshotUrl, "pos", "speed", "skipdeadair", "opaque", "w", "h", "q", "stream", "nc") + "&isolate&pos=" + videoPlayer.lastFrameUtc.dropDecimalsStr() + sizeQualityArgs + groupArgs;
 		else
-			return lastSnapshotUrl + sizeQualityArgs;
+			return RemoveUrlParameters(lastSnapshotUrl, "w", "h", "q", "stream") + sizeQualityArgs;
 	}
 	this.GetLastSnapshotFullUrl = function ()
 	{
@@ -14278,8 +14259,8 @@ function JpegVideoModule()
 		var isLoadingRecordedSnapshot = false;
 		var isVisible = !documentIsHidden();
 
-		var sizeToRequest = imageRenderer.GetSizeToRequest(genericQualityHelper.GetCurrentProfile(), loading);
-		var sizeArgs = "&w=" + sizeToRequest.w + (cameraListLoader.isDynamicLayoutEnabled(loading.id) ? "&h=" + sizeToRequest.h : "");
+		var sizeToRequest = imageRenderer.GetSizeToRequest(loading);
+		var sizeArgs = "&w=" + sizeToRequest.w + "&h=" + sizeToRequest.h;
 
 		var overlayArgs = "";
 		var timelineSpeedArg = "";
@@ -14667,7 +14648,8 @@ function FetchH264VideoModule()
 		else
 		{
 			// This is the automatic player selection algorithm:
-			if (mse_mp4_h264_supported)
+			var isAndroidFF = BrowserIsAndroid() && BrowserIsFirefox();
+			if (mse_mp4_h264_supported && !isAndroidFF)
 			{
 				isInitialized = false;
 				Initialize(H264PlayerOptions.HTML5);
@@ -14822,6 +14804,7 @@ function FetchH264VideoModule()
 		var overlayArgs = "";
 		var videoUrl;
 		var groupArgs = loading.isGroup ? groupCfg.GetUrlArgs(loading.id) : "";
+		var profileArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 		if (loading.isTimeline())
 		{
 			// Seeking with /time/set is disabled because its performance was terrible during testing. 
@@ -14840,7 +14823,11 @@ function FetchH264VideoModule()
 				StopStreaming();
 				reconnectDelayedToast.hide();
 				self.Playback_Pause();
-				clipTimeline.getVue().downloadSeekPreview(loading.timelineStart);
+				timelineSync.run(this, function ()
+				{
+					clipTimeline.getVue().downloadSeekPreview(loading.timelineStart);
+					BI_CustomEvent.Invoke("OpenVideo", loading);
+				});
 				return;
 			}
 			var speed = 100 * playbackControls.GetPlaybackSpeed();
@@ -14855,12 +14842,12 @@ function FetchH264VideoModule()
 			}
 			var skipDeadAirArg = playbackControls.GetSkipDeadAirArg();
 			overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + '&pos=' + loading.timelineStart + jumpArg + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + '&pos=' + loading.timelineStart + jumpArg + audioArg + profileArgs + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
 		}
 		else if (loading.isLive)
 		{
 			videoPlayer.lastFrameUtc = GetUtcNow();
-			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading) + groupArgs + "&extend=2";
+			videoUrl = currentServer.remoteBaseURL + "video/" + loading.path + "/2.0" + currentServer.GetAPISessionArg("?", true) + audioArg + profileArgs + groupArgs + "&extend=2";
 		}
 		else
 		{
@@ -14935,14 +14922,11 @@ function FetchH264VideoModule()
 				reqMs = (currentSeekPositionPercent * (loading.msec + offsetMsec)).dropDecimals();
 				posArg = "";
 			}
-			var urlArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
-			var widthAndQualityArg = "";
 			if (speed === 0)
 			{
-				// speed == 0 means we'll get a jpeg, so we should include w and q arguments.
-				if (urlArgs.indexOf("&h=") === -1)
-					widthAndQualityArg += "&w=" + imageRenderer.GetSizeToRequest(false, loading).w;
-				widthAndQualityArg += "&q=50";
+				// speed == 0 means we'll get a jpeg
+				// set quality to 50
+				profileArgs = RemoveUrlParameters(profileArgs, "q") + "&q=50";
 			}
 			var offsetArg = "";
 			if (reqMs !== null)
@@ -14951,7 +14935,7 @@ function FetchH264VideoModule()
 				offsetArg = "&time=" + reqMs;
 				loading.requestedMs = reqMs;
 			}
-			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + Math.round(speed) + audioArg + urlArgs + "&extend=2" + offsetArg + widthAndQualityArg + overlayArgs;
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + Math.round(speed) + audioArg + profileArgs + "&extend=2" + offsetArg + overlayArgs;
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -17249,99 +17233,74 @@ function ImageRenderer()
 	this.zoomHandler = null;
 
 	/**
-	 * Returns dimensions to request.
-	 * @param {any} streamingProfile Optional jpeg streaming profile to confine the returned dimensions.
-	 * @param {any} ciLoading
-	 * @param {any} alreadyTriedResizableSource
+	 * Returns a ui3Rect defining the dimensions OF JPEG IMAGE to request for a given video source. NOT USABLE FOR H.264 YET
+	 * Considers:
+	 * * Display dpi / browser zoom level
+	 * * Video player zoom level
+	 * * UI settings such as jpeg supersampling
+	 * * Requirements of the given streaming profile
+	 * * Viewport dimensions
+	 * * Dynamic group layouts
+	 * @param {BICameraData} ciLoading BICameraData to consider for image loading.  If omitted, the currently loading image object is used (videoPlayer.Loading().image).
+	 * @param {StreamingProfile} streamingProfile Streaming profile to confine the returned dimensions.  If omitted, the currently selected streaming profile will be used.
 	 */
-	this.GetSizeToRequest = function (streamingProfile, ciLoading, alreadyTriedResizableSource)
+	this.GetSizeToRequest = function (ciLoading, streamingProfile)
 	{
-		// Calculate the size of the image we need
+		if (!ciLoading)
+			ciLoading = videoPlayer.Loading().image;
+		if (!streamingProfile)
+			streamingProfile = genericQualityHelper.GetCurrentProfile();
+		var isJpegProfile = streamingProfile.vcodec == "jpeg";
 		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
-		if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
+		if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2 || !isJpegProfile)
 			ssFactor = 1;
+
+		var scaleFactor = dpiScalingFactor * ssFactor;
 		var zoomFactor = self.zoomHandler.GetZoomFactor();
 
-		var bodyW = $layoutbody.width();
-		var bodyH = $layoutbody.height();
-		var srcNativeWidth = ciLoading.fullwidth;
-		var srcNativeHeight = ciLoading.fullheight;
-		var resizableSource = !alreadyTriedResizableSource && cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
-		if (resizableSource)
+		var viewportRect = new ui3Rect($layoutbody.width(), $layoutbody.height())
+			.MultiplyBy(scaleFactor);
+
+		var maximizeSize = !isJpegProfile || zoomFactor >= 1 || streamingProfile.isHQSnapshot;
+
+		/** The size we want the video stream to be. */
+		var x;
+		var isDynamicResolutionSource = cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
+		if (isDynamicResolutionSource)
 		{
 			var lockedResolution = groupCfg.GetLockedResolution(ciLoading.id);
 			if (lockedResolution)
-			{
-				srcNativeWidth = lockedResolution.w;
-				srcNativeHeight = lockedResolution.h;
-			}
+				x = lockedResolution; // This dynamic-resolution video source has a preferred size saved.
 			else
-			{
-				srcNativeWidth = bodyW;
-				srcNativeHeight = bodyH;
-			}
-		}
-		var srcNativeAspect = srcNativeWidth / srcNativeHeight;
-		var imgDrawWidth = srcNativeWidth * dpiScalingFactor * ssFactor;
-		var imgDrawHeight = srcNativeHeight * dpiScalingFactor * ssFactor;
-
-		if (!streamingProfile.isHQSnapshot)
-			SetIntendedSize(ciLoading, imgDrawWidth, imgDrawHeight);
-
-		if (streamingProfile.isHQSnapshot)
-		{
-			zoomFactor = 0;
-			bodyW = bodyH = 65535;
-		}
-
-		imgDrawWidth *= zoomFactor;
-		imgDrawHeight *= zoomFactor;
-		if (imgDrawWidth === 0)
-		{
-			// Image is supposed to scale to fit the screen (first zoom level)
-			imgDrawWidth = bodyW * dpiScalingFactor * ssFactor;
-			imgDrawHeight = bodyH * dpiScalingFactor * ssFactor;
-
-			var availableRatio = imgDrawWidth / imgDrawHeight;
-			if (availableRatio < srcNativeAspect)
-				imgDrawHeight = imgDrawWidth / srcNativeAspect;
+				x = viewportRect; // Size this dynamic-resolution video according to the viewport
+			if (maximizeSize)
+				x.MultiplyBy(100000); // Drastically enlarge so that it will fill the maxGroupImageDimension bounding box later.
 			else
-				imgDrawWidth = imgDrawHeight * srcNativeAspect;
-		}
-		if (srcNativeAspect < 1)
-		{
-			if (streamingProfile)
-				imgDrawHeight = jpegQualityHelper.ModifyImageDimension("h", imgDrawHeight, streamingProfile);
-			imgDrawWidth = MakeDivisibleBy8(imgDrawHeight * srcNativeAspect);
+				x.ApplyBoundingBox(viewportRect); // Stream can be limited to viewport size for efficiency.
+			// Apply dynamic stream limits
+			x.ApplyBoundingBox(new ui3Rect(self.maxGroupImageDimension, self.maxGroupImageDimension));
+			x.ExpandAround(new ui3Rect(self.minGroupImageDimension, self.minGroupImageDimension));
 		}
 		else
 		{
-			if (streamingProfile)
-				imgDrawWidth = jpegQualityHelper.ModifyImageDimension("w", imgDrawWidth, streamingProfile);
-			imgDrawHeight = MakeDivisibleBy8(imgDrawWidth / srcNativeAspect);
+			x = ciLoading.getFullRect(); // Use the video source's native resolution as the baseline size
+			if (!maximizeSize)
+				x.ApplyBoundingBox(viewportRect); // Stream can be limited to viewport size for efficiency.
 		}
 
-		// Do not request a dimension larger than 7680.  Resizable group streams will revert to a standard size.
-		if (resizableSource)
+		// Honor resolution limit of streaming profile.
+		var profileBoundingBox = streamingProfile.GetRect();
+		if (profileBoundingBox)
 		{
-			var aspect = (imgDrawWidth / imgDrawHeight);
-			if (imgDrawWidth > self.maxGroupImageDimension)
-			{
-				imgDrawWidth = self.maxGroupImageDimension;
-				imgDrawHeight = imgDrawWidth / aspect;
-			}
-			if (imgDrawHeight > self.maxGroupImageDimension)
-			{
-				imgDrawHeight = self.maxGroupImageDimension;
-				imgDrawWidth = imgDrawHeight * aspect;
-			}
+			if (profileBoundingBox.AspectRatio() < 1 !== x.AspectRatio() < 1)
+				profileBoundingBox.Rotate(); // Profile is different aspect ratio from video stream. Rotate the profile.
+			x.ApplyBoundingBox(profileBoundingBox);
 		}
 
-		// Now we have the size we need.  Determine what argument we will send to Blue Iris
-		var size = { w: Math.round(imgDrawWidth), h: Math.round(imgDrawHeight) };
-		if (resizableSource && (size.w < self.minGroupImageDimension || size.h < self.minGroupImageDimension))
-			return this.GetSizeToRequest(streamingProfile, ciLoading, true);
-		return size;
+		if (!streamingProfile.isHQSnapshot)
+			SetIntendedSize(ciLoading, x.w, x.h);
+
+		return x.Round().MakeDivisibleBy8();
 	}
 
 	this.ViewportCanSupportDynamicGroupLayout = function ()
@@ -18688,13 +18647,17 @@ function GroupCfg()
 	{
 		self.Set(image.id, "lockedResolution", null);
 	}
+	/**
+	 * Returns the locked resolution for the camera if one is saved for it, otherwise null.
+	 * @param {String} camId Camera Short Name
+	 */
 	this.GetLockedResolution = function (camId)
 	{
 		var lockedResolution = self.Get(camId, "lockedResolution");
 		if (lockedResolution)
 		{
 			var parts = lockedResolution.split('x');
-			return { w: parseInt(parts[0]), h: parseInt(parts[1]) };
+			return new ui3Rect(parseInt(parts[0]), parseInt(parts[1]));
 		}
 		return null;
 	}
@@ -19076,118 +19039,18 @@ function StreamingProfile()
 
 	this.GetUrlArgs = function (loading)
 	{
-		var w = loading.fullwidth;
-		var h = loading.fullheight;
 		var sb = new StringBuilder();
-
 		sb.Append("&stream=").Append(self.stream);
 
 		if (self.q >= 0)
 			sb.Append("&q=").Append(self.q);
 
-		// Jpeg size arguments are handled elsewhere.
+		var sizeToRequest = imageRenderer.GetSizeToRequest(loading, self);
+		sb.Append("&w=").Append(sizeToRequest.w);
+		sb.Append("&h=").Append(sizeToRequest.h);
+
 		if (self.vcodec === "h264")
 		{
-			// local variables w and h are the native resolution of the stream, and will help us determine what to request here.
-
-			// Dynamically-sized groups ignore the stated native resolution.
-			var resizableSource = cameraListLoader.isDynamicLayoutEnabled(loading.id);
-			if (resizableSource)
-			{
-				var dpiScalingFactor = BI_GetDevicePixelRatio();
-				var $layoutbody = $("#layoutbody");
-				var bodyW = $layoutbody.width();
-				var bodyH = $layoutbody.height();
-				var lockedResolution = groupCfg.GetLockedResolution(loading.id);
-				if (lockedResolution)
-				{
-					bodyW = lockedResolution.w;
-					bodyH = lockedResolution.h;
-				}
-				resizableSource = resizableSource
-					&& (bodyW * dpiScalingFactor) >= imageRenderer.minGroupImageDimension
-					&& (bodyH * dpiScalingFactor) >= imageRenderer.minGroupImageDimension;
-				if (resizableSource)
-				{
-					w = bodyW * dpiScalingFactor;
-					h = bodyH * dpiScalingFactor;
-				}
-			}
-
-			// This method should still work if w and h were omitted.
-			var aspect;
-			if (!w || !h)
-			{
-				w = 1280;
-				h = 720;
-			}
-			aspect = w / h;
-			var sizeToRequest = { w: 0, h: 0 };
-			if (self.w > 0 && self.h > 0)
-			{
-				// If both width and height are provided in the profile, UI3 will allow the 90-degree rotated form of this. Otherwise the width or height arguments will be strict limits.
-				// This enables decent handling of rotated views and different aspect ratios.
-				var profileIsPortrait = self.w < self.h;
-				var nativeIsPortrait = w < h;
-				var maxW = self.w;
-				var maxH = self.h;
-				if (profileIsPortrait !== nativeIsPortrait)
-				{
-					// Aspect ratio of profile is different from aspect ratio of camera, so we should swap the limits.
-					maxW = self.h;
-					maxH = self.w;
-				}
-				var profileAspect = maxW / maxH;
-				if (profileAspect >= aspect)
-				{
-					sizeToRequest.w = ~~(maxH * aspect); // ~~ is like casting to int
-					sizeToRequest.h = maxH;
-				}
-				else
-				{
-					sizeToRequest.w = maxW;
-					sizeToRequest.h = ~~(maxW / aspect);
-				}
-			}
-			else if (self.h >= 1)
-			{
-				sizeToRequest.w = ~~(self.h * aspect);
-				sizeToRequest.h = self.h;
-			}
-			else if (self.w >= 1)
-			{
-				sizeToRequest.w = self.w;
-				sizeToRequest.h = ~~(self.w / aspect);
-			}
-
-			if (resizableSource)
-			{
-				// Do not request a dimension larger than 7680.  Resizable group streams will revert to a standard size.
-				var aspect = (sizeToRequest.w / sizeToRequest.h);
-				if (sizeToRequest.w > imageRenderer.maxGroupImageDimension)
-				{
-					sizeToRequest.w = imageRenderer.maxGroupImageDimension;
-					sizeToRequest.h = sizeToRequest.w / aspect;
-				}
-				if (sizeToRequest.h > imageRenderer.maxGroupImageDimension)
-				{
-					sizeToRequest.h = imageRenderer.maxGroupImageDimension;
-					sizeToRequest.w = sizeToRequest.h * aspect;
-				}
-				sizeToRequest.w = MakeDivisibleBy8(sizeToRequest.w);
-				sizeToRequest.h = MakeDivisibleBy8(sizeToRequest.h);
-
-				sb.Append("&w=").Append(parseInt(Math.round(sizeToRequest.w)));
-
-				SetIntendedSize(loading, sizeToRequest.w, sizeToRequest.h);
-			}
-			else
-			{
-				sizeToRequest.w = MakeDivisibleBy8(sizeToRequest.w);
-				sizeToRequest.h = MakeDivisibleBy8(sizeToRequest.h);
-			}
-			sb.Append("&h=").Append(parseInt(Math.round(sizeToRequest.h)));
-
 			var kbps = -1; // -1: inherit, 0: no limit, 10-8192: limit
 			if (self.limitBitrate === 1)
 				kbps = 0; // Sentinel value instructing Blue Iris to use no limit
@@ -19255,6 +19118,18 @@ function StreamingProfile()
 	{
 		return self.vcodec === "jpeg" || (any_h264_playback_supported && self.vcodec === "h264");
 	}
+	/** Returns a ui3Rect representing the size requirements of this streaming profile.  Null if neither width or height were specified.  If only one of these was specified, the bounding box will be square. */
+	this.GetRect = function ()
+	{
+		if (self.w > 0 && self.h > 0)
+			return new ui3Rect(self.w, self.h);
+		else if (self.w > 0)
+			return new ui3Rect(self.w, self.w);
+		else if (self.h > 0)
+			return new ui3Rect(self.h, self.h);
+		else
+			return null;
+	}
 }
 function SetIntendedSize(loading, w, h)
 {
@@ -19276,7 +19151,7 @@ function SetIntendedSize(loading, w, h)
 function JpegSnapshotArgs(loadingImg)
 {
 	var p = new StreamingProfile();
-	p.isHQSnapshot = true;
+	p.isHQSnapshot = true; // Indicates this is to create isolated snapshots. Special behavior should be exhibited.
 	p.name = "Jpeg Snapshot";
 	p.vcodec = "jpeg";
 	p.abbr = "SS";
@@ -19285,9 +19160,7 @@ function JpegSnapshotArgs(loadingImg)
 	p.h = 3840;
 	p.q = Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100);
 
-	var sizeToRequest = imageRenderer.GetSizeToRequest(p, loadingImg);
-	var sizeArgs = "&decode=1&w=" + sizeToRequest.w + (cameraListLoader.isDynamicLayoutEnabled(loadingImg.id) ? "&h=" + sizeToRequest.h : "");
-	return sizeArgs + p.GetUrlArgs(loadingImg);
+	return "&decode=1" + p.GetUrlArgs(loadingImg);
 }
 ///////////////////////////////////////////////////////////////
 // Generic Quality Helper /////////////////////////////////////
@@ -19419,67 +19292,63 @@ function GenericQualityHelper()
 				return self.profiles[i];
 		return null;
 	}
-	this.getSeekPreviewQualityArgs = function (dimKey, dimValue, videoWidth, videoHeight)
+	this.getSeekPreviewQualityArgs = function (loadingImg)
 	{
-		var playerId = self.GetCurrentProfile().vcodec;
 		var profile = self.GetCurrentProfile();
-		var bitRate_Video = bitRateCalc_Video.GetBestGuess() * 8;
-		var bitRateMbps = bitRate_Video / 1000000;
-		if (playerId == "h264")
-		{
-			var bitRate_Audio = bitRateCalc_Audio.GetBestGuess() * 8;
-			bitRateMbps += bitRate_Audio / 1000000;
-		}
-		if (currentPrimaryTab === "timeline")
-		{
-			if (profile.kbps)
-				bitRateMbps = profile.kbps / 1000;
-
-			var scale = Clamp(bitRateMbps / 4.096, 0, 1);
-			var qualityArg = playerId == "h264" ? "&q=40" : jpegQualityHelper.getQualityArg();
-			return "&w=" + videoWidth + "&h=" + videoHeight + "&stream=" + profile.stream + qualityArg;
-		}
-		else
+		var sizeToRequest = imageRenderer.GetSizeToRequest(loadingImg, profile);
+		var playerId = profile.vcodec;
+		var quality = null;
+		if (playerId == "jpeg" && profile.q)
+			quality = profile.q;
+		if (currentPrimaryTab !== "timeline")
 		{
 			if (playerId == "h264")
 			{
-				var sizeLimit;
-				var quality;
-				if (bitRateMbps < 0.07)
+				var bitRateMbps;
+				if (profile.kbps)
+					bitRateMbps = profile.kbps / 1000;
+				else
 				{
-					sizeLimit = Math.min(dimValue, 320);
+					var bitRate_Video = bitRateCalc_Video.GetBestGuess() * 8;
+					var bitRate_Audio = bitRateCalc_Audio.GetBestGuess() * 8;
+					bitRateMbps = (bitRate_Video / 1000000) + (bitRate_Audio / 1000000);
+				}
+
+				if (bitRateMbps < 0.1)
+				{
+					sizeToRequest.ApplyBoundingBox(new ui3Rect(320, 320));
 					quality = 20;
 				}
-				else if (bitRateMbps < 0.15)
+				else if (bitRateMbps < 0.3)
 				{
-					sizeLimit = Math.min(dimValue, 480);
+					sizeToRequest.ApplyBoundingBox(new ui3Rect(480, 480));
 					quality = 20;
-				}
-				else if (bitRateMbps < 0.33)
-				{
-					sizeLimit = Math.min(dimValue, 640);
-					quality = 25;
 				}
 				else if (bitRateMbps < 0.5)
 				{
-					sizeLimit = Math.min(dimValue, 640);
+					sizeToRequest.ApplyBoundingBox(new ui3Rect(640, 640));
+					quality = 25;
+				}
+				else if (bitRateMbps < 0.75)
+				{
+					sizeToRequest.ApplyBoundingBox(new ui3Rect(640, 640));
+					quality = 40;
+				}
+				else if (bitRateMbps < 1.5)
+				{
+					sizeToRequest.ApplyBoundingBox(new ui3Rect(1280, 1280));
 					quality = 50;
 				}
-				else if (bitRateMbps < 1)
+				else if (bitRateMbps < 4)
 				{
-					sizeLimit = Math.min(dimValue, 1280);
+					sizeToRequest.ApplyBoundingBox(new ui3Rect(1920, 1920));
 					quality = 60;
 				}
-				else // Plenty of bandwidth. Get whatever resolution fits best.
-				{
-					sizeLimit = dimValue;
+				else
 					quality = 75;
-				}
-				return "&" + dimKey + "=" + sizeLimit + "&stream=" + profile.stream + "&q=" + quality;
 			}
-			else
-				return "&" + dimKey + "=" + jpegQualityHelper.ModifyImageDimension(dimKey, dimValue, profile) + jpegQualityHelper.getQualityArg();
 		}
+		return "&w=" + sizeToRequest.w + "&h=" + sizeToRequest.h + "&stream=" + profile.stream + (quality === null ? "" : ("&q=" + quality));
 	}
 
 	var Create_4K_VBR = function ()
@@ -19966,40 +19835,6 @@ function GroupLayoutDialog()
 			dialog = null;
 		}
 	}
-}
-///////////////////////////////////////////////////////////////
-// Jpeg Quality Helper ////////////////////////////////////////
-///////////////////////////////////////////////////////////////
-function JpegQualityHelper()
-{
-	var self = this;
-	this.getQualityArg = function ()
-	{
-		var p = genericQualityHelper.GetCurrentProfile();
-		if (p.q)
-			return "&q=" + p.q;
-		else
-			return "";
-	}
-	this.ModifyImageDimension = function (dimKey, dimValue, streamingProfile)
-	{
-		if (dimKey === "w")
-		{
-			if (streamingProfile.w > 0)
-				return MakeDivisibleBy8(Math.min(dimValue, streamingProfile.w));
-			return MakeDivisibleBy8(dimValue);
-		}
-		else
-		{
-			if (streamingProfile.h > 0)
-				return MakeDivisibleBy8(Math.min(dimValue, streamingProfile.h));
-			return MakeDivisibleBy8(dimValue);
-		}
-	}
-}
-function MakeDivisibleBy8(num)
-{
-	return num - num % 8;
 }
 ///////////////////////////////////////////////////////////////
 // Video Canvas Context Menu //////////////////////////////////
@@ -22835,7 +22670,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 		{
 			setTimeout(function ()
 			{
-				window.URL.revokeObjectURL(dataUri);
+				URL.revokeObjectURL(dataUri);
 			}, 1000);
 		}
 		aviEncoder = null;
@@ -24871,55 +24706,34 @@ function UpdateCurrentURL()
 	clearTimeout(updateCurrentUrl_Timeout);
 	updateCurrentUrl_Timeout = null;
 	lastUpdateCurrentUrlTime = performance.now();
-	var search = location.search;
-	var m = search.match("([&?]rec=)[^#&?]*");
-	if (m)
-		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
-
-	m = search.match("([&?]timeline=)[^#&?]*");
-	if (m)
-		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
-
-	m = search.match("([&?]cam=)[^#&?]*");
-	if (m)
-		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
-
-	m = search.match("([&?]group=)[^#&?]*");
-	if (m)
-		search = search.substr(0, m.index) + search.substr(m.index + m[0].length);
+	var search = new URLSearchParams(location.search);
+	search.delete("rec");
+	search.delete("timeline");
+	search.delete("cam");
+	search.delete("group");
 
 	var cli = videoPlayer.Loading().image;
 	if (cli.isTimeline())
-	{
-		if (search === "")
-			search = "?";
-		else
-			search += "&";
-		search += "timeline=" + encodeURIComponent(clipTimeline.getCurrentTime());
-	}
+		search.set("timeline", clipTimeline.getCurrentTime());
 	else if (!cli.isLive)
 	{
 		var clipData = clipLoader.GetClipFromId(cli.uniqueId);
 		if (clipData)
 		{
-			if (search === "")
-				search = "?";
-			else
-				search += "&";
-			search += "rec=" + encodeURIComponent(clipData.recId);
+			var val = clipData.recId;
 			var offset = videoPlayer.GetClipPlaybackPositionMs();
 			if (offset > 0)
-				search += "-" + offset;
+				val += "-" + offset;
+			search.set("rec", val);
 		}
 	}
 	if (cli.isLive || cli.isTimeline())
-	{
-		if (search === "")
-			search = "?";
-		else
-			search += "&";
-		search += (cli.isGroup ? "group" : "cam") + "=" + encodeURIComponent(cli.id);
-	}
+		search.set(cli.isGroup ? "group" : "cam", cli.id);
+
+	search = search.toString();
+	if (search.length)
+		search = "?" + search;
+
 	var newUrl = location.origin + location.pathname + search + location.hash;
 	try
 	{
@@ -24929,6 +24743,35 @@ function UpdateCurrentURL()
 	{
 		console.error(ex);
 	}
+}
+/**
+ * Returns the URL with the specified URL parameters removed. First argument is the string containing URL parameters. All following arguments must be URL parameter names. If the URL contains a question mark, it will still exist in the return value.
+ * @param {String} url URL.
+ */
+function RemoveUrlParameters(url)
+{
+	var root = "";
+	var search = url;
+	var idxQmark = search.indexOf("?");
+	if (idxQmark > -1)
+	{
+		root = search.substr(0, idxQmark + 1);
+		search = search.substr(idxQmark + 1);
+	}
+	search = new URLSearchParams(search);
+	for (var i = 1; i < arguments.length; i++)
+	{
+		search.delete(arguments[i]);
+	}
+	return root + search.toString();
+}
+/**
+ * Returns "?" if the given string does not have one in it already, otherwise returns "&".
+ * @param {String} url URL.
+ */
+function GetUrlParameterSeparator(url)
+{
+	return url.indexOf("?") > -1 ? "&" : "?";
 }
 //////////////////////////////////////////////////////////////////////
 // Hotkeys ///////////////////////////////////////////////////////////
@@ -29810,14 +29653,15 @@ function StringBuilder(lineBreakStr)
 ///////////////////////////////////////////////////////////////
 // Uint8Array to Data URI /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+/**
+ * The dataUri returned from this method should be sent to window.URL.revokeObjectURL() when it is done being used!
+ * @param {Uint8Array} someUint8Array Uint8Array to convert into a data URI (actually, it will become a "blob:" url)
+ */
 function Uint8ArrayToDataURI(someUint8Array)
 {
-	// <summary>The dataUri returned from this method should be sent to window.URL.revokeObjectURL() when it is done being used!</summary>
 	var blob = new Blob([someUint8Array]);
 	return window.URL.createObjectURL(blob);
 }
-
-
 ///////////////////////////////////////////////////////////////
 // Programmatic Sound Player //////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -31092,7 +30936,7 @@ function BrowserIsIOSChrome()
 }
 function BrowserIsAndroid()
 {
-	return !!navigator.userAgent.match(/ Android /);
+	return !!navigator.userAgent.match(/ Android /) || !!navigator.userAgent.match(/\(Android \d+;/);
 }
 function getHiddenProp()
 {
@@ -31212,7 +31056,7 @@ function RemoveUrlParams()
 	for (var i = 0; i < arguments.length; i++)
 	{
 		var param = arguments[i];
-		var rx = new RegExp('(&|\\?)' + param + '=[^&?#%]+', 'gi');
+		var rx = new RegExp('[&?]' + param + '=[^&?#]*', 'gi');
 		s = s.replace(rx, "");
 		while (s.indexOf("&") === 0)
 		{
@@ -31472,4 +31316,100 @@ function normalizeWheelEvent(e)
 function ui3Modulus(n, m)
 {
 	return ((n % m) + m) % m;
+}
+/**
+ * Constructor for ui3Rect. Contains a width and height and provides scaling functions.
+ * @param {Number} w Rectangle width
+ * @param {aNumberny} h Rectangle height
+ */
+function ui3Rect(w, h)
+{
+	if (typeof w !== "number" || typeof h !== "number")
+		throw Error("ui3Rect was constructed with an invalid or missing argument.");
+	var self = this;
+	this.w = w;
+	this.h = h;
+	/**
+	 * Downscales this rectangle if necessary, but does not upscale, to fit within the given rectangle.  Preserve's this rectangle's aspect ratio.  Returns self.
+	 * @param {ui3Rect} otherRect Another ui3Rect to fit this rect within.
+	 */
+	this.ApplyBoundingBox = function (otherRect)
+	{
+		var myAspect = self.AspectRatio();
+		if (self.w > otherRect.w)
+		{
+			self.w = otherRect.w;
+			self.h = self.w / myAspect;
+		}
+		if (self.h > otherRect.h)
+		{
+			self.h = otherRect.h;
+			self.w = self.h * myAspect;
+		}
+		return self;
+	}
+	/**
+	 * Scales this rectangle to be able to fit the given rectangle fully within it, preserving my aspect ratio.  Returns self.
+	 * @param {ui3Rect} otherRect Another ui3Rect to fit this rect around.
+	 */
+	this.ExpandAround = function (otherRect)
+	{
+		var myAspect = self.AspectRatio();
+		if (self.w < otherRect.w)
+		{
+			self.w = otherRect.w;
+			self.h = self.w / myAspect;
+		}
+		if (self.h < otherRect.h)
+		{
+			self.h = otherRect.h;
+			self.w = self.h * myAspect;
+		}
+		return self;
+	}
+	/** Returns this rectangle's aspect ratio (w/h). */
+	this.AspectRatio = function ()
+	{
+		return self.w / self.h;
+	}
+	/** Returns true if this rectangle's width and height match a given rectangle's width and height.
+	 * @param { ui3Rect } otherRect Another ui3Rect that defines the minimum size.
+	 */
+	this.Equals = function (otherRect)
+	{
+		return self.w === otherRect.w && self.h === otherRect.h;
+	}
+	/** Multplies the dimensions of this rectangle by a given scaler. Returns self. */
+	this.MultiplyBy = function (scaler)
+	{
+		self.w *= scaler;
+		self.h *= scaler;
+		return self;
+	}
+	/** Swaps w and h fields. Returns self. */
+	this.Rotate = function ()
+	{
+		var tmp = self.w;
+		self.w = self.h;
+		self.h = tmp;
+		return self;
+	}
+	/** Rounds the dimensions of this rectangle to the nearest integer. Returns self. */
+	this.Round = function ()
+	{
+		self.w = Math.round(self.w);
+		self.h = Math.round(self.h);
+		return self;
+	}
+	/** Makes the dimensions of this rectangle divisible by 8. Returns self. */
+	this.MakeDivisibleBy8 = function ()
+	{
+		self.w = MakeDivisibleBy8(self.w);
+		self.h = MakeDivisibleBy8(self.h);
+		return self;
+	}
+}
+function MakeDivisibleBy8(num)
+{
+	return num - num % 8;
 }
