@@ -640,7 +640,7 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// Load timeline video, select a disabled camera, and click the clock icon to go live.  It doesn't go live.  It just returns to the group.
+// 
 // Leaving fullscreen mode, the timeline appears on UI tabs where it shouldn't appear.
 // Timeline "&jump" needs to work while the H.264 player is paused.
 
@@ -13186,7 +13186,7 @@ function VideoPlayerController()
 		}
 		else
 		{
-			self.LoadHomeGroup();
+			self.LoadLiveCamera(cameraListLoader.GetGroupCamera(currentlySelectedHomeGroupId));
 		}
 	}
 	this.isLive = function ()
