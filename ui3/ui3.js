@@ -6768,6 +6768,8 @@ function ClipTimeline()
 	{
 		if (typeof timelineMs === "number")
 		{
+			if (timelineMs < 1)
+				timelineMs = 1;
 			var offset = GetUtcNow() - timelineMs;
 			if (offset < self.keepOutTime)
 				return undefined;
@@ -14267,15 +14269,14 @@ function JpegVideoModule()
 
 		if (loading.isTimeline())
 		{
-			if (clipPlaybackPosition)
+			if (!clipPlaybackPosition)
+				clipPlaybackPosition = clipTimeline.getCurrentTime();
+			clipPlaybackPosition = clipTimeline.BoundsCheckTimelineMs(clipPlaybackPosition);
+			if (!clipPlaybackPosition)
 			{
-				clipPlaybackPosition = clipTimeline.BoundsCheckTimelineMs(clipPlaybackPosition);
-				if (typeof clipPlaybackPosition === "undefined")
-				{
-					timelineSync.unlock();
-					videoPlayer.goLive();
-					return;
-				}
+				timelineSync.unlock();
+				videoPlayer.goLive();
+				return;
 			}
 
 			overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
@@ -14846,7 +14847,7 @@ function FetchH264VideoModule()
 			var speedArg = "&speed=" + Math.round(speed);
 			var skipDeadAirArg = playbackControls.GetSkipDeadAirArg();
 			overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + '&pos=' + loading.timelineStart + jumpArg + audioArg + profileArgs + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + '&pos=' + Math.floor(loading.timelineStart) + jumpArg + audioArg + profileArgs + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
 		}
 		else if (loading.isLive)
 		{
