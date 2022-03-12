@@ -1211,7 +1211,21 @@ var defaultSettings =
 			key: "ui3_timeline_starfield"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: 'Starfield Background<div class="settingDesc">a little visual flair outside the timeline boundaries</div>'
+			, label: 'Starfield Background<div class="settingDesc">A little visual flair outside the timeline boundaries.</div>'
+			, category: "Timeline"
+		}
+		, {
+			key: "ui3_timeline_alertBarColor"
+			, value: "#8E3510"
+			, inputType: "color"
+			, label: 'Alert Bar Color'
+			, category: "Timeline"
+		}
+		, {
+			key: "ui3_timeline_alertTrackMarkers"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Alert Track Markers<div class="settingDesc">Marks timeline color bars wherever they were alerted.</div>'
 			, category: "Timeline"
 		}
 		, {
@@ -6148,7 +6162,7 @@ function ClipTimeline()
 						}
 
 						// Draw alert rectangles
-						ctx.fillStyle = "#8E3510";
+						ctx.fillStyle = ValidateHexColor(settings.ui3_timeline_alertBarColor, "#8E3510");
 						var y = Math.round(alertIconSpace * 0.125);
 						var h = alertIconSpace - y - y;
 						for (var n = 0; n < canvasData.alerts.length; n++)
@@ -6162,6 +6176,28 @@ function ClipTimeline()
 									roundRect(ctx, x, y, w, h);
 								else
 									ctx.fillRect(x, y, w, h);
+							}
+						}
+
+						if (settings.ui3_timeline_alertTrackMarkers === "1")
+						{
+							// Draw alert track markers
+							for (var n = 0; n < canvasData.alerts.length; n++)
+							{
+								var alert = canvasData.alerts[n];
+								var x = (alert.time - left) / zoomFactor;
+								if (x < canvas.width && x >= 0)
+								{
+									for (var track = 0; track <= canvasData.colors.length; track++)
+									{
+										if ((alert.tracks & (1 << track)) > 0)
+										{
+											var y1 = Math.round(track * timelineColorbarHeight);
+											var y2 = Math.round((track + 1) * timelineColorbarHeight);
+											ctx.fillRect(x, alertIconSpace + y1, 1 * dpr, y2 - y1);
+										}
+									}
+								}
 							}
 						}
 
@@ -6186,12 +6222,14 @@ function ClipTimeline()
 								if (a.isFlag)
 								{
 									var x = ((a.time - left) / zoomFactor) - flagImgXOffset;
-									ctx.drawImage(flagImg, x, flagImgYOffset, flagImgW, flagImgH);
+									if (x < canvas.width && x + flagImgW > 0)
+										ctx.drawImage(flagImg, x, flagImgYOffset, flagImgW, flagImgH);
 								}
 								else
 								{
 									var x = ((a.time - left) / zoomFactor) - alertImgXOffset;
-									ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
+									if (x < canvas.width && x + alertImgW > 0)
+										ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
 								}
 							}
 						}
@@ -28248,6 +28286,7 @@ function UISettingsPanel()
 				else if (s.inputType === "text" || s.inputType === "color")
 				{
 					formFields.onChange = TextChanged;
+					formFields.defaultValue = s.value;
 					$row.append(UIFormField(formFields));
 				}
 				cat.$section.append($row);
@@ -29036,7 +29075,18 @@ function UIFormField(args)
 			$input.attr("disabled", "disabled");
 		else
 			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
-		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + compactClass + '"></div>').append($input).append(GetDialogOptionLabel(o.label));
+		var $label = $(GetDialogOptionLabel(o.label));
+		if (typeof o.defaultValue !== "undefined")
+		{
+			var $defaultBtn = $('<a role="button">(reset to default)</a>');
+			$defaultBtn.on('click', function ()
+			{
+				$input.val(o.defaultValue);
+				$input.trigger('change');
+			});
+			$label.append($('<div class="settingDesc"></div>').append($defaultBtn));
+		}
+		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + compactClass + '"></div>').append($input).append($label);
 	}
 	else if (o.inputType === "button" || o.inputType === "threeState")
 	{
@@ -30025,9 +30075,9 @@ function logoutOldSession(oldSession)
 	//if (oldSession != null && oldSession != sessionManager.GetAPISession())
 	//	ExecJSON({ cmd: "logout", session: oldSession });
 }
-function GetDialogOptionLabel(text)
+function GetDialogOptionLabel(html)
 {
-	return '<div class="dialogOption_label">' + text + '</div>';
+	return '<div class="dialogOption_label">' + html + '</div>';
 }
 function GetHtmlOptionElementMarkup(value, name, selectedValue)
 {
@@ -30238,6 +30288,17 @@ function CompareHSLColors(a, b)
 	if (diff === 0)
 		diff = a.l - b.l;
 	return diff;
+}
+/**
+ * Returns the first argument if it is a valid 3-digit or 6-digit hex color preceded by a '#', otherwise returns the second argument.
+ * @param {String} color Color that is possibly invalid.
+ * @param {String} fallbackColor Color that is guaranteed to be valid. Will be returned if the first argument is not a valid hex color.
+ */
+function ValidateHexColor(color, fallbackColor)
+{
+	if (color && (color.match(/^#[0-9a-f]{6}$/i) || color.match(/^#[0-9a-f]{3}$/i)))
+		return color;
+	return fallbackColor;
 }
 function PercentTo01Float(s, defaultValue)
 {
