@@ -7708,7 +7708,7 @@ function PlaybackControls()
 		else if (settings.ui3_playback_skipDeadAir === "1")
 			return "&skipdeadair=0";
 		else
-			return "";
+			return "&skipdeadair=";
 	}
 	this.ChangePlaySpeed = function (offset)
 	{
