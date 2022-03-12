@@ -6968,13 +6968,15 @@ function StarfieldGenerator(blockSize, density, seedStr)
 		var sw = Math.min(dw, backBuffer.width - sx);
 		var sh = dh;
 		var firstDrawW = sw;
-		ctx.drawImage(backBuffer, sx, sy, sw, sh, dx, dy, firstDrawW, dh);
+		if (sw > 0)
+			ctx.drawImage(backBuffer, sx, sy, sw, sh, dx, dy, firstDrawW, dh);
 		var rem = dw - firstDrawW;
 		if (rem)
 		{
 			sx = 0;
 			sw = rem;
-			ctx.drawImage(backBuffer, sx, sy, sw, sh, dx + firstDrawW, dy, rem, dh);
+			if (sw > 0)
+				ctx.drawImage(backBuffer, sx, sy, sw, sh, dx + firstDrawW, dy, rem, dh);
 		}
 		//ctx.fillStyle = "rgba(138,95,62,1)";
 		//ctx.fillRect(dx + firstDrawW, dy, 1, dh);
