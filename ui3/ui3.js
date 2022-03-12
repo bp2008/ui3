@@ -640,7 +640,6 @@ var togglableUIFeatures =
 // Timeline Immediate TODO //
 /////////////////////////////
 
-// /time/ H.264 streams do not return an audio stream when audio is requested. BI Bug? Not implemented serverside? 
 // BI Bug? Seeking often broken when jpeg player is playing.
 
 //////////////////////////
@@ -665,6 +664,7 @@ var togglableUIFeatures =
 // CONSIDER: Expandable clip list. ("Show more clips")
 // KNOWN: Jpeg snapshots of dynamic groups often are missing some labels because BI returned the frame before drawing them.
 // KNOWN: navigator.mediaSession doesn't work properly. Timeline playback has never been tested with it.
+// KNOWN: Timeline playback does not support audio yet (needs BI support)
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -5784,11 +5784,11 @@ function ClipTimeline()
 					timelineInternalWidth: 0,
 					/** Height of the timeline internal buffer in pixels. Affected by device pixel ratio. */
 					timelineInternalHeight: 0,
-					/** Millisecond timestamp that is currently selected in the timeline (at the center). */
+					/** Unbounded millisecond timestamp that the user wants to set the timeline to. For a bounds-clamped value, see currentTime property. */
 					lastSetTime: GetUtcNow(),
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
-					dragState: { isMouseDown: false, isDragging: false, startX: 0, offsetMs: 0, lastClickAt: -9999, doubleClickTime: 400 },
+					dragState: { isMouseDown: false, isDragging: false, startX: 0, lastClickAt: -9999, doubleClickTime: 400 },
 					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
 					/** Helps maintain a decent timeline frame rate while nothing is interacting with the timeline. */
 					canvasRedrawState: { interval: null, lastRedraw: 0 },
@@ -5923,8 +5923,7 @@ function ClipTimeline()
 						return;
 					if (touchEvents.isMultiTouch(e))
 					{
-						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
-
+						this.mouseUp(e);
 						return;
 					}
 					if (e.button === 2)
@@ -5932,7 +5931,6 @@ function ClipTimeline()
 					if (pointInsideElement($tl_root, e.mouseX, e.mouseY))
 					{
 						timeline.dragState.startX = e.mouseX;
-						timeline.dragState.offsetMs = 0;
 						timeline.dragState.isMouseDown = true;
 						timeline.dragState.isDragging = false;
 						timeline.timelineDidPauseVideo = !videoPlayer.Playback_IsPaused();
@@ -5945,16 +5943,15 @@ function ClipTimeline()
 						return;
 					if (timeline.dragState.isMouseDown)
 					{
-						if (touchEvents.isMultiTouch(e))
-						{
-							timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
-							return;
-						}
 						var delta = (e.mouseX - timeline.dragState.startX);
 						if (Math.abs(delta) > 3)
 							timeline.dragState.isDragging = true;
 						if (timeline.dragState.isDragging)
-							timeline.pan(delta * -timeline.zoomFactor);
+						{
+							timeline.dragState.startX = e.mouseX;
+							var time = timeline.lastSetTime + delta * -timeline.zoomFactor;
+							timeline.lastSetTime = time;
+						}
 						this.finishWheelPan();
 					}
 					this.isHovered = !touchEvents.isTouchEvent(e) && pointInsideElement($tl_root, e.mouseX, e.mouseY);
@@ -5964,30 +5961,23 @@ function ClipTimeline()
 					mouseCoordFixer.fix(e);
 					if (touchEvents.Gate(e))
 						return;
-					if (touchEvents.isMultiTouch(e))
-					{
-						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
-						return;
-					}
 					if (timeline.dragState.isMouseDown)
 					{
-						timeline.mouseMove(e);
-						var time = null;
-						if (timeline.dragState.isDragging)
-							time = timeline.lastSetTime + (e.mouseX - timeline.dragState.startX) * -timeline.zoomFactor;
+						var isMultiTouch = touchEvents.isMultiTouch(e);
+						if (!isMultiTouch)
+							timeline.mouseMove(e);
+						if (timeline.dragState.isDragging || isMultiTouch)
+							timeline.userDidSetTime();
 						else
 						{
 							var now = performance.now();
 							if (now - timeline.dragState.lastClickAt > timeline.dragState.doubleClickTime)
 							{
 								timeline.dragState.lastClickAt = now;
-								time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
+								var time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
+								timeline.assignLastSetTime(time);
+								timeline.userDidSetTime();
 							}
-						}
-						if (time !== null)
-						{
-							timeline.assignLastSetTime(time);
-							timeline.userDidSetTime();
 						}
 						// Order of setting timelineDidPauseVideo is important. userDidSetTime reads it and expects it to be unmodified
 						timeline.timelineDidPauseVideo = timeline.dragState.isMouseDown = timeline.dragState.isDragging = false;
@@ -6056,10 +6046,6 @@ function ClipTimeline()
 					var zf = szf / Math.max(0.001, e.scale * e.scale);
 					var zs = Math.log2(zf);
 					timeline.acceptZoom(zs);
-				},
-				pan: function (offsetMs)
-				{
-					timeline.dragState.offsetMs = offsetMs;
 				},
 				acceptZoom: function (newZoomScaler)
 				{
@@ -6368,7 +6354,11 @@ function ClipTimeline()
 				},
 				userDidSetTime: function ()
 				{
-					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, { timelineMs: this.lastSetTime, startPaused: videoPlayer.Playback_IsPaused() && !this.timelineDidPauseVideo });
+					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, this.getCurrentTimelineArgs());
+				},
+				getCurrentTimelineArgs: function ()
+				{
+					return { timelineMs: this.currentTime, startPaused: videoPlayer.Playback_IsPaused() && !this.timelineDidPauseVideo };
 				},
 				updateSeekPreview: function ()
 				{
@@ -6476,8 +6466,6 @@ function ClipTimeline()
 				currentTimeIfFuturePanningWasAllowed: function ()
 				{
 					var time = this.lastSetTime;
-					if (this.dragState.isDragging)
-						time += this.dragState.offsetMs;
 					if (this.wheelPanState.isActive)
 						time += this.wheelPanState.accumulatedX * this.zoomFactor;
 					return time;
@@ -6488,14 +6476,11 @@ function ClipTimeline()
 					if (this.recomputeCurrentTime) { } // Reactively update currentTime when recomputeCurrentTime value changes
 
 					var time = this.currentTimeIfFuturePanningWasAllowed;
-					if (this.dragState.isDragging || this.wheelPanState.isActive)
-					{
-						if (time < 1)
-							time = 1;
-						var serverTime = GetUtcNow();
-						if (time > serverTime)
-							time = serverTime;
-					}
+					if (time < 1)
+						time = 1;
+					var serverTime = GetUtcNow();
+					if (time > serverTime)
+						time = serverTime;
 					return time;
 				},
 				clipTimelineClasses: function ()
@@ -6837,7 +6822,7 @@ function ClipTimeline()
 	this.getTimelineArgsForCameraSwitch = function ()
 	{
 		if (timeline && videoPlayer.Loading().image.isTimeline())
-			return { timelineMs: timeline.currentTime, startPaused: videoPlayer.Playback_IsPaused() && !timeline.timelineDidPauseVideo };
+			return timeline.getCurrentTimelineArgs();
 		return null;
 	}
 	/**
