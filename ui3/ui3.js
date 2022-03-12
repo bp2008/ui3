@@ -13242,7 +13242,7 @@ function VideoPlayerController()
 			toaster.Error("The target camera or group could not be found.");
 			return;
 		}
-		timelineArgs = Object.assign({
+		timelineArgs = $.extend({
 			timelineMs: undefined,
 			timelineJump: undefined,
 			startPaused: false

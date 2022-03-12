@@ -13,7 +13,7 @@
 	--text-active-color: #FFFFFF;
 	--pctext-color: #E8E8E8;
 	--pctext-hover-color: #FFFFFF;
-	.ui --audio-playing-color: #63C35B;
+	--audio-playing-color: #63C35B;
 	--audio-loading-color: #F0F000;
 	--audio-error-color: #F00000;
 	--audio-idle-color: var(--button-color);
