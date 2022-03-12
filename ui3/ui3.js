@@ -646,11 +646,6 @@ var togglableUIFeatures =
 // Timeline Pre-Release //
 //////////////////////////
 
-// Ensure that zooming while panning behaves nicely.
-//   * Click+drag + mousewheel
-//   * Touchpad gestures
-//   * Touchscreen gestures (Windows)
-//   * Touchscreen gestures (Android)
 // Test timeline with clock drift and a different timezone.  This was fine as of 2022-02-25.
 
 ///////////////////////////////////////////////////////////////
@@ -5789,7 +5784,7 @@ function ClipTimeline()
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
 					dragState: { isMouseDown: false, isDragging: false, startX: 0, lastClickAt: -9999, doubleClickTime: 400 },
-					wheelPanState: { isActive: false, accumulatedX: 0, timeout: null },
+					wheelPanState: { isActive: false, timeout: null },
 					/** Helps maintain a decent timeline frame rate while nothing is interacting with the timeline. */
 					canvasRedrawState: { interval: null, lastRedraw: 0 },
 					/** Helps throttle canvas drawing to once per frame */
@@ -6006,14 +6001,14 @@ function ClipTimeline()
 						if (settings.ui3_wheelZoomReverse === "1")
 							dx *= -1;
 
-						if (!this.wheelPanState.isActive)
-						{
+						if (!this.wheelPanState.isActive && dx !== 0)
 							this.wheelPanState.isActive = true;
-							this.wheelPanState.accumulatedX = 0;
+						if (this.wheelPanState.isActive)
+						{
+							this.lastSetTime += dx * -this.zoomFactor;
+							clearTimeout(this.wheelPanState.timeout);
+							this.wheelPanState.timeout = setTimeout(this.finishWheelPan, 200);
 						}
-						this.wheelPanState.accumulatedX -= dx;
-						clearTimeout(this.wheelPanState.timeout);
-						this.wheelPanState.timeout = setTimeout(this.finishWheelPan, 200);
 					}
 					if (e.spinY !== 0)
 					{
@@ -6028,10 +6023,8 @@ function ClipTimeline()
 				finishWheelPan: function ()
 				{
 					clearTimeout(this.wheelPanState.timeout);
-					if (this.wheelPanState.isActive && this.wheelPanState.accumulatedX !== 0)
+					if (this.wheelPanState.isActive)
 					{
-						var time = this.lastSetTime + this.wheelPanState.accumulatedX * this.zoomFactor;
-						this.assignLastSetTime(time);
 						this.wheelPanState.isActive = false;
 						timeline.userDidSetTime();
 					}
@@ -6245,7 +6238,7 @@ function ClipTimeline()
 					}
 
 					// Draw a gradient if we've panned beyond a boundary.
-					var outOfBoundsTime = this.currentTimeIfFuturePanningWasAllowed;
+					var outOfBoundsTime = this.lastSetTime;
 					var currentTime = this.currentTime;
 					var futureTimePx = (outOfBoundsTime - currentTime) / zoomFactor;
 					if (futureTimePx > 0)
@@ -6354,6 +6347,7 @@ function ClipTimeline()
 				},
 				userDidSetTime: function ()
 				{
+					this.assignLastSetTime(this.lastSetTime);
 					videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, this.getCurrentTimelineArgs());
 				},
 				getCurrentTimelineArgs: function ()
@@ -6462,20 +6456,12 @@ function ClipTimeline()
 						left: (this.CenterBarCenterX - 1) + 'px'
 					};
 				},
-				/** Currently highlighted time as it would be if it was allowed to pan into the future. */
-				currentTimeIfFuturePanningWasAllowed: function ()
-				{
-					var time = this.lastSetTime;
-					if (this.wheelPanState.isActive)
-						time += this.wheelPanState.accumulatedX * this.zoomFactor;
-					return time;
-				},
 				/** Currently highlighted time */
 				currentTime: function ()
 				{
 					if (this.recomputeCurrentTime) { } // Reactively update currentTime when recomputeCurrentTime value changes
 
-					var time = this.currentTimeIfFuturePanningWasAllowed;
+					var time = this.lastSetTime;
 					if (time < 1)
 						time = 1;
 					var serverTime = GetUtcNow();
