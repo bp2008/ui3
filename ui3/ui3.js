@@ -636,22 +636,13 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-/////////////////////////////
-// Timeline Immediate TODO //
-/////////////////////////////
-
-// BI Bug? Seeking often broken when jpeg player is playing.
-
-//////////////////////////
-// Timeline Pre-Release //
-//////////////////////////
-
-// Test timeline with clock drift and a different timezone.  This was fine as of 2022-02-25.
+// BI Bug? Timeline seeking often broken when jpeg player is playing.
 
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// Clock drift and timezone differences were last tested 2022-03-12 and 2022-02-25.
 // KNOWN: Around May 11, 2018 with BI 4.7.4.1, Blue Iris began imposing Streaming 0's frame size and quality settings on jpeg frames, and I wasn't able to talk the developer out of it.  UI3 works around this by always requesting jpeg snapshots with explicit dimensions and quality.
 // CONSIDER: Add "Remote Control" menu based on that which is available in iOS and Android apps.
 // KNOWN: Sometimes the clip list scrolls down when you're trying to work with it, probably related to automatic refreshing addings items at the top.
