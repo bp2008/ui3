@@ -13676,8 +13676,6 @@ function VideoPlayerController()
 
 		mediaSessionController.setMediaState();
 
-		UpdateCurrentURL_Throttled();
-
 		BI_CustomEvent.Invoke("ImageRendered", properties);
 	}
 	/**
@@ -14874,6 +14872,7 @@ function FetchH264VideoModule()
 					timelineSync.run(this, function ()
 					{
 						clipTimeline.getVue().downloadSeekPreview(loading.timelineStart, jumpArg);
+						UpdateCurrentURL();
 						BI_CustomEvent.Invoke("OpenVideo", loading);
 					});
 				}, 0);
@@ -24768,16 +24767,10 @@ function AjaxHistoryManager()
 //////////////////////////////////////////////////////////////////////
 // Update Current URL ////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////
-var lastUpdateCurrentUrlTime = 0;
-var updateCurrentUrl_Timeout = null;
-var UpdateCurrentURL_Throttled = throttle(UpdateCurrentURL, 1000);
 function UpdateCurrentURL()
 {
 	if (!html5HistorySupported)
 		return;
-	clearTimeout(updateCurrentUrl_Timeout);
-	updateCurrentUrl_Timeout = null;
-	lastUpdateCurrentUrlTime = performance.now();
 	var search = new URLSearchParams(location.search);
 	search.delete("rec");
 	search.delete("timeline");
@@ -24807,15 +24800,19 @@ function UpdateCurrentURL()
 		search = "?" + search;
 
 	var newUrl = location.origin + location.pathname + search + location.hash;
-	try
+	if (location.href !== newUrl)
 	{
-		history.replaceState(history.state, "", newUrl);
-	}
-	catch (ex)
-	{
-		console.error(ex);
+		try
+		{
+			history.replaceState(history.state, "", newUrl);
+		}
+		catch (ex)
+		{
+			console.error(ex);
+		}
 	}
 }
+BindEventsPassive(document, "mouseleave", UpdateCurrentURL);
 /**
  * Returns the URL with the specified URL parameters removed. First argument is the string containing URL parameters. All following arguments must be URL parameter names. If the URL contains a question mark, it will still exist in the return value.
  * @param {String} url URL.
@@ -25155,6 +25152,8 @@ function BI_Hotkeys()
 	$(document).keydown(function (e)
 	{
 		var charCode = e.which;
+		if (charCode === 116 || (e.ctrlKey && charCode === 82)) // F5 or (ctrl+R)
+			UpdateCurrentURL();
 		if (!charCode
 			|| $("body").children(".dialog_overlay").length !== 0
 			|| $("body").children(".dialog_wrapper").children(".streamingProfileEditorPanel").length !== 0)
