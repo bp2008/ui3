@@ -3135,7 +3135,6 @@ $(function ()
 	sessionManager.Initialize();
 
 	$(window).resize(resized);
-	$(window).resize(debounce(AfterWindowResized, 250));
 	$('.topbar_tab[name="' + currentPrimaryTab + '"]').click(); // this calls resized()
 
 	window.addEventListener("beforeunload", function ()
@@ -3148,11 +3147,6 @@ $(function ()
 
 	BI_CustomEvent.Invoke("UI_Loading_End");
 });
-function AfterWindowResized()
-{
-	if (cameraListLoader.isDynamicLayoutEnabled(videoPlayer.Loading().image.id, true) && !groupCfg.GetLockedResolution(videoPlayer.Loading().image))
-		videoPlayer.ReopenStreamAtCurrentSeekPosition();
-}
 function OnChange_ui3_dynamicGroupLayout()
 {
 	videoPlayer.ReopenStreamAtCurrentSeekPosition();
@@ -6041,7 +6035,11 @@ function ClipTimeline()
 				onPinchMove: function (e)
 				{
 					var szf = Math.pow(2, timeline.pinchZoomState.startingZoomScaler);
-					var zf = szf / Math.max(0.001, e.scale * e.scale);
+					var speedExponent = 2;
+						var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
+					zoomSpeed /= 400;
+					speedExponent *= zoomSpeed;
+					var zf = szf / Math.max(0.001, Math.pow(e.scale, speedExponent));
 					var zs = Math.log2(zf);
 					timeline.acceptZoom(zs);
 				},
@@ -14650,6 +14648,10 @@ function FetchH264VideoModule()
 
 	var lastStatusBlock = null;
 
+	var lastRequestedSize = null;
+	var AfterResized2Debounced = debounce(AfterResized2, 250);
+	BI_CustomEvent.AddListener("afterResize", AfterResized);
+
 	var Initialize = function (h264PlayerChoice)
 	{
 		if (isInitialized)
@@ -14840,6 +14842,7 @@ function FetchH264VideoModule()
 		var videoUrl;
 		var groupArgs = groupCfg.GetUrlArgs(loading);
 		var profileArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
+		lastRequestedSize = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile());
 		var fetchOptions = { timestampScale: 1 };
 		if (loading.isTimeline())
 		{
@@ -15235,6 +15238,26 @@ function FetchH264VideoModule()
 			currentSeekPositionPercent = Clamp(currentSeekPositionPercent, 0, 1);
 		}
 		self.OpenVideo(loading.UpdateTimelineStart(), currentSeekPositionPercent, playbackPaused);
+	}
+	/** Handler for "afterResized" custom event. The video viewport may have resized, or layout may have just been re-done. */
+	function AfterResized()
+	{
+		if (isCurrentlyActive && cameraListLoader.isDynamicLayoutEnabled(loading.id, true) && !groupCfg.GetLockedResolution(loading))
+		{
+			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile());
+			if (!sizeToRequest.Equals(lastRequestedSize))
+				AfterResized2Debounced();
+		}
+	}
+	/** Should only be called via [AfterResized2Debounced] when it has been confirmed that the ideal resolution of the video frame has changed. */
+	function AfterResized2()
+	{
+		if (isCurrentlyActive && cameraListLoader.isDynamicLayoutEnabled(loading.id, true) && !groupCfg.GetLockedResolution(loading))
+		{
+			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile());
+			if (!sizeToRequest.Equals(lastRequestedSize))
+				ReopenStreamAtCurrentSeekPosition();
+		}
 	}
 	var FrameRendered = function (frame)
 	{
@@ -31470,6 +31493,8 @@ function ui3Rect(w, h)
 	 */
 	this.Equals = function (otherRect)
 	{
+		if (!otherRect)
+			return false;
 		return self.w === otherRect.w && self.h === otherRect.h;
 	}
 	/** Multplies the dimensions of this rectangle by a given scaler. Returns self. */
