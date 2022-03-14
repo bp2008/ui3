@@ -6036,7 +6036,7 @@ function ClipTimeline()
 				{
 					var szf = Math.pow(2, timeline.pinchZoomState.startingZoomScaler);
 					var speedExponent = 2;
-						var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
+					var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
 					zoomSpeed /= 400;
 					speedExponent *= zoomSpeed;
 					var zf = szf / Math.max(0.001, Math.pow(e.scale, speedExponent));
@@ -24792,7 +24792,7 @@ function AjaxHistoryManager()
 //////////////////////////////////////////////////////////////////////
 function UpdateCurrentURL()
 {
-	if (!html5HistorySupported)
+	if (!html5HistorySupported || !loadingHelper.DidLoadingFinish())
 		return;
 	var search = new URLSearchParams(location.search);
 	search.delete("rec");
@@ -25313,6 +25313,7 @@ function BI_Hotkeys()
 
 	this.getKeyName = function (charCode)
 	{
+		charCode = parseInt(charCode);
 		var name = charCodeToKeyNameMap[charCode];
 		if (typeof name == "undefined")
 			name = String.fromCharCode(charCode);
@@ -28234,7 +28235,7 @@ function UISettingsPanel()
 			var isDisplayable = (s.label || (s.comment && s.inputType === "comment")) && s.category === category;
 			if (isDisplayable && (typeof s.preconditionFunc !== "function" || s.preconditionFunc()) && processFilter(s))
 			{
-				var $row = $('<div class="uiSettingsRow"></div>');
+				var $row = $('<div class="uiSettingsRow withDefaultBtn"></div>');
 				if (s.hint && s.hint.length > 0)
 					$row.attr('title', s.hint);
 				if (rowIdx++ % 2 === 1)
@@ -28244,28 +28245,15 @@ function UISettingsPanel()
 					, value: settings.getItem(s.key)
 					, label: s.label
 					, tag: s
+					, defaultValue: s.value
 				};
 				if (s.hotkey)
 				{
-					var $input = $('<input type="text" />');
-					AddKeydownEventToElement(HandleHotkeyChange, s, $input);
-					var val = settings.getItem(s.key);
-					if (!val)
-						val = "";
-					var parts = val.split("|");
-					if (parts.length < 4)
-						$input.val("unset");
-					else
-						$input.val((parts[0] === "1" ? "CTRL + " : "")
-							+ (parts[1] === "1" ? "ALT + " : "")
-							+ (parts[2] === "1" ? "SHIFT + " : "")
-							+ hotkeys.getKeyName(parts[3]));
-					$row.addClass('dialogOption_item dialogOption_item_info');
-					$row.append($input);
-					var label = s.label;
+					formFields.inputType = "hotkey";
+					formFields.onChange = HandleHotkeyChange;
 					if (!fullscreen_supported && s.key === 'ui3_hotkey_togglefullscreen')
-						label += '<br>(Unavailable)';
-					$row.append(GetDialogOptionLabel(label));
+						formFields.label += '<br>(Unavailable)';
+					$row.append(UIFormField(formFields));
 				}
 				else if (s.inputType === "checkbox")
 				{
@@ -28286,7 +28274,6 @@ function UISettingsPanel()
 					formFields.maxValue = s.maxValue;
 					formFields.step = s.step;
 					formFields.onChange = NumberChanged;
-					formFields.defaultValue = s.value;
 					if (s.inputType === "range")
 					{
 						if (s.changeOnStep)
@@ -28308,7 +28295,6 @@ function UISettingsPanel()
 				else if (s.inputType === "text" || s.inputType === "color")
 				{
 					formFields.onChange = TextChanged;
-					formFields.defaultValue = s.value;
 					$row.append(UIFormField(formFields));
 				}
 				cat.$section.append($row);
@@ -28609,31 +28595,10 @@ function UISettingsPanel()
 		settings.setItem(s.key, value.toString());
 		CallOnChangeCallback(s);
 	}
-	var HandleHotkeyChange = function (e, s, $input)
+	var HandleHotkeyChange = function (e, s, $input, textValue, hotkeyValue)
 	{
-		var charCode = e.which ? e.which : event.keyCode;
-
-		var modifiers = "";
-		if (e.ctrlKey)
-			modifiers += "CTRL + ";
-		if (e.altKey)
-			modifiers += "ALT + ";
-		if (e.shiftKey)
-			modifiers += "SHIFT + ";
-
-		var keyName = hotkeys.getKeyName(charCode);
-
-		$input.val(modifiers + keyName);
-
-		var hotkeyValue = (e.ctrlKey ? "1" : "0") + "|" + (e.altKey ? "1" : "0") + "|" + (e.shiftKey ? "1" : "0") + "|" + charCode + "|" + keyName;
 		settings.setItem(s.key, hotkeyValue);
-
 		return false;
-	}
-	var AddKeydownEventToElement = function (eventHandler, defaultSetting, $input)
-	{
-		/// <summary>Adds a keydown event handler to the input element.</summary>
-		$input.on('keydown', function (e) { return eventHandler(e, defaultSetting, $input); });
 	}
 	var CallOnChangeCallback = function (s)
 	{
@@ -29002,8 +28967,34 @@ function UIFormField(args)
 		, maxValue: undefined // number / range types
 		, disabled: false
 		, compact: false
+		, defaultValue: undefined // default value.  If defined, this will cause a "reset to default" button to exist.
 	}, args);
 
+	var ff = UIFormFieldInternal(o);
+	if (typeof o.defaultValue !== "undefined")
+	{
+		var $defaultButton = $('<div class="uiFormFieldDefaultBtn" title="Reset value to default"><svg class="icon"><use xlink:href="#svg_x5F_Restart"></use></svg></div>');
+		$defaultButton.on('click', function ()
+		{
+			var $input = ff.find('input,select');
+			if (o.inputType === "checkbox")
+				$input.prop('checked', o.defaultValue === "1");
+			else if (o.inputType === "hotkey")
+			{
+				var textValue = getHotkeyTextValueFromHotkeyValue(o.defaultValue);
+				$input.val(textValue);
+				o.onChange(null, o.tag, $input, textValue, o.defaultValue);
+			}
+			else
+				$input.val(o.defaultValue);
+			$input.trigger('change');
+		});
+		ff = $defaultButton.add(ff);
+	}
+	return ff;
+}
+function UIFormFieldInternal(o)
+{
 	var disabledClass = (o.disabled ? ' disabled' : '');
 	var compactClass = (o.compact ? ' compact' : '');
 
@@ -29076,12 +29067,6 @@ function UIFormField(args)
 			{
 				$numericValue.text($input.val());
 			});
-			if (typeof o.defaultValue === 'number')
-				$input.on('dblclick', function ()
-				{
-					$input.val(o.defaultValue);
-					$input.trigger('change');
-				});
 			return $('<div class="' + classes + ' dialogOption_item_range"></div>').append($label).append($input);
 		}
 		else
@@ -29098,16 +29083,6 @@ function UIFormField(args)
 		else
 			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
 		var $label = $(GetDialogOptionLabel(o.label));
-		if (typeof o.defaultValue !== "undefined")
-		{
-			var $defaultBtn = $('<a role="button">(reset to default)</a>');
-			$defaultBtn.on('click', function ()
-			{
-				$input.val(o.defaultValue);
-				$input.trigger('change');
-			});
-			$label.append($('<div class="settingDesc"></div>').append($defaultBtn));
-		}
 		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + compactClass + '"></div>').append($input).append($label);
 	}
 	else if (o.inputType === "button" || o.inputType === "threeState")
@@ -29149,6 +29124,25 @@ function UIFormField(args)
 			$row.append($label);
 		}
 		$row.append($input);
+		return $row;
+	}
+	else if (o.inputType === "hotkey")
+	{
+		var $input = $('<input type="text" />');
+		$input.val(getHotkeyTextValueFromHotkeyValue(o.value));
+		$input.on('keydown', function (e)
+		{
+			var charCode = e.which;
+			var keyName = hotkeys.getKeyName(charCode);
+			var hotkeyValue = (e.ctrlKey ? "1" : "0") + "|" + (e.altKey ? "1" : "0") + "|" + (e.shiftKey ? "1" : "0") + "|" + charCode + "|" + keyName;
+			var textValue = getHotkeyTextValueFromHotkeyValue(hotkeyValue);
+			$input.val(textValue);
+			return o.onChange(e, o.tag, $input, textValue, hotkeyValue);
+		});
+
+		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>')
+		$row.append($input);
+		$row.append(GetDialogOptionLabel(o.label));
 		return $row;
 	}
 	else if (o.inputType === "errorCommentText")
@@ -31530,4 +31524,17 @@ function ui3Rect(w, h)
 function MakeDivisibleBy8(num)
 {
 	return num - num % 8;
+}
+function getHotkeyTextValueFromHotkeyValue(val)
+{
+	if (!val)
+		val = "";
+	var parts = val.split("|");
+	if (parts.length < 4)
+		return "unset";
+	else
+		return (parts[0] === "1" ? "CTRL + " : "")
+			+ (parts[1] === "1" ? "ALT + " : "")
+			+ (parts[2] === "1" ? "SHIFT + " : "")
+			+ hotkeys.getKeyName(parts[3]);
 }

@@ -5183,7 +5183,7 @@ div::-webkit-scrollbar-corner
 		color: #FFFFFF;
 	}
 
-	.clipExportPanel .panel_close::active
+	.clipExportPanel .panel_close:active
 	{
 		background-color: #F1707A;
 		color: #FFFFFF;
@@ -5602,7 +5602,7 @@ div::-webkit-scrollbar-corner
 		background-color: rgba(255,255,255,0.05);
 	}
 
-/*#uiSettingsPanel input[type="button"]
+	/*#uiSettingsPanel input[type="button"]
 {
 	background-color: #C03737;
 	color: #FFFFFF;
@@ -5611,6 +5611,38 @@ div::-webkit-scrollbar-corner
 	padding-right: 12px;
 	cursor: pointer;
 }*/
+
+	.uiSettingsRow.withDefaultBtn
+	{
+		display: flex;
+		align-items: center;
+	}
+
+		.uiSettingsRow.withDefaultBtn > *
+		{
+			width: 100%;
+			flex: 1 1 auto;
+		}
+
+		.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn
+		{
+			flex: 0 0 auto;
+			padding: 10px 4px 10px 2px;
+			width: 20px;
+			height: 20px;
+			cursor: pointer;
+			color: var(--text-color);
+		}
+
+			.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn:hover
+			{
+				color: var(--text-hover-color);
+			}
+
+			.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn:active
+			{
+				color: var(--text-active-color);
+			}
 
 #volumeBar.audioTemporarilyUnavailable,
 #volumeBar.audioNoPermission,
