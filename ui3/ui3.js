@@ -636,8 +636,6 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
-// BI Bug? Timeline seeking often broken when jpeg player is playing.
-
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -726,10 +724,6 @@ var HTML5DelayCompensationOptions = {
 	Weak: "Weak",
 	Normal: "Normal",
 	Strong: "Strong"
-}
-var Zoom1xOptions = {
-	Camera: "Camera",
-	Stream: "Stream"
 }
 var settings = null;
 var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
@@ -2432,7 +2426,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_cameraLabels_minimumFontSize"
-			, value: 6
+			, value: BI_GetDevicePixelRatio() > 1 ? 6 : 8
 			, inputType: "number"
 			, minValue: 0
 			, maxValue: 128
@@ -2492,24 +2486,14 @@ var defaultSettings =
 			, category: "Camera Labels"
 		}
 		, {
-			key: "ui3_wheelZoomMethod"
-			, value: "Adjustable"
-			, inputType: "select"
-			, options: ["Adjustable", "Legacy"]
-			, label: "Digital Zoom Method"
-			, onChange: OnChange_ui3_wheelZoomMethod
-			, category: "Digital Zoom"
-		}
-		, {
 			key: "ui3_wheelAdjustableSpeed"
 			, value: 400
 			, minValue: 20
 			, maxValue: 2000
 			, step: 1
 			, inputType: "range"
-			, label: 'Digital Zoom Speed<br/>(Requires zoom method "Adjustable")'
+			, label: 'Digital Zoom Speed'
 			, changeOnStep: true
-			, hint: "Default: 400"
 			, category: "Digital Zoom"
 		}
 		, {
@@ -2521,12 +2505,18 @@ var defaultSettings =
 			, category: "Digital Zoom"
 		}
 		, {
-			key: "ui3_zoom1x_mode"
-			, value: Zoom1xOptions.Camera
-			, inputType: "select"
-			, options: [Zoom1xOptions.Camera, Zoom1xOptions.Stream]
-			, label: 'At 1x zoom, match resolution of: '
-			, hint: 'Choose "' + Zoom1xOptions.Stream + '" if clip playback has the wrong aspect ratio.'
+			key: "ui3_alwaysAllow1xVideoZoom"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Always Allow 1x Zoom<div class="settingDesc">(if "yes", small cameras can be rendered smaller than the viewport)</div>'
+			, category: "Digital Zoom"
+		}
+		, {
+			key: "ui3_browserZoomEnabled"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Browser Native Zoom<div class="settingDesc">(enabling this will disable ui3\'s video player touchscreen pinch handling)</div>'
+			, onChange: OnChange_ui3_browserZoomEnabled
 			, category: "Digital Zoom"
 		}
 		, {
@@ -3128,6 +3118,7 @@ $(function ()
 	OnChange_ui3_ir_brightness_contrast();
 	OnChange_ui3_ptzHome();
 	OnChange_ui3_sideBarPosition();
+	OnChange_ui3_browserZoomEnabled();
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -3238,22 +3229,13 @@ function HandlePreLoadUrlParameters()
 		BI_CustomEvent.AddListener("FinishedLoading", function ()
 		{
 			var camData = cameraListLoader.GetCameraWithId(group);
-			if (camData != null)
+			if (camData != null && videoPlayer.Loading().image.id !== group)
 				videoPlayer.SelectCameraGroup(group);
 		});
 	}
 
-	// Parameter "cam"
-	var cam = UrlParameters.Get("cam", "c");
-	if (cam !== '')
-	{
-		BI_CustomEvent.AddListener("FinishedLoading", function ()
-		{
-			var camData = cameraListLoader.GetCameraWithId(cam);
-			if (camData != null)
-				videoPlayer.ImgClick_Camera(camData);
-		});
-	}
+	// Parameter "cam" is handled in the LoadCameraList method
+
 	var maximize = UrlParameters.Get("maximize", "m");
 	if (maximize === "1" || maximize.toLowerCase() === "true")
 		settings.ui3_is_maximized = "1";
@@ -8075,7 +8057,7 @@ function SeekBar()
 	this.resetSeekHintImg = function ()
 	{
 		seekHintInfo.loadingMsec = seekHintInfo.queuedMsec = seekHintInfo.visibleMsec = -1;
-		seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.aspectratio) + 'px');
+		seekhint_canvas.css('height', (160 / videoPlayer.Loading().image.getFullRect().AspectRatio()) + 'px');
 		ClearCanvas(seekhint_canvas_ele);
 		seekhint_loading.addClass('hidden');
 	}
@@ -12451,15 +12433,31 @@ function CameraListLoader()
 					&& (videoPlayer.Loading().image.isLive
 						|| videoPlayer.Loading().image.isTimeline()))) // isLive/isTimeline check allows clips to continue playing if their camera instance is missing
 			{
-				if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId) == null)
+				if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId))
+					videoPlayer.SetCurrentlySelectedHomeGroupId(settings.ui3_defaultCameraGroupId);
+				else if (self.CameraIsGroup(lastResponse.data[0]))
+					videoPlayer.SetCurrentlySelectedHomeGroupId(lastResponse.data[0].optionValue);
+
+				var didLoadStream = false;
+				var cam = UrlParameters.Get("cam", "c");
+				if (!firstCameraListLoaded && cam)
 				{
-					if (self.CameraIsGroup(lastResponse.data[0]))
+					cam = self.GetCameraWithId(cam);
+					if (cam)
+					{
+						videoPlayer.LoadLiveCamera(cam);
+						didLoadStream = videoPlayer.Loading().image.id === cam.optionValue;
+					}
+				}
+				if (!didLoadStream)
+				{
+					if (self.GetGroupCamera(settings.ui3_defaultCameraGroupId))
+						videoPlayer.SelectCameraGroup(settings.ui3_defaultCameraGroupId);
+					else if (self.CameraIsGroup(lastResponse.data[0]))
 						videoPlayer.SelectCameraGroup(lastResponse.data[0].optionValue);
 					else
-						videoPlayer.LoadLiveCamera(lastResponse.data[0], clipTimeline.getTimelineArgsForCameraSwitch());
+						videoPlayer.LoadLiveCamera(lastResponse.data[0], clipTimeline ? clipTimeline.getTimelineArgsForCameraSwitch() : null);
 				}
-				else
-					videoPlayer.SelectCameraGroup(settings.ui3_defaultCameraGroupId);
 			}
 			if (!firstCameraListLoaded)
 			{
@@ -12513,17 +12511,45 @@ function CameraListLoader()
 		// Get from dynamic layout
 		var imgLoaded = videoPlayer.Loaded().image;
 		if (imgLoaded.id === groupId && imgLoaded.rects)
-			return imgLoaded.rects;
+			return ScaledRectsWorkaround(imgLoaded);
 
 		var imgLoading = videoPlayer.Loading().image;
 		if (imgLoading.id === groupId && imgLoading.rects)
-			return imgLoading.rects;
+			return ScaledRectsWorkaround(imgLoading);
 
 		// Get from default layout
 		var cam = self.GetCameraWithId(groupId);
 		if (cam)
 			return cam.rects;
 		return null;
+	}
+	function ScaledRectsWorkaround(image)
+	{
+		// Last noted in BI 5.5.6.2:
+		// H.264 group streams
+		//  * Dynamic Layout: scaled reclist 
+		//  * Static Layout: scaled reclist
+		// JPEG group streams
+		//  * Dynamic Layout: scaled reclist 
+		//  * Static Layout: unscaled reclist
+		// To work around this inconsistency, this method will unscale the static layout reclist for static layout h264 group streams..
+
+		if (image.rects && videoPlayer.CurrentPlayerModuleName() === "h264" && !cameraListLoader.isDynamicLayoutEnabled(image.id))
+		{
+			var rects = new Array(image.rects.length);
+			var nativeRes = image.getFullRect();
+			var actualRes = image.getActualRect();
+			var scaleX = nativeRes.w / actualRes.w;
+			var scaleY = nativeRes.h / actualRes.h;
+			var scale = (scaleX + scaleY) / 2;
+			for (var i = 0; i < rects.length; i++)
+			{
+				var r = image.rects[i];
+				rects[i] = [r[0] * scale, r[1] * scale, r[2] * scale, r[3] * scale];
+			}
+			return rects;
+		}
+		return image.rects;
 	}
 	this.GetGroupCams = function (groupId)
 	{
@@ -12558,10 +12584,10 @@ function CameraListLoader()
 		}
 		return false;
 	}
-	this.isDynamicLayoutEnabled = function (groupId, ignoreViewportSize)
+	this.isDynamicLayoutEnabled = function (groupId)
 	{
 		var cam = self.GetCameraWithId(groupId);
-		return cam && self.isDynamicLayoutEligible(groupId) && settings.ui3_dynamicGroupLayout === "1" && (ignoreViewportSize || imageRenderer.ViewportCanSupportDynamicGroupLayout());
+		return cam && self.isDynamicLayoutEligible(groupId) && settings.ui3_dynamicGroupLayout === "1";
 	}
 	this.HideWebcastingWarning = function ()
 	{
@@ -13267,13 +13293,16 @@ function VideoPlayerController()
 			{
 				if (cameraListLoader.CameraIsGroupOrCycle(camList.data[i]))
 				{
-					settings.ui3_defaultCameraGroupId = currentlySelectedHomeGroupId = groupId;
-
+					self.SetCurrentlySelectedHomeGroupId(groupId);
 					self.LoadLiveCamera(camList.data[i], clipTimeline.getTimelineArgsForCameraSwitch());
 					break;
 				}
 			}
 		}
+	}
+	this.SetCurrentlySelectedHomeGroupId = function (id)
+	{
+		settings.ui3_defaultCameraGroupId = currentlySelectedHomeGroupId = id;
 	}
 	this.LoadLiveCamera = function (camData, timelineArgs)
 	{
@@ -13312,7 +13341,6 @@ function VideoPlayerController()
 		cli.id = clc.optionValue;
 		cli.fullwidth = cli.actualwidth = clc.width;
 		cli.fullheight = cli.actualheight = clc.height;
-		cli.aspectratio = clc.width / clc.height;
 		cli.path = clc.optionValue;
 		cli.uniqueId = clc.optionValue;
 		cli.isLive = typeof timelineArgs.timelineMs !== "number";
@@ -13324,7 +13352,6 @@ function VideoPlayerController()
 		cli.isGroup = clc.group ? true : false;
 		if (previousId !== cli.id)
 		{
-			imageRenderer.zoomHandler.ZoomToFit();
 			cli.cams = null;
 			cli.rects = null;
 		}
@@ -13363,7 +13390,6 @@ function VideoPlayerController()
 			cam = cameraListLoader.MakeFakeCamBasedOnClip(clipData);
 		if (cam)
 		{
-			imageRenderer.zoomHandler.ZoomToFit();
 			var cli = currentlyLoadingImage;
 			var clc = currentlyLoadingCamera = cam;
 			cli.id = clc.optionValue;
@@ -13375,7 +13401,6 @@ function VideoPlayerController()
 				cli.fullwidth = clipRes.width;
 				cli.fullheight = clipRes.height;
 			}
-			cli.aspectratio = clc.width / clc.height;
 			cli.path = clipData.path;
 			cli.uniqueId = clipData.recId;
 			cli.isLive = false;
@@ -13603,40 +13628,31 @@ function VideoPlayerController()
 	// Callback methods for a player module to inform the VideoPlayerController of state changes.
 	this.CameraOrResolutionChange = function ()
 	{
-		if (currentlyLoadedImage.uniqueId !== currentlyLoadingImage.uniqueId)
-			imageRenderer.zoomHandler.ZoomToFit();
+		var idChanged = currentlyLoadedImage.uniqueId !== currentlyLoadingImage.uniqueId;
+		var wasZoomedToFit = imageRenderer.zoomHandler.IsZoomedToFit();
 		currentlyLoadedImage.CopyValuesFrom(currentlyLoadingImage);
 		currentlyLoadedCamera = currentlyLoadingCamera;
+		if (idChanged || wasZoomedToFit)
+			imageRenderer.zoomHandler.ZoomToFit();
 		resized();
 	}
-	var lastCycleWidth = 0;
-	var lastCycleHeight = 0;
 	this.lastFrameUtc = 0;
 	this.ImageRendered = function (properties)
 	{
+		if (properties.id !== currentlyLoadingImage.id)
+		{
+			console.log("ImageRendered called for wrong video source.", properties.id, properties, "Currently loading: " + currentlyLoadingImage.id);
+			return;
+		}
 		jpegPreviewModule.Hide();
-		if (currentlyLoadedImage.uniqueId != properties.id || currentlyLoadingImage.isTimeline() !== currentlyLoadedImage.isTimeline())
+
+		var imageSizeIsChanging = currentlyLoadingImage.actualwidth !== properties.w || currentlyLoadingImage.actualheight !== properties.h;
+
+		currentlyLoadingImage.actualwidth = properties.w;
+		currentlyLoadingImage.actualheight = properties.h;
+
+		if (imageSizeIsChanging || currentlyLoadedImage.uniqueId != properties.id || currentlyLoadingImage.isTimeline() !== currentlyLoadedImage.isTimeline())
 			self.CameraOrResolutionChange();
-		else if (currentlyLoadingImage.isLive && properties.id.startsWith("@"))
-		{
-			if (lastCycleWidth != properties.w || lastCycleHeight != properties.h)
-			{
-				lastCycleWidth = properties.w;
-				lastCycleHeight = properties.h;
-				currentlyLoadedImage.aspectratio = lastCycleWidth / lastCycleHeight;
-				resized();
-			}
-		}
-		else
-		{
-			lastCycleWidth = lastCycleHeight = 0;
-		}
-
-		var imageSizeIsChanging = currentlyLoadedImage.actualwidth !== properties.w || currentlyLoadedImage.actualheight !== properties.h;
-
-		// actualwidth and actualheight must be set after [CameraOrResolutionChange]
-		currentlyLoadedImage.actualwidth = properties.w;
-		currentlyLoadedImage.actualheight = properties.h;
 
 		if (imageSizeIsChanging)
 			imageRenderer.ImgResized(false);
@@ -13675,6 +13691,8 @@ function VideoPlayerController()
 		mediaSessionController.setMediaState();
 
 		BI_CustomEvent.Invoke("ImageRendered", properties);
+		if (properties.isFirstFrame)
+			BI_CustomEvent.Invoke("FirstFrameLoaded");
 	}
 	/**
 	 * Called when clip playback ends. Not called for live or timeline video.
@@ -13756,8 +13774,6 @@ function VideoPlayerController()
 	{
 		if (!xCamList || !xRecList)
 			return;
-		//console.log(camId + " -> X-CAMLIST: " + xCamList);
-		//console.log(camId + " -> X-RECLIST: " + xRecList);
 		try
 		{
 			var cams = xCamList ? JSON.parse('[' + xCamList + ']') : null;
@@ -13796,16 +13812,14 @@ function BICameraData()
 	this.fullwidth = 1280;
 	/** Native height of image.  Used when calculating with group rects and as a base for digital zoom. */
 	this.fullheight = 720;
-	/** Aspect ratio of image. */
-	this.aspectratio = 1280 / 720;
 	/** Actual width of image (can be smaller than fullwidth) */
 	this.actualwidth = 1280;
 	/** Actual width of image (can be smaller than fullheight) */
 	this.actualheight = 720;
-	/** Special value to assist in digital zooming dynamically sized group frames. */
-	this.intendedW = 0;
-	/** Special value to assist in digital zooming dynamically sized group frames. */
-	this.intendedH = 0;
+	/** "Native resolution" of dynamically sized group frame. */
+	this.dynamicNativeW = 0;
+	/** "Native resolution" of dynamically sized group frame. */
+	this.dynamicNativeH = 0;
 	/** Path component to use in URLs.  For live/timeline streams, this is the same as [id] and [uniqueId].  For clips, this is a string like "@12345.bvr". */
 	this.path = "";
 	/** Unique ID of the image provider. One of:
@@ -13849,11 +13863,10 @@ function BICameraData()
 		self.id = other.id;
 		self.fullwidth = other.fullwidth;
 		self.fullheight = other.fullheight;
-		self.aspectratio = other.aspectratio;
 		self.actualwidth = other.actualwidth;
 		self.actualheight = other.actualheight;
-		self.intendedW = other.intendedW;
-		self.intendedH = other.intendedH;
+		self.dynamicNativeW = other.dynamicNativeW;
+		self.dynamicNativeH = other.dynamicNativeH;
 		self.path = other.path;
 		self.uniqueId = other.uniqueId;
 		self.isLive = other.isLive;
@@ -13884,12 +13897,12 @@ function BICameraData()
 		return new ui3Rect(self.fullwidth, self.fullheight);
 	}
 	/** Returns a new ui3Rect representing the intended resolution of the image. The "intended" resolution is meaningful only for dynamically-sized group frames, and is quite hacky. */
-	this.getIntendedRect = function ()
+	this.getDynamicNativeRect = function ()
 	{
-		return new ui3Rect(self.intendedwidth, self.intendedheight);
+		return new ui3Rect(self.dynamicNativeW || 0, self.dynamicNativeH || 0);
 	}
 	/** Returns a new ui3Rect representing the actual resolution of the last frame that was loaded for this video source.  If none has loaded yet, it will be equal to the native resolution. */
-	this.getIntendedRect = function ()
+	this.getActualRect = function ()
 	{
 		return new ui3Rect(self.actualwidth, self.actualheight);
 	}
@@ -14055,6 +14068,7 @@ function JpegVideoModule()
 				else
 				{
 					programmaticSoundPlayer.NotifyReconnected();
+					var isFirstFrame = !loadedFirstFrame;
 					loadedFirstFrame = true;
 					imageLoadingState.loadedUrl = url;
 					var msLoadingTime = performance.now() - currentImageRequestedAtMs;
@@ -14068,7 +14082,7 @@ function JpegVideoModule()
 					var frameUtc = currentImageTimestampGuessUtc >= 0 ? currentImageTimestampGuessUtc : parseInt(headers["x-utc"]);
 					if (loading.isTimeline())
 						clipPlaybackPosition = frameUtc;
-					videoPlayer.ImageRendered({ id: loading.uniqueId, w: image.naturalWidth, h: image.naturalHeight, loadingTime: msLoadingTime, utc: frameUtc });
+					videoPlayer.ImageRendered({ id: loading.uniqueId, w: image.naturalWidth, h: image.naturalHeight, loadingTime: msLoadingTime, utc: frameUtc, isFirstFrame: isFirstFrame });
 					playbackControls.FrameTimestampUpdated(false);
 
 					CopyImageToCanvas(image, camimg_canvas_ele);
@@ -14087,9 +14101,10 @@ function JpegVideoModule()
 						}
 
 						var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
+						var digitalZoom = '<span title="Digital Zoom Factor"> \uD83D\uDD0D' + imageRenderer.zoomHandler.GetZoomFactor().toFixed(2) + 'x</span>';
 
 						nerdStats.BeginUpdate();
-						nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
+						nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag() + digitalZoom);
 						nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
 						if (loading.isLive)
 							nerdStats.UpdateStat("Seek Position", "LIVE");
@@ -14294,7 +14309,7 @@ function JpegVideoModule()
 		var isVisible = !documentIsHidden();
 
 		var sizeToRequest = imageRenderer.GetSizeToRequest(loading);
-		var sizeArgs = "&w=" + sizeToRequest.w + "&h=" + sizeToRequest.h;
+		var sizeArgs = "&w=" + sizeToRequest.w + "&h=" + sizeToRequest.h; // Also included in qualityArg later
 
 		var overlayArgs = "";
 		var timelineSpeedArg = "";
@@ -14405,7 +14420,7 @@ function JpegVideoModule()
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?nc=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
 			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
-		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + sizeArgs + qualityArg + groupArgs;
+		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + qualityArg + groupArgs;
 
 		if (imageLoadingState.loadedUrl == imgSrcPath)
 		{
@@ -15242,7 +15257,7 @@ function FetchH264VideoModule()
 	/** Handler for "afterResized" custom event. The video viewport may have resized, or layout may have just been re-done. */
 	function AfterResized()
 	{
-		if (isCurrentlyActive && cameraListLoader.isDynamicLayoutEnabled(loading.id, true) && !groupCfg.GetLockedResolution(loading))
+		if (isCurrentlyActive && cameraListLoader.isDynamicLayoutEnabled(loading.id) && !groupCfg.GetLockedResolution(loading))
 		{
 			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile());
 			if (!sizeToRequest.Equals(lastRequestedSize))
@@ -15252,7 +15267,7 @@ function FetchH264VideoModule()
 	/** Should only be called via [AfterResized2Debounced] when it has been confirmed that the ideal resolution of the video frame has changed. */
 	function AfterResized2()
 	{
-		if (isCurrentlyActive && cameraListLoader.isDynamicLayoutEnabled(loading.id, true) && !groupCfg.GetLockedResolution(loading))
+		if (isCurrentlyActive && cameraListLoader.isDynamicLayoutEnabled(loading.id) && !groupCfg.GetLockedResolution(loading))
 		{
 			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile());
 			if (!sizeToRequest.Equals(lastRequestedSize))
@@ -15273,7 +15288,7 @@ function FetchH264VideoModule()
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
 
 		var timeNow = performance.now();
-		videoPlayer.ImageRendered({ id: loading.uniqueId, w: frame.width, h: frame.height, loadingTime: lastFrameAt - timeNow, utc: frame.utc });
+		videoPlayer.ImageRendered({ id: loading.uniqueId, w: frame.width, h: frame.height, loadingTime: lastFrameAt - timeNow, utc: frame.utc, isFirstFrame: lastStreamBeganAt === lastFrameAt });
 		if (loading.isLive || loading.isTimeline())
 			playbackControls.FrameTimestampUpdated(false);
 		else
@@ -15378,9 +15393,10 @@ function FetchH264VideoModule()
 				if (loading.fullwidth !== frame.width || loading.fullheight !== frame.height)
 					nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
 			}
+			var digitalZoom = '<span title="Digital Zoom Factor"> \uD83D\uDD0D' + imageRenderer.zoomHandler.GetZoomFactor().toFixed(2) + 'x</span>';
 
 			nerdStats.BeginUpdate();
-			nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag());
+			nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag() + digitalZoom);
 			nerdStats.UpdateStat("Stream Resolution", null, frame.width + "x" + frame.height + nativeRes);
 			if (loading.isLive)
 				nerdStats.UpdateStat("Seek Position", "LIVE");
@@ -17297,8 +17313,32 @@ function ImageRenderer()
 	var $camimg_wrapper = $("#camimg_wrapper");
 	var sccc_outerObjs = $('#layoutbody,#camimg_wrapper,#zoomhint');
 
-	this.zoomHandler = null;
+	this.zoomHandler = zoomHandler_Adjustable;
 
+
+	this.GetNativeSize = function (ciLoading)
+	{
+		if (!ciLoading)
+			ciLoading = videoPlayer.Loading().image;
+
+		var x;
+		var isDynamicResolutionSource = cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
+		if (isDynamicResolutionSource)
+		{
+			var lockedResolution = groupCfg.GetLockedResolution(ciLoading);
+			if (lockedResolution)
+				x = lockedResolution; // This dynamic-resolution video source has a preferred size saved.
+			else
+				x = new ui3Rect($layoutbody.width(), $layoutbody.height()); // Size this dynamic-resolution video according to the viewport
+			x.MultiplyBy(100000); // Drastically enlarge so that it will fill the maxGroupImageDimension bounding box later.
+			// Apply dynamic stream limits
+			x.ApplyBoundingBox(new ui3Rect(self.maxGroupImageDimension, self.maxGroupImageDimension));
+			x.ExpandAround(new ui3Rect(self.minGroupImageDimension, self.minGroupImageDimension));
+		}
+		else
+			x = ciLoading.getFullRect(); // Use the video source metadata's native resolution
+		return x;
+	}
 	/**
 	 * Returns a ui3Rect defining the dimensions OF JPEG IMAGE to request for a given video source. NOT USABLE FOR H.264 YET
 	 * Considers:
@@ -17317,42 +17357,38 @@ function ImageRenderer()
 			ciLoading = videoPlayer.Loading().image;
 		if (!streamingProfile)
 			streamingProfile = genericQualityHelper.GetCurrentProfile();
-		var isJpegProfile = streamingProfile.vcodec == "jpeg";
-		var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
-		if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2 || !isJpegProfile)
-			ssFactor = 1;
-
-		var scaleFactor = dpiScalingFactor * ssFactor;
-		var zoomFactor = self.zoomHandler.GetZoomFactor();
-
-		var viewportRect = new ui3Rect($layoutbody.width(), $layoutbody.height())
-			.MultiplyBy(scaleFactor);
-
-		var maximizeSize = !isJpegProfile || zoomFactor >= 1 || streamingProfile.isHQSnapshot;
 
 		/** The size we want the video stream to be. */
-		var x;
+		var x = self.GetNativeSize(ciLoading);
+
+		if (!streamingProfile.isHQSnapshot)
+			SetDynamicNativeSize(ciLoading, x.w, x.h);
+
 		var isDynamicResolutionSource = cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
-		if (isDynamicResolutionSource)
+		if (streamingProfile.vcodec == "jpeg" && !streamingProfile.isHQSnapshot)
 		{
-			var lockedResolution = groupCfg.GetLockedResolution(ciLoading);
-			if (lockedResolution)
-				x = lockedResolution; // This dynamic-resolution video source has a preferred size saved.
-			else
-				x = viewportRect; // Size this dynamic-resolution video according to the viewport
-			if (maximizeSize)
-				x.MultiplyBy(100000); // Drastically enlarge so that it will fill the maxGroupImageDimension bounding box later.
-			else
-				x.ApplyBoundingBox(viewportRect); // Stream can be limited to viewport size for efficiency.
-			// Apply dynamic stream limits
-			x.ApplyBoundingBox(new ui3Rect(self.maxGroupImageDimension, self.maxGroupImageDimension));
-			x.ExpandAround(new ui3Rect(self.minGroupImageDimension, self.minGroupImageDimension));
-		}
-		else
-		{
-			x = ciLoading.getFullRect(); // Use the video source's native resolution as the baseline size
-			if (!maximizeSize)
-				x.ApplyBoundingBox(viewportRect); // Stream can be limited to viewport size for efficiency.
+			// We can limit this request size if the zoom factor is less than 1
+			var zoomFactor = self.zoomHandler.GetZoomFactor(ciLoading);
+			if (zoomFactor < 1)
+			{
+				var ssFactor = parseFloat(settings.ui3_jpegSupersampling);
+				if (isNaN(ssFactor) || ssFactor < 0.01 || ssFactor > 2)
+					ssFactor = 1;
+
+				var scaleFactor = dpiScalingFactor * ssFactor;
+				if (isDynamicResolutionSource)
+				{
+					var fit = self.zoomHandler.GetFittingZoomFactor(ciLoading);
+					if (zoomFactor < fit || self.zoomHandler.zoomsEqual(zoomFactor, fit))
+					{
+						var viewportRect = new ui3Rect($layoutbody.width(), $layoutbody.height())
+							.MultiplyBy(scaleFactor);
+						x.ApplyBoundingBox(viewportRect);
+					}
+				}
+				else
+					x.MultiplyBy(zoomFactor * scaleFactor);
+			}
 		}
 
 		// Honor resolution limit of streaming profile.
@@ -17364,18 +17400,12 @@ function ImageRenderer()
 			x.ApplyBoundingBox(profileBoundingBox);
 		}
 
-		if (!streamingProfile.isHQSnapshot)
-			SetIntendedSize(ciLoading, x.w, x.h);
+		if (isDynamicResolutionSource)
+			x.ExpandAround(new ui3Rect(self.minGroupImageDimension, self.minGroupImageDimension));
 
-		return x.Round().MakeDivisibleBy8();
-	}
+		x.Round().MakeDivisibleBy8();
 
-	this.ViewportCanSupportDynamicGroupLayout = function ()
-	{
-		var bodyW = $layoutbody.width();
-		var bodyH = $layoutbody.height();
-		return (bodyW * dpiScalingFactor) >= self.minGroupImageDimension
-			&& (bodyH * dpiScalingFactor) >= self.minGroupImageDimension;
+		return x;
 	}
 	this.SetMousePos = function (x, y)
 	{
@@ -17392,6 +17422,8 @@ function ImageRenderer()
 	}
 	this.ImgResized = function (isFromKeyboard)
 	{
+		imageRenderer.zoomHandler.notifyImageResized();
+
 		dpiScalingFactor = BI_GetDevicePixelRatio();
 
 		var imgAvailableWidth = $layoutbody.width();
@@ -17406,41 +17438,22 @@ function ImageRenderer()
 		var resizableSource = cameraListLoader.isDynamicLayoutEnabled(imgForSizing.id);
 		if (resizableSource)
 		{
-			widthForSizing = imgForSizing.intendedW;
-			heightForSizing = imgForSizing.intendedH;
+			widthForSizing = imgForSizing.dynamicNativeW;
+			heightForSizing = imgForSizing.dynamicNativeH;
 			if (!widthForSizing || !heightForSizing)
 			{
 				widthForSizing = imgForSizing.actualwidth;
 				heightForSizing = imgForSizing.actualheight;
 			}
 		}
-		else if (settings.ui3_zoom1x_mode === "Stream")
-		{
-			widthForSizing = imgForSizing.actualwidth;
-			heightForSizing = imgForSizing.actualheight;
-		}
 		else
 		{
 			widthForSizing = imgForSizing.fullwidth;
 			heightForSizing = imgForSizing.fullheight;
 		}
-		var imgDrawWidth = widthForSizing * zoomFactor;
-		var imgDrawHeight = heightForSizing * zoomFactor;
-		if (imgDrawWidth === 0)
-		{
-			imgDrawWidth = imgAvailableWidth;
-			imgDrawHeight = imgAvailableHeight;
-
-			var aspectRatio = widthForSizing / heightForSizing;
-			var newRatio = imgDrawWidth / imgDrawHeight;
-			if (newRatio < aspectRatio)
-				imgDrawHeight = imgDrawWidth / aspectRatio;
-			else
-				imgDrawWidth = imgDrawHeight * aspectRatio;
-			$camimg_wrapper.css("width", imgDrawWidth + "px").css("height", imgDrawHeight + "px");
-		}
-		else
-			$camimg_wrapper.css("width", widthForSizing + "px").css("height", heightForSizing + "px");
+		var imgDrawWidth = Math.max(1, widthForSizing * zoomFactor);
+		var imgDrawHeight = Math.max(1, heightForSizing * zoomFactor);
+		$camimg_wrapper.css("width", widthForSizing + "px").css("height", heightForSizing + "px");
 
 		imageIsLargerThanAvailableSpace = imgDrawWidth > imgAvailableWidth || imgDrawHeight > imgAvailableHeight;
 
@@ -17499,29 +17512,26 @@ function ImageRenderer()
 		previousImageDraw.z = zoomFactor;
 
 		// Css scaling shim:
-		if (zoomFactor > 1)
-		{
-			proposedX += (widthForSizing * (zoomFactor - 1)) / 2;
-			proposedY += (heightForSizing * (zoomFactor - 1)) / 2;
-		}
+		proposedX += (widthForSizing * (zoomFactor - 1)) / 2;
+		proposedY += (heightForSizing * (zoomFactor - 1)) / 2;
 
 		var transform = "translate(" + proposedX + "px, " + proposedY + "px)";
-		if (zoomFactor > 1)
-			transform += " scale(" + zoomFactor + ")";
+		transform += " scale(" + zoomFactor + ")";
 		$camimg_wrapper.css("transform", transform);
 
 		BI_CustomEvent.Invoke("ImageResized");
 	}
 	this.DigitalZoomNow = function (deltaY, isFromKeyboard)
 	{
-		self.setZoomHandler();
 		self.zoomHandler.OffsetZoom(deltaY);
-
+		AfterZoom(isFromKeyboard);
+	}
+	var AfterZoom = function (isFromKeyboard)
+	{
 		$("#zoomhint").stop(true, true);
 		$("#zoomhint").show();
 		zoomHintIsVisible = true;
-		var zoomFactor = self.zoomHandler.GetZoomFactor();
-		$("#zoomhint").html(zoomFactor === 0 ? "Fit" : ((Math.round(zoomFactor * 10) / 10) + "x"));
+		$("#zoomhint").html(GetDigitalZoomLabel());
 		RepositionZoomHint(isFromKeyboard);
 		if (zoomHintTimeout !== null)
 			clearTimeout(zoomHintTimeout);
@@ -17538,6 +17548,31 @@ function ImageRenderer()
 		self.ImgResized(isFromKeyboard);
 
 		SetCamCellCursor();
+	}
+	var GetDigitalZoomLabel = function ()
+	{
+		var fit = self.zoomHandler.GetFittingZoomFactor();
+		var zoomFactor = self.zoomHandler.GetZoomFactor();
+		var rounded = zoomFactor < 1 ? (Math.round(zoomFactor * 100) / 100) : (Math.round(zoomFactor * 10) / 10);
+		if (rounded === 1)
+		{
+			// Only show "1x" if it is exactly 1x.  Otherwise round down or up.
+			if (zoomFactor < 1)
+				rounded -= 0.01;
+			else if (zoomFactor > 1)
+				rounded += 0.1;
+		}
+
+		var text = rounded + "x";
+		var isOne = self.zoomHandler.zoomsEqual(1, zoomFactor);
+		var isFit = self.zoomHandler.zoomsEqual(fit, zoomFactor);
+		if (isOne && isFit)
+			text += " (Best Fit, Native)";
+		else if (isOne)
+			text += " (Native)";
+		else if (isFit)
+			text += " (Best Fit)";
+		return text;
 	}
 	this.DigitalPan = function (dx, dy)
 	{
@@ -17629,14 +17664,81 @@ function ImageRenderer()
 			deltaY *= -1;
 		self.DigitalZoomNow(deltaY, false);
 	});
-	this.setZoomHandler = function ()
+
 	{
-		if (settings.ui3_wheelZoomMethod === "Adjustable")
-			self.zoomHandler = zoomHandler_Adjustable;
-		else
-			self.zoomHandler = zoomHandler_Legacy;
+		var hammertime;
+		var pinchZoomState = { lastScale: 0, startingZoomFactor: 0, active: false };
+		var toast;
+		function onPinchStart(e)
+		{
+			if (settings.ui3_browserZoomEnabled !== "1")
+			{
+				pinchZoomState.active = true;
+				pinchZoomState.startingZoomFactor = self.zoomHandler.GetZoomFactor(videoPlayer.Loaded().image);
+				e.mouseX = e.center.x;
+				e.mouseY = e.center.y;
+				self.CamImgDragStart(e);
+			}
+		}
+		function onPinchMove(e)
+		{
+			if (!pinchZoomState.active)
+				return;
+			e.mouseX = e.center.x;
+			e.mouseY = e.center.y;
+			self.CamImgDragMove(e);
+
+			var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 200, 2000);
+			zoomSpeed /= 400; // Make it a number between 0.05 and 5, where default is 1
+
+			var speedExponent = zoomSpeed;
+			var scale = Math.pow(e.scale, speedExponent);
+
+			var szf = pinchZoomState.startingZoomFactor;
+			var zf = szf * Math.max(0.001, scale);
+			self.zoomHandler.SetZoomFactor(zf);
+			AfterZoom(false);
+		}
+		function onPinchEnd(e)
+		{
+			if (!pinchZoomState.active)
+				return;
+			e.mouseX = e.center.x;
+			e.mouseY = e.center.y;
+			self.CamImgDragEnd(e);
+			pinchZoomState.active = false;
+		}
+		this.onToggleBrowserZoom = function ()
+		{
+			if (settings.ui3_browserZoomEnabled === "1")
+			{
+				if (hammertime)
+				{
+					ReloadToTakeEffectToast();
+					// The following hammer destruction methods do not re-enable native browser zoom over the video player.
+					hammertime.off('pinchstart pinchmove pinchend');
+					hammertime.get('pinch').set({ enable: false });
+					hammertime.stop(true);
+					hammertime.destroy();
+					hammertime = null;
+					imageRenderer.zoomHandler.ZoomToFit();
+					resized();
+				}
+			}
+			else
+			{
+				if (!hammertime)
+				{
+					DestroyReloadToTakeEffectToast();
+					hammertime = new Hammer($layoutbody.get(0));
+					hammertime.get('pinch').set({ enable: true });
+					hammertime.on('pinchstart', onPinchStart);
+					hammertime.on('pinchmove', onPinchMove);
+					hammertime.on('pinchend', onPinchEnd);
+				}
+			}
+		}
 	}
-	self.setZoomHandler();
 }
 ///////////////////////////////////////////////////////////////
 // Digital Zoom ///////////////////////////////////////////////
@@ -17644,69 +17746,119 @@ function ImageRenderer()
 var zoomHandler_Adjustable = new (function ()
 {
 	var self = this;
-	var zoomIndex = -1; // All values less than 0 are treated as "zoom to fit".
-	var maxZoomIndex = Math.log2(50); // About 5.6
-	var defaultZoomStep = maxZoomIndex / 29; // 30 zoom levels with a standard wheel mouse, including "fit", same as legacy zoom handler.
+	var $layoutbody = $("#layoutbody");
+	var absoluteMinZoomFactor = 0.000001;
+	var absoluteMinZoomScaler = Math.log2(absoluteMinZoomFactor); // About -20
+	var maxZoomScaler = Math.log2(50); // About 5.6
+	var _zoomScaler = absoluteMinZoomScaler;
+	var wasZoomedToFit = true;
+	var defaultZoomStep = maxZoomScaler / 29; // 30 zoom levels with a standard wheel mouse, including "fit", same as legacy zoom handler.
 	this.OffsetZoom = function (deltaY)
 	{
 		var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
 		zoomSpeed /= 400;
-		// zoomSpeed is now a multiplier between 0.125 and 5.
+		// zoomSpeed is now a multiplier between 2% and 500%.
 		var delta = deltaY * defaultZoomStep * zoomSpeed;
-
-		if (delta > 0 && zoomIndex < 0)
-			zoomIndex = 0; // This ensures we always hit "1x" zoom precisely when zooming in.
-		else
-		{
-			var wasGreaterThan0 = zoomIndex > 0;
-			zoomIndex += delta;
-			if (zoomIndex < 0.071 && wasGreaterThan0)
-				zoomIndex = 0; // This ensures we always hit "1x" zoom precisely when zooming out.
-			if (zoomIndex < 0)
-				zoomIndex = -1;
-			if (zoomIndex > maxZoomIndex)
-				zoomIndex = maxZoomIndex;
-		}
+		self.SetZoomScaler(self.GetZoomScaler() + delta);
 	}
-	this.GetZoomFactor = function ()
+	this.GetZoomFactor = function (image)
 	{
-		var zoomFactor = Math.pow(2, zoomIndex);
-		if (zoomFactor < 1)
-			zoomFactor = 0;
-		else if (zoomFactor > 50)
-			zoomFactor = 50;
-		if (isNaN(zoomFactor))
-			zoomFactor = 0;
+		var zoomFactor = Math.pow(2, self.GetZoomScaler(image));
 		return zoomFactor;
 	}
-	this.ZoomToFit = function ()
+	this.SetZoomFactor = function (zoomFactor)
 	{
-		zoomIndex = -1;
-	}
-})();
-var zoomHandler_Legacy = new (function ()
-{
-	var self = this;
-	var zoomTable = [0, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 45, 50];
-	var digitalZoom = 0;
-	this.OffsetZoom = function (deltaY)
-	{
-		if (deltaY < 0)
-			digitalZoom -= 1;
-		else if (deltaY > 0)
-			digitalZoom += 1;
-		if (digitalZoom < 0)
-			digitalZoom = 0;
-		else if (digitalZoom >= zoomTable.length)
-			digitalZoom = zoomTable.length - 1;
-	}
-	this.GetZoomFactor = function ()
-	{
-		return zoomTable[digitalZoom];
+		self.SetZoomScaler(Math.log2(zoomFactor));
 	}
 	this.ZoomToFit = function ()
 	{
-		digitalZoom = 0;
+		_zoomScaler = self.GetFittingZoomScaler();
+	}
+	this.GetFittingZoomScaler = function (image)
+	{
+		return Math.log2(self.GetFittingZoomFactor(image));
+	}
+	this.GetFittingZoomFactor = function (image)
+	{
+		if (!videoPlayer)
+			return 0;
+		var oneXSize;
+		if (image && cameraListLoader.isDynamicLayoutEnabled(image.id))
+			oneXSize = image.getDynamicNativeRect();
+		if (!oneXSize || !oneXSize.w || !oneXSize.h)
+		{
+			if (!image)
+				image = videoPlayer.Loaded().image;
+			if (!image.id)
+				return absoluteMinZoomFactor;
+			oneXSize = imageRenderer.GetNativeSize(image);
+		}
+
+		var viewport = new ui3Rect($layoutbody.width(), $layoutbody.height());
+		var fitting = oneXSize.Copy().ExpandAround(viewport).ApplyBoundingBox(viewport);
+		if (fitting.w > fitting.h)
+			return fitting.w / oneXSize.w;
+		else
+			return fitting.h / oneXSize.h;
+	}
+	var applyZoomScalerLimits = function (zs, fitZoomScaler)
+	{
+		var minZoomScaler = fitZoomScaler; //fitZoomScaler may be positive (> 1 zoom factor) or negative (0-1 zoom factor).
+		if (settings.ui3_alwaysAllow1xVideoZoom === "1")
+			minZoomScaler = Math.min(0, minZoomScaler); // Allow zooming out to 1x even if that is smaller than viewport.
+		zs = Math.max(zs, minZoomScaler);
+		return Clamp(zs, absoluteMinZoomScaler, maxZoomScaler);
+	}
+	this.SetZoomScaler = function (zs)
+	{
+		var fit = self.GetFittingZoomScaler();
+		if (isNaN(zs))
+			zs = fit;
+		// Ensures we always hit "fit" zoom precisely when zooming past it.
+		zs = borderGuard(_zoomScaler, zs, fit);
+		// Ensures we always hit "1x" zoom precisely when zooming past it.
+		zs = borderGuard(_zoomScaler, zs, 0);
+		_zoomScaler = applyZoomScalerLimits(zs, fit);
+		wasZoomedToFit = self.zoomsEqual(_zoomScaler, fit);
+	}
+	this.GetZoomScaler = function (image)
+	{
+		var fit = self.GetFittingZoomScaler(image);
+		var zs = applyZoomScalerLimits(_zoomScaler, fit);
+		if (fit < 0 && zs !== fit && self.zoomsNear(zs, 0))
+			return 0;
+		if (0 < fit && zs !== 0 && self.zoomsNear(zs, fit))
+			return fit;
+		return zs;
+	}
+	var borderGuard = function (oldValue, newValue, border)
+	{
+		// Don't allow the value to cross the border until it has already been at the border.
+		if (oldValue < border && newValue > border)
+			return border;
+		if (oldValue > border && newValue < border)
+			return border;
+		if (self.zoomsEqual(newValue, border) && !self.zoomsEqual(oldValue, border))
+			return border; // New value is really close to the border. Put it right on the border to avoid future precision errors.
+		return newValue;
+	}
+	this.zoomsEqual = function (a, b)
+	{
+		return Math.abs(a - b) < 0.0001;
+	}
+	this.zoomsNear = function (a, b)
+	{
+		return Math.abs(a - b) < 0.05;
+	}
+	this.notifyImageResized = function ()
+	{
+		if (wasZoomedToFit && videoPlayer && videoPlayer.Loading().image.id)
+			self.ZoomToFit();
+	}
+	this.IsZoomedToFit = function ()
+	{
+		var fit = self.GetFittingZoomScaler();
+		return self.zoomsEqual(_zoomScaler, fit);
 	}
 })();
 ///////////////////////////////////////////////////////////////
@@ -17730,6 +17882,7 @@ function CameraNameLabels()
 	BI_CustomEvent.AddListener("ImageResized", onui3_cameraLabelsChanged);
 	BI_CustomEvent.AddListener("CameraListLoaded", onui3_cameraLabelsChanged);
 	BI_CustomEvent.AddListener("DynamicGroupLayoutLoaded", onui3_cameraLabelsChanged);
+	BI_CustomEvent.AddListener("FirstFrameLoaded", onui3_cameraLabelsChanged);
 
 	this.show = function (isHotkeyShow)
 	{
@@ -17753,8 +17906,8 @@ function CameraNameLabels()
 		if (show_names || show_overlay_icons)
 		{
 			var nativeRes = cameraListLoader.isDynamicLayoutEnabled(loaded.image.id)
-				? { w: loaded.image.actualwidth, h: loaded.image.actualheight }
-				: { w: loaded.image.fullwidth, h: loaded.image.fullheight };
+				? loaded.image.getActualRect()
+				: loaded.image.getFullRect();
 			var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / nativeRes.w;
 			var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / nativeRes.h;
 			var offsetCamHeight = settings.ui3_cameraLabels_position === CameraLabelPositionValues.Bottom || settings.ui3_cameraLabels_position === CameraLabelPositionValues.Below;
@@ -17764,6 +17917,7 @@ function CameraNameLabels()
 			var fontSizePt = parseFloat(settings.ui3_cameraLabels_fontSize);
 
 			var zoomAmount = (scaleX + scaleY) / 2; // scaleX and scaleY are probably the same or very close anyway.
+			zoomAmount = Clamp(zoomAmount, 0.5, 2); // Font sizing is a little screwy since 2022-03 or earlier. This keeps it from getting too big.
 			fontSizePt *= zoomAmount;
 			var minScaledFontSize = parseFloat(settings.ui3_cameraLabels_minimumFontSize);
 			if (fontSizePt < minScaledFontSize)
@@ -18695,8 +18849,8 @@ function GroupCfg()
 	}
 	this.GetResolutionThatWouldBeLockedIn = function (image)
 	{
-		var w = image.intendedW;
-		var h = image.intendedH;
+		var w = image.dynamicNativeW;
+		var h = image.dynamicNativeH;
 		if (w < image.actualwidth || h < image.actualheight)
 		{
 			w = image.actualwidth;
@@ -19208,21 +19362,21 @@ function StreamingProfile()
 			return null;
 	}
 }
-function SetIntendedSize(loading, w, h)
+function SetDynamicNativeSize(loading, w, h)
 {
-	loading.intendedW = w;
-	loading.intendedH = h;
+	loading.dynamicNativeW = w;
+	loading.dynamicNativeH = h;
 	var imgLoading = videoPlayer.Loading().image;
 	if (imgLoading.id === loading.id)
 	{
-		imgLoading.intendedW = w;
-		imgLoading.intendedH = h;
+		imgLoading.dynamicNativeW = w;
+		imgLoading.dynamicNativeH = h;
 	}
 	var imgLoaded = videoPlayer.Loaded().image;
 	if (imgLoaded.id === loading.id)
 	{
-		imgLoaded.intendedW = w;
-		imgLoaded.intendedH = h;
+		imgLoaded.dynamicNativeW = w;
+		imgLoaded.dynamicNativeH = h;
 	}
 }
 function JpegSnapshotArgs(loadingImg)
@@ -19472,6 +19626,7 @@ function GenericQualityHelper()
 			p.aClr = "#008248";
 			p.w = 3840;
 			p.h = 2160;
+			p.q = 50;
 			p.limitBitrate = 2;
 			p.kbps = 8192;
 			profiles.push(p);
@@ -19483,6 +19638,7 @@ function GenericQualityHelper()
 			p.aClr = "#0048A2";
 			p.w = 2560;
 			p.h = 1440;
+			p.q = 40;
 			p.limitBitrate = 2;
 			p.kbps = 4096;
 			profiles.push(p);
@@ -19494,6 +19650,7 @@ function GenericQualityHelper()
 			p.aClr = "#004882";
 			p.w = 1920;
 			p.h = 1080;
+			p.q = 35;
 			p.limitBitrate = 2;
 			p.kbps = 2048;
 			profiles.push(p);
@@ -19505,6 +19662,7 @@ function GenericQualityHelper()
 			p.aClr = "#003862";
 			p.w = 1280;
 			p.h = 720;
+			p.q = 35;
 			p.limitBitrate = 2;
 			p.kbps = 1024;
 			profiles.push(p);
@@ -19516,6 +19674,7 @@ function GenericQualityHelper()
 			p.aClr = "#884400";
 			p.w = 856;
 			p.h = 480;
+			p.q = 30;
 			p.limitBitrate = 2;
 			p.kbps = 456;
 			profiles.push(p);
@@ -19527,6 +19686,7 @@ function GenericQualityHelper()
 			p.aClr = "#883000";
 			p.w = 640;
 			p.h = 360;
+			p.q = 30;
 			p.limitBitrate = 2;
 			p.kbps = 256;
 			profiles.push(p);
@@ -19538,6 +19698,7 @@ function GenericQualityHelper()
 			p.aClr = "#882000";
 			p.w = 427;
 			p.h = 240;
+			p.q = 30;
 			p.limitBitrate = 2;
 			p.kbps = 114;
 			profiles.push(p);
@@ -19549,6 +19710,7 @@ function GenericQualityHelper()
 			p.aClr = "#880000";
 			p.w = 256;
 			p.h = 144;
+			p.q = 30;
 			p.limitBitrate = 2;
 			p.kbps = 41;
 			profiles.push(p);
@@ -28744,27 +28906,35 @@ function OnChange_ui3_bypass_single_camera_groups()
 {
 	cameraListLoader.LoadCameraList();
 }
-var ui3_contextMenus_trigger_toast = null;
-function OnChange_ui3_contextMenus_trigger(newValue)
+var ui3_reload_to_take_effect_toast = null;
+function ReloadToTakeEffectToast(extraMessage)
 {
-	if (ui3_contextMenus_trigger_toast)
-		ui3_contextMenus_trigger_toast.remove();
-	ui3_contextMenus_trigger_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Context menus will open on " + settings.ui3_contextMenus_trigger + ".<br><br>Clicking this message will reload the page.", 60000, false
+	DestroyReloadToTakeEffectToast();
+	if (extraMessage)
+		extraMessage = "<br><br>" + extraMessage;
+	else
+		extraMessage = "";
+	ui3_reload_to_take_effect_toast = toaster.Info("This setting will take effect when you reload the page." + extraMessage + "<br><br>Clicking this message will reload the page.", 60000, false
 		, function ()
 		{
 			ReloadInterface();
 		});
 }
-var ui3_ptzPresetShowCount_toast = null;
+function DestroyReloadToTakeEffectToast()
+{
+	if (ui3_reload_to_take_effect_toast)
+	{
+		ui3_reload_to_take_effect_toast.remove();
+		ui3_reload_to_take_effect_toast = null;
+	}
+}
+function OnChange_ui3_contextMenus_trigger(newValue)
+{
+	ReloadToTakeEffectToast("Context menus will open on " + settings.ui3_contextMenus_trigger + ".");
+}
 function OnChange_ui3_ptzPresetShowCount(newValue)
 {
-	if (ui3_ptzPresetShowCount_toast)
-		ui3_ptzPresetShowCount_toast.remove();
-	ui3_ptzPresetShowCount_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>" + settings.ui3_ptzPresetShowCount + " PTZ presets will be shown.<br><br>Clicking this message will reload the page.", 60000, false
-		, function ()
-		{
-			ReloadInterface();
-		});
+	ReloadToTakeEffectToast(settings.ui3_ptzPresetShowCount + " PTZ presets will be shown.");
 }
 function GetPreferredContextMenuTrigger()
 {
@@ -28808,13 +28978,7 @@ function OnChange_ui3_topbar_warnings_counter()
 }
 function OnChange_ui3_h264_choice()
 {
-	if (ui3_contextMenus_trigger_toast)
-		ui3_contextMenus_trigger_toast.remove();
-	ui3_contextMenus_trigger_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
-		, function ()
-		{
-			ReloadInterface();
-		});
+	ReloadToTakeEffectToast();
 	uiSettingsPanel.Refresh();
 }
 function Precondition_ui3_h264_choice()
@@ -28825,16 +28989,9 @@ function Precondition_ui3_edge_fetch_bug_h264_enable()
 {
 	return fetch_streams_cant_close_bug;
 }
-var ui3_edge_fetch_bug_h264_enable_toast = null;
 function OnChange_ui3_edge_fetch_bug_h264_enable()
 {
-	if (ui3_edge_fetch_bug_h264_enable_toast)
-		ui3_edge_fetch_bug_h264_enable_toast.remove();
-	ui3_edge_fetch_bug_h264_enable_toast = toaster.Info("This setting will take effect when you reload the page.<br><br>Clicking this message will reload the page.", 60000, false
-		, function ()
-		{
-			ReloadInterface();
-		});
+	ReloadToTakeEffectToast();
 }
 function OnChange_ui3_streamingProfileBitRateMax()
 {
@@ -28860,12 +29017,6 @@ function OnChange_ui3_icons_extraVisibility()
 {
 	cornerStatusIcons.ReInitialize();
 	cameraNameLabels.show();
-}
-function OnChange_ui3_wheelZoomMethod()
-{
-	zoomHandler_Adjustable.ZoomToFit();
-	zoomHandler_Legacy.ZoomToFit();
-	imageRenderer.ImgResized();
 }
 function OnChange_ui3_fullscreen_videoonly()
 {
@@ -28949,6 +29100,18 @@ function OnChange_ui3_prioritizeTriggered()
 function OnChange_ui3_playback_skipDeadAir()
 {
 	videoPlayer.RefreshVideoStream();
+}
+function OnChange_ui3_browserZoomEnabled()
+{
+	SetBrowserZoom(settings.ui3_browserZoomEnabled === "1");
+	imageRenderer.onToggleBrowserZoom();
+}
+function SetBrowserZoom(enable)
+{
+	if (enable)
+		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1');
+	else
+		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no');
 }
 ///////////////////////////////////////////////////////////////
 // Form Field Helpers /////////////////////////////////////////
@@ -30193,7 +30356,7 @@ function makeUnselectable($target)
 		.addClass('unselectable') // All these attributes are inheritable
 		.attr('unselectable', 'on') // For IE9 - This property is not inherited, needs to be placed onto everything
 		.attr('draggable', 'false') // For moz and webkit, although Firefox 16 ignores this when -moz-user-select: none; is set, it's like these properties are mutually exclusive, seems to be a bug.
-		.on('dragstart', function () { return false; });  // Needed since Firefox 16 seems to ingore the 'draggable' attribute we just applied above when '-moz-user-select: none' is applied to the CSS 
+		.on('dragstart', function () { return false; });  // Needed since Firefox 16 seems to ingore the 'draggable' attribute we just applied above when '-moz-user-select: none' is applied to the CSS
 
 	$target // Apply non-inheritable properties to the child elements
 		.find('*:not(.selectable)')
@@ -31520,10 +31683,25 @@ function ui3Rect(w, h)
 		self.h = MakeDivisibleBy8(self.h);
 		return self;
 	}
+	/** Returns a copy of this rectangle. */
+	this.Copy = function ()
+	{
+		return new ui3Rect(self.w, self.h);
+	}
+	this.toString = function ()
+	{
+		return self.w + "x" + self.h;
+	}
 }
 function MakeDivisibleBy8(num)
 {
-	return num - num % 8;
+	var rem = num % 8;
+	if (!rem)
+		return num;
+	if (num < 3840)
+		return num + (8 - num % 8);
+	else
+		return num - num % 8;
 }
 function getHotkeyTextValueFromHotkeyValue(val)
 {
