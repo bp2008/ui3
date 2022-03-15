@@ -16784,6 +16784,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			jmuxer.destroy();
 			jmuxer = null;
 		}
+		HTML5VideoBreakDetector.Reset();
 		hasToldPlayerToPlay = false;
 		player.pause();
 		delayCompensation = new HTML5DelayCompensationHelper(player);
@@ -16874,6 +16875,12 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		}
 
 		acceptedFrameCount++;
+		if (HTML5VideoBreakDetector.CheckForBreak(player, acceptedFrameCount, finishedFrameCount))
+		{
+			console.log("HTML5 video player break detected.");
+			videoPlayer.ReopenStreamAtCurrentSeekPosition();
+			return;
+		}
 		timestampLastAcceptedFrame = frame.time;
 		lastFrameReceivedAt = performance.now();
 		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
@@ -17167,6 +17174,32 @@ function HTML5BetterFrameTiming(video, callback)
 	}
 	timeCheck();
 }
+var HTML5VideoBreakDetector = new (function ()
+{
+	var playerWasReady = false;
+	this.Reset = function ()
+	{
+		playerWasReady = false;
+	}
+	/**
+	 * Returns true if it is believed that the HTML5 video player is in a broken state.
+	 * @param {Object} player HTML5 video player
+	 * @param {Number} acceptedFrameCount Number of frames accepted from the network.
+	 * @param {Number} finishedFrameCount Number of frames rendered.
+	 * @returns {Boolean} Returns true if it is believed that the HTML5 video player is in a broken state.
+	 */
+	this.CheckForBreak = function (player, acceptedFrameCount, finishedFrameCount)
+	{
+		if (playerWasReady)
+		{
+			if (acceptedFrameCount - finishedFrameCount >= 5 && player.readyState < 3)
+				return true;
+		}
+		else if (player.readyState >= 3)
+			playerWasReady = true;
+		return false;
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // Network Delay Calculator - An Imperfect Science ////////////
 ///////////////////////////////////////////////////////////////
