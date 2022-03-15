@@ -16674,6 +16674,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			if (allQueuedFrames.length > 0)
 				finishFramesToTime(allQueuedFrames[allQueuedFrames.length - 1].time);
 		}
+		HTML5VideoBreakDetector.NotifyWaitingState();
 	}
 	var dropFrame = function ()
 	{
@@ -16877,7 +16878,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		acceptedFrameCount++;
 		if (HTML5VideoBreakDetector.CheckForBreak(player, acceptedFrameCount, finishedFrameCount))
 		{
-			console.log("HTML5 video player break detected.");
+			toaster.Warning("Detected HTML5 video player stall. Reopening video stream.", 5000);
 			videoPlayer.ReopenStreamAtCurrentSeekPosition();
 			return;
 		}
@@ -17177,9 +17178,17 @@ function HTML5BetterFrameTiming(video, callback)
 var HTML5VideoBreakDetector = new (function ()
 {
 	var playerWasReady = false;
+	var isWaitingState = false;
+	var lastFinishedFrameCount = 0;
 	this.Reset = function ()
 	{
 		playerWasReady = false;
+		isWaitingState = false;
+		lastFinishedFrameCount = 0;
+	}
+	this.NotifyWaitingState = function ()
+	{
+		isWaitingState = true;
 	}
 	/**
 	 * Returns true if it is believed that the HTML5 video player is in a broken state.
@@ -17190,9 +17199,14 @@ var HTML5VideoBreakDetector = new (function ()
 	 */
 	this.CheckForBreak = function (player, acceptedFrameCount, finishedFrameCount)
 	{
+		if (lastFinishedFrameCount !== finishedFrameCount)
+		{
+			isWaitingState = false;
+			lastFinishedFrameCount = finishedFrameCount;
+		}
 		if (playerWasReady)
 		{
-			if (acceptedFrameCount - finishedFrameCount >= 5 && player.readyState < 3)
+			if (isWaitingState && acceptedFrameCount - finishedFrameCount >= 5 && player.readyState < 3)
 				return true;
 		}
 		else if (player.readyState >= 3)
