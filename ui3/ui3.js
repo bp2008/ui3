@@ -15265,7 +15265,7 @@ function FetchH264VideoModule()
 	{
 		if (isCurrentlyActive && cameraListLoader.isDynamicLayoutEnabled(loading.id) && !groupCfg.GetLockedResolution(loading))
 		{
-			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile());
+			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile(), true);
 			if (!sizeToRequest.Equals(lastRequestedSize))
 				AfterResized2Debounced();
 		}
@@ -15275,7 +15275,7 @@ function FetchH264VideoModule()
 	{
 		if (isCurrentlyActive && cameraListLoader.isDynamicLayoutEnabled(loading.id) && !groupCfg.GetLockedResolution(loading))
 		{
-			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile());
+			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile(), true);
 			if (!sizeToRequest.Equals(lastRequestedSize))
 				ReopenStreamAtCurrentSeekPosition();
 		}
@@ -17185,12 +17185,20 @@ var HTML5VideoBreakDetector = new (function ()
 {
 	var playerWasReady = false;
 	var isWaitingState = false;
+	var didPlayAFrame = false;
 	var lastFinishedFrameCount = 0;
+	var lastFrameRenderedAtTime = 0;
+	var lastStallAtTime = -1;
+	var stallTimeout = 2000;
+
 	this.Reset = function ()
 	{
 		playerWasReady = false;
 		isWaitingState = false;
+		didPlayAFrame = false;
 		lastFinishedFrameCount = 0;
+		lastFrameRenderedAtTime = performance.now();
+		lastStallAtTime = -1;
 	}
 	this.NotifyWaitingState = function ()
 	{
@@ -17205,18 +17213,34 @@ var HTML5VideoBreakDetector = new (function ()
 	 */
 	this.CheckForBreak = function (player, acceptedFrameCount, finishedFrameCount)
 	{
+		var now = performance.now();
 		if (lastFinishedFrameCount !== finishedFrameCount)
 		{
+			didPlayAFrame = true;
 			isWaitingState = false;
 			lastFinishedFrameCount = finishedFrameCount;
+			lastFrameRenderedAtTime = now;
 		}
 		if (playerWasReady)
 		{
-			if (isWaitingState && acceptedFrameCount - finishedFrameCount >= 5 && player.readyState < 3)
-				return true;
+			if (didPlayAFrame && isWaitingState && acceptedFrameCount - finishedFrameCount >= 5 && player.readyState < 3)
+			{
+				if (lastStallAtTime < 0)
+					lastStallAtTime = now;
+				if (now - lastFrameRenderedAtTime > stallTimeout && now - lastStallAtTime > stallTimeout)
+				{
+					stallTimeout += 2000; // Add 2 seconds to stall time each time a stall is detected, so that on badly-behaving systems it won't be as disruptive.
+					return true;
+				}
+			}
+			else
+				lastStallAtTime = -1;
 		}
 		else if (player.readyState >= 3)
+		{
 			playerWasReady = true;
+			lastStallAtTime = -1;
+		}
 		return false;
 	}
 })();
@@ -17403,8 +17427,9 @@ function ImageRenderer()
 	 * * Dynamic group layouts
 	 * @param {BICameraData} ciLoading BICameraData to consider for image loading.  If omitted, the currently loading image object is used (videoPlayer.Loading().image).
 	 * @param {StreamingProfile} streamingProfile Streaming profile to confine the returned dimensions.  If omitted, the currently selected streaming profile will be used.
+	 * @param {Boolean} doNotRemember If true, the dynamicNative properties of the video source will NOT be set.  Pass true if the size being requested will not be used to load video.
 	 */
-	this.GetSizeToRequest = function (ciLoading, streamingProfile)
+	this.GetSizeToRequest = function (ciLoading, streamingProfile, doNotRemember)
 	{
 		if (!ciLoading)
 			ciLoading = videoPlayer.Loading().image;
@@ -17414,7 +17439,7 @@ function ImageRenderer()
 		/** The size we want the video stream to be. */
 		var x = self.GetNativeSize(ciLoading);
 
-		if (!streamingProfile.isHQSnapshot)
+		if (!streamingProfile.isHQSnapshot && !doNotRemember)
 			SetDynamicNativeSize(ciLoading, x.w, x.h);
 
 		var isDynamicResolutionSource = cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
@@ -17823,9 +17848,9 @@ var zoomHandler_Adjustable = new (function ()
 	{
 		self.SetZoomScaler(Math.log2(zoomFactor));
 	}
-	this.ZoomToFit = function ()
+	this.ZoomToFit = function (image)
 	{
-		_zoomScaler = self.GetFittingZoomScaler();
+		_zoomScaler = self.GetFittingZoomScaler(image);
 	}
 	this.GetFittingZoomScaler = function (image)
 	{
@@ -17836,16 +17861,14 @@ var zoomHandler_Adjustable = new (function ()
 		if (!videoPlayer)
 			return 0;
 		var oneXSize;
-		if (image && cameraListLoader.isDynamicLayoutEnabled(image.id))
+		if (!image)
+			image = videoPlayer.Loaded().image;
+		if (!image.id)
+			return absoluteMinZoomFactor;
+		if (cameraListLoader.isDynamicLayoutEnabled(image.id))
 			oneXSize = image.getDynamicNativeRect();
 		if (!oneXSize || !oneXSize.w || !oneXSize.h)
-		{
-			if (!image)
-				image = videoPlayer.Loaded().image;
-			if (!image.id)
-				return absoluteMinZoomFactor;
 			oneXSize = imageRenderer.GetNativeSize(image);
-		}
 
 		var viewport = new ui3Rect($layoutbody.width(), $layoutbody.height());
 		var fitting = oneXSize.Copy().ExpandAround(viewport).ApplyBoundingBox(viewport);
@@ -17905,8 +17928,8 @@ var zoomHandler_Adjustable = new (function ()
 	}
 	this.notifyImageResized = function ()
 	{
-		if (wasZoomedToFit && videoPlayer && videoPlayer.Loading().image.id)
-			self.ZoomToFit();
+		if (wasZoomedToFit && videoPlayer && videoPlayer.Loaded().image.id)
+			self.ZoomToFit(videoPlayer.Loaded().image);
 	}
 	this.IsZoomedToFit = function ()
 	{
