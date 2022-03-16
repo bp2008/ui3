@@ -6818,7 +6818,7 @@ function ClipTimeline()
 	/** Returns a timelineArgs object that will persist the current timeline playback position if sent to videoPlayer.LoadLiveCamera. */
 	this.getTimelineArgsForCameraSwitch = function ()
 	{
-		if (timeline && videoPlayer.Loading().image.isTimeline())
+		if (timeline && (videoPlayer.Loading().image.isTimeline() || (currentPrimaryTab === "timeline" && !videoPlayer.Loading().image.isLive)))
 			return timeline.getCurrentTimelineArgs();
 		return null;
 	}
@@ -13311,12 +13311,18 @@ function VideoPlayerController()
 			toaster.Error("The target camera or group could not be found.");
 			return;
 		}
+		if (timelineArgs)
+		{
+			if (typeof timelineArgs.timelineMs === "number")
+				timelineArgs.timelineMs = clipTimeline.BoundsCheckTimelineMs(timelineArgs.timelineMs);
+			if (typeof timelineArgs.timelineMs !== "number")
+				timelineArgs = {}; // Nothing else matters if timelineMs is not defined.
+		}
 		timelineArgs = $.extend({
 			timelineMs: undefined,
 			timelineJump: undefined,
 			startPaused: false
 		}, timelineArgs);
-		timelineArgs.timelineMs = clipTimeline.BoundsCheckTimelineMs(timelineArgs.timelineMs);
 
 		if ((!camData.isEnabled || !camData.webcast) && !cameraListLoader.CameraIsGroupOrCycle(camData))
 		{
@@ -13366,7 +13372,7 @@ function VideoPlayerController()
 			clipLoader.LoadClips(); // This method does not waste resources if not on the clips tab.
 
 		videoOverlayHelper.ShowLoadingOverlay(true);
-		var startPaused = false || timelineArgs.startPaused;
+		var startPaused = timelineArgs.startPaused;
 		if (playerModule)
 			playerModule.OpenVideo(cli, 0, startPaused);
 
@@ -13639,7 +13645,7 @@ function VideoPlayerController()
 	this.lastFrameUtc = 0;
 	this.ImageRendered = function (properties)
 	{
-		if (properties.id !== currentlyLoadingImage.id)
+		if (properties.id !== currentlyLoadingImage.uniqueId)
 		{
 			console.log("ImageRendered called for wrong video source.", properties.id, properties, "Currently loading: " + currentlyLoadingImage.id);
 			return;
