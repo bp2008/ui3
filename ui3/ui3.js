@@ -2936,7 +2936,7 @@ $(function ()
 		{
 			$("#layoutleftLive").show();
 			$("#layoutleftRecordings").hide();
-			$("#layoutbottom").hide();
+			$("#layoutbottomTimeline").hide();
 			$("body").removeClass("tabTimeline");
 			if (videoPlayer && videoPlayer.Loading().image.isTimeline())
 				videoPlayer.goLive();
@@ -2945,7 +2945,7 @@ $(function ()
 		{
 			$("#layoutleftLive").hide();
 			$("#layoutleftRecordings").show();
-			$("#layoutbottom").hide();
+			$("#layoutbottomTimeline").hide();
 			$("body").removeClass("tabTimeline");
 			$("#recordingsFilterByHeading").text("Filter by:");
 			if (videoPlayer && videoPlayer.Loading().image.isTimeline())
@@ -2955,7 +2955,7 @@ $(function ()
 		{
 			$("#layoutleftLive").hide();
 			$("#layoutleftRecordings").hide();
-			$("#layoutbottom").show();
+			$("#layoutbottomTimeline").show();
 			$("body").addClass("tabTimeline");
 		}
 
@@ -6723,7 +6723,6 @@ function ClipTimeline()
 			}
 		});
 
-		$("#layoutbottomTimeline").show();
 		// The [timeline] field will contain a reference to the component, set by the component after its creation.
 		new Vue({ el: "#layoutbottomTimeline" });
 

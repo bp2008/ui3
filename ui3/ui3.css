@@ -295,7 +295,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	background-color: var(--panel-bg-color);
 	left: 256px;
 	bottom: 0px;
-	display: none;
+	display: block;
 }
 
 .sideBarRight #layoutleft
