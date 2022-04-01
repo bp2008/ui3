@@ -17477,7 +17477,7 @@ function ImageRenderer()
 			x.ApplyBoundingBox(profileBoundingBox);
 		}
 
-		if (isDynamicResolutionSource)
+		if (isDynamicResolutionSource || ciLoading.isTimeline()) // All timeline video uses dynamic group sizing logic so these minimum dimensions apply.
 			x.ExpandAround(new ui3Rect(self.minGroupImageDimension, self.minGroupImageDimension));
 
 		x.Round().MakeDivisibleBy8();
