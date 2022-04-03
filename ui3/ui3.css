@@ -5656,7 +5656,7 @@ div::-webkit-scrollbar-corner
 	display: none !important;
 }
 
-.nonMatchingNativeRes, .dprTag
+.nonMatchingNativeRes, .dprTag, .requestedRes
 {
 	color: #e6e660;
 }

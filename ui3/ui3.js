@@ -13641,6 +13641,16 @@ function VideoPlayerController()
 			imageRenderer.zoomHandler.ZoomToFit();
 		resized();
 	}
+	this.notifyImageLoading = function (loading, sizeToRequest)
+	{
+		loading.reqwidth = sizeToRequest.w;
+		loading.reqheight = sizeToRequest.h;
+		if (loading.id === currentlyLoadingImage.id)
+		{
+			currentlyLoadingImage.reqwidth = loading.reqwidth;
+			currentlyLoadingImage.reqheight = loading.reqheight;
+		}
+	}
 	this.lastFrameUtc = 0;
 	this.ImageRendered = function (properties)
 	{
@@ -13825,6 +13835,10 @@ function BICameraData()
 	this.dynamicNativeW = 0;
 	/** "Native resolution" of dynamically sized group frame. */
 	this.dynamicNativeH = 0;
+	/** Resolution that was last requested. */
+	this.reqwidth = 0;
+	/** Resolution that was last requested. */
+	this.reqheight = 0;
 	/** Path component to use in URLs.  For live/timeline streams, this is the same as [id] and [uniqueId].  For clips, this is a string like "@12345.bvr". */
 	this.path = "";
 	/** Unique ID of the image provider. One of:
@@ -13872,6 +13886,8 @@ function BICameraData()
 		self.actualheight = other.actualheight;
 		self.dynamicNativeW = other.dynamicNativeW;
 		self.dynamicNativeH = other.dynamicNativeH;
+		self.reqwidth = other.reqwidth;
+		self.reqheight = other.reqheight;
 		self.path = other.path;
 		self.uniqueId = other.uniqueId;
 		self.isLive = other.isLive;
@@ -13910,6 +13926,11 @@ function BICameraData()
 	this.getActualRect = function ()
 	{
 		return new ui3Rect(self.actualwidth, self.actualheight);
+	}
+	/** Returns a new ui3Rect representing the resolution that was last requested. */
+	this.getRequestedRect = function ()
+	{
+		return new ui3Rect(self.reqwidth, self.reqheight);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -14100,7 +14121,7 @@ function JpegVideoModule()
 							nativeRes = " (dynamically sized group)";
 						else
 						{
-							nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
+							nativeRes = " (Native: " + loading.getFullRect().toString() + ")";
 							if (loading.fullwidth !== loaded.actualwidth || loading.fullheight !== loaded.actualheight)
 								nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
 						}
@@ -14110,7 +14131,9 @@ function JpegVideoModule()
 
 						nerdStats.BeginUpdate();
 						nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag() + digitalZoom);
-						nerdStats.UpdateStat("Stream Resolution", null, loaded.actualwidth + "x" + loaded.actualheight + nativeRes);
+						nerdStats.UpdateStat("Stream Resolution", null, loaded.getActualRect().toString() + nativeRes);
+						if (!loaded.getActualRect().Equals(loaded.getRequestedRect()))
+							nerdStats.UpdateStat("Requested Res", null, '<span class="requestedRes">' + loaded.getRequestedRect().toString() + '</span>');
 						if (loading.isLive)
 							nerdStats.UpdateStat("Seek Position", "LIVE");
 						else if (loading.isTimeline())
@@ -14458,6 +14481,7 @@ function JpegVideoModule()
 				SetImageLoadTimeout();
 				lastLoadedTimeValue = timeValue;
 				currentImageTimestampGuessUtc = loading.isLive ? GetUtcNow() : -1;
+				videoPlayer.notifyImageLoading(loading, lastRequestedSize);
 				LoadImageFromUrl(imgSrcPath, currentStreamId);
 			}
 		}
@@ -14863,6 +14887,7 @@ function FetchH264VideoModule()
 		var groupArgs = groupCfg.GetUrlArgs(loading);
 		var profileArgs = genericQualityHelper.GetCurrentProfile().GetUrlArgs(loading);
 		lastRequestedSize = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile());
+		videoPlayer.notifyImageLoading(loading, lastRequestedSize);
 		var fetchOptions = { timestampScale: 1 };
 		if (loading.isTimeline())
 		{
@@ -15376,6 +15401,7 @@ function FetchH264VideoModule()
 			perfNow = performance.now();
 		if (nerdStats.IsOpen())
 		{
+			var loaded = videoPlayer.Loaded().image;
 			var codecs = "h264";
 			if (streamHasAudio == 1 && audioCodec)
 				codecs += ", " + audioCodec;
@@ -15403,6 +15429,8 @@ function FetchH264VideoModule()
 			nerdStats.BeginUpdate();
 			nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag() + digitalZoom);
 			nerdStats.UpdateStat("Stream Resolution", null, frame.width + "x" + frame.height + nativeRes);
+			if (!loaded.getActualRect().Equals(loaded.getRequestedRect()))
+				nerdStats.UpdateStat("Requested Res", null, '<span class="requestedRes">' + loaded.getRequestedRect().toString() + '</span>');
 			if (loading.isLive)
 				nerdStats.UpdateStat("Seek Position", "LIVE");
 			else if (loading.isTimeline())
@@ -27392,6 +27420,7 @@ function UI3NerdStats()
 		[
 			"Viewport"
 			, "Stream Resolution"
+			, "Requested Res"
 			, "Seek Position"
 			, "Frame Time"
 			, "Stream Timestamp"
