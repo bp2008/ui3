@@ -2076,6 +2076,16 @@ div.invisibleLabel
 	padding-top: 2px;
 }
 
+.orangeIcon
+{
+	color: #FF5F00;
+}
+
+.greenIcon
+{
+	color: #64C35C;
+}
+
 /* Left Bar Checkboxes */
 .leftBarBool
 {

@@ -636,6 +636,9 @@ var togglableUIFeatures =
 // High priority notes ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 
+// Most custom db views are lost when auto-refreshing the clip list
+// Clip list auto-refresh is only requesting data up to some time span after the last seen clip, should be up to the current time plus some.
+
 ///////////////////////////////////////////////////////////////
 // Low priority notes /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -1476,7 +1479,7 @@ var defaultSettings =
 			key: "ui3_clipicon_trigger_sentry"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_logo"></use></svg> for AI-verified alerts'
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_cbChecked"></use></svg> for AI-verified alerts'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -4234,7 +4237,9 @@ function DropdownBoxes()
 				this.items.push(new DropdownListItem({ id: "flagged", text: "Flagged", icon: "#svg_x5F_Flag", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "new.clipboard", text: "Clipboard", icon: "#svg_mio_crop", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "cancelled", text: "Cancelled alerts", icon: "#svg_x5F_HoldProfile", iconClass: "smallIcon" }));
-				this.items.push(new DropdownListItem({ id: "confirmed", text: "Confirmed alerts", icon: "#sentry_logo", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "confirmed", text: "Confirmed alerts", icon: "#svg_mio_cbChecked", iconClass: "smallIcon greenIcon" }));
+				this.items.push(new DropdownListItem({ id: "people", text: "Person alerts", icon: "#svg_mio_man", iconClass: "smallIcon orangeIcon" }));
+				this.items.push(new DropdownListItem({ id: "vehicles", text: "Vehicle alerts", icon: "#svg_mio_directions_car", iconClass: "smallIcon orangeIcon" }));
 
 				this.items.push(new DropdownListItem({ id: "separator" }));
 
@@ -4257,6 +4262,7 @@ function DropdownBoxes()
 				this.items.push(new DropdownListItem({ id: "separator" }));
 
 				this.items.push(new DropdownListItem({ id: "memos", text: "Memos", icon: "#blank", iconClass: "smallIcon" }));
+				this.items.push(new DropdownListItem({ id: "protected", text: "Protected", icon: "#svg_mio_lock", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "archive", text: "FTP backup queue", icon: "#svg_mio_cloudUploading", iconClass: "smallIcon" }));
 				this.items.push(new DropdownListItem({ id: "export", text: "Convert/Export queue", icon: "#svg_mio_launch", iconClass: "smallIcon" }));
 
@@ -8872,7 +8878,7 @@ function ClipLoader(clipsBodySelector)
 		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
 			return;
 		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
-		loadClipsInternal(lastLoadedCameraFilter, newestClipDate - 60, newestClipDate + 86400, false, true, null, settings.ui3_current_dbView);
+		loadClipsInternal(lastLoadedCameraFilter, newestClipDate - 60, Math.round(GetUtcNow() / 1000) + 86400, false, true, null, settings.ui3_current_dbView);
 	}
 	this.LoadClipsRange = function (camFilter, dateBegin, dateEnd)
 	{
@@ -9873,7 +9879,7 @@ function ClipLoader(clipsBodySelector)
 		switch (name)
 		{
 			case "trigger_sentry":
-				return GetClipIcon_Internal(name, "#sentry_logo", true, "AI-verified alert");
+				return GetClipIcon_Internal(name, "#svg_mio_cbChecked", true, "AI-verified alert");
 			case "trigger_sentry_occupied":
 				return GetClipIcon_Internal(name, "#sentry_human", true, "AI-verified continuation of a previous alert");
 			case "trigger_motion":
@@ -10544,7 +10550,7 @@ function ClipLoader(clipsBodySelector)
 }
 function DbViewIsAlerts(dbView)
 {
-	return dbView === "alerts" || dbView === "cancelled" || dbView === "confirmed" || dbView.match("zone[a-h]") || dbView === "dio" || dbView === "onvif" || dbView === "audio" || dbView === "external";
+	return dbView === "alerts" || dbView === "cancelled" || dbView === "confirmed" || dbView === "people" || dbView === "vehicles" || dbView.match("zone[a-h]") || dbView === "dio" || dbView === "onvif" || dbView === "audio" || dbView === "external";
 }
 function SetClipListShortcutIconState(iconSelector, selected)
 {
@@ -21037,7 +21043,7 @@ function ClipListContextMenu()
 			[
 				{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
-				, { text: '<span id="cm_cliplist_aiconfirm">(un)Mark as AI-confirmed</span>', icon: "#sentry_logo", iconClass: "noflip", alias: "aiconfirm", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_aiconfirm">(un)Mark as AI-confirmed</span>', icon: "#svg_mio_cbChecked", iconClass: "noflip", alias: "aiconfirm", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
 				, (addDeleteItem
 					? { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
