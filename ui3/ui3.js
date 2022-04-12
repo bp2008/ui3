@@ -110,9 +110,9 @@ function BrowserIsEdgeLegacy()
 }
 function BrowserEdgeVersion()
 {
-	var m = window.navigator.userAgent.match(/ Edge\/([0-9\.,]+)/);
+	var m = window.navigator.userAgent.match(/ Edge\/([0-9.,]+)/);
 	if (!m)
-		m = window.navigator.userAgent.match(/ Edg\/([0-9\.,]+)/);
+		m = window.navigator.userAgent.match(/ Edg\/([0-9.,]+)/);
 	if (m)
 		return m[1];
 	return null;
@@ -391,7 +391,7 @@ function requestAnimationFramePolyFill()
 	try
 	{
 		if (typeof requestAnimationFrame != "function")
-			requestAnimationFrame = function (callback) { setTimeout(callback, 33); };
+			window.requestAnimationFrame = function (callback) { setTimeout(callback, 33); };
 		return true;
 	}
 	catch (e)
@@ -11045,7 +11045,7 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 	var prepareClipDataForRegistration = function (obj, callbackOnAppearFunc, callbackOnDisappearFunc, callbackOnMoveFunc, HeightOfOneClipTilePx, HeightOfOneDateTilePx)
 	{
 		obj.isAppeared = false;
-		obj.isDateTile = obj.isDateTile;
+		//obj.isDateTile = obj.isDateTile;
 		obj.y = nextY;
 		obj.h = obj.isDateTile ? HeightOfOneDateTilePx : HeightOfOneClipTilePx;
 		nextY += obj.h;
@@ -11300,7 +11300,7 @@ function StatusLoader()
 				else if (response.data.clips)
 				{
 					// Fall back to old format
-					var match = new RegExp(", (.+)\/(.+);").exec(response.data.clips);
+					var match = new RegExp(", (.+)/(.+);").exec(response.data.clips);
 					if (match)
 					{
 						var used = getBytesFromBISizeStr(match[1]);
@@ -12630,7 +12630,7 @@ function CameraListLoader()
 		var cameraIdLower = cameraId.toLowerCase();
 		for (var id in cameraIdToCameraMap)
 		{
-			if (id.toLowerCase() === cameraIdLower && cameraIdToCameraMap.hasOwnProperty(id))
+			if (id.toLowerCase() === cameraIdLower && Object.prototype.hasOwnProperty.call(cameraIdToCameraMap, id))
 				return cameraIdToCameraMap[id];
 		}
 		return null;
@@ -17773,77 +17773,75 @@ function ImageRenderer()
 		self.DigitalZoomNow(deltaY, false);
 	});
 
+	var hammertime;
+	var pinchZoomState = { lastScale: 0, startingZoomFactor: 0, active: false };
+	var toast;
+	function onPinchStart(e)
 	{
-		var hammertime;
-		var pinchZoomState = { lastScale: 0, startingZoomFactor: 0, active: false };
-		var toast;
-		function onPinchStart(e)
+		if (settings.ui3_browserZoomEnabled !== "1")
 		{
-			if (settings.ui3_browserZoomEnabled !== "1")
-			{
-				pinchZoomState.active = true;
-				pinchZoomState.startingZoomFactor = self.zoomHandler.GetZoomFactor(videoPlayer.Loaded().image);
-				e.mouseX = e.center.x;
-				e.mouseY = e.center.y;
-				self.CamImgDragStart(e);
-			}
-		}
-		function onPinchMove(e)
-		{
-			if (!pinchZoomState.active)
-				return;
+			pinchZoomState.active = true;
+			pinchZoomState.startingZoomFactor = self.zoomHandler.GetZoomFactor(videoPlayer.Loaded().image);
 			e.mouseX = e.center.x;
 			e.mouseY = e.center.y;
-			self.CamImgDragMove(e);
-
-			var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 200, 2000);
-			zoomSpeed /= 400; // Make it a number between 0.05 and 5, where default is 1
-
-			var speedExponent = zoomSpeed;
-			var scale = Math.pow(e.scale, speedExponent);
-
-			var szf = pinchZoomState.startingZoomFactor;
-			var zf = szf * Math.max(0.001, scale);
-			self.zoomHandler.SetZoomFactor(zf);
-			AfterZoom(false);
+			self.CamImgDragStart(e);
 		}
-		function onPinchEnd(e)
+	}
+	function onPinchMove(e)
+	{
+		if (!pinchZoomState.active)
+			return;
+		e.mouseX = e.center.x;
+		e.mouseY = e.center.y;
+		self.CamImgDragMove(e);
+
+		var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 200, 2000);
+		zoomSpeed /= 400; // Make it a number between 0.05 and 5, where default is 1
+
+		var speedExponent = zoomSpeed;
+		var scale = Math.pow(e.scale, speedExponent);
+
+		var szf = pinchZoomState.startingZoomFactor;
+		var zf = szf * Math.max(0.001, scale);
+		self.zoomHandler.SetZoomFactor(zf);
+		AfterZoom(false);
+	}
+	function onPinchEnd(e)
+	{
+		if (!pinchZoomState.active)
+			return;
+		e.mouseX = e.center.x;
+		e.mouseY = e.center.y;
+		self.CamImgDragEnd(e);
+		pinchZoomState.active = false;
+	}
+	this.onToggleBrowserZoom = function ()
+	{
+		if (settings.ui3_browserZoomEnabled === "1")
 		{
-			if (!pinchZoomState.active)
-				return;
-			e.mouseX = e.center.x;
-			e.mouseY = e.center.y;
-			self.CamImgDragEnd(e);
-			pinchZoomState.active = false;
-		}
-		this.onToggleBrowserZoom = function ()
-		{
-			if (settings.ui3_browserZoomEnabled === "1")
+			if (hammertime)
 			{
-				if (hammertime)
-				{
-					ReloadToTakeEffectToast();
-					// The following hammer destruction methods do not re-enable native browser zoom over the video player.
-					hammertime.off('pinchstart pinchmove pinchend');
-					hammertime.get('pinch').set({ enable: false });
-					hammertime.stop(true);
-					hammertime.destroy();
-					hammertime = null;
-					imageRenderer.zoomHandler.ZoomToFit();
-					resized();
-				}
+				ReloadToTakeEffectToast();
+				// The following hammer destruction methods do not re-enable native browser zoom over the video player.
+				hammertime.off('pinchstart pinchmove pinchend');
+				hammertime.get('pinch').set({ enable: false });
+				hammertime.stop(true);
+				hammertime.destroy();
+				hammertime = null;
+				imageRenderer.zoomHandler.ZoomToFit();
+				resized();
 			}
-			else
+		}
+		else
+		{
+			if (!hammertime)
 			{
-				if (!hammertime)
-				{
-					DestroyReloadToTakeEffectToast();
-					hammertime = new Hammer($layoutbody.get(0));
-					hammertime.get('pinch').set({ enable: true });
-					hammertime.on('pinchstart', onPinchStart);
-					hammertime.on('pinchmove', onPinchMove);
-					hammertime.on('pinchend', onPinchEnd);
-				}
+				DestroyReloadToTakeEffectToast();
+				hammertime = new Hammer($layoutbody.get(0));
+				hammertime.get('pinch').set({ enable: true });
+				hammertime.on('pinchstart', onPinchStart);
+				hammertime.on('pinchmove', onPinchMove);
+				hammertime.on('pinchend', onPinchEnd);
 			}
 		}
 	}
@@ -18805,7 +18803,7 @@ function ClipOverlayCfg()
 				var hasAnyProps = false;
 				for (var id in camCfg)
 				{
-					if (camCfg.hasOwnProperty(id))
+					if (Object.prototype.hasOwnProperty.call(camCfg, id))
 					{
 						hasAnyProps = true;
 						break;
@@ -18916,7 +18914,7 @@ function GroupCfg()
 			var hasAnyProps = false;
 			for (var id in camCfg)
 			{
-				if (camCfg.hasOwnProperty(id))
+				if (Object.prototype.hasOwnProperty.call(camCfg, id))
 				{
 					hasAnyProps = true;
 					break;
@@ -19348,7 +19346,7 @@ function StreamingProfile()
 	{
 		for (var prop in self)
 		{
-			if (self.hasOwnProperty(prop))
+			if (Object.prototype.hasOwnProperty.call(self, prop))
 			{
 				var value = self[prop];
 				var type = typeof value;
@@ -19363,7 +19361,7 @@ function StreamingProfile()
 		var newProfile = new StreamingProfile();
 		for (var prop in self)
 		{
-			if (self.hasOwnProperty(prop))
+			if (Object.prototype.hasOwnProperty.call(self, prop))
 			{
 				var value = self[prop];
 				var type = typeof value;
@@ -19879,7 +19877,7 @@ function GenericQualityHelper()
 				if (u)
 				{
 					for (var key in u)
-						if (u.hasOwnProperty(key))
+						if (Object.prototype.hasOwnProperty.call(u, key))
 							profileData[i][key] = u[key];
 					upgradeMade = true;
 				}
@@ -25209,7 +25207,8 @@ function LoadNextOrPreviousCamera(offset)
 			idxCurrentMaximizedCamera = cams.length;
 	}
 
-	while (true)
+	var iterations = 1000;
+	while (iterations-- > 0)
 	{
 		idxCurrentMaximizedCamera += offset;
 		if (idxCurrentMaximizedCamera < 0 || idxCurrentMaximizedCamera >= cams.length)
@@ -26354,7 +26353,7 @@ function DisableIEWarning()
 // Logging ////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 if (!console)
-	console = {};
+	window.console = {};
 if (typeof console.log !== "function")
 	console.log = function () { };
 if (typeof console.error !== "function")
@@ -26377,7 +26376,7 @@ function ArrayToHtmlTable(a)
 	{
 		for (var key in a[i])
 		{
-			if (a[i].hasOwnProperty(key))
+			if (Object.prototype.hasOwnProperty.call(a[i], key))
 			{
 				if (typeof columnSpec[key] == "undefined")
 				{
@@ -26392,7 +26391,7 @@ function ArrayToHtmlTable(a)
 		var newRow = new Object();
 		for (var key in a[i])
 		{
-			if (a[i].hasOwnProperty(key))
+			if (Object.prototype.hasOwnProperty.call(a[i], key))
 			{
 				var value = a[i][key];
 				var idx = columnSpec[key];
@@ -26830,8 +26829,8 @@ function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockC
 							{
 								toaster.Error(e);
 							}
-						})
-						["catch"](function (e)
+						}
+						)["catch"](function (e)
 						{
 							CallStreamEnded(e);
 						});
@@ -28718,7 +28717,7 @@ function UISettingsPanel()
 				if (typeof s === "string")
 					s = JSON.parse(s);
 				for (var key in s)
-					if (s.hasOwnProperty(key))
+					if (Object.prototype.hasOwnProperty.call(s, key))
 						localStorage.setItem(key, s[key]);
 				return true;
 			}
