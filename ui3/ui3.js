@@ -12862,7 +12862,7 @@ function VideoPlayerController()
 	 */
 	this.GetPlayerObject = function ()
 	{
-		if (typeof playerModule.GetPlayerObject === "function")
+		if (playerModule && typeof playerModule.GetPlayerObject === "function")
 			return playerModule.GetPlayerObject();
 		return null;
 	}
