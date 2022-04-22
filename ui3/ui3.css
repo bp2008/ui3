@@ -5595,7 +5595,8 @@ div::-webkit-scrollbar-corner
 	width: 169px;
 }
 
-#uiSettingsPanel input[type="range"]
+#uiSettingsPanel input[type="range"],
+.dialogOptionPanel input[type="range"]
 {
 	width: 90%;
 	margin: 0px 5%;

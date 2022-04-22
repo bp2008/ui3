@@ -1194,6 +1194,18 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
+			key: "ui3_maxDynamicGroupImageDimension"
+			, value: 1440
+			, minValue: 240
+			, maxValue: 7680
+			, step: 8
+			, inputType: "range"
+			, label: 'Dynamic Group Max Resolution<div class="settingDesc">(strongly affects server CPU usage)</div>'
+			, changeOnStep: false
+			, onChange: OnChange_ui3_maxDynamicGroupImageDimension
+			, category: "Video Player"
+		}
+		, {
 			key: "ui3_playback_skipDeadAir"
 			, value: 0
 			, inputType: "threeState"
@@ -17414,14 +17426,13 @@ function ImageRenderer()
 	previousImageDraw.z = 10;
 
 	this.minGroupImageDimension = 240; // Strictly >= 240 or else dynamic group layouts are broken
-	this.maxGroupImageDimension = 3000; // Strictly <= 7680 or else dynamic group layouts are broken
+	// Max group image dimension is now a ui setting.
 
 	var $layoutbody = $("#layoutbody");
 	var $camimg_wrapper = $("#camimg_wrapper");
 	var sccc_outerObjs = $('#layoutbody,#camimg_wrapper,#zoomhint');
 
 	this.zoomHandler = zoomHandler_Adjustable;
-
 
 	this.GetNativeSize = function (ciLoading)
 	{
@@ -17437,9 +17448,9 @@ function ImageRenderer()
 				x = lockedResolution; // This dynamic-resolution video source has a preferred size saved.
 			else
 				x = new ui3Rect($layoutbody.width(), $layoutbody.height()); // Size this dynamic-resolution video according to the viewport
-			x.MultiplyBy(100000); // Drastically enlarge so that it will fill the maxGroupImageDimension bounding box later.
+			x.MultiplyBy(100000); // Drastically enlarge so that it will fill the bounding box later.
 			// Apply dynamic stream limits
-			x.ApplyBoundingBox(new ui3Rect(self.maxGroupImageDimension, self.maxGroupImageDimension));
+			x.ApplyBoundingBox(new ui3Rect(self.getMaxGroupImageDimension(), self.getMaxGroupImageDimension()));
 			x.ExpandAround(new ui3Rect(self.minGroupImageDimension, self.minGroupImageDimension));
 		}
 		else
@@ -17844,6 +17855,17 @@ function ImageRenderer()
 				hammertime.on('pinchend', onPinchEnd);
 			}
 		}
+	}
+	/**
+	 * Returns the max group image dimension setting, clamped within required boundaries.
+	 */
+	this.getMaxGroupImageDimension = function ()
+	{
+		var d = parseInt(settings.ui3_maxDynamicGroupImageDimension);
+		if (!d || isNaN(d))
+			return 1280;
+		else
+			return Math.min(d, 7680); // Strictly <= 7680 or else dynamic group layouts are broken
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -20067,6 +20089,20 @@ function GroupLayoutDialog()
 			if (settings.ui3_dynamicGroupLayout === "0")
 				collapsible.$section.append('<div style="padding: 8px; margin-bottom: 10px; border: 2px dotted #FF0000;">This section has no effect while Dynamic Group Layout is disabled in UI Settings &gt; Video Player.</div>');
 			collapsible.$section.append(UIFormField({
+				inputType: "range"
+				, value: imageRenderer.getMaxGroupImageDimension()
+				, minValue: 240
+				, maxValue: 7680
+				, step: 8
+				, label: 'Dynamic Group Max Resolution<div class="settingDesc">(strongly affects server CPU usage)<br>(this setting affects all dynamic groups)</div>'
+				, tag: "maxDynRes",
+				onChange: function (e, tag, $input)
+				{
+					settings.ui3_maxDynamicGroupImageDimension = $input.val();
+					OnChange_ui3_maxDynamicGroupImageDimension();
+				}
+			}));
+			collapsible.$section.append(UIFormField({
 				inputType: "checkbox"
 				, value: !lockedResolution
 				, label: "Fit to Viewport"
@@ -20091,7 +20127,7 @@ function GroupLayoutDialog()
 			$layoutWidth = UIFormField({
 				inputType: "number"
 				, minValue: imageRenderer.minGroupImageDimension
-				, maxValue: Math.max(7680, imageRenderer.maxGroupImageDimension)
+				, maxValue: Math.max(7680, imageRenderer.getMaxGroupImageDimension())
 				, step: 16
 				, value: lockedResolution ? lockedResolution.w : 1920
 				, label: "Width"
@@ -20105,7 +20141,7 @@ function GroupLayoutDialog()
 			$layoutHeight = UIFormField({
 				inputType: "number"
 				, minValue: imageRenderer.minGroupImageDimension
-				, maxValue: Math.max(7680, imageRenderer.maxGroupImageDimension)
+				, maxValue: Math.max(7680, imageRenderer.getMaxGroupImageDimension())
 				, step: 16
 				, value: lockedResolution ? lockedResolution.h : 1080
 				, label: "Height"
@@ -29011,6 +29047,10 @@ function OnChange_ui3_show_cameras_in_group_dropdowns()
 function OnChange_ui3_bypass_single_camera_groups()
 {
 	cameraListLoader.LoadCameraList();
+}
+function OnChange_ui3_maxDynamicGroupImageDimension()
+{
+	videoPlayer.ReopenStreamAtCurrentSeekPosition();
 }
 var ui3_reload_to_take_effect_toast = null;
 function ReloadToTakeEffectToast(extraMessage)
