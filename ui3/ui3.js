@@ -1639,6 +1639,17 @@ var defaultSettings =
 			, category: "Event-Triggered Sounds"
 		}
 		, {
+			key: "ui3_sound_alert"
+			, value: "None"
+			, inputType: "select"
+			, options: []
+			, getOptions: getBISoundOptions
+			, alwaysRefreshOptions: true
+			, label: 'Camera Alerting'
+			, onChange: function () { biSoundPlayer.PlayEvent("alert"); }
+			, category: "Event-Triggered Sounds"
+		}
+		, {
 			key: "ui3_eventSoundVolume"
 			, value: 100
 			, minValue: 0
@@ -5469,6 +5480,7 @@ var ptzPresetThumbLoader = new (function ()
 ///////////////////////////////////////////////////////////////
 // Timeline ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var timelineDeveloperMode = false;
 /**
 	A value that is added to the zoomScaler when requesting timeline data, to affect precision.
 	+2 for 0.25x precision
@@ -5547,7 +5559,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 					return Promise.reject(htmlEncode('Server response did not indicate "success" result: ' + JSON.stringify(response)));
 				else
 				{
-					if (developerMode)
+					if (timelineDeveloperMode)
 						console.log('<<< Received timeline data in ' + (performance.now() - requestTime).toFixed() + ' ms <<<');
 					loadedState = reqParams;
 					callbackGotData(response.data);
@@ -6308,7 +6320,7 @@ function ClipTimeline()
 						drawRoundedRectangles = false;
 					else if (!drawRoundedRectangles && fps >= 30 && averageCpuUsage < 0.05)
 						drawRoundedRectangles = true;
-					if (developerMode)
+					if (timelineDeveloperMode)
 						bet.log("Canvas Render: " + renderTime.toFixed(1) + " ms (avg " + averageRenderTime.toFixed(1) + "ms).\nFPS: " + fps.toFixed(0) + ". CPU: " + (cpuUsage * 100).toFixed(1) + "% (avg " + (averageCpuUsage * 100).toFixed(1) + "%)");
 
 					this.canvasRedrawState.lastRedraw = perfStart;
@@ -12308,7 +12320,7 @@ function CameraListLoader()
 			var timeSinceLastLoad = performance.now() - lastLoadAt;
 			if (timeSinceLastLoad > 4500)
 				shouldDelay = false;
-			else if (AnyCameraTriggerOverlayIconsEnabled() || videoPlayer.PrioritizeTriggeredEnabled() || $("#campropdialog").length)
+			else if (AnyTimeSensitiveCameraStatusEffectsEnabled() || videoPlayer.PrioritizeTriggeredEnabled() || $("#campropdialog").length)
 				shouldDelay = false;
 			if (shouldDelay)
 				CallScheduler();
@@ -12351,6 +12363,7 @@ function CameraListLoader()
 				}
 				return;
 			}
+			var previousResponse = lastResponse;
 			lastResponse = response;
 			var numGroups = 0;
 			var numCameras = 0;
@@ -12487,6 +12500,7 @@ function CameraListLoader()
 			{
 				toaster.Error(ex, 30000);
 			}
+			biSoundPlayer.PlayEventSounds(lastResponse, previousResponse);
 
 			BI_CustomEvent.Invoke("CameraListLoaded", lastResponse);
 			CallScheduler();
@@ -15171,13 +15185,10 @@ function FetchH264VideoModule()
 		cornerStatusIcons.Set("trigger", status.bTriggered);
 		cornerStatusIcons.Set("recording", status.bRec);
 
-		if (lastStatusBlock)
-		{
-			if (status.bMotion && !lastStatusBlock.bMotion)
-				biSoundPlayer.PlayEvent("motion");
-			if (status.bTriggered && !lastStatusBlock.bTriggered)
-				biSoundPlayer.PlayEvent("trigger");
-		}
+		if (status.bMotion && (!lastStatusBlock || !lastStatusBlock.bMotion))
+			biSoundPlayer.PlayEvent("motion");
+		if (status.bTriggered && (!lastStatusBlock || !lastStatusBlock.bTriggered))
+			biSoundPlayer.PlayEvent("trigger");
 
 		BI_CustomEvent.Invoke("Video Status Block", arguments);
 
@@ -18193,6 +18204,14 @@ function AnyCameraTriggerOverlayIconsEnabled()
 		|| settings.ui3_camera_overlay_icon_audio_trigger === "1"
 		|| settings.ui3_camera_overlay_icon_generic_trigger === "1";
 }
+function AnyTimeSensitiveCameraStatusEffectsEnabled()
+{
+	var isH264 = videoPlayer.CurrentPlayerModuleName() === 'h264';
+	return AnyCameraTriggerOverlayIconsEnabled()
+		|| (!isH264 && settings.ui3_sound_motion && settings.ui3_sound_motion !== "None")
+		|| (!isH264 && settings.ui3_sound_trigger && settings.ui3_sound_trigger !== "None")
+		|| (settings.ui3_sound_alert && settings.ui3_sound_alert !== "None");
+}
 ///////////////////////////////////////////////////////////////
 // VideoCenter Icons and Video Loading/Buffering Overlay //////
 ///////////////////////////////////////////////////////////////
@@ -18615,6 +18634,8 @@ function BISoundEffect()
 				{
 					try
 					{
+						if (ex.message.indexOf('call to pause') > -1)
+							return;
 						toaster.Error("Audio Play Error: " + htmlEncode(ex.name) + "<br>" + htmlEncode(ex.message), 15000);
 					}
 					catch (e)
@@ -18660,6 +18681,8 @@ var biSoundPlayer = new (function ()
 	var playerCache = new FasterObjectMap();
 	this.PlayEvent = function (event)
 	{
+		if (developerMode)
+			console.log("PlayEvent " + event)
 		var player = playerCache[event];
 		if (!player)
 			player = playerCache[event] = new BISoundEffect();
@@ -18677,7 +18700,7 @@ var biSoundPlayer = new (function ()
 	}
 	this.TestUserInputRequirement = function ()
 	{
-		var eventSoundPlayerEnabled = settings.ui3_eventSoundVolume > 0 && (settings.ui3_sound_motion !== "None" || settings.ui3_sound_trigger !== "None");
+		var eventSoundPlayerEnabled = settings.ui3_eventSoundVolume > 0 && (settings.ui3_sound_motion !== "None" || settings.ui3_sound_trigger !== "None" || settings.ui3_sound_alert !== "None");
 		var videoStatusSoundsEnabled = settings.ui3_uiStatusSounds === "1" || settings.ui3_uiStatusSpeech === "1";
 		if (eventSoundPlayerEnabled || videoStatusSoundsEnabled)
 		{
@@ -18707,6 +18730,81 @@ var biSoundPlayer = new (function ()
 			}
 			catch (ex) { }
 		}
+	}
+	this.PlayEventSounds = function (response, previousResponse)
+	{
+		try
+		{
+			if (videoPlayer.Loading().image.isLive)
+			{
+				var currentCameras = GetCurrentlyVisibleCameras(response.data);
+				var previousCameras = GetCurrentlyVisibleCameras(previousResponse ? previousResponse.data : []);
+
+				if (videoPlayer.CurrentPlayerModuleName() !== 'h264')
+				{
+					if (AnyCameraIs(currentCameras, function (cam) { return cam.isMotion; })
+						&& !AnyCameraIs(previousCameras, function (cam) { return cam.isMotion; }))
+					{
+						self.PlayEvent("motion");
+					}
+
+					if (AnyCameraIs(currentCameras, function (cam) { return cam.isTriggered; })
+						&& !AnyCameraIs(previousCameras, function (cam) { return cam.isTriggered; }))
+					{
+						self.PlayEvent("trigger");
+					}
+				}
+				if (AnyCameraIs(currentCameras, function (cam) { return cam.isAlerting; })
+					&& !AnyCameraIs(previousCameras, function (cam) { return cam.isAlerting; }))
+				{
+					self.PlayEvent("alert");
+				}
+			}
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
+	}
+	var AnyCameraIs = function (cameras, condition)
+	{
+		if (cameras)
+			for (var i = 0; i < cameras.length; i++)
+				if (condition(cameras[i]))
+					return true;
+		return false;
+	}
+	var GetCurrentlyVisibleCameras = function (cameraList)
+	{
+		var cams = [];
+		// Get the names of cameras that are currently visible
+		var camNames = cameraListLoader.GetGroupCams(videoPlayer.Loading().image.id);
+		if (camNames && camNames.length)
+		{
+			// Get the camera objects from passed-in cameraList.
+			var camMap = new FasterObjectMap();
+			for (var i = 0; i < cameraList.length; i++)
+				camMap[cameraList[i].optionValue] = cameraList[i];
+
+			for (var i = 0; i < camNames.length; i++)
+			{
+				var cam = camMap[camNames[i]];
+				if (cam)
+					cams.push(cam);
+			}
+		}
+		else
+		{
+			for (var i = 0; i < cameraList.length; i++)
+			{
+				if (cameraList[i].optionValue === videoPlayer.Loading().image.id)
+				{
+					cams.push(cameraList[i]);
+					break;
+				}
+			}
+		}
+		return cams;
 	}
 })();
 ///////////////////////////////////////////////////////////////
