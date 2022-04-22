@@ -726,7 +726,7 @@ var HTML5DelayCompensationOptions = {
 	Strong: "Strong"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -1713,7 +1713,7 @@ var defaultSettings =
 			key: "ui3_hotkey_cameraLabels"
 			, value: "1|0|0|76" // 76: L
 			, hotkey: true
-			, label: "Toggle Camera Labels"
+			, label: "Toggle UI3 Camera Labels"
 			, actionDown: BI_Hotkey_Toggle_Camera_Labels
 			, category: "Hotkeys"
 		}
@@ -2401,9 +2401,9 @@ var defaultSettings =
 			key: "ui3_cameraLabels_enabled"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'Camera Labels Enabled'
+			, label: 'UI3 Camera Labels Enabled<div class="settingDesc"><br>Blue Iris provides its own camera name labels since version 5.5, so UI3\'s clientside labels are no longer recommended.<br><br>Toggle Blue Iris\'s labels using Blue Iris\'s "Edit Layout" functionality (See Blue Iris Help > Cameras > Camera Groups), or toggle the camera names via UI3 by right clicking a group video feed and choosing "Group Settings".</div>'
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_multiCameras"
@@ -2411,7 +2411,7 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Label multi-camera streams'
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_singleCameras"
@@ -2419,7 +2419,7 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Label single-camera streams'
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_text"
@@ -2428,7 +2428,7 @@ var defaultSettings =
 			, options: [CameraLabelTextValues.Name, CameraLabelTextValues.ShortName, CameraLabelTextValues.Both]
 			, label: "Label Text"
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_position"
@@ -2437,7 +2437,7 @@ var defaultSettings =
 			, options: [CameraLabelPositionValues.Above, CameraLabelPositionValues.Top, CameraLabelPositionValues.Bottom, CameraLabelPositionValues.Below]
 			, label: "Label Position"
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_fontSize"
@@ -2447,7 +2447,7 @@ var defaultSettings =
 			, maxValue: 128
 			, label: "Font Size"
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_minimumFontSize"
@@ -2458,7 +2458,7 @@ var defaultSettings =
 			, label: "Min Font Size"
 			, hint: "When a group view is rendered smaller than native resolution, font size is scaled down no smaller than this."
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_backgroundColor"
@@ -2466,7 +2466,7 @@ var defaultSettings =
 			, inputType: "color"
 			, label: 'Background Color'
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_textColor"
@@ -2474,7 +2474,7 @@ var defaultSettings =
 			, inputType: "color"
 			, label: 'Text Color'
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_cameraColor"
@@ -2482,7 +2482,7 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Use Camera Color<div class="settingDesc">(ignore colors set above)</div>'
 			, onChange: onui3_cameraLabelsChanged
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_backgroundOpacity"
@@ -2495,7 +2495,7 @@ var defaultSettings =
 			, label: 'Background Opacity'
 			, onChange: onui3_cameraLabelsChanged
 			, changeOnStep: true
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_cameraLabels_textOpacity"
@@ -2508,7 +2508,7 @@ var defaultSettings =
 			, label: 'Text Opacity'
 			, onChange: onui3_cameraLabelsChanged
 			, changeOnStep: true
-			, category: "Camera Labels"
+			, category: "UI3 Camera Labels"
 		}
 		, {
 			key: "ui3_wheelAdjustableSpeed"
