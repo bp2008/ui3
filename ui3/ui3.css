@@ -3765,8 +3765,27 @@ body + div
 
 	.prioritizeTriggeredButton.on
 	{
-		color: var(--seek-bar-color);
+		animation: prioritizeTriggeredButton 2s infinite;
+		animation-timing-function: steps(4, end);
 	}
+
+@keyframes prioritizeTriggeredButton
+{
+	0%
+	{
+		color: #FFFFFF;
+	}
+
+	50%
+	{
+		color: var(--context-menu-icon-highlight-color);
+	}
+
+	100%
+	{
+		color: #FFFFFF;
+	}
+}
 
 .showOnTimeline
 {

@@ -1145,17 +1145,18 @@ var defaultSettings =
 			key: "ui3_prioritizeTriggered"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon prioritizeTriggeredButton on"><use xlink:href="#svg_x5F_Alert"></use></svg> Auto-Maximize Enabled'
+			, label: '<svg class="icon noflip clipicon prioritizeTriggeredButton"><use xlink:href="#svg_auto_maximize"></use></svg> Auto-Maximize Enabled'
 			, onChange: OnChange_ui3_prioritizeTriggered
+			, onCreate: OnChange_ui3_prioritizeTriggered
 			, category: "Video Player"
 		}
 		, {
 			key: "ui3_prioritizeTriggered_triggerMode"
-			, value: "Trigger"
+			, value: "Alert"
 			, inputType: "select"
-			, options: ["Trigger", "Motion"]
-			, label: '<svg class="icon clipicon prioritizeTriggeredButton on"><use xlink:href="#svg_x5F_Alert"></use></svg> Auto-Maximize upon...'
-			, hint: '"Motion" uses Blue Iris\'s built-in motion detection.\n\n"Trigger" works with any method of trigger (such as ONVIF or audio), but may not respond as quickly.'
+			, options: ["Alert", "Trigger", "Motion"]
+			, label: '<svg class="icon noflip clipicon prioritizeTriggeredButton"><use xlink:href="#svg_auto_maximize"></use></svg> Auto-Maximize upon...'
+			, hint: '"Motion" uses Blue Iris\'s built-in motion detection.\n\n"Trigger" works with any method of trigger (such as ONVIF or audio), but may not respond as quickly. Trigger happens before AI verification.\n\n"Alert" waits for the camera to begin alerting, which happens after AI verification (if configured).'
 			, category: "Video Player"
 		}
 		, {
@@ -1634,7 +1635,7 @@ var defaultSettings =
 			, options: []
 			, getOptions: getBISoundOptions
 			, alwaysRefreshOptions: true
-			, label: 'Camera Triggered'
+			, label: 'Camera Triggered<div class="settingDesc">(before AI-verification)'
 			, onChange: function () { biSoundPlayer.PlayEvent("trigger"); }
 			, category: "Event-Triggered Sounds"
 		}
@@ -1646,6 +1647,7 @@ var defaultSettings =
 			, getOptions: getBISoundOptions
 			, alwaysRefreshOptions: true
 			, label: 'Camera Alerting'
+			, hint: "Occurs only after AI-verification, if AI is configured."
 			, onChange: function () { biSoundPlayer.PlayEvent("alert"); }
 			, category: "Event-Triggered Sounds"
 		}
@@ -12977,6 +12979,8 @@ function VideoPlayerController()
 			, imageRenderer.CamImgDragEnd
 		);
 
+		$("#prioritizeTriggeredButton").longpress(self.PrioritizeTriggeredToggle);
+
 		BI_CustomEvent.AddListener("CameraListLoaded", UpdatedCurrentCameraData);
 		BI_CustomEvent.AddListener("OpenVideo", OnOpenVideo);
 	}
@@ -13043,7 +13047,12 @@ function VideoPlayerController()
 	{
 		if (camData && camData.isEnabled && camData.active && camData.webcast)
 		{
-			if (settings.ui3_prioritizeTriggered_triggerMode === "Trigger")
+			if (settings.ui3_prioritizeTriggered_triggerMode === "Alert")
+			{
+				if (camData.isAlerting)
+					return true;
+			}
+			else if (settings.ui3_prioritizeTriggered_triggerMode === "Trigger")
 			{
 				if (camData.isTriggered)
 					return true;
@@ -13797,22 +13806,47 @@ function VideoPlayerController()
 	{
 		return settings.ui3_prioritizeTriggered === "1";
 	}
+	this.PrioritizeTriggeredClick = function ()
+	{
+		if (!prioritizeTriggeredToggled)
+			toaster.Info("Long press to toggle Auto-Maximize.");
+		else
+		{
+			clearTimeout(prioritizeTriggeredTimeout);
+			prioritizeTriggeredToggled = false;
+		}
+	}
 	this.PrioritizeTriggeredToggle = function ()
 	{
-		settings.ui3_prioritizeTriggered = self.PrioritizeTriggeredEnabled() ? "0" : "1";
+		if (self.PrioritizeTriggeredEnabled())
+		{
+			settings.ui3_prioritizeTriggered = "0";
+			toaster.Success("Auto-Maximize is disabled.");
+		}
+		else
+		{
+			settings.ui3_prioritizeTriggered = "1";
+			toaster.Success("Auto-Maximize is enabled upon " + settings.ui3_prioritizeTriggered_triggerMode + ". Configure feature at UI Settings > Video Player.");
+		}
 		self.PrioritizeTriggeredWasToggled();
 	}
+	var prioritizeTriggeredToggled = false;
+	var prioritizeTriggeredTimeout = null;
 	this.PrioritizeTriggeredWasToggled = function ()
 	{
+		prioritizeTriggeredToggled = true;
+		clearTimeout(prioritizeTriggeredTimeout);
+		prioritizeTriggeredTimeout = setTimeout(function () { prioritizeTriggeredToggled = false; }, 4000);
+
 		setPrioritizeTriggeredButtonState();
 		UpdatedCurrentCameraData(cameraListLoader.GetLastResponse());
 	}
 	var setPrioritizeTriggeredButtonState = function ()
 	{
 		if (self.PrioritizeTriggeredEnabled())
-			$("#prioritizeTriggeredButton").addClass("on");
+			$(".prioritizeTriggeredButton").addClass("on");
 		else
-			$("#prioritizeTriggeredButton").removeClass("on");
+			$(".prioritizeTriggeredButton").removeClass("on");
 	}
 	this.GroupLayoutMetadataReceived = function (camId, xCamList, xRecList)
 	{
@@ -18610,7 +18644,7 @@ function BISoundEffect()
 					audio.pause();
 				return;
 			}
-			var path = currentServer.remoteBaseURL + "sounds/" + file;
+			var path = currentServer.remoteBaseURL + "sounds/" + file + "?v=" + combined_version + currentServer.GetLocalSessionArg("&");
 			if (!audio)
 			{
 				audio = new Audio(path);
@@ -28631,6 +28665,7 @@ function UISettingsPanel()
 			if (processFilter({ label: "Reset All Settings" }))
 				rowIdx = Add_ResetAllSettingsButton(cat, rowIdx);
 		}
+		var allCreated = [];
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
 			var s = defaultSettings[i];
@@ -28700,6 +28735,7 @@ function UISettingsPanel()
 					$row.append(UIFormField(formFields));
 				}
 				cat.$section.append($row);
+				allCreated.push(s);
 			}
 		}
 		if (category === "Extra")
@@ -28718,6 +28754,21 @@ function UISettingsPanel()
 		{
 			$content.append(cat.$heading);
 			$content.append(cat.$section);
+			for (var i = 0; i < allCreated.length; i++)
+			{
+				var s = allCreated[i];
+				if (typeof s.onCreate === "function")
+				{
+					try
+					{
+						s.onCreate();
+					}
+					catch (ex)
+					{
+						toaster.Error(ex);
+					}
+				}
+			}
 			return true;
 		}
 		return false;
