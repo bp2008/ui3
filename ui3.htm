@@ -84,7 +84,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "209";
+		var ui_version = "210";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -324,19 +324,10 @@
 							</div>
 						</div>
 						<div id="profileStatusBox" class="leftBarBox">
-							<div class="leftBarHeading collapsibleTrigger" collapsibleid="profileStatus">Profile Status</div>
-							<div class="leftBarInnerBox">
-								<div class="oneByTwoSquareButton" id="schedule_lock_button"><div class="squareButtonIcon"><svg class="icon" id="schedule_lock_icon"><use xlink:href="#svg_x5F_RunProfile"></use></svg></div></div>
-								<div class="fourByTwoButtonSet">
-									<div class="squareButton profilebtn" profilenum="0" title="Inactive profile" selColor="inherit">~</div>
-									<div class="squareButton profilebtn" profilenum="1" title="Profile 1" selColor="#00FF00">1</div>
-									<div class="squareButton profilebtn" profilenum="2" title="Profile 2" selColor="#0097F0">2</div>
-									<div class="squareButton profilebtn" profilenum="3" title="Profile 3" selColor="#FF0000">3</div>
-									<div class="squareButton profilebtn" profilenum="4" title="Profile 4" selColor="#FFFF00">4</div>
-									<div class="squareButton profilebtn" profilenum="5" title="Profile 5" selColor="#FF8800">5</div>
-									<div class="squareButton profilebtn" profilenum="6" title="Profile 6" selColor="#FF00FF">6</div>
-									<div class="squareButton profilebtn" profilenum="7" title="Profile 7" selColor="#00FFFF">7</div>
-								</div>
+							<div class="leftBarHeading collapsibleTrigger" collapsibleid="profileStatus">Profile</div>
+							<div class="leftBarInnerBox profileControls">
+								<div class="dropdownBox" name="profile"></div>
+								<div id="schedule_lock_button" class="squareButton"><svg class="icon" id="schedule_lock_icon"><use xlink:href="#svg_x5F_Play"></use></svg></div>
 							</div>
 						</div>
 						<div id="globalScheduleBox" class="leftBarBox">
@@ -471,7 +462,7 @@
 				<div id="clipDeleteButton" class="pcButton hidden rightSide hideWhenLive hideOnTimeline" onclick="clipLoader.DeleteCurrentClip()" title="Delete"><svg class="icon"><use xlink:href="#svg_x5F_Error"></use></svg></div>
 				<div id="playbackSettingsButton" class="pcButton rightSide" onclick="playbackControls.OpenSettingsPanel()"><svg class="icon"><use xlink:href="#svg_x5F_Settings"></use></svg><div id="playbackSettingsQualityMark"></div></div>
 				<div id="changeGroupButton" name="currentGroup" extendLeft="1" extendUp="1" class="pcButton rightSide showOnTimeline" title="Change Group"><svg class="icon noflip"><use xlink:href="#svg_mio_apps"></use></svg></div>
-				<div id="prioritizeTriggeredButton" class="pcButton rightSide showWhenLive prioritizeTriggeredButton" onclick="videoPlayer.PrioritizeTriggeredClick()" title="Auto-Maximize&#10;&#10;When live viewing, automatically maximize cameras that are alerted or triggered or detecting motion.&#10;&#10;Click button to toggle.  Configure feature at UI Settings > Video Player."><svg class="icon noflip"><use xlink:href="#svg_auto_maximize"></use></svg></div>
+				<div id="prioritizeTriggeredButton" class="pcButton rightSide showWhenLive prioritizeTriggeredButton" title="Auto-Maximize&#10;&#10;When live viewing, automatically maximize cameras that are alerted or triggered or detecting motion.&#10;&#10;Click button to toggle.  Configure feature at UI Settings > Video Player."><svg class="icon noflip"><use xlink:href="#svg_auto_maximize"></use></svg></div>
 				<div id="playbackSpeedText" class="pcText rightSide hideWhenLive" onclick="playbackControls.OpenSpeedPanel()" title="Playback Speed"></div>
 			</div>
 		</div>

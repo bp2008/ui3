@@ -13,6 +13,9 @@
 	--text-active-color: #FFFFFF;
 	--pctext-color: #E8E8E8;
 	--pctext-hover-color: #FFFFFF;
+	--profile-active-color: #63C35B;
+	--profile-pause-color: #E3D246;
+	--profile-stop-color: #DC164F;
 	--audio-playing-color: #63C35B;
 	--audio-loading-color: #F0F000;
 	--audio-error-color: #F00000;
@@ -872,41 +875,65 @@ div.invisibleLabel
 	color: #FFFF00;
 }
 
-.profilebtn.selected
+.profileControls
 {
-	font-weight: bold;
-	background-color: rgba(255,255,255,0.1);
+	display: flex;
 }
 
-#schedule_lock_button.hold
+#schedule_lock_button
 {
-	color: #C03737;
+	flex: 0 0 auto;
+	border: 0px solid transparent;
+	padding: 8px;
+	width: 23px;
+	height: 23px;
+	background-color: transparent;
+	color: var(--profile-active-color);
 }
 
-	#schedule_lock_button.hold:hover
+	#schedule_lock_button:hover
 	{
-		color: #D35555;
+		background-color: rgba(255,255,255,0.1)
 	}
 
-	#schedule_lock_button.hold:active
+	#schedule_lock_button:active
 	{
-		color: #EF9E9E;
+		background-color: rgba(255,255,255,0.2)
 	}
 
-#schedule_lock_button.temp
+	#schedule_lock_button.hold
+	{
+		color: var(--profile-stop-color);
+	}
+
+	#schedule_lock_button.temp
+	{
+		color: var(--profile-pause-color);
+	}
+
+	#schedule_lock_button.disabled
+	{
+		color: #6a6a6a;
+	}
+
+.sizeMedium #schedule_lock_button
 {
-	color: #37C03E;
+	padding: 6px;
+	width: 17px;
+	height: 17px;
 }
 
-	#schedule_lock_button.temp:hover
-	{
-		color: #69D06E;
-	}
+.sizeSmall #schedule_lock_button
+{
+	padding: 3px;
+	width: 13px;
+	height: 13px;
+}
 
-	#schedule_lock_button.temp:active
-	{
-		color: #A5E5A8;
-	}
+#schedule_lock_icon
+{
+	vertical-align: top;
+}
 
 .collapsibleTriggerIcon
 {
@@ -963,7 +990,8 @@ div.invisibleLabel
 .fiveByTwoButtonSet,
 .dropdownBox,
 .standardLeftBarBoxSize,
-.leftBarBool
+.leftBarBool,
+.profileControls
 {
 	width: 190px;
 }
@@ -972,7 +1000,8 @@ div.invisibleLabel
 .sizeMedium .fiveByTwoButtonSet,
 .sizeMedium .dropdownBox,
 .sizeMedium .standardLeftBarBoxSize,
-.sizeMedium .leftBarBool
+.sizeMedium .leftBarBool,
+.sizeMedium .profileControls
 {
 	width: 155px;
 }
@@ -981,7 +1010,8 @@ div.invisibleLabel
 .sizeSmall .fiveByTwoButtonSet,
 .sizeSmall .dropdownBox,
 .sizeSmall .standardLeftBarBoxSize,
-.sizeSmall .leftBarBool
+.sizeSmall .leftBarBool,
+.sizeSmall .profileControls
 {
 	width: 125px;
 }
@@ -1793,6 +1823,7 @@ div.invisibleLabel
 	cursor: pointer;
 	overflow: hidden;
 	background-color: var(--uicontrol-bg-color);
+	display: flex;
 }
 
 	.dropdownBox.disabled
@@ -1850,23 +1881,26 @@ div.invisibleLabel
 	margin-top: 3px;
 }
 
+.dropdownBox[name="profile"]
+{
+	margin-top: 0px;
+}
+
 .dropdownLabel
 {
-	display: inline-block;
+	flex: 1 1 auto;
 	font-size: 16px;
 	padding-top: 10px;
 	color: var(--text-color);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	max-width: 150px;
 }
 
 .sizeMedium .dropdownLabel
 {
 	font-size: 15px;
 	padding-top: 5px;
-	max-width: 125px;
 }
 
 .sizeSmall .dropdownLabel
@@ -1874,7 +1908,6 @@ div.invisibleLabel
 	font-size: 13px;
 	line-height: 19px;
 	padding-top: 0px;
-	max-width: 107px;
 }
 
 .dropdownBox:hover .dropdownLabel

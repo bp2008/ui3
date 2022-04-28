@@ -4222,6 +4222,13 @@ function DropdownBoxes()
 				}
 			}
 		});
+	function GetNumberedDropdownListItems(name, min, max)
+	{
+		var items = [];
+		for (var i = min; i <= max; i++)
+			items.push(new DropdownListItem({ cmd: i.toString(), text: name + " " + i }));
+		return items;
+	}
 	this.listDefs["dbView"] = new DropdownListDefinition("dbView",
 		{
 			onItemClick: function (item)
@@ -4317,13 +4324,20 @@ function DropdownBoxes()
 			name = defaultName;
 		items.push(new DropdownListItem({ id: id, text: name, icon: icon, iconClass: "smallIcon" }));
 	}
-	function GetNumberedDropdownListItems(name, min, max)
-	{
-		var items = [];
-		for (var i = min; i <= max; i++)
-			items.push(new DropdownListItem({ cmd: i.toString(), text: name + " " + i }));
-		return items;
-	}
+
+	this.listDefs["profile"] = new DropdownListDefinition("profile",
+		{
+			onItemClick: function (item)
+			{
+				statusLoader.LoadProfile(parseInt(item.id.substr("profile".length)));
+			}
+			, rebuildItems: function (data)
+			{
+				this.items = [];
+				for (var i = 0; i < 8; i++)
+					this.items.push(new DropdownListItem({ id: "profile" + i, text: statusLoader.getProfileDropdownHtml(i), isHtml: true }));
+			}
+		});
 
 	$dropdownBoxes.each(function (idx, ele)
 	{
@@ -11177,16 +11191,16 @@ function StatusLoader()
 	var currentProfileNames = null;
 	var currentlySelectedSchedule = null;
 	var globalScheduleEnabled = false;
+	var profileButtonsEnabled = true;
 	var profileChangedTimeout = null;
 	var statusUpdateTimeout = null;
-	var $profileBtns = $(".profilebtn");
+	var $profileDropdown = $('.dropdownBox[name="profile"]');
 	var $scheduleLockBtn = $("#schedule_lock_button");
 	var $scheduleLockIcon = $("#schedule_lock_icon use");
 	var $stoplightDiv = $("#stoplightBtn div");
 	var $stoplightRed = $("#stoplightRed");
 	var $stoplightGreen = $("#stoplightGreen");
 	var $stoplightYellow = $("#stoplightYellow");
-	var $profileStatusBox = $("#profileStatusBox");
 
 	statusBars.addOnProgressChangedListener("cpu", function (cpu)
 	{
@@ -11226,6 +11240,13 @@ function StatusLoader()
 	this.LoadStatus = function ()
 	{
 		loadStatusInternal();
+	}
+	this.LoadProfile = function (profileNum)
+	{
+		if (profileNum >= -1 && profileNum <= 7)
+			loadStatusInternal(profileNum);
+		else
+			toaster.Error("Cannot load profile " + profileNum);
 	}
 	var loadStatusInternal = function (profileNum, stoplightState, schedule)
 	{
@@ -11407,56 +11428,76 @@ function StatusLoader()
 			cameraListLoader.LoadCameraList();
 		}, 5000);
 	}
+	this.getProfileDropdownHtml = function (profileNum)
+	{
+		var profileName;
+		if (currentProfileNames && currentProfileNames.length > profileNum)
+			profileName = currentProfileNames[profileNum];
+		if (profileNum === 0 && !profileName)
+			profileName = 'Inactive';
+		else if (!profileName)
+			profileName = "Profile " + profileNum;
+		if (profileNum === 0)
+			return getProfileDropdownHtml_Internal(profileNum, '#EEEEEE; background-color: #EE232C; padding: 0px 3px', profileName);
+		else if (profileNum === 1)
+			return getProfileDropdownHtml_Internal(profileNum, '#00FF00', profileName);
+		else if (profileNum === 2)
+			return getProfileDropdownHtml_Internal(profileNum, '#0097F0', profileName);
+		else if (profileNum === 3)
+			return getProfileDropdownHtml_Internal(profileNum, '#FF0000', profileName);
+		else if (profileNum === 4)
+			return getProfileDropdownHtml_Internal(profileNum, '#FFFF00', profileName);
+		else if (profileNum === 5)
+			return getProfileDropdownHtml_Internal(profileNum, '#FF8800', profileName);
+		else if (profileNum === 6)
+			return getProfileDropdownHtml_Internal(profileNum, '#FF00FF', profileName);
+		else if (profileNum === 7)
+			return getProfileDropdownHtml_Internal(profileNum, '#00FFFF', profileName);
+		else
+			return getProfileDropdownHtml_Internal(profileNum, '#FF0000', "Unknown Profile");
+	}
+	var getProfileDropdownHtml_Internal = function (profileNum, color, profileName)
+	{
+		return '<span style="color: ' + color + '; font-weight: bold;">' + profileNum + '</span>' + (profileName ? (' &nbsp; ' + htmlEncode(profileName)) : '');
+	}
 	var UpdateProfileStatus = function ()
 	{
 		if (lastResponse != null)
 		{
-			var selectedProfile = lastResponse.data.profile;
+			dropdownBoxes.setLabelText("profile", self.getProfileDropdownHtml(parseInt(lastResponse.data.profile)), true);
 			var schedule = lastResponse.data.schedule;
 			if (schedule == "")
 				schedule = "N/A";
 			var lock = lastResponse.data.lock;
-			$profileBtns.removeClass("selected");
-			$profileBtns.css("color", "");
-			var $selectedProfileBtn = $profileStatusBox.find('.profilebtn[profilenum="' + selectedProfile + '"]');
-			$selectedProfileBtn.addClass("selected");
-			$selectedProfileBtn.css("color", $selectedProfileBtn.attr("selColor"));
 			if (lock == 0)
 			{
 				$scheduleLockBtn.removeClass("hold");
 				$scheduleLockBtn.removeClass("temp");
-				$scheduleLockIcon.attr("href", "#svg_x5F_RunProfile");
-				$scheduleLockBtn.attr("title", 'Schedule "' + schedule + '" is active. Click to disable automatic scheduling.');
+				$scheduleLockIcon.attr("href", "#svg_x5F_Play");
+				$scheduleLockBtn.attr("title", 'Schedule "' + schedule + '" is active. Long press to disable automatic scheduling.');
 			}
 			else if (lock == 1)
 			{
 				$scheduleLockBtn.addClass("hold");
 				$scheduleLockBtn.removeClass("temp");
-				$scheduleLockIcon.attr("href", "#svg_x5F_HoldProfile");
+				$scheduleLockIcon.attr("href", "#svg_square");
 				$scheduleLockBtn.attr("title", 'Schedule "' + schedule + '" is currently disabled. Click to re-enable.');
 			}
 			else if (lock == 2)
 			{
 				$scheduleLockBtn.removeClass("hold");
 				$scheduleLockBtn.addClass("temp");
-				$scheduleLockIcon.attr("href", "#svg_x5F_TempProfile");
+				$scheduleLockIcon.attr("href", "#svg_x5F_Pause");
 				$scheduleLockBtn.attr("title", 'Schedule "' + schedule + '" is temporarily overridden. Click to resume schedule, or wait some hours and it should return to normal.');
 			}
 			else
 				toaster.Error("unexpected <b>lock</b> value from Blue Iris status");
 		}
-		if (currentProfileNames)
-			for (var i = 0; i < currentProfileNames.length; i++)
-			{
-				var tooltipText = currentProfileNames[i];
-				if (i == 0 && tooltipText == "Inactive")
-					tooltipText = "Inactive profile";
-				$profileStatusBox.find('.profilebtn[profilenum="' + i + '"]').attr("title", tooltipText);
-			}
 	}
 	this.SetCurrentProfileNames = function (newProfileNames)
 	{
 		currentProfileNames = newProfileNames;
+		dropdownBoxes.listDefs["profile"].rebuildItems();
 		UpdateProfileStatus();
 	}
 	this.GetProfileName = function (profileNum)
@@ -11499,9 +11540,20 @@ function StatusLoader()
 	this.SetProfileButtonsEnabled = function (enabled)
 	{
 		if (enabled)
-			$("#schedule_lock_button,.profilebtn").removeClass("disabled");
+		{
+			$scheduleLockBtn.removeClass("disabled");
+			$profileDropdown.removeClass("disabled");
+		}
 		else
-			$("#schedule_lock_button,.profilebtn").addClass("disabled");
+		{
+			$scheduleLockBtn.addClass("disabled");
+			$profileDropdown.addClass("disabled");
+		}
+		profileButtonsEnabled = enabled;
+	}
+	this.GetProfileButtonsEnabled = function ()
+	{
+		return profileButtonsEnabled;
 	}
 	this.SetStoplightButtonEnabled = function (enabled)
 	{
@@ -11510,18 +11562,22 @@ function StatusLoader()
 		else
 			$("#stoplightBtn").addClass("disabled");
 	}
-	$("#schedule_lock_button").click(function ()
-	{
-		if ($(this).hasClass("disabled"))
-			return;
-		loadStatusInternal(-1);
-	});
-	$(".profilebtn").click(function ()
-	{
-		if ($(this).hasClass("disabled"))
-			return;
-		loadStatusInternal($(this).attr("profilenum"));
-	});
+	$scheduleLockBtn.longpress(
+		function ()
+		{
+			if (!lastResponse || $scheduleLockBtn.hasClass("disabled"))
+				return;
+			loadStatusInternal(-1);
+		},
+		function ()
+		{
+			if (!lastResponse || $scheduleLockBtn.hasClass("disabled"))
+				return;
+			if (parseInt(lastResponse.data.lock) !== 0)
+				loadStatusInternal(-1);
+			else
+				toaster.Info("Long press to disable automatic scheduling.");
+		});
 	$("#stoplightBtn").click(function ()
 	{
 		if ($(this).hasClass("disabled"))
@@ -12979,7 +13035,7 @@ function VideoPlayerController()
 			, imageRenderer.CamImgDragEnd
 		);
 
-		$("#prioritizeTriggeredButton").longpress(self.PrioritizeTriggeredToggle);
+		$("#prioritizeTriggeredButton").longpress(self.PrioritizeTriggeredToggle, self.PrioritizeTriggeredClick);
 
 		BI_CustomEvent.AddListener("CameraListLoaded", UpdatedCurrentCameraData);
 		BI_CustomEvent.AddListener("OpenVideo", OnOpenVideo);
@@ -13808,13 +13864,7 @@ function VideoPlayerController()
 	}
 	this.PrioritizeTriggeredClick = function ()
 	{
-		if (!prioritizeTriggeredToggled)
-			toaster.Info("Long press to toggle Auto-Maximize.");
-		else
-		{
-			clearTimeout(prioritizeTriggeredTimeout);
-			prioritizeTriggeredToggled = false;
-		}
+		toaster.Info("Long press to toggle Auto-Maximize.");
 	}
 	this.PrioritizeTriggeredToggle = function ()
 	{
@@ -13830,14 +13880,8 @@ function VideoPlayerController()
 		}
 		self.PrioritizeTriggeredWasToggled();
 	}
-	var prioritizeTriggeredToggled = false;
-	var prioritizeTriggeredTimeout = null;
 	this.PrioritizeTriggeredWasToggled = function ()
 	{
-		prioritizeTriggeredToggled = true;
-		clearTimeout(prioritizeTriggeredTimeout);
-		prioritizeTriggeredTimeout = setTimeout(function () { prioritizeTriggeredToggled = false; }, 4000);
-
 		setPrioritizeTriggeredButtonState();
 		UpdatedCurrentCameraData(cameraListLoader.GetLastResponse());
 	}
