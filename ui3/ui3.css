@@ -1250,6 +1250,39 @@ div.invisibleLabel
 	max-width: 100%;
 	max-height: 20px;
 }
+/* Relative PTZ / 3D Positioning */
+#ptzRelativeToggleSection
+{
+	text-align: center;
+}
+
+#ptzRelativeToggle
+{
+	font-size: 16px;
+}
+
+#relativeptzbox
+{
+	border: 3px solid Red;
+	display: none;
+	background-color: transparent;
+	position: absolute;
+	z-index: 2;
+	opacity: 1;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.relativePtzDebugText
+{
+	position: absolute;
+	z-index: 1;
+	font-size: 16px;
+	background-color: #000000;
+	color: var(--text-active-color);
+	padding: 3px;
+}
+
 /* Progress Bars */
 .progressBarOuter
 {
@@ -4267,6 +4300,16 @@ body + div
 	border: 0px solid transparent;
 }
 
+	.simpleTextButton:hover
+	{
+		box-shadow: 0px 0px 1px 2px rgba(255,255,255,0.5);
+	}
+
+	.simpleTextButton.disabled:hover
+	{
+		box-shadow: none;
+	}
+
 .btnBlue
 {
 	background-color: #B9B9B9;
@@ -4381,6 +4424,19 @@ body + div
 		background-color: rgba(255,255,255,0.1);
 	}
 
+	.btnTransparent.turnedon
+	{
+		background-color: var(--profile-active-color);
+		color: #000000;
+	}
+
+.simpleTextButton.disabled
+{
+	background-color: transparent;
+	color: #3e4149;
+	border-color: #3e4149;
+	cursor: not-allowed;
+}
 /* Three-state buttons */
 .triBtn0,
 .triBtn1,

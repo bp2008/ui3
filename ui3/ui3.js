@@ -551,6 +551,7 @@ var serverTimeLimiter = null;
 var liveVideoPausing = null;
 var genericQualityHelper = null;
 var streamingProfileUI = null;
+var relativePTZ = null;
 var ptzButtons = null;
 var playbackHeader = null;
 var exportControls = null;
@@ -2921,6 +2922,8 @@ $(function ()
 
 	setSystemNameButtonState();
 
+	relativePTZ = new RelativePTZ();
+
 	ptzButtons = new PtzButtons();
 
 	if (!any_h264_playback_supported)
@@ -4756,6 +4759,7 @@ function PtzButtons()
 	var $irButtonLabel = $("#irButtonLabel");
 	var $brightnessButtonLabel = $("#brightnessButtonLabel");
 	var $contrastButtonLabel = $("#contrastButtonLabel");
+	var $ptzRelativeToggle = $("#ptzRelativeToggle");
 
 	var hitPolys = {};
 	hitPolys["PTZzoomIn"] = [[64, 64], [82, 82], [91, 77], [99, 77], [106, 81], [126, 64], [116, 58], [105, 53], [86, 53], [74, 58]];
@@ -4994,6 +4998,8 @@ function PtzButtons()
 			$ptzButtons.removeClass("disabled");
 			$ptzExtraDropdowns.removeClass("disabled");
 			$ptzHome.removeClass("disabled");
+			$ptzRelativeToggle.removeClass("disabled");
+			$ptzRelativeToggle.removeAttr("disabled");
 			setColor($ptzBackgroundGraphics, $ptzBackgroundGraphics.get(0).defaultColor);
 		}
 		else
@@ -5003,6 +5009,8 @@ function PtzButtons()
 			$ptzButtons.addClass("disabled");
 			$ptzExtraDropdowns.addClass("disabled");
 			$ptzHome.addClass("disabled");
+			$ptzRelativeToggle.addClass("disabled");
+			$ptzRelativeToggle.attr("disabled", "disabled");
 			setColor($ptzBackgroundGraphics, ptzpadDisabledColor);
 		}
 	}
@@ -5105,6 +5113,20 @@ function PtzButtons()
 			return;
 		}
 		self.PTZ_async_noguarantee(videoPlayer.Loading().image.id, 100 + parseInt(presetNumber));
+	}
+	this.PTZ_relative = function (x, y, z, onSuccess, onFail)
+	{
+		if (!ptzControlsEnabled)
+			return;
+		if (!videoPlayer.Loading().image.ptz)
+		{
+			toaster.Error("Current camera is not PTZ");
+			return;
+		}
+		x = Clamp(x, 0, 1);
+		y = Clamp(y, 0, 1);
+		z = Clamp(z, -1, 1);
+		self.PTZ_async_noguarantee(videoPlayer.Loading().image.id, 4, undefined, { xperc: x, yperc: y, zperc: z }, onSuccess, onFail);
 	}
 	var PTZ_set_preset = function (presetNumber, description)
 	{
@@ -5269,20 +5291,48 @@ function PtzButtons()
 			}
 		}
 	}
-	this.PTZ_async_noguarantee = function (cameraId, ptzCmd, updown)
+	this.PTZ_async_noguarantee = function (cameraId, ptzCmd, updown, extraArgs, onSuccess, onFail)
 	{
 		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd) };
 		if (updown == "1")
 			args.updown = 1;
 		else if (updown == "2")
 			args.button = 64;
+		if (extraArgs)
+			args = $.extend(args, extraArgs);
 		ExecJSON(args, function (response)
 		{
-		}, function ()
+			if (response && response.result === "success")
+			{
+				if (typeof onSuccess === "function")
+					onSuccess();
+			}
+			else
+			{
+				if (typeof onFail !== "function")
+					onFail = function (messageHtml) { toaster.Error("PTZ command failed. " + messageHtml); }
+
+				if (!response)
+					onFail("No response body.");
+				else if (response.result && response.result === "fail")
+				{
+					if (response.status)
+						onFail("Status: " + htmlEncode(response.status));
+					else if (response.data && response.data.reason)
+						onFail("Reason: " + htmlEncode(response.data.reason));
+					else
+						onFail("No failure reason was given.");
+				}
+				else
+					onFail("Unexpected response: " + htmlEncode(JSON.stringify(response)));
+			}
+		}, function (jqXHR, textStatus, errorThrown)
 		{
+			if (typeof onFail === "function")
+				onFail(jqXHR.ErrorMessageHtml);
 		});
 	}
-	this.PTZ_unsafe_async_guarantee = function (cameraId, ptzCmd, updown)
+	this.PTZ_unsafe_async_guarantee = function (cameraId, ptzCmd, updown, extraArgs)
 	{
 		unsafePtzActionInProgress = true;
 		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd) };
@@ -5290,6 +5340,8 @@ function PtzButtons()
 			args.updown = 1;
 		else if (updown == "2")
 			args.button = 64;
+		if (extraArgs)
+			args = $.extend(args, extraArgs);
 		ExecJSON(args, function (response)
 		{
 			unsafePtzActionInProgress = false;
@@ -5306,7 +5358,7 @@ function PtzButtons()
 			}, 100);
 		});
 	}
-	this.PTZ_unsafe_sync_guarantee = function (cameraId, ptzCmd, updown)
+	this.PTZ_unsafe_sync_guarantee = function (cameraId, ptzCmd, updown, extraArgs)
 	{
 		unsafePtzActionInProgress = true;
 		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd) };
@@ -5314,6 +5366,8 @@ function PtzButtons()
 			args.updown = 1;
 		else if (updown == "2")
 			args.button = 64;
+		if (extraArgs)
+			args = $.extend(args, extraArgs);
 		ExecJSON(args, function (response)
 		{
 			unsafePtzActionInProgress = false;
@@ -5364,6 +5418,194 @@ function PtzButtons()
 			currentPtzData.contrast = contrast;
 		$contrastButtonLabel.text("Contrast " + currentPtzData.contrast);
 	}
+}
+///////////////////////////////////////////////////////////////
+// Relative PTZ GUI ///////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function RelativePTZ()
+{
+	var self = this;
+	var initialized = false;
+	var enabled3dPositioning = false;
+	var pos3dX = 0;
+	var pos3dY = 0;
+	var pos3dDragging = false;
+	var box = $("#relativeptzbox");
+	var $camimg_wrapper = $("#camimg_wrapper");
+
+	function Initialize()
+	{
+		if (initialized)
+			return;
+		initialized = true;
+
+		BindEvents($camimg_wrapper.get(0), 'mousedown touchstart', ImageArea_MouseDown);
+		BindEvents(document, 'mousemove touchmove', MouseMove);
+		BindEvents(document, 'mouseleave', function (e)
+		{
+			mouseCoordFixer.fix(e);
+			EndPos3dDragging(e.mouseX, e.mouseY);
+		});
+		BindEvents(document, 'mouseup touchend', function (e)
+		{
+			mouseCoordFixer.fix(e);
+			EndPos3dDragging(e.mouseX, e.mouseY);
+		});
+		BindEvents(document, 'touchcancel', function (e)
+		{
+			mouseCoordFixer.fix(e);
+			pos3dDragging = false;
+		});
+	}
+	function EndPos3dDragging(mx, my)
+	{
+		if (pos3dDragging)
+		{
+			pos3dDragging = false;
+			hideRelPtzBox();
+
+			var boxSpec = { x: pos3dX, y: pos3dY, w: mx - pos3dX, h: my - pos3dY };
+
+			var w = mx - pos3dX;
+			var h = my - pos3dY;
+
+			if (Math.abs(w) < 10 && Math.abs(h) < 10)
+				w = h = 0;
+
+			var imgFrameOffset = $camimg_wrapper.offset();
+			var zoomFactor = imageRenderer.zoomHandler.GetZoomFactor();
+			var imgFrameW = $camimg_wrapper.width() * zoomFactor;
+			var imgFrameH = $camimg_wrapper.height() * zoomFactor;
+			var z = Math.max(Math.abs(w / imgFrameW), Math.abs(h / imgFrameH));
+			if (w < 0)
+				z *= -1;
+			var xperc = ((pos3dX - imgFrameOffset.left) + (w / 2)) / imgFrameW;
+			var yperc = ((pos3dY - imgFrameOffset.top) + (h / 2)) / imgFrameH;
+
+			ptzButtons.PTZ_relative(xperc, yperc, z, function () { flashRelPtzBox(boxSpec.x, boxSpec.y, boxSpec.w, boxSpec.h); });
+		}
+	}
+	function Precon_3dPos(e)
+	{
+		if (!videoPlayer.Loading().image.isLive)
+			return;
+		var currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
+		if (!currentCam || !currentCam.ptz)
+			return;
+		return (e.which === 2 || enabled3dPositioning ||
+			(e.getModifierState && e.getModifierState("Control")));
+	}
+	function ImageArea_MouseDown(e)
+	{
+		if (Precon_3dPos(e))
+		{
+			videoPlayer.suppressMouseHelper(true);
+			mouseCoordFixer.fix(e);
+			pos3dX = e.mouseX;
+			pos3dY = e.mouseY;
+			pos3dDragging = true;
+			e.preventDefault();
+			e.stopPropagation();
+		}
+	}
+	function ImageArea_MouseLeave(e)
+	{
+		mouseCoordFixer.fix(e);
+		var ofst = $camimg_wrapper.offset();
+		var zoomFactor = imageRenderer.zoomHandler.GetZoomFactor();
+		var imgFrameW = $camimg_wrapper.width() * zoomFactor;
+		var imgFrameH = $camimg_wrapper.height() * zoomFactor;
+		if (e.mouseX < ofst.left || e.mouseY < ofst.top || e.mouseX >= ofst.left + imgFrameW || e.mouseY >= ofst.top + imgFrameH)
+		{
+			EndPos3dDragging(e.mouseX, e.mouseY);
+		}
+	}
+	function MouseMove(e)
+	{
+		mouseCoordFixer.fix(e);
+		if (pos3dDragging)
+			showRelPtzBox(pos3dX, pos3dY, e.mouseX - pos3dX, e.mouseY - pos3dY);
+	}
+	function showRelPtzBox(x, y, w, h)
+	{
+		if (developerMode)
+		{
+			var imgFrameOffset = $camimg_wrapper.offset();
+			var zoomFactor = imageRenderer.zoomHandler.GetZoomFactor();
+			var imgFrameW = $camimg_wrapper.width() * zoomFactor;
+			var imgFrameH = $camimg_wrapper.height() * zoomFactor;
+			var z = Math.max(Math.abs(w / imgFrameW), Math.abs(h / imgFrameH));
+			if (w < 0)
+				z *= -1;
+			var xperc = ((pos3dX - imgFrameOffset.left) + (w / 2)) / imgFrameW;
+			var yperc = ((pos3dY - imgFrameOffset.top) + (h / 2)) / imgFrameH;
+
+			box.html('<div class="relativePtzDebugText">'
+				+ 'X: ' + xperc.toFixed(3)
+				+ ', Y: ' + yperc.toFixed(3)
+				+ ', Z: ' + z.toFixed(3)
+				+ ', imgFrameW: ' + imgFrameW.toFixed(3)
+				+ ', imgFrameH: ' + imgFrameH.toFixed(3)
+				+ '</div > ');
+		}
+		else
+			box.html('');
+
+		var blueBox = false;
+		if (w < 0)
+		{
+			x += w;
+			w *= -1;
+			blueBox = true;
+		}
+		if (h < 0)
+		{
+			y += h;
+			h *= -1;
+		}
+		box.css("border-color", blueBox ? "Blue" : "Red");
+		box.css("left", (x - 3) + "px");
+		box.css("top", (y - 3) + "px");
+		box.css("width", (w) + "px");
+		box.css("height", (h) + "px");
+
+		box.show();
+	}
+	function hideRelPtzBox()
+	{
+		box.hide();
+	}
+	function flashRelPtzBox(x, y, w, h)
+	{
+		if (box.is(':visible'))
+			return;
+		showRelPtzBox(x, y, w, h);
+		box.fadeOut(1000);
+	}
+	this.enable3dPositioning = function ()
+	{
+		if (!enabled3dPositioning)
+			self.toggle3dPositioning();
+	}
+	this.disable3dPositioning = function ()
+	{
+		if (enabled3dPositioning)
+			self.toggle3dPositioning();
+	}
+	this.toggle3dPositioning = function ()
+	{
+		enabled3dPositioning = !enabled3dPositioning;
+		self.setToggleButtonState();
+	}
+	this.setToggleButtonState = function (forceTurnedOn)
+	{
+		if (enabled3dPositioning || forceTurnedOn)
+			$("#ptzRelativeToggle").addClass("turnedon");
+		else
+			$("#ptzRelativeToggle").removeClass("turnedon");
+	}
+
+	Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // PtzPresetThumbLoader ///////////////////////////////////////
@@ -13459,6 +13701,7 @@ function VideoPlayerController()
 
 		playbackControls.Live();
 		ptzButtons.UpdatePtzControlDisplayState();
+		relativePTZ.disable3dPositioning();
 		dropdownBoxes.setLabelText("currentGroup", CleanUpGroupName(clc.optionDisplay));
 
 		if (clipLoader.GetCurrentFilteredCamera() !== cli.id)
@@ -25660,6 +25903,8 @@ function BI_Hotkeys()
 			|| $("body").children(".dialog_overlay").length !== 0
 			|| $("body").children(".dialog_wrapper").children(".streamingProfileEditorPanel").length !== 0)
 			return;
+		if (e.ctrlKey)
+			relativePTZ.setToggleButtonState(true);
 		var hotkeysBeingRepeated = currentlyDownKeys[charCode];
 		if (hotkeysBeingRepeated)
 		{
@@ -25720,6 +25965,7 @@ function BI_Hotkeys()
 	});
 	$(document).keyup(function (e)
 	{
+		relativePTZ.setToggleButtonState();
 		var charCode = e.which;
 		if (!charCode)
 			return;
@@ -26288,9 +26534,13 @@ function RollingAverage(MAXSAMPLES)
 /////////////////////////////////////////////////////////////
 // Efficient Timed Average Calculator ///////////////////////
 /////////////////////////////////////////////////////////////
+/**
+ * Calculates the average of values provided for a limited time. The timer starts upon the first Add operation. The Add method becomes a no-op when the timer reaches time time limit and [minRecords] or more items have been added.
+ * @param {Number} maxMs Time limit.
+ * @param {Number} minRecords Minimum number of records to keep.
+ */
 function TimedAverage(maxMs, minRecords)
 {
-	/// <summary>Calculates the average of values provided for a limited time. The timer starts upon the first Add operation.</summary>
 	var self = this;
 	var itemCount = 0;
 	var sum = 0;
@@ -32055,3 +32305,16 @@ function getHotkeyTextValueFromHotkeyValue(val)
 			+ (parts[2] === "1" ? "SHIFT + " : "")
 			+ hotkeys.getKeyName(parts[3]);
 }
+// Disable middle-click scrolling. In most non-scrollable parts of UI3 in Chrome, middle click causes the cursor to get stuck in the scrolling state.
+setTimeout(function ()
+{
+	BindEvents(document, 'mousedown', function (e)
+	{
+		if (e.which === 2)
+		{
+			e.preventDefault();
+			e.stopPropagation();
+			return false;
+		}
+	});
+}, 0);
