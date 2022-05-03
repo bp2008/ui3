@@ -5455,6 +5455,7 @@ function RelativePTZ()
 		{
 			mouseCoordFixer.fix(e);
 			pos3dDragging = false;
+			hideRelPtzBox();
 		});
 	}
 	function EndPos3dDragging(mx, my)
@@ -5497,6 +5498,12 @@ function RelativePTZ()
 	}
 	function ImageArea_MouseDown(e)
 	{
+		if (pos3dDragging)
+		{
+			pos3dDragging = false;
+			hideRelPtzBox();
+			return;
+		}
 		if (Precon_3dPos(e))
 		{
 			videoPlayer.suppressMouseHelper(true);
