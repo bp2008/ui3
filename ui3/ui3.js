@@ -4998,8 +4998,6 @@ function PtzButtons()
 			$ptzButtons.removeClass("disabled");
 			$ptzExtraDropdowns.removeClass("disabled");
 			$ptzHome.removeClass("disabled");
-			$ptzRelativeToggle.removeClass("disabled");
-			$ptzRelativeToggle.removeAttr("disabled");
 			setColor($ptzBackgroundGraphics, $ptzBackgroundGraphics.get(0).defaultColor);
 		}
 		else
@@ -5009,9 +5007,20 @@ function PtzButtons()
 			$ptzButtons.addClass("disabled");
 			$ptzExtraDropdowns.addClass("disabled");
 			$ptzHome.addClass("disabled");
+			setColor($ptzBackgroundGraphics, ptzpadDisabledColor);
+		}
+		var currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
+		if (videoPlayer.Loading().image.isLive && currentCam && currentCam.ptzdirect && ptzControlsEnabled)
+		{
+			$ptzRelativeToggle.removeClass("disabled");
+			$ptzRelativeToggle.removeAttr("disabled");
+			$ptzRelativeToggle.attr('title', "Clicking this button will toggle 3D Positioning mode, where you can click or drag within a PTZ camera's view to move/zoom the camera.\n\nTo use 3D Positioning without this button activated, use the middle mouse button or hold the CTRL key.");
+		}
+		else
+		{
 			$ptzRelativeToggle.addClass("disabled");
 			$ptzRelativeToggle.attr("disabled", "disabled");
-			setColor($ptzBackgroundGraphics, ptzpadDisabledColor);
+			$ptzRelativeToggle.attr('title', "3D Positioning is not available from the current camera.\n\nAs of Blue Iris 5.5.6.19, the only PTZ protocol that fully supports 3D positioning is \"Dahua New V4\".");
 		}
 	}
 	this.isEnabledNow = function ()
@@ -5491,7 +5500,7 @@ function RelativePTZ()
 		if (!videoPlayer.Loading().image.isLive)
 			return;
 		var currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
-		if (!currentCam || !currentCam.ptz)
+		if (!currentCam || !currentCam.ptz || !currentCam.ptzdirect)
 			return;
 		return (e.which === 2 || enabled3dPositioning ||
 			(e.getModifierState && e.getModifierState("Control")));
@@ -5576,10 +5585,12 @@ function RelativePTZ()
 		box.css("width", (w) + "px");
 		box.css("height", (h) + "px");
 
+		box.stop(true, true);
 		box.show();
 	}
 	function hideRelPtzBox()
 	{
+		box.stop(true, true);
 		box.hide();
 	}
 	function flashRelPtzBox(x, y, w, h)
@@ -12683,6 +12694,8 @@ function CameraListLoader()
 				var o = lastResponse.data[i];
 				if (typeof o.webcast === "undefined")
 					o.webcast = true;
+				if (typeof o.ptzdirect === "undefined" && o.ptz)
+					o.ptzdirect = true;
 				allCameras[o.optionValue] = o;
 			}
 			for (var i = 0; i < lastResponse.data.length; i++)

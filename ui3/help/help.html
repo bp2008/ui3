@@ -17,6 +17,7 @@
 			border: 1px solid black;
 			padding: 1px 2px;
 		}
+
 		.urlParameterAlias
 		{
 			margin-left: 10px;
@@ -61,6 +62,7 @@
 								<li><a data-toggle="pill" href="#export" id="nav-export">Exporting Video</a></li>
 								<li><a data-toggle="pill" href="#hlsstreams" id="nav-hlsstreams">HLS Streams</a></li>
 								<li><a data-toggle="pill" href="#mainmenu" id="nav-mainmenu">Main Menu</a></li>
+								<li><a data-toggle="pill" href="#ptzcontrols" id="nav-ptzcontrols">PTZ Controls</a></li>
 								<li><a data-toggle="pill" href="#nerdstats" id="nav-nerdstats">Stats for Nerds</a></li>
 								<li><a data-toggle="pill" href="#tips" id="nav-tips">Tips</a></li>
 								<li><a data-toggle="pill" href="#extensions" id="nav-extensions">UI Extensions</a></li>
@@ -196,6 +198,30 @@
 						<h2>livestream.htm</h2>
 						<p>One of the pages included with UI3 is "livestream.htm" which just plays an HLS stream from Blue Iris and does basically nothing else.  The page takes a single URL parameter "cam" with the short name of the camera or group you wish to view.  Example: <a href="../../livestream.htm?cam=index">livestream.htm?cam=index</a></p>
 						<p class="bg-info padded-info">If you omit the "cam" parameter, livestream.htm will attempt to load "index" (a.k.a. "all cameras" ).</p>
+					</div>
+					<div class="tab-pane" id="ptzcontrols" role="tabpanel" aria-labelledby="nav-ptzcontrols">
+						<h1>PTZ Controls</h1>
+						<p>UI3 offers several methods of controlling Pan-Tilt-Zoom (PTZ) cameras.  For correct behavior, each camera must have the appropriate PTZ control profile chosen in Blue Iris.  Not all cameras support all functions that are shown in the user interface.</p>
+						<h3>Standard PTZ Controls</h3>
+						<p>The primary method of PTZ input is via the PTZ button pad on the Live View tab, where buttons are available to pan, tilt, zoom, or adjust camera focus.  Mouse over each button for a description of what each button does.  The button at the center of the button pad is to "Stop" the camera, which is unnecessary in most cases but may be helpful if your camera is stuck in a moving state and the other buttons cannot stop it.</p>
+						<h3>Preset Positions</h3>
+						<p>Below the PTZ button pad, there are buttons for loading and setting PTZ presets.</p>
+						<h4>Goto Preset</h4>
+						<p>Click a button to instruct the camera to go to that preset position.</p>
+						<h4>Set Preset</h4>
+						<p>Long-press (click and hold) a button to set the preset to the camera's current position.  You will be prompted to enter a name for the preset, and given the option to cancel the "Set" operation.  If you proceed, the camera will be instructed to save the preset, and Blue Iris save a snapshot of the current view to show within the preset button.</p>
+						<p>If long-press doesn't work, you can access the "Set" functionality by right clicking each preset button to open a context menu.</p>
+						<h4>Mouseover</h4>
+						<p>Mousing over any preset button will show the name assigned to the preset, along with the saved snapshot.</p>
+						<h3>3D Positioning</h3>
+						<p>On supported cameras, the "Toggle 3D Positioning" button can be used to enable 3D Positioning mode, where you can click a spot in the camera's field of view and the camera will attempt to center its view on that position.</p>
+						<p>If you click and drag, you can draw a rectangle around the region you would like the camera to move to.  Drag <b>left-to-right</b> to draw a red rectangle that will cause the camera to <b>zoom in</b>.  Drag <b>right-to-left</b> to draw a blue rectangle that will cause the camera to <b>zoom out</b>.</p>
+						<p>For devices with a keyboard, you can hold the CTRL key to temporarily enable "3D Positioning" mode, even when not on the Live View tab.  <i>(TIP: the CTRL key + click method is also supported in Blue Iris's local console for basic 3D positioning.)</i></p>
+						<p>For devices with a mouse wheel, you can click with the mouse wheel instead of the primary mouse button to directly access "3D Positioning" mode without explicitly enabling it and without using the CTRL key.</p>
+						<p><i>* At this time, UI3 does not support 3D Positioning while viewing a camera group, only when viewing an individual camera.</i></p>
+						<p class="bg-info padded-info"><b>3D Positioning Compatibility</b><br /><br />If you know that your camera supports 3D positioning in its web interface, but you can't make it work in Blue Iris or in UI3, try selecting a different PTZ control profile for the camera in Blue Iris.  Blue Iris has multiple choices of PTZ protocol for some popular camera manufacturers, such as Dahua.<br /><br />As of Blue Iris 5.5.6.18, 3D positioning with zoom capability is supported with the "Dahua New V4" PTZ profile.  Other PTZ profiles may offer limited or no support for 3D positioning.<br /><br />3D Positioning support may change with Blue Iris updates and with camera firmware updates.<br /><br />If none of the relevant PTZ profiles enable 3D Positioning with your camera, but you know your camera is capable of 3D positioning, Blue Iris Support may be able to help (requires an active support plan).</p>
+						<h3>Hotkeys</h3>
+						<p>Hotkeys exist for most PTZ functions, and hotkeys work even if you are not on the Live View tab.  With a default hotkey configuration, try the arrow keys to pan and tilt, <code>+</code> and <code>-</code> keys on the number bar to zoom, and <code>[</code> and <code>]</code> keys to adjust focus.  The number keys 0-9 on the number bar are bound to goto PTZ presets.  Holding the CTRL key will temporarily activate "3D Positioning" mode (see "3D Positioning" section above).</p>
 					</div>
 					<div class="tab-pane" id="nerdstats" role="tabpanel" aria-labelledby="nav-nerdstats">
 						<h1>Stats for Nerds</h1>
@@ -403,26 +429,17 @@
 					</div>
 					<div class="tab-pane" id="cameralayout" role="tabpanel" aria-labelledby="nav-cameralayout">
 						<h1>Camera Layout</h1>
-						<p>UI3 is unable to control your camera layout.  To change the camera layout, you must drag cameras around in Blue Iris's local console.</p>
+						<p>UI3 is unable to directly control the order or exact positioning of your cameras.  To change the order of your cameras, you must enter "Edit Layout" mode in Blue Iris's local console, and drag cameras around.</p>
 						<h2>Optimizing Group Frames</h2>
-						<p>The default group frame size may have a lot of empty black area, or the resolution may be lower than you would like. You can change the resolution of each group in Blue Iris's local console.</p>
-						<p><img class="img-responsive" mysrc="img/GroupProperties.png" alt="Screenshot of Group Properties" /></p>
-						<p>You may <b>type any resolution</b> you want into the frame size dropdown box.  For best results, use frame dimensions that are multiples of 16.  For convenience, here is a list of suitable multiples of 16 that you can copy from:</p>
-						<div class="panel panel-info">
-							<div class="panel-heading">Multiples of 16</div>
-							<div class="panel-body">
-								16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 272, 288, 304, 320, 336, 352, 368, 384, 400, 416, 432, 448, 464, 480, 496, 512, 528, 544, 560, 576, 592, 608, 624, 640, 656, 672, 688, 704, 720, 736, 752, 768, 784, 800, 816, 832, 848, 864, 880, 896, 912, 928, 944, 960, 976, 992, 1008, 1024, 1040, 1056, 1072, 1088, 1104, 1120, 1136, 1152, 1168, 1184, 1200, 1216, 1232, 1248, 1264, 1280, 1296, 1312, 1328, 1344, 1360, 1376, 1392, 1408, 1424, 1440, 1456, 1472, 1488, 1504, 1520, 1536, 1552, 1568, 1584, 1600, 1616, 1632, 1648, 1664, 1680, 1696, 1712, 1728, 1744, 1760, 1776, 1792, 1808, 1824, 1840, 1856, 1872, 1888, 1904, 1920, 1936, 1952, 1968, 1984, 2000, 2016, 2032, 2048, 2064, 2080, 2096, 2112, 2128, 2144, 2160, 2176, 2192, 2208, 2224, 2240, 2256, 2272, 2288, 2304, 2320, 2336, 2352, 2368, 2384, 2400, 2416, 2432, 2448, 2464, 2480, 2496, 2512, 2528, 2544, 2560, 2576, 2592, 2608, 2624, 2640, 2656, 2672, 2688, 2704, 2720, 2736, 2752, 2768, 2784, 2800, 2816, 2832, 2848, 2864, 2880, 2896, 2912, 2928, 2944, 2960, 2976, 2992, 3008, 3024, 3040, 3056, 3072, 3088, 3104, 3120, 3136, 3152, 3168, 3184, 3200, 3216, 3232, 3248, 3264, 3280, 3296, 3312, 3328, 3344, 3360, 3376, 3392, 3408, 3424, 3440, 3456, 3472, 3488, 3504, 3520, 3536, 3552, 3568, 3584, 3600, 3616, 3632, 3648, 3664, 3680, 3696, 3712, 3728, 3744, 3760, 3776, 3792, 3808, 3824, 3840, 3856, 3872, 3888, 3904, 3920, 3936, 3952, 3968, 3984, 4000
-							</div><!--/.panel-body -->
-						</div><!--/.panel -->
-						<h3>Group Optimization Example</h3>
-						<div style="display: inline-block;">
-							<h4>Before Optimization</h4>
-							<p><img class="img-responsive" mysrc="img/PoorLayout.jpg" alt="Example of poor layout" /></p>
-						</div>
-						<div style="display: inline-block;">
-							<h4>After Optimization</h4>
-							<p><img class="img-responsive" mysrc="img/BetterLayout.jpg" alt="Example of better layout" /></p>
-						</div>
+						<p>Since Blue Iris 5.5, group video streams have a dynamic resolution intended to best-fit within the viewport you have available.  If you wish to adjust this behavior, there are a few ways to do it:</p>
+						<h3>In UI3</h3>
+						<p>
+							Right-click the group video in UI3, and choose "Group Settings".  Here, you can force a specific aspect ratio for the group frame, adjust the streaming resolution limit to improve quality or save CPU cycles, or toggle features like the camera labels and borders.  Control of the group frame's aspect ratio will be unavailable if you have configured a fixed aspect ratio for the group within Blue Iris's local console.
+						</p>
+						<h3>In the Blue Iris Local Console</h3>
+						<p>
+							In the local console, choose the desired group and click the "Edit Layout" button to the right of the group selection dropdown list.  Then, right click any camera to access a menu of options to configure the group layout.  Most options here also affect UI3.  You can also click and drag cameras to reposition them.
+						</p>
 					</div>
 					<div class="tab-pane" id="recordings" role="tabpanel" aria-labelledby="nav-recordings">
 						<h1>Recordings</h1>
