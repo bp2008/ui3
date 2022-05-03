@@ -9,7 +9,9 @@ https://ipcamtalk.com/threads/blue-iris-ui3.23528/
 
 ## Manual installation
 
-If you wish to manually install UI3 (maybe to get a bugfix without waiting for it to arrive in a Blue Iris update), you can get it from the releases tab: https://github.com/bp2008/ui3/releases
+Be aware that most UI3 releases are developed against the **latest Blue Iris version** at the time of UI3 release.  Compatibility with older Blue Iris versions is not maintained, so any time you update UI3 without being on the latest version of Blue Iris, you risk encountering broken features and other bugs.
+
+If you wish to manually install a UI3 update, you can get it from the releases tab: https://github.com/bp2008/ui3/releases
 
 To install, just extract everything to Blue Iris's `www` directory and overwrite all files.  The default path to this folder is `C:\Program Files\Blue Iris 5\www`.
 
