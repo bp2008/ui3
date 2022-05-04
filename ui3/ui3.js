@@ -27082,7 +27082,7 @@ function LoadImagePromise(url, headers, imageSizeBytes)
 		image.setAttribute("crossOrigin", "Anonymous");
 		image.onload = function ()
 		{
-			if (url.substr(5) === "blob:")
+			if (url.substr(0, 5) === "blob:")
 				URL.revokeObjectURL(url);
 			if (image.complete && image.naturalWidth && image.naturalHeight)
 				resolve({ image: image, headers: headers, imageSizeBytes: imageSizeBytes });
@@ -27091,7 +27091,7 @@ function LoadImagePromise(url, headers, imageSizeBytes)
 		};
 		image.onerror = function ()
 		{
-			if (url.substr(5) === "blob:")
+			if (url.substr(0, 5) === "blob:")
 				URL.revokeObjectURL(url);
 			reject({ image: image, headers: headers, imageSizeBytes: imageSizeBytes });
 		};
