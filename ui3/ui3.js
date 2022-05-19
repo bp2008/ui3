@@ -19400,6 +19400,11 @@ function GroupCfg()
 		var urlArgs = "";
 		if (flagMask.mask > 0)
 			urlArgs = "&flags=" + flagMask.flags + "&mask=" + flagMask.mask;
+		//if (!image.isGroup && settings.ui3_defaultCameraGroupId)
+		//{
+		//	// Add a "&group=" parameter so that BI knows which group you were streaming from.  This can affect camera scaling via the "Scale to fill" layout option.
+		//	urlArgs += "&group=" + encodeURIComponent(settings.ui3_defaultCameraGroupId);
+		//}
 		return urlArgs;
 	}
 	var SetFlagMask = function (image, flagMask, index, key)
@@ -22601,11 +22606,13 @@ function ClipProperties()
 			$camprop.append(GetInfo("Date", GetDateStr(clipData.displayDate)));
 			if (clipData.isClip)
 				$camprop.append(GetInfo("Real Time", clipData.roughLength).attr("title", "Real Time: Length of real time this clip covers.\nMay be significantly longer than Play Time if created from multiple alerts."));
-			$camprop.append(GetInfo("Play Time", msToTime(clipData.msec)));
+			$camprop.append(GetInfo("Play Time", msToTime(clipData.msec, true), true));
 			if (clipData.isClip)
 				$camprop.append(GetInfo("Size", clipData.fileSize));
 			else
 				$camprop.append(GetInfo("Zones", new AlertZonesMask(clipData.rawData.zones).toString()));
+
+			$camprop.append(GetInfoEleValue("Resolution", clipData.res));
 
 			if ((clipData.flags & BIDBFLAG_AI_CONFIRMED_X) > 0)
 				$camprop.append(GetIcon("trigger_sentry", "AI-verified alert"));
@@ -22658,6 +22665,8 @@ function ClipProperties()
 				$camprop.append(GetInfoEleValue("Convert/export", $exportBtn));
 			}
 
+			$camprop.append(GetInfoEleValue("File Name", clipData.rawData.file));
+
 			if (developerMode)
 			{
 				$camprop.append(GetInfo("Flags", InsertSpacesInBinary(dec2bin(clipData.flags), 32)));
@@ -22682,10 +22691,13 @@ function ClipProperties()
 		$iconRow.append(clipLoader.GetClipIcon(icon)).append(label);
 		return $iconRow;
 	}
-	var GetInfo = function (label, value)
+	var GetInfo = function (label, value, isHtml)
 	{
 		var $info = $('<div class="dialogOption_item clipprop_item_info"></div>');
-		$info.text(label + ": " + value);
+		if (isHtml)
+			$info.html(label + ": " + value);
+		else
+			$info.text(label + ": " + value);
 		return $info;
 	}
 	var GetInfoEleValue = function (label, ele)
