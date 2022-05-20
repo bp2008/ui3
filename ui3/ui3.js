@@ -5792,6 +5792,21 @@ var timelineFlagImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABcAAAAY
 	+ "4Bb2USsDaKJX+eOX9qddl4N4GHgEoE/xkWeV67XftoZiaB+8AagEzi15/9WTw9vQDcAX78OWsbF0LSJbewmd09wMB6s30cyc7UCEPO2e3AdWB/YjhAp5Vh2B0Th6wrB4BrQF9iOEDG7mX"
 	+ "EPW/tkaePNx7olq0k3lp5BFudQUY7r7o7xOgZ4ITd7HKEwjclbN0RK4Nup49+K5ctqmfHmuH1op4rzZRvWA6peKOJ5qv2ysBiM7xQZWmiEE24bGw/LAOv/8Ib0gqQB3Q7TZb/6GLbGy2x"
 	+ "UfwfuNjAVLcWtiYgNGtoo4iMQuEnh0eUF9+Fj6tBpeIqE/A+elIHqkngAugFLgO7GqP3CpgGvrWL/wa9grsEBYmdaQAAAABJRU5ErkJggg==";
+var timelinePersonImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAYCAYAAADKx8xXAAABx0lEQVQ4y8XUO2sUYRTG8d9eMopxAxEllyUma0QJAZt0lvaChQ"
+	+ "oWYh2s/ASpbERb/QwWaa28xVKwSIwYEBcJbkwwMUbdxZ3s7ljM7GYviRAQfOAwL5zzf58z73tm2FOASygi6opikgvsowKeoTqTE90cE10bFY31iVBNcoVmcbbLMX91VHB7mqlBqnVerHF"
+	+ "/UbBckW93bIIpyKW4MsHFYYJ0nLg8zuImyx8620snu0ygsEtQrVOP9gp2G4SNvY6arhmcxkPcqpGPajK5PjJp1io8WeXxRzZr+nEOK1jPYAizQxmTd6Zkb5wl3086Ffc/0s/MKYKGzNIP"
+	+ "w5jEy9bhXC9IzU4zcix54TZdOMFEjrWy4Pm3uN10M3lmgJNHeyHIphk/TmGg83Bai/2gVj4VRw94WP1HcCeMR+wg/dxlp7oP+LTEwhfKtV5ovcJ8kYWNTjBE6dW28NG7uKhdjYg3m9x7y"
+	+ "0Y9rkWYThZ3USrXOue0fV6/x9BrzKHUckyeByoV18wlcHiYU+0w+Df32Iji6FY96h3HDvBzmffb8Z01P+Cvv1neotK1Yba9/2Ko8GBJsLjF4JHYffUX858Obvlvv8ZmrOB8E/gDEteiey"
+	+ "c1xP8AAAAASUVORK5CYII=";
+var timelineVehicleImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAYCAYAAADpnJ2CAAADHklEQVRIx93Vy29VVRQG8N++9/S0tAVLKNa2iFwiNSQaiIQakwZaH"
+	+ "wP/AzVEHDAwDnSs0RiNkUQHxolxgASMkUQZ+pj5JDFWiTFEpS1U24CiwAXSR9rb3nscnF1B0sclztjJyTk556z17e9b316Lm32FZb6l6I73G1kVnI33ugFT9OLlCHoj6yxewuBioGEZsP"
+	+ "0NQe+2VmlTsT6kmSo/TarMZQbx3GKgYSmw1qD3+Xukj2yksYisDi1rfDrOaydUJpcAvR6whAPo27dJ+uIOKlW++pO52vJgaYHdXTQUeOU47/6ugmPYh9+WqtsDGC2lsk8GZJcfk72xXRb"
+	+ "5rXi9vj2P+XhAVkplGI05/zVe8TopX8XWPSXFR+/kzBRvnWBspr4azs5yfwc9bZybYvCSFvTgJM6hGq6VclXQ9/gd0id72Hkrxy8wfPnGLNpzCzvWM/g3h4c5MqYynV2VNol1XIUNT22R"
+	+ "Pns3tzUzW2VrGzvXE0IdpgnUakzO5+a5r4ONraxJpW8Oux2rUUiQYO3qINnVSXcrP5c5cip3594eNq9ZoUXE/fx6hQ9GcuM8EeN2d3LglMaJmhJGCjFVsRhoTsgyhq9wcISjo3kd6zgRa"
+	+ "lku/6ERPhxlfCp/35KQ5BiNCwwDmlCApMBAF+/35zvdtm5Fcrn7Av1dvNefP9/bHkuRsw9RSUlELqFxIXF7Ew9153+FUL9h1jXx4CJxIcdpQ5JEZo0FCpdnuThDW5ozhal5pufrA2xOcg"
+	+ "nJG8WVSn6FqwxDgiqmyjXVd37hx4s8E52a4YfzHB6imq0s6d4ednXm7C7M5Gf4+/OUazkGqgmm8R1GPi9rz0j3bKFjVb7LM5McGlPJlhk5SIt0P7xBOpfRgPIs3/7F15dUMBIxphcYDuM"
+	+ "F7P+mrPfgSelAFxPzHB2VRbCnl+qJKFV5+6PTNhWC0JLw5R8cy8EGY+7hiPWfXtqHLzC2tmC8ORjDED6LxgpLzNRS/GeoOeSxGIu5+q7tpYuNp824K7p3NrKasIKkcVCvXnB8jB2KDbyy"
+	+ "3AAuLBxS1GJgrc6T8X9ib5L1D6qOEQx3D47yAAAAAElFTkSuQmCC";
 function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackError)
 {
 	/** The most recent timeline parameters defining the timeline view we require. */
@@ -5960,6 +5975,8 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 							time: timeOffset + (a.x1 * msecpp),
 							len: (a.x2 - a.x1) * msecpp,
 							isFlag: (a.type & BIDBFLAG_FLAGGED) > 0,
+							isPerson: (a.type & BIDBFLAG_AI_PERSON) > 0,
+							isVehicle: (a.type & BIDBFLAG_AI_VEHICLE) > 0,
 							tracks: a.tracks
 						});
 					}
@@ -5988,10 +6005,10 @@ function ClipTimeline()
 	var timeline;
 	var initialized = false;
 	var didRunFinishInit = false;
-	var alertImg = new Image();
-	var alertImgLoaded = false;
-	var flagImg = new Image();
-	var flagImgLoaded = false;
+	var alertImg = new TimelineRasterIcon(timelineAlertImgSrc);
+	var flagImg = new TimelineRasterIcon(timelineFlagImgSrc);
+	var personImg = new TimelineRasterIcon(timelinePersonImgSrc);
+	var vehicleImg = new TimelineRasterIcon(timelineVehicleImgSrc);
 	var $tl_root = $();
 	var timelineDataLoader = null;
 	var minZoomScaler = 8;
@@ -6016,21 +6033,6 @@ function ClipTimeline()
 			return;
 		initialized = true;
 
-		alertImg.onload = function ()
-		{
-			alertImgLoaded = true;
-			if (timeline && typeof timeline.drawCanvas === "function")
-				timeline.drawCanvas();
-		};
-		alertImg.src = timelineAlertImgSrc;
-
-		flagImg.onload = function ()
-		{
-			flagImgLoaded = true;
-			if (timeline && typeof timeline.drawCanvas === "function")
-				timeline.drawCanvas();
-		};
-		flagImg.src = timelineFlagImgSrc;
 		BI_CustomEvent.AddListener("CameraListLoaded", finishInit);
 		finishInit();
 	}
@@ -6498,36 +6500,17 @@ function ClipTimeline()
 						}
 
 						// Draw alert icons
-						if (alertImg.naturalWidth && alertImg.naturalHeight && flagImg.naturalWidth && flagImg.naturalHeight)
+						for (var n = 0; n < canvasData.alerts.length; n++)
 						{
-							var alertImgScale = (alertImg.naturalHeight / 12) / dpr;
-							var alertImgW = alertImg.naturalWidth / alertImgScale;
-							var alertImgH = alertImg.naturalHeight / alertImgScale;
-							var alertImgXOffset = alertImgW / 2;
-							var alertImgYOffset = 0 * dpr;
-
-							var flagImgScale = (flagImg.naturalHeight / 12) / dpr;
-							var flagImgW = flagImg.naturalWidth / flagImgScale;
-							var flagImgH = flagImg.naturalHeight / flagImgScale;
-							var flagImgXOffset = flagImgW / 2;
-							var flagImgYOffset = 0 * dpr;
-
-							for (var n = 0; n < canvasData.alerts.length; n++)
-							{
-								var a = canvasData.alerts[n];
-								if (a.isFlag)
-								{
-									var x = ((a.time - left) / zoomFactor) - flagImgXOffset;
-									if (x < canvas.width && x + flagImgW > 0)
-										ctx.drawImage(flagImg, x, flagImgYOffset, flagImgW, flagImgH);
-								}
-								else
-								{
-									var x = ((a.time - left) / zoomFactor) - alertImgXOffset;
-									if (x < canvas.width && x + alertImgW > 0)
-										ctx.drawImage(alertImg, x, alertImgYOffset, alertImgW, alertImgH);
-								}
-							}
+							var a = canvasData.alerts[n];
+							var img = alertImg;
+							if (a.isFlag)
+								img = flagImg;
+							else if (a.isPerson)
+								img = personImg;
+							else if (a.isVehicle)
+								img = vehicleImg;
+							img.draw(ctx, canvas.width, dpr, ((a.time - left) / zoomFactor), 0);
 						}
 						bet.stop();
 					}
@@ -7316,6 +7299,64 @@ function StarfieldGenerator(blockSize, density, seedStr)
 		//ctx.fillStyle = "rgba(138,95,62,1)";
 		//ctx.fillRect(dx + firstDrawW, dy, 1, dh);
 	};
+}
+function TimelineRasterIcon(src, onLoad)
+{
+	var img = new Image();
+	var loadedOk = false;
+	var myW;
+	var myH;
+	var lastDpr = null;
+	var scale;
+	var w;
+	var h;
+	var xOffset;
+	var yOffset;
+	img.onload = function ()
+	{
+		myW = img.naturalWidth;
+		myH = img.naturalHeight;
+		loadedOk = !!(myW && myH);
+		if (loadedOk)
+		{
+			if (typeof onLoad === "function")
+				onLoad();
+		}
+	};
+	img.src = src;
+
+	var calcScaleValues = function (dpr)
+	{
+		if (dpr !== lastDpr)
+		{
+			lastDpr = dpr;
+			scale = (myH / 12) / dpr;
+			w = myW / scale;
+			h = myH / scale;
+			xOffset = w / 2;
+			yOffset = 0 * dpr;
+		}
+	}
+	/**
+	 * Draws the image on the canvas at the specified location.
+	 * @param {Number} ctx Device pixel ratio
+	 * @param {Number} canvasWidth Width of the canvas element for culling purposes.
+	 * @param {Number} dpr Device pixel ratio
+	 * @param {Number} x Image will be drawn with center at this X-coordinate.
+	 * @param {Number} y Image will be drawn with top at this Y-coordinate.
+	 */
+	this.draw = function (ctx, canvasWidth, dpr, x, y)
+	{
+		if (loadedOk)
+		{
+			calcScaleValues(dpr);
+
+			x -= xOffset;
+			y += yOffset;
+			if (x < canvasWidth && x + w > 0)
+				ctx.drawImage(img, x, y, w, h);
+		}
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Zebra Date Picker //////////////////////////////////////////
