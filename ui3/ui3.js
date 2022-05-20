@@ -989,7 +989,7 @@ var defaultSettings =
 			, inputType: "number"
 			, minValue: 0
 			, maxValue: 525600
-			, label: 'Idle Timeout<div class="settingDesc">The UI will close itself after this many minutes of inactivity. (0 to disable)</div>'
+			, label: 'Idle Timeout<div class="settingDesc">The UI will close itself after this many minutes of inactivity. (0 to disable)<br>Can be set with URL parameter &quot;&amp;timeout=0&quot;</div>'
 			, category: "General Settings"
 		}
 		, {
@@ -3306,6 +3306,8 @@ function HandlePreLoadUrlParameters()
 			skipLoadingAllVideoStreams = true;
 			startupTimelineMs = timelineMs;
 		}
+		else
+			console.log('"timeline"/"tl" URL parameter received invalid value: ' + UrlParameters.Get("timeline", "tl"));
 	}
 	else
 	{
@@ -3317,6 +3319,17 @@ function HandlePreLoadUrlParameters()
 	var streamingprofile = UrlParameters.Get("streamingprofile", "p");
 	if (streamingprofile !== '')
 		settings.ui3_streamingQuality = streamingprofile;
+
+	// Parameter "timeout"
+	var timeoutParam = UrlParameters.Get("timeout", "to");
+	if (timeoutParam !== '')
+	{
+		var timeoutInt = parseInt(timeoutParam);
+		if (!isNaN(timeoutInt) && timeoutInt >= 0 && timeoutInt <= 525600)
+			settings.ui3_timeout = timeoutInt;
+		else
+			console.log('"timeout"/"to" URL parameter received invalid value: ' + timeoutParam);
+	}
 }
 function StartupClipOpener(recId, offset)
 {

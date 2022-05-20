@@ -53,8 +53,8 @@
 					<ul class="nav navbar-nav nav-pills">
 						<li class="active"><a data-toggle="pill" href="#overview" id="nav-overview">Overview</a></li>
 						<li><a data-toggle="pill" href="#cameralayout" id="nav-cameralayout">Camera Layout</a></li>
-						<li><a data-toggle="pill" href="#recordings" id="nav-recordings">Recordings</a></li>
 						<li><a data-toggle="pill" href="#videoplayer" id="nav-videoplayer">Video Player</a></li>
+						<li><a data-toggle="pill" href="#urlparameters" id="nav-urlparameters">URL Parameters</a></li>
 						<li class="dropdown">
 							<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">More Topics<span class="caret"></span></a>
 							<ul class="dropdown-menu">
@@ -63,14 +63,14 @@
 								<li><a data-toggle="pill" href="#hlsstreams" id="nav-hlsstreams">HLS Streams</a></li>
 								<li><a data-toggle="pill" href="#mainmenu" id="nav-mainmenu">Main Menu</a></li>
 								<li><a data-toggle="pill" href="#ptzcontrols" id="nav-ptzcontrols">PTZ Controls</a></li>
+								<li><a data-toggle="pill" href="#recordings" id="nav-recordings">Recordings</a></li>
 								<li><a data-toggle="pill" href="#nerdstats" id="nav-nerdstats">Stats for Nerds</a></li>
 								<li><a data-toggle="pill" href="#tips" id="nav-tips">Tips</a></li>
 								<li><a data-toggle="pill" href="#extensions" id="nav-extensions">UI Extensions</a></li>
-								<li><a data-toggle="pill" href="#urlparameters" id="nav-urlparameters">URL Parameters</a></li>
 								<!--li role="separator" class="divider"></li>
-								<li class="dropdown-header">Nav header</li>
-								<li><a href="#">Separated link</a></li>
-								<li><a href="#">One more separated link</a></li>-->
+			<li class="dropdown-header">Nav header</li>
+			<li><a href="#">Separated link</a></li>
+			<li><a href="#">One more separated link</a></li>-->
 							</ul>
 						</li>
 					</ul>
@@ -85,7 +85,9 @@
 				<div class="tab-content">
 					<div class="tab-pane active" id="overview" role="tabpanel" aria-labelledby="nav-overview">
 						<h2>UI3 Help Overview</h2>
-						<p>Please choose a section from the navigation menu above.</p>
+						<p>Please choose a section:</p>
+						<div id="overviewIndex" class="list-group">
+						</div>
 						<h2>Support</h2>
 						<p>If you need support with UI3, the best place to go for help is <a href="https://ipcamtalk.com/forums/blue-iris.30/">the Blue Iris section of the IpCamTalk forum</a>.</p>
 						<p>This interface was developed by community member <a target="_blank" href="https://ipcamtalk.com/members/bp2008.28/">bp2008</a> from <a href="https://ipcamtalk.com/">IpCamTalk</a>.</p>
@@ -284,6 +286,11 @@
 							</thead>
 							<tbody>
 								<tr>
+									<td>timeout=[minutes]<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">to=</span></td>
+									<td>Replace [minutes] with the desired integer number of minutes to set the Idle Timeout setting upon UI startup.  Useful for systems that cannot save persistent settings.</td>
+									<td><a href="../../ui3.htm?timeout=0" target="_blank">ui3.htm?timeout=0</a></td>
+								</tr>
+								<tr>
 									<td>maximize=1<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">m=</span></td>
 									<td>UI3 loads with the left and top control bars hidden. This state persists between UI loads.</td>
 									<td><a href="../../ui3.htm?maximize=1" target="_blank">ui3.htm?maximize=1</a></td>
@@ -292,6 +299,9 @@
 									<td>maximize=0<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">m=</span></td>
 									<td>UI3 loads with the left and top control bars shown.</td>
 									<td><a href="../../ui3.htm?maximize=0" target="_blank">ui3.htm?maximize=0</a></td>
+								</tr>
+								<tr>
+									<td colspan="3"><i>Note that UI3 cannot automatically full-screen itself due to security protections imposed by web browsers.<br />Please do a web search for how to open your favorite browser in full-screen or kiosk mode.</i></td>
 								</tr>
 								<tr>
 									<td>tab=live<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">t=L</span></td>
@@ -371,16 +381,16 @@
 									<td><a href="../../ui3.htm?rec=21148130039-10000" target="_blank">ui3.htm?rec=21148130039-10000</a></td>
 								</tr>
 								<tr>
-									<td>timeline=[MS]<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">tl=</span></td>
+									<td>timeline=MS<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">tl=</span></td>
 									<td>
 										<p>
-											Opens the timeline tab and seeks to the specified position. The value should be a JavaScript timestamp (number of milliseconds since the unix epoch, ignoring leap seconds).
+											Opens the timeline tab and seeks to the specified millisecond position. The "MS" value should be a JavaScript timestamp (number of milliseconds since the unix epoch, ignoring leap seconds).
 										</p>
 										<p style="font-style: italic;">
 											To make it easy to share links, this parameter is automatically entered into the address bar during timeline playback.
 										</p>
 									</td>
-									<td><a href="../../ui3.htm?rec=21148130039-10000" target="_blank">ui3.htm?rec=21148130039-10000</a></td>
+									<td><a href="../../ui3.htm?timeline=" target="_blank" id="timelineLink">ui3.htm?timeline=</a></td>
 								</tr>
 								<tr>
 									<td>streamingprofile=name<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">p=</span></td>
@@ -654,6 +664,51 @@
 				console.error(ex);
 			}
 
+			try
+			{
+				// Set the current time minus one minute in the Timeline example link on the URL Parameters page
+				$("#timelineLink").attr("href", $("#timelineLink").attr("href") + (Date.now() - 60000));
+				$("#timelineLink").text($("#timelineLink").text() + (Date.now() - 60000));
+			}
+			catch (ex)
+			{
+				console.log("Unable to set timelineLink.");
+				console.error(ex);
+			}
+
+			try
+			{
+				// Copy all navbar links to a list on the Overview page.
+				var navbarLinks = $("#navbar").find("a");
+				var overviewLinks = [];
+				for (var i = 0; i < navbarLinks.length; i++)
+				{
+					var src = navbarLinks.eq(i);
+					var href = src.attr('href');
+					if (href && href !== '#')
+					{
+						var dst = $('<a class="list-group-item"></a>');
+						dst.attr('href', href);
+						dst.html(src.html());
+
+						overviewLinks.push({ key: src.text(), a: dst });
+					}
+				}
+
+				overviewLinks.sort(function (a, b)
+				{
+					return a.key.localeCompare(b.key);
+				});
+
+				var overviewIndex = $("#overviewIndex");
+				for (var i = 0; i < overviewLinks.length; i++)
+					overviewIndex.append(overviewLinks[i].a);
+			}
+			catch (ex)
+			{
+				console.log("Unable to create list of section links in Overview page.");
+				console.error(ex);
+			}
 		})();
 	</script>
 </body>
