@@ -20626,7 +20626,7 @@ function GroupLayoutDialog()
 				inputType: "number"
 				, minValue: imageRenderer.minGroupImageDimension
 				, maxValue: Math.max(7680, imageRenderer.getMaxGroupImageDimension())
-				, step: 16
+				, step: 8
 				, value: lockedResolution ? lockedResolution.w : 1920
 				, label: "Width"
 				, tag: "width",
@@ -20640,7 +20640,7 @@ function GroupLayoutDialog()
 				inputType: "number"
 				, minValue: imageRenderer.minGroupImageDimension
 				, maxValue: Math.max(7680, imageRenderer.getMaxGroupImageDimension())
-				, step: 16
+				, step: 8
 				, value: lockedResolution ? lockedResolution.h : 1080
 				, label: "Height"
 				, tag: "height",
