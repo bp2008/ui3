@@ -29632,9 +29632,9 @@ function OnChange_ui3_time24hour()
 function OnChange_ui3_topbar_allclips_shortcut_show()
 {
 	if (settings.ui3_topbar_allclips_shortcut_show === "1")
-		$("#open_all_clips_btn").show();
+		$("#open_all_clips_btn").removeClass('hidden');
 	else
-		$("#open_all_clips_btn").hide();
+		$("#open_all_clips_btn").addClass('hidden');
 }
 function OnChange_ui3_topbar_alerts_shortcut_show()
 {
