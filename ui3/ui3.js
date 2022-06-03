@@ -14215,6 +14215,7 @@ function VideoPlayerController()
 			return;
 		try
 		{
+			xCamList = UTF8Fix(xCamList);
 			var cams = xCamList ? JSON.parse('[' + xCamList + ']') : null;
 			var rects = xRecList ? JSON.parse('[' + xRecList + ']') : null;
 			if (!cams.length || !rects.length)
@@ -14240,6 +14241,59 @@ function VideoPlayerController()
 		{
 			toaster.Error(ex);
 		}
+	}
+	/**
+	 * Fixes a string that contains UTF-8 characters but was read as ISO-8859-1, e.g. from an HTTP header value.  If a case is found where this doesn't work right, it should be resolved by correctly encoding the string in the first place, not by making this function even more hacky.
+	 * @param {String} str String containing malformed UTF-8 characters.
+	 */
+	function UTF8Fix(str)
+	{
+		var bytes = new Uint8Array(str.length);
+		for (var i = 0; i < str.length; i++)
+			bytes[i] = str.charCodeAt(i);
+		return Utf8ArrayToStr(bytes);
+	}
+	/* utf.js - UTF-8 <=> UTF-16 convertion
+	 *
+	 * Copyright (C) 1999 Masanao Izumo <iz@onicos.co.jp>
+	 * Version: 1.0
+	 * LastModified: Dec 25 1999
+	 * This library is free.  You can redistribute it and/or modify it.
+	 */
+
+	function Utf8ArrayToStr(array)
+	{
+		var out, i, len, c;
+		var char2, char3;
+
+		out = "";
+		len = array.length;
+		i = 0;
+		while (i < len)
+		{
+			c = array[i++];
+			switch (c >> 4)
+			{
+				case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:
+					// 0xxxxxxx
+					out += String.fromCharCode(c);
+					break;
+				case 12: case 13:
+					// 110x xxxx   10xx xxxx
+					char2 = array[i++];
+					out += String.fromCharCode(((c & 0x1F) << 6) | (char2 & 0x3F));
+					break;
+				case 14:
+					// 1110 xxxx  10xx xxxx  10xx xxxx
+					char2 = array[i++];
+					char3 = array[i++];
+					out += String.fromCharCode(((c & 0x0F) << 12) |
+						((char2 & 0x3F) << 6) |
+						((char3 & 0x3F) << 0));
+					break;
+			}
+		}
+		return out;
 	}
 }
 function BICameraData()
