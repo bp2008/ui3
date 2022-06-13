@@ -5505,7 +5505,7 @@ function RelativePTZ()
 			var xperc = ((pos3dX - imgFrameOffset.left) + (w / 2)) / imgFrameW;
 			var yperc = ((pos3dY - imgFrameOffset.top) + (h / 2)) / imgFrameH;
 
-			ptzButtons.PTZ_relative(xperc, yperc, z, function () { flashRelPtzBox(boxSpec.x, boxSpec.y, boxSpec.w, boxSpec.h); });
+			ptzButtons.PTZ_relative(xperc, yperc, z, function () { self.flashRelPtzBox(boxSpec.x, boxSpec.y, boxSpec.w, boxSpec.h); });
 		}
 	}
 	function Precon_3dPos(e)
@@ -5606,7 +5606,7 @@ function RelativePTZ()
 		box.stop(true, true);
 		box.hide();
 	}
-	function flashRelPtzBox(x, y, w, h)
+	this.flashRelPtzBox = function(x, y, w, h)
 	{
 		if (box.is(':visible'))
 			return;

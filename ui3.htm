@@ -31,6 +31,10 @@
 			function (err) // Edge iOS
 			{
 				return err.msg && err.msg.indexOf("instantSearchSDKJSBridgeClearHighlight") > -1;
+			},
+			function (err)
+			{
+				return err.msg && err.msg.indexOf("EvalError") > -1 && err.msg.indexOf("debug-evaluate") > -1;
 			}
 		];
 
