@@ -31109,6 +31109,7 @@ function OnChange_ui3_mqttClientEnabled()
 	else
 		mqttClient.disconnect();
 }
+var mqttWindowId = getRandomAlphanumericStr(16); // Used by MQTT client to indicate that this unique browser window is connected to the broker.
 /**
  Clientside cache of state values from the MQTT broker so we can track when things actually change versus when we just get notified of the same value again.
  */
@@ -31153,14 +31154,17 @@ function MqttClient()
 				toaster.Warning("MQTT Client was enabled, but publishing and subscribing were disabled. MQTT client has nothing to do.", 10000);
 				return;
 			}
+			hasDisconnected = false;
 
 			client = new Paho.Client(brokerUrl, clientId);
 
-			// set callback handlers
 			client.onConnectionLost = onConnectionLost;
 			client.onMessageArrived = onMessageArrived;
-
-			// connect the client
+			
+			var willMessage = new Paho.Message("");
+			willMessage.destinationName = "ui3/" + instance_id + "/online/" + mqttWindowId;
+			willMessage.retained = true;
+			willMessage.qos = 1;
 			var connectArgs = {
 				userName: user
 				, password: pass
@@ -31170,6 +31174,7 @@ function MqttClient()
 				, onSuccess: onConnect
 				, onFailure: onConnectFailure
 				, invocationContext: self
+				, willMessage: willMessage
 			};
 			client.connect(connectArgs);
 		}
@@ -31183,22 +31188,27 @@ function MqttClient()
 	{
 		try
 		{
-			if (client && !hasDisconnected)
-			{
-				hasDisconnected = true;
-				client.disconnect();
-			}
-			for (var i = 0; i < eventRemovalFunctions.length; i++)
-				eventRemovalFunctions[i]();
-			eventRemovalFunctions = [];
+			if (!hasDisconnected)
+				internalDisconnect();
 		}
 		catch (ex)
 		{
 			console.log("MqttClient disconnect exception: ", ex);
 		}
 	}
+	function internalDisconnect()
+	{
+		hasDisconnected = true;
+		if (client && isConnected)
+		{
+			internalPublish("ui3/" + instance_id + "/online/" + mqttWindowId, "", 1, true, true);
+			client.disconnect();
+		}
+		for (var i = 0; i < eventRemovalFunctions.length; i++)
+			eventRemovalFunctions[i]();
+		eventRemovalFunctions = [];
+	}
 
-	// called when the client connects
 	function onConnect(arg)
 	{
 		if (arg.invocationContext !== self)
@@ -31207,11 +31217,24 @@ function MqttClient()
 		{
 			isConnected = true;
 			toaster.Success("Connected to MQTT broker.", 3000);
+			if (hasDisconnected)
+			{
+				console.log("MqttClient just finished connecting, but disconnect() has already been called. Disconnecting now.");
+				internalDisconnect();
+				return;
+			}
 
 			if (subscribeEnabled)
 				startSubscription();
 			if (publishEnabled)
 				startPublishing();
+
+			var syncMode = "pub/sub";
+			if (!subscribeEnabled)
+				syncMode = "pub only";
+			else if (!publishEnabled)
+				syncMode = "sub only";
+			internalPublish("ui3/" + instance_id + "/online/" + mqttWindowId, syncMode, 1, true);
 		}
 		catch (ex)
 		{
@@ -31397,20 +31420,27 @@ function MqttClient()
 		{
 			if (mqttTopicState.set(key, value))
 			{
-				try
-				{
-					var message = new Paho.Message(value);
-					message.destinationName = "ui3/" + instance_id + "/state/" + key;
-					message.qos = publishQos;
-					message.retained = publishRetain;
-					client.publish(message);
-					console.log('MQTT Publish: "' + message.destinationName + '" -> "' + value + '"');
-				}
-				catch (ex)
-				{
-					toaster.Error("MqttClient publish exception: " + ex, 10000);
-				}
+				internalPublish("ui3/" + instance_id + "/state/" + key, value, publishQos, publishRetain);
 			}
+		}
+	}
+	var internalPublish = function (topic, message, qos, retain, suppressExceptions)
+	{
+		try
+		{
+			var message = new Paho.Message(message);
+			message.destinationName = topic;
+			if (typeof qos !== "undefined")
+				message.qos = qos;
+			if (typeof retain !== "undefined")
+				message.retained = retain;
+			client.publish(message);
+			console.log('MQTT Publish: "' + topic + '" -> "' + message + '"');
+		}
+		catch (ex)
+		{
+			if (!suppressExceptions)
+				toaster.Error("MqttClient publish exception: " + ex, 10000);
 		}
 	}
 
