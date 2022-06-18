@@ -4977,6 +4977,17 @@ body + div
 	color: #666666;
 }
 
+.dialogOption_item.column_reverse
+{
+	display: flex;
+	flex-direction: column-reverse;
+}
+
+	.dialogOption_item.column_reverse .textBasedInput
+	{
+		max-width: unset;
+	}
+
 .dialogOption_label
 {
 	font-size: 16px;
@@ -4998,8 +5009,7 @@ body + div
 
 .dialogOptionPanel select,
 .dialogOptionPanel input[type="number"],
-.dialogOptionPanel input[type="color"],
-.dialogOptionPanel input[type="text"],
+.dialogOptionPanel .textBasedInput,
 #uiSettingsPanel input[type="button"],
 #uiSettingsPanel a.input,
 #sysconfigdialog input[type="button"]
@@ -5009,6 +5019,45 @@ body + div
 	margin: 0px 10px;
 	float: right;
 	max-width: 35%;
+}
+
+	.dialogOptionPanel .textBasedInput input[type="text"],
+	.dialogOptionPanel .textBasedInput input[type="color"],
+	.dialogOptionPanel .textBasedInput input[type="password"]
+	{
+		box-sizing: border-box;
+		height: 28px;
+		width: 100% !important;
+	}
+
+a[role="button"].showPasswordButton
+{
+	position: relative;
+	margin-left: -27px;
+	top: -1px;
+	text-decoration: none;
+	width: 26px;
+	height: 26px;
+	line-height: 26px;
+	display: inline-block;
+	text-align: center;
+	opacity: 0.5;
+}
+
+	a[role="button"].showPasswordButton.showingPassword
+	{
+		opacity: 1;
+		background-color: rgba(255,255,0,0.5);
+	}
+
+	a[role="button"].showPasswordButton:hover
+	{
+		background-color: rgba(0,0,0,0.1);
+	}
+
+.passwordInput
+{
+	padding-right: 29px;
 }
 
 .clipExportPanel select
@@ -5718,6 +5767,12 @@ div::-webkit-scrollbar-corner
 
 #uiSettingsPanel input[type="text"],
 .streamingProfileEditorPanel input[type="text"]
+{
+	width: 169px;
+}
+
+#uiSettingsPanel input[type="password"],
+.streamingProfileEditorPanel input[type="password"]
 {
 	width: 169px;
 }

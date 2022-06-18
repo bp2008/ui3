@@ -12,11 +12,11 @@ if (navigator.cookieEnabled)
 	NavRemoveUrlParams("session");
 }
 /**
- * Uniquely identifies each UI3 instance.
+ * Uniquely identifies each UI3 instance (randomly generated during page loading; not persisted outside of memory).
  * This is sent to /time/ APIs as the argument "opaque" so BI can tell UI3 instances apart when they share the same session.
  * Otherwise the instances interfere with each other's timeline playback state.
  */
-var ui3InstanceId = Math.random();
+var ui3InstanceId = getRandomAlphanumericStr(16);
 //
 ///////////////////////////////////////////////////////////////
 // Host Redirection, Proxy Handling ///////////////////////////
@@ -587,6 +587,7 @@ var clipOverlayCfg = null;
 var groupCfg = null;
 var programmaticSoundPlayer = null;
 var sidebarResizeBar = null;
+var mqttClient = null;
 
 var currentPrimaryTab = "";
 
@@ -727,7 +728,7 @@ var HTML5DelayCompensationOptions = {
 	Strong: "Strong"
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -952,6 +953,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_cps_uiSettings_category_Digital_Zoom_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_MQTT_Remote_Control"
 			, value: "1"
 		}
 		, {
@@ -2546,6 +2551,106 @@ var defaultSettings =
 			, category: "Digital Zoom"
 		}
 		, {
+			key: "ui3_comment_mqtt_learnmore"
+			, value: ""
+			, inputType: "comment"
+			, comment: function () { return '<div style="text-align: center;"><a href="ui3/help/help.html' + currentServer.GetLocalSessionArg("?") + '#mqtt">Help Link: MQTT Remote Control</a></div>'; }
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttBrokerUrl"
+			, value: ""
+			, inputType: "text"
+			, class: "column_reverse"
+			, label: 'WebSocket URL to connect to MQTT broker<div class="settingDesc">(example: <code>ws://homeassistant.local:1884/</code>)</div>'
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttUser"
+			, value: ""
+			, inputType: "text"
+			, label: 'MQTT User Name'
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttPass"
+			, value: ""
+			, inputType: "password"
+			, label: 'MQTT Password'
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttInstanceId"
+			, value: function () { return getRandomAlphanumericStr(12); }
+			, maxValue: 12
+			, inputType: "text"
+			, label: 'Instance ID<div class="settingDesc">(Uniquely identifies this UI3)</div>'
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttClientEnabled"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Enable MQTT Client<div class="settingDesc">(toggle to reconnect with new settings)</div>'
+			, onChange: OnChange_ui3_mqttClientEnabled
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_comment_mqtt_advanced"
+			, value: ""
+			, inputType: "comment"
+			, comment: function ()
+			{
+				return 'The following are <b>advanced configuration</b> options, recommended only for MQTT experts. Please read the <a href="ui3/help/help.html'
+					+ currentServer.GetLocalSessionArg("?") + '#mqtt">help file</a> to better-understand the function of each advanced option.</div>';
+			}
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttSubscribeEnabled"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Subscribe to /state/ Topics'
+			, hint: "Disabling this will disable inbound state synchronization with the MQTT broker."
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttSubscribeQOS"
+			, value: 0
+			, inputType: "number"
+			, minValue: 0
+			, maxValue: 2
+			, label: 'Subscribe QOS'
+			, hint: "The MQTT QOS value (0,1,2) that is sent when subscribing to the /state/ topics."
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttPublishEnabled"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Publish to /state/ Topics'
+			, hint: "Disabling this will disable outbound state synchronization with the MQTT broker."
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttPublishQOS"
+			, value: 0
+			, inputType: "number"
+			, minValue: 0
+			, maxValue: 2
+			, label: 'Publish QOS'
+			, hint: "The MQTT QOS value (0,1,2) that is sent when publishing to the /state/ topics."
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttPublishRetain"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Publish Retain'
+			, hint: "If enabled, UI3 will set the Retain flag when publishing to the /state/ topics."
+			, category: "MQTT Remote Control"
+		}
+		, {
 			key: "ui3_fullscreen_videoonly"
 			, value: "1"
 			, inputType: "checkbox"
@@ -2668,7 +2773,12 @@ function LoadDefaultSettings()
 		if (settings.getItem(defaultSettings[i].key) == null
 			|| defaultSettings[i].AlwaysReload
 			|| IsNewGeneration(defaultSettings[i].key, defaultSettings[i].Generation))
-			settings.setItem(defaultSettings[i].key, defaultSettings[i].value);
+		{
+			if (typeof defaultSettings[i].value === 'function')
+				settings.setItem(defaultSettings[i].key, defaultSettings[i].value());
+			else
+				settings.setItem(defaultSettings[i].key, defaultSettings[i].value);
+		}
 	}
 }
 function RevertSettingsToDefault()
@@ -3116,6 +3226,8 @@ $(function ()
 
 	sidebarResizeBar = new SidebarResizeBar();
 
+	mqttClient = new MqttClient();
+
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
 	{
@@ -3256,9 +3368,12 @@ function HandlePreLoadUrlParameters()
 		settings.ui3_defaultCameraGroupId = group;
 		BI_CustomEvent.AddListener("FinishedLoading", function ()
 		{
-			var camData = cameraListLoader.GetCameraWithId(group);
-			if (camData != null && videoPlayer.Loading().image.id !== group)
-				videoPlayer.SelectCameraGroup(group);
+			if (!mqttClient.preLoadVideoSpecified)
+			{
+				var camData = cameraListLoader.GetCameraWithId(group);
+				if (camData != null && videoPlayer.Loading().image.id !== group)
+					videoPlayer.SelectCameraGroup(group);
+			}
 		});
 	}
 
@@ -5606,7 +5721,7 @@ function RelativePTZ()
 		box.stop(true, true);
 		box.hide();
 	}
-	this.flashRelPtzBox = function(x, y, w, h)
+	this.flashRelPtzBox = function (x, y, w, h)
 	{
 		if (box.is(':visible'))
 			return;
@@ -12840,14 +12955,30 @@ function CameraListLoader()
 					videoPlayer.SetCurrentlySelectedHomeGroupId(lastResponse.data[0].optionValue);
 
 				var didLoadStream = false;
-				var cam = UrlParameters.Get("cam", "c");
-				if (!firstCameraListLoaded && cam)
+				if (!firstCameraListLoaded)
 				{
-					cam = self.GetCameraWithId(cam);
-					if (cam)
+					var cam;
+					if (mqttClient.preLoadVideoSpecified) // MQTT instruction takes precidence over URL parameter.
 					{
-						videoPlayer.LoadLiveCamera(cam);
-						didLoadStream = videoPlayer.Loading().image.id === cam.optionValue;
+						cam = self.GetCameraWithId(mqttClient.preLoadVideoSpecified);
+						if (cam)
+						{
+							videoPlayer.LoadLiveCamera(cam);
+							didLoadStream = videoPlayer.Loading().image.id === cam.optionValue;
+						}
+					}
+					if (!didLoadStream)
+					{
+						cam = UrlParameters.Get("cam", "c");
+						if (cam)
+						{
+							cam = self.GetCameraWithId(cam);
+							if (cam)
+							{
+								videoPlayer.LoadLiveCamera(cam);
+								didLoadStream = videoPlayer.Loading().image.id === cam.optionValue;
+							}
+						}
 					}
 				}
 				if (!didLoadStream)
@@ -24798,6 +24929,8 @@ function PcmAudioPlayer()
 			audioStopTimeout = setTimeout(toggleAudioPlayback, 1000);
 		else
 			toggleAudioPlayback();
+		if (mqttClient)
+			mqttClient.volumeChanged();
 	}
 	this.GetVolume = function ()
 	{
@@ -25513,6 +25646,7 @@ function MaximizedModeController()
 			$("#layoutleft,#layouttop").show();
 		this.updateMaximizeButtonState();
 		clipLoader && clipLoader.RedrawClipList();
+		BI_CustomEvent.Invoke("MaximizeChanged", settings.ui3_is_maximized === "1");
 	}
 	this.EnableMaximizedMode = function ()
 	{
@@ -26747,6 +26881,7 @@ var BI_CustomEvent =
 		if (typeof this.customEventRegistry[eventName] == "undefined")
 			this.customEventRegistry[eventName] = new Array();
 		this.customEventRegistry[eventName].push(eventHandler);
+		return function () { BI_CustomEvent.RemoveListener(eventName, eventHandler); }
 	},
 	RemoveListener: function (eventName, eventHandler)
 	{
@@ -29117,6 +29252,7 @@ function UISettingsPanel()
 					, label: s.label
 					, tag: s
 					, defaultValue: s.value
+					, class: s.class
 				};
 				if (s.hotkey)
 				{
@@ -29163,9 +29299,16 @@ function UISettingsPanel()
 					var comment = typeof s.comment === "function" ? s.comment() : s.comment;
 					$row.append(GetDialogOptionLabel(comment));
 				}
-				else if (s.inputType === "text" || s.inputType === "color")
+				else if (s.inputType === "text" || s.inputType === "color" || s.inputType === "password")
 				{
-					formFields.onChange = TextChanged;
+					if (s.inputType === "password")
+					{
+						formFields.onChange = PasswordChanged;
+						formFields.value = Base64.decode(formFields.value);
+					}
+					else
+						formFields.onChange = TextChanged;
+					formFields.maxValue = s.maxValue;
 					$row.append(UIFormField(formFields));
 				}
 				cat.$section.append($row);
@@ -29475,6 +29618,11 @@ function UISettingsPanel()
 	var TextChanged = function (e, s, $input)
 	{
 		settings.setItem(s.key, $input.val());
+		CallOnChangeCallback(s);
+	}
+	var PasswordChanged = function (e, s, $input)
+	{
+		settings.setItem(s.key, Base64.encode($input.val()));
 		CallOnChangeCallback(s);
 	}
 	var ThreeStateChanged = function (s, value, $input)
@@ -29860,9 +30008,12 @@ function UIFormField(args)
 		, disabled: false
 		, compact: false
 		, defaultValue: undefined // default value.  If defined, this will cause a "reset to default" button to exist.
+		, class: undefined
 	}, args);
 
 	var ff = UIFormFieldInternal(o);
+	if (o.class)
+		ff.addClass(o.class);
 	if (typeof o.defaultValue !== "undefined")
 	{
 		var $defaultButton = $('<div class="uiFormFieldDefaultBtn" title="Reset value to default"><svg class="icon"><use xlink:href="#svg_x5F_Restart"></use></svg></div>');
@@ -29878,7 +30029,12 @@ function UIFormField(args)
 				o.onChange(null, o.tag, $input, textValue, o.defaultValue);
 			}
 			else
-				$input.val(o.defaultValue);
+			{
+				if (typeof o.defaultValue === "function")
+					$input.val(o.defaultValue());
+				else
+					$input.val(o.defaultValue);
+			}
 			$input.trigger('change');
 		});
 		ff = $defaultButton.add(ff);
@@ -29964,8 +30120,9 @@ function UIFormFieldInternal(o)
 		else
 			return $('<div class="' + classes + '"></div>').append($input).append($label);
 	}
-	else if (o.inputType === "text" || o.inputType === "color")
+	else if (o.inputType === "text" || o.inputType === "color" || o.inputType === "password")
 	{
+		var $inputWrapper = $('<div class="textBasedInput"></div>');
 		var $input = $('<input type="' + o.inputType + '" data-lpignore="true" autocomplete="off" />');
 		if (o.maxValue)
 			$input.attr('maxlength', o.maxValue);
@@ -29974,8 +30131,30 @@ function UIFormFieldInternal(o)
 			$input.attr("disabled", "disabled");
 		else
 			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
+		$inputWrapper.append($input);
+		if (o.inputType === "password")
+		{
+			$input.addClass('passwordInput');
+			var $showPasswordBtn = $('<a role="button" class="showPasswordButton" title="Show Password">&#x1F441;&#xFE0F;</a>');
+			$showPasswordBtn.on('click', function ()
+			{
+				if ($input.attr('type') === "password")
+				{
+					$input.attr('type', 'text');
+					$showPasswordBtn.attr('title', 'Hide Password');
+					$showPasswordBtn.addClass('showingPassword');
+				}
+				else
+				{
+					$input.attr('type', 'password');
+					$showPasswordBtn.attr('title', 'Show Password');
+					$showPasswordBtn.removeClass('showingPassword');
+				}
+			});
+			$inputWrapper.append($showPasswordBtn);
+		}
 		var $label = $(GetDialogOptionLabel(o.label));
-		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + compactClass + '"></div>').append($input).append($label);
+		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + compactClass + '"></div>').append($inputWrapper).append($label);
 	}
 	else if (o.inputType === "button" || o.inputType === "threeState")
 	{
@@ -30915,6 +31094,351 @@ function TestSpeech()
 		"I want a cookie"
 	];
 	programmaticSoundPlayer.Speak(speeches[getRandomInt(speeches.length)], true);
+}
+///////////////////////////////////////////////////////////////
+// MQTT Client ////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+// UI3 uses paho-mqtt instead of the better-maintained mqtt.js, because the latter is about 6x larger filesize.
+function OnChange_ui3_mqttClientEnabled()
+{
+	if (settings.ui3_mqttClientEnabled === "1")
+	{
+		mqttClient.disconnect();
+		mqttClient = new MqttClient();
+	}
+	else
+		mqttClient.disconnect();
+}
+/**
+ Clientside cache of state values from the MQTT broker so we can track when things actually change versus when we just get notified of the same value again.
+ */
+var mqttTopicState = new MqttTopicState();
+function MqttClient()
+{
+	var self = this;
+	/**
+	 * If a video ID is received from MQTT before loading has completed, it will be stored in this property.
+	 */
+	this.preLoadVideoSpecified = null;
+
+	var hasDisconnected = false;
+
+	var client;
+	var isConnected = false;
+
+	var clientId = "ui3" + getRandomBase36String(17); // Used by MQTT broker to indentify reconnecting clients after a lost connection. Must be unique across all active connections. Not persisted outside of memory so it doesn't get shared with other browser windows.
+
+	var brokerUrl = settings.ui3_mqttBrokerUrl;
+	var user = settings.ui3_mqttUser;
+	var pass = Base64.decode(settings.ui3_mqttPass);
+	var instance_id = settings.ui3_mqttInstanceId; // This UI3 instance only cares about topics with this instance ID in them.
+	var subscribeEnabled = settings.ui3_mqttSubscribeEnabled === "1";
+	var subscribeQos = Clamp(parseInt(settings.ui3_mqttSubscribeQOS), 0, 2);
+	var publishEnabled = settings.ui3_mqttPublishEnabled === "1";
+	var publishQos = Clamp(parseInt(settings.ui3_mqttPublishQOS), 0, 2);
+	var publishRetain = settings.ui3_mqttPublishRetain === "1";
+	var clientEnabled = settings.ui3_mqttClientEnabled === "1";
+
+	var publishQueue = new FasterObjectMap();
+	var eventRemovalFunctions = [];
+
+	function connect()
+	{
+		try
+		{
+			if (!clientEnabled)
+				return;
+			if (!subscribeEnabled && !publishEnabled)
+			{
+				toaster.Warning("MQTT Client was enabled, but publishing and subscribing were disabled. MQTT client has nothing to do.", 10000);
+				return;
+			}
+
+			client = new Paho.Client(brokerUrl, clientId);
+
+			// set callback handlers
+			client.onConnectionLost = onConnectionLost;
+			client.onMessageArrived = onMessageArrived;
+
+			// connect the client
+			var connectArgs = {
+				userName: user
+				, password: pass
+				, mqttVersion: 4
+				, reconnect: true
+				, cleanSession: (subscribeQos === 0 && publishQos === 0)
+				, onSuccess: onConnect
+				, onFailure: onConnectFailure
+				, invocationContext: self
+			};
+			client.connect(connectArgs);
+		}
+		catch (ex)
+		{
+			toaster.Error("MqttClient connect exception: " + ex, 10000);
+		}
+	}
+
+	this.disconnect = function ()
+	{
+		try
+		{
+			if (client && !hasDisconnected)
+			{
+				hasDisconnected = true;
+				client.disconnect();
+			}
+			for (var i = 0; i < eventRemovalFunctions.length; i++)
+				eventRemovalFunctions[i]();
+			eventRemovalFunctions = [];
+		}
+		catch (ex)
+		{
+			console.log("MqttClient disconnect exception: ", ex);
+		}
+	}
+
+	// called when the client connects
+	function onConnect(arg)
+	{
+		if (arg.invocationContext !== self)
+			return;
+		try
+		{
+			isConnected = true;
+			toaster.Success("Connected to MQTT broker.", 3000);
+
+			if (subscribeEnabled)
+				startSubscription();
+			if (publishEnabled)
+				startPublishing();
+		}
+		catch (ex)
+		{
+			toaster.Error("MqttClient onConnect exception: " + ex, 10000);
+		}
+	}
+
+	function onConnectFailure(arg)
+	{
+		if (arg.invocationContext !== self)
+			return;
+		try
+		{
+			isConnected = false;
+			toaster.Warning("MQTT Connect Failed: " + arg.errorCode + " " + arg.errorMessage, 10000);
+		}
+		catch (ex)
+		{
+			toaster.Error("MqttClient onConnectFailure exception: " + ex);
+		}
+	}
+
+	function onConnectionLost(arg)
+	{
+		try
+		{
+			isConnected = false;
+			if (arg.errorCode === 0)
+				toaster.Info("MQTT Disconnected", 3000);
+			else
+				toaster.Warning("MQTT Disconnected: " + arg.errorCode + " " + arg.errorMessage, 10000);
+		}
+		catch (ex)
+		{
+			toaster.Error("MqttClient onConnectionLost exception: " + ex, 10000);
+		}
+	}
+
+	function startSubscription()
+	{
+		var subscribeOptions = {
+			qos: subscribeQos
+			, invocationContext: self
+			, onSuccess: function (arg)
+			{
+				if (arg.invocationContext !== self)
+					return;
+				try
+				{
+					toaster.Success("UI3 is ready to be remotely controlled.", 3000);
+				}
+				catch (ex)
+				{
+					toaster.Error("MqttClient subscription success handler exception: " + ex, 10000);
+				}
+			}
+			, onFailure: function (arg)
+			{
+				if (context !== self)
+					return;
+				try
+				{
+					toaster.Error("MqttClient Subscription Failed: " + arg.errorCode + " " + arg.errorMessage, 10000);
+				}
+				catch (ex)
+				{
+					toaster.Error("MqttClient subscription fail handler exception: " + ex, 10000);
+				}
+			}
+		};
+		client.subscribe("ui3/" + instance_id + "/state/#", subscribeOptions);
+	}
+
+	function onMessageArrived(message)
+	{
+		try
+		{
+			console.log('MQTT Received: "' + message.topic + '" -> "' + message.payloadString + '"');
+			if (!subscribeEnabled)
+			{
+				console.log("Rejecting MQTT message because subscription was not enabled in settings.");
+				return;
+			}
+			// EXAMPLE TOPIC: "ui3/instance_id/state/vid"
+			var parts = message.topic.split('/');
+			if (parts.length === 4)
+			{
+				if (parts[0] === "ui3" && parts[1] === instance_id && parts[2] === "state")
+				{
+					var key = parts[3];
+					var value = message.payloadString;
+					mqttTopicState.set(key, value);
+					if (key === "vid")
+					{
+						if (!cameraListLoader.GetLastResponse())
+							self.preLoadVideoSpecified = value;
+						else
+						{
+							var camData = cameraListLoader.GetCameraWithId(value);
+							if (camData && videoPlayer.Loading().image.id !== camData.optionValue)
+								videoPlayer.LoadLiveCamera(camData);
+						}
+					}
+					else if (key === "maximize")
+					{
+						if (value === "1")
+							maximizedModeController.EnableMaximizedMode();
+						else
+							maximizedModeController.DisableMaximizedMode();
+					}
+					else if (key === "volume")
+					{
+						var newVolume = Clamp(parseFloat(value), 0, 100) / 100.0;
+						settings.ui3_audioMute = newVolume === 0 ? "1" : "0";
+						settings.ui3_audioVolume = newVolume;
+						statusBars.setProgress("volume", newVolume, "");
+					}
+				}
+			}
+		}
+		catch (ex)
+		{
+			toaster.Error("MqttClient onMessageArrived exception: " + ex, 10000);
+		}
+	}
+
+	function startPublishing()
+	{
+		if (publishEnabled)
+		{
+			processPublishQueue();
+			eventRemovalFunctions.push(BI_CustomEvent.AddListener("OpenVideo", function (loading)
+			{
+				if (loading.isLive)
+				{
+					self.publish("vid", loading.id);
+				}
+			}));
+			eventRemovalFunctions.push(BI_CustomEvent.AddListener("MaximizeChanged", function (maximized)
+			{
+				self.publish("maximize", maximized ? "1" : "0");
+			}));
+		}
+	}
+
+	function processPublishQueue()
+	{
+		if (client && isConnected && publishQueue)
+		{
+			for (var k in publishQueue)
+			{
+				var v = publishQueue[k];
+				self.publish(k, v);
+			}
+			publishQueue = null;
+		}
+	}
+
+	var debounced_PublishVolume = debounce(function ()
+	{
+		var volume = Math.floor(parseFloat(settings.ui3_audioVolume) * 100.0);
+		if (settings.ui3_audioMute === "1")
+			volume = 0;
+		self.publish("volume", volume);
+	}, 400);
+
+	this.volumeChanged = function ()
+	{
+		debounced_PublishVolume();
+	}
+
+	this.publish = function (key, value)
+	{
+		if (!publishEnabled)
+			return;
+		value = value.toString();
+		if (!client || !isConnected)
+		{
+			if (publishQueue)
+				publishQueue[key] = value;
+		}
+		else
+		{
+			if (mqttTopicState.set(key, value))
+			{
+				try
+				{
+					var message = new Paho.Message(value);
+					message.destinationName = "ui3/" + instance_id + "/state/" + key;
+					message.qos = publishQos;
+					message.retained = publishRetain;
+					client.publish(message);
+					console.log('MQTT Publish: "' + message.destinationName + '" -> "' + value + '"');
+				}
+				catch (ex)
+				{
+					toaster.Error("MqttClient publish exception: " + ex, 10000);
+				}
+			}
+		}
+	}
+
+	connect();
+}
+function MqttTopicState()
+{
+	var map = new FasterObjectMap();
+	/**
+	 * Sets the value, returning true if the value has changed as a result of calling this method.
+	 * @param {String} key
+	 * @param {any} value
+	 */
+	this.set = function (key, value)
+	{
+		var oldValue = map[key];
+		if (oldValue !== value)
+		{
+			map[key] = value;
+			return true;
+		}
+		else
+			return false;
+	}
+	this.get = function (key)
+	{
+		return map[key];
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
@@ -32187,6 +32711,22 @@ function throttle(fn, delay)
 function getRandomInt(maxPlusOne)
 {
 	return Clamp(Math.floor(Math.random() * maxPlusOne), 0, maxPlusOne - 1);
+}
+function getRandomAlphanumericStr(length)
+{
+	var chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+	if (!length)
+		length = 8;
+	var result = '';
+	for (var i = length; i > 0; --i)
+		result += chars[Math.floor(Math.random() * chars.length)];
+	return result;
+}
+function getRandomBase36String(length)
+{
+	if (!length)
+		length = 8;
+	return Math.round((Math.pow(36, length + 1) - Math.random() * Math.pow(36, length))).toString(36).slice(1);
 }
 function PreviewSpeedToDelayMs(speed)
 {
