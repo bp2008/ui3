@@ -904,6 +904,10 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_jp_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_mro_visible"
 			, value: "1"
 		}
@@ -2581,7 +2585,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_mqttInstanceId"
-			, value: function () { return getRandomAlphanumericStr(12); }
+			, value: GetRandomMqttInstanceId
 			, maxValue: 12
 			, inputType: "text"
 			, label: 'Instance ID<div class="settingDesc">(Uniquely identifies this UI3)</div>'
@@ -22091,6 +22095,19 @@ function CameraConfig()
 				return;
 			}
 		}
+		else if (key.startsWith("setpost."))
+		{
+			args.setpost = {};
+			if (key == "setpost.timed")
+				args.setpost.timed = value;
+			else if (key == "setpost.timed_interval")
+				args.setpost.timed_interval = value;
+			else
+			{
+				toaster.Error('Unknown camera configuration key: ' + htmlEncode(key), 3000);
+				return;
+			}
+		}
 		else
 		{
 			toaster.Error('Unknown camera configuration key: ' + htmlEncode(key), 3000);
@@ -22438,6 +22455,14 @@ function CameraProperties(camId)
 						$motionSection.append($selectHighlight);
 						$camprop.append($motionSection);
 
+						var collapsible = new CollapsibleSection('jp', "Jpeg Posting", modal_cameraPropDialog);
+						$camprop.append(collapsible.$heading);
+						var $postSection = collapsible.$section;
+						$postSection.append('<div class="dialogOption_item dialogOption_item_info">Due to limited Blue Iris API functionality, this section offers very limited configuration from Blue Iris\'s <b>Camera Properties &gt; Post</b> tab.</div>');
+						$postSection.append(GetCamPropCheckbox("setpost.timed|" + camId, "Queue an image update ...", response.data.setpost.timed, camPropOnOffBtnClick));
+						$postSection.append(GetNumberInput("setpost.timed_interval|" + camId, "... each (seconds): ", response.data.setpost.timed_interval, 1, 99999));
+						$camprop.append($postSection);
+
 						var collapsible = new CollapsibleSection('mro', "Manual Recording Options", modal_cameraPropDialog);
 						$camprop.append(collapsible.$heading);
 						var $manrecSection = collapsible.$section;
@@ -22557,6 +22582,20 @@ function CameraProperties(camId)
 			$infoSection.append(GetInfo("Sub stream", ((cam.width2 * cam.height2) / 1000000).toFixed(1) + "MP, " + cam.FPS2.toFixed(2) + " fps, " + formatBitsPerSecond(cam.BPS2 * 8), cam.width2 + "x" + cam.height2));
 		$infoSection.append(GetInfo("Audio", cam.audio ? "Yes" : "No"));
 		$infoSection.append(GetInfo("Profile", cam.profile));
+		$infoSection.append(GetInfo("Clips", cam.nClips));
+		$infoSection.append(GetInfo("Alerts", cam.nAlerts));
+		$infoSection.append(GetInfo("Triggers", cam.nTriggers));
+		$infoSection.append(GetInfo("No Signal", cam.nNoSignal));
+		var lastAlert = "None";
+		if (cam.alertutc && cam.alertutc > 0)
+		{
+			var diff = Date.now() - (parseInt(cam.alertutc) * 1000);
+			if (diff >= 0)
+			{
+				lastAlert = MsToDHMS(diff) + " ago";
+			}
+		}
+		$infoSection.append(GetInfo("Last Alert", lastAlert));
 		$infoSection.append('<div class="dialogOption_item dialogOption_item_info"><a title="Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds." href="javascript:hlsPlayer.OpenDialog(\'' + JavaScriptStringEncode(camId) + '\')">'
 			+ '<svg class="icon noflip"><use xlink:href="#svg_mio_ViewStream"></use></svg>'
 			+ ' Open HTTP Live Stream (HLS)</a></div>');
@@ -22627,15 +22666,36 @@ function CameraProperties(camId)
 				var v = parseInt($range.val());
 				if (invert)
 					v = (max - v) + min;
-				if (changeTimeout != null)
-					clearTimeout(changeTimeout);
+				clearTimeout(changeTimeout);
 				changeTimeout = setTimeout(function ()
 				{
-					changeTimeout = null;
 					onChange(tag, v);
 				}, 500);
 			}
 		});
+		return $parent;
+	}
+	var GetNumberInput = function (tag, label, value, min, max)
+	{
+		var $parent = $('<div class="dialogOption_item dialogOption_item_info"></div>');
+
+		var $input = $('<input type="number" min="' + min + '" max="' + max + '" />');
+		$input.val(value);
+		$parent.append($input);
+
+		var changeTimeout = null;
+		$input.on('change', function ()
+		{
+			var v = parseInt($input.val());
+			v = Clamp(v, min, max);
+			clearTimeout(changeTimeout);
+			changeTimeout = setTimeout(function ()
+			{
+				camPropNumberChanged(tag, v);
+			}, 500);
+		});
+
+		$parent.append('<div class="dialogOption_label">' + label + '</div>');
 		return $parent;
 	}
 	var percentScalingMethod = function (value, min, max)
@@ -22720,6 +22780,7 @@ function CameraProperties(camId)
 		var camId = parts[1];
 		cameraConfig.set(camId, settingName, value);
 	}
+	var camPropNumberChanged = camPropSliderChanged;
 	var GetSelectRow = function (label, settingKey, options)
 	{
 		var $row = $('<div class="dialogOption_item dialogOption_item_ddl"></div>');
@@ -31109,6 +31170,10 @@ function OnChange_ui3_mqttClientEnabled()
 	else
 		mqttClient.disconnect();
 }
+function GetRandomMqttInstanceId()
+{
+	return getRandomAlphanumericStr(12);
+}
 var mqttWindowId = getRandomAlphanumericStr(16); // Used by MQTT client to indicate that this unique browser window is connected to the broker.
 /**
  Clientside cache of state values from the MQTT broker so we can track when things actually change versus when we just get notified of the same value again.
@@ -31154,13 +31219,18 @@ function MqttClient()
 				toaster.Warning("MQTT Client was enabled, but publishing and subscribing were disabled. MQTT client has nothing to do.", 10000);
 				return;
 			}
+			if (!instance_id)
+				instance_id = settings.ui3_mqttInstanceId = GetRandomMqttInstanceId();
+			if (instance_id.length > 12)
+				instance_id = settings.ui3_mqttInstanceId = instance_id.substr(0, 12);
+
 			hasDisconnected = false;
 
 			client = new Paho.Client(brokerUrl, clientId);
 
 			client.onConnectionLost = onConnectionLost;
 			client.onMessageArrived = onMessageArrived;
-			
+
 			var willMessage = new Paho.Message("");
 			willMessage.destinationName = "ui3/" + instance_id + "/online/" + mqttWindowId;
 			willMessage.retained = true;
