@@ -39,10 +39,7 @@ var currentServer =
 	{
 		if (!navigator.cookieEnabled || forceAddArg)
 		{
-			if (sessionManager)
-				return prefix + "session=" + sessionManager.GetLocalSession();
-			else
-				toaster.Error("Attempted to access sessionManager before it was initialized.");
+			return prefix + "session=" + local_bi_session;
 		}
 		return "";
 	}
