@@ -19929,6 +19929,8 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			AddEditorField("Preset", "pre", { type: "select", options: ["inherit", "ultrafast", "superfast", "veryfast"] });
 			AddEditorField("Profile", "pro", { type: "select", options: ["inherit", "default", "baseline", "main", "extended", "high", "high 10"] });
 			AddEditorField("Zero-Frame Latency", "zfl", { type: "select", options: ["inherit", "No", "Yes"] });
+			AddEditorField("Full Range Color", "fullRangeColor", { type: "select", options: ["inherit", "No", "Yes"] });
+			AddEditorField("Direct-to-wire", "directToWire", { type: "select", options: ["inherit", "No", "Yes"] });
 		}
 		var $deleteBtn = $('<input type="button" value="Delete This Profile" />');
 		$deleteBtn.on('click', DeleteClicked);
@@ -20052,6 +20054,8 @@ function StreamingProfile()
 	this.zfl = -1;
 	this.pre = -1; // Preset ["inherit", "ultrafast", "superfast", "veryfast"]
 	this.pro = -1; // Profile ["inherit", "default", "baseline", "main", "extended", "high", "high 10"]
+	this.directToWire = 0; // 0: inherit. 1: disable. 2: enable
+	this.fullRangeColor = 0; // 0: inherit. 1: disable. 2: enable
 
 	this.GetNameText = function ()
 	{
@@ -20158,6 +20162,12 @@ function StreamingProfile()
 
 			if (self.pro > 0)
 				sb.Append("&profile=").Append(self.pro - 1);
+
+			if (self.directToWire > 0)
+				sb.Append("&d2w=").Append(self.directToWire - 1);
+
+			if (self.fullRangeColor > 0)
+				sb.Append("&frc=").Append(self.fullRangeColor - 1);
 		}
 		return sb.ToString();
 	}
