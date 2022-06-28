@@ -16358,16 +16358,19 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.AcceptFrame = function (frame)
 	{
-		acceptedFrameCount++;
-		decoder.Decode(frame);
-		timestampLastAcceptedFrame = frame.time;
-		lastFrameReceivedAt = performance.now();
-		if (timestampFirstAcceptedFrame == -1)
+		if (acceptedFrameCount > 0 || frame.isKeyframe())
 		{
-			timestampFirstAcceptedFrame = frame.time;
-			firstFrameRenderedAt = lastFrameReceivedAt; // This value is faked so the timing starts more reasonably.
+			acceptedFrameCount++;
+			decoder.Decode(frame);
+			timestampLastAcceptedFrame = frame.time;
+			lastFrameReceivedAt = performance.now();
+			if (timestampFirstAcceptedFrame == -1)
+			{
+				timestampFirstAcceptedFrame = frame.time;
+				firstFrameRenderedAt = lastFrameReceivedAt; // This value is faked so the timing starts more reasonably.
+			}
+			netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 		}
-		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 	}
 	this.Toggle = function ($wrapper, activate)
 	{
@@ -16714,7 +16717,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 				var dataObj = JSON.parse(message_event.data.substr("df ".length));
 				var loading = videoPlayer.Loading().image;
 				//console.log(message_event.data);
-				dropFrame();
+				dropFrame(dataObj);
 			}
 			else if (message_event.data.startsWith("vr ")) // Video Resized and the player is about to start painting a frame of this size.
 			{
@@ -16740,19 +16743,25 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		var meta = frameMetadataCache.Remove(dataObj.t);
 		if (!meta)
 			return; // Most likely from a stream we canceled
+		finishedFrameCount++;
+		if (meta === true)
+			return; // Special case: the frameMetadataCache will return true if the same frame as last time is removed again.
 		meta.width = dataObj.w;
 		meta.height = dataObj.h;
 		meta.expectedInterframe = dataObj.i;
 		meta.timestamp = meta.time;
-		finishedFrameCount++;
 		timestampLastRenderedFrame = meta.timestamp;
 		frameRendered(meta);
 		CheckStreamEndCondition();
 	}
-	var dropFrame = function ()
+	var dropFrame = function (dataObj)
 	{
-		finishedFrameCount++;
-		CheckStreamEndCondition();
+		var meta = frameMetadataCache.Remove(dataObj.t);
+		if (meta)
+		{
+			finishedFrameCount++;
+			CheckStreamEndCondition();
+		}
 	}
 	var CheckStreamEndCondition = function ()
 	{
@@ -16857,15 +16866,18 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	}
 	this.AcceptFrame = function (frame)
 	{
-		frameMetadataCache.Add(frame);
-		//if (developerMode)
-		//	console.log("Posting frame " + frame.time);
-		acceptedFrameCount++;
-		player.postMessage("f " + frame.time);
-		player.postMessage(frame.frameData.buffer);
-		timestampLastAcceptedFrame = frame.time;
-		lastFrameReceivedAt = performance.now();
-		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
+		if (acceptedFrameCount > 0 || frame.isKeyframe())
+		{
+			frameMetadataCache.Add(frame);
+			//if (developerMode)
+			//	console.log("Posting frame " + frame.time);
+			acceptedFrameCount++;
+			player.postMessage("f " + frame.time);
+			player.postMessage(frame.frameData.buffer);
+			timestampLastAcceptedFrame = frame.time;
+			lastFrameReceivedAt = performance.now();
+			netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
+		}
 	}
 	this.Toggle = function ($wrapper, activate)
 	{
@@ -16901,7 +16913,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var ctx;
 	var canvasW = 0;
 	var canvasH = 0;
-	var frameCache = {};
+	var frameCache = new FasterObjectMap();
 	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
 	var decodedFrameCount = 0; // Number of frames rendered.
 	var finishedFrameCount = 0; // Number of frames rendered or dropped.
@@ -16921,6 +16933,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var lastFrameRenderTime = 0; // Milliseconds it took to render the last frame.
 	var averageRenderTime = new RollingAverage();
 	var averageDecodeTime = new RollingAverage();
+	var lastFrameDecodedTimestamp = -1;
 	var allFramesAccepted = false;
 	var renderScheduler = null;
 	var lastFrameWarning = performance.now() - 60000;
@@ -16930,10 +16943,17 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		var frame = frameCache[nativeFrame.timestamp];
 		if (!frame)
 		{
-			toaster.Error("A frame was decoded with a timestamp that is not in the frame cache.");
+			if (nativeFrame.timestamp !== lastFrameDecodedTimestamp)
+			{
+				console.log("A frame was decoded with a timestamp that is not in the frame cache.", nativeFrame);
+				toaster.Error("A frame was decoded with a timestamp that is not in the frame cache.");
+			}
+			decodedFrameCount++;
 			finishedFrameCount++;
+			nativeFrame.close();
 			return;
 		}
+		lastFrameDecodedTimestamp = nativeFrame.timestamp;
 		delete frameCache[nativeFrame.timestamp];
 		frame.nativeFrame = nativeFrame;
 		frame.width = nativeFrame.displayWidth;
@@ -17088,6 +17108,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		lastFrameDecodedAt = timeNow;
 		firstFrameRenderedAt = timeNow;
 		lastFrameRenderedAt = timeNow;
+		lastFrameDecodedTimestamp = -1;
 		allFramesAccepted = false;
 		frameCache = {};
 	}
@@ -17097,26 +17118,29 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	 */
 	this.AcceptFrame = function (frame)
 	{
-		acceptedFrameCount++;
-		timestampLastAcceptedFrame = frame.time;
-		lastFrameReceivedAt = performance.now();
-		if (timestampFirstAcceptedFrame == -1)
+		var isKeyframe = frame.isKeyframe();
+		if (isKeyframe || acceptedFrameCount > 0)
 		{
-			timestampFirstAcceptedFrame = frame.time;
-			firstFrameRenderedAt = lastFrameReceivedAt; // This value is faked so the timing starts more reasonably.
+			acceptedFrameCount++;
+			timestampLastAcceptedFrame = frame.time;
+			lastFrameReceivedAt = performance.now();
+			if (timestampFirstAcceptedFrame == -1)
+			{
+				timestampFirstAcceptedFrame = frame.time;
+				firstFrameRenderedAt = lastFrameReceivedAt; // This value is faked so the timing starts more reasonably.
+			}
+			netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
+			var chunkArgs = {
+				type: isKeyframe ? "key" : "delta",
+				timestamp: frame.time * 1000,
+				duration: 0,
+				data: frame.frameData.buffer
+			};
+			frameCache[chunkArgs.timestamp] = frame;
+			var chunk = new EncodedVideoChunk(chunkArgs);
+			RecoverVideoDecoder();
+			videoDecoder.decode(chunk);
 		}
-		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
-
-		var chunkArgs = {
-			type: frame.isKeyframe() ? "key" : "delta",
-			timestamp: frame.time * 1000,
-			duration: 0,
-			data: frame.frameData.buffer
-		};
-		frameCache[chunkArgs.timestamp] = frame;
-		var chunk = new EncodedVideoChunk(chunkArgs);
-		RecoverVideoDecoder();
-		videoDecoder.decode(chunk);
 	}
 	this.Toggle = function ($wrapper, activate)
 	{
@@ -17150,6 +17174,7 @@ function FrameMetadataCache()
 {
 	var self = this;
 	var cache = {};
+	var lastRemoved = -1;
 	this.Add = function (frame)
 	{
 		cache[frame.time] = frame.meta;
@@ -17161,12 +17186,21 @@ function FrameMetadataCache()
 	this.Remove = function (timestamp)
 	{
 		var value = cache[timestamp];
-		delete cache[timestamp];
+		if (!value)
+		{
+			if (timestamp === lastRemoved)
+				return true;
+			console.log("FrameMetadataCache missing value for timestamp " + timestamp);
+		}
+		else
+			delete cache[timestamp];
+		lastRemoved = timestamp;
 		return value;
 	}
 	this.Reset = function ()
 	{
 		cache = {};
+		lastRemoved = -1;
 	}
 }
 function FrameMetadataQueue()
@@ -17388,31 +17422,31 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	{
 		return finishedFrameCount;
 	}
+	/**
+	 * Returns the number of buffered video frames that have not yet been rendered.
+	 * If the system has sufficient computational power, this number should remain close to 0.
+	 */
 	this.GetBufferedFrameCount = function ()
 	{
-		/// <summary>
-		/// Returns the number of buffered video frames that have not yet been rendered. 
-		/// If the system has sufficient computational power, this number should remain close to 0.
-		/// </summary>
 		return acceptedFrameCount - finishedFrameCount;
 	}
+	/**
+	 * Returns the approximate number of milliseconds of video delay caused by insufficient network speed.
+	 * If the system has sufficient network bandwidth, this number should remain close to 0.
+	 * One or two frames worth of delay is nothing to worry about.
+	 */
 	this.GetNetworkDelay = function ()
 	{
-		/// <summary>
-		/// Returns the approximate number of milliseconds of video delay caused by insufficient network speed.
-		/// If the system has sufficient network bandwidth, this number should remain close to 0.
-		/// One or two frames worth of delay is nothing to worry about.
-		/// </summary>
 		if (allFramesAccepted)
 			return 0;
 		return netDelayCalc.Calc();
 	}
+	/**
+	 * Returns the number of milliseconds of buffered video frames, calculated as timestampLastAcceptedFrame - timestampLastRenderedFrame.
+	 * If the system has sufficient computational power, this number should remain close to 0.
+	 */
 	this.GetBufferedTime = function ()
 	{
-		/// <summary>
-		/// Returns the number of milliseconds of buffered video frames, calculated as timestampLastAcceptedFrame - timestampLastRenderedFrame.
-		/// If the system has sufficient computational power, this number should remain close to 0.
-		/// </summary>
 		return timestampLastAcceptedFrame - timestampLastRenderedFrame;
 	}
 	this.Flush = function ()
@@ -17497,70 +17531,73 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	this.AcceptFrame = function (frame)
 	{
-		if (!jmuxer)
+		if (acceptedFrameCount > 0 || frame.isKeyframe())
 		{
-			jmuxer = new JMuxer({
-				node: 'html5MseVideoEle',
-				mode: 'video',
-				flushingTime: 1,
-				clearBuffer: true,
-				cleanOffset: 600, // This is an extension of the original jmuxer.
-				onReady: onMSEReady,
-				debug: jmuxerDeveloperMode
-			});
-		}
-		if (!mseReady)
-		{
-			earlyFrames.enqueue(frame);
-			return;
-		}
-
-		acceptedFrameCount++;
-		if (HTML5VideoBreakDetector.CheckForBreak(player, acceptedFrameCount, finishedFrameCount))
-		{
-			toaster.Warning("Detected HTML5 video player stall. Reopening video stream.", 5000);
-			videoPlayer.ReopenStreamAtCurrentSeekPosition();
-			return;
-		}
-		timestampLastAcceptedFrame = frame.time;
-		lastFrameReceivedAt = performance.now();
-		netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
-
-		frame.meta.duration = lastFrameDuration;
-		frame.meta.expectedInterframe = lastFrameDuration;
-		frameMetadataQueue.Add(frame);
-
-		if (lastFrame)
-		{
-			lastFrameDuration = frame.time - lastFrame.time;
-			jmuxer.feed({
-				video: lastFrame.frameData,
-				duration: lastFrameDuration
-			});
-			if (finishedFrameCount === 0 && !earlyFrameRenderCalled && currentStreamBitmapInfo)
+			if (!jmuxer)
 			{
-				// Some browsers started having a noticeable delay before their first onTimeUpdate call, so we call frameRendered early for the first frame, causing the video element to be resized at a more appropriate time.
-				earlyFrameRenderCalled = true;
-				var startMeta = $.extend({}, frame.meta);
-				startMeta.width = currentStreamBitmapInfo.biWidth;
-				startMeta.height = currentStreamBitmapInfo.biHeight;
-				startMeta.timestamp = startMeta.time;
-				frameRendered(startMeta);
+				jmuxer = new JMuxer({
+					node: 'html5MseVideoEle',
+					mode: 'video',
+					flushingTime: 1,
+					clearBuffer: true,
+					cleanOffset: 600, // This is an extension of the original jmuxer.
+					onReady: onMSEReady,
+					debug: jmuxerDeveloperMode
+				});
 			}
-			fedFrameCount++;
-			if (!hasToldPlayerToPlay || player.paused)
+			if (!mseReady)
 			{
-				if (hasToldPlayerToPlay && player.paused)
-					console.log("Detected that the video player is paused when it should not be. Instructing to play.");
-				StartPlayback();
+				earlyFrames.enqueue(frame);
+				return;
 			}
-			// Evidently jmuxer can be set to null by some callback method by the time we get to here.
-			if (jmuxer && jmuxer.bufferControllers && jmuxer.bufferControllers.video)
+
+			acceptedFrameCount++;
+			if (HTML5VideoBreakDetector.CheckForBreak(player, acceptedFrameCount, finishedFrameCount))
 			{
-				jmuxer.bufferControllers.video.cleanOffset = 600;
+				toaster.Warning("Detected HTML5 video player stall. Reopening video stream.", 5000);
+				videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				return;
 			}
+			timestampLastAcceptedFrame = frame.time;
+			lastFrameReceivedAt = performance.now();
+			netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
+
+			frame.meta.duration = lastFrameDuration;
+			frame.meta.expectedInterframe = lastFrameDuration;
+			frameMetadataQueue.Add(frame);
+
+			if (lastFrame)
+			{
+				lastFrameDuration = frame.time - lastFrame.time;
+				jmuxer.feed({
+					video: lastFrame.frameData,
+					duration: lastFrameDuration
+				});
+				if (finishedFrameCount === 0 && !earlyFrameRenderCalled && currentStreamBitmapInfo)
+				{
+					// Some browsers started having a noticeable delay before their first onTimeUpdate call, so we call frameRendered early for the first frame, causing the video element to be resized at a more appropriate time.
+					earlyFrameRenderCalled = true;
+					var startMeta = $.extend({}, frame.meta);
+					startMeta.width = currentStreamBitmapInfo.biWidth;
+					startMeta.height = currentStreamBitmapInfo.biHeight;
+					startMeta.timestamp = startMeta.time;
+					frameRendered(startMeta);
+				}
+				fedFrameCount++;
+				if (!hasToldPlayerToPlay || player.paused)
+				{
+					if (hasToldPlayerToPlay && player.paused)
+						console.log("Detected that the video player is paused when it should not be. Instructing to play.");
+					StartPlayback();
+				}
+				// Evidently jmuxer can be set to null by some callback method by the time we get to here.
+				if (jmuxer && jmuxer.bufferControllers && jmuxer.bufferControllers.video)
+				{
+					jmuxer.bufferControllers.video.cleanOffset = 600;
+				}
+			}
+			lastFrame = frame;
 		}
-		lastFrame = frame;
 	}
 	this.Toggle = function ($wrapper, activate)
 	{

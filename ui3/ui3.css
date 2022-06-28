@@ -5027,6 +5027,11 @@ body + div
 	{
 		box-sizing: border-box;
 		height: 28px;
+	}
+
+	.dialogOptionPanel .textBasedInput input[type="text"],
+	.dialogOptionPanel .textBasedInput input[type="password"]
+	{
 		width: 100% !important;
 	}
 
