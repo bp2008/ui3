@@ -506,6 +506,13 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	padding: 6px 16px;
 }
 
+.sizeSmaller #btn_main_menu
+{
+	width: 7px;
+	height: 28px;
+	padding: 6px 8px;
+}
+
 #save_snapshot_btn
 {
 	display: inline-block;
@@ -549,26 +556,49 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	padding: 11px 16px;
 }
 
-#open_all_clips_btn
+.sizeSmaller #open_alerts_btn
+{
+	width: 8px;
+	height: 18px;
+	padding: 11px 8px;
+}
+
+#open_all_clips_btn,
+#open_alerts_canceled_btn,
+#open_alerts_confirmed_btn
 {
 	width: 24px;
 	height: 24px;
 	padding: 20px 20px;
 }
 
-.sizeMedium #open_all_clips_btn
+.sizeMedium #open_all_clips_btn,
+.sizeMedium #open_alerts_canceled_btn,
+.sizeMedium #open_alerts_confirmed_btn
 {
 	width: 22px;
 	height: 22px;
 	padding: 15px 10px;
 }
 
-.sizeSmall #open_all_clips_btn
+.sizeSmall #open_all_clips_btn,
+.sizeSmall #open_alerts_canceled_btn,
+.sizeSmall #open_alerts_confirmed_btn
 {
 	width: 18px;
 	height: 18px;
 	padding: 11px 8px;
 }
+
+.sizeSmaller #open_all_clips_btn,
+.sizeSmaller #open_alerts_canceled_btn,
+.sizeSmaller #open_alerts_confirmed_btn
+{
+	width: 18px;
+	height: 18px;
+	padding: 11px 4px;
+}
+
 
 #open_all_clips_btn.hidden,
 #open_alerts_btn.hidden

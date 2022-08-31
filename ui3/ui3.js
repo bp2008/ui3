@@ -1287,6 +1287,22 @@ var defaultSettings =
 			, category: "Top Bar"
 		}
 		, {
+			key: "ui3_topbar_alerts_canceled_shortcut_show"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: "Shortcut to Cancelled Alerts"
+			, onChange: OnChange_ui3_topbar_alerts_canceled_shortcut_show
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_topbar_alerts_confirmed_shortcut_show"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: "Shortcut to Confirmed Alerts"
+			, onChange: OnChange_ui3_topbar_alerts_confirmed_shortcut_show
+			, category: "Top Bar"
+		}
+		, {
 			key: "ui3_topbar_alerts_shortcut_counter"
 			, value: "1"
 			, inputType: "checkbox"
@@ -3062,6 +3078,8 @@ $(function ()
 	{
 		SetClipListShortcutIconState("#open_all_clips_btn", false);
 		SetClipListShortcutIconState("#open_alerts_btn", false);
+		SetClipListShortcutIconState("#open_alerts_canceled_btn", false);
+		SetClipListShortcutIconState("#open_alerts_confirmed_btn", false);
 
 		var $ele = $(this);
 		$(".topbar_tab").removeClass("selected");
@@ -3250,6 +3268,8 @@ $(function ()
 	OnChange_ui3_time24hour();
 	OnChange_ui3_topbar_allclips_shortcut_show();
 	OnChange_ui3_topbar_alerts_shortcut_show();
+	OnChange_ui3_topbar_alerts_confirmed_shortcut_show();
+	OnChange_ui3_topbar_alerts_canceled_shortcut_show();
 	OnChange_ui3_skipAmount();
 	OnChange_ui3_pc_next_prev_buttons();
 	OnChange_ui3_pc_seek_buttons();
@@ -9429,6 +9449,8 @@ function ClipLoader(clipsBodySelector)
 
 		SetClipListShortcutIconState("#open_all_clips_btn", !dbView || dbView === "all");
 		SetClipListShortcutIconState("#open_alerts_btn", dbView === "alerts");
+		SetClipListShortcutIconState("#open_alerts_canceled_btn", dbView === "cancelled");
+		SetClipListShortcutIconState("#open_alerts_confirmed_btn", dbView === "confirmed");
 
 		var isClipListRequest = args.cmd === "cliplist"; // We can't rely on this anymore to tell us if response items are clips or alerts.
 
@@ -26104,7 +26126,7 @@ function BI_Hotkey_Delete()
 }
 function BI_Hotkey_ToggleReverse()
 {
-	if (!videoPlayer.Loading().image.isLive && !videoPlayer.Loading().image.isTimeline())
+	if (!videoPlayer.Loading().image.isLive)
 		playbackControls.ToggleReverse();
 }
 function BI_Hotkey_NextClip()
@@ -29949,6 +29971,20 @@ function OnChange_ui3_topbar_alerts_shortcut_show()
 		$("#open_alerts_btn").show();
 	else
 		$("#open_alerts_btn").hide();
+}
+function OnChange_ui3_topbar_alerts_canceled_shortcut_show()
+{
+	if (settings.ui3_topbar_alerts_canceled_shortcut_show === "1")
+		$("#open_alerts_canceled_btn").show();
+	else
+		$("#open_alerts_canceled_btn").hide();
+}
+function OnChange_ui3_topbar_alerts_confirmed_shortcut_show()
+{
+	if (settings.ui3_topbar_alerts_confirmed_shortcut_show === "1")
+		$("#open_alerts_confirmed_btn").show();
+	else
+		$("#open_alerts_confirmed_btn").hide();
 }
 function OnChange_ui3_topbar_alerts_shortcut_counter()
 {
