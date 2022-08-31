@@ -30304,6 +30304,7 @@ function UIFormFieldInternal(o)
 	}
 	else if (o.inputType === "hotkey")
 	{
+		var $inputWrapper = $('<div class="textBasedInput"></div>');
 		var $input = $('<input type="text" />');
 		$input.val(getHotkeyTextValueFromHotkeyValue(o.value));
 		$input.on('keydown', function (e)
@@ -30316,8 +30317,9 @@ function UIFormFieldInternal(o)
 			return o.onChange(e, o.tag, $input, textValue, hotkeyValue);
 		});
 
+		$inputWrapper.append($input);
 		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>')
-		$row.append($input);
+		$row.append($inputWrapper);
 		$row.append(GetDialogOptionLabel(o.label));
 		return $row;
 	}
