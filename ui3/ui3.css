@@ -5967,3 +5967,13 @@ ul.extraSpacing li
 	{
 		background: var(--dialog-bg-color);
 	}
+/* Misc */
+.icode
+{
+	display: inline;
+	user-select: all;
+	white-space: pre;
+	font-family: Consolas, monospace;
+	border: 1px solid #808080;
+	padding: 0px 2px;
+}

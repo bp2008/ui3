@@ -995,7 +995,7 @@ var defaultSettings =
 			, inputType: "number"
 			, minValue: 0
 			, maxValue: 525600
-			, label: 'Idle Timeout<div class="settingDesc">The UI will close itself after this many minutes of inactivity. (0 to disable)<br>Can be set with URL parameter &quot;&amp;timeout=0&quot;</div>'
+			, label: 'Idle Timeout<div class="settingDesc">The UI will close itself after this many minutes of inactivity. (0 to disable)<br>Can be set with URL parameter <span class="icode">&amp;timeout=0</span></div>'
 			, category: "General Settings"
 		}
 		, {
@@ -1692,7 +1692,7 @@ var defaultSettings =
 			, value: "1|0|0|192" // 192: tilde (~`)
 			, hotkey: true
 			, label: "Maximize Video Area"
-			, hint: "Shows or hides the left and top control bars. This can be triggered on page load via the url parameter \"maximize=1\"."
+			, hint: 'Shows or hides the left and top control bars. This can be triggered on page load via the URL parameter: &maximize=1'
 			, actionDown: BI_Hotkey_MaximizeVideoArea
 			, category: "Hotkeys"
 		}
