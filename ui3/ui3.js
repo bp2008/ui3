@@ -16204,6 +16204,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var allFramesAccepted = false;
 	var renderScheduler = null;
 	var lastFrameWarning = performance.now() - 60000;
+	var nonKeyframeDropper = new NonKeyframeDropper();
 
 	var onLoad = function ()
 	{
@@ -16359,6 +16360,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		decoder.Flush();
 		renderScheduler.Reset(averageRenderTime);
+		nonKeyframeDropper.Reset();
 		acceptedFrameCount = 0;
 		decodedFrameCount = 0;
 		finishedFrameCount = 0;
@@ -16380,7 +16382,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.AcceptFrame = function (frame)
 	{
-		if (acceptedFrameCount > 0 || frame.isKeyframe())
+		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			acceptedFrameCount++;
 			decoder.Decode(frame);
@@ -16622,6 +16624,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	var allFramesAccepted = false;
 	var frameMetadataCache = new FrameMetadataCache();
 	var loadingTimeout = null;
+	var nonKeyframeDropper = new NonKeyframeDropper();
 
 	var moduleDidLoad = function ()
 	{
@@ -16876,6 +16879,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		if (developerMode)
 			console.log("Posting reset");
 		player.postMessage("reset");
+		nonKeyframeDropper.Reset();
 		acceptedFrameCount = 0;
 		finishedFrameCount = 0;
 		frameMetadataCache.Reset();
@@ -16888,7 +16892,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 	}
 	this.AcceptFrame = function (frame)
 	{
-		if (acceptedFrameCount > 0 || frame.isKeyframe())
+		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			frameMetadataCache.Add(frame);
 			//if (developerMode)
@@ -16959,6 +16963,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var allFramesAccepted = false;
 	var renderScheduler = null;
 	var lastFrameWarning = performance.now() - 60000;
+	var nonKeyframeDropper = new NonKeyframeDropper();
 
 	var frameDecoded = function (nativeFrame)
 	{
@@ -17113,6 +17118,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			ConfigureVideoDecoder();
 		}
 		renderScheduler.Reset(averageRenderTime);
+		nonKeyframeDropper.Reset();
 		acceptedFrameCount = 0;
 		decodedFrameCount = 0;
 		finishedFrameCount = 0;
@@ -17140,8 +17146,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	 */
 	this.AcceptFrame = function (frame)
 	{
-		var isKeyframe = frame.isKeyframe();
-		if (isKeyframe || acceptedFrameCount > 0)
+		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			acceptedFrameCount++;
 			timestampLastAcceptedFrame = frame.time;
@@ -17153,7 +17158,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			}
 			netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 			var chunkArgs = {
-				type: isKeyframe ? "key" : "delta",
+				type: frame.isKeyframe() ? "key" : "delta",
 				timestamp: frame.time * 1000,
 				duration: 0,
 				data: frame.frameData.buffer
@@ -17280,6 +17285,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var allFramesAccepted = false;
 	var frameMetadataQueue = new FrameMetadataQueue();
 	var currentStreamBitmapInfo = null;
+	var nonKeyframeDropper = new NonKeyframeDropper();
 
 	var lastFrame;
 	var lastFrameDuration = 16;
@@ -17482,6 +17488,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			jmuxer = null;
 		}
 		HTML5VideoBreakDetector.Reset();
+		nonKeyframeDropper.Reset();
 		hasToldPlayerToPlay = false;
 		player.pause();
 		delayCompensation = new HTML5DelayCompensationHelper(player);
@@ -17553,7 +17560,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	this.AcceptFrame = function (frame)
 	{
-		if (acceptedFrameCount > 0 || frame.isKeyframe())
+		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			if (!jmuxer)
 			{
@@ -17937,6 +17944,32 @@ var HTML5VideoBreakDetector = new (function ()
 		return false;
 	}
 })();
+///////////////////////////////////////////////////////////////
+// Non-keyframe Dropper ///////////////////////////////////////
+///////////////////////////////////////////////////////////////
+/**
+ * Utility module that helps UI3's video players drop non-keyframe frames at the start of a stream.
+ */
+function NonKeyframeDropper()
+{
+	var hasSeenKeyframe = false;
+	this.shouldAccept = function (frame)
+	{
+		if (hasSeenKeyframe)
+			return true;
+		else if (frame.isKeyframe())
+		{
+			hasSeenKeyframe = true;
+			return true;
+		}
+		else
+			return false;
+	}
+	this.Reset = function ()
+	{
+		hasSeenKeyframe = false;
+	}
+}
 ///////////////////////////////////////////////////////////////
 // Network Delay Calculator - An Imperfect Science ////////////
 ///////////////////////////////////////////////////////////////
@@ -28084,8 +28117,13 @@ function BIVideoFrame(buf, metadata)
 	this.time = metadata.time;
 	this.utc = metadata.utc;
 	this.size = metadata.size;
+	var cachedIsKeyframe = 0;
 	this.isKeyframe = function ()
 	{
+		if (cachedIsKeyframe === 1)
+			return true;
+		else if (cachedIsKeyframe === -1)
+			return false;
 		if (self.frameData && self.frameData.length > 0)
 		{
 			// The NALU type is the last 5 bits of the first byte after a start code.
@@ -28104,9 +28142,15 @@ function BIVideoFrame(buf, metadata)
 						// Identified a start code.  Check the NALU type.
 						var NALU_Type = self.frameData[i + 1] & 31; // 31 is 0b00011111
 						if (NALU_Type == 5) // This is a slice of a keyframe.
+						{
+							cachedIsKeyframe = 1;
 							return true;
+						}
 						else if (0 < NALU_Type && NALU_Type < 5) // This is another frame type
+						{
+							cachedIsKeyframe = -1;
 							return false;
+						}
 					}
 					zeroBytes = 0;
 				}
