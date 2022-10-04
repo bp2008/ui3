@@ -4405,13 +4405,10 @@ function DropdownBoxes()
 
 				AddDbViewFolder(this.items, "new", "New", 0, "#svg_mio_folder_special");
 				AddDbViewFolder(this.items, "stored", "Stored", 1, "#svg_mio_folder");
-				AddDbViewFolder(this.items, "aux1", "Aux 1", 3, "#svg_mio_folder");
-				AddDbViewFolder(this.items, "aux2", "Aux 2", 4, "#svg_mio_folder");
-				AddDbViewFolder(this.items, "aux3", "Aux 3", 5, "#svg_mio_folder");
-				AddDbViewFolder(this.items, "aux4", "Aux 4", 6, "#svg_mio_folder");
-				AddDbViewFolder(this.items, "aux5", "Aux 5", 7, "#svg_mio_folder");
-				AddDbViewFolder(this.items, "aux6", "Aux 6", 8, "#svg_mio_folder");
-				AddDbViewFolder(this.items, "aux7", "Aux 7", 9, "#svg_mio_folder");
+				for (var i = 1; i <= 13; i++)
+				{
+					AddDbViewFolder(this.items, "aux" + i, "Aux " + i, i + 2, "#svg_mio_folder");
+				}
 
 				this.items.push(new DropdownListItem({ id: "separator" }));
 
