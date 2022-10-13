@@ -1073,9 +1073,9 @@ var defaultSettings =
 			, value: -1
 			, inputType: "number"
 			, minValue: -1
-			, maxValue: 8192
-			, label: 'Maximum H.264 Kbps<div class="settingDesc">(10-8192, disabled if less than 10)</div>'
-			, hint: "Useful for slow connections. Audio streams are not affected by this setting."
+			, maxValue: 100000
+			, label: 'Maximum H.264 Kbps<div class="settingDesc">(disabled if less than 10)</div>'
+			, hint: "Useful for slow connections. Audio streams are not affected by this setting. Limit 100000 Kbps."
 			, onChange: OnChange_ui3_streamingProfileBitRateMax
 			, preconditionFunc: Precondition_ui3_streamingProfileBitRateMax
 			, category: "Video Player"
@@ -19975,7 +19975,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		{
 			AddEditorField("Frame Rate [0-60]", "fps", { min: 0, max: 60 });
 			AddEditorField("Limit Bit Rate", "limitBitrate", { type: "select", options: ["inherit", "No Limit", "Yes Limit"] });
-			AddEditorField("Max Bit Rate (Kbps) [10-8192]", "kbps", { min: 10, max: 8192 });
+			AddEditorField("Max Bit Rate (Kbps) [10-100000]", "kbps", { min: 10, max: 100000 });
 			var maxGop = getMaxGOP();
 			AddEditorField("Keyframe Interval [1-" + maxGop + "]", "gop", { min: 1, max: maxGop, hint: 'Advanced users may change the Keyframe Interval max limit. Use the developer console to set "settings.ui3_maxGOP = N" where N is between 300 and 99999, then reload UI3. Higher keyframe values may make video streams freeze.' });
 			AddEditorField("Preset", "pre", { type: "select", options: ["inherit", "ultrafast", "superfast", "veryfast"] });
@@ -20185,15 +20185,15 @@ function StreamingProfile()
 
 		if (self.vcodec === "h264")
 		{
-			var kbps = -1; // -1: inherit, 0: no limit, 10-8192: limit
+			var kbps = -1; // -1: inherit, 0: no limit, 10-100000: limit
 			if (self.limitBitrate === 1)
 				kbps = 0; // Sentinel value instructing Blue Iris to use no limit
 			else if (self.limitBitrate === 2)
-				kbps = Clamp(self.kbps, 10, 8192);
+				kbps = Clamp(self.kbps, 10, 100000);
 			var max = settings.ui3_streamingProfileBitRateMax;
 			if (max)
 			{
-				max = Clamp(parseInt(max), -1, 8192);
+				max = Clamp(parseInt(max), -1, 100000);
 				if (max >= 10 && (max < kbps || kbps === -1 || kbps === 0))
 					kbps = max;
 			}
@@ -20245,7 +20245,7 @@ function StreamingProfile()
 		if (self.limitBitrate === 1)
 			sb.Append('no bitrate limit ');
 		else if (self.limitBitrate === 2 && self.kbps > -1)
-			sb.Append('<' + Clamp(self.kbps, 10, 8192) + ' Kbps ');
+			sb.Append('<' + Clamp(self.kbps, 10, 100000) + ' Kbps ');
 
 		sb.AppendLine().AppendLine();
 
