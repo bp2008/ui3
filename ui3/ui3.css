@@ -689,6 +689,17 @@ div.icon, a.icon
 	background-color: #383E47;
 }
 /* Left Bar Misc */
+.leftBarBox
+{
+	break-inside: avoid;
+}
+
+#ptzControlsBox
+{
+	break-inside: auto;
+	padding-bottom: 0px;
+}
+
 .leftBarBox, #statusArea
 {
 	padding: 0px 30px 15px 31px;
@@ -737,6 +748,21 @@ div.icon, a.icon
 .sizeSmall .leftBarInnerBox
 {
 	padding-top: 5px;
+}
+
+.leftBarInvertBox
+{
+	padding-bottom: 15px;
+}
+
+.sizeMedium .leftBarInvertBox
+{
+	padding-bottom: 10px;
+}
+
+.sizeSmall .leftBarInvertBox
+{
+	padding-bottom: 5px;
 }
 
 .leftBarHeading
@@ -1018,6 +1044,7 @@ div.invisibleLabel
 .fiveByTwoButtonSet, .fourByTwoButtonSet
 {
 	height: 76px;
+	break-inside: avoid;
 }
 
 .standardLeftBarBoxSize

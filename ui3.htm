@@ -208,7 +208,7 @@
 						<div id="ptzControlsBox" class="leftBarBox">
 							<div class="leftBarHeading collapsibleTrigger" collapsibleid="ptz" title="Pan-Tilt-Zoom Controls">PTZ</div>
 							<div class="leftBarInnerBox">
-								<div id="ptzButtonsMain">
+								<div id="ptzButtonsMain" class="leftBarInvertBox">
 									<div id="ptzGraphicWrapper">
 										<div class="ptzGraphicContainer" uisize="large">
 											<div class="ptzGraphic ptzBackground" layoutR="0 0 190 190" svgid="PTZbackground"></div>
@@ -263,11 +263,11 @@
 										</div>
 									</div>
 								</div>
-								<div id="ptzRelativeToggleSection" class="leftBarInnerBox standardLeftBarBoxSize">
+								<div id="ptzRelativeToggleSection" class="leftBarInvertBox standardLeftBarBoxSize">
 									<input type="button" id="ptzRelativeToggle" class="simpleTextButton btnTransparent" value="Toggle 3D Positioning" onclick="relativePTZ.toggle3dPositioning()">
 								</div>
 								<div id="ptzPresetsContent">
-									<div class="fiveByTwoButtonSet leftBarInnerBox ptzPresets10">
+									<div class="fiveByTwoButtonSet leftBarInvertBox ptzPresets10">
 										<div class="squareButton ptzpreset" presetnum="1"></div>
 										<div class="squareButton ptzpreset" presetnum="2"></div>
 										<div class="squareButton ptzpreset" presetnum="3"></div>
@@ -279,7 +279,7 @@
 										<div class="squareButton ptzpreset" presetnum="9"></div>
 										<div class="squareButton ptzpreset" presetnum="10"></div>
 									</div>
-									<div class="fiveByTwoButtonSet leftBarInnerBox ptzPresets20">
+									<div class="fiveByTwoButtonSet leftBarInvertBox ptzPresets20">
 										<div class="squareButton ptzpreset" presetnum="11"></div>
 										<div class="squareButton ptzpreset" presetnum="12"></div>
 										<div class="squareButton ptzpreset" presetnum="13"></div>
@@ -291,7 +291,7 @@
 										<div class="squareButton ptzpreset" presetnum="19"></div>
 										<div class="squareButton ptzpreset" presetnum="20"></div>
 									</div>
-									<div class="fiveByTwoButtonSet leftBarInnerBox ptzPresets30">
+									<div class="fiveByTwoButtonSet leftBarInvertBox ptzPresets30">
 										<div class="squareButton ptzpreset" presetnum="21"></div>
 										<div class="squareButton ptzpreset" presetnum="22"></div>
 										<div class="squareButton ptzpreset" presetnum="23"></div>
@@ -303,7 +303,7 @@
 										<div class="squareButton ptzpreset" presetnum="29"></div>
 										<div class="squareButton ptzpreset" presetnum="30"></div>
 									</div>
-									<div class="fiveByTwoButtonSet leftBarInnerBox ptzPresets40">
+									<div class="fiveByTwoButtonSet leftBarInvertBox ptzPresets40">
 										<div class="squareButton ptzpreset" presetnum="31"></div>
 										<div class="squareButton ptzpreset" presetnum="32"></div>
 										<div class="squareButton ptzpreset" presetnum="33"></div>
@@ -317,7 +317,7 @@
 									</div>
 								</div>
 								<div id="ptzIrBrightnessContrast" style="display: none;">
-									<div class="fiveByOneButtonSet leftBarInnerBox">
+									<div class="fiveByOneButtonSet leftBarInvertBox">
 										<div class="squareButton noborder dropdownTrigger" name="ptzIR" title="Infrared"><svg class="icon noflip"><use xlink:href="#svg_mio_lightbulb"></use></svg><span id="irButtonText"></span><div id="irButtonLabel" class="invisibleLabel"></div></div>
 										<div class="squareButton noborder spacer"></div>
 										<div class="squareButton noborder dropdownTrigger" name="ptzBrightness" title="Brightness"><svg class="icon noflip"><use xlink:href="#svg_mio_brightness"></use></svg><div id="brightnessButtonLabel" class="invisibleLabel"></div></div>
@@ -326,7 +326,7 @@
 									</div>
 								</div>
 								<div id="ptzHomeContainer" style="display: none;">
-									<div class="fiveByOneButtonSet leftBarInnerBox">
+									<div class="fiveByOneButtonSet leftBarInvertBox">
 										<div id="ptzHome" class="squareButton fiveByOneButtonSet" title="Sends a PTZ home command to the camera.  Results may vary."><svg class="icon noflip"><use xlink:href="#svg_mio_home"></use></svg><div id="homeButtonLabel">PTZ Home</div></div>
 									</div>
 								</div>

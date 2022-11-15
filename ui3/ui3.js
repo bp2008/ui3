@@ -3597,6 +3597,7 @@ function resized()
 	// Size layoutsidebar
 	var sidebarT = topH;
 	var $dragBar = $("#sidebarPortraitDragbar");
+	var dragBarH = 0;
 	if (settings.ui3_is_maximized !== "1")
 	{
 		if (currentPrimaryTab == "timeline")
@@ -3613,6 +3614,7 @@ function resized()
 			sidebarH = Math.round(sidebarResizeBar.getSidebarSize() * (windowH - topH - botH));
 			sidebarT = windowH - sidebarH;
 			$dragBar.show();
+			dragBarH = $dragBar.height();
 		}
 		else
 			$dragBar.hide();
@@ -3622,7 +3624,7 @@ function resized()
 
 	if (currentPrimaryTab == "live")
 	{
-		$("#layoutleftLiveScrollableWrapper").css("height", sidebarH - statusH + "px");
+		$("#layoutleftLiveScrollableWrapper").css("height", sidebarH - statusH - dragBarH + "px");
 		var $layoutleftLiveContent = $("#layoutleftLiveContent");
 		var sidebarStuff = $layoutleftLiveContent.children();
 		if (portrait)
@@ -3644,7 +3646,7 @@ function resized()
 		if (portrait)
 		{
 			var topDateH = $("#clipListTopDate").outerHeight(true);
-			$("#clipsbodyWrapper").css("height", (sidebarH - statusH - topDateH) + "px");
+			$("#clipsbodyWrapper").css("height", (sidebarH - statusH - dragBarH - topDateH) + "px");
 			$("#clipsbodyWrapper").css("top", topDateH + "px");
 			uiSizeHelper.setDynCSS(".portrait .cliptile, .portrait .datetile { width: " + ((windowW / 2) - 30) + "px }\n"
 				+ ".sizeMedium.portrait .cliptile, .sizeMedium.portrait .datetile { width: " + ((windowW / 2) - 15) + "px }\n"
@@ -3652,10 +3654,10 @@ function resized()
 		}
 		else
 		{
-			$("#clipsbodyWrapper").css("height", sidebarH - statusH - llrControlsH + "px");
+			$("#clipsbodyWrapper").css("height", sidebarH - statusH - dragBarH - llrControlsH + "px");
 			$("#clipsbodyWrapper").css("top", "");
 		}
-		$("#layoutleftExportScrollableWrapper").css("height", sidebarH - statusH + "px");
+		$("#layoutleftExportScrollableWrapper").css("height", sidebarH - statusH - dragBarH + "px");
 	}
 
 	var statusArea_margins = statusArea.outerWidth(true) - statusArea.width();
