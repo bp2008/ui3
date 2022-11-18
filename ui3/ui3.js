@@ -973,6 +973,10 @@ var defaultSettings =
 			, value: 1000
 		}
 		, {
+			key: "ui3_didAdd8kProfiles"
+			, value: "0" // 8K streaming profiles are added dynamically to UI3 only when a camera or group is found with a dimension above 3840px (which is uncommon as of 2022). This flag gets set afterward to disable the relevant code.
+		}
+		, {
 			key: "ui3_clipOverlayCfg"
 			, value: ""
 		}
@@ -13281,6 +13285,15 @@ function CameraListLoader()
 		return lastResponse;
 	}
 	/**
+	 * Returns an array containing all stream objects (groups, cycles, cameras) currently known, including any fake ones created by UI3.
+	 */
+	this.GetAllStreamObjects = function ()
+	{
+		if (lastResponse && lastResponse.data && lastResponse.data.length >= 0)
+			return lastResponse.data;
+		return [];
+	}
+	/**
 	 * Returns true if the current user has admin privilege for any camera
 	 */
 	this.hasCameraAdminPrivilege = function ()
@@ -20089,7 +20102,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 function StreamingProfile()
 {
 	var self = this;
-	this.dv = 4; // default version
+	this.dv = 5; // default version
 	this.name = "Unnamed Streaming Profile";
 	this.abbr = "";
 	this.aClr = "#004882";
@@ -20298,8 +20311,8 @@ function JpegSnapshotArgs(loadingImg)
 	p.vcodec = "jpeg";
 	p.abbr = "SS";
 	p.aClr = "#000000";
-	p.w = 3840;
-	p.h = 3840;
+	p.w = 7680;
+	p.h = 7680;
 	p.q = Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100);
 
 	return "&decode=1" + p.GetUrlArgs(loadingImg);
@@ -20493,12 +20506,42 @@ function GenericQualityHelper()
 		return "&w=" + sizeToRequest.w + "&h=" + sizeToRequest.h + "&stream=" + profile.stream + (quality === null ? "" : ("&q=" + quality));
 	}
 
-	var Create_4K_VBR = function ()
+	var Create_4320p = function ()
+	{
+		var p = new StreamingProfile();
+		p.name = "4320p^";
+		p.abbr = "8K";
+		p.aClr = "#8F29AE";
+		p.w = 7680;
+		p.h = 4320;
+		p.q = 50;
+		p.limitBitrate = 2;
+		p.kbps = 16384;
+		p.gop = 1000;
+		return p;
+	}
+	var Create_4320p_VBR = function ()
+	{
+		var p = new StreamingProfile();
+		p.name = "4320p VBR^";
+		p.abbr = "V8";
+		p.aClr = "#8F29AE";
+		p.w = 7680;
+		p.h = 4320;
+		p.q = 20;
+		p.limitBitrate = 2;
+		p.kbps = 5000;
+		p.gop = 1000;
+		p.pre = 2;
+		p.zfl = 2;
+		return p;
+	}
+	var Create_2160p_VBR = function ()
 	{
 		var p = new StreamingProfile();
 		p.name = "2160p VBR^";
-		p.abbr = "V8";
-		p.aClr = "#00FF00";
+		p.abbr = "V4";
+		p.aClr = "#008248";
 		p.w = 3840;
 		p.h = 2160;
 		p.q = 20;
@@ -20514,7 +20557,7 @@ function GenericQualityHelper()
 		var p = new StreamingProfile();
 		p.name = "1080p VBR^";
 		p.abbr = "V2";
-		p.aClr = "#00CC88";
+		p.aClr = "#004882";
 		p.w = 1920;
 		p.h = 1080;
 		p.q = 20;
@@ -20528,7 +20571,7 @@ function GenericQualityHelper()
 	this.GenerateDefaultProfiles = function ()
 	{
 		var profiles = new Array();
-		profiles.push(Create_4K_VBR());
+		profiles.push(Create_2160p_VBR());
 		profiles.push(Create_1080p_VBR());
 		{
 			var p = new StreamingProfile();
@@ -20691,7 +20734,7 @@ function GenericQualityHelper()
 			}
 		}
 		{
-			// v2 -> v3
+			// v2 -> v3 (add 1080p VBR and 2160p VBR)
 			for (var i = 0; i < profileData.length; i++)
 			{
 				if (profileData[i].dv && profileData[i].dv >= 3)
@@ -20700,10 +20743,10 @@ function GenericQualityHelper()
 				upgradeMade = true;
 			}
 			if (upgradeMade)
-				profileData.splice(0, 0, Create_4K_VBR(), Create_1080p_VBR());
+				profileData.splice(0, 0, Create_2160p_VBR(), Create_1080p_VBR());
 		}
 		{
-			// v3 -> v4
+			// v3 -> v4 (change preset and ZFL settings for default VBR profiles)
 			for (var i = 0; i < profileData.length; i++)
 			{
 				if (profileData[i].dv && profileData[i].dv >= 4)
@@ -20716,6 +20759,28 @@ function GenericQualityHelper()
 						profileData[i].pre = 2;
 					if (profileData[i].zfl <= 0)
 						profileData[i].zfl = 2;
+				}
+			}
+		}
+		{
+			// v4 -> v5 (change abbreviations and colors of default VBR profiles)
+			for (var i = 0; i < profileData.length; i++)
+			{
+				if (profileData[i].dv && profileData[i].dv >= 5)
+					continue;
+				profileData[i].dv = 5;
+				upgradeMade = true;
+				if (profileData[i].name === "2160p VBR^")
+				{
+					if (profileData[i].abbr === "V8")
+						profileData[i].abbr = "V4";
+					if (profileData[i].aClr === "#00FF00")
+						profileData[i].aClr = "#008248";
+				}
+				else if (profileData[i].name === "1080p VBR^")
+				{
+					if (profileData[i].aClr === "#00CC88")
+						profileData[i].aClr = "#004882";
 				}
 			}
 		}
@@ -20811,6 +20876,74 @@ function GenericQualityHelper()
 			self.SetStreamingQualityDropdownBoxItems();
 		}
 	}
+	var hasProfileWithName = function (name)
+	{
+		for (var p = 0; p < self.profiles.length; p++)
+		{
+			if (self.profiles[p].name === name)
+				return true;
+		}
+		return false;
+	}
+	var onCameraListLoaded = function ()
+	{
+		BI_CustomEvent.RemoveListener("CameraListLoaded", onCameraListLoaded);
+		var cams = cameraListLoader.GetAllStreamObjects();
+		for (var i = 0; i < cams.length; i++)
+		{
+			var cam = cams[i];
+			if (cam.width > 3840 || cam.height > 3840)
+			{
+				// At least one stream exists that is natively larger than 3840px.
+				// Add 8K streaming profiles, then exit this function.
+				var madeChanges = false;
+				var added4320pVBR = hasProfileWithName("4320p VBR^");
+				var added4320p = hasProfileWithName("4320p^");
+				for (var p = 0; p < self.profiles.length; p++)
+				{
+					if (!added4320pVBR &&
+						(
+							self.profiles[p].name === "2160p VBR^"
+							|| self.profiles[p].name === "1080p VBR^"
+						))
+					{
+						self.profiles.splice(p, 0, Create_4320p_VBR());
+						added4320pVBR = madeChanges = true;
+					}
+					else if (!added4320p &&
+						(
+							self.profiles[p].name === "2160p^"
+							|| self.profiles[p].name === "1440p^"
+							|| self.profiles[p].name === "1080p^"
+							|| self.profiles[p].name === "720p^"
+						))
+					{
+						self.profiles.splice(p, 0, Create_4320p());
+						added4320p = madeChanges = true;
+					}
+				}
+				if (!added4320p)
+				{
+					self.profiles.splice(0, 0, Create_4320p());
+					added4320p = madeChanges = true;
+				}
+				if (!added4320pVBR)
+				{
+					self.profiles.splice(0, 0, Create_4320p());
+					added4320pVBR = madeChanges = true;
+				}
+				if (madeChanges)
+				{
+					self.SaveProfiles();
+				}
+				settings.ui3_didAdd8kProfiles = "1";
+				console.log("A camera or group with native resolution above 3840px has been detected. 4320p (8K) streaming profiles have been added to UI3.");
+				break;
+			}
+		}
+	};
+	if (settings.ui3_didAdd8kProfiles !== "1")
+		BI_CustomEvent.AddListener("CameraListLoaded", onCameraListLoaded);
 
 	self.LoadProfiles();
 	if (!self.profiles || self.profiles.length === 0)
