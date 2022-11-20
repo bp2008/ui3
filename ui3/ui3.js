@@ -8899,9 +8899,10 @@ function ExportControls()
 	}
 	Initialize();
 }
-function ExportOffsetControl($handle, polePosition, offsetChanged, onFocused)
+function ExportOffsetControl($handle, defaultPolePosition, offsetChanged, onFocused)
 {
 	var self = this;
+	var polePosition = defaultPolePosition;
 	var $parent = $handle.parent();
 	var percent;
 	var po = $parent.offset();
@@ -8914,7 +8915,8 @@ function ExportOffsetControl($handle, polePosition, offsetChanged, onFocused)
 	var isDragging = false;
 	var $label = $('<div class="exportOffsetFlagLabel" style="' + (polePosition > 0.5 ? "right: 0px;" : "left: 0px;") + '"></div>');
 	$handle.append($label);
-	$handle.append('<div class="exportOffsetFlagpole" style="left: ' + (polePosition * 100) + '%"></div>');
+	var $pole = $('<div class="exportOffsetFlagpole" style="left: ' + (polePosition * 100) + '%"></div>');
+	$handle.append($pole);
 	var clipData;
 	this.setClipData = function (cd)
 	{
@@ -8938,7 +8940,35 @@ function ExportOffsetControl($handle, polePosition, offsetChanged, onFocused)
 		seekBarW = seekBar.getWidth();
 		seekBarO = seekBar.getOffset();
 
-		$handle.css('left', ((seekBarW * percent) - (w * polePosition) + (seekBarO.left - po.left)) + 'px');
+		// Flip the flag orientation if too close to an edge.
+		var labelW = $label.width();
+		var posPx = (seekBarW * percent);
+		var newPolePosition = polePosition;
+		if (seekBarW > labelW
+			&& (defaultPolePosition <= 0.5 && seekBarW - posPx < labelW)
+			|| (defaultPolePosition > 0.5 && posPx < labelW
+			))
+			newPolePosition = 1 - defaultPolePosition;
+		else
+			newPolePosition = defaultPolePosition;
+		if (newPolePosition !== polePosition)
+		{
+			polePosition = newPolePosition;
+			if (polePosition > 0.5)
+			{
+				$label.css('right', '0px');
+				$label.css('left', 'auto');
+			}
+			else
+			{
+				$label.css('right', 'auto');
+				$label.css('left', '0px');
+			}
+			$pole.css('left', (polePosition * 100) + "%");
+		}
+		// Position the flag
+		$handle.css('left', (posPx - (w * polePosition) + (seekBarO.left - po.left)) + 'px');
+
 
 		if (clipData)
 		{
