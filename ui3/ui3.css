@@ -3929,12 +3929,12 @@ body + div
 	}
 }
 
-.showOnTimeline
+.showOnlyOnTimeline
 {
 	display: none;
 }
 
-.tabTimeline .showOnTimeline
+.tabTimeline .showOnlyOnTimeline
 {
 	display: initial;
 }

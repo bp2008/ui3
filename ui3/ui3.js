@@ -647,7 +647,6 @@ var togglableUIFeatures =
 // CONSIDER: Expandable clip list. ("Show more clips")
 // KNOWN: Jpeg snapshots of dynamic groups often are missing some labels because BI returned the frame before drawing them.
 // KNOWN: navigator.mediaSession doesn't work properly. Timeline playback has never been tested with it.
-// KNOWN: Timeline playback does not support audio yet (needs BI support)
 
 ///////////////////////////////////////////////////////////////
 // Settings ///////////////////////////////////////////////////
@@ -7241,6 +7240,19 @@ function ClipTimeline()
 			return GetUtcNow();
 	}
 	/**
+	 * Returns the largest possible timestamp the timeline control will allow, to the millisecond.
+	 */
+	this.getNewestAllowableTime = function ()
+	{
+		return GetUtcNow() - self.keepOutTime;
+	}
+	this.loadNewestAllowableTime = function ()
+	{
+		var args = self.getTimelineArgsForCameraSwitch(true);
+		args.timelineMs = self.getNewestAllowableTime();
+		videoPlayer.LoadLiveCamera(videoPlayer.Loading().cam, args);
+	}
+	/**
 	 * Selects the given timestamp on the timeline.
 	 * @param {Number} timestampMs Milliseconds since unix epoch.
 	 */
@@ -7252,10 +7264,13 @@ function ClipTimeline()
 			timeline.userDidSetTime();
 		}
 	}
-	/** Returns a timelineArgs object that will persist the current timeline playback position if sent to videoPlayer.LoadLiveCamera. */
-	this.getTimelineArgsForCameraSwitch = function ()
+	/**
+	 * Returns a timelineArgs object that will persist the current timeline playback position if sent to videoPlayer.LoadLiveCamera.
+	 * @param alsoWhileLive {Boolean} If false, and the current video is live, then null is returned instead of a timelineArgs object.
+	 */
+	this.getTimelineArgsForCameraSwitch = function (alsoWhileLive)
 	{
-		if (timeline && (videoPlayer.Loading().image.isTimeline() || (currentPrimaryTab === "timeline" && !videoPlayer.Loading().image.isLive)))
+		if (timeline && (videoPlayer.Loading().image.isTimeline() || (currentPrimaryTab === "timeline" && !videoPlayer.Loading().image.isLive) || alsoWhileLive))
 			return timeline.getCurrentTimelineArgs();
 		return null;
 	}
@@ -7793,8 +7808,6 @@ function PlaybackControls()
 		{
 			playbackHeader.Hide();
 			$("#seekBarWrapper").hide();
-			$("#pcButtonContainer .hideWhenLive").addClass('temporarilyUnavailable');
-			$("#pcButtonContainer .showWhenLive").removeClass('temporarilyUnavailable');
 		}
 		else
 		{
@@ -7808,10 +7821,30 @@ function PlaybackControls()
 				playbackHeader.Show();
 				$("#seekBarWrapper").show();
 			}
-			$("#pcButtonContainer .hideWhenLive").removeClass('temporarilyUnavailable');
-			$("#pcButtonContainer .showWhenLive").addClass('temporarilyUnavailable');
 		}
+		evaluateShowHideRules();
 	}
+	var evaluateShowHideRules = function ()
+	{
+		var loadingImg = videoPlayer.Loading().image;
+		// "hideWhenLive" is used to suppress controls that we want always shown on the timeline tab.
+		if (currentPrimaryTab === "timeline")
+			$("#pcButtonContainer .hideWhenLive").removeClass('temporarilyUnavailable');
+		else if (loadingImg.isLive)
+			$("#pcButtonContainer .hideWhenLive").addClass('temporarilyUnavailable');
+		else
+			$("#pcButtonContainer .hideWhenLive").removeClass('temporarilyUnavailable');
+
+		// "showWhenLive" applies simply during live video playback regardless of UI tab.
+		if (loadingImg.isLive)
+			$("#pcButtonContainer .showWhenLive").removeClass('temporarilyUnavailable');
+		else
+			$("#pcButtonContainer .showWhenLive").addClass('temporarilyUnavailable');
+		self.setPlayPauseButtonState();
+	}
+	BI_CustomEvent.AddListener("TabLoaded_live", function () { evaluateShowHideRules(); });
+	BI_CustomEvent.AddListener("TabLoaded_clips", function () { evaluateShowHideRules(); });
+	BI_CustomEvent.AddListener("TabLoaded_timeline", function () { evaluateShowHideRules(); });
 	this.Hide = function ()
 	{
 		if (isVisible)
@@ -7907,7 +7940,7 @@ function PlaybackControls()
 	}
 	this.setPlayPauseButtonState = function (paused)
 	{
-		if (videoPlayer.Loading().image.isLive)
+		if (videoPlayer.Loading().image.isLive && currentPrimaryTab !== "timeline")
 		{
 			$("#pcPlay").hide();
 			$("#pcPause").hide();
@@ -14055,12 +14088,14 @@ function VideoPlayerController()
 	}
 	this.TimelineJump = function (direction)
 	{
-		if (!currentlyLoadingImage.isTimeline())
+		if (currentPrimaryTab !== "timeline")
 			return;
 		direction = (direction > 0 ? 1 : -1);
-		if (self.Playback_IsPaused())
+		if (currentlyLoadingImage.isLive || !currentlyLoadingImage.isTimeline() || self.Playback_IsPaused())
 		{
-			var args = clipTimeline.getTimelineArgsForCameraSwitch();
+			var args = clipTimeline.getTimelineArgsForCameraSwitch(true);
+			if (currentlyLoadingImage.isLive)
+				args.timelineMs = clipTimeline.getNewestAllowableTime();
 			args.timelineJump = direction;
 			self.LoadLiveCamera(currentlyLoadingCamera, args);
 		}
@@ -14149,6 +14184,8 @@ function VideoPlayerController()
 	{
 		if (videoPlayer.Loading().image.isTimeline())
 			videoPlayer.TimelineJump(1);
+		else if (currentPrimaryTab === "timeline")
+			return;
 		else
 		{
 			var clipEle = clipLoader.GetCurrentClipEle();
@@ -14170,7 +14207,7 @@ function VideoPlayerController()
 	}
 	this.Playback_PreviousClip = function ()
 	{
-		if (videoPlayer.Loading().image.isTimeline())
+		if (videoPlayer.Loading().image.isTimeline() || currentPrimaryTab === "timeline")
 			videoPlayer.TimelineJump(-1);
 		else
 		{
@@ -25810,9 +25847,9 @@ function MediaSessionController()
 		{
 			navigator.mediaSession.setActionHandler('previoustrack', function ()
 			{
-				if (videoPlayer.Loading().image.isLive)
+				if (videoPlayer.Loading().image.isLive && currentPrimaryTab !== "timeline")
 					BI_Hotkey_PreviousCamera();
-				else if (!videoPlayer.Loading().image.isTimeline())
+				else
 					videoPlayer.Playback_PreviousClip();
 			});
 
@@ -26352,6 +26389,8 @@ function BI_Hotkey_PreviousClip()
 		else
 			videoPlayer.Playback_NextClip();
 	}
+	else if (currentPrimaryTab === "timeline")
+		videoPlayer.Playback_PreviousClip();
 }
 function BI_Hotkey_SkipAhead()
 {
@@ -26362,6 +26401,8 @@ function BI_Hotkey_SkipBack()
 {
 	if (!videoPlayer.Loading().image.isLive)
 		videoPlayer.SeekByMs(-1000 * GetSkipAmount());
+	else if (currentPrimaryTab === "timeline")
+		clipTimeline.loadNewestAllowableTime();
 }
 function GetSkipAmount()
 {
@@ -26376,6 +26417,8 @@ function BI_Hotkey_SkipBack1Frame()
 {
 	if (!videoPlayer.Loading().image.isLive)
 		videoPlayer.SeekByMs(-1 * videoPlayer.GetExpectedFrameIntervalOfCurrentCamera(), false);
+	else if (currentPrimaryTab === "timeline")
+		clipTimeline.loadNewestAllowableTime();
 }
 function BI_Hotkey_PlaybackFaster()
 {
