@@ -8781,6 +8781,9 @@ function ExportControls()
 			return;
 		controlsEnabled = true;
 
+		if (currentPrimaryTab !== "clips")
+			$("#topbar_tab_clips").click();
+
 		clipData = clipLoader.GetClipFromId(recId);
 
 		if (!videoPlayer.Playback_IsPaused())
