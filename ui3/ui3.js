@@ -7736,6 +7736,12 @@ function PlaybackControls()
 		if (SpeedOptions[i] == settings.ui3_playback_speed)
 			playSpeed = SpeedOptions[i];
 
+	$("#playbackControls").on('mousedown touchstart', function (event)
+	{
+		// This hack seems to fix [Playback controls click-through bug](https://github.com/bp2008/ui3/issues/122).
+		videoPlayer.suppressMouseHelper(true);
+	});
+
 	var SetPlaySpeedLabel = function ()
 	{
 		$("#playbackSpeedText").text(playSpeed + "x");
