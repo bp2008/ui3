@@ -6846,6 +6846,8 @@ function ClipTimeline()
 					var uniqueId = loadingImg.uniqueId;
 					var startTime = performance.now();
 					this.seekPreviewLoading = true;
+					videoPlayer.Loading().image.isLive = false;
+					videoPlayer.Loading().image.timelineStart = Math.floor(requestMs);
 
 					videoOverlayHelper.ShowLoadingOverlay(true, true);
 					DownloadToDataUri(seekImgUrl)
