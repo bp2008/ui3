@@ -2616,6 +2616,14 @@ var defaultSettings =
 			, category: "MQTT Remote Control"
 		}
 		, {
+			key: "ui3_mqttStatusToasts"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Connection Status Messages'
+			, hint: 'Disabling connection status messages does not suppress error messages related to the MQTT connection.'
+			, category: "MQTT Remote Control"
+		}
+		, {
 			key: "ui3_comment_mqtt_advanced"
 			, value: ""
 			, inputType: "comment"
@@ -31626,7 +31634,8 @@ function MqttClient()
 		try
 		{
 			isConnected = true;
-			toaster.Success("Connected to MQTT broker.", 3000);
+			if (settings.ui3_mqttStatusToasts === "1")
+				toaster.Success("Connected to MQTT broker.", 3000);
 			if (hasDisconnected)
 			{
 				console.log("MqttClient just finished connecting, but disconnect() has already been called. Disconnecting now.");
@@ -31673,7 +31682,10 @@ function MqttClient()
 		{
 			isConnected = false;
 			if (arg.errorCode === 0)
-				toaster.Info("MQTT Disconnected", 3000);
+			{
+				if (settings.ui3_mqttStatusToasts === "1")
+					toaster.Info("MQTT Disconnected", 3000);
+			}
 			else
 				toaster.Warning("MQTT Disconnected: " + arg.errorCode + " " + arg.errorMessage, 10000);
 		}
