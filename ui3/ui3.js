@@ -2638,8 +2638,8 @@ var defaultSettings =
 			key: "ui3_mqttSubscribeEnabled"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: 'Subscribe to /state/ Topics'
-			, hint: "Disabling this will disable inbound state synchronization with the MQTT broker."
+			, label: 'Subscribe to Topics'
+			, hint: "Disabling this will disable inbound state synchronization with the MQTT broker. MQTT-triggered audio commands will not work."
 			, category: "MQTT Remote Control"
 		}
 		, {
@@ -2649,7 +2649,7 @@ var defaultSettings =
 			, minValue: 0
 			, maxValue: 2
 			, label: 'Subscribe QOS'
-			, hint: "The MQTT QOS value (0,1,2) that is sent when subscribing to the /state/ topics."
+			, hint: "The MQTT QOS value (0,1,2) that is sent when subscribing to topics."
 			, category: "MQTT Remote Control"
 		}
 		, {
@@ -2676,6 +2676,14 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Publish Retain'
 			, hint: "If enabled, UI3 will set the Retain flag when publishing to the /state/ topics."
+			, category: "MQTT Remote Control"
+		}
+		, {
+			key: "ui3_mqttAudioEvents"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Audio/TTS Events'
+			, hint: "If enabled, UI3 will subscribe to playaudio and playtts topics and may require user interaction to finish loading UI3."
 			, category: "MQTT Remote Control"
 		}
 		, {
@@ -19461,6 +19469,16 @@ var biSoundPlayer = new (function ()
 		var file = settings.getItem("ui3_sound_" + event);
 		player.Play(file, settings.ui3_eventSoundVolume);
 	}
+	this.PlaySoundFile = function (audioPlayerId, file)
+	{
+		if (developerMode)
+			console.log('PlaySoundFile("' + audioPlayerId + '", "' + file + '")');
+		var player = playerCache["custom_" + audioPlayerId];
+		if (!player)
+			player = playerCache["custom_" + audioPlayerId] = new BISoundEffect();
+
+		player.Play(file, settings.ui3_eventSoundVolume);
+	}
 	this.AdjustVolume = function ()
 	{
 		for (var event in playerCache)
@@ -19473,7 +19491,8 @@ var biSoundPlayer = new (function ()
 	{
 		var eventSoundPlayerEnabled = settings.ui3_eventSoundVolume > 0 && (settings.ui3_sound_motion !== "None" || settings.ui3_sound_trigger !== "None" || settings.ui3_sound_alert !== "None");
 		var videoStatusSoundsEnabled = settings.ui3_uiStatusSounds === "1" || settings.ui3_uiStatusSpeech === "1";
-		if (eventSoundPlayerEnabled || videoStatusSoundsEnabled)
+		var mqttSoundsEnabled = settings.ui3_mqttClientEnabled === "1" && settings.ui3_mqttAudioEvents === "1";
+		if (eventSoundPlayerEnabled || videoStatusSoundsEnabled || mqttSoundsEnabled)
 		{
 			try
 			{
@@ -19490,9 +19509,15 @@ var biSoundPlayer = new (function ()
 								reason += "event-triggered sound player";
 							if (videoStatusSoundsEnabled)
 							{
-								if (eventSoundPlayerEnabled)
+								if (reason)
 									reason += " and ";
 								reason += "video status sound player";
+							}
+							if (mqttSoundsEnabled)
+							{
+								if (reason)
+									reason += " and ";
+								reason += "MQTT-triggered sound player";
 							}
 							inputRequiredOverlay.Show(reason);
 						}
@@ -31708,7 +31733,8 @@ function MqttClient()
 					return;
 				try
 				{
-					toaster.Success("UI3 is ready to be remotely controlled.", 3000);
+					//if (settings.ui3_mqttStatusToasts === "1")
+					//	toaster.Success("UI3 is ready to be remotely controlled.", 3000);
 				}
 				catch (ex)
 				{
@@ -31729,7 +31755,8 @@ function MqttClient()
 				}
 			}
 		};
-		client.subscribe("ui3/" + instance_id + "/state/#", subscribeOptions);
+		client.subscribe("ui3/" + instance_id + "/#", subscribeOptions);
+		client.subscribe("ui3/global/#", subscribeOptions);
 	}
 
 	function onMessageArrived(message)
@@ -31776,6 +31803,20 @@ function MqttClient()
 						settings.ui3_audioVolume = newVolume;
 						statusBars.setProgress("volume", newVolume, "");
 					}
+				}
+				else if (parts[0] === "ui3" && (parts[1] === instance_id || parts[1] === "global") && parts[2] === "playaudio")
+				{
+					handlePlayAudio(parts[3], message.payloadString);
+				}
+			}
+			else if (parts.length === 3)
+			{
+				if (parts[0] === "ui3" && (parts[1] === instance_id || parts[1] === "global"))
+				{
+					if (parts[2] === "playtts")
+						handlePlayTTS(message.payloadString);
+					else if (parts[2] === "playaudio")
+						handlePlayAudio(null, message.payloadString);
 				}
 			}
 		}
@@ -31866,6 +31907,26 @@ function MqttClient()
 			if (!suppressExceptions)
 				toaster.Error("MqttClient publish exception: " + ex, 10000);
 		}
+	}
+
+	function handlePlayAudio(audioPlayerId, audioFileName)
+	{
+		if (settings.ui3_mqttAudioEvents !== "1")
+		{
+			console.log("MQTT Audio Events are not enabled. Ignoring request:", audioFileName);
+			return;
+		}
+		if (audioFileName.indexOf('..') > -1 || audioFileName.indexOf(':') > -1)
+		{
+			console.log("Rejected audio file name:", audioFileName);
+			return;
+		}
+		biSoundPlayer.PlaySoundFile(audioPlayerId, audioFileName);
+	}
+
+	function handlePlayTTS(message)
+	{
+		programmaticSoundPlayer.Speak(message, true);
 	}
 
 	connect();
