@@ -3439,6 +3439,7 @@ function HandlePreLoadUrlParameters()
 				offset = 0;
 			recId = recId.substr(0, idxHyphen);
 		}
+		recId = ltrim(recId, "@");
 		if (!recId.startsWith("@"))
 			recId = "@" + recId;
 		settings.ui3_defaultTab = "clips";
@@ -32405,6 +32406,53 @@ function GetClipFileSize(fileSize)
 		return parentheticals[0].substr(1, parentheticals[0].length - 2);
 	return "";
 }
+function ltrim(str, chars)
+{
+	for (var i = 0; i < str.length; i++)
+	{
+		var matched = false;
+		for (var n = 0; n < chars.length; n++)
+		{
+			if (str[i] === chars[n])
+			{
+				matched = true;
+				break;
+			}
+		}
+		if (!matched)
+		{
+			if (i === 0)
+				return str;
+			else
+				return str.substr(i);
+		}
+	}
+	return "";
+}
+function rtrim(str, chars)
+{
+	for (var i = str.length - 1; i >= 0; i--)
+	{
+		var matched = false;
+		for (var n = 0; n < chars.length; n++)
+		{
+			if (str[i] === chars[n])
+			{
+				matched = true;
+				break;
+			}
+		}
+		if (!matched)
+		{
+			if (i === str.length - 1)
+				return str;
+			else
+				return str.substr(0, i + 1);
+		}
+	}
+	return "";
+}
+
 String.prototype.startsWith = function (prefix)
 {
 	return this.lastIndexOf(prefix, 0) === 0;
