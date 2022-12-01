@@ -31571,6 +31571,8 @@ function MqttClient()
 	var clientId = "ui3" + getRandomBase36String(17); // Used by MQTT broker to indentify reconnecting clients after a lost connection. Must be unique across all active connections. Not persisted outside of memory so it doesn't get shared with other browser windows.
 
 	var brokerUrl = settings.ui3_mqttBrokerUrl;
+	if (!brokerUrl.endsWith("/"))
+		brokerUrl = brokerUrl + "/";
 	var user = settings.ui3_mqttUser;
 	var pass = Base64.decode(settings.ui3_mqttPass);
 	var instance_id = settings.ui3_mqttInstanceId; // This UI3 instance only cares about topics with this instance ID in them.
