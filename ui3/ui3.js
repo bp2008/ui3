@@ -2985,6 +2985,9 @@ $(function ()
 {
 	BI_CustomEvent.Invoke("UI_Loading_Start");
 
+	if (cacheBust)
+		toaster.Info("Cache-busting is enabled");
+
 	$DialogDefaults.theme = "dark";
 	SimpleDialog.onErrorDefault = toaster.Error;
 
@@ -6271,6 +6274,7 @@ function ClipTimeline()
 				$tl_root = $(timeline.$refs.tl_root);
 				timeline.hammertime = new Hammer(timeline.$refs.tl_root);
 				timeline.hammertime.get('pinch').set({ enable: true });
+				timeline.hammertime.get('pinch').recognizeWith(timeline.hammertime.get('pan')); // Allow pinch to resume if one finger lifts and touches again.
 				timeline.hammertime.on('pinchstart', timeline.onPinchStart);
 				timeline.hammertime.on('pinchmove', timeline.onPinchMove);
 				BindEventsPassive(timeline.$refs.tl_root, "mousedown", timeline.mouseDown);
@@ -18641,6 +18645,7 @@ function ImageRenderer()
 				DestroyReloadToTakeEffectToast();
 				hammertime = new Hammer($layoutbody.get(0));
 				hammertime.get('pinch').set({ enable: true });
+				hammertime.get('pinch').recognizeWith(hammertime.get('pan')); // Allow pinch to resume if one finger lifts and touches again.
 				hammertime.on('pinchstart', onPinchStart);
 				hammertime.on('pinchmove', onPinchMove);
 				hammertime.on('pinchend', onPinchEnd);
