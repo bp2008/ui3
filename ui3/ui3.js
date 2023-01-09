@@ -12876,7 +12876,7 @@ function SessionManager()
 	}
 	this.HasPermission_PtzPresetSet = function ()
 	{
-		return permission_ptzpresetset;
+		return permission_ptzpresetset || cameraListLoader.hasCameraAdminPrivilege();
 	}
 	this.HasPermission_Audio = function ()
 	{
