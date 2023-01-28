@@ -13850,7 +13850,6 @@ function VideoPlayerController()
 	}
 	this.ImgClick_Camera = function (camData)
 	{
-		var scaleOut = false;
 		if (camData.optionValue == currentlyLoadedImage.id)
 		{
 			// Back to Group
@@ -13858,7 +13857,7 @@ function VideoPlayerController()
 			if (camData.optionValue === currentlyLoadedImage.id)
 				return;
 			var didRenderThing = false;
-			if (scaleOut && playerModule.DrawFullCameraAsThumb)
+			if (debug_cameraChange_scaleOut && playerModule.DrawFullCameraAsThumb)
 				didRenderThing = playerModule.DrawFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
 			self.LoadLiveCamera(camData, clipTimeline.getTimelineArgsForCameraSwitch());
 			if (didRenderThing)
@@ -14741,6 +14740,9 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 ///////////////////////////////////////////////////////////////
 // Video Player Modules Shared ////////////////////////////////
 ///////////////////////////////////////////////////////////////
+// ScaleOut behavior is disabled because it is jarring, and also is incorrect when dynamic group layouts are being used.
+var debug_cameraChange_scaleOut = false;
+var debug_cameraChange_scaleOut_spotlight = false;
 /**
  Contains components shared between JpegVideoModule and HTML5_MSE_Player.
  */
@@ -14784,7 +14786,7 @@ var videoModulesShared = new (function VideoModulesShared()
 	{
 		ClearCanvas(canvas);
 	}
-	this.DrawFullCameraAsThumb = function (cameraId, groupId)
+	this.DrawFullCameraAsThumb = function (cameraId, groupId, CANVAS)
 	{
 		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
 		if (!thumbBounds)
@@ -14793,6 +14795,8 @@ var videoModulesShared = new (function VideoModulesShared()
 		if (!groupObj)
 			return;
 
+		if (!CANVAS)
+			CANVAS = canvas;
 		backbuffer_canvas.width = groupObj.width;
 		backbuffer_canvas.height = groupObj.height;
 		FitRectangleIntoCanvas(thumbBounds, backbuffer_canvas);
@@ -14803,6 +14807,20 @@ var videoModulesShared = new (function VideoModulesShared()
 		var thumbW = thumbBounds[2] - thumbBounds[0];
 		var thumbH = thumbBounds[3] - thumbBounds[1];
 
+		if (debug_cameraChange_scaleOut_spotlight)
+		{
+			// Draw radial gradient under the thumbnail image
+			var thumbCenterX = thumbBounds[0] + (thumbW / 2);
+			var thumbCenterY = thumbBounds[1] + (thumbH / 2);
+			var innerR = (thumbW + thumbH) / 2;
+			var outerR = (groupObj.width + groupObj.height) / 4;
+			var grd = backbuffer_context2d.createRadialGradient(thumbCenterX, thumbCenterY, innerR, thumbCenterX, thumbCenterY, outerR);
+			grd.addColorStop(0, "#666666");
+			grd.addColorStop(1, "#000000");
+			backbuffer_context2d.fillStyle = grd;
+			backbuffer_context2d.fillRect(0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
+		}
+
 		// Draw rectangles around each image's grid space
 		backbuffer_context2d.strokeStyle = "#888888";
 		backbuffer_context2d.lineWidth = 2;
@@ -14812,27 +14830,16 @@ var videoModulesShared = new (function VideoModulesShared()
 			var rect = rects[i];
 			backbuffer_context2d.strokeRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
 		}
-
-		// Draw radial gradient under the thumbnail image
-		//var thumbCenterX = thumbBounds[0] + (thumbW / 2);
-		//var thumbCenterY = thumbBounds[1] + (thumbH / 2);
-		//var innerR = (thumbW + thumbH) / 2;
-		//var outerR = (groupObj.width + groupObj.height) / 4;
-		//var grd = backbuffer_context2d.createRadialGradient(thumbCenterX, thumbCenterY, innerR, thumbCenterX, thumbCenterY, outerR);
-		//grd.addColorStop(0, "#222222");
-		//grd.addColorStop(1, "#000000");
-		//backbuffer_context2d.fillStyle = grd;
-		//backbuffer_context2d.fillRect(0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
-		backbuffer_context2d.drawImage(canvas
-			, 0, 0, canvas.width, canvas.height
+		backbuffer_context2d.drawImage(CANVAS
+			, 0, 0, CANVAS.width, CANVAS.height
 			, thumbBounds[0], thumbBounds[1], thumbW, thumbH);
 
-		canvas.width = backbuffer_canvas.width;
-		canvas.height = backbuffer_canvas.height;
-		var context2d = canvas.getContext("2d");
-		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+		CANVAS.width = backbuffer_canvas.width;
+		CANVAS.height = backbuffer_canvas.height;
+		var context2d = CANVAS.getContext("2d");
+		context2d.drawImage(backbuffer_canvas, 0, 0, CANVAS.width, CANVAS.height, 0, 0, CANVAS.width, CANVAS.height);
 	}
-	this.DrawThumbAsFullCamera = function (cameraId, groupId)
+	this.DrawThumbAsFullCamera = function (cameraId, groupId, CANVAS)
 	{
 		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId, groupId);
 		if (!thumbBounds)
@@ -14840,22 +14847,25 @@ var videoModulesShared = new (function VideoModulesShared()
 		var cameraObj = cameraListLoader.GetCameraWithId(cameraId);
 		if (!cameraObj)
 			return;
-		FitRectangleIntoCanvas(thumbBounds, canvas);
+
+		if (!CANVAS)
+			CANVAS = canvas;
+		FitRectangleIntoCanvas(thumbBounds, CANVAS);
 
 		backbuffer_canvas.width = cameraObj.width;
 		backbuffer_canvas.height = cameraObj.height;
 
 		var backbuffer_context2d = backbuffer_canvas.getContext("2d");
 
-		backbuffer_context2d.drawImage(canvas
+		backbuffer_context2d.drawImage(CANVAS
 			, thumbBounds[0], thumbBounds[1], thumbBounds[2] - thumbBounds[0], thumbBounds[3] - thumbBounds[1]
 			, 0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
 
 		$camimg_wrapper.css("width", backbuffer_canvas.width + "px").css("height", backbuffer_canvas.height + "px");
-		canvas.width = backbuffer_canvas.width;
-		canvas.height = backbuffer_canvas.height;
-		var context2d = canvas.getContext("2d");
-		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+		CANVAS.width = backbuffer_canvas.width;
+		CANVAS.height = backbuffer_canvas.height;
+		var context2d = CANVAS.getContext("2d");
+		context2d.drawImage(backbuffer_canvas, 0, 0, CANVAS.width, CANVAS.height, 0, 0, CANVAS.width, CANVAS.height);
 	}
 	this.RenderImage = function (image)
 	{
@@ -17374,6 +17384,14 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	this.GetVideoDecoder = function ()
 	{
 		return videoDecoder;
+	}
+	this.DrawFullCameraAsThumb = function (cameraId, groupId)
+	{
+		videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId, canvas);
+	}
+	this.DrawThumbAsFullCamera = function (cameraId, groupId)
+	{
+		videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId, canvas);
 	}
 
 	Initialize();
