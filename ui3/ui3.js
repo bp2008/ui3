@@ -13857,23 +13857,25 @@ function VideoPlayerController()
 			camData = self.GetCurrentHomeGroupObj();
 			if (camData.optionValue === currentlyLoadedImage.id)
 				return;
+			var didRenderThing = false;
 			if (scaleOut && playerModule.DrawFullCameraAsThumb)
-				playerModule.DrawFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
+				didRenderThing = playerModule.DrawFullCameraAsThumb(currentlyLoadedImage.id, camData.optionValue);
 			self.LoadLiveCamera(camData, clipTimeline.getTimelineArgsForCameraSwitch());
-			if (scaleOut && playerModule.DrawFullCameraAsThumb)
+			if (didRenderThing)
 				self.CameraOrResolutionChange();
 		}
 		else
 		{
 			// Maximize
+			var didRenderThing = false;
 			if (playerModule.DrawThumbAsFullCamera)
 			{
 				var loadedImg = videoPlayer.Loaded().image;
 				if (loadedImg.id)
-					playerModule.DrawThumbAsFullCamera(camData.optionValue, loadedImg.id);
+					didRenderThing = playerModule.DrawThumbAsFullCamera(camData.optionValue, loadedImg.id);
 			}
 			self.LoadLiveCamera(camData, clipTimeline.getTimelineArgsForCameraSwitch());
-			if (playerModule.DrawThumbAsFullCamera)
+			if (didRenderThing)
 				self.CameraOrResolutionChange();
 		}
 	}
@@ -16332,12 +16334,20 @@ function FetchH264VideoModule()
 	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
 		if (h264_player.DrawFullCameraAsThumb)
+		{
 			h264_player.DrawFullCameraAsThumb(cameraId, groupId);
+			return true;
+		}
+		return false;
 	}
 	this.DrawThumbAsFullCamera = function (cameraId, groupId)
 	{
 		if (h264_player.DrawThumbAsFullCamera)
+		{
 			h264_player.DrawThumbAsFullCamera(cameraId, groupId);
+			return true;
+		}
+		return false;
 	}
 	Initialize();
 	perfMonInterval = setInterval(MeasurePerformance, 2500);
