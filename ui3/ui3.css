@@ -3257,6 +3257,9 @@ div.invisibleLabel
 	height: 100%;
 }
 
+	#camimg_store .videoCanvas,
+	#camimg_store #videoElement_wrapper,
+	.videoCanvas.deactivated,
 	#videoElement_wrapper.deactivated
 	{
 		position: absolute;

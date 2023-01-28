@@ -14737,6 +14737,136 @@ var jpegPreviewModule = new (function JpegPreviewModule()
 	}
 })();
 ///////////////////////////////////////////////////////////////
+// Video Player Modules Shared ////////////////////////////////
+///////////////////////////////////////////////////////////////
+/**
+ Contains components shared between JpegVideoModule and HTML5_MSE_Player.
+ */
+var videoModulesShared = new (function VideoModulesShared()
+{
+	var self = this;
+	var isInitialized = false;
+	var $canvas = null;
+	var canvas = null;
+	var backbuffer_canvas = null;
+	var $camimg_wrapper = $("#camimg_wrapper");
+	var $camimg_store = $("#camimg_store");
+
+	this.GetCanvas = function ()
+	{
+		return canvas;
+	}
+	this.Get$Canvas = function ()
+	{
+		return $canvas;
+	}
+	var Initialize = function ()
+	{
+		if (isInitialized)
+			return;
+		isInitialized = true;
+		// Do one-time initialization here
+		$canvas = $('<canvas id="camimg_canvas" class="videoCanvas"></canvas>');
+		canvas = $canvas.get(0);
+
+		var ctx = canvas.getContext("2d");
+		//ctx.translate(0.5, 0.5);
+		//ctx.imageSmoothingEnabled = false;
+
+		var $backbuffer_canvas = $('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
+		backbuffer_canvas = $backbuffer_canvas.get(0);
+		$camimg_store.append($canvas);
+		$camimg_store.append($backbuffer_canvas);
+	}
+	this.ClearFrontCanvas = function ()
+	{
+		ClearCanvas(canvas);
+	}
+	this.DrawFullCameraAsThumb = function (cameraId, groupId)
+	{
+		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
+		if (!thumbBounds)
+			return;
+		var groupObj = cameraListLoader.GetCameraWithId(groupId);
+		if (!groupObj)
+			return;
+
+		backbuffer_canvas.width = groupObj.width;
+		backbuffer_canvas.height = groupObj.height;
+		FitRectangleIntoCanvas(thumbBounds, backbuffer_canvas);
+
+		var backbuffer_context2d = backbuffer_canvas.getContext("2d");
+		backbuffer_context2d.clearRect(0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
+
+		var thumbW = thumbBounds[2] - thumbBounds[0];
+		var thumbH = thumbBounds[3] - thumbBounds[1];
+
+		// Draw rectangles around each image's grid space
+		backbuffer_context2d.strokeStyle = "#888888";
+		backbuffer_context2d.lineWidth = 2;
+		var rects = cameraListLoader.GetGroupRects(groupId);
+		for (var i = 0; i < rects.length; i++)
+		{
+			var rect = rects[i];
+			backbuffer_context2d.strokeRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
+		}
+
+		// Draw radial gradient under the thumbnail image
+		//var thumbCenterX = thumbBounds[0] + (thumbW / 2);
+		//var thumbCenterY = thumbBounds[1] + (thumbH / 2);
+		//var innerR = (thumbW + thumbH) / 2;
+		//var outerR = (groupObj.width + groupObj.height) / 4;
+		//var grd = backbuffer_context2d.createRadialGradient(thumbCenterX, thumbCenterY, innerR, thumbCenterX, thumbCenterY, outerR);
+		//grd.addColorStop(0, "#222222");
+		//grd.addColorStop(1, "#000000");
+		//backbuffer_context2d.fillStyle = grd;
+		//backbuffer_context2d.fillRect(0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
+		backbuffer_context2d.drawImage(canvas
+			, 0, 0, canvas.width, canvas.height
+			, thumbBounds[0], thumbBounds[1], thumbW, thumbH);
+
+		canvas.width = backbuffer_canvas.width;
+		canvas.height = backbuffer_canvas.height;
+		var context2d = canvas.getContext("2d");
+		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+	}
+	this.DrawThumbAsFullCamera = function (cameraId, groupId)
+	{
+		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId, groupId);
+		if (!thumbBounds)
+			return;
+		var cameraObj = cameraListLoader.GetCameraWithId(cameraId);
+		if (!cameraObj)
+			return;
+		FitRectangleIntoCanvas(thumbBounds, canvas);
+
+		backbuffer_canvas.width = cameraObj.width;
+		backbuffer_canvas.height = cameraObj.height;
+
+		var backbuffer_context2d = backbuffer_canvas.getContext("2d");
+
+		backbuffer_context2d.drawImage(canvas
+			, thumbBounds[0], thumbBounds[1], thumbBounds[2] - thumbBounds[0], thumbBounds[3] - thumbBounds[1]
+			, 0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
+
+		$camimg_wrapper.css("width", backbuffer_canvas.width + "px").css("height", backbuffer_canvas.height + "px");
+		canvas.width = backbuffer_canvas.width;
+		canvas.height = backbuffer_canvas.height;
+		var context2d = canvas.getContext("2d");
+		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+	}
+	this.RenderImage = function (image)
+	{
+		CopyImageToCanvas(image, canvas);
+	}
+	this.RenderVideoFrame = function (video)
+	{
+		CopyVideoFrameToCanvas(video, canvas);
+	}
+
+	Initialize();
+})();
+///////////////////////////////////////////////////////////////
 // Jpeg Video Module //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function JpegVideoModule()
@@ -14770,9 +14900,6 @@ function JpegVideoModule()
 	var $layoutbody = $("#layoutbody");
 	var $camimg_wrapper = $("#camimg_wrapper");
 	var $camimg_store = $("#camimg_store");
-	var $camimg_canvas;
-	var camimg_canvas_ele;
-	var backbuffer_canvas;
 	// Contains URLs of the last image we started loading and the last image we loaded.
 	var imageLoadingState = { loadingUrl: "", loadedUrl: "" };
 	/** Contains critical timeline arguments which, if changed, will break the current timeline stream. If this string has changed, a new timeline stream must be started. */
@@ -14788,12 +14915,7 @@ function JpegVideoModule()
 			return;
 		isInitialized = true;
 		// Do one-time initialization here
-		$camimg_canvas = $('<canvas id="camimg_canvas" class="videoCanvas"></canvas>');
-		camimg_canvas_ele = $camimg_canvas.get(0);
-		var $backbuffer_canvas = $('<canvas id="backbuffer_canvas" style="display: none;"></canvas>');
-		backbuffer_canvas = $backbuffer_canvas.get(0);
-		$camimg_store.append($camimg_canvas);
-		$camimg_store.append($backbuffer_canvas);
+		// Currently all relevant initialization is in videoModulesShared
 	}
 	function LoadImageFromUrl(url, streamId)
 	{
@@ -14854,7 +14976,7 @@ function JpegVideoModule()
 					videoPlayer.ImageRendered({ id: loading.uniqueId, w: image.naturalWidth, h: image.naturalHeight, loadingTime: msLoadingTime, utc: frameUtc, isFirstFrame: isFirstFrame });
 					playbackControls.FrameTimestampUpdated(false);
 
-					CopyImageToCanvas(image, camimg_canvas_ele);
+					videoModulesShared.RenderImage(image);
 
 					if (nerdStats.IsOpen())
 					{
@@ -14910,9 +15032,9 @@ function JpegVideoModule()
 			return;
 		isCurrentlyActive = true;
 		// Show yourself
-		ClearCanvas(camimg_canvas_ele);
+		videoModulesShared.ClearFrontCanvas();
 		videoOverlayHelper.ShowLoadingOverlay(true);
-		$camimg_canvas.appendTo($camimg_wrapper);
+		videoModulesShared.Get$Canvas().appendTo($camimg_wrapper);
 	}
 	this.Deactivate = function ()
 	{
@@ -14924,11 +15046,11 @@ function JpegVideoModule()
 		//clipPlaybackPosition = 0;
 		ClearImageLoadTimeout();
 		ClearGetNewImageTimeout();
-		$camimg_canvas.appendTo($camimg_store);
+		videoModulesShared.Get$Canvas().appendTo($camimg_store);
 	}
 	this.GetPlayerElement = function ()
 	{
-		return $camimg_canvas.get(0);
+		return videoModulesShared.GetCanvas();
 	}
 	this.VisibilityChanged = function (visible)
 	{
@@ -15281,78 +15403,11 @@ function JpegVideoModule()
 	}
 	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
-		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
-		if (!thumbBounds)
-			return;
-		var groupObj = cameraListLoader.GetCameraWithId(groupId);
-		if (!groupObj)
-			return;
-		var canvas = $("#camimg_canvas").get(0);
-
-		backbuffer_canvas.width = groupObj.width;
-		backbuffer_canvas.height = groupObj.height;
-		FitRectangleIntoCanvas(thumbBounds, backbuffer_canvas);
-
-		var backbuffer_context2d = backbuffer_canvas.getContext("2d");
-		backbuffer_context2d.clearRect(0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
-
-		var thumbW = thumbBounds[2] - thumbBounds[0];
-		var thumbH = thumbBounds[3] - thumbBounds[1];
-
-		// Draw rectangles around each image's grid space
-		backbuffer_context2d.strokeStyle = "#888888";
-		backbuffer_context2d.lineWidth = 2;
-		var rects = cameraListLoader.GetGroupRects(groupId);
-		for (var i = 0; i < rects.length; i++)
-		{
-			var rect = rects[i];
-			backbuffer_context2d.strokeRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
-		}
-
-		// Draw radial gradient under the thumbnail image
-		//var thumbCenterX = thumbBounds[0] + (thumbW / 2);
-		//var thumbCenterY = thumbBounds[1] + (thumbH / 2);
-		//var innerR = (thumbW + thumbH) / 2;
-		//var outerR = (groupObj.width + groupObj.height) / 4;
-		//var grd = backbuffer_context2d.createRadialGradient(thumbCenterX, thumbCenterY, innerR, thumbCenterX, thumbCenterY, outerR);
-		//grd.addColorStop(0, "#222222");
-		//grd.addColorStop(1, "#000000");
-		//backbuffer_context2d.fillStyle = grd;
-		//backbuffer_context2d.fillRect(0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
-		backbuffer_context2d.drawImage(canvas
-			, 0, 0, canvas.width, canvas.height
-			, thumbBounds[0], thumbBounds[1], thumbW, thumbH);
-
-		canvas.width = backbuffer_canvas.width;
-		canvas.height = backbuffer_canvas.height;
-		var context2d = canvas.getContext("2d");
-		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+		videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId);
 	}
 	this.DrawThumbAsFullCamera = function (cameraId, groupId)
 	{
-		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId, groupId);
-		if (!thumbBounds)
-			return;
-		var cameraObj = cameraListLoader.GetCameraWithId(cameraId);
-		if (!cameraObj)
-			return;
-		var canvas = camimg_canvas_ele;
-		FitRectangleIntoCanvas(thumbBounds, canvas);
-
-		backbuffer_canvas.width = cameraObj.width;
-		backbuffer_canvas.height = cameraObj.height;
-
-		var backbuffer_context2d = backbuffer_canvas.getContext("2d");
-
-		backbuffer_context2d.drawImage(canvas
-			, thumbBounds[0], thumbBounds[1], thumbBounds[2] - thumbBounds[0], thumbBounds[3] - thumbBounds[1]
-			, 0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
-
-		$camimg_wrapper.css("width", backbuffer_canvas.width + "px").css("height", backbuffer_canvas.height + "px");
-		canvas.width = backbuffer_canvas.width;
-		canvas.height = backbuffer_canvas.height;
-		var context2d = canvas.getContext("2d");
-		context2d.drawImage(backbuffer_canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+		videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId);
 	}
 	var imgLoadTimeout = null;
 	var SetImageLoadTimeout = function ()
@@ -15391,7 +15446,7 @@ function JpegVideoModule()
 ///////////////////////////////////////////////////////////////
 // Fetch H264 Video Module ////////////////////////////////////
 // Using OpenH264_Player or Pnacl_Player or HTML5_MSE_Player //
-// or WebCodecs_Player ////////////////////////////////////////
+// or WebCodec_Player ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var currentH264Player = null;
 function SetH264PlayerPreference(val)
@@ -15429,8 +15484,6 @@ function FetchH264VideoModule()
 	var loading = new BICameraData();
 
 	var $layoutbody = $("#layoutbody");
-	var $camimg_wrapper = $("#camimg_wrapper");
-	var $camimg_store = $("#camimg_store");
 	var $volumeBar = $("#volumeBar");
 
 	var lastStatusBlock = null;
@@ -15461,12 +15514,12 @@ function FetchH264VideoModule()
 		else if (mse_mp4_h264_supported &&
 			(h264PlayerChoice === H264PlayerOptions.HTML5
 				|| (h264PlayerChoice === H264PlayerOptions.WebCodecs && !webcodecs_h264_player_supported)))
-			h264_player = new HTML5_MSE_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd, playerErrorCb);
+			h264_player = new HTML5_MSE_Player(FrameRendered, PlaybackReachedNaturalEnd, playerErrorCb);
 		else if (pnacl_player_supported &&
 			(h264PlayerChoice === H264PlayerOptions.NaCl_HWVA_Auto
 				|| h264PlayerChoice === H264PlayerOptions.NaCl_HWVA_No
 				|| h264PlayerChoice === H264PlayerOptions.NaCl_HWVA_Yes))
-			h264_player = new Pnacl_Player($camimg_wrapper, FrameRendered, PlaybackReachedNaturalEnd);
+			h264_player = new Pnacl_Player(FrameRendered, PlaybackReachedNaturalEnd);
 		else if (h264_js_player_supported && h264PlayerChoice === H264PlayerOptions.JavaScript)
 			h264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
 		else
@@ -15508,7 +15561,7 @@ function FetchH264VideoModule()
 		// Show yourself
 		//console.log("Activating h264_player");
 		$volumeBar.removeClass("audioTemporarilyUnavailable");
-		h264_player.Toggle($camimg_wrapper, true);
+		h264_player.Toggle(true);
 		h264_player.ClearDrawingSurface();
 		videoOverlayHelper.ShowLoadingOverlay(true);
 	}
@@ -15521,7 +15574,7 @@ function FetchH264VideoModule()
 		//console.log("Deactivating h264_player");
 		$volumeBar.addClass("audioTemporarilyUnavailable");
 		StopStreaming();
-		h264_player.Toggle($camimg_store, false);
+		h264_player.Toggle(false);
 	}
 	this.GetPlayerElement = function ()
 	{
@@ -16276,6 +16329,16 @@ function FetchH264VideoModule()
 	{
 		MeasurePerformance(true);
 	}
+	this.DrawFullCameraAsThumb = function (cameraId, groupId)
+	{
+		if (h264_player.DrawFullCameraAsThumb)
+			h264_player.DrawFullCameraAsThumb(cameraId, groupId);
+	}
+	this.DrawThumbAsFullCamera = function (cameraId, groupId)
+	{
+		if (h264_player.DrawThumbAsFullCamera)
+			h264_player.DrawThumbAsFullCamera(cameraId, groupId);
+	}
 	Initialize();
 	perfMonInterval = setInterval(MeasurePerformance, 2500);
 }
@@ -16507,9 +16570,9 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 		}
 	}
-	this.Toggle = function ($wrapper, activate)
+	this.Toggle = function (activate)
 	{
-		$canvas.appendTo($wrapper);
+		$canvas.appendTo(activate ? $("#camimg_wrapper") : $("#camimg_store"));
 	}
 	this.GetPlayerElement = function ()
 	{
@@ -16720,7 +16783,7 @@ function OpenH264_Decoder(onLoad, onLoadError, onFrameDecoded, onFrameError, onC
 ///////////////////////////////////////////////////////////////
 // pnacl_player ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalEndCB)
+function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 {
 	var self = this;
 	var player;
@@ -16915,7 +16978,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 		var $parent = $("#videoElement_wrapper");
 		$parent.remove();
 		$parent = $('<div id="videoElement_wrapper" class="deactivated"></div>');
-		$startingContainer.append($parent);
+		$("#camimg_wrapper").append($parent);
 
 		var listenerDiv = $parent.get(0);
 		listenerDiv.addEventListener('load', moduleDidLoad, true);
@@ -17016,7 +17079,7 @@ function Pnacl_Player($startingContainer, frameRendered, PlaybackReachedNaturalE
 			netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 		}
 	}
-	this.Toggle = function ($wrapper, activate)
+	this.Toggle = function (activate)
 	{
 		if (activate)
 			$("#videoElement_wrapper").removeClass('deactivated');
@@ -17280,9 +17343,9 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			videoDecoder.decode(chunk);
 		}
 	}
-	this.Toggle = function ($wrapper, activate)
+	this.Toggle = function (activate)
 	{
-		$canvas.appendTo($wrapper);
+		$canvas.appendTo(activate ? $("#camimg_wrapper") : $("#camimg_store"));
 	}
 	/**Gets the visible DOM element that shows the video. */
 	this.GetPlayerElement = function ()
@@ -17378,11 +17441,12 @@ function FrameMetadataQueue()
 // HTML5 + Media Source Extensions Player /////////////////////
 ///////////////////////////////////////////////////////////////
 var jmuxerDeveloperMode = false;
-function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNaturalEndCB, playerErrorHandler)
+function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErrorHandler)
 {
 	var self = this;
 	var jmuxer;
 	var player;
+	var isActivated = false;
 	var acceptedFrameCount = 0; // Number of frames submitted to the decoder.
 	var finishedFrameCount = 0; // Number of frames rendered or dropped.
 	var fedFrameCount = 0; // Number of frames fed to jmuxer
@@ -17391,18 +17455,17 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	var timestampLastAcceptedFrame = -1; // Frame timestamp (ms) of the last frame to be submitted to the decoder.
 	var timestampLastRenderedFrame = -1; // Frame timestamp (ms) of the last frame to be rendered.
 	var lastFrameReceivedAt = performance.now(); // The performance.now() reading at the moment the last frame was received from the network.
-	var averageRenderTime = new RollingAverage();
 	var isLoaded = false;
 	var allFramesAccepted = false;
 	var frameMetadataQueue = new FrameMetadataQueue();
 	var currentStreamBitmapInfo = null;
 	var nonKeyframeDropper = new NonKeyframeDropper();
+	var isRenderingToCanvas = null;
+	var disableRenderingStateChangesUntilNextFrame = false;
 
 	var lastFrame;
 	var lastFrameDuration = 16;
 	var hasToldPlayerToPlay = false;
-	var playerW;
-	var playerH;
 
 	var earlyFrames = new Queue();
 	var mseReady = false;
@@ -17423,6 +17486,8 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 		var h = player.videoHeight;
 		if (w === 0 && h === 0)
 			return;
+		if (isActivated && acceptedFrameCount > 0 && isRenderingToCanvas)
+			videoModulesShared.RenderVideoFrame(player);
 		while (!frameMetadataQueue.IsEmpty())
 		{
 			var meta = frameMetadataQueue.Get();
@@ -17507,10 +17572,12 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	{
 		if (developerMode)
 			console.log("HTML5_MSE_Player.Initialize()");
+
+		// Since UI3-228, in some circumstances, the HTML5 player copies video frames to a canvas and hides the <video> element. See setCanvasRenderingState function.
 		var $parent = $("#videoElement_wrapper");
 		$parent.remove();
-		$parent = $('<div id="videoElement_wrapper" class="deactivated"></div>');
-		$startingContainer.append($parent);
+		$parent = $('<div id="videoElement_wrapper"></div>');
+		$("#camimg_store").append($parent);
 
 		// If the video element is muted, browsers are more likely to let it play without user interaction.
 		var $player = $('<video id="html5MseVideoEle" muted></video>');
@@ -17533,6 +17600,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				console.log("HTML5 video suspended");
 		});
 		HTML5BetterFrameTiming(player, onTimeUpdate);
+		self.setCanvasRenderingState(false);
 
 		isLoaded = true;
 		loadingHelper.SetLoadedStatus("h264");
@@ -17691,6 +17759,7 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 				return;
 			}
 
+			disableRenderingStateChangesUntilNextFrame = false;
 			acceptedFrameCount++;
 			if (HTML5VideoBreakDetector.CheckForBreak(player, acceptedFrameCount, finishedFrameCount))
 			{
@@ -17739,12 +17808,20 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 			lastFrame = frame;
 		}
 	}
-	this.Toggle = function ($wrapper, activate)
+	this.Toggle = function (activate)
 	{
+		isActivated = activate;
 		if (activate)
-			$("#videoElement_wrapper").removeClass('deactivated');
+		{
+			$("#videoElement_wrapper").add(videoModulesShared.Get$Canvas()).appendTo($("#camimg_wrapper"));
+			self.setCanvasRenderingState();
+		}
 		else
-			$("#videoElement_wrapper").addClass('deactivated');
+		{
+			$("#videoElement_wrapper").add(videoModulesShared.Get$Canvas()).appendTo($("#camimg_store"));
+			isRenderingToCanvas = null;
+			videoModulesShared.Get$Canvas().removeClass('deactivated'); // Remove deactivated class on <canvas> because it is a shared resource.
+		}
 	}
 	this.GetPlayerElement = function ()
 	{
@@ -17752,6 +17829,19 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	}
 	this.ClearDrawingSurface = function ()
 	{
+		videoModulesShared.ClearFrontCanvas();
+	}
+	this.DrawFullCameraAsThumb = function (cameraId, groupId)
+	{
+		self.setCanvasRenderingState(true);
+		disableRenderingStateChangesUntilNextFrame = true;
+		videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId);
+	}
+	this.DrawThumbAsFullCamera = function (cameraId, groupId)
+	{
+		self.setCanvasRenderingState(true);
+		disableRenderingStateChangesUntilNextFrame = true;
+		videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId);
 	}
 	this.PreviousFrameIsLastFrame = function ()
 	{
@@ -17787,6 +17877,38 @@ function HTML5_MSE_Player($startingContainer, frameRendered, PlaybackReachedNatu
 	{
 		if (bitmapInfoHeader)
 			currentStreamBitmapInfo = bitmapInfoHeader;
+	}
+	/**
+	 * Enables or disables canvas rendering.
+	 * @param {Boolean} enable True to enable <canvas> rendering. False to enable native <video> rendering. If undefined, canvas rendering will be enabled if the zoom level is higher than "fit".
+	 */
+	this.setCanvasRenderingState = function (enable)
+	{
+		if (!isActivated)
+			return;
+		if (disableRenderingStateChangesUntilNextFrame)
+			return;
+		if (typeof enable === "undefined")
+			enable = imageRenderer.zoomHandler.IsZoomedInMoreThanFit();
+		if (isRenderingToCanvas !== enable)
+		{
+			if (enable)
+			{
+				// Turn on canvas rendering
+				// Copy current video frame, if possible.
+				if (finishedFrameCount > 0)
+					videoModulesShared.RenderVideoFrame(player);
+				$("#videoElement_wrapper").addClass('deactivated'); // Hide <video>				
+				videoModulesShared.Get$Canvas().removeClass('deactivated'); // Show <canvas>
+			}
+			else
+			{
+				// Turn off canvas rendering
+				$("#videoElement_wrapper").removeClass('deactivated'); // Show <video>
+				videoModulesShared.Get$Canvas().addClass('deactivated'); // Hide <canvas>
+			}
+		}
+		isRenderingToCanvas = enable;
 	}
 
 	Initialize();
@@ -18185,6 +18307,18 @@ function CopyImageToCanvas(imgEle, canvas)
 	var context2d = canvas.getContext("2d");
 	context2d.drawImage(imgEle, 0, 0);
 }
+function CopyVideoFrameToCanvas(videoEle, canvas)
+{
+	var w = videoEle.videoWidth;
+	var h = videoEle.videoHeight;
+	if (canvas.width != w)
+		canvas.width = w;
+	if (canvas.height != h)
+		canvas.height = h;
+
+	var context2d = canvas.getContext("2d");
+	context2d.drawImage(videoEle, 0, 0, w, h);
+}
 function ClearCanvas(canvas)
 {
 	var context2d = canvas.getContext("2d");
@@ -18428,6 +18562,10 @@ function ImageRenderer()
 		// Css scaling shim:
 		proposedX += (widthForSizing * (zoomFactor - 1)) / 2;
 		proposedY += (heightForSizing * (zoomFactor - 1)) / 2;
+
+		var player = videoPlayer.GetPlayerObject();
+		if (player && player.isMsePlayer)
+			player.setCanvasRenderingState();
 
 		var transform = "translate(" + proposedX + "px, " + proposedY + "px)";
 		transform += " scale(" + zoomFactor + ")";
@@ -18676,7 +18814,7 @@ var zoomHandler_Adjustable = new (function ()
 	var maxZoomScaler = Math.log2(50); // About 5.6
 	var _zoomScaler = absoluteMinZoomScaler;
 	var wasZoomedToFit = true;
-	var defaultZoomStep = maxZoomScaler / 29; // 30 zoom levels with a standard wheel mouse, including "fit", same as legacy zoom handler.
+	var defaultZoomStep = maxZoomScaler / 29; // A standard wheel mouse will give 30 distinct zoom levels between 1:1 rendering size and max zoomed-in (zoomFactor 1x to 50x), same as legacy zoom handler.. Some input devices have more or less precision.
 	this.OffsetZoom = function (deltaY)
 	{
 		var zoomSpeed = Clamp(parseFloat(settings.ui3_wheelAdjustableSpeed), 20, 2000);
@@ -18685,11 +18823,19 @@ var zoomHandler_Adjustable = new (function ()
 		var delta = deltaY * defaultZoomStep * zoomSpeed;
 		self.SetZoomScaler(self.GetZoomScaler() + delta);
 	}
+	/**
+	 * Gets the zoom factor, with a range of 0.000001 to 50.
+	 * @param {Object} image 
+	 */
 	this.GetZoomFactor = function (image)
 	{
 		var zoomFactor = Math.pow(2, self.GetZoomScaler(image));
 		return zoomFactor;
 	}
+	/**
+	 * Sets the zoom factor, with a range of 0.000001 to 50.
+	 * @param {Number} zoomFactor Number between 0.000001 and 50.
+	 */
 	this.SetZoomFactor = function (zoomFactor)
 	{
 		self.SetZoomScaler(Math.log2(zoomFactor));
@@ -18731,6 +18877,10 @@ var zoomHandler_Adjustable = new (function ()
 		zs = Math.max(zs, minZoomScaler);
 		return Clamp(zs, absoluteMinZoomScaler, maxZoomScaler);
 	}
+	/**
+	 * Sets the zoom scaler, with a range of about -20 to 5.6. Linear increases to zoom scaler over time yield a linear-looking zoom rate.
+	 * @param {Number} zs Number with a range of about -20 to 5.6.
+	 */
 	this.SetZoomScaler = function (zs)
 	{
 		var fit = self.GetFittingZoomScaler();
@@ -18743,6 +18893,10 @@ var zoomHandler_Adjustable = new (function ()
 		_zoomScaler = applyZoomScalerLimits(zs, fit);
 		wasZoomedToFit = self.zoomsEqual(_zoomScaler, fit);
 	}
+	/**
+	 * Gets the current zoom scaler, with a range of about -20 to 5.6. Linear increases to zoom scaler over time yield a linear-looking zoom rate.
+	 * @param {Object} image
+	 */
 	this.GetZoomScaler = function (image)
 	{
 		var fit = self.GetFittingZoomScaler(image);
@@ -18781,6 +18935,11 @@ var zoomHandler_Adjustable = new (function ()
 	{
 		var fit = self.GetFittingZoomScaler();
 		return self.zoomsEqual(_zoomScaler, fit);
+	}
+	this.IsZoomedInMoreThanFit = function ()
+	{
+		var fit = self.GetFittingZoomScaler();
+		return fit < _zoomScaler && !self.zoomsEqual(_zoomScaler, fit);
 	}
 })();
 ///////////////////////////////////////////////////////////////
