@@ -16255,6 +16255,8 @@ function FetchH264VideoModule()
 			nerdStats.UpdateStat("Network Delay", netDelay, netDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Player Delay", decoderDelay, decoderDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Delayed Frames", h264_player.GetBufferedFrameCount(), h264_player.GetBufferedFrameCount(), true);
+			if (h264_player.isMsePlayer)
+				h264_player.UpdateNerdStats();
 			lastNerdStatsUpdate = performance.now();
 			nerdStats.EndUpdate();
 		}
@@ -17490,6 +17492,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	var nonKeyframeDropper = new NonKeyframeDropper();
 	var isRenderingToCanvas = null;
 	var disableRenderingStateChangesUntilNextFrame = false;
+	var aFrameWasOnceRendered = false; // Set = true when the first frame is rendered.  Never reset to false.
 
 	var lastFrame;
 	var lastFrameDuration = 16;
@@ -17526,6 +17529,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			meta.height = h;
 			meta.timestamp = meta.time;
 			finishedFrameCount++;
+			aFrameWasOnceRendered = true;
 			timestampLastRenderedFrame = meta.timestamp;
 			frameRendered(meta);
 			CheckStreamEndCondition();
@@ -17924,7 +17928,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			{
 				// Turn on canvas rendering
 				// Copy current video frame, if possible.
-				if (finishedFrameCount > 0)
+				if (aFrameWasOnceRendered)
 					videoModulesShared.RenderVideoFrame(player);
 				$("#videoElement_wrapper").addClass('deactivated'); // Hide <video>				
 				videoModulesShared.Get$Canvas().removeClass('deactivated'); // Show <canvas>
@@ -17937,6 +17941,15 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			}
 		}
 		isRenderingToCanvas = enable;
+		self.UpdateNerdStats();
+	}
+	this.getCanvasRenderingState = function ()
+	{
+		return isRenderingToCanvas;
+	}
+	this.UpdateNerdStats = function ()
+	{
+		nerdStats.UpdateStat("Renderer", isRenderingToCanvas ? "<canvas>" : "Native HTML5 <video>");
 	}
 
 	Initialize();
@@ -28776,6 +28789,7 @@ function UI3NerdStats()
 			, "Seek Position"
 			, "Frame Time"
 			, "Stream Timestamp"
+			, "Renderer"
 			, "Codecs"
 			, "Video Bit Rate"
 			, "Audio Bit Rate"
