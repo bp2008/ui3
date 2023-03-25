@@ -4423,9 +4423,10 @@ function DropdownBoxes()
 
 				this.items.push(new DropdownListItem({ id: "separator" }));
 
-				var alertsName = statusLoader ? statusLoader.GetFolderName(2) : null;
-				if (!alertsName || alertsName === "")
-					alertsName = "Alerts";
+				var alertsName = "Alerts";
+				var alertsFolder = statusLoader ? statusLoader.GetFolder(2) : null;
+				if (alertsFolder && alertsFolder.name)
+					alertsName = alertsFolder.name;
 				this.items.push(new DropdownListItem({ id: "alerts", text: alertsName, icon: "#svg_x5F_Alert1", iconClass: "smallIcon" }));
 
 				AddDbViewFolder(this.items, "new", "New", 0, "#svg_mio_folder_special");
@@ -4491,10 +4492,11 @@ function DropdownBoxes()
 
 	function AddDbViewFolder(items, id, defaultName, folderIndex, icon)
 	{
-		var name = statusLoader ? statusLoader.GetFolderName(folderIndex) : null;
-		if (name === "")
+		var folder = statusLoader ? statusLoader.GetFolder(folderIndex) : null;
+		if (!folder)
 			return;
-		else if (name === null)
+		var name = folder.name;
+		if (!name)
 			name = defaultName;
 		items.push(new DropdownListItem({ id: id, text: name, icon: icon, iconClass: "smallIcon" }));
 	}
@@ -12057,10 +12059,23 @@ function StatusLoader()
 			return currentProfileNames[profileNum];
 		return "Profile " + profileNum;
 	}
-	this.GetFolderName = function (index)
+	/**
+	 * Gets the folder at the specified index, returning null if it does not exist or if its path has not been configured in Blue Iris.
+	 * @param {Number} index 0-based index
+	 */
+	this.GetFolder = function (index)
 	{
 		if (lastResponse && lastResponse.data && lastResponse.data.folders && index >= 0 && index < lastResponse.data.folders.length)
-			return lastResponse.data.folders[index];
+		{
+			var folder = lastResponse.data.folders[index];
+			// Previously this was just the folder name. BI 5.7.2.1 made it {name: "New", clips: 123, age: 0, used: 1791998, allocated: 1792000}. Sizes assumed to be MB, assuming folders are configured as MiB. BI does not follow abbreviation standards.
+			if (typeof folder === "string")
+				return { name: folder, clips: 1, age: 0, used: 1, allocated: 1 };
+			else if (folder.name)
+				return folder;
+			else
+				return null;
+		}
 		else
 			return null;
 	}
