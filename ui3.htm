@@ -88,7 +88,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "230";
+		var ui_version = "231";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -557,6 +557,44 @@
 		</div>
 	</div>
 	<script>
+		var loadingFailed403 = false;
+		function GetAppPath()
+		{
+			var appPath = "/" + appPath_raw.replace(/^\/+|\/+$/g, '');
+			if (appPath[appPath.length - 1] !== '/')
+				appPath = appPath + "/";
+			return appPath;
+		}
+		function checkResourceHttpStatus(url, callback)
+		{
+			var req = new XMLHttpRequest();
+			req.open('GET', url, true);
+			req.onreadystatechange = function ()
+			{
+				if (req.readyState === 4)
+					callback(req.status, req);
+			};
+			req.send();
+		}
+		function criticalScriptLoadError(e)
+		{
+			if (loadingFailed403)
+				return;
+			var url = e.target.src;
+			checkResourceHttpStatus(url, function (status)
+			{
+				if (loadingFailed403)
+					return;
+				if (status === 403)
+				{
+					loadingFailed403 = true;
+					alert("Your web server session was lost, probably because of a problem with the session cookie. Redirecting to login page.");
+					location.href = GetAppPath() + "login.htm?autologin=0&page=" + encodeURIComponent(location.pathname);
+				}
+				else
+					alert("A script resource failed to load because of HTTP status " + status + ":\n" + url.replace(/\/\/.*?\//, '//censored_hostname/'));
+			});
+		}
 		(function ()
 		{
 			var imgs = document.getElementsByTagName("img");
@@ -567,8 +605,8 @@
 					imgs[i].src = src + '?v=' + combined_version + local_bi_session_arg;
 			}
 		})();
-		document.write('<script src="ui3/libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'
-			+ '<script src="ui3/ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'
+		document.write('<script onerror="criticalScriptLoadError(event)" src="ui3/libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'
+			+ '<script onerror="criticalScriptLoadError(event)" src="ui3/ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'
 			+ '<script src="ui3/ui3-local-overrides.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 
 		if (!(window.CSS && window.CSS.supports && window.CSS.supports('--fake-var', 0)))
