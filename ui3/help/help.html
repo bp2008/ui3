@@ -107,35 +107,44 @@
 						</ul>
 						<h3>H.264 Streaming Profiles</h3>
 						<h4>Server-side profiles</h4>
-						<p>Blue Iris provides three streaming profiles called simply "Streaming 0", "Streaming 1", and "Streaming 2".  To find these in Blue Iris's local console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
-						<p class="bg-info padded-info">The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, and even the legacy default.htm and jpegpull.htm pages.</p>
-						<h4>Client-side profiles</h4>
-
 						<div class="row">
 							<div class="col-sm-5">
-								<p>Prior to June 2018, UI3 simply exposed the three server-side profiles as choices in the Streaming Quality menu, and that was that.</p>
-								<p>Thanks to improvements in Blue Iris, UI3 is now able to provide more-intuitive quality choices such as "1080p", "720p", and "480p".  These quality choices each represent a fully-configurable streaming profile, which you can edit by opening the <a href="#mainmenu">Main Menu</a> and choosing the <b>Streaming Profiles</b> option.</p>
+								<p>Blue Iris provides three streaming profiles called simply "Streaming 0", "Streaming 1", and "Streaming 2".  To find these in Blue Iris's local console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
+								<p>The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, Remote Management, and even the legacy default.htm and jpegpull.htm pages. <b>"Streaming 0" is used by default.</b></p>
+								<p class="bg-info padded-info">Some settings in the "Streaming 0" encoder options affect UI3's default client-side streaming profiles, while some settings are overridden by UI3.</p>
+							</div>
+							<div class="col-sm-7">
+								<img class="img-responsive" mysrc="img/ServerSideStreamingProfile.png" alt="Screenshot of Blue Iris's profile editor" style="margin-bottom: 5px;" />
+							</div>
+						</div>
+						<h4>Client-side profiles</h4>
+						<div class="row">
+							<div class="col-sm-5">
+								<p>UI3 provides more-intuitive quality choices such as "1080p", "720p", and "480p".  These quality choices each represent a fully-configurable streaming profile, which you can edit by opening the <a href="#mainmenu">Main Menu</a> and choosing the <b>Streaming Profiles</b> option.</p>
 								<p>Each of UI3's streaming profiles must be based on one of the server-side profiles.  All encoding parameters are inherited from this profile unless otherwise specified in UI3.  UI3's default profiles are all based on <b>Streaming 0</b>, but they override the <b>Max Frame Width</b>, <b>Max Frame Height</b>, and <b>Max Bit Rate</b> parameters.  Other parameters, such as <b>Quality</b>, are intentionally left blank so their values will be inherited from <b>Streaming 0</b>.</p>
-								<p>UI3 no longer includes <b>Streaming 0</b> or <b>Streaming 1</b> or <b>Streaming 2</b> as default quality choices.  If they are desired, they can be restored easily.  Simply create a new profile in UI3, give it a name, and base it on the desired server-side profile. Leave all the encoding parameters alone, and their values will be inherited from your chosen <b>Base Server Profile</b>.</p>
+								<p>For internet streaming, it is recommended to use one of the built-in profiles with "VBR" in the name, as these use lower quality in order to achieve substantially lower average bit rates.</p>
+								<p>If you want UI3 to use a server-side streaming profile without overriding anything, simply create a new profile in UI3, give it a name, and base it on the desired server-side profile. Leave all the encoding parameters alone, and their values will be inherited from your chosen <b>Base Server Profile</b>.</p>
 								<p class="bg-info padded-info">If you want to share your profile changes with all browsers and devices, <a href="#extensions">see the "Quick Start" section of UI Extensions</a>.</p>
 							</div>
 							<div class="col-sm-7">
-								<img class="img-responsive" mysrc="img/ProfileEditor.png" alt="Screenshot of the UI3 profile editor" style="margin-bottom: 5px;" />
+								<img class="img-responsive" mysrc="img/ProfileEditor.png?v=2" alt="Screenshot of the UI3 profile editor" style="margin-bottom: 5px;" />
 							</div>
 						</div>
 						<h3>H.264 Profile Configuration Tips</h3>
+						<h4>HVA (Hardware Video Acceleration)</h4>
+						<p>You can choose a method of hardware accelerated video encoding if desired.  Nvidia NVENC can be helpful if you have a supported GPU.  Intel QSV in my experience simply does not work and Blue Iris falls back to software encoding. <b>HVA is only settable in server-side profiles and can't be overridden by UI3.</b></p>
 						<h4>Audio</h4>
-						<p>The audio codec setting has no effect on UI3.  UI3 only knows how to decode "mu-law" and that is what Blue Iris provides no matter what you set here.  It is therefore not an option in UI3's streaming profile system, but can be configured in Blue Iris's server-side profiles.</p>
+						<p>Although the audio codec can be configured in server-side streaming profiles, it has no effect.  It is therefore not an option in UI3's streaming profile system.  If you wish to configure the audio codec received by UI3, find the "Audio Codec" setting in UI3's settings panel.</p>
 						<h4>Quality vs Bit Rate</h4>
 						<p>Blue Iris will encode up to your specified <b>Quality</b> level, automatically reducing quality if necessary to stay within the bit rate limit. For streaming, it is recommended to always use the <b>Limit bitrate</b> setting, otherwise the actual bit rate can get excessively high and in extreme cases this can cause decoding errors.</p>
 						<p>The default quality value (50) is already quite high, so setting it higher is almost never a good idea for remote streaming!  Actually, lower values like 20 can provide enormous bandwidth savings while retaining acceptable visual quality.</p>
 						<p>Lower bit rates work better with devices that have a slow CPU or slow network connection.</p>
 						<h4>Maximum keyframe interval (GOP)</h4>
-						<p>Also known as the i-frame interval.  For UI3, you should <b>set this as high as it goes</b> (300 at the time of this writing).</p>
+						<p>Also known as the i-frame interval.  For UI3, you should <b>set this as high as it goes</b>, which is 300 in a server-side streaming profile.  UI3 lets you set it as high as 1000 frames.  I've seen stream stability problems with values much higher than 1000 frames so UI3 enforces 1000 as its limit.</p>
 						<h4>Maximum B-frames between P-frames</h4>
 						<p>UI3 is not compatible with B-frames.  Keep this set to 0, though evidence suggests this setting has no effect anyway.</p>
 						<h4>Advanced &gt; Profile</h4>
-						<p>"high" profile is recommended for most users. "baseline" profile may reduce CPU requirements slightly at the cost of image quality.</p>
+						<p>"high" profile is recommended for most users. "baseline" profile may reduce CPU requirements slightly at the cost of image quality. <a href="https://www.google.com/search?q=h.264%20profiles" target="_blank">Read more about H.264 profiles.</a></p>
 						<h4>Advanced &gt; Preset</h4>
 						<ul>
 							<li>"ultrafast" - Lowest CPU usage and lowest image quality</li>
@@ -144,8 +153,26 @@
 						</ul>
 						<h4>Zero frame latency</h4>
 						<p>Recommended to be enabled for best UI responsiveness. In testing, no perceptible difference was seen with this enabled or disabled.</p>
+						<h4>Full range color</h4>
+						<p>Controls whether Blue Iris will use <a href="https://www.google.com/search?q=limited+rgb+vs+full+rgb">RGB limited (16-235) or RGB full (0-255) color range</a> when encoding video.  Keep this disabled if you do not understand it, because in most hardware configurations enabling it can cause very dark and very bright details to be lost.</p>
+						<h4>Direct-to-wire</h4>
+						<p>For advanced users only.  Direct-to-wire introduces minor compatibility problems in UI3 and substantially reduces camera-switching responsiveness.  However Direct-to-wire can be a helpful optimization for systems that will spent a large amount of time live streaming a single camera, because Blue Iris won't need to re-encode that video stream.</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">From Blue Iris Help File</div>
+							<div class="panel-body">
+								When <b>Direct to Wire</b> is in effect, video is passed directly from a camera’s direct-to-disc
+								frame buffer to the browser UI3 and other clients. This has the huge benefit of using NO
+								CPU for the decoding and re-encoding of the video. However, this also means the video will
+								not have Blue Iris overlays and is limited to either the sub or main stream WITHOUT
+								MODIFICATION—that is, it becomes imperative to manage the stream encoding properties
+								on the camera side. You should have a reasonable key frame rate (0.40 or higher) and use
+								H.264 (as UI3 and the phone apps cannot decode H.265 at this time).
+							</div>
+						</div>
 						<h4>Resize output frame width x height</h4>
-						<p>This depends entirely on your personal preference for quality vs efficiency.  Lower resolutions are more efficient to work with.</p>
+						<p>UI3's client-side streaming profiles all override the width and height by default as one of their primary functions.  The <b>"Resize output frame width x height"</b> setting in the server-side streaming profiles lets you do similarly for other client applications which do not offer their own resolution controls.  Whether you should use this setting or not depends entirely on your personal preference for quality vs efficiency.  Lower resolutions are more efficient to work with.</p>
+						<h4>Retain aspect ratio within frame</h4>
+						<p>Recommended to be enabled, unless you like stretching your video streams to fill a particular shape of display.</p>
 						<h3>Jpeg Streaming</h3>
 						<p>Jpeg streaming is done by requesting Jpeg-compressed snapshots as quickly as possible.  It is not very efficient with network bandwidth and it can't achieve high frame rates over the internet.  However, being a simpler streaming method, it tends to "just work".  Jpeg streaming is capable of extremely high resolutions and excellent image quality.</p>
 						<p class="bg-warning padded-info"><b>Audio playback</b> is <b>not available</b> while streaming Jpeg snapshots.</p>
@@ -566,7 +593,7 @@
 						<h3>Prerequisite</h3>
 						<p>To use MQTT in UI3, you must first have access to an MQTT broker with WebSocket support, such as <a href="https://mosquitto.org/">Eclipse Mosquitto&#8482;</a> software.  Mosquitto is commonly installed as an addon to the popular Home Assistant OS running on a Raspberry Pi or a virtual machine or docker container, but the Mosquitto server can also be installed on Windows if desired.  Installing and configuring an MQTT broker is outside the scope of this document.</p>
 						<h3>UI3 Configuration</h3>
-						<p>Go to UI3's Main Menu > UI Settings > MQTT Remote Control section and fill in the WebSocket URL, User Name, and Password fields.  Adjust the Instance ID if you desire (it is randomly generated, but can be edited).  For basic users, the  MQTT Advanced options should be left at their default values.  When ready, enable the MQTT Client via the toggle button labelled "Enable MQTT Client".  Toast messages should quickly appear indicating success or failure of the connection to the MQTT broker.</p>
+						<p>Go to UI3's Main Menu &gt; UI Settings &gt; MQTT Remote Control section and fill in the WebSocket URL, User Name, and Password fields.  Adjust the Instance ID if you desire (it is randomly generated, but can be edited).  For basic users, the  MQTT Advanced options should be left at their default values.  When ready, enable the MQTT Client via the toggle button labelled "Enable MQTT Client".  Toast messages should quickly appear indicating success or failure of the connection to the MQTT broker.</p>
 						<p class="bg-info padded-info"><b>What are WebSocket URLs?</b><br /><br />WebSocket URLs are very similar to regular web URLs, except instead of beginning with <code>http://</code> or <code>https://</code>, they begin with <code>ws://</code> for unencrypted connections, or <code>wss://</code> for connections that will be secured with TLS.<br /><br />An example WebSocket URL is <code>ws://homeassistant.local:1884/</code> which indicates that the connection should use an unencrypted connection to the host named <code>homeassistant.local</code> on TCP port <code>1884</code>.</p>
 						<h3>Remotely Control UI3's State</h3>
 						<p>You can use UI3's MQTT Remote Control capabilities to change the current live group or camera, maximize or unmaximize the video player, and change the volume of audio streaming.</p>
@@ -593,11 +620,11 @@
 							<div class="panel-body">
 								<dl class="dl-vertical">
 									<dt>ui3/instance_id/playaudio</dt>
-									<dd>Publish an audio file name to this topic, and UI3 will play the sound. For example, publish <code>doorbell.mp3</code> to <code>ui3/instance_id/playaudio</code>. If a previous audio file is still playing, it will be immediately stopped and the new audio file will play. Sound volume is controlled by UI Settings > Event-Triggered Sounds > Sound Effect Volume.</dd>
+									<dd>Publish an audio file name to this topic, and UI3 will play the sound. For example, publish <code>doorbell.mp3</code> to <code>ui3/instance_id/playaudio</code>. If a previous audio file is still playing, it will be immediately stopped and the new audio file will play. Sound volume is controlled by UI Settings &gt; Event-Triggered Sounds &gt; Sound Effect Volume.</dd>
 									<dt>ui3/instance_id/playaudio/{player_id}</dt>
 									<dd>This alternate topic lets you provide an arbitrary Player ID string for the purpose of allowing multiple sounds to be played concurrently. More about that below.*</dd>
 									<dt>ui3/instance_id/playtts</dt>
-									<dd>Publish some text to this topic, and the web browser's text-to-speech engine will speak the text aloud. The voice can be selected via <b></b>UI Settings > UI Status Sounds > Speech Voice.</dd>
+									<dd>Publish some text to this topic, and the web browser's text-to-speech engine will speak the text aloud. The voice can be selected via <b></b>UI Settings &gt; UI Status Sounds &gt; Speech Voice.</dd>
 								</dl>
 							</div><!--/.panel-body -->
 						</div><!--/.panel -->
