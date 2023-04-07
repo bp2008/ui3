@@ -1064,6 +1064,14 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
+			key: "ui3_h264_choice_requires_restart"
+			, value: ""
+			, inputType: "comment"
+			, comment: '<div style="text-align: center"><a href="javascript:ReloadInterface()">Click to apply H.264 Player change</a></div>'
+			, preconditionFunc: Precondition_ui3_h264_choice_requires_restart
+			, category: "Video Player"
+		}
+		, {
 			key: "ui3_comment_current_h264_player"
 			, value: ""
 			, inputType: "comment"
@@ -1174,7 +1182,7 @@ var defaultSettings =
 			, value: "1"
 			, inputType: "checkbox"
 			, label: 'Picture-in-Picture Button'
-			, hint: 'Requires a supported browser and H.264 player: HTML5.'
+			, hint: 'Requires a supported browser and only works with the HTML5 player.' // Do not include "H.264 player" text, for filtering reasons
 			, onChange: OnChange_ui3_show_picture_in_picture_button
 			, category: "Video Player"
 		}
@@ -17559,7 +17567,10 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 		if (player.error.message.indexOf("DEMUXER_ERROR_COULD_NOT_OPEN: MediaSource endOfStream before demuxer initialization completes") === 0)
 			return; // Happens sometimes if the video stream ends very quickly. Some clips may do this if you seek to the very end while they are playing.
 		if (!inputRequiredOverlay.IsActive())
-			playerErrorHandler(player.error.message + ": " + GetMediaErrorMessage(player.error.code));
+		{
+			var clickForHelp = '<br><br><a href="javascript:UIHelp.LearnMore(\'Video Player Error\')" class="videoPlayerTroubleshootLink">Click for Help</a>';
+			playerErrorHandler(htmlEncode(player.error.message) + ": " + GetMediaErrorMessage(player.error.code) + clickForHelp);
+		}
 	}
 	var onPlayerPaused = function (e)
 	{
@@ -27040,7 +27051,8 @@ function Toaster()
 			"showEasing": "swing",
 			"hideEasing": "linear",
 			"showMethod": "fadeIn",
-			"hideMethod": "fadeOut"
+			"hideMethod": "fadeOut",
+			"target": "#toast-wrapper"
 		}
 	var showToastInternal = function (type, message, showTime, closeButton, onClick, extendedTimeOut)
 	{
@@ -27670,6 +27682,7 @@ function LoadingHelper()
 		loadingFinished = true;
 		loadingFinishedAtServerTime = GetUtcNow();
 		$("#loadingmsgwrapper").remove();
+		$("body").removeClass("uiIsLoading");
 		resized();
 		videoPlayer.Initialize();
 		ShowIEWarning();
@@ -29831,13 +29844,16 @@ function UISettingsPanel()
 		}
 	}
 
-	this.open = function ()
+	this.open = function (initialFilterText)
 	{
 		Initialize();
 		CloseDialog();
-		filterText = "";
+		if (isNullOrWhitespace(initialFilterText))
+			initialFilterText = "";
+		filterText = initialFilterText;
 		$dlg = $('<div id="uiSettingsPanel" class="dialogOptionPanel"></div>');
 		$dlg.append(MakeButtonBar());
+		$dlg.find("#uiSettingsFilterInput").val(filterText);
 		$content = $('<div id="uiSettingsPanelContent"></div>');
 		$dlg.append($content);
 		modal_dialog = $dlg.dialog({
@@ -30312,6 +30328,8 @@ function UISettingsPanel()
 			return true;
 		if (filterFind(s.hint, query))
 			return true;
+		if (s.inputType === "comment" && filterFind(s.comment, query))
+			return true;
 		return false;
 	}
 	var filterFind = function (field, query)
@@ -30328,7 +30346,7 @@ function UISettingsPanel()
 	var MakeButtonBar = function ()
 	{
 		var $buttonBar = $('<div class="uiSettingsButtonBar"></div>');
-		var $filterInput = $('<input type="search" value="" placeholder="Type to filter..." />');
+		var $filterInput = $('<input type="search" value="" placeholder="Type to filter..." id="uiSettingsFilterInput" />');
 		$filterInput.on('input', function (e)
 		{
 			filterText = $filterInput.val();
@@ -30517,6 +30535,10 @@ function OnChange_ui3_h264_choice()
 function Precondition_ui3_h264_choice()
 {
 	return any_h264_playback_supported;
+}
+function Precondition_ui3_h264_choice_requires_restart()
+{
+	return Precondition_ui3_h264_choice() && ui3_reload_to_take_effect_toast;
 }
 function Precondition_ui3_edge_fetch_bug_h264_enable()
 {
@@ -31116,6 +31138,9 @@ function UIHelpTool()
 			case "UI Status Sounds":
 				UI3_UI_Status_Sounds();
 				break;
+			case "Video Player Error":
+				UI3_Video_Player_Error();
+				break;
 		}
 	}
 	var Context_Menu_Trigger = function ()
@@ -31188,15 +31213,15 @@ function UIHelpTool()
 		$('<div class="UIHelp">'
 			+ 'UI3 has several H.264 player options. Not all options are available in all browsers.'
 			+ '<br><br><b>Automatic</b> <span style="color:#66FF66;">(Preferred)</span><br><br>'
-			+ '&nbsp; &nbsp; When "Automatic" is selected, UI3 will always load the best player available.  It is recommended to stay on "Automatic" unless it causes problems.'
+			+ '&nbsp; &nbsp; When "Automatic" is selected, UI3 will choose which player to load.  It is recommended to stay on "Automatic" unless it causes problems.'
 			+ '<br><br><b>WebCodecs</b> - ' + (webcodecs_h264_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
-			+ '&nbsp; &nbsp; The WebCodecs player directly accesses the browser\'s built-in video codecs to efficiently decode video with the lowest possible latency.  WebCodecs is a new feature in browsers as of late 2021, and may not perform as well as HTML5.'
+			+ '&nbsp; &nbsp; The WebCodecs player directly accesses the browser\'s built-in video codecs to efficiently decode video with the lowest possible latency.  WebCodecs is available in Chromium-based browsers since late 2021, and is only avalable on pages loaded via HTTPS.'
 			+ '<br><br><b>JavaScript</b> - ' + (h264_js_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
 			+ '&nbsp; &nbsp; The JavaScript player is the most robust and compatible player option, but also the slowest.'
 			+ '<br><br><b>HTML5</b> - ' + (mse_mp4_h264_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
 			+ '&nbsp; &nbsp; The HTML5 player works by converting each frame into a fragmented MP4 which is played using Media Source Extensions.  This is usually the fastest option, but has compatibility problems with some browsers.'
 			+ '<br><br><b>NaCl</b> - ' + (pnacl_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
-			+ '&nbsp; &nbsp; The NaCl player is much faster than the JavaScript player. It is not quite as fast as the HTML5 player, and takes longer to load when you open UI3, but it is more stable. This player is only available in ChromeOS and in the Chrome browser on a desktop OS (such as Windows or Mac).  It uses Google\'s "NaCl" or "Native Client" technology, which was expected to be removed from Chrome in 2018 but remained available by entering <b>chrome://flags</b> in the address bar and enabling <b>Native Client</b>.'
+			+ '&nbsp; &nbsp; The NaCl player is faster than the JavaScript player. It is not quite as fast as the HTML5 player, and takes longer to load when you open UI3, but may be more stable. This player is only available in ChromeOS and in the Chrome browser on a desktop OS (such as Windows or Mac).  It uses Google\'s "NaCl" or "Native Client" technology, which was expected to be removed from Chrome in 2018 but remained available by entering <b>chrome://flags</b> in the address bar and enabling <b>Native Client</b>.'
 			+ (pnacl_player_supported ? ('<br><br>The NaCl player has 3 modes available, each with different behavior regarding Hardware Accelerated Video Decoding.<br>'
 				+ '<ul>'
 				+ '<li><b>' + H264PlayerOptions.NaCl_HWVA_Auto + '</b><br>The player will try to use hardware decoding, but will fall back to software decoding if hardware decoding is unavailable. The fallback process may increase loading times.</li>'
@@ -31272,6 +31297,23 @@ function UIHelpTool()
 		$ul.append(MakeSoundListItem("When the UI is about to reload (to recover from an error).", function () { programmaticSoundPlayer.PlayReloadingSound(true, true); }));
 		$ele.append($ul);
 		$ele.modalDialog({ title: 'UI Status Sounds', closeOnOverlayClick: true });
+	}
+	var UI3_Video_Player_Error = function ()
+	{
+		var $ele = $('<div class="UIHelp">'
+			+ "<p>It looks like there was an error with the <b>" + currentH264Player + "</b> video player.</p>"
+			+ "<p>UI3 offers a choice of video player modules to help you work around compatibility problems.</p>"
+			+ "<p>Consider trying a different video player module via:</p>"
+			+ "<p> &nbsp; <a role=\"button\" class=\"h264PlayerSettingsLink\">UI Settings &gt; Video Player &gt; H.264 Player</a></p>"
+			+ '</div>');
+		var dlg = null;
+		$ele.find('.h264PlayerSettingsLink').on('click', function ()
+		{
+			uiSettingsPanel.open("H.264 Player");
+			//if (dlg)
+			//	dlg.close();
+		});
+		dlg = $ele.modalDialog({ title: 'Troubleshooting Video Player Errors', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////

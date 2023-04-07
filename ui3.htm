@@ -88,7 +88,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "231";
+		var ui_version = "232";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -112,7 +112,7 @@
 			+ '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />');
 	</script>
 </head>
-<body>
+<body class="uiIsLoading">
 	<div id="svgContainer" style="display: none;"></div>
 	<div id="loadingmsgwrapper" style="position:absolute;width:100%;height:100%;background-color:rgba(0,0,0,0.75);z-index:99999;font-family:Consolas, monospace, Sans-Serif">
 		<div style="position: absolute;left:50%;top:50%;overflow:visible;white-space:nowrap;">
@@ -491,6 +491,7 @@
 			<clip-timeline></clip-timeline>
 		</div>
 	</div>
+	<div id="toast-wrapper"></div>
 	<div id="zoomhint" style="display: none">
 	</div>
 	<div id="relativeptzbox"></div>

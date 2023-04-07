@@ -3211,32 +3211,61 @@ div.invisibleLabel
 	left: 0px;
 }
 /* Toasts */
-#toast-container
+#toast-wrapper
 {
-	font-size: 16px;
+	position: fixed;
+	max-height: calc(100vh - 64px - 64px);
 	bottom: 64px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column-reverse;
+	right: 12px;
+	z-index: 999;
 }
 
-.sizeMedium #toast-container
+.uiIsLoading #toast-wrapper
 {
+	z-index: 999999;
+}
+
+.sizeMedium #toast-wrapper
+{
+	max-height: calc(100vh - 52px - 48px);
 	bottom: 48px;
 }
 
-.sizeSmall #toast-container
+.sizeSmall #toast-wrapper
 {
+	max-height: calc(100vh - 40px - 36px);
 	bottom: 36px;
 }
 
-#toast-container > .toast-warning > div,
-#toast-container > .toast-warning a
+#toast-container
 {
-	color: #000000;
+	position: static;
+	font-size: 16px;
+	z-index: 0;
 }
 
-#toast-container > .toast-warning
+	#toast-container > .toast-warning > div,
+	#toast-container > .toast-warning a
+	{
+		color: #000000;
+	}
+
+	#toast-container > .toast-warning
+	{
+		background-color: #E0E000;
+		background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABXElEQVRIx+WVoU7DUBSG/y+ZqEBMTFRMTCAgQUwgKhA8AAKJIMHsERATEyQ8AWoCMYFA8ACTExWTiIqJiQkEAjFRMTFxMYfkUrq2GW1CwkmuuOfk/n/P+c85lf6VAaeSLpskiIGlpKAJ8CtJzs6wbvwAeAPmwAuQSgrrJLgDtsCJpBBYA5O6wHvABrj3yjWQ5ICojto/A4ussMAMmP8W/8xEPc+JHVlm1/uCt4BX4NG7T6z2HctiBLxLOtinNAN73PbcX23a80gTX5+q1gY+rPd90tQIOp4vAjYeaaWvHwNxjn9lBFn/EzCtCh4BW0n9nNjSYll/F0izGe8SNvGEzWvZeEdslKPZDxsC64I1EBbUOgBWwLhsYm8LhE9tgg+LFmLuhANTW8WtkoWXAt0CDWdA8g3HY74o26oVhqpvjTCUJCz1haTAOfdQ07/jRlLonDuWieKaOJVn40/bJ5sEYUYnrJHQAAAAAElFTkSuQmCC) !important
+	}
+
+.videoPlayerTroubleshootLink
 {
-	background-color: #E0E000;
-	background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABXElEQVRIx+WVoU7DUBSG/y+ZqEBMTFRMTCAgQUwgKhA8AAKJIMHsERATEyQ8AWoCMYFA8ACTExWTiIqJiQkEAjFRMTFxMYfkUrq2GW1CwkmuuOfk/n/P+c85lf6VAaeSLpskiIGlpKAJ8CtJzs6wbvwAeAPmwAuQSgrrJLgDtsCJpBBYA5O6wHvABrj3yjWQ5ICojto/A4ussMAMmP8W/8xEPc+JHVlm1/uCt4BX4NG7T6z2HctiBLxLOtinNAN73PbcX23a80gTX5+q1gY+rPd90tQIOp4vAjYeaaWvHwNxjn9lBFn/EzCtCh4BW0n9nNjSYll/F0izGe8SNvGEzWvZeEdslKPZDxsC64I1EBbUOgBWwLhsYm8LhE9tgg+LFmLuhANTW8WtkoWXAt0CDWdA8g3HY74o26oVhqpvjTCUJCz1haTAOfdQ07/jRlLonDuWieKaOJVn40/bJ5sEYUYnrJHQAAAAAElFTkSuQmCC) !important
+	font-weight: bold;
+	font-size: 1.2em;
+	display: block;
+	padding-top: 0.5em;
+	padding-bottom: 0.5em;
 }
 /* camimg */
 #camimg_wrapper
@@ -5779,6 +5808,7 @@ div::-webkit-scrollbar-corner
 		font-size: 20px;
 		padding: 2px 4px;
 		flex: 1 1 auto;
+		width: 100%;
 	}
 
 		.uiSettingsButtonBar input[type="button"]
