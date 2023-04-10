@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>UI3 Storage Info</title>
+</head>
+<body>
+	<div id="loading">Loading UI3 Storage Info</div>
+	<div id="root" style="display: none;">
+		<h2>UI3 Storage Info</h2>
+		<p>UI3 stores its settings in your browser using <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>.  If Local Storage is full, UI3 can experience errors.</p>
+		<p>This page provides information about your browser's Storage usage for origin: <span class="origin" title="this field is censored for your privacy in case you want to screenshot the page">{{origin}}</span>.</p>
+		<div class="message">
+			<template v-if="allStorage">
+				<template v-if="allStorage.local.enabled">
+					<storage-meta :me="allStorage.local"></storage-meta>
+				</template>
+				<template v-if="allStorage.session.enabled">
+					<storage-meta :me="allStorage.session"></storage-meta>
+				</template>
+			</template>
+		</div>
+		<p v-if="wasCached">
+			Storage capacity values above assume that your browser enforces a <span title="in mebibytes (1 mebibyte is equal to 1048576 bytes)">5 MiB</span> quota per storage container, which was common as of 2023.  <a role="button" ttabindex="0" v-on:click="recalculateStorageCapacity" v-on:keypress.enter.prevent="recalculateStorageCapacity" title="Storage fullness shown above depends on assumed capacity values. Click to recompute values specific to your browser.">recompute storage capacity</a>
+		</p>
+		<p v-else-if="isComputingCapacity">
+			Storage capacity values are being recomputed now...
+		</p>
+		<p v-else>
+			Storage capacity values above were validated during this browser session.
+		</p>
+		<template v-if="allStorage && allStorage.local.enabled">
+			<h2>Local Storage Usage Breakdown</h2>
+			<table class="localStorageUsageBreakdown">
+				<thead>
+					<tr>
+						<th>Usage</th>
+						<th>Bytes</th>
+						<th>Clear</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="category in localStorageCategories()" :title="category.hint">
+						<td>{{category.name}}</td>
+						<td>{{category.bytes}}</td>
+						<td><input v-if="category.bytes" type="button" value="clear" @click="onClearIndividual(category.name, category.key)" /></td>
+					</tr>
+				</tbody>
+			</table>
+		</template>
+		<p><a href="../ui3.htm">Go to UI3</a></p>
+	</div>
+	<div class="component-templates" style="display: none;">
+		<div id="storage-meta">
+			<div>
+				<h3>
+					{{me.name}} Storage: {{me.size}} / {{me.capacity}} chars
+				</h3>
+				<div v-if="me.capacity" :title="me.size + '/' + me.capacity + ' characters'">
+					<meter :value="me.fullness"></meter> {{parseInt(me.fullness*100)}}% full
+				</div>
+				<div v-else>
+					Calculating capacity...
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		var si_version = "1";
+		var bi_version = "%%VERSION%%";
+		var local_bi_session = "%%SESSION%%";
+		if (!local_bi_session || (local_bi_session.length === 11 && local_bi_session.indexOf("%") === 0 && local_bi_session.indexOf("SESSION") === 2))
+		{
+			local_bi_session = "";
+			bi_version = "0.0.0.0";
+		}
+		var combined_version = "StorageInfo-" + si_version + "-" + bi_version;
+		var local_bi_session_arg_always = local_bi_session ? "&session=" + local_bi_session : "";
+		var local_bi_session_arg = navigator.cookieEnabled ? "" : local_bi_session_arg_always;
+		document.write('<script src="libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
+		document.write('<script src="libs-src/vue.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
+	</script>
+	<script type="text/javascript">
+		var capacity_cached = { "localCapacity": 5242880, "sessionCapacity": 5242880 };
+
+		Vue.component("storage-meta", {
+			template: "#storage-meta",
+			props:
+			{
+				me: {
+					type: Object,
+					required: true
+				}
+			}
+		});
+
+		var app = null;
+		this.app = app = new Vue({
+			el: '#root',
+			data: function ()
+			{
+				return {
+					allStorage: null,
+					wasCached: false,
+					isComputingCapacity: false,
+					origin: location.origin.trim()
+				};
+			},
+			created: function ()
+			{
+				this.allStorage = serializeAllStorage();
+				document.getElementById("root").style.display = "block";
+				document.getElementById("loading").style.display = "none";
+			},
+			mounted: function ()
+			{
+				this.loadFromCache(this.allStorage.local, capacity_cached.localCapacity);
+				this.loadFromCache(this.allStorage.session, capacity_cached.sessionCapacity);
+				this.wasCached = true;
+			},
+			methods:
+			{
+				recalculateStorageCapacity: function ()
+				{
+					if (this.allStorage.local.enabled)
+						this.allStorage.local.capacity = this.allStorage.local.fullness = 0;
+					if (this.allStorage.session.enabled)
+						this.allStorage.session.capacity = this.allStorage.session.fullness = 0;
+					this.wasCached = false;
+					this.isComputingCapacity = true;
+					setTimeout(function ()
+					{
+						app.calculateStorageCapacity(app.allStorage.local);
+
+						setTimeout(function ()
+						{
+							app.calculateStorageCapacity(app.allStorage.session);
+							app.isComputingCapacity = false;
+						}, 0);
+					}, 0);
+				},
+				calculateStorageCapacity: function (storageDef)
+				{
+					if (!storageDef)
+						return;
+
+					try
+					{
+						storageDef.storageObj.clear();
+
+						var limit = 20000000;
+						var startSize = limit / 2;
+						storageDef.capacity = getCapacity(storageDef.storageObj, startSize, limit);
+						storageDef.fullness = storageDef.size / storageDef.capacity;
+					}
+					finally
+					{
+						restoreStorageData(storageDef);
+					}
+				},
+				loadFromCache: function (storageDef, cachedCapacity)
+				{
+					storageDef.capacity = cachedCapacity;
+					storageDef.fullness = storageDef.size / storageDef.capacity;
+				},
+				localStorageCategories: function ()
+				{
+					var categories = [];
+					categories.push(this.newLocalStorageCategory("ui3_settings", "UI3 Settings"));
+					categories.push(this.newLocalStorageCategory("camlist_thumbs_ui3", "Saved Thumbnails for UI3's Full Camera List"));
+					categories.push(this.newLocalStorageCategory("ui2", "Old UI2 Settings"));
+					categories.push(this.newLocalStorageCategory("camlist_thumbs_ui2", "Old Saved Thumbnails for UI2's Full Camera List"));
+					categories.push(this.newLocalStorageCategory("ui2_preset_thumbs", "Old Saved Thumbnails for UI2's PTZ Preset Buttons"));
+					categories.push(this.newLocalStorageCategory("other", "Other", 'The "Other" category includes:\n'
+						+ '\u2022 saved credentials' + '\n'
+						+ '\u2022 items saved by other applications hosted by the same web origin' + '\n'
+						+ '\u2022 settings for other Blue Iris servers, if you have used UI2 as a client app for other servers (very advanced use, not supported by UI3)'));
+					return categories;
+				},
+				newLocalStorageCategory: function (key, name, hint)
+				{
+					var bytes = this.allStorage.local.sizes[key];
+					if (!bytes)
+						bytes = 0;
+					return {
+						name: name,
+						key: key,
+						bytes: bytes,
+						hint: hint
+					};
+				},
+				onClearIndividual: function (name, categoryKey)
+				{
+					if (confirm(name + ' will be cleared. Continue?'))
+					{
+						ClearIndividualSettingCategory(categoryKey);
+						location.reload();
+					}
+				}
+			}
+		});
+		function ClearIndividualSettingCategory(category)
+		{
+			var storageObj = getLocalStorage();
+			if (storageObj)
+			{
+				try
+				{
+					for (var key in storageObj)
+					{
+						if (!storageObj.hasOwnProperty(key))
+							continue;
+						var thisCategory = categorizeSetting(key);
+						if (category === thisCategory)
+							storageObj.removeItem(key);
+					};
+				}
+				catch (ex)
+				{
+					console.error(ex);
+					storageObj = null;
+				}
+			}
+		}
+		function categorizeSetting(key)
+		{
+			if (!key)
+				return "other";
+			if (key.indexOf("ui3_camlistthumb_") === 0)
+				return "camlist_thumbs_ui3";
+			if (key.indexOf("ui2_camlistthumb_") === 0)
+				return "camlist_thumbs_ui2";
+			if (key.indexOf("ui2_preset_") === 0)
+				return "ui2_preset_thumbs";
+			if (key.indexOf("ui3_") === 0)
+				return "ui3_settings";
+			if (key.indexOf("ui2_") === 0)
+				return "ui2";
+			return "other";
+		}
+		function serializeAllStorage()
+		{
+			return {
+				local: serializeStorage(getLocalStorage(), "Local"),
+				session: serializeStorage(getSessionStorage(), "Session")
+			};
+		}
+		function serializeStorage(storageObj, name)
+		{
+			var store = {};
+			var sizes = { total: 0 };
+			var isLocalStorage = false;
+			try
+			{
+				isLocalStorage = storageObj === localStorage;
+			}
+			catch (ex)
+			{
+				console.error(ex);
+			}
+			if (storageObj)
+			{
+				try
+				{
+					for (var key in storageObj)
+					{
+						if (!storageObj.hasOwnProperty(key))
+						{
+							continue;
+						}
+						var value = storageObj[key];
+						store[key] = value;
+						var itemSize = key.length + value.length;
+						sizes.total += itemSize;
+						if (key)
+						{
+							var thisCategory = categorizeSetting(key);
+							if (!sizes[thisCategory])
+								sizes[thisCategory] = 0;
+							sizes[thisCategory] += itemSize;
+						}
+					};
+				}
+				catch (ex)
+				{
+					console.error(ex);
+					storageObj = null;
+				}
+			}
+			var obj = {
+				name: name,
+				store: store,
+				storageObj: storageObj,
+				enabled: !!storageObj,
+				size: sizes.total,
+				capacity: 0,
+				fullness: 0
+			};
+			if (isLocalStorage)
+			{
+				obj.isLocalStorage = true;
+				obj.sizes = sizes;
+			}
+			return obj;
+		}
+		function restoreStorageData(storageDef)
+		{
+			storageDef.storageObj.clear();
+			for (var key in storageDef.store)
+				storageDef.storageObj.setItem(key, storageDef.store[key]);
+		}
+		function getLocalStorage()
+		{
+			try // May throw exception if local storage is disabled by browser settings!
+			{
+				if (typeof Storage === "undefined")
+					return null;
+				var key = "local_storage_test_item";
+				localStorage.setItem(key, key);
+				localStorage.removeItem(key);
+				return localStorage;
+			}
+			catch (e)
+			{
+				return null;
+			}
+		}
+		function getSessionStorage()
+		{
+			try // May throw exception if local storage is disabled by browser settings!
+			{
+				if (typeof Storage === "undefined")
+					return null;
+				var key = "session_storage_test_item";
+				sessionStorage.setItem(key, key);
+				sessionStorage.removeItem(key);
+				return sessionStorage;
+			}
+			catch (e)
+			{
+				return null;
+			}
+		}
+		function getCapacity(storageObj)
+		{
+			var L = 0;
+			var R = 20000001;
+			var M;
+			while (L < R)
+			{
+				M = Math.floor((L + R) / 2);
+				if (!testCapacity(storageObj, M))
+					R = M;
+				else
+					L = M + 1;
+			}
+			return R - 1;
+		}
+		function testCapacity(storageObj, size)
+		{
+			if (size == 0)
+				return true;
+			try
+			{
+				storageObj.setItem("k", repeatChar(size - 1, "v"));
+				storageObj.removeItem("k");
+				return true;
+			}
+			catch (ex)
+			{
+				return false;
+			}
+		}
+		function repeatChar(count, ch)
+		{
+			if (count == 0)
+			{
+				return "";
+			}
+			var count2 = count / 2;
+			var result = ch;
+
+			// double the input until it is long enough.
+			while (result.length <= count2)
+			{
+				result += result;
+			}
+			// use substring to hit the precise length target without
+			// using extra memory
+			return result + result.substring(0, count - result.length);
+		};
+	</script>
+	<style type="text/css">
+		body
+		{
+			font-family: Arial, Sans-Serif;
+			font-size: 12pt;
+		}
+
+		a[role="button"]
+		{
+			color: #0000EE;
+			cursor: pointer;
+			text-decoration: underline;
+		}
+
+		.localStorageUsageBreakdown
+		{
+			border-collapse: collapse;
+		}
+
+			.localStorageUsageBreakdown th,
+			.localStorageUsageBreakdown td
+			{
+				border: 1px solid #AAAAAA;
+				padding: 2px;
+			}
+
+			.localStorageUsageBreakdown th
+			{
+				background-color: #EEEEEE;
+			}
+
+		.origin
+		{
+			border: 1px solid #777777;
+			color: #000000;
+			background-color: #000000;
+			padding: 1px 6px;
+			user-select: all;
+		}
+
+			.origin:hover,
+			.origin:active
+			{
+				background-color: #FFF9E6;
+			}
+	</style>
+</body>
+</html>
