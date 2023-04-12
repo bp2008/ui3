@@ -35,6 +35,7 @@
 					<tr>
 						<th>Usage</th>
 						<th>Bytes</th>
+						<th>Download</th>
 						<th>Clear</th>
 					</tr>
 				</thead>
@@ -42,6 +43,7 @@
 					<tr v-for="category in localStorageCategories()" :title="category.hint">
 						<td>{{category.name}}</td>
 						<td>{{category.bytes}}</td>
+						<td><input v-if="category.download" type="button" value="download" @click="onDownloadIndividual(category.name, category.key, category.download)" /></td>
 						<td><input v-if="category.bytes" type="button" value="clear" @click="onClearIndividual(category.name, category.key)" /></td>
 					</tr>
 				</tbody>
@@ -78,6 +80,7 @@
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : local_bi_session_arg_always;
 		document.write('<script src="libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 		document.write('<script src="libs-src/vue.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
+		document.write('<script src="storageinfo-libs.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 	</script>
 	<script type="text/javascript">
 		var capacity_cached = { "localCapacity": 5242880, "sessionCapacity": 5242880 };
@@ -165,19 +168,26 @@
 				localStorageCategories: function ()
 				{
 					var categories = [];
-					categories.push(this.newLocalStorageCategory("ui3_settings", "UI3 Settings"));
-					categories.push(this.newLocalStorageCategory("camlist_thumbs_ui3", "Saved Thumbnails for UI3's Full Camera List"));
-					categories.push(this.newLocalStorageCategory("ui2", "Old UI2 Settings"));
-					categories.push(this.newLocalStorageCategory("camlist_thumbs_ui2", "Old Saved Thumbnails for UI2's Full Camera List"));
-					categories.push(this.newLocalStorageCategory("ui2_preset_thumbs", "Old Saved Thumbnails for UI2's PTZ Preset Buttons"));
-					categories.push(this.newLocalStorageCategory("other", "Other", 'The "Other" category includes:\n'
-						+ '\u2022 saved credentials' + '\n'
-						+ '\u2022 items saved by other applications hosted by the same web origin' + '\n'
-						+ '\u2022 settings for other Blue Iris servers, if you have used UI2 as a client app for other servers (very advanced use, not supported by UI3)'));
+					categories.push(this.newLocalStorageCategory("ui3_settings", "UI3 Settings", { download: "json" }));
+					categories.push(this.newLocalStorageCategory("camlist_thumbs_ui3", "Saved Thumbnails for UI3's Full Camera List", { download: "jpg" }));
+					categories.push(this.newLocalStorageCategory("ui2_settings", "Old UI2 Settings", { download: "json" }));
+					categories.push(this.newLocalStorageCategory("camlist_thumbs_ui2", "Old Saved Thumbnails for UI2's Full Camera List", { download: "jpg" }));
+					categories.push(this.newLocalStorageCategory("ui2_preset_thumbs", "Old Saved Thumbnails for UI2's PTZ Preset Buttons", { download: "jpg" }));
+					categories.push(this.newLocalStorageCategory("other", "Other", {
+						download: "json",
+						hint: 'The "Other" category includes:\n'
+							+ '\u2022 saved credentials' + '\n'
+							+ '\u2022 items saved by other applications hosted by the same web origin' + '\n'
+							+ '\u2022 settings for other Blue Iris servers, if you have used UI2 as a client app for other servers (very advanced use, not supported by UI3)'
+					}));
 					return categories;
 				},
-				newLocalStorageCategory: function (key, name, hint)
+				newLocalStorageCategory: function (key, name, options)
 				{
+					options = $.extend({
+						hint: null,
+						download: false
+					}, options);
 					var bytes = this.allStorage.local.sizes[key];
 					if (!bytes)
 						bytes = 0;
@@ -185,7 +195,8 @@
 						name: name,
 						key: key,
 						bytes: bytes,
-						hint: hint
+						hint: options.hint,
+						download: options.download
 					};
 				},
 				onClearIndividual: function (name, categoryKey)
@@ -194,6 +205,29 @@
 					{
 						ClearIndividualSettingCategory(categoryKey);
 						location.reload();
+					}
+				},
+				onDownloadIndividual: function (name, categoryKey, downloadType)
+				{
+					if (downloadType === "jpg")
+					{
+						var result = DownloadAllItemsInIndividualSettingCategory_jpg(categoryKey);
+						if (result === -1)
+							alert("Failed to create zip file.");
+						else if (result > 0)
+							alert(result + " items failed to be added to the zip file.");
+					}
+					else if (downloadType === "json")
+					{
+						var result = DownloadAllItemsInIndividualSettingCategory_json(categoryKey);
+						if (result === -1)
+							alert("Failed to create json file.");
+						else if (result > 0)
+							alert(result + " items failed to be added to the json file.");
+					}
+					else
+					{
+						alert("Unexpected download type: " + downloadType);
 					}
 				}
 			}
@@ -217,10 +251,209 @@
 				catch (ex)
 				{
 					console.error(ex);
-					storageObj = null;
+					alert("Failed to iterate across localStorage.");
 				}
 			}
 		}
+		function GetDownloadFileNameNoExt(category)
+		{
+			var dateStr = TimestampToDateFileNameString(Date.now());
+			var fileNameNoExt = location.hostname + "_" + category + "_" + dateStr;
+			return fileNameNoExt;
+		}
+		function DownloadAllItemsInIndividualSettingCategory_json(category)
+		{
+			var keep = {};
+			var storageObj = getLocalStorage();
+			if (storageObj)
+			{
+				try
+				{
+					for (var key in storageObj)
+					{
+						if (!storageObj.hasOwnProperty(key))
+							continue;
+						var thisCategory = categorizeSetting(key);
+						if (!category || category === thisCategory)
+							keep[key] = storageObj[key];
+					}
+				}
+				catch (ex)
+				{
+					console.error(ex);
+					alert("Failed to iterate across localStorage.");
+					return;
+				}
+			}
+			try
+			{
+				var jsonStr = JSON.stringify(keep, null, 2);
+				downloadDataUri(textToDataUri(jsonStr), GetDownloadFileNameNoExt(category) + ".json");
+			}
+			catch (ex)
+			{
+				console.error(ex);
+				return -1;
+			}
+			return 0;
+		}
+		function textToDataUri(text)
+		{
+			return 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
+		}
+		function DownloadAllItemsInIndividualSettingCategory_jpg(category)
+		{
+			var files = [];
+			var errors = 0;
+			var storageObj = getLocalStorage();
+			if (storageObj)
+			{
+				var images = [];
+				try
+				{
+					var keys = [];
+					for (var key in storageObj)
+					{
+						if (!storageObj.hasOwnProperty(key))
+							continue;
+						var thisCategory = categorizeSetting(key);
+						if (category === thisCategory)
+							keys.push(key);
+					}
+					var allTimestamps = {};
+					for (var i = 0; i < keys.length; i++)
+					{
+						var key = keys[i];
+						if (/_date$/.test(key))
+						{
+							var baseKey = key.substr(0, key.length - "_date".length);
+							var timestamp = parseInt(storageObj[key]);
+							if (timestamp && !isNaN(timestamp))
+								allTimestamps[baseKey] = timestamp;
+						}
+					}
+					for (var i = 0; i < keys.length; i++)
+					{
+						var key = keys[i];
+						if (allTimestamps[key] || !(/_date$/.test(key)))
+						{
+							var timestamp = allTimestamps[key];
+							if (!timestamp)
+								timestamp = Date.now();
+							var dateStr = TimestampToDateFileNameString(timestamp);
+							images.push({ dataUri: storageObj[key], name: key + "_" + dateStr + ".jpg" });
+						}
+					}
+				}
+				catch (ex)
+				{
+					console.error(ex);
+					alert("Failed to iterate across localStorage.");
+					return;
+				}
+				for (var i = 0; i < images.length; i++)
+				{
+					var image = images[i];
+					try
+					{
+						files.push({ name: image.name, input: dataURItoBlob(image.dataUri) });
+					}
+					catch (ex)
+					{
+						errors++;
+						console.error(image.name, ex);
+					}
+				};
+			}
+			try
+			{
+				clientZip.downloadZip(files)
+					.blob()
+					.then(function (content)
+					{
+						var objectUrl = URL.createObjectURL(content);
+						try
+						{
+							downloadDataUri(objectUrl, GetDownloadFileNameNoExt(category) + ".zip");
+						}
+						finally
+						{
+							URL.revokeObjectURL(objectUrl);
+						}
+					});
+			}
+			catch (ex)
+			{
+				console.error(ex);
+				return -1;
+			}
+			return errors;
+		}
+		function dataURItoBlob(dataURI)
+		{
+			// convert base64 to raw binary data held in a string
+			// doesn't handle URLEncoded DataURIs - see SO answer #6850276 for code that does this
+			var byteString = atob(dataURI.split(',')[1]);
+
+			// separate out the mime component
+			var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0]
+
+			// write the bytes of the string to an ArrayBuffer
+			var ab = new ArrayBuffer(byteString.length);
+
+			// create a view into the buffer
+			var ia = new Uint8Array(ab);
+
+			// set the bytes of the buffer to the correct values
+			for (var i = 0; i < byteString.length; i++)
+			{
+				ia[i] = byteString.charCodeAt(i);
+			}
+
+			// write the ArrayBuffer to a blob, and you're done
+			var blob = new Blob([ab], { type: mimeString });
+			return blob;
+
+		}
+		function TimestampToDateFileNameString(timestamp)
+		{
+			var str = GetPaddedDateStr(new Date(timestamp), true);
+			str = str.replace(/ /g, '_');
+			str = FormatFileName(str);
+			return str;
+		}
+		function GetPaddedDateStr(date, includeMilliseconds)
+		{
+			var str = date.getFullYear() + "/" + (date.getMonth() + 1).toString().padLeft(2, '0') + "/" + date.getDate().toString().padLeft(2, '0') + " " + GetTimeStr(date, includeMilliseconds);
+			return str;
+		}
+		function GetTimeStr(date, includeMilliseconds)
+		{
+			var ampm = "";
+			var hour = date.getHours();
+			var ms = includeMilliseconds ? ("." + date.getMilliseconds()) : "";
+
+			var str = hour.toString().padLeft(2, '0') + ":" + date.getMinutes().toString().padLeft(2, '0') + ":" + date.getSeconds().toString().padLeft(2, '0') + ms + ampm;
+			return str;
+		}
+		function FormatFileName(str)
+		{
+			return str.replace(/\//g, '-').replace(/:/g, '.');
+		}
+		String.prototype.padLeft = function (len, c)
+		{
+			var pads = len - this.length;
+			if (pads > 0)
+			{
+				var sb = [];
+				var pad = c || "&nbsp;";
+				for (var i = 0; i < pads; i++)
+					sb.push(pad);
+				sb.push(this);
+				return sb.join("");
+			}
+			return this;
+		};
 		function categorizeSetting(key)
 		{
 			if (!key)
@@ -388,6 +621,46 @@
 			// using extra memory
 			return result + result.substring(0, count - result.length);
 		};
+		function downloadDataUri(uri, fileName)
+		{
+			var link = document.createElement("a")
+			link.href = uri;
+			link.download = fileName;
+			link.click();
+			link.remove();
+		}
+		function htmlAttributeEncode(value)
+		{
+			if (typeof value !== "string" && typeof value !== "undefined" && typeof value.toString === "function")
+				value = value.toString();
+			var sb = new StringBuilder();
+			for (var i = 0; i < value.length; i++)
+			{
+				var c = value.charAt(i);
+				switch (c)
+				{
+					case '"':
+						sb.Append("&quot;");
+						break;
+					case "'":
+						sb.Append("&#39;");
+						break;
+					case "&":
+						sb.Append("&amp;");
+						break;
+					case "<":
+						sb.Append("&lt;");
+						break;
+					case ">":
+						sb.Append("&gt;");
+						break;
+					default:
+						sb.Append(c);
+						break;
+				}
+			}
+			return sb.ToString();
+		}
 	</script>
 	<style type="text/css">
 		body
