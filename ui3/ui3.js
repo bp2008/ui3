@@ -24658,7 +24658,9 @@ var objectVisualizer = new (function ObjectVisualizer()
 		}
 		else
 			$viewer.find(".selectable").text("null");
-		$root.dialog({ title: "Object Visualizer" });
+		if (!title)
+			title = "Object Visualizer";
+		$root.dialog({ title: title });
 	}
 })();
 ///////////////////////////////////////////////////////////////

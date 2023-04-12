@@ -7,16 +7,21 @@
 	<div id="loading">Loading UI3 Storage Info</div>
 	<div id="root" style="display: none;">
 		<h2>UI3 Storage Info</h2>
-		<p>UI3 stores its settings in your browser using <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>.  If Local Storage is full, UI3 can experience errors.</p>
+		<p>UI3 stores its settings in your browser using <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>.</p>
 		<p>This page provides information about your browser's Storage usage for origin: <span class="origin" title="this field is censored for your privacy in case you want to screenshot the page">{{origin}}</span>.</p>
 		<div class="message">
-			<template v-if="allStorage">
-				<template v-if="allStorage.local.enabled">
-					<storage-meta :me="allStorage.local"></storage-meta>
-				</template>
-				<template v-if="allStorage.session.enabled">
-					<storage-meta :me="allStorage.session"></storage-meta>
-				</template>
+			<template v-for="storage in allStorage">
+				<div v-if="storage.enabled">
+					<h3>
+						{{storage.name}} Storage: {{storage.size}} / {{storage.capacity}} chars
+					</h3>
+					<div v-if="storage.capacity" :title="storage.size + '/' + storage.capacity + ' characters'">
+						<meter :value="storage.fullness"></meter> {{parseInt(storage.fullness*100)}}% full
+					</div>
+					<div v-else>
+						Calculating capacity...
+					</div>
+				</div>
 			</template>
 		</div>
 		<p v-if="wasCached">
@@ -28,43 +33,42 @@
 		<p v-else>
 			Storage capacity values above were validated during this browser session.
 		</p>
-		<template v-if="allStorage && allStorage.local.enabled">
+		<template v-if="localStorageObject">
 			<h2>Local Storage Usage Breakdown</h2>
 			<table class="localStorageUsageBreakdown">
 				<thead>
 					<tr>
 						<th>Usage</th>
 						<th>Bytes</th>
+						<th>View</th>
 						<th>Download</th>
-						<th>Clear</th>
+						<th title="Export this section in a format that can be imported later">Export</th>
+						<th>Delete</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-for="category in localStorageCategories()" :title="category.hint">
 						<td>{{category.name}}</td>
 						<td>{{category.bytes}}</td>
-						<td><input v-if="category.download" type="button" value="download" @click="onDownloadIndividual(category.name, category.key, category.download)" /></td>
-						<td><input v-if="category.bytes" type="button" value="clear" @click="onClearIndividual(category.name, category.key)" /></td>
+						<td><input v-if="category.bytes" type="button" value="view" @click="onViewIndividual(category)" /></td>
+						<td><input v-if="category.download && category.bytes" type="button" :value="category.downloadButton" @click="onDownloadIndividual(category)" /></td>
+						<td title="Export this section in a format that can be imported later"><input v-if="category.bytes" type="button" value="export" @click="onExportIndividual(category)" /></td>
+						<td><input v-if="category.bytes" type="button" value="delete" @click="onClearIndividual(category)" /></td>
 					</tr>
 				</tbody>
 			</table>
+			<h2>Local Storage Export</h2>
+			<p><input type="button" value="Export All Local Storage" @click="onExportAll()" /></p>
+			<h2>Local Storage Import</h2>
+			<p>Drag and drop or select a .json file that was previously exported from this page. The content of the file will be merged with existing data in Local Storage.</p>
+			<div id="dropTarget" :class="dropTargetClasses" @dragover.prevent="onFileDragOver" @dragenter="onFileDragEnter" @dragleave="onFileDragLeave" @drop.prevent="onFileDrop">
+				<input type="file" @change="onImportInputChange" />
+			</div>
+			<p><input type="button" value="Import" :disabled="!selectedImportFile" @click="importSelectedFile" /> {{selectedImportFileDescription}}</p>
+			<h2>Local Storage Erase</h2>
+			<p><input type="button" value="Erase All Local Storage Data" @click="onEraseAllLocalStorage()" /></p>
 		</template>
 		<p><a href="../ui3.htm">Go to UI3</a></p>
-	</div>
-	<div class="component-templates" style="display: none;">
-		<div id="storage-meta">
-			<div>
-				<h3>
-					{{me.name}} Storage: {{me.size}} / {{me.capacity}} chars
-				</h3>
-				<div v-if="me.capacity" :title="me.size + '/' + me.capacity + ' characters'">
-					<meter :value="me.fullness"></meter> {{parseInt(me.fullness*100)}}% full
-				</div>
-				<div v-else>
-					Calculating capacity...
-				</div>
-			</div>
-		</div>
 	</div>
 	<script>
 		var si_version = "1";
@@ -78,159 +82,378 @@
 		var combined_version = "StorageInfo-" + si_version + "-" + bi_version;
 		var local_bi_session_arg_always = local_bi_session ? "&session=" + local_bi_session : "";
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : local_bi_session_arg_always;
+		document.write('<link href="libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />');
 		document.write('<script src="libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 		document.write('<script src="libs-src/vue.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 		document.write('<script src="storageinfo-libs.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 	</script>
-	<script type="text/javascript">
-		var capacity_cached = { "localCapacity": 5242880, "sessionCapacity": 5242880 };
+	<style type="text/css">
+		:root
+		{
+			/* Dialogs */
+			--dialog-bg-color: #FFFFFF;
+			--dialog-border-color: #404040;
+			--dialog-color: #FFFFFF;
+			--dialog-titlebar-bg-color: #3E5F8A;
+			--dialog-titlebar-bottom-border-color: #2b405d;
+			--dialog-titlebar-color: #cdcdcd;
+		}
 
-		Vue.component("storage-meta", {
-			template: "#storage-meta",
-			props:
+		body
+		{
+			font-family: Arial, Sans-Serif;
+			font-size: 12pt;
+		}
+
+		a[role="button"]
+		{
+			color: #0000EE;
+			cursor: pointer;
+			text-decoration: underline;
+		}
+
+		.localStorageUsageBreakdown
+		{
+			border-collapse: collapse;
+		}
+
+			.localStorageUsageBreakdown th,
+			.localStorageUsageBreakdown td
 			{
-				me: {
-					type: Object,
-					required: true
-				}
+				border: 1px solid #AAAAAA;
+				padding: 2px;
 			}
-		});
 
-		var app = null;
-		this.app = app = new Vue({
-			el: '#root',
-			data: function ()
+			.localStorageUsageBreakdown th
 			{
-				return {
-					allStorage: null,
-					wasCached: false,
-					isComputingCapacity: false,
-					origin: location.origin.trim()
-				};
-			},
-			created: function ()
-			{
-				this.allStorage = serializeAllStorage();
-				document.getElementById("root").style.display = "block";
-				document.getElementById("loading").style.display = "none";
-			},
-			mounted: function ()
-			{
-				this.loadFromCache(this.allStorage.local, capacity_cached.localCapacity);
-				this.loadFromCache(this.allStorage.session, capacity_cached.sessionCapacity);
-				this.wasCached = true;
-			},
-			methods:
-			{
-				recalculateStorageCapacity: function ()
-				{
-					if (this.allStorage.local.enabled)
-						this.allStorage.local.capacity = this.allStorage.local.fullness = 0;
-					if (this.allStorage.session.enabled)
-						this.allStorage.session.capacity = this.allStorage.session.fullness = 0;
-					this.wasCached = false;
-					this.isComputingCapacity = true;
-					setTimeout(function ()
-					{
-						app.calculateStorageCapacity(app.allStorage.local);
+				background-color: #EEEEEE;
+			}
 
-						setTimeout(function ()
-						{
-							app.calculateStorageCapacity(app.allStorage.session);
-							app.isComputingCapacity = false;
-						}, 0);
-					}, 0);
-				},
-				calculateStorageCapacity: function (storageDef)
-				{
-					if (!storageDef)
-						return;
+		.origin
+		{
+			border: 1px solid #777777;
+			color: transparent;
+			background-color: #AAAAAA;
+			padding: 1px 6px;
+			user-select: all;
+		}
 
-					try
-					{
-						storageDef.storageObj.clear();
+			.origin:hover,
+			.origin:active
+			{
+				color: #000000;
+				background-color: #FFF9E6;
+			}
 
-						var limit = 20000000;
-						var startSize = limit / 2;
-						storageDef.capacity = getCapacity(storageDef.storageObj, startSize, limit);
-						storageDef.fullness = storageDef.size / storageDef.capacity;
-					}
-					finally
-					{
-						restoreStorageData(storageDef);
-					}
-				},
-				loadFromCache: function (storageDef, cachedCapacity)
+		#dropTarget
+		{
+			padding: 20px 10px;
+			border: 2px dashed #999999;
+			background-color: #eeeeee;
+		}
+
+			#dropTarget.dragover
+			{
+				border: 2px dashed #FFD900;
+				background-color: #f9e6bf;
+			}
+
+		.ImageVisualizer
+		{
+			background-color: #d5d5d5;
+		}
+
+		.ImageVisualizerList
+		{
+			word-wrap: break-word;
+			color: #000000;
+			padding: 10px;
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			justify-content: space-evenly;
+		}
+
+		.imageContainer
+		{
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			margin: 5px;
+			border: 1px solid black;
+			border-radius: 8px;
+			background-color: #FFFFFF;
+			padding: 5px;
+		}
+
+		.imageVisualizerImage
+		{
+			flex: 0 0;
+		}
+
+		.imageName
+		{
+			margin-top: 2px;
+			white-space: pre-line;
+		}
+		/* Dialog Theme */
+		.dialog_wrapper.darkTheme
+		{
+			border-color: var(--dialog-border-color);
+			background-color: var(--dialog-bg-color);
+			color: var(--dialog-color);
+		}
+
+			.dialog_wrapper.darkTheme .dialog_titlebar
+			{
+				border-bottom-color: var(--dialog-titlebar-bottom-border-color);
+				background-color: var(--dialog-titlebar-bg-color);
+			}
+
+			.dialog_wrapper.darkTheme .dialog_close,
+			.dialog_wrapper.darkTheme .dialog_refresh
+			{
+				background-color: var(--dialog-titlebar-bg-color);
+				color: var(--dialog-titlebar-color);
+			}
+
+			.dialog_wrapper.darkTheme div::-webkit-scrollbar-track
+			{
+				background: var(--dialog-bg-color);
+			}
+	</style>
+	<script type="text/javascript">
+		$(function ()
+		{
+			$DialogDefaults.theme = "dark";
+			window.app = null;
+			this.app = window.app = new Vue({
+				el: '#root',
+				data: function ()
 				{
-					storageDef.capacity = cachedCapacity;
-					storageDef.fullness = storageDef.size / storageDef.capacity;
-				},
-				localStorageCategories: function ()
-				{
-					var categories = [];
-					categories.push(this.newLocalStorageCategory("ui3_settings", "UI3 Settings", { download: "json" }));
-					categories.push(this.newLocalStorageCategory("camlist_thumbs_ui3", "Saved Thumbnails for UI3's Full Camera List", { download: "jpg" }));
-					categories.push(this.newLocalStorageCategory("ui2_settings", "Old UI2 Settings", { download: "json" }));
-					categories.push(this.newLocalStorageCategory("camlist_thumbs_ui2", "Old Saved Thumbnails for UI2's Full Camera List", { download: "jpg" }));
-					categories.push(this.newLocalStorageCategory("ui2_preset_thumbs", "Old Saved Thumbnails for UI2's PTZ Preset Buttons", { download: "jpg" }));
-					categories.push(this.newLocalStorageCategory("other", "Other", {
-						download: "json",
-						hint: 'The "Other" category includes:\n'
-							+ '\u2022 saved credentials' + '\n'
-							+ '\u2022 items saved by other applications hosted by the same web origin' + '\n'
-							+ '\u2022 settings for other Blue Iris servers, if you have used UI2 as a client app for other servers (very advanced use, not supported by UI3)'
-					}));
-					return categories;
-				},
-				newLocalStorageCategory: function (key, name, options)
-				{
-					options = $.extend({
-						hint: null,
-						download: false
-					}, options);
-					var bytes = this.allStorage.local.sizes[key];
-					if (!bytes)
-						bytes = 0;
 					return {
-						name: name,
-						key: key,
-						bytes: bytes,
-						hint: options.hint,
-						download: options.download
+						allStorage: null,
+						wasCached: true,
+						isComputingCapacity: false,
+						origin: location.origin.trim(),
+						dropTargetClasses: "",
+						selectedImportFile: null,
+						dragEnterCounter: 0
 					};
 				},
-				onClearIndividual: function (name, categoryKey)
+				created: function ()
 				{
-					if (confirm(name + ' will be cleared. Continue?'))
+					this.allStorage = serializeAllStorage();
+					document.getElementById("root").style.display = "block";
+					document.getElementById("loading").style.display = "none";
+				},
+				mounted: function ()
+				{
+				},
+				computed:
+				{
+					selectedImportFileDescription: function ()
 					{
-						ClearIndividualSettingCategory(categoryKey);
-						location.reload();
+						if (this.selectedImportFile)
+						{
+							return this.selectedImportFile.name + " (" + formatBytes2(this.selectedImportFile.size) + ")";
+						}
+						return "";
+					},
+					localStorageObject: function ()
+					{
+						for (var i = 0; i < this.allStorage.length; i++)
+							if (this.allStorage[i].name === "Local")
+								return this.allStorage[i];
+						return null;
 					}
 				},
-				onDownloadIndividual: function (name, categoryKey, downloadType)
+				methods:
 				{
-					if (downloadType === "jpg")
+					recalculateStorageCapacity: function ()
 					{
-						var result = DownloadAllItemsInIndividualSettingCategory_jpg(categoryKey);
-						if (result === -1)
-							alert("Failed to create zip file.");
-						else if (result > 0)
-							alert(result + " items failed to be added to the zip file.");
-					}
-					else if (downloadType === "json")
+						this.wasCached = false;
+						this.isComputingCapacity = true;
+						this.recalculateStorageCapacity_recursive(0);
+					},
+					recalculateStorageCapacity_recursive: function (index)
 					{
-						var result = DownloadAllItemsInIndividualSettingCategory_json(categoryKey);
+						if (index < this.allStorage.length)
+						{
+							this.allStorage[index].capacity = this.allStorage[index].fullness = 0;
+							setTimeout(function ()
+							{
+								app.calculateStorageCapacity(app.allStorage[index]);
+								app.recalculateStorageCapacity_recursive(++index);
+							}, 0);
+						}
+						else
+							this.isComputingCapacity = false;
+					},
+					calculateStorageCapacity: function (storageDef)
+					{
+						if (!storageDef)
+							return;
+
+						try
+						{
+							storageDef.storageObj.clear();
+
+							var limit = 20000000;
+							var startSize = limit / 2;
+							storageDef.capacity = getCapacity(storageDef.storageObj, startSize, limit);
+							storageDef.fullness = storageDef.size / storageDef.capacity;
+						}
+						finally
+						{
+							restoreStorageData(storageDef);
+						}
+					},
+					loadFromCache: function (storageDef, cachedCapacity)
+					{
+						storageDef.capacity = cachedCapacity;
+						storageDef.fullness = storageDef.size / storageDef.capacity;
+					},
+					localStorageCategories: function ()
+					{
+						var categories = [];
+						categories.push(this.newLocalStorageCategory("ui3_settings", "UI3 Settings"));
+						categories.push(this.newLocalStorageCategory("camlist_thumbs_ui3", "Saved Thumbnails for UI3's Full Camera List", { download: "jpg" }));
+						categories.push(this.newLocalStorageCategory("ui2_settings", "Old UI2 Settings"));
+						categories.push(this.newLocalStorageCategory("camlist_thumbs_ui2", "Old Saved Thumbnails for UI2's Full Camera List", { download: "jpg" }));
+						categories.push(this.newLocalStorageCategory("ui2_preset_thumbs", "Old Saved Thumbnails for UI2's PTZ Preset Buttons", { download: "jpg" }));
+						categories.push(this.newLocalStorageCategory("other", "Other", {
+							hint: 'The "Other" category includes:\n'
+								+ '\u2022 saved credentials' + '\n'
+								+ '\u2022 items saved by other applications hosted by the same web origin' + '\n'
+								+ '\u2022 settings for other Blue Iris servers, if you have used UI2 as a client app for other servers (very advanced use, not supported by UI3)'
+						}));
+						return categories;
+					},
+					newLocalStorageCategory: function (key, name, options)
+					{
+						options = $.extend({
+							hint: null,
+							download: false
+						}, options);
+						var bytes = this.localStorageObject.sizes[key];
+						if (!bytes)
+							bytes = 0;
+						var downloadButton = "download";
+						if (options.download === "jpg")
+							downloadButton = ".zip";
+						return {
+							name: name,
+							key: key,
+							bytes: bytes,
+							hint: options.hint,
+							download: options.download,
+							downloadButton: downloadButton
+						};
+					},
+					// DELETE
+					onClearIndividual: function (category)
+					{
+						if (confirm(category.name + ' will be cleared. Continue?'))
+						{
+							ClearIndividualSettingCategory(category);
+							location.reload();
+						}
+					},
+					onEraseAllLocalStorage: function ()
+					{
+						EraseAllLocalStorage();
+					},
+					// VIEW
+					onViewIndividual: function (category)
+					{
+						if (category.download === "jpg")
+						{
+							ViewAllItemsInIndividualSettingCategory_jpg(category);
+						}
+						else
+						{
+							var result = ViewAllItemsInIndividualSettingCategory_json(category);
+							if (result === -1)
+								alert("Failed to create json file.");
+							else if (result > 0)
+								alert(result + " items failed to be added to the json file.");
+						}
+					},
+					// DOWNLOAD
+					onDownloadIndividual: function (category)
+					{
+						if (category.download === "jpg")
+						{
+							var result = DownloadAllItemsInIndividualSettingCategory_jpg(category);
+							if (result === -1)
+								alert("Failed to create zip file.");
+							else if (result > 0)
+								alert(result + " items failed to be added to the zip file.");
+						}
+						else
+							this.onExportIndividual(category, category);
+					},
+					// EXPORT
+					onExportIndividual: function (category)
+					{
+						var result = DownloadAllItemsInIndividualSettingCategory_json(category);
 						if (result === -1)
 							alert("Failed to create json file.");
 						else if (result > 0)
 							alert(result + " items failed to be added to the json file.");
-					}
-					else
+					},
+					onExportAll: function ()
 					{
-						alert("Unexpected download type: " + downloadType);
+						var result = DownloadAllItemsInIndividualSettingCategory_json(this.newLocalStorageCategory("All", "All"));
+						if (result === -1)
+							alert("Failed to create json file.");
+						else if (result > 0)
+							alert(result + " items failed to be added to the json file.");
+					},
+					// IMPORT
+					onImportInputChange: function (e)
+					{
+						if (e.target.files && e.target.files.length)
+						{
+							this.selectedImportFile = e.target.files[0];
+						}
+					},
+					onFileDragOver: function (e)
+					{
+					},
+					onFileDragEnter: function (e)
+					{
+						this.dropTargetClasses = "dragover";
+						this.dragEnterCounter++;
+					},
+					onFileDragLeave: function (e)
+					{
+						if (--this.dragEnterCounter < 1)
+						{
+							this.dragEnterCounter = 0;
+							this.dropTargetClasses = "";
+						}
+					},
+					onFileDrop: function (e)
+					{
+						this.dragEnterCounter = 0;
+						this.dropTargetClasses = "";
+						if (e.dataTransfer.files && e.dataTransfer.files.length)
+						{
+							this.selectedImportFile = e.dataTransfer.files[0];
+						}
+					},
+					importSelectedFile: function (e)
+					{
+						if (this.selectedImportFile)
+							readImportFile(this.selectedImportFile);
+						else
+							alert("No file was selected for import.");
 					}
 				}
-			}
+			});
 		});
 		function ClearIndividualSettingCategory(category)
 		{
@@ -243,8 +466,8 @@
 					{
 						if (!storageObj.hasOwnProperty(key))
 							continue;
-						var thisCategory = categorizeSetting(key);
-						if (category === thisCategory)
+						var thisCategoryKey = categorizeSetting(key);
+						if (category.key === "All" || category.key === thisCategoryKey)
 							storageObj.removeItem(key);
 					};
 				}
@@ -258,10 +481,33 @@
 		function GetDownloadFileNameNoExt(category)
 		{
 			var dateStr = TimestampToDateFileNameString(Date.now());
-			var fileNameNoExt = location.hostname + "_" + category + "_" + dateStr;
+			var fileNameNoExt = location.origin + "_" + category.key + "_" + dateStr;
+			fileNameNoExt = FormatFileName(fileNameNoExt);
 			return fileNameNoExt;
 		}
 		function DownloadAllItemsInIndividualSettingCategory_json(category)
+		{
+			var jsonStr = GetAllItemsInIndividualSettingCategory_json(category);
+			if (jsonStr)
+			{
+				try
+				{
+					downloadDataUri(textToDataUri(jsonStr), GetDownloadFileNameNoExt(category) + ".json");
+				}
+				catch (ex)
+				{
+					console.error(ex);
+					return -1;
+				}
+			}
+			return 0;
+		}
+		function ViewAllItemsInIndividualSettingCategory_json(category)
+		{
+			var jsonStr = GetAllItemsInIndividualSettingCategory_json(category);
+			VisualizeObject(jsonStr, category.name);
+		}
+		function GetAllItemsInIndividualSettingCategory_json(category)
 		{
 			var keep = {};
 			var storageObj = getLocalStorage();
@@ -273,8 +519,8 @@
 					{
 						if (!storageObj.hasOwnProperty(key))
 							continue;
-						var thisCategory = categorizeSetting(key);
-						if (!category || category === thisCategory)
+						var thisCategoryKey = categorizeSetting(key);
+						if (category.key === "All" || category.key === thisCategoryKey)
 							keep[key] = storageObj[key];
 					}
 				}
@@ -282,20 +528,66 @@
 				{
 					console.error(ex);
 					alert("Failed to iterate across localStorage.");
-					return;
+					return null;
 				}
 			}
 			try
 			{
 				var jsonStr = JSON.stringify(keep, null, 2);
-				downloadDataUri(textToDataUri(jsonStr), GetDownloadFileNameNoExt(category) + ".json");
+				return sortJsonProps(jsonStr);
 			}
 			catch (ex)
 			{
 				console.error(ex);
-				return -1;
 			}
-			return 0;
+			return null;
+		}
+		function sortJsonProps(jsonFlat)
+		{
+			var lines = jsonFlat.split('\n');
+			var props = [];
+			for (var i = 0; i < lines.length; i++)
+			{
+				var line = lines[i];
+				var lineTrimmed = line.trim();
+				if (i === 0)
+				{
+					if (lineTrimmed !== "{")
+					{
+						console.error("Unable to sort json properties because first line did not meet expectations.");
+						return jsonFlat;
+					}
+				}
+				else if (i === lines.length - 1)
+				{
+					if (lineTrimmed !== "}")
+					{
+						console.error("Unable to sort json properties because last line did not meet expectations.");
+						return jsonFlat;
+					}
+				}
+				else if (lineTrimmed === "{" || lineTrimmed === "}")
+				{
+					console.error("Unable to sort json properties because line " + i + " did not meet expectations.");
+					return jsonFlat;
+				}
+				else
+				{
+					if (line.endsWith(","))
+						line = line.substr(0, line.length - 1);
+					props.push(line);
+				}
+			}
+			if (props.length === lines.length - 2)
+			{
+				props.sort();
+				return "{\n" + props.join(",\n") + "\n}";
+			}
+			else
+			{
+				console.error("Unable to sort json properties because line count was wrong at the end of the method.");
+				return jsonFlat;
+			}
 		}
 		function textToDataUri(text)
 		{
@@ -303,68 +595,24 @@
 		}
 		function DownloadAllItemsInIndividualSettingCategory_jpg(category)
 		{
+			var images = GetAllItemsInIndividualSettingCategory_jpg(category);
+			if (!images)
+				return -1;
 			var files = [];
 			var errors = 0;
-			var storageObj = getLocalStorage();
-			if (storageObj)
+			for (var i = 0; i < images.length; i++)
 			{
-				var images = [];
+				var image = images[i];
 				try
 				{
-					var keys = [];
-					for (var key in storageObj)
-					{
-						if (!storageObj.hasOwnProperty(key))
-							continue;
-						var thisCategory = categorizeSetting(key);
-						if (category === thisCategory)
-							keys.push(key);
-					}
-					var allTimestamps = {};
-					for (var i = 0; i < keys.length; i++)
-					{
-						var key = keys[i];
-						if (/_date$/.test(key))
-						{
-							var baseKey = key.substr(0, key.length - "_date".length);
-							var timestamp = parseInt(storageObj[key]);
-							if (timestamp && !isNaN(timestamp))
-								allTimestamps[baseKey] = timestamp;
-						}
-					}
-					for (var i = 0; i < keys.length; i++)
-					{
-						var key = keys[i];
-						if (allTimestamps[key] || !(/_date$/.test(key)))
-						{
-							var timestamp = allTimestamps[key];
-							if (!timestamp)
-								timestamp = Date.now();
-							var dateStr = TimestampToDateFileNameString(timestamp);
-							images.push({ dataUri: storageObj[key], name: key + "_" + dateStr + ".jpg" });
-						}
-					}
+					files.push({ name: image.name, input: dataURItoBlob(image.dataUri) });
 				}
 				catch (ex)
 				{
-					console.error(ex);
-					alert("Failed to iterate across localStorage.");
-					return;
+					errors++;
+					console.error(image.name, ex);
 				}
-				for (var i = 0; i < images.length; i++)
-				{
-					var image = images[i];
-					try
-					{
-						files.push({ name: image.name, input: dataURItoBlob(image.dataUri) });
-					}
-					catch (ex)
-					{
-						errors++;
-						console.error(image.name, ex);
-					}
-				};
-			}
+			};
 			try
 			{
 				clientZip.downloadZip(files)
@@ -389,6 +637,72 @@
 			}
 			return errors;
 		}
+		function ViewAllItemsInIndividualSettingCategory_jpg(category)
+		{
+			var images = GetAllItemsInIndividualSettingCategory_jpg(category);
+			VisualizeImages(images, category.name);
+		}
+		function GetAllItemsInIndividualSettingCategory_jpg(category)
+		{
+			var errors = 0;
+			var storageObj = getLocalStorage();
+			if (storageObj)
+			{
+				var images = [];
+				try
+				{
+					var keys = [];
+					for (var key in storageObj)
+					{
+						if (!storageObj.hasOwnProperty(key))
+							continue;
+						var thisCategoryKey = categorizeSetting(key);
+						if (category.key === "All" || category.key === thisCategoryKey)
+							keys.push(key);
+					}
+					var allTimestamps = {};
+					for (var i = 0; i < keys.length; i++)
+					{
+						var key = keys[i];
+						if (/_date$/.test(key))
+						{
+							var baseKey = key.substr(0, key.length - "_date".length);
+							var timestamp = parseInt(storageObj[key]);
+							if (timestamp && !isNaN(timestamp))
+								allTimestamps[baseKey] = timestamp;
+						}
+					}
+					for (var i = 0; i < keys.length; i++)
+					{
+						var key = keys[i];
+						if (allTimestamps[key] || !(/_date$/.test(key)))
+						{
+							var timestamp = allTimestamps[key];
+							if (!timestamp)
+								timestamp = Date.now();
+							var dateStr = TimestampToDateFileNameString(timestamp);
+							images.push({
+								dataUri: storageObj[key],
+								name: key + "_" + dateStr + ".jpg",
+								key: key,
+								dateStr: dateStr
+							});
+						}
+					}
+				}
+				catch (ex)
+				{
+					console.error(ex);
+					alert("Failed to iterate across localStorage.");
+					return null;
+				}
+				return images;
+			}
+			return {
+				imageCollection: imageCollection,
+				errors: errors
+			};
+		}
 		function dataURItoBlob(dataURI)
 		{
 			// convert base64 to raw binary data held in a string
@@ -406,9 +720,7 @@
 
 			// set the bytes of the buffer to the correct values
 			for (var i = 0; i < byteString.length; i++)
-			{
 				ia[i] = byteString.charCodeAt(i);
-			}
 
 			// write the ArrayBuffer to a blob, and you're done
 			var blob = new Blob([ab], { type: mimeString });
@@ -467,17 +779,17 @@
 			if (key.indexOf("ui3_") === 0)
 				return "ui3_settings";
 			if (key.indexOf("ui2_") === 0)
-				return "ui2";
+				return "ui2_settings";
 			return "other";
 		}
 		function serializeAllStorage()
 		{
-			return {
-				local: serializeStorage(getLocalStorage(), "Local"),
-				session: serializeStorage(getSessionStorage(), "Session")
-			};
+			var allStorage = [];
+			allStorage.push(serializeStorage(getLocalStorage(), "Local", 5242880));
+			//allStorage.push(serializeStorage(getSessionStorage(), "Session", 5242880));
+			return allStorage;
 		}
-		function serializeStorage(storageObj, name)
+		function serializeStorage(storageObj, name, capacityCached)
 		{
 			var store = {};
 			var sizes = { total: 0 };
@@ -525,9 +837,10 @@
 				storageObj: storageObj,
 				enabled: !!storageObj,
 				size: sizes.total,
-				capacity: 0,
+				capacity: capacityCached,
 				fullness: 0
 			};
+			obj.fullness = obj.size / obj.capacity;
 			if (isLocalStorage)
 			{
 				obj.isLocalStorage = true;
@@ -661,52 +974,146 @@
 			}
 			return sb.ToString();
 		}
+		function EraseAllLocalStorage()
+		{
+			if (getLocalStorage())
+			{
+				if (confirm("All Local Storage data for the origin \"" + location.origin + "\" will be lost.  Continue?"))
+				{
+					try
+					{
+						localStorage.clear();
+						location.reload();
+					}
+					catch (ex)
+					{
+						alert("An error occurred. Local Storage could not be cleared!\n\n" + ex);
+						return;
+					}
+					alert("Local Storage has been cleared.");
+				}
+			}
+			else
+			{
+				alert("Local Storage is not available. Unable to clear Local Storage.");
+			}
+		}
+		function readImportFile(file)
+		{
+			if (getLocalStorage())
+			{
+				var reader = new FileReader();
+				reader.onload = function (e)
+				{
+					var obj = null;
+					try
+					{
+						var text = e.target.result;
+						obj = JSON.parse(text);
+					}
+					catch (ex)
+					{
+						console.error(ex);
+						alert("Failed to import. The file was not in expected JSON format.");
+						return;
+					}
+					var errors = 0;
+					for (var key in obj)
+					{
+						if (obj.hasOwnProperty(key))
+						{
+							try
+							{
+								localStorage.setItem(key, obj[key]);
+							}
+							catch (ex)
+							{
+								console.log("Failed to import key", key, "value", obj[key], ex);
+								errors++;
+							}
+						}
+					}
+					if (errors > 0)
+						alert("Failed to import " + errors + " keys.");
+					else
+						alert("Import completed successfully.");
+					location.reload();
+				};
+				reader.readAsText(file);
+			}
+			else
+			{
+				alert("Local Storage is not available. Unable to import data into Local Storage.");
+			}
+		}
+		function formatBytes2(bytes, decimals)
+		{
+			if (bytes == 0) return '0 B';
+			var negative = bytes < 0;
+			if (negative)
+				bytes = -bytes;
+			var k = 1024,
+				dm = typeof decimals != "undefined" ? decimals : 2,
+				sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'],
+				i = Math.floor(Math.log(bytes) / Math.log(k));
+			return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + ' ' + sizes[i];
+		}
+		String.prototype.toFloat = function (digits)
+		{
+			return parseFloat(this.toFixed(digits));
+		};
+		Number.prototype.toFloat = function (digits)
+		{
+			return parseFloat(this.toFixed(digits));
+		};
+		String.prototype.endsWith = function (suffix)
+		{
+			if (this.length < suffix.length)
+				return false;
+			return this.substr(this.length - suffix.length) === suffix;
+		};
+		///////////////////////////////////////////////////////////////
+		// Object/JSON Visualize //////////////////////////////////////
+		///////////////////////////////////////////////////////////////
+		function VisualizeObject(obj, title)
+		{
+			var $root = $('<div class="ObjectVisualizer"></div>');
+			var $viewer = $('<div class="selectable" style="word-wrap: break-word; background-color: #FFFFFF; color: #000000; padding: 10px;"></div>');
+			$root.append($viewer);
+			if (obj)
+				$viewer.JSONView(obj);
+			else
+				$viewer.find(".selectable").text("null");
+			if (!title)
+				title = "Object Visualizer";
+			$root.dialog({ title: title });
+		}
+		function VisualizeImages(images, title)
+		{
+			var $root = $('<div class="ImageVisualizer"></div>');
+			var $viewer = $('<div class="ImageVisualizerList"></div>');
+			$root.append($viewer);
+			if (images && images.length)
+			{
+				for (var i = 0; i < images.length; i++)
+				{
+					var image = images[i];
+					var $imgContainer = $('<div class="imageContainer">');
+					var $img = $('<img class="imageVisualizerImage">');
+					$img.attr("src", image.dataUri);
+					$imgContainer.append($img);
+					$imgContainer.append($('<div class="imageName">').text(image.key + "\n" + image.dateStr));
+					$viewer.append($imgContainer);
+				}
+			}
+			if (!title)
+				title = "Object Visualizer";
+			var dialog = $root.dialog({ title: title });
+			setTimeout(function ()
+			{
+				dialog.contentChanged(true, true);
+			}, 0);
+		}
 	</script>
-	<style type="text/css">
-		body
-		{
-			font-family: Arial, Sans-Serif;
-			font-size: 12pt;
-		}
-
-		a[role="button"]
-		{
-			color: #0000EE;
-			cursor: pointer;
-			text-decoration: underline;
-		}
-
-		.localStorageUsageBreakdown
-		{
-			border-collapse: collapse;
-		}
-
-			.localStorageUsageBreakdown th,
-			.localStorageUsageBreakdown td
-			{
-				border: 1px solid #AAAAAA;
-				padding: 2px;
-			}
-
-			.localStorageUsageBreakdown th
-			{
-				background-color: #EEEEEE;
-			}
-
-		.origin
-		{
-			border: 1px solid #777777;
-			color: #000000;
-			background-color: #000000;
-			padding: 1px 6px;
-			user-select: all;
-		}
-
-			.origin:hover,
-			.origin:active
-			{
-				background-color: #FFF9E6;
-			}
-	</style>
 </body>
 </html>

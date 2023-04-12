@@ -66,6 +66,7 @@
 								<li><a data-toggle="pill" href="#ptzcontrols" id="nav-ptzcontrols">PTZ Controls</a></li>
 								<li><a data-toggle="pill" href="#recordings" id="nav-recordings">Recordings</a></li>
 								<li><a data-toggle="pill" href="#nerdstats" id="nav-nerdstats">Stats for Nerds</a></li>
+								<li><a data-toggle="pill" href="#storageinfo" id="nav-storageinfo">Storage Info</a></li>
 								<li><a data-toggle="pill" href="#tips" id="nav-tips">Tips</a></li>
 								<li><a data-toggle="pill" href="#extensions" id="nav-extensions">UI Extensions</a></li>
 								<!--li role="separator" class="divider"></li>
@@ -547,7 +548,7 @@
 							<li>The "DISK" status bar in the Status area can be clicked as a shortcut to open the Disk Usage panel.</li>
 						</ul>
 					</div>
-					<div class="tab-pane" id="cameraproperties" role="cameraproperties" aria-labelledby="nav-cameraproperties">
+					<div class="tab-pane" id="cameraproperties" role="tabpanel" aria-labelledby="nav-cameraproperties">
 						<h1>Camera Properties</h1>
 						<p><span class="label label-primary">Admin</span> user permission is required to access this functionality.</p>
 						<p>The Camera Properties panel is accessible from the context menu that appears when you right click on a camera (long-press on touchscreens).  This panel contains some information about the camera and provides a set of common administrative controls, such as the ability to reconfigure the motion sensor.  You can also disable a camera from here.  If you disable a camera, you can re-enable it from the Full Camera List in the <a href="#mainmenu">Main Menu</a>.</p>
@@ -709,6 +710,12 @@
 							<img class="img-responsive" mysrc="img/ExportList.png" alt="Convert/Export List" />
 						</div>
 					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="storageinfo" role="tabpanel" aria-labelledby="nav-storageinfo">
+						<h1>UI3 Settings Management (Import/Export/Reset Local Storage)</h1>
+						<p>Visit <a href="../storageinfo.htm" target="_blank"><b>storageinfo.htm</b></a> to manage your browser's <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>, including the ability to View, Delete, Import, and Export the settings and other data that UI3 is storing.</p>
+						<h2>Reset UI3 Settings</h2>
+						<p>A basic "Factory Default" reset button is available on the <a href="../reset.htm" target="_blank"><b>reset.htm</b></a> page, in case the main UI3 interface is unable to load.</p>
+					</div><!--/.tab-pane -->
 					<div class="tab-pane" role="tabpanel" id="template" aria-labelledby="nav-template">
 						<h1>Template</h1>
 						<p></p>
@@ -768,22 +775,38 @@
 				console.error(ex);
 			}
 
+			function GetFirstHeading(ele)
+			{
+				for (var i = 1; i <= 9; i++)
+				{
+					var h = ele.find("h" + i).first();
+					if (h.length)
+						return h;
+				}
+				return null;
+			}
+
 			try
 			{
 				// Copy all navbar links to a list on the Overview page.
-				var navbarLinks = $("#navbar").find("a");
+				var tabPanels = $('div.tab-pane');
 				var overviewLinks = [];
-				for (var i = 0; i < navbarLinks.length; i++)
+				for (var i = 0; i < tabPanels.length; i++)
 				{
-					var src = navbarLinks.eq(i);
-					var href = src.attr('href');
-					if (href && href !== '#' && href !== '#overview')
+					var tabPanel = tabPanels.eq(i);
+					var firstHeading = GetFirstHeading(tabPanel);
+					if (firstHeading)
 					{
-						var dst = $('<a class="list-group-item"></a>');
-						dst.attr('href', href);
-						dst.html(src.html());
+						var id = tabPanel.attr('id');
+						if (id && id !== '' && id !== 'overview' && id !== 'template')
+						{
+							var dst = $('<a class="list-group-item"></a>');
+							dst.attr('href', "#" + id);
+							var text = firstHeading.text().trim();
+							dst.text(text);
 
-						overviewLinks.push({ key: src.text(), a: dst });
+							overviewLinks.push({ key: text, a: dst });
+						}
 					}
 				}
 
