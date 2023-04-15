@@ -15565,7 +15565,8 @@ function FetchH264VideoModule()
 		{
 			// This is the automatic player selection algorithm:
 			var isAndroidFF = BrowserIsAndroid() && BrowserIsFirefox();
-			if (mse_mp4_h264_supported && !isAndroidFF)
+			var isIOS16_4_ornewer = GetIOSVersion()[0] === 16 && GetIOSVersion()[1] >= 4;
+			if (mse_mp4_h264_supported && !isAndroidFF && !isIOS16_4_ornewer)
 			{
 				isInitialized = false;
 				Initialize(H264PlayerOptions.HTML5);
@@ -33335,6 +33336,25 @@ function BrowserIsIOSSafari()
 function BrowserIsIOSChrome()
 {
 	return BrowserIsIOS() && !!navigator.userAgent.match(/ Safari\//) && !!navigator.userAgent.match(/ CriOS\//);
+}
+/**
+ * Returns an array of 3 integers indicating the iOS version (e.g. [16, 4, 1] or [0, 0, 0] if not positively identified as iOS).
+ */
+function GetIOSVersion()
+{
+	if (BrowserIsIOS())
+	{
+		try
+		{
+			var v = (navigator.appVersion).match(/OS (\d+)_(\d+)_?(\d+)?/);
+			return [parseInt(v[1], 10), parseInt(v[2], 10), parseInt(v[3] || 0, 10)];
+		}
+		catch (ex)
+		{
+			console.error("GetIOSVersion() failed to identify iOS version. Method will return [0,0,0].", ex);
+		}
+	}
+	return [0, 0, 0];
 }
 function BrowserIsAndroid()
 {
