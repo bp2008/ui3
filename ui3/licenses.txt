@@ -172,3 +172,6 @@ paho-mqtt
  * Contributors:
  *    Andrew Banks - initial API and implementation and initial documentation
  *******************************************************************************/
+
+NoSleep.js (https://github.com/Jmorr10/NoSleep.js)
+MIT License - https://github.com/Jmorr10/NoSleep.js/blob/master/LICENSE

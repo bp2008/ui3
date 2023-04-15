@@ -568,6 +568,7 @@ var openAlertListButtonContextMenu = null;
 var clipListContextMenu = null;
 var togglableContextMenus = null;
 var cameraConfig = null;
+var keepScreenAlive = null;
 var videoPlayer = null;
 var imageRenderer = null;
 var cameraNameLabels = null;
@@ -3241,6 +3242,8 @@ $(function ()
 	clipListContextMenu = new ClipListContextMenu();
 
 	cameraConfig = new CameraConfig();
+
+	keepScreenAlive = new KeepScreenAlive();
 
 	videoPlayer = new VideoPlayerController();
 	videoPlayer.PreLoadPlayerModules();
@@ -13576,6 +13579,7 @@ function VideoPlayerController()
 					moduleHolder["jpeg"].VisibilityChanged(visibleNow);
 				if (moduleHolder["h264"])
 					moduleHolder["h264"].VisibilityChanged(visibleNow);
+				BI_CustomEvent.Invoke("VisibilityChanged", visibleNow);
 			});
 		}
 		mouseHelper = new MouseEventHelper($("#layoutbody,#zoomhint")
@@ -19473,6 +19477,48 @@ function LiveVideoPausing()
 	this.showToast = function (text)
 	{
 		playbackPausedToast.showText(text);
+	}
+}
+///////////////////////////////////////////////////////////////
+// Prevent device from sleeping while video is playing ////////
+///////////////////////////////////////////////////////////////
+function KeepScreenAlive()
+{
+	var self = this;
+	var noSleep;
+	try
+	{
+		noSleep = new NoSleep({ allowNativeWakeLock: false });
+		if (noSleep.noSleepVideo)
+			$(noSleep.noSleepVideo).css("top", "0px")
+				.css("left", "0px")
+				.css("width", "1px")
+				.css("height", "1px")
+				.css("z-index", "-1");
+		BI_CustomEvent.AddListener("OpenVideo", function (loading)
+		{
+			noSleep.enable(document.title);
+		});
+		BI_CustomEvent.AddListener("Playback_Pause", function (loading)
+		{
+			noSleep.disable();
+		});
+		BI_CustomEvent.AddListener("Playback_Play", function (loading)
+		{
+			noSleep.enable(document.title);
+		});
+	}
+	catch (ex)
+	{
+		toaster.Error(ex);
+	}
+	this.isEnabled = function ()
+	{
+		return noSleep && noSleep.enabled;
+	}
+	this.getNoSleepObject = function ()
+	{
+		return noSleep;
 	}
 }
 ///////////////////////////////////////////////////////////////
