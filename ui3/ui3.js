@@ -30,6 +30,7 @@ catch (ex)
 window.developerMode = false;
 function developerLog()
 {
+	if (!developerMode) return;
 	var args = ["[dev]"];
 	for (var i = 0; i < arguments.length; i++)
 		args.push(arguments[i]);
@@ -37,6 +38,7 @@ function developerLog()
 }
 function developerTrace()
 {
+	if (!developerMode) return;
 	var args = ["[dev]"];
 	for (var i = 0; i < arguments.length; i++)
 		args.push(arguments[i]);
@@ -44,6 +46,7 @@ function developerTrace()
 }
 function developerError()
 {
+	if (!developerMode) return;
 	var args = ["[dev]"];
 	for (var i = 0; i < arguments.length; i++)
 		args.push(arguments[i]);
