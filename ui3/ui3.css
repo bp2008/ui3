@@ -407,6 +407,11 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	float: right;
 }
 
+.developerMode #systemnamewrapper
+{
+	background-color: #a35513;
+}
+
 .topbar_tab
 {
 	height: 56px;

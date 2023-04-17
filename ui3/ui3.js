@@ -4,7 +4,51 @@
 /// <reference path="libs-ui3.js" />
 /// This web interface is licensed under the GNU LGPL Version 3
 "use strict";
-var developerMode = false;
+var developerMode_internal = false;
+try
+{
+	if (typeof Object.defineProperty == "function")
+	{
+		Object.defineProperty(window, "developerMode",
+			{
+				get: function () { return developerMode_internal; },
+				set: function (value)
+				{
+					developerMode_internal = value;
+					if (value)
+						$("body").addClass("developerMode");
+					else
+						$("body").removeClass("developerMode");
+				}
+			});
+	}
+}
+catch (ex)
+{
+	console.error(ex);
+}
+window.developerMode = false;
+function developerLog()
+{
+	var args = ["[dev]"];
+	for (var i = 0; i < arguments.length; i++)
+		args.push(arguments[i]);
+	console.log.apply(this, args);
+}
+function developerTrace()
+{
+	var args = ["[dev]"];
+	for (var i = 0; i < arguments.length; i++)
+		args.push(arguments[i]);
+	console.trace.apply(this, args);
+}
+function developerError()
+{
+	var args = ["[dev]"];
+	for (var i = 0; i < arguments.length; i++)
+		args.push(arguments[i]);
+	console.error.apply(this, args);
+}
 var isReloadingUi3 = false;
 var appPath = GetAppPath();
 if (navigator.cookieEnabled)
@@ -3397,6 +3441,13 @@ var skipLoadingAllVideoStreams = false;
 var startupTimelineMs = null;
 function HandlePreLoadUrlParameters()
 {
+	// Parameter "developerMode"
+	var devModeParam = UrlParameters.Get("developerMode")
+	if (devModeParam === "1")
+		developerMode = true;
+	else if (devModeParam === "0")
+		developerMode = false;
+
 	// Parameter "tab"
 	var tab = UrlParameters.Get("tab", "t");
 	if (tab !== '')
@@ -3475,6 +3526,7 @@ function HandlePreLoadUrlParameters()
 			settings.ui3_defaultTab = "timeline";
 			skipLoadingAllVideoStreams = true;
 			startupTimelineMs = timelineMs;
+			developerLog('"timeline"/"tl" URL parameter received value: ' + timelineMs);
 		}
 		else
 			console.log('"timeline"/"tl" URL parameter received invalid value: ' + UrlParameters.Get("timeline", "tl"));
@@ -6278,6 +6330,7 @@ function ClipTimeline()
 				if (startupTimelineMs !== null)
 				{
 					skipLoadingAllVideoStreams = false;
+					developerLog("Timeline component created. Starting playback at " + startupTimelineMs);
 					this.assignLastSetTime(startupTimelineMs);
 					this.userDidSetTime();
 				}
@@ -6536,6 +6589,7 @@ function ClipTimeline()
 				},
 				assignLastSetTime: function (time)
 				{
+					developerLog("timeline.assignLastSetTime(" + time + ")");
 					if (time < 1)
 						time = 1;
 					else
@@ -13438,6 +13492,7 @@ function DontShowWebcastingWarningAgain()
 ///////////////////////////////////////////////////////////////
 // Video Player Controller ////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+var firstStreamHasBeenRequested = false;
 function VideoPlayerController()
 {
 	/*
@@ -13573,8 +13628,7 @@ function VideoPlayerController()
 			{
 				// Called when page visibility changes.
 				var visibleNow = !documentIsHidden();
-				if (developerMode)
-					console.log("Tab is " + (visibleNow ? "visible now" : "hidden"));
+				developerLog("Tab is " + (visibleNow ? "visible now" : "hidden"));
 				if (moduleHolder["jpeg"])
 					moduleHolder["jpeg"].VisibilityChanged(visibleNow);
 				if (moduleHolder["h264"])
@@ -13698,6 +13752,7 @@ function VideoPlayerController()
 	}
 	var OnOpenVideo = function (loading)
 	{
+		firstStreamHasBeenRequested = true;
 		if (loading.id.startsWith('@'))
 			$("#prioritizeTriggeredButton").hide();
 		else
@@ -14004,6 +14059,7 @@ function VideoPlayerController()
 	}
 	this.LoadLiveCamera = function (camData, timelineArgs)
 	{
+		developerLog("LoadLiveCamera(", camData, timelineArgs, ")");
 		if (camData == null)
 		{
 			toaster.Error("The target camera or group could not be found.");
@@ -14012,15 +14068,26 @@ function VideoPlayerController()
 		if (timelineArgs)
 		{
 			if (typeof timelineArgs.timelineMs === "number")
+			{
+				var beforeBoundsCheck = timelineArgs.timelineMs;
 				timelineArgs.timelineMs = clipTimeline.BoundsCheckTimelineMs(timelineArgs.timelineMs);
+				if (timelineArgs.timelineMs !== beforeBoundsCheck)
+					developerLog("clipTimeline.BoundsCheckTimelineMs(" + beforeBoundsCheck + ") -> " + timelineArgs.timelineMs);
+			}
 			if (typeof timelineArgs.timelineMs !== "number")
+			{
+				if (timelineArgs.timelineMs !== beforeBoundsCheck)
+					developerLog("LoadLiveCamera saw that timelineArgs.timelineMs was type " + typeof timelineArgs.timelineMs + ", so is disregarding timelineArgs object.");
 				timelineArgs = {}; // Nothing else matters if timelineMs is not defined.
+			}
 		}
+		developerLog("LoadLiveCamera timelineArgs ", timelineArgs);
 		timelineArgs = $.extend({
 			timelineMs: undefined,
 			timelineJump: undefined,
 			startPaused: false
 		}, timelineArgs);
+		developerLog("LoadLiveCamera timelineArgs ", timelineArgs);
 
 		if ((!camData.isEnabled || !camData.webcast) && !cameraListLoader.CameraIsGroupOrCycle(camData))
 		{
@@ -14060,6 +14127,8 @@ function VideoPlayerController()
 			cli.rects = null;
 		}
 
+		developerLog("LoadLiveCamera cli ", cli);
+
 		lastLiveCameraOrGroupId = clc.optionValue;
 
 		playbackControls.Live();
@@ -14074,6 +14143,8 @@ function VideoPlayerController()
 		var startPaused = timelineArgs.startPaused;
 		if (playerModule)
 			playerModule.OpenVideo(cli, 0, startPaused);
+		else
+			developerLog("LoadLiveCamera playerModule not yet loaded");
 
 		fullScreenModeController.updateFullScreenButtonState();
 
@@ -14679,8 +14750,11 @@ function BICameraData()
 	/** If [isTimeline], then sets [timelineStart] = videoPlayer.lastFrameUtc. Returns a reference to this instance. */
 	this.UpdateTimelineStart = function ()
 	{
-		if (self.isTimeline())
+		if (self.isTimeline() && firstStreamHasBeenRequested)
+		{
+			developerTrace("BICameraData.UpdateTimelineStart() is resetting timelineStart from " + self.timelineStart + " to " + videoPlayer.lastFrameUtc);
 			self.timelineStart = videoPlayer.lastFrameUtc;
+		}
 		return self;
 	}
 	/** Returns a new ui3Rect representing the native resolution of the image as defined by camera or clip metadata. */
@@ -15104,8 +15178,10 @@ function JpegVideoModule()
 	var timeBetweenOpenVideoCalls = 300;
 	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
+		developerLog("JpegVideoModule.OpenVideo(", videoData, offsetPercent, startPaused, ")");
 		if (skipLoadingFirstVideoStream || skipLoadingAllVideoStreams)
 		{
+			developerLog("JpegVideoModule.OpenVideo -> Skipping Stream");
 			skipLoadingFirstVideoStream = false;
 			return;
 		}
@@ -15125,8 +15201,7 @@ function JpegVideoModule()
 			return;
 		}
 		lastOpenVideoCallAt = perfNow;
-		if (developerMode)
-			console.log("jpeg.OpenVideo");
+		developerLog("jpeg.OpenVideo");
 
 		if (videoPlayer.handleDisabledCamera(videoData))
 			return;
@@ -15150,6 +15225,7 @@ function JpegVideoModule()
 		currentStreamId++;
 		if (loading.isTimeline())
 		{
+			developerLog("JpegVideoModule -> isTimeline");
 			videoPlayer.lastFrameUtc = loading.timelineStart;
 			clipPlaybackPosition = loading.timelineStart;
 			loading.newTimelineStream = true;
@@ -15668,8 +15744,10 @@ function FetchH264VideoModule()
 	var openVideoTimeout = null;
 	this.OpenVideo = function (videoData, offsetPercent, startPaused)
 	{
+		developerLog("FetchH264VideoModule.OpenVideo(", videoData, offsetPercent, startPaused, ")");
 		if (skipLoadingFirstVideoStream || skipLoadingAllVideoStreams)
 		{
+			developerLog("FetchH264VideoModule.OpenVideo -> Skipping Stream");
 			skipLoadingFirstVideoStream = false;
 			return;
 		}
@@ -15680,14 +15758,14 @@ function FetchH264VideoModule()
 			clearTimeout(openVideoTimeout);
 		if (!h264_player.IsLoaded())
 		{
+			developerLog("!h264_player.IsLoaded(). Re-queuing action.");
 			openVideoTimeout = setTimeout(function ()
 			{
 				self.OpenVideo(videoData, offsetPercent, startPaused);
 			}, 5);
 			return;
 		}
-		if (developerMode)
-			console.log("h264.OpenVideo");
+		developerLog("h264.OpenVideo");
 
 		if (videoPlayer.handleDisabledCamera(videoData))
 			return;
@@ -15727,6 +15805,7 @@ function FetchH264VideoModule()
 		var fetchOptions = { timestampScale: 1 };
 		if (loading.isTimeline())
 		{
+			developerLog("FetchH264VideoModule -> isTimeline");
 			// Seeking with /time/set is disabled because its performance was terrible during testing. 
 			// Besides, the video stream ends when the user begins to seek, so /time/set is not even 
 			// appropriate unless we change how pausing works just for the timeline stream... yuck.
@@ -16173,8 +16252,7 @@ function FetchH264VideoModule()
 	{
 		if (currentServer.isLoggingOut)
 			return;
-		if (developerMode)
-			console.log("fetch stream ended: ", message);
+		developerLog("fetch stream ended: ", message);
 		cornerStatusIcons.Hide("trigger");
 		cornerStatusIcons.Hide("motion");
 		cornerStatusIcons.Hide("recording");
@@ -16852,8 +16930,7 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 
 	var moduleDidLoad = function ()
 	{
-		if (developerMode)
-			console.log("NACL Module loaded");
+		developerLog("NACL Module loaded");
 		clearTimeout(loadingTimeout);
 	}
 	var onLoadFail = function ()
@@ -17023,8 +17100,7 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 
 	var Initialize = function ()
 	{
-		if (developerMode)
-			console.log("pnacl_player.Initialize()");
+		developerLog("pnacl_player.Initialize()");
 		var $parent = $("#videoElement_wrapper");
 		$parent.remove();
 		$parent = $('<div id="videoElement_wrapper" class="deactivated"></div>');
@@ -17100,8 +17176,7 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.Flush = function ()
 	{
-		if (developerMode)
-			console.log("Posting reset");
+		developerLog("Posting reset");
 		player.postMessage("reset");
 		nonKeyframeDropper.Reset();
 		acceptedFrameCount = 0;
@@ -17119,8 +17194,7 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			frameMetadataCache.Add(frame);
-			//if (developerMode)
-			//	console.log("Posting frame " + frame.time);
+			//developerLog("Posting frame " + frame.time);
 			acceptedFrameCount++;
 			player.postMessage("f " + frame.time);
 			player.postMessage(frame.frameData.buffer);
@@ -17633,8 +17707,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 
 	var Initialize = function ()
 	{
-		if (developerMode)
-			console.log("HTML5_MSE_Player.Initialize()");
+		developerLog("HTML5_MSE_Player.Initialize()");
 
 		// Since UI3-228, in some circumstances, the HTML5 player copies video frames to a canvas and hides the <video> element. See setCanvasRenderingState function.
 		var $parent = $("#videoElement_wrapper");
@@ -17670,8 +17743,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	}
 	this.Dispose = function ()
 	{
-		if (developerMode)
-			console.log("HTML5_MSE_Player.Dispose()");
+		developerLog("HTML5_MSE_Player.Dispose()");
 		var $parent = $("#videoElement_wrapper");
 		$parent.remove();
 		if (jmuxer)
@@ -19739,8 +19811,7 @@ var biSoundPlayer = new (function ()
 	var playerCache = new FasterObjectMap();
 	this.PlayEvent = function (event)
 	{
-		if (developerMode)
-			console.log("PlayEvent " + event)
+		developerLog("PlayEvent " + event)
 		var player = playerCache[event];
 		if (!player)
 			player = playerCache[event] = new BISoundEffect();
@@ -19750,8 +19821,7 @@ var biSoundPlayer = new (function ()
 	}
 	this.PlaySoundFile = function (audioPlayerId, file)
 	{
-		if (developerMode)
-			console.log('PlaySoundFile("' + audioPlayerId + '", "' + file + '")');
+		developerLog('PlaySoundFile("' + audioPlayerId + '", "' + file + '")');
 		var player = playerCache["custom_" + audioPlayerId];
 		if (!player)
 			player = playerCache["custom_" + audioPlayerId] = new BISoundEffect();
@@ -28065,6 +28135,7 @@ var safeFetch = new (function ()
 	var streamEndedCbForActiveFetch = null;
 	this.OpenStream = function (url, headerCallback, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded, options)
 	{
+		developerLog("safeFetch.OpenStream", url);
 		queuedRequest = { url: url, headerCallback: headerCallback, frameCallback: frameCallback, statusBlockCallback: statusBlockCallback, streamInfoCallback: streamInfoCallback, streamEnded: streamEnded, options: options, activated: false };
 		if (streamer)
 		{
