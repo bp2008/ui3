@@ -15650,7 +15650,7 @@ function FetchH264VideoModule()
 				isInitialized = false;
 				Initialize(H264PlayerOptions.HTML5);
 			}
-			else if (webcodecs_h264_player_supported)
+			else if (webcodecs_h264_player_supported && !browser_is_ios)
 			{
 				isInitialized = false;
 				Initialize(H264PlayerOptions.WebCodecs);
@@ -30310,7 +30310,7 @@ function UISettingsPanel()
 			if (s.category != category)
 				continue;
 			var key = s.key;
-			if (!key || key === "bi_rememberMe" || key === "bi_username" || key === "bi_password" || key === "bi_lastunload")
+			if (!key || key === "bi_rememberMe" || key === "bi_username" || key === "bi_password" || key === "bi_lastunload" || key === "bi_override_disable_auto_login_once")
 				continue; // Don't write these to the file!
 			var value = settings.getItem(key);
 			sb.Append('OverrideDefaultSetting(');
@@ -33420,8 +33420,11 @@ function GetIOSVersion()
 	{
 		try
 		{
-			var v = (navigator.appVersion).match(/OS (\d+)_(\d+)_?(\d+)?/);
-			return [parseInt(v[1], 10), parseInt(v[2], 10), parseInt(v[3] || 0, 10)];
+			var v = navigator.userAgent.match(/OS (\d+)_(\d+)_?(\d+)?/);
+			if (!v && navigator.appVersion)
+				v = navigator.appVersion.match(/OS (\d+)_(\d+)_?(\d+)?/);
+			if (v)
+				return [parseInt(v[1], 10), parseInt(v[2], 10), parseInt(v[3] || 0, 10)];
 		}
 		catch (ex)
 		{
