@@ -3372,9 +3372,20 @@ $(function ()
 	window.addEventListener("beforeunload", function ()
 	{
 		if (isReloadingUi3)
+		{
 			settings.bi_lastunload = 0;
+			console.log('UI3 is reloading. Automatic login will not be suppressed.');
+		}
+		else if (tabVisibleStopwatch.Elapsed() < 2000)
+		{
+			settings.bi_lastunload = 0;
+			console.log('UI3 is unloading after being active for less than 2 seconds. Automatic login will not be suppressed.');
+		}
 		else
+		{
 			settings.bi_lastunload = Date.now();
+			console.log('UI3 is unloading after being active for more than 2 seconds. Automatic login will be suppressed for the next 5 seconds.');
+		}
 	});
 
 	BI_CustomEvent.Invoke("UI_Loading_End");
@@ -13496,6 +13507,7 @@ function DontShowWebcastingWarningAgain()
 // Video Player Controller ////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var firstStreamHasBeenRequested = false;
+var tabVisibleStopwatch = new UI3Stopwatch();
 function VideoPlayerController()
 {
 	/*
@@ -13636,6 +13648,10 @@ function VideoPlayerController()
 					moduleHolder["jpeg"].VisibilityChanged(visibleNow);
 				if (moduleHolder["h264"])
 					moduleHolder["h264"].VisibilityChanged(visibleNow);
+				if (visibleNow)
+					tabVisibleStopwatch.Restart();
+				else
+					tabVisibleStopwatch.Reset();
 				BI_CustomEvent.Invoke("VisibilityChanged", visibleNow);
 			});
 		}
@@ -32342,6 +32358,64 @@ function MqttTopicState()
 	this.get = function (key)
 	{
 		return map[key];
+	}
+}
+///////////////////////////////////////////////////////////////
+// Stopwatch //////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+/** Creates a new Stopwatch which begins in the running state. A Stopwatch instance operates only while it is being interacted with, and as such does not leak resources if left running. */
+function UI3Stopwatch()
+{
+	var self = this;
+	var startTime = performance.now();
+	var accumulatedTime = 0;
+	var isRunning = true;
+	/** Starts, or resumes, measuring elapsed time. Returns a reference to this Stopwatch. */
+	this.Start = function ()
+	{
+		if (!isRunning)
+		{
+			startTime = performance.now();
+			isRunning = true;
+		}
+		return self;
+	}
+	/** Stops measuring elapsed time. Returns a reference to this Stopwatch. */
+	this.Stop = function ()
+	{
+		if (isRunning)
+		{
+			accumulatedTime += performance.now() - startTime;
+			isRunning = false;
+		}
+		return self;
+	}
+	/** Stops time measurement and resets the elapsed time to zero. Returns a reference to this Stopwatch. */
+	this.Reset = function ()
+	{
+		self.Stop();
+		accumulatedTime = 0;
+		return self;
+	}
+	/** Stops time measurement, resets the elapsed time to zero, and starts measuring elapsed time. Returns a reference to this Stopwatch. */
+	this.Restart = function ()
+	{
+		self.Reset();
+		self.Start();
+		return self;
+	}
+	/** Returns true if this Stopwatch is currently running and measuring time. */
+	this.IsRunning = function ()
+	{
+		return isRunning;
+	}
+	/** Returns the total elapsed time measured by the current instance in milliseconds with sub-millisecond precison.  Time is only counted while the Stopwatch is running. */
+	this.Elapsed = function ()
+	{
+		var time = accumulatedTime;
+		if (isRunning)
+			time += performance.now() - startTime;
+		return time;
 	}
 }
 ///////////////////////////////////////////////////////////////

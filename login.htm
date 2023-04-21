@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "27";
+		var login_version = "28";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -222,12 +222,17 @@
 			if (skipAutoLogin)
 			{
 				SetPersistedValue("bi_override_disable_auto_login_once", "0");
+				console.log('Auto login was temporarily disabled because "autologin=0" URL parameter was observed (the UI3 "Main Menu" > "Log Out" button sets this parameter).');
 			}
 			var lastUnload = GetPersistedValue("bi_lastunload");
 			if (lastUnload > Date.now())
 				SetPersistedValue("bi_lastunload", 0);
 			else if (!skipAutoLogin)
+			{
 				skipAutoLogin = Date.now() - lastUnload < 5000;
+				if (skipAutoLogin)
+					console.log('Auto login was temporarily disabled because UI3 was determined to be running within the previous 5 seconds.');
+			}
 			clearTimeout(showLoadingMessageTimeout);
 			$("#loginLoading").hide();
 			$("#login").show();
@@ -245,7 +250,6 @@
 			}
 			if (!localStorageEnabled)
 				$("#cbLoginAutomatically").parent().text("Note: Local Storage is disabled in your browser, so credentials can not be saved.").css("color", "#EEEEEE");
-			SetupLoginContextMenu();
 			SetStatus();
 			$(window).resize(resized);
 			resized();
@@ -266,21 +270,7 @@
 				{
 					if ($("#txtUn").val() !== "" && $("#txtPw").val() !== "")
 					{
-						if (GetAutoLoginInstantly())
-						{
-							if ($("#cbLoginAutomatically").is(":checked"))
-								login();
-						}
-						else
-						{
-							$("#btnLogin").val("Logging in, in 2 seconds");
-							autologin_timeout_1 = setTimeout(function () { $("#btnLogin").val("Logging in, in 1 second"); }, 1000);
-							autologin_timeout_2 = setTimeout(function ()
-							{
-								if ($("#cbLoginAutomatically").is(":checked"))
-									login();
-							}, 2000);
-						}
+						login();
 					}
 				}
 			}
@@ -502,40 +492,6 @@
 			$("#status").html(html);
 			$("#status").css("color", color);
 			resized();
-		}
-		function GetAutoLoginInstantly()
-		{
-			return GetPersistedValue("bi_autoLoginInstant") === "1";
-		}
-		function GetPreferredContextMenuTrigger()
-		{
-			return GetPersistedValue("ui3_contextMenus_longPress") === "1" ? "longpress" : "right";
-		}
-		function SetupLoginContextMenu()
-		{
-			var onTriggerContextMenu = function (e)
-			{
-				if (GetAutoLoginInstantly())
-					$("#autoLoginNoDelay").text("Auto Login: Instant (click to change)");
-				else
-					$("#autoLoginNoDelay").text("Auto Login: Delayed (click to change)");
-				return true;
-			};
-			var onContextMenuAction = function ()
-			{
-				if (this.data.alias === "autoLoginNoDelay")
-					SetPersistedValue("bi_autoLoginInstant", GetAutoLoginInstantly() ? "0" : "1");
-			};
-			var menuOptions =
-			{
-				alias: "cmroot_login", width: "300px", items:
-					[
-						{ text: '<span id="autoLoginNoDelay"></span>', icon: "", alias: "autoLoginNoDelay", action: onContextMenuAction }
-					]
-				, onContextMenu: onTriggerContextMenu
-				, clickType: GetPreferredContextMenuTrigger()
-			};
-			$(".checkboxWrapper,#btnLogin").contextmenu(menuOptions);
 		}
 	</script>
 </body>
