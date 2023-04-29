@@ -4240,7 +4240,7 @@ function DropdownListItem(options)
 	var self = this;
 	// Default Options
 	this.text = "List Item";
-	this.isHtml = false;
+	this.isHtml = !!options.isHtml;
 	this.autoSetLabelText = true;
 	// End options
 	this.GetTooltip = function ()
@@ -8245,8 +8245,6 @@ function PlaybackControls()
 				continue;
 			var $item = $('<div class="playbackSettingsLine alignRight"></div>');
 			var name = $item.get(0).qualityName = p.name;
-			if (!sessionManager.CanProfileUseOverrides(i))
-				$item.append(GetStreamOverrideWarningSymbolMarkup(i));
 			$item.append(p.GetNameEle());
 			var tooltip = p.GetTooltipText();
 			if (tooltip)
@@ -8445,16 +8443,6 @@ function PlaybackControls()
 		if (!exportControls.mouseUp(e))
 			seekBar.mouseUp(e);
 	});
-	this.SyncStreamingQualityWarningIcon = function ()
-	{
-		if (sessionManager)
-		{
-			if (sessionManager.CanProfileUseOverrides())
-				$('#playbackSettingsWarning').hide();
-			else
-				$('#playbackSettingsWarning').show();
-		}
-	}
 }
 function GetStreamOverrideWarningSymbolMarkup(profileIndex)
 {
@@ -8471,6 +8459,20 @@ function OpenStreamingProfileEditor(profileIndex, e)
 	if (e && e.stopPropagation)
 		e.stopPropagation();
 	new StreamingProfileEditor(genericQualityHelper.GetProfileWithIndex(profileIndex), function () { });
+}
+function SyncStreamingQualityWarningIcon(haveNewSessionData)
+{
+	if (genericQualityHelper && sessionManager)
+	{
+		if (sessionManager.CanProfileUseOverrides())
+			$('#playbackSettingsWarning').hide();
+		else
+			$('#playbackSettingsWarning').show();
+
+		dropdownBoxes.setLabelText("streamingQuality", genericQualityHelper.GetCurrentProfile().GetNameEle().html(), true);
+		if (haveNewSessionData)
+			genericQualityHelper.SetStreamingQualityDropdownBoxItems();
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Playback Controls //////////////////////////////////////////
@@ -12720,7 +12722,7 @@ function SessionManager()
 
 		ProcessSoundsArray();
 		ProcessStreamsArray();
-		playbackControls && playbackControls.SyncStreamingQualityWarningIcon();
+		SyncStreamingQualityWarningIcon(true);
 
 		BI_CustomEvent.Invoke("Login Success", response);
 	}
@@ -20444,9 +20446,7 @@ function StreamingProfileUI()
 			var p = genericQualityHelper.profiles[i];
 			var $p = $('<li class="profileListItem"></li>');
 			$p.attr('name', p.name);
-			if (!sessionManager.CanProfileUseOverrides(i))
-				$p.append(GetStreamOverrideWarningSymbolMarkup());
-			$p.append(p.GetNameEle());
+			$p.append(p.GetNameEle({ warningIconIsButton: false }));
 			$p.append($('<div class="profileCodec"></div>').text("(" + p.vcodec + ")"))
 			$p.attr('title', p.GetTooltipText());
 			$p.on('click', ProfileClicked);
@@ -20550,7 +20550,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 
 		$dlg.append($content);
 		dialog = $dlg.dialog({
-			title: '<span>Profile: ' + srcProfile.GetNameEle().html() + '</span>'
+			title: '<span>Profile: ' + srcProfile.GetNameEle({ allowWarningIcon: false }).html() + '</span>'
 			, onClosing: DialogClosing
 		});
 	}
@@ -20566,7 +20566,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			AddEditorField("UI3 can't play this codec in your current web browser. This profile will not be available.", "vcodec", { type: "errorCommentText" });
 		AddEditorField("Base Server Profile", "stream", { type: "select", options: [GetServerProfileString(0), GetServerProfileString(1), GetServerProfileString(2)], onChange: ReRender });
 		if (p.vcodec !== "jpeg" && !sessionManager.DoesStreamAllowOverrides(p.stream))
-			AddEditorField(GetStreamOverrideWarningSymbolMarkup() + " The chosen Base Server Profile does not allow most encoding parameters to be overridden.  This profile may not operate as expected.  To allow this profile to function fully, choose a different Base Server Profile, or configure the Streaming profile in Blue Iris web server settings to allow UI3 overrides.", "stream", { type: "errorCommentHtml" });
+			AddEditorField(GetStreamOverrideWarningSymbolMarkup() + " The chosen Base Server Profile does not allow most encoding parameters to be overridden.  This profile may not operate as expected.  To allow this profile to function fully, choose a different Base Server Profile, or configure the \"Streaming " + p.stream + "\" profile in Blue Iris web server settings to allow UI3 overrides.", "stream", { type: "errorCommentHtml" });
 		AddEditorField("Each profile inherits encoding parameters from one of the server's streaming profiles. You may override individual parameters below.", "stream", { type: "comment" });
 		AddEditorField("Max Frame Width", "w", { min: 1, max: 99999 });
 		AddEditorField("Max Frame Height", "h", { min: 1, max: 99999 });
@@ -20713,8 +20713,12 @@ function StreamingProfile()
 	{
 		return self.name.replace('^', '');
 	}
-	this.GetNameEle = function ()
+	this.GetNameEle = function (options)
 	{
+		options = $.extend({
+			allowWarningIcon: true,
+			warningIconIsButton: true
+		}, options);
 		var $ele = $('<span></span>');
 		if (self.name.indexOf('^') > -1)
 		{
@@ -20730,6 +20734,12 @@ function StreamingProfile()
 		}
 		else
 			$ele.text(self.name);
+		if (options.allowWarningIcon && genericQualityHelper && sessionManager)
+		{
+			var profileIndex = genericQualityHelper.GetProfileIndexWithName(self.name);
+			if (!sessionManager.CanProfileUseOverrides(profileIndex))
+				$ele.prepend(GetStreamOverrideWarningSymbolMarkup(options.warningIconIsButton ? profileIndex : null));
+		}
 		return $ele;
 	}
 	this.GetAbbrColor = function ()
@@ -21017,16 +21027,16 @@ function GenericQualityHelper()
 			if (self.profiles[i].name === name)
 			{
 				settings.ui3_streamingQuality = name;
-				dropdownBoxes.setLabelText("streamingQuality", self.profiles[i].GetNameText()); // TODO: set name as HTML, include warning symbol and abbreviation as neccessary.
+				dropdownBoxes.setLabelText("streamingQuality", self.profiles[i].GetNameEle().html(), true);
 				if (videoPlayer)
 					videoPlayer.SelectedQualityChanged();
 				break;
 			}
-		playbackControls && playbackControls.SyncStreamingQualityWarningIcon();
+		SyncStreamingQualityWarningIcon(false);
 	}
 	var NotifyQualitySelectionChanged = function (p)
 	{
-		toaster.Info("The active streaming profile has changed to " + p.GetNameEle().html(), 3000);
+		toaster.Info("The active streaming profile has changed to " + p.GetNameEle().html(true), 3000);
 	}
 	this.SetStreamingQualityDropdownBoxItems = function ()
 	{
@@ -21035,9 +21045,16 @@ function GenericQualityHelper()
 		{
 			var p = self.profiles[i];
 			if (p.IsCompatible())
-				arr.push(new DropdownListItem({ text: p.GetNameText(), uniqueId: p.name, GetTooltip: p.GetTooltipText }));
+				arr.push(new DropdownListItem({ text: p.GetNameEle().html(), uniqueId: p.name, GetTooltip: p.GetTooltipText, isHtml: true }));
 		}
 		dropdownBoxes.listDefs["streamingQuality"].items = arr;
+	}
+	this.GetProfileIndexWithName = function (name)
+	{
+		for (var i = 0; i < self.profiles.length; i++)
+			if (self.profiles[i].name === name)
+				return i;
+		return -1;
 	}
 	this.GetProfileWithName = function (name)
 	{

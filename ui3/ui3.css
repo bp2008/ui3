@@ -1938,6 +1938,7 @@ div.invisibleLabel
 	overflow: hidden;
 	background-color: var(--uicontrol-bg-color);
 	display: flex;
+	align-items: center;
 }
 
 	.dropdownBox.disabled
@@ -2004,7 +2005,6 @@ div.invisibleLabel
 {
 	flex: 1 1 auto;
 	font-size: 16px;
-	padding-top: 10px;
 	color: var(--text-color);
 	white-space: nowrap;
 	overflow: hidden;
@@ -2014,14 +2014,12 @@ div.invisibleLabel
 .sizeMedium .dropdownLabel
 {
 	font-size: 15px;
-	padding-top: 5px;
 }
 
 .sizeSmall .dropdownLabel
 {
 	font-size: 13px;
 	line-height: 19px;
-	padding-top: 0px;
 }
 
 .dropdownBox:hover .dropdownLabel
@@ -2041,23 +2039,24 @@ div.invisibleLabel
 
 .dropdownArrow
 {
+	flex-shrink: 0;
 	display: inline-block;
 	float: right;
-	padding: 16px 11px 0px 0px;
+	padding-right: 11px;
 	width: 10px;
 	height: 8px;
 }
 
 .sizeMedium .dropdownArrow
 {
-	padding: 11px 8px 0px 0px;
+	padding-right: 8px;
 	width: 8px;
 	height: 6.4px;
 }
 
 .sizeSmall .dropdownArrow
 {
-	padding: 7px 4px 0px 0px;
+	padding-right: 4px;
 	width: 5px;
 	height: 4px;
 }
@@ -3725,16 +3724,10 @@ div.warningSymbol
 		height: 100% !important;
 	}
 
-.playbackSettingsLine div.warningSymbol,
-.profileListItem div.warningSymbol,
-.dialogOption_item_comment div.warningSymbol
+div.warningSymbol /* Some parent elements need to override these styles */
 {
 	vertical-align: bottom;
 	margin-right: 4px;
-}
-
-.playbackSettingsLine div.warningSymbol
-{
 	width: 20px;
 	height: 20px;
 }
@@ -3745,10 +3738,24 @@ div.warningSymbol
 	height: 18px;
 }
 
-.dialogOption_item_comment div.warningSymbol
+.sizeMedium .dropdownLabel div.warningSymbol,
+.sizeMedium .dropdown_list div.warningSymbol
 {
-	width: 20px;
-	height: 20px;
+	width: 18px;
+	height: 18px;
+}
+
+.sizeSmall .dropdownLabel div.warningSymbol,
+.sizeSmall .dropdown_list div.warningSymbol
+{
+	width: 16px;
+	height: 16px;
+}
+
+#playbackSettingsWarning.warningSymbol
+{
+	vertical-align: unset;
+	margin-right: unset;
 }
 
 div.warningSymbol.button
