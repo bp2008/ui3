@@ -7901,7 +7901,7 @@ function PlaybackControls()
 	{
 		if (!isVisible)
 		{
-			SetQualityHint();
+			self.SetQualityHint();
 			$pc.stop(true, true);
 			$pc.show();
 			isVisible = true;
@@ -7966,7 +7966,7 @@ function PlaybackControls()
 	{
 		if (!isVisible)
 		{
-			SetQualityHint();
+			self.SetQualityHint();
 			$pc.stop(true, true);
 			$pc.fadeIn(100);
 			isVisible = true;
@@ -8254,7 +8254,7 @@ function PlaybackControls()
 			$item.click(function ()
 			{
 				genericQualityHelper.QualityChoiceChanged(this.qualityName);
-				SetQualityHint();
+				self.SetQualityHint();
 				CloseSettings();
 			});
 			$playbackSettings.append($item);
@@ -8414,7 +8414,7 @@ function PlaybackControls()
 				$playbackSettings.find("div.speedBtn .playbackSettingsFloatRight").html((playSpeed == 1 ? "Normal" : playSpeed));
 		}
 	}
-	var SetQualityHint = function ()
+	this.SetQualityHint = function ()
 	{
 		var p = genericQualityHelper.GetCurrentProfile();
 		if (p.abbr)
@@ -21032,6 +21032,8 @@ function GenericQualityHelper()
 					videoPlayer.SelectedQualityChanged();
 				break;
 			}
+		if (playbackControls && playbackControls.IsVisible())
+			playbackControls.SetQualityHint();
 		SyncStreamingQualityWarningIcon(false);
 	}
 	var NotifyQualitySelectionChanged = function (p)
