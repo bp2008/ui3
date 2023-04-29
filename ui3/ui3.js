@@ -4831,9 +4831,9 @@ function DropdownBoxes()
 			currentlyOpenList = null;
 		}
 	}
+	/** This exists to prevent a glitch where dropdown lists close immediately in Edge when using a touchscreen, giving the appearance that the dropdown lists never even open. */
 	var allowDDLClose = function ()
 	{
-		/// <summary>This exists to prevent a glitch where dropdown lists close immediately in Edge when using a touchscreen, giving the appearance that the dropdown lists never even open.</summary>
 		preventDDLClose = false;
 	}
 	this.Resized = function ()
@@ -8402,9 +8402,9 @@ function PlaybackControls()
 			pcFrameTimestampVisible = false;
 		}
 	}
+	/** Updates several GUI elements with the new playSpeed value. */
 	var NotifySpeedChanged = function ()
 	{
-		/// <summary>Updates several GUI elements with the new playSpeed value.</summary>
 		SetPlaySpeedLabel();
 		if ($playbackSettings && $playbackSettings.length > 0)
 		{
@@ -32813,9 +32813,14 @@ function HexColorToRgbaColor(c, alpha)
 	c = HexColorToRgbObj(c);
 	return "rgba(" + c.r + "," + c.g + "," + c.b + "," + alpha + ")";
 }
+/**
+ * Returns a hex color not including "#", such as "222222" or "DDDDDD".
+ * @param {String} c Hex color of the background.  The idea is that the returned hex color will be high contrast against this background.
+ * @param {String} dark Your preferred color for dark text (defaults to "222222")
+ * @param {String} light Your preferred color for light text (defaults to "DDDDDD")
+ */
 function GetReadableTextColorHexForBackgroundColorHex(c, dark, light)
 {
-	/// <summary>Returns a hex color not including "#", such as "222222" or "DDDDDD".</summary>
 	c = HexColorToRgbObj(c);
 	var o = Math.round(((c.r * 299) + (c.g * 587) + (c.b * 114)) / 1000);
 	if (o > 125)
