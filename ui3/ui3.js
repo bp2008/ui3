@@ -4852,8 +4852,8 @@ function DropdownBoxes()
 function GetTooltipForStreamQuality(index)
 {
 	var arr = sessionManager.GetStreamsArray();
-	if (arr && arr.length > 0 && index > -1 && index < arr.length)
-		return arr[index];
+	if (index > -1 && index < arr.length)
+		return arr[index].str + (arr[index].overrides ? "" : " OVERRIDES NOT ALLOWED");
 	return "";
 }
 ///////////////////////////////////////////////////////////////
@@ -8167,6 +8167,7 @@ function PlaybackControls()
 		$playbackSettings.append($speedBtn);
 		var $qualityBtn = $('<div class="playbackSettingsLine">'
 			+ 'Quality<div class="playbackSettingsFloatRight">'
+			+ (sessionManager.CanProfileUseOverrides() ? '' : GetStreamOverrideWarningSymbolMarkup(genericQualityHelper.GetCurrentProfileIndex()))
 			+ htmlEncode(genericQualityHelper.GetCurrentProfile().GetNameText())
 			+ '<div class="playbackSettingsRightArrow"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalRight"></use></svg></div>'
 			+ '</div></div>');
@@ -8244,6 +8245,8 @@ function PlaybackControls()
 				continue;
 			var $item = $('<div class="playbackSettingsLine alignRight"></div>');
 			var name = $item.get(0).qualityName = p.name;
+			if (!sessionManager.CanProfileUseOverrides(i))
+				$item.append(GetStreamOverrideWarningSymbolMarkup(i));
 			$item.append(p.GetNameEle());
 			var tooltip = p.GetTooltipText();
 			if (tooltip)
@@ -8442,6 +8445,32 @@ function PlaybackControls()
 		if (!exportControls.mouseUp(e))
 			seekBar.mouseUp(e);
 	});
+	this.SyncStreamingQualityWarningIcon = function ()
+	{
+		if (sessionManager)
+		{
+			if (sessionManager.CanProfileUseOverrides())
+				$('#playbackSettingsWarning').hide();
+			else
+				$('#playbackSettingsWarning').show();
+		}
+	}
+}
+function GetStreamOverrideWarningSymbolMarkup(profileIndex)
+{
+	var button = typeof profileIndex === "number";
+	var cssClass = 'warningSymbol' + (button ? ' button' : '');
+	var onclick = button ? ' onclick="OpenStreamingProfileEditor(' + profileIndex + ', event)"' : '';
+	var tooltip = "This streaming profile is not allowed to override most encoding parameters and may not operate as expected.";
+	if (button)
+		tooltip += "\n\nClick to edit this profile.";
+	return '<div class="' + cssClass + '"' + onclick + ' title="' + tooltip + '"><div class="warningSymbolWhiteInterior"></div><svg class="icon noflip"><use xlink:href="#svg_mio_warning"></use></svg></div>';
+}
+function OpenStreamingProfileEditor(profileIndex, e)
+{
+	if (e && e.stopPropagation)
+		e.stopPropagation();
+	new StreamingProfileEditor(genericQualityHelper.GetProfileWithIndex(profileIndex), function () { });
 }
 ///////////////////////////////////////////////////////////////
 // Playback Controls //////////////////////////////////////////
@@ -12503,6 +12532,7 @@ function SessionManager()
 	var permission_clips = true;
 	var permission_clipcreate = false;
 	var biSoundOptions = ["None"];
+	var biStreamingProfiles = [];
 	var sessionExpiredToast = null;
 	this.supportedHTML5AudioFormats = [".mp3", ".wav"]; // File extensions, in order of preference
 	this.Initialize = function ()
@@ -12689,6 +12719,8 @@ function SessionManager()
 			$("#bi_version_label").text(lastResponse.data.version);
 
 		ProcessSoundsArray();
+		ProcessStreamsArray();
+		playbackControls && playbackControls.SyncStreamingQualityWarningIcon();
 
 		BI_CustomEvent.Invoke("Login Success", response);
 	}
@@ -12954,11 +12986,81 @@ function SessionManager()
 			return lastResponse.data.schedules;
 		return null;
 	}
+	var ProcessStreamsArray = function ()
+	{
+		if (lastResponse && lastResponse.data && lastResponse.data.streams && lastResponse.data.streams.length)
+		{
+			if (typeof lastResponse.data.streams[0] !== "string")
+				toaster.Warning("Blue Iris session data included the array of streams metadata in an unknown format.");
+			else
+			{
+				var streams = [];
+				for (var i = 0; i < lastResponse.data.streams.length; i++)
+					streams.push(MakeStreamObject(lastResponse.data.streams[i]));
+				biStreamingProfiles = streams;
+				return;
+			}
+		}
+		else
+			toaster.Warning("Blue Iris session data did not include the array of streams metadata.");
+		biStreamingProfiles = [MakeStreamObject(), MakeStreamObject(), MakeStreamObject()];
+	}
+	var MakeStreamObject = function (str)
+	{
+		if (!str)
+			str = "";
+		var o = { str: str };
+		if (str)
+		{
+			if (str.startsWithCaseInsensitive("VBR"))
+				o.control = "VBR";
+			else if (str.startsWithCaseInsensitive("CBR"))
+				o.control = "CBR";
+
+			var m = str.match(/q=(\d+)%/i);
+			if (m)
+				o.q = parseInt(m[1]);
+
+			m = str.match(/(\d+)kbps/i);
+			if (m)
+				o.kbps = parseInt(m[1]);
+
+			m = str.match(/gop=(\d+)/);
+			if (m)
+				o.gop = parseInt(m[1]);
+
+			m = str.match(/ (\d+)p/);
+			if (m)
+				o.res = parseInt(m[1]);
+
+			if (compareVersions(bi_version, "5.7.5.3") >= 0)
+				o.overrides = str.indexOf("*") > -1;
+			else
+				o.overrides = true;
+		}
+		return o;
+	}
 	this.GetStreamsArray = function ()
 	{
-		if (lastResponse && lastResponse.data && lastResponse.data.streams && lastResponse.data.streams.length == 3)
-			return lastResponse.data.streams;
-		return ["", "", ""];
+		return biStreamingProfiles;
+	}
+	this.CanProfileUseOverrides = function (i)
+	{
+		if (typeof i === "undefined" || i === null)
+			i = genericQualityHelper.GetCurrentProfileIndex();
+		var p = genericQualityHelper.GetProfileWithIndex(i);
+		if (p.vcodec === "jpeg")
+			return true;
+		return self.DoesStreamAllowOverrides(p.stream);
+	}
+	this.DoesStreamAllowOverrides = function (stream_index)
+	{
+		if (typeof stream_index === "undefined" || stream_index === null)
+			stream_index = genericQualityHelper.GetCurrentProfile().stream;
+		var streamsArray = sessionManager.GetStreamsArray();
+		if (stream_index >= 0 && stream_index < streamsArray.length)
+			return streamsArray[stream_index].overrides;
+		return true;
 	}
 	this.HasPermission_ChangeProfile = function ()
 	{
@@ -20342,6 +20444,8 @@ function StreamingProfileUI()
 			var p = genericQualityHelper.profiles[i];
 			var $p = $('<li class="profileListItem"></li>');
 			$p.attr('name', p.name);
+			if (!sessionManager.CanProfileUseOverrides(i))
+				$p.append(GetStreamOverrideWarningSymbolMarkup());
 			$p.append(p.GetNameEle());
 			$p.append($('<div class="profileCodec"></div>').text("(" + p.vcodec + ")"))
 			$p.attr('title', p.GetTooltipText());
@@ -20459,8 +20563,10 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		AddEditorField("Abbreviation Color", "aClr", { type: "color" });
 		AddEditorField("Video Codec", "vcodec", { type: "select", options: ["jpeg", "h264"], onChange: ReRender });
 		if (!p.IsCompatible())
-			AddEditorField("UI3 can't play this codec in your current web browser. This profile will not be available.", "vcodec", { type: "errorComment" });
-		AddEditorField("Base Server Profile", "stream", { type: "select", options: [GetServerProfileString(0), GetServerProfileString(1), GetServerProfileString(2)] });
+			AddEditorField("UI3 can't play this codec in your current web browser. This profile will not be available.", "vcodec", { type: "errorCommentText" });
+		AddEditorField("Base Server Profile", "stream", { type: "select", options: [GetServerProfileString(0), GetServerProfileString(1), GetServerProfileString(2)], onChange: ReRender });
+		if (p.vcodec !== "jpeg" && !sessionManager.DoesStreamAllowOverrides(p.stream))
+			AddEditorField(GetStreamOverrideWarningSymbolMarkup() + " The chosen Base Server Profile does not allow most encoding parameters to be overridden.  This profile may not operate as expected.  To allow this profile to function fully, choose a different Base Server Profile, or configure the Streaming profile in Blue Iris web server settings to allow UI3 overrides.", "stream", { type: "errorCommentHtml" });
 		AddEditorField("Each profile inherits encoding parameters from one of the server's streaming profiles. You may override individual parameters below.", "stream", { type: "comment" });
 		AddEditorField("Max Frame Width", "w", { min: 1, max: 99999 });
 		AddEditorField("Max Frame Height", "h", { min: 1, max: 99999 });
@@ -20819,6 +20925,19 @@ function GenericQualityHelper()
 			}
 		return self.GetAnyCompatibleProfile();
 	}
+	this.GetCurrentProfileIndex = function ()
+	{
+		if (!self.profiles || self.profiles.length === 0)
+			self.RestoreDefaultProfiles();
+		for (var i = 0; i < self.profiles.length; i++)
+			if (self.profiles[i].name === settings.ui3_streamingQuality)
+			{
+				if (!self.profiles[i].IsCompatible())
+					continue;
+				return i;
+			}
+		return -1;
+	}
 	this.GetAnyCompatibleProfile = function (didRestoreDefaults)
 	{
 		// Try to find the best profile
@@ -20898,11 +21017,12 @@ function GenericQualityHelper()
 			if (self.profiles[i].name === name)
 			{
 				settings.ui3_streamingQuality = name;
-				dropdownBoxes.setLabelText("streamingQuality", self.profiles[i].GetNameText());
+				dropdownBoxes.setLabelText("streamingQuality", self.profiles[i].GetNameText()); // TODO: set name as HTML, include warning symbol and abbreviation as neccessary.
 				if (videoPlayer)
 					videoPlayer.SelectedQualityChanged();
-				return;
+				break;
 			}
+		playbackControls && playbackControls.SyncStreamingQualityWarningIcon();
 	}
 	var NotifyQualitySelectionChanged = function (p)
 	{
@@ -20924,6 +21044,12 @@ function GenericQualityHelper()
 		for (var i = 0; i < self.profiles.length; i++)
 			if (self.profiles[i].name === name)
 				return self.profiles[i];
+		return null;
+	}
+	this.GetProfileWithIndex = function (index)
+	{
+		if (index >= 0 && index < self.profiles.length)
+			return self.profiles[index];
 		return null;
 	}
 	this.getSeekPreviewQualityArgs = function (loadingImg)
@@ -31159,9 +31285,13 @@ function MakeAddEditorFieldFn(title, $content, obj, o)
 		{
 			fieldArgs.inputType = "commentText";
 		}
-		else if (type === "errorComment")
+		else if (type === "errorCommentText")
 		{
 			fieldArgs.inputType = "errorCommentText";
+		}
+		else if (type === "errorCommentHtml")
+		{
+			fieldArgs.inputType = "errorCommentHtml";
 		}
 		else
 		{
@@ -34045,3 +34175,21 @@ setTimeout(function ()
 		}
 	});
 }, 0);
+/**
+ * Compares two version numbers using semantic versioning rules. Returns 1 if the first version is greater than the second version, -1 if it is less, 0 if the versions are the same.
+ * @param {String} version1 First version to compare.
+ * @param {String} version2 Second version to compare.
+ */
+function compareVersions(version1, version2)
+{
+	var v1 = version1.split('.');
+	var v2 = version2.split('.');
+	for (var i = 0; i < Math.max(v1.length, v2.length); i++)
+	{
+		var num1 = parseInt(v1[i] || 0);
+		var num2 = parseInt(v2[i] || 0);
+		if (num1 > num2) return 1;
+		if (num2 > num1) return -1;
+	}
+	return 0;
+}

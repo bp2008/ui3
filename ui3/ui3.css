@@ -3700,6 +3700,67 @@ body + div
 	font-size: 14px;
 }
 
+div.warningSymbol
+{
+	display: inline-block;
+	position: relative;
+	color: #FF0000;
+	background-color: transparent;
+	font-size: 0px;
+}
+
+	div.warningSymbol .warningSymbolWhiteInterior
+	{
+		position: absolute;
+		background-color: #FFFFFF;
+		width: 20%;
+		height: 53%;
+		top: 32%;
+		left: 40%;
+	}
+
+	div.warningSymbol svg
+	{
+		width: 100% !important;
+		height: 100% !important;
+	}
+
+.playbackSettingsLine div.warningSymbol,
+.profileListItem div.warningSymbol,
+.dialogOption_item_comment div.warningSymbol
+{
+	vertical-align: bottom;
+	margin-right: 4px;
+}
+
+.playbackSettingsLine div.warningSymbol
+{
+	width: 20px;
+	height: 20px;
+}
+
+.profileListItem div.warningSymbol
+{
+	width: 18px;
+	height: 18px;
+}
+
+.dialogOption_item_comment div.warningSymbol
+{
+	width: 20px;
+	height: 20px;
+}
+
+div.warningSymbol.button
+{
+	cursor: pointer;
+}
+
+	div.warningSymbol.button:hover
+	{
+		color: #FF6666;
+	}
+
 .playbackSettingsSpacer, .customCheckboxSpacer
 {
 	display: inline-block;
@@ -3814,6 +3875,32 @@ body + div
 	right: 0px;
 	font-size: 8px;
 	padding: 0px 1px;
+}
+
+#playbackSettingsWarning
+{
+	display: none;
+	position: absolute;
+	bottom: 6px;
+	left: 2px;
+	width: 24px;
+	height: 24px;
+}
+
+.sizeMedium #playbackSettingsWarning
+{
+	bottom: 4px;
+	left: 2px;
+	width: 20px;
+	height: 20px;
+}
+
+.sizeSmall #playbackSettingsWarning
+{
+	bottom: 2px;
+	left: 0px;
+	width: 16px;
+	height: 16px;
 }
 
 #pcButtonContainer.extraPadding
