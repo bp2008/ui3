@@ -64,6 +64,23 @@ if (navigator.cookieEnabled)
  * Otherwise the instances interfere with each other's timeline playback state.
  */
 var ui3InstanceId = getRandomAlphanumericStr(16);
+
+if ('serviceWorker' in navigator)
+{
+	window.addEventListener('load', function ()
+	{
+		navigator.serviceWorker.register('ui3serviceworker.js')
+			.then(function (registration)
+			{
+				console.log('UI3 Service Worker registration successful with scope: ', registration.scope);
+			})
+			.catch(function (err)
+			{
+				console.log('UI3 Service Worker registration failed: ', err);
+			});
+	});
+}
+
 //
 ///////////////////////////////////////////////////////////////
 // Host Redirection, Proxy Handling ///////////////////////////
@@ -28448,6 +28465,10 @@ function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockC
 				{
 					HandleGroupableConnectionError();
 					CallStreamEnded("Server unreachable");
+				}
+				else if (res.status === 403 || res.status === 302) // this request may redirect to the login page
+				{
+					CallStreamEnded("Your session has been lost.");
 				}
 				else if (res.status === 503)
 				{

@@ -1,64 +1,64 @@
-﻿{
-    "short_name": "UI3",
-    "name": "Blue Iris UI3",
-    "icons": [
-        {
-            "src": "logos/launcher-icon128.webp",
-            "sizes": "128x128",
-            "type": "image/webp"
-        },
-        {
-            "src": "logos/launcher-icon144.webp",
-            "sizes": "144x144",
-            "type": "image/webp"
-        },
-        {
-            "src": "logos/launcher-icon168.webp",
-            "sizes": "168x168",
-            "type": "image/webp"
-        },
-        {
-            "src": "logos/launcher-icon192.webp",
-            "sizes": "192x192",
-            "type": "image/webp"
-        },
-        {
-            "src": "logos/launcher-icon48.png",
-            "sizes": "48x48",
-            "type": "image/png"
-        },
-        {
-            "src": "logos/launcher-icon72.png",
-            "sizes": "72x72",
-            "type": "image/png"
-        },
-        {
-            "src": "logos/launcher-icon96.png",
-            "sizes": "96x96",
-            "type": "image/png"
-        },
-        {
-            "src": "logos/launcher-icon128.png",
-            "sizes": "128x128",
-            "type": "image/png"
-        },
-        {
-            "src": "logos/launcher-icon144.png",
-            "sizes": "144x144",
-            "type": "image/png"
-        },
-        {
-            "src": "logos/launcher-icon168.png",
-            "sizes": "168x168",
-            "type": "image/png"
-        },
-        {
-            "src": "launcher-icon.png",
-            "sizes": "192x192",
-            "type": "image/png"
-        }
-    ],
-    "display": "standalone",
-    "orientation": "any",
-    "start_url": "../ui3.htm"
+{
+	"short_name": "%%UI3_PWA_NAME%%",
+	"name": "%%UI3_PWA_NAME%%",
+	"icons": [
+		{
+			"src": "logos/launcher-icon128.webp",
+			"sizes": "128x128",
+			"type": "image/webp"
+		},
+		{
+			"src": "logos/launcher-icon144.webp",
+			"sizes": "144x144",
+			"type": "image/webp"
+		},
+		{
+			"src": "logos/launcher-icon168.webp",
+			"sizes": "168x168",
+			"type": "image/webp"
+		},
+		{
+			"src": "logos/launcher-icon192.webp",
+			"sizes": "192x192",
+			"type": "image/webp"
+		},
+		{
+			"src": "logos/launcher-icon48.png",
+			"sizes": "48x48",
+			"type": "image/png"
+		},
+		{
+			"src": "logos/launcher-icon72.png",
+			"sizes": "72x72",
+			"type": "image/png"
+		},
+		{
+			"src": "logos/launcher-icon96.png",
+			"sizes": "96x96",
+			"type": "image/png"
+		},
+		{
+			"src": "logos/launcher-icon128.png",
+			"sizes": "128x128",
+			"type": "image/png"
+		},
+		{
+			"src": "logos/launcher-icon144.png",
+			"sizes": "144x144",
+			"type": "image/png"
+		},
+		{
+			"src": "logos/launcher-icon168.png",
+			"sizes": "168x168",
+			"type": "image/png"
+		},
+		{
+			"src": "launcher-icon.png",
+			"sizes": "192x192",
+			"type": "image/png"
+		}
+	],
+	"display": "standalone",
+	"orientation": "any",
+	"start_url": "../ui3.htm"
 }
