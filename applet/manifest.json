@@ -23,6 +23,22 @@
 			"type": "image/webp"
 		},
 		{
+			"src": "logos/launcher-icon512.webp",
+			"sizes": "512x512",
+			"type": "image/webp"
+		},
+		{
+			"src": "logos/launcher-icon512_maskable.webp",
+			"sizes": "512x512",
+			"type": "image/webp",
+			"purpose": "maskable"
+		},
+		{
+			"src": "logos/launcher-icon1024.webp",
+			"sizes": "1024x1024",
+			"type": "image/webp"
+		},
+		{
 			"src": "logos/launcher-icon48.png",
 			"sizes": "48x48",
 			"type": "image/png"
@@ -53,12 +69,21 @@
 			"type": "image/png"
 		},
 		{
+			"src": "logos/launcher-icon512.png",
+			"sizes": "512x512",
+			"type": "image/png"
+		},
+		{
 			"src": "launcher-icon.png",
 			"sizes": "192x192",
 			"type": "image/png"
 		}
 	],
+	"background_color": "#000000",
+	"theme_color": "#3E5F8A",
 	"display": "standalone",
 	"orientation": "any",
-	"start_url": "../ui3.htm"
+	"start_url": "../ui3.htm",
+	"id": "/ui3.htm",
+	"scope": "%%VIRTDIR%%"
 }

@@ -10,3 +10,10 @@ self.addEventListener('activate', function (event)
 {
 	console.log('UI3 Service Worker activating...');
 });
+
+self.addEventListener('fetch', function (event)
+{
+	// Stub necessary for browser to suggest installing PWA.
+});
+
+

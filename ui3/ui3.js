@@ -69,7 +69,7 @@ if ('serviceWorker' in navigator)
 {
 	window.addEventListener('load', function ()
 	{
-		navigator.serviceWorker.register('ui3serviceworker.js')
+		navigator.serviceWorker.register('ui3serviceworker.js?v=' + combined_version + local_bi_session_arg)
 			.then(function (registration)
 			{
 				console.log('UI3 Service Worker registration successful with scope: ', registration.scope);
