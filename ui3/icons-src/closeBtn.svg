@@ -1,4 +1,4 @@
-﻿<symbol id="svg_stroke_closeBtn" viewBox="0 0 40 40">
-	<circle stroke-width="3" fill-opacity="0" cx="20" cy="20" r="18.5"/>
-	<path stroke-width="5" d="M 12,12 L 28,28 M 28,12 L 12,28" />
-</symbol>
+<svg xmlns="http://www.w3.org/2000/svg" id="svg_stroke_closeBtn" viewBox="0 0 40 40">
+	<circle stroke-width="3" fill-opacity="0" cx="20" cy="20" r="18.5" stroke="#000000" />
+	<path stroke-width="5" d="M 12,12 L 28,28 M 28,12 L 12,28" stroke="#000000" />
+</svg>
