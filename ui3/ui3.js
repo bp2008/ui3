@@ -12687,7 +12687,10 @@ function SessionManager()
 		loadingHelper.SetLoadedStatus("login");
 		self.SetAPISession(lastResponse.session);
 
-		$("#systemname").text(lastResponse.data["system name"]);
+		var sysName = lastResponse.data["system name"];
+		var appName = SysNameToAppName(sysName);
+		$("#systemname").text(sysName);
+		document.title = appName;
 		if (lastResponse.data && lastResponse.data.profiles && lastResponse.data.profiles.length > 0)
 			statusLoader.SetCurrentProfileNames(lastResponse.data.profiles);
 		if (lastResponse && lastResponse.data && lastResponse.data.schedules)
@@ -16358,6 +16361,8 @@ function FetchH264VideoModule()
 	}
 	var FrameRendered = function (frame)
 	{
+		if (typeof frame.width === "undefined")
+			return;
 		lastFrameMetadata.width = frame.width;
 		lastFrameMetadata.height = frame.height;
 		lastFrameMetadata.pos = frame.pos;
@@ -17498,6 +17503,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		{
 			videoDecoder = new VideoDecoder({ output: frameDecoded, error: decoderError });
 			videoDecoder.reset();
+			nonKeyframeDropper.Reset();
 			ConfigureVideoDecoder();
 		}
 	}
@@ -17547,7 +17553,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		return timestampLastAcceptedFrame - timestampLastRenderedFrame;
 	}
-	/**Clears the state of the video player, making it ready to accept a new stream. */
+	/** Clears the state of the video player, making it ready to accept a new stream. */
 	this.Flush = function ()
 	{
 		if (videoDecoder.state === "configured")
@@ -17604,7 +17610,14 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			frameCache[chunkArgs.timestamp] = frame;
 			var chunk = new EncodedVideoChunk(chunkArgs);
 			RecoverVideoDecoder();
-			videoDecoder.decode(chunk);
+			try
+			{
+				videoDecoder.decode(chunk);
+			}
+			catch (ex)
+			{
+				decoderError(ex);
+			}
 		}
 	}
 	this.Toggle = function (activate)
@@ -21464,6 +21477,13 @@ function GenericQualityHelper()
 		}
 		else
 			self.profiles = defaultProfiles;
+		if (settings.ui3_didAdd8kProfiles === "1")
+		{
+			if (!hasProfileWithName("4320p VBR^"))
+				self.profiles.push(Create_4320p_VBR());
+			if (!hasProfileWithName("4320p^"))
+				self.profiles.push(Create_4320p());
+		}
 		self.SaveProfiles();
 	}
 	this.LoadProfiles = function ()
@@ -32591,6 +32611,17 @@ function UI3Stopwatch()
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+function SysNameToAppName(sysName)
+{
+	sysName = sysName ? sysName.trim() : "";
+	if (sysName == "")
+		return "Blue Iris UI3";
+	if (sysName.match(/\b(Blue Iris|BI|UI3)\b/i))
+		return sysName;
+	if (sysName.length <= 13)
+		return sysName + " UI3";
+	return sysName;
+}
 function IsStandaloneApp()
 {
 	return navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches == true);
