@@ -19712,9 +19712,10 @@ function KeepScreenAlive()
 {
 	var self = this;
 	var noSleep;
+	var badAutoplay = new BadAutoplayPreventionDetector();
 	try
 	{
-		noSleep = new NoSleep({ allowNativeWakeLock: false });
+		noSleep = new NoSleep({ allowNativeWakeLock: false, overridePlayFunc: function (player) { return badAutoplay.Play(player); } });
 		if (noSleep.noSleepVideo)
 			$(noSleep.noSleepVideo).css("top", "0px")
 				.css("left", "0px")
@@ -32616,7 +32617,7 @@ function SysNameToAppName(sysName)
 	sysName = sysName ? sysName.trim() : "";
 	if (sysName == "")
 		return "Blue Iris UI3";
-	if (sysName.match(/\b(Blue Iris|BI|UI3)\b/i))
+	if (sysName.match(/\b(Blue Iris|BlueIris|BI|UI3)\b/i))
 		return sysName;
 	if (sysName.length <= 13)
 		return sysName + " UI3";

@@ -124,7 +124,8 @@ var NoSleep = function () {
     _classCallCheck(this, NoSleep);
 
     this.options = Object.assign({
-      allowNativeWakeLock: true
+      allowNativeWakeLock: true,
+      overridePlayFunc: null
     }, options);
     this.title = "No sleep";
     this.enabled = false;
@@ -229,7 +230,7 @@ var NoSleep = function () {
         this.enabled = true;
         return Promise.resolve();
       } else {
-        var playPromise = this.noSleepVideo.play();
+        var playPromise = this.options.overridePlayFunc ? this.options.overridePlayFunc(this.noSleepVideo) : this.noSleepVideo.play();
         return playPromise.then(function (res) {
           _this2.enabled = true;
           return res;
