@@ -173,7 +173,7 @@
 		console.log("Supported URL parameters:");
 		console.log("* cam=short     -- Select camera or group with [short] name");
 		console.log("* autoplay=0    -- Disables autoplay.");
-		console.log("* audio=1       -- Unmute at startup. Also disables autoplay.");
+		console.log("* audio=1       -- Unmute at startup. May cause browser to disable autoplay.");
 		console.log("* mode=2        -- Hide video player controls");
 		console.log("* mode=3        -- Use browser's standard video player controls");
 		console.log("=========================================================================");
@@ -212,8 +212,8 @@
 			autoplay = autoplay !== "0" && autoplay.toUpperCase() !== "FALSE";
 			var audio = UrlParameters.Get("audio");
 			audio = audio === "1" || audio.toUpperCase() === "TRUE";
-			if (audio)
-				autoplay = false;
+			//if (audio)
+			//	autoplay = false;
 			var args = { source: src, parentId: "#player", autoPlay: false, mute: !audio, chromeless: false, disableVideoTagContextMenu: true, allowUserInteraction: true, actualLiveTime: true, hlsMinimumDvrSize: 1 };
 			if (mode === 2 || mode === 3)
 			{
