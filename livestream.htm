@@ -208,8 +208,8 @@
 			var camId = (UrlParameters.Get("cam") === "" ? "index" : UrlParameters.Get("cam"));
 			var src = "/h264/" + camId + "/temp.m3u8?session=" + local_bi_session;
 			var mode = parseInt(UrlParameters.Get("mode"));
-			var autoplay = UrlParameters.Get("audio");
-			autoplay = autoplay === "0" || autoplay.toUpperCase() === "FALSE";
+			var autoplay = UrlParameters.Get("autoplay");
+			autoplay = autoplay !== "0" && autoplay.toUpperCase() !== "FALSE";
 			var audio = UrlParameters.Get("audio");
 			audio = audio === "1" || audio.toUpperCase() === "TRUE";
 			if (audio)
