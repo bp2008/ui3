@@ -4588,7 +4588,12 @@ function DropdownBoxes()
 	{
 		var folder = statusLoader ? statusLoader.GetFolder(folderIndex) : null;
 		if (!folder)
-			return;
+		{
+			if (!statusLoader || !statusLoader.getLastResponse())
+				folder = { name: defaultName }; // Status hasn't loaded yet.  Fall back to default folder name.
+			else
+				return;
+		}
 		var name = folder.name;
 		if (!name)
 			name = defaultName;
