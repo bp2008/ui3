@@ -125,7 +125,7 @@
 	<script type="text/javascript">
 		$(function ()
 		{
-			$("#svgContainer").load("icons.svg", function ()
+			$("#svgContainer").load("icons.svg?r=" + Date.now(), function ()
 			{
 				var $root = $("#root");
 				$("symbol,g").each(function (idx, ele)

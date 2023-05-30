@@ -2807,6 +2807,16 @@ var defaultSettings =
 			, category: "Extra"
 		}
 		, {
+			key: "ui3_invert_ptz_focus_buttons"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Swap PTZ Focus Near/Far'
+			, hint: 'If enabled, smaller icon will be focus near.  If disabled, the larger icon will be focus near.'
+			, onChange: OnChange_ui3_invert_ptz_focus_buttons
+			, category: "Extra"
+
+		}
+		, {
 			key: "ui3_show_cameras_in_group_dropdowns"
 			, value: "0"
 			, inputType: "checkbox"
@@ -5036,8 +5046,8 @@ function PtzButtons()
 	var hitPolys = {};
 	hitPolys["PTZzoomIn"] = [[64, 64], [82, 82], [91, 77], [99, 77], [106, 81], [126, 64], [116, 58], [105, 53], [86, 53], [74, 58]];
 	hitPolys["PTZzoomOut"] = [[64, 126], [82, 108], [91, 113], [99, 113], [106, 109], [126, 126], [116, 132], [105, 137], [86, 137], [74, 132]];
-	hitPolys["PTZfocusNear"] = [[126, 64], [108, 82], [113, 91], [113, 99], [109, 106], [126, 126], [132, 116], [137, 105], [137, 86], [132, 74]];
-	hitPolys["PTZfocusFar"] = [[64, 64], [82, 82], [77, 91], [77, 99], [81, 106], [64, 126], [58, 116], [53, 105], [53, 86], [58, 74]];
+	hitPolys["PTZfocusLarge"] = [[126, 64], [108, 82], [113, 91], [113, 99], [109, 106], [126, 126], [132, 116], [137, 105], [137, 86], [132, 74]];
+	hitPolys["PTZfocusSmall"] = [[64, 64], [82, 82], [77, 91], [77, 99], [81, 106], [64, 126], [58, 116], [53, 105], [53, 86], [58, 74]];
 	hitPolys["PTZstop"] = [[82, 82], [91, 77], [99, 77], [108, 82], [113, 91], [113, 99], [108, 108], [99, 113], [91, 113], [82, 108], [77, 99], [77, 91]];
 	hitPolys["PTZcardinalUp"] = [[52, 9], [74, 58], [86, 53], [105, 53], [116, 58], [138, 9], [96, 0]];
 	hitPolys["PTZcardinalRight"] = [[181, 52], [132, 74], [138, 86], [138, 105], [132, 116], [181, 138], [190, 96]];
@@ -5052,8 +5062,8 @@ function PtzButtons()
 	ptzCmds["PTZhome"] = 4;
 	ptzCmds["PTZzoomIn"] = 5;
 	ptzCmds["PTZzoomOut"] = 6;
-	ptzCmds["PTZfocusNear"] = -1;
-	ptzCmds["PTZfocusFar"] = -2;
+	ptzCmds["PTZfocusLarge"] = -1;
+	ptzCmds["PTZfocusSmall"] = -2;
 	ptzCmds["PTZstop"] = 64;
 	ptzCmds["PTZcardinalUp"] = 2;
 	ptzCmds["PTZcardinalRight"] = 1;
@@ -5068,8 +5078,8 @@ function PtzButtons()
 	ptzTitles["PTZhome"] = "Home";
 	ptzTitles["PTZzoomIn"] = "Zoom In";
 	ptzTitles["PTZzoomOut"] = "Zoom Out";
-	ptzTitles["PTZfocusNear"] = "Focus Near";
-	ptzTitles["PTZfocusFar"] = "Focus Far";
+	ptzTitles["PTZfocusLarge"] = "Focus Near";
+	ptzTitles["PTZfocusSmall"] = "Focus Far";
 	ptzTitles["PTZstop"] = "Stop";
 	ptzTitles["PTZcardinalUp"] = "Up";
 	ptzTitles["PTZcardinalRight"] = "Right";
@@ -5079,6 +5089,33 @@ function PtzButtons()
 	ptzTitles["PTZordinalNW"] = "Up Left";
 	ptzTitles["PTZordinalSW"] = "Down Left";
 	ptzTitles["PTZordinalSE"] = "Down Right";
+
+	/**
+	 * Call to assign new PTZ button mappings based on UI settings.
+	 */
+	this.UpdatePtzButtonMappings = function ()
+	{
+		var invertFocus = settings.ui3_invert_ptz_focus_buttons == "1";
+		ptzCmds["PTZfocusLarge"] = invertFocus ? -2 : -1;
+		ptzCmds["PTZfocusSmall"] = invertFocus ? -1 : -2;
+		ptzTitles["PTZfocusLarge"] = invertFocus ? "Focus Far" : "Focus Near";
+		ptzTitles["PTZfocusSmall"] = invertFocus ? "Focus Near" : "Focus Far";
+	}
+	this.UpdatePtzButtonMappings();
+	/**
+	 * Returns the map of svgid to PTZ command number for PTZ button mappings.
+	 */
+	this.GetPtzCmds = function ()
+	{
+		return ptzCmds;
+	}
+	/**
+	 * Returns the map of svgid to tooltip text for PTZ button mappings.
+	 */
+	this.GetPtzTooltips = function ()
+	{
+		return ptzTitles;
+	}
 
 	$ptzGraphicContainers.each(function (idx, ele)
 	{
@@ -5090,8 +5127,6 @@ function PtzButtons()
 	{
 		var $ele = $(ele);
 		ele.svgid = $ele.attr('svgid');
-		ele.ptzcmd = ptzCmds[ele.svgid];
-		ele.tooltipText = ptzTitles[ele.svgid];
 		var layoutParts = $ele.attr('layoutR').split(' ');
 		ele.layout = {
 			x: parseFloat(layoutParts[0])
@@ -5121,7 +5156,7 @@ function PtzButtons()
 	// onHoverEnter called whenever a mouse pointer begins hovering over any button.
 	var onHoverEnter = function (btn)
 	{
-		$ptzButtons.attr("title", btn.tooltipText);
+		$ptzButtons.attr("title", ptzTitles[btn.svgid]);
 		$hoveredEle = $(btn);
 		setColor($hoveredEle, textHoverColor);
 	}
@@ -5143,7 +5178,7 @@ function PtzButtons()
 	}
 	var onButtonMouseDown = function (btn)
 	{
-		self.SendOrQueuePtzCommand(videoPlayer.Loading().image.id, btn.ptzcmd, false);
+		self.SendOrQueuePtzCommand(videoPlayer.Loading().image.id, ptzCmds[btn.svgid], false);
 		$activeEle = $(btn);
 		setColor($activeEle, textActiveColor);
 	}
@@ -30231,6 +30266,7 @@ function UISettingsPanel()
 			if (isDisplayable && (typeof s.preconditionFunc !== "function" || s.preconditionFunc()) && processFilter(s))
 			{
 				var $row = $('<div class="uiSettingsRow withDefaultBtn"></div>');
+				$row.attr("data-settings-key", s.key);
 				if (s.hint && s.hint.length > 0)
 					$row.attr('title', s.hint);
 				if (rowIdx++ % 2 === 1)
@@ -30998,6 +31034,10 @@ function SetBrowserZoom(enable)
 		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1');
 	else
 		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no');
+}
+function OnChange_ui3_invert_ptz_focus_buttons()
+{
+	ptzButtons.UpdatePtzButtonMappings();
 }
 ///////////////////////////////////////////////////////////////
 // Form Field Helpers /////////////////////////////////////////
