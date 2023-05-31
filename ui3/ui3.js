@@ -2787,7 +2787,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_status_area_bar_key_1"
-			, value: "CPU"
+			, value: "Server CPU"
 			, inputType: "select"
 			, options: []
 			, getOptions: GetStatusAreaBarOptions
@@ -2798,7 +2798,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_status_area_bar_key_2"
-			, value: "MEM"
+			, value: "Server Memory"
 			, inputType: "select"
 			, options: []
 			, getOptions: GetStatusAreaBarOptions
@@ -2809,7 +2809,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_status_area_bar_key_3"
-			, value: "DISK"
+			, value: "Server Disk"
 			, inputType: "select"
 			, options: []
 			, getOptions: GetStatusAreaBarOptions
@@ -2820,7 +2820,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_status_area_bar_key_4"
-			, value: "FPS"
+			, value: "Stream FPS"
 			, inputType: "select"
 			, options: []
 			, getOptions: GetStatusAreaBarOptions
@@ -4251,10 +4251,10 @@ function StatusAreaApi()
 			statusBarRegistry[uniqueName] = { uniqueName: uniqueName, componentName: componentName, value: initialValue };
 	}
 
-	this.setStatusBarRegistration("CPU", "status-bar-cpu", 0.0);
-	this.setStatusBarRegistration("MEM", "status-bar-mem", { bi: 0, memPhys: 1024, load: 0.0 });
-	this.setStatusBarRegistration("DISK", "status-bar-disk", { fullness: 0.0, tooltip: "", error: false });
-	this.setStatusBarRegistration("FPS", "status-bar-fps", { fps: 0, maxFps: 10 });
+	this.setStatusBarRegistration("Server CPU", "status-bar-cpu", 0.0);
+	this.setStatusBarRegistration("Server Memory", "status-bar-mem", { bi: 0, memPhys: 1024, load: 0.0 });
+	this.setStatusBarRegistration("Server Disk", "status-bar-disk", { fullness: 0.0, tooltip: "", error: false });
+	this.setStatusBarRegistration("Stream FPS", "status-bar-fps", { fps: 0, maxFps: 10 });
 
 	this.getStatusBarRegistration = function (uniqueName)
 	{
@@ -4387,7 +4387,7 @@ function StatusAreaApi()
 						if (uniqueName)
 							bar = this.reactiveStatusBarRegistry[uniqueName];
 						if (!bar)
-							bar = this.reactiveStatusBarRegistry["CPU"];
+							bar = this.reactiveStatusBarRegistry["Server CPU"];
 						bars.push(bar);
 					}
 				}
@@ -12439,7 +12439,7 @@ function StatusLoader()
 				//data:
 				// {"signal":"1", "cxns":23, "cpu":9, "gpu":0, "ram":"3418931200", "bits":28, "mem":"3.18G", "memphys":"31.9G", "memload":"27%", "folders":[...], "disks":[...], "profile":1, "lock":"0", "schedule":"Default", "dio":[...], "uptime":"4:20:55:44", "clips":"Clips: 123 items, 1.23T/1.23T; D: +108.6G, E: +69.7G", "time":"1685468503006", "tmessage":"1685468502981", "clipprocess":"", "warnings":"4", "alerts":"5854", "tzone":"-360"}
 				statusAreaApi.setStoplightSignal(parseInt(lastResponse.data.signal));
-				statusAreaApi.setValue("CPU", Clamp(parseFloat(response.data.cpu) / 100, 0, 1));
+				statusAreaApi.setValue("Server CPU", Clamp(parseFloat(response.data.cpu) / 100, 0, 1));
 				var memObj = {
 					bi: response.data.ram && parseInt(response.data.ram)
 						? parseInt(response.data.ram)
@@ -12449,7 +12449,7 @@ function StatusLoader()
 						: 0,
 					load: parseFloat(response.data.memload) / 100
 				};
-				statusAreaApi.setValue("MEM", memObj);
+				statusAreaApi.setValue("Server Memory", memObj);
 
 				// Disk info example: "disks":[{ "disk":"V:", "allocated":1841152, "used":1563676, "free":343444, "total":1907599 }]
 				// Values are in Mebibytes (MiB)
@@ -12464,7 +12464,7 @@ function StatusLoader()
 						totalUsed += disk.used;
 					}
 					var diskPercent = totalAvailable == 0 ? 0 : totalUsed / totalAvailable;
-					statusAreaApi.setValue("DISK", { fullness: diskPercent, tooltip: "Click to visualize disk usage." + (response.data.clips ? "\n\n" + response.data.clips : "") });
+					statusAreaApi.setValue("Server Disk", { fullness: diskPercent, tooltip: "Click to visualize disk usage." + (response.data.clips ? "\n\n" + response.data.clips : "") });
 				}
 				else if (response.data.clips)
 				{
@@ -12475,11 +12475,11 @@ function StatusLoader()
 						var used = getBytesFromBISizeStr(match[1]);
 						var total = getBytesFromBISizeStr(match[2]);
 						var diskPercent = total == 0 ? 0 : used / total;
-						statusAreaApi.setValue("DISK", { fullness: diskPercent, tooltip: response.data.clips });
+						statusAreaApi.setValue("Server Disk", { fullness: diskPercent, tooltip: response.data.clips });
 					}
 					else
 					{
-						statusAreaApi.setValue("DISK", { fullness: 0, tooltip: "Disk information was in an unexpected format: " + response.data.clips, error: true });
+						statusAreaApi.setValue("Server Disk", { fullness: 0, tooltip: "Disk information was in an unexpected format: " + response.data.clips, error: true });
 					}
 				}
 
@@ -15090,7 +15090,7 @@ function VideoPlayerController()
 	var fpsZeroTimeout = null;
 	var setFpsStatusBarThrottled = throttle(function (currentFps, maxFps)
 	{
-		statusAreaApi.setValue("FPS", { fps: currentFps, maxFps: maxFps });
+		statusAreaApi.setValue("Stream FPS", { fps: currentFps, maxFps: maxFps });
 	}, 250);
 	var RefreshFps = function (imgRequestMs)
 	{
@@ -15105,7 +15105,7 @@ function VideoPlayerController()
 	}
 	var ZeroFps = function ()
 	{
-		statusAreaApi.setValue("FPS", { fps: 0, maxFps: 0 });
+		statusAreaApi.setValue("Stream FPS", { fps: 0, maxFps: 0 });
 	}
 	this.PrioritizeTriggeredEnabled = function ()
 	{
