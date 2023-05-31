@@ -2783,7 +2783,7 @@ var defaultSettings =
 			, label: 'Status Area Label'
 			, hint: 'You can change the label shown in the status area.'
 			, onChange: OnChange_ui3_status_area
-			, category: "Status Area"
+			, category: "Status Area" // Note all status area settings should contain the text "status area" in a filterable field.
 		}
 		, {
 			key: "ui3_status_area_bar_key_1"
@@ -2792,6 +2792,7 @@ var defaultSettings =
 			, options: []
 			, getOptions: GetStatusAreaBarOptions
 			, label: 'Status Bar 1'
+			, hint: 'Choose what is shown in bar 1 of the Status Area'
 			, onChange: OnChange_ui3_status_area
 			, category: "Status Area"
 		}
@@ -2802,6 +2803,7 @@ var defaultSettings =
 			, options: []
 			, getOptions: GetStatusAreaBarOptions
 			, label: 'Status Bar 2'
+			, hint: 'Choose what is shown in bar 2 of the Status Area'
 			, onChange: OnChange_ui3_status_area
 			, category: "Status Area"
 		}
@@ -2812,6 +2814,7 @@ var defaultSettings =
 			, options: []
 			, getOptions: GetStatusAreaBarOptions
 			, label: 'Status Bar 3'
+			, hint: 'Choose what is shown in bar 3 of the Status Area'
 			, onChange: OnChange_ui3_status_area
 			, category: "Status Area"
 		}
@@ -2822,6 +2825,7 @@ var defaultSettings =
 			, options: []
 			, getOptions: GetStatusAreaBarOptions
 			, label: 'Status Bar 4'
+			, hint: 'Choose what is shown in bar 4 of the Status Area'
 			, onChange: OnChange_ui3_status_area
 			, category: "Status Area"
 		}
@@ -4320,7 +4324,7 @@ function StatusAreaApi()
 		template: ''
 			+ '<div id="statusArea">'
 			+ ' <stoplight-button :enabled="stoplightEnabled" :signal="stoplightSignal"></stoplight-button>'
-			+ '	<div class="serverStatusLabel" collapsibleid="serverStatus">'
+			+ '	<div class="serverStatusLabel" collapsibleid="serverStatus" ref="serverStatusLabel">'
 			+ '' + '{{panelName}}'
 			+ '' + '<div class="serverStatusSmallIcon">'
 			+ '			<component v-for="(b, index) in displayableStatusBars" :key="index" v-bind:is="b.componentName" :tiny="true" :value="b.value"></component>'
@@ -4353,6 +4357,21 @@ function StatusAreaApi()
 			this.stoplightSignal = tmpStoplightSignal;
 
 			statusAreaComponent = this;
+		},
+		mounted: function ()
+		{
+			var optionStatusArea =
+			{
+				alias: "cmroot_statusarea", width: 200, items:
+					[
+						{
+							text: 'Configure Status Area', icon: "#svg_x5F_Settings", alias: "configure",
+							action: function () { uiSettingsPanel.open("Status Area"); }
+						}
+					]
+				, clickType: GetPreferredContextMenuTrigger()
+			};
+			$(this.$refs.serverStatusLabel).contextmenu(optionStatusArea);
 		},
 		computed:
 		{
