@@ -4223,6 +4223,8 @@ var ProgressBar =
 function StatusAreaApi()
 {
 	var self = this;
+	var tmpStoplightEnabled = true;
+	var tmpStoplightSignal = -1;
 	/** [statusAreaComponent] is set when the 'status-area' vue component is created, which is triggered later in the loading routine. */
 	var statusAreaComponent = null;
 	/** Merged with statusAreaComponent.reactiveStatusBarRegistry after the vue component is created. */
@@ -4284,6 +4286,20 @@ function StatusAreaApi()
 		}
 	}
 
+	this.setStoplightEnabled = function (enabled)
+	{
+		tmpStoplightEnabled = enabled;
+		if (statusAreaComponent)
+			statusAreaComponent.setStoplightEnabled(enabled);
+	}
+
+	this.setStoplightSignal = function (signal)
+	{
+		tmpStoplightSignal = signal;
+		if (statusAreaComponent)
+			statusAreaComponent.setStoplightSignal(signal);
+	}
+
 	/**
 	 * Returns the status-area vue component instance. Use with caution.
 	 */
@@ -4303,11 +4319,7 @@ function StatusAreaApi()
 	Vue.component('status-area', {
 		template: ''
 			+ '<div id="statusArea">'
-			+ '	<div id="stoplightBtn" title="Control Blue Iris\'s Shield state with this button. Right-click to enable or disable button.">'
-			+ '		<div id="stoplightRed"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>' // The stoplight control is created here, but wired-up elsewhere using jQuery.
-			+ '		<div id="stoplightYellow"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>'
-			+ '		<div id="stoplightGreen"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>'
-			+ '	</div>'
+			+ ' <stoplight-button :enabled="stoplightEnabled" :signal="stoplightSignal"></stoplight-button>'
 			+ '	<div class="serverStatusLabel" collapsibleid="serverStatus">'
 			+ '' + '{{panelName}}'
 			+ '' + '<div class="serverStatusSmallIcon">'
@@ -4323,7 +4335,9 @@ function StatusAreaApi()
 			return {
 				panelName: "Server Status",
 				reactiveStatusBarRegistry: {},
-				userChosenBarNames: []
+				userChosenBarNames: [],
+				stoplightEnabled: false,
+				stoplightSignal: -1
 			};
 		},
 		created: function ()
@@ -4335,6 +4349,8 @@ function StatusAreaApi()
 			}
 			statusBarRegistry = this.reactiveStatusBarRegistry;
 			this.loadUserSettings();
+			this.stoplightEnabled = tmpStoplightEnabled;
+			this.stoplightSignal = tmpStoplightSignal;
 
 			statusAreaComponent = this;
 		},
@@ -4407,6 +4423,14 @@ function StatusAreaApi()
 					var uniqueName = settings.getItem("ui3_status_area_bar_key_" + i);
 					this.userChosenBarNames.push(uniqueName);
 				}
+			},
+			setStoplightEnabled: function (enabled)
+			{
+				this.stoplightEnabled = enabled;
+			},
+			setStoplightSignal: function (signal)
+			{
+				this.stoplightSignal = signal;
 			}
 		}
 	});
@@ -4414,17 +4438,17 @@ function StatusAreaApi()
 	Vue.component('status-bar', {
 		template: ''
 			+ '<div :class="{ statusBar: true, clickableStatusBar: clickable && !tiny, statusTiny: tiny }" :title="tooltipText" @click="onClick">'
-			+ '<div class="statusBarLabel" v-if="!tiny">{{ label ? label.toString().substr(0,4) : \'\' }}</div>'
+			+ '<div class="statusBarLabel" v-if="!tiny">{{ label ? label.substr(0,4) : \'\' }}</div>'
 			+ '<div class="progressBarOuter"><div class="progressBarInner" :style="myStyle"></div></div>'
-			+ '<div class="statusBarAmount" v-if="!tiny">{{textValue ? textValue.toString().substr(0,4) : \'\'}}</div>'
+			+ '<div class="statusBarAmount" v-if="!tiny">{{ textValue ? textValue.substr(0,4) : \'\' }}</div>'
 			+ '</div>',
 		props:
 		{
 			label: String,
 			percent: Number,
 			color: String,
-			textValue: null,
-			tooltipText: null,
+			textValue: String,
+			tooltipText: String,
 			clickable: Boolean,
 			tiny: Boolean
 		},
@@ -4454,9 +4478,9 @@ function StatusAreaApi()
 			+ '<status-bar :tiny="tiny" :label="genericLabel" :percent="value" :textValue="textValue"></status-bar>',
 		props:
 		{
-			genericLabel: "ERR",
+			genericLabel: { type: String, default: "ERR" },
 			value: Object,
-			tiny: false
+			tiny: { type: Boolean, default: false }
 		},
 		computed:
 		{
@@ -4478,8 +4502,8 @@ function StatusAreaApi()
 			+ '<status-bar :tiny="tiny" label="CPU" :percent="value" :color="color" :textValue="textValue" :tooltipText="tooltipText"></status-bar>',
 		props:
 		{
-			value: 0.0,
-			tiny: false
+			value: { type: Number, default: 0.0 },
+			tiny: { type: Boolean, default: false }
 		},
 		computed:
 		{
@@ -4512,8 +4536,8 @@ function StatusAreaApi()
 			+ '<status-bar :tiny="tiny" label="MEM" :percent="value.load" :color="color" :textValue="textValue" :tooltipText="tooltipText"></status-bar>',
 		props:
 		{
-			value: { bi: 0, memPhys: 1024, load: 0.0 },
-			tiny: false
+			value: { type: Object, default: function () { return { bi: 0, memPhys: 1024, load: 0.0 }; } },
+			tiny: { type: Boolean, default: false }
 		},
 		computed:
 		{
@@ -4546,8 +4570,8 @@ function StatusAreaApi()
 			+ '<status-bar :tiny="tiny" label="DISK" :percent="value.fullness" :textValue="textValue" :tooltipText="value.tooltip" :clickable="true" @click="onClick"></status-bar>',
 		props:
 		{
-			value: { fullness: 0.0, tooltip: "", error: false },
-			tiny: false
+			value: { type: Object, default: function () { return { fullness: 0.0, tooltip: "", error: false }; } },
+			tiny: { type: Boolean, default: false }
 		},
 		computed:
 		{
@@ -4570,8 +4594,8 @@ function StatusAreaApi()
 			+ '<status-bar :tiny="tiny" label="FPS" :percent="percent" :color="color" :textValue="value.fps.toString()" tooltipText="Frame rate of video being played by UI3"></status-bar>',
 		props:
 		{
-			value: { fps: 0, maxFps: 10 },
-			tiny: false
+			value: { type: Object, default: function () { return { fps: 0, maxFps: 10 }; } },
+			tiny: { type: Boolean, default: false }
 		},
 		computed:
 		{
@@ -4589,6 +4613,63 @@ function StatusAreaApi()
 					return "#CC3300";
 				else
 					return "#CC0000";
+			}
+		}
+	});
+
+	Vue.component('stoplight-button', {
+		template: ''
+			+ '	<div id="stoplightBtn" title="Control Blue Iris\'s Shield state with this button. Right-click to enable or disable button." @click="onClick" :class="{ disabled: !enabled }">'
+			+ '		<div id="stoplightRed" :style="redStyle"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>'
+			+ '		<div id="stoplightYellow" :style="yellowStyle"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>'
+			+ '		<div id="stoplightGreen" :style="greenStyle"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>'
+			+ '	</div>',
+		data: function ()
+		{
+			return {
+			};
+		},
+		props:
+		{
+			enabled: { type: Boolean, default: true },
+			signal: { type: Number, default: -1 }
+		},
+		computed:
+		{
+			redStyle: function ()
+			{
+				var s = {};
+				if (this.signal === 0)
+					s.opacity = "1";
+				return s;
+			},
+			yellowStyle: function ()
+			{
+				var s = {};
+				if (this.signal === 2)
+					s.opacity = "1";
+				return s;
+			},
+			greenStyle: function ()
+			{
+				var s = {};
+				if (this.signal === 1)
+					s.opacity = "1";
+				return s;
+			}
+		},
+		methods:
+		{
+			onClick: function (e)
+			{
+				if (this.disabled)
+					return;
+				var newSignal;
+				if (this.signal !== 0)
+					newSignal = 0;
+				else
+					newSignal = 2;
+				statusLoader.SetStoplight(newSignal);
 			}
 		}
 	});
@@ -12264,10 +12345,6 @@ function StatusLoader()
 	var $profileDropdown = $('.dropdownBox[name="profile"]');
 	var $scheduleLockBtn = $("#schedule_lock_button");
 	var $scheduleLockIcon = $("#schedule_lock_icon use");
-	var $stoplightDiv = $("#stoplightBtn div");
-	var $stoplightRed = $("#stoplightRed");
-	var $stoplightGreen = $("#stoplightGreen");
-	var $stoplightYellow = $("#stoplightYellow");
 
 	this.LoadStatus = function ()
 	{
@@ -12279,6 +12356,13 @@ function StatusLoader()
 			loadStatusInternal(profileNum);
 		else
 			toaster.Error("Cannot load profile " + profileNum);
+	}
+	this.SetStoplight = function (signal)
+	{
+		if (typeof signal !== "undefined" && signal >= 0 && signal <= 2)
+			loadStatusInternal(null, signal);
+		else
+			toaster.Error("Cannot set Shield state: " + signal);
 	}
 	var loadStatusInternal = function (profileNum, stoplightState, schedule)
 	{
@@ -12335,14 +12419,7 @@ function StatusLoader()
 			{
 				//data:
 				// {"signal":"1", "cxns":23, "cpu":9, "gpu":0, "ram":"3418931200", "bits":28, "mem":"3.18G", "memphys":"31.9G", "memload":"27%", "folders":[...], "disks":[...], "profile":1, "lock":"0", "schedule":"Default", "dio":[...], "uptime":"4:20:55:44", "clips":"Clips: 123 items, 1.23T/1.23T; D: +108.6G, E: +69.7G", "time":"1685468503006", "tmessage":"1685468502981", "clipprocess":"", "warnings":"4", "alerts":"5854", "tzone":"-360"}
-				$stoplightDiv.css("opacity", "");
-				if (response.data.signal == "0")
-					$stoplightRed.css("opacity", "1");
-				else if (response.data.signal == "1")
-					$stoplightGreen.css("opacity", "1");
-				else if (response.data.signal == "2")
-					$stoplightYellow.css("opacity", "1");
-
+				statusAreaApi.setStoplightSignal(parseInt(lastResponse.data.signal));
 				statusAreaApi.setValue("CPU", Clamp(parseFloat(response.data.cpu) / 100, 0, 1));
 				var memObj = {
 					bi: response.data.ram && parseInt(response.data.ram)
@@ -12594,10 +12671,7 @@ function StatusLoader()
 	}
 	this.SetStoplightButtonEnabled = function (enabled)
 	{
-		if (enabled)
-			$("#stoplightBtn").removeClass("disabled");
-		else
-			$("#stoplightBtn").addClass("disabled");
+		statusAreaApi.setStoplightEnabled(enabled);
 	}
 	$scheduleLockBtn.longpress(
 		function ()
@@ -12615,19 +12689,6 @@ function StatusLoader()
 			else
 				toaster.Info("Long press to disable automatic scheduling.");
 		});
-	$("#stoplightBtn").click(function ()
-	{
-		if ($(this).hasClass("disabled"))
-			return;
-		if (lastResponse == null)
-			return;
-		var newSignal = 0;
-		if (lastResponse.data.signal != 0)
-			newSignal = 0;
-		else
-			newSignal = 2;
-		loadStatusInternal(null, newSignal);
-	});
 	this.diskUsageClick = function ()
 	{
 		if (lastResponse == null)
