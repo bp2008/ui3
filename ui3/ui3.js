@@ -4255,6 +4255,9 @@ function StatusAreaApi()
 	this.setStatusBarRegistration("Server Memory", "status-bar-mem", { bi: 0, memPhys: 1024, load: 0.0 });
 	this.setStatusBarRegistration("Server Disk", "status-bar-disk", { fullness: 0.0, tooltip: "", error: false });
 	this.setStatusBarRegistration("Stream FPS", "status-bar-fps", { fps: 0, maxFps: 10 });
+	this.setStatusBarRegistration("Stream Bit Rate", "status-bar-stream-bit-rate", { video: 0, audio: 0 });
+	this.setStatusBarRegistration("Stream Delay", "status-bar-stream-delay", { netDelay: 0, playerDelay: 0 });
+	this.setStatusBarRegistration("Audio Buffer", "status-bar-audio-buffer", 0);
 
 	this.getStatusBarRegistration = function (uniqueName)
 	{
@@ -4457,9 +4460,9 @@ function StatusAreaApi()
 	Vue.component('status-bar', {
 		template: ''
 			+ '<div :class="{ statusBar: true, clickableStatusBar: clickable && !tiny, statusTiny: tiny }" :title="tooltipText" @click="onClick">'
-			+ '<div class="statusBarLabel" v-if="!tiny">{{ label ? label.substr(0,4) : \'\' }}</div>'
+			+ '<div class="statusBarLabel" v-if="!tiny">{{ label ? label : \'\' }}</div>'
 			+ '<div class="progressBarOuter"><div class="progressBarInner" :style="myStyle"></div></div>'
-			+ '<div class="statusBarAmount" v-if="!tiny">{{ textValue ? textValue.substr(0,4) : \'\' }}</div>'
+			+ '<div class="statusBarAmount" v-if="!tiny">{{ textValue ? textValue.substr(0, 4) : \'\' }}</div>'
 			+ '</div>',
 		props:
 		{
@@ -4632,6 +4635,149 @@ function StatusAreaApi()
 					return "#CC3300";
 				else
 					return "#CC0000";
+			}
+		}
+	});
+
+	Vue.component('status-bar-stream-delay', {
+		template: ''
+			+ '<status-bar :tiny="tiny" label="DLY" :percent="percent" :color="color" :textValue="totalDelayString" tooltipText="Total video streaming delay in milliseconds"></status-bar>',
+		props:
+		{
+			value: { type: Object, default: function () { return { netDelay: 0, playerDelay: 0 }; } },
+			tiny: { type: Boolean, default: false }
+		},
+		computed:
+		{
+			totalDelay: function ()
+			{
+				return this.value.netDelay + this.value.playerDelay;
+			},
+			totalDelayString: function ()
+			{
+				var ms = Math.round(this.totalDelay);
+				if (ms > 99999)
+					return "99+s";
+				if (ms > 9999)
+					return Math.round(ms / 1000) + "s";
+				return ms.toString();
+			},
+			percent: function ()
+			{
+				return Clamp(this.totalDelay / 5000, 0, 1);
+			},
+			color: function ()
+			{
+				if (this.totalDelay < 1000)
+					return null;
+				else if (this.totalDelay < 2000)
+					return "#CCAA00";
+				else if (this.totalDelay < 3000)
+					return "#CC8800";
+				else if (this.totalDelay < 4000)
+					return "#CC5500";
+				else if (this.totalDelay < 5000)
+					return "#CC3300";
+				else
+					return "#CC0000";
+			}
+		}
+	});
+
+	Vue.component('status-bar-audio-buffer', {
+		template: ''
+			+ '<status-bar :tiny="tiny" label="ABUF" :percent="percent" :color="color" :textValue="totalBufferString" tooltipText="Audio buffer contains this many milliseconds"></status-bar>',
+		props:
+		{
+			value: { type: Number, default: 0 },
+			tiny: { type: Boolean, default: false }
+		},
+		computed:
+		{
+			totalBufferString: function ()
+			{
+				var ms = Math.round(this.value);
+				if (ms > 99999)
+					return "99+s";
+				if (ms > 9999)
+					return Math.round(ms / 1000) + "s";
+				return ms.toString();
+			},
+			percent: function ()
+			{
+				return Clamp(this.value / 1000, 0, 1);
+			},
+			color: function ()
+			{
+				if (this.value < 1000)
+					return null;
+				else
+					return "#CCAA00";
+			}
+		}
+	});
+
+	function estimateMaxBitRate()
+	{
+		if (genericQualityHelper)
+		{
+			var p = genericQualityHelper.GetCurrentProfile();
+			if (p.vcodec === "h264")
+			{
+				var overridesAllowed = sessionManager.DoesStreamAllowOverrides(p.stream);
+				if (p.limitBitrate === 0 || (p.limitBitrate === 2 && !overridesAllowed))
+				{
+					var serversideStream = sessionManager.GetServersideStream(p.stream);
+					if (serversideStream && serversideStream.control === "CBR")
+						return serversideStream.kbps / 1000;
+					else
+						return 24.0;
+				}
+				else if (p.limitBitrate === 1)
+					return 24.0;
+				else if (p.limitBitrate === 2)
+					return p.kbps / 1000;
+			}
+		}
+		return 50.0;
+	}
+
+	Vue.component('status-bar-stream-bit-rate', {
+		template: ''
+			+ '<status-bar :tiny="tiny" label="MBPS" :percent="percent" :color="color" :textValue="textValue" tooltipText="Total video + audio bit rate"></status-bar>',
+		props:
+		{
+			value: { type: Object, default: { video: 0, audio: 0 } },
+			tiny: { type: Boolean, default: false }
+		},
+		computed:
+		{
+			totalKbps: function ()
+			{
+				return Math.round((this.value.video + this.value.audio) / 1000);
+			},
+			totalMbps: function ()
+			{
+				return this.totalKbps / 1000;
+			},
+			percent: function ()
+			{
+				return this.totalMbps / estimateMaxBitRate();
+			},
+			textValue: function ()
+			{
+				if (this.totalMbps < 1)
+					return this.totalMbps.toFixed(3);
+				else if (this.totalMbps < 10)
+					return this.totalMbps.toFixed(2);
+				else if (this.totalMbps < 100)
+					return this.totalMbps.toFixed(1);
+				else
+					return Math.round(this.totalMbps);
+			},
+			color: function ()
+			{
+				return this.percent > 1 ? "#CCAA00" : undefined;
 			}
 		}
 	});
@@ -13491,6 +13637,11 @@ function SessionManager()
 	{
 		return biStreamingProfiles;
 	}
+	this.GetServersideStream = function (stream_index)
+	{
+		if (stream_index >= 0 && stream_index < biStreamingProfiles.length)
+			return biStreamingProfiles[stream_index];
+	}
 	this.CanProfileUseOverrides = function (i)
 	{
 		if (typeof i === "undefined" || i === null)
@@ -13504,9 +13655,9 @@ function SessionManager()
 	{
 		if (typeof stream_index === "undefined" || stream_index === null)
 			stream_index = genericQualityHelper.GetCurrentProfile().stream;
-		var streamsArray = sessionManager.GetStreamsArray();
-		if (stream_index >= 0 && stream_index < streamsArray.length)
-			return streamsArray[stream_index].overrides;
+		var stream = sessionManager.GetServersideStream(stream_index);
+		if (stream)
+			return stream.overrides;
 		return true;
 	}
 	this.HasPermission_ChangeProfile = function ()
@@ -15659,6 +15810,8 @@ function JpegVideoModule()
 
 					videoModulesShared.RenderImage(image);
 
+					var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
+
 					if (nerdStats.IsOpen())
 					{
 						var loaded = videoPlayer.Loaded().image;
@@ -15672,7 +15825,6 @@ function JpegVideoModule()
 								nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
 						}
 
-						var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
 						var digitalZoom = '<span title="Digital Zoom Factor"> \uD83D\uDD0D' + imageRenderer.zoomHandler.GetZoomFactor().toFixed(2) + 'x</span>';
 
 						nerdStats.BeginUpdate();
@@ -15693,6 +15845,10 @@ function JpegVideoModule()
 						nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, Math.round(msLoadingTime) + "ms", true);
 						nerdStats.EndUpdate();
 					}
+
+					statusAreaApi.setValue("Stream Bit Rate", { video: bitRate_Video, audio: 0 });
+					statusAreaApi.setValue("Stream Delay", { netDelay: msLoadingTime, playerDelay: 0 });
+					statusAreaApi.setValue("Audio Buffer", 0);
 				}
 				GetNewImage();
 			})
@@ -16880,20 +17036,22 @@ function FetchH264VideoModule()
 	{
 		if (!perfNow)
 			perfNow = performance.now();
+
+		var netDelay = h264_player.GetNetworkDelay().toFloat();
+		var decoderDelay = h264_player.GetBufferedTime().toFloat();
+		var audioBufferSize = pcmPlayer.GetBufferedMs();
+		var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
+		var bitRate_Audio = bitRateCalc_Audio.GetBPS() * 8;
+
 		if (nerdStats.IsOpen())
 		{
 			var loaded = videoPlayer.Loaded().image;
 			var codecs = "h264";
 			if (streamHasAudio == 1 && audioCodec)
 				codecs += ", " + audioCodec;
-			var bitRate_Video = bitRateCalc_Video.GetBPS() * 8;
-			var bitRate_Audio = bitRateCalc_Audio.GetBPS() * 8;
-			var bufferSize = pcmPlayer.GetBufferedMs();
 			var interFrame = frame.expectedInterframe;
 			var actualInterFrame = perfNow - lastFrameAt;
 			var interFrameError = Math.abs(frame.expectedInterframe - actualInterFrame);
-			var netDelay = h264_player.GetNetworkDelay().toFloat();
-			var decoderDelay = h264_player.GetBufferedTime().toFloat();
 			if (h264_player.isMsePlayer)
 				interFrame = frame.duration ? frame.duration : 0;
 			var nativeRes = "";
@@ -16923,7 +17081,7 @@ function FetchH264VideoModule()
 			nerdStats.UpdateStat("Codecs", codecs);
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
-			nerdStats.UpdateStat("Audio Buffer", bufferSize, bufferSize.toFixed(0) + "ms", true);
+			nerdStats.UpdateStat("Audio Buffer", audioBufferSize, audioBufferSize.toFixed(0) + "ms", true);
 			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
 			if (!h264_player.isMsePlayer)
@@ -16936,6 +17094,10 @@ function FetchH264VideoModule()
 			lastNerdStatsUpdate = performance.now();
 			nerdStats.EndUpdate();
 		}
+
+		statusAreaApi.setValue("Stream Bit Rate", { video: bitRate_Video, audio: bitRate_Audio });
+		statusAreaApi.setValue("Stream Delay", { netDelay: netDelay, playerDelay: decoderDelay });
+		statusAreaApi.setValue("Audio Buffer", audioBufferSize);
 	}
 	var perf_warning_net = null;
 	var perf_warning_cpu = null;
