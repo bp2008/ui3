@@ -604,7 +604,8 @@ var cameraListDialog = null;
 var exportListDialog = null;
 var clipProperties = null;
 var clipDownloadDialog = null;
-var statusBars = null;
+var statusAreaApi = null;
+var volumeSlider = null;
 var dropdownBoxes = null;
 var leftBarBools = null;
 var cornerStatusIcons = null;
@@ -660,7 +661,7 @@ var togglableUIFeatures =
 		// [selector, uniqueId, displayName, onToggle, extraMenuButtons, shouldDisableToggler, labels]
 		["#volumeBar", "volumeBar", "Volume Controls", function (enabled)
 		{
-			statusBars.setEnabled("volume", enabled);
+			volumeSlider.setEnabled(enabled);
 			if (enabled)
 				$("#volumeBar").removeClass("disabled")
 			else
@@ -788,8 +789,19 @@ var HTML5DelayCompensationOptions = {
 	Normal: "Normal",
 	Strong: "Strong"
 }
+function GetStatusAreaBarOptions()
+{
+	var arr = new Array();
+	if (statusAreaApi)
+	{
+		var registrations = statusAreaApi.getStatusBarRegistrations();
+		for (var i = 0; i < registrations.length; i++)
+			arr.push(registrations[i].uniqueName);
+	}
+	return arr;
+}
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Status Area", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -1022,6 +1034,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_cps_uiSettings_category_MQTT_Remote_Control"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_Status_Area_visible"
 			, value: "1"
 		}
 		, {
@@ -2760,6 +2776,56 @@ var defaultSettings =
 			, category: "MQTT Remote Control"
 		}
 		, {
+			key: "ui3_status_area_name"
+			, value: "Server Status"
+			, inputType: "select"
+			, options: ["Server Status", "Status"]
+			, label: 'Status Area Label'
+			, hint: 'You can change the label shown in the status area.'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_bar_key_1"
+			, value: "CPU"
+			, inputType: "select"
+			, options: []
+			, getOptions: GetStatusAreaBarOptions
+			, label: 'Status Bar 1'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_bar_key_2"
+			, value: "MEM"
+			, inputType: "select"
+			, options: []
+			, getOptions: GetStatusAreaBarOptions
+			, label: 'Status Bar 2'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_bar_key_3"
+			, value: "DISK"
+			, inputType: "select"
+			, options: []
+			, getOptions: GetStatusAreaBarOptions
+			, label: 'Status Bar 3'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_bar_key_4"
+			, value: "FPS"
+			, inputType: "select"
+			, options: []
+			, getOptions: GetStatusAreaBarOptions
+			, label: 'Status Bar 4'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
 			key: "ui3_fullscreen_videoonly"
 			, value: "1"
 			, inputType: "checkbox"
@@ -3251,20 +3317,11 @@ $(function ()
 
 	clipDownloadDialog = new ClipDownloadDialog();
 
-	statusBars = new StatusBars();
-	statusBars.setLabel("volume", $("#pcVolume"));
-	statusBars.addDragHandle("volume");
-	statusBars.addOnProgressChangedListener("volume", function (newVolume)
-	{
-		newVolume = Clamp(parseFloat(newVolume), 0, 1);
-		if (!pcmPlayer.SuppressAudioVolumeSave())
-		{
-			settings.ui3_audioMute = "0";
-			settings.ui3_audioVolume = newVolume;
-		}
-		pcmPlayer.SetVolume(newVolume);
-	});
-	statusBars.addLabelClickHandler("volume", CameraAudioMuteToggle);
+	statusAreaApi = new StatusAreaApi();
+
+	new Vue({ el: "#layoutleft" }); // Activates any nested vue components in #layoutleft.
+
+	volumeSlider = new VolumeSlider();
 	pcmPlayer.SetAudioVolumeFromSettings();
 
 	dropdownBoxes = new DropdownBoxes();
@@ -4040,108 +4097,42 @@ function SidebarResizeBar()
 	}
 }
 ///////////////////////////////////////////////////////////////
-// Progress bar / Scrub bar / Status bar //////////////////////
+// Status Area and Volume control /////////////////////////////
 ///////////////////////////////////////////////////////////////
-function StatusBars()
+/**
+ * Manages the volume slider control.  Based on the old StatusBars class.
+ */
+function VolumeSlider()
 {
 	var self = this;
-	var statusElements = {};
-	$(".statusBar").each(function (idx, ele)
+
+	var $ele = $("#volumeBarCtrl");
+	var pb = $('<div></div>');
+	$ele.append(pb);
+	ProgressBar.initialize(pb);
+
+	ProgressBar.addDragHandle(pb, function (newValue) { self.setPosition(newValue) });
+
+	ProgressBar.addOnProgressChangedListener(pb, function (newVolume)
 	{
-		var $ele = $(ele);
-		if ($ele.children().length > 0)
-			return;
-		var statusTiny = $ele.hasClass("statusTiny");
-		if (!statusTiny)
-			ele.$label = $('<div class="statusBarLabel">' + $ele.attr('label') + '</div>');
-		ele.$pb = $('<div></div>');
-		if (!statusTiny)
-			ele.$amount = $('<div class="statusBarAmount">' + $ele.attr('defaultAmountText') + '</div>');
-		$ele.append(ele.$label);
-		$ele.append(ele.$pb);
-		$ele.append(ele.$amount);
-		ProgressBar.initialize(ele.$pb);
-		var name = $ele.attr("name");
-		if (!statusElements[name])
-			statusElements[name] = [];
-		statusElements[name].push(ele);
-	});
-	this.setProgress = function (name, progressAmount, progressAmountText, progressColor, progressBackgroundColor)
-	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			for (var i = 0; i < statusEles.length; i++)
-			{
-				ProgressBar.setProgress(statusEles[i].$pb, progressAmount);
-				ProgressBar.setColor(statusEles[i].$pb, progressColor, progressBackgroundColor);
-				progressAmountText = progressAmountText.toString();
-				statusEles[i].$amount && statusEles[i].$amount.text() !== progressAmountText.toString() && statusEles[i].$amount.text(progressAmountText);
-			}
-	};
-	this.setTooltip = function (name, tooltipText)
-	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			for (var i = 0; i < statusEles.length; i++)
-				$(statusEles[i]).attr("title", tooltipText);
-	};
-	this.setColor = function (name, progressColor, progressBackgroundColor)
-	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			for (var i = 0; i < statusEles.length; i++)
-				ProgressBar.setColor(statusEles[i].$pb, progressColor, progressBackgroundColor);
-	};
-	this.setLabel = function (name, label)
-	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			for (var i = 0; i < statusEles.length; i++)
-				statusEles[i].$label && statusEles[i].$label.append(label);
-	};
-	this.getLabelObjs = function (name)
-	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			return $(statusEles);
-		return $();
-	};
-	this.addDragHandle = function (name)
-	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			for (var i = 0; i < statusEles.length; i++)
-				ProgressBar.addDragHandle(statusEles[i].$pb, function (newValue) { self.setProgress(name, newValue, parseInt(newValue * 100) + "%") });
-	};
-	this.getValue = function (name)
-	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			for (var i = 0; i < statusEles.length; i++)
-				return statusEles[i].getValue();
-		return -1;
-	};
-	this.addOnProgressChangedListener = function (name, onProgressChanged)
-	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			if (statusEles.length > 0) // Add the listener only to the first element, so in case of multiple elements with the same name, we only create one callback.
-				ProgressBar.addOnProgressChangedListener(statusEles[0].$pb, onProgressChanged);
-	};
-	this.addLabelClickHandler = function (name, onLabelClick)
-	{
-		var $labels = self.getLabelObjs(name);
-		$labels.each(function (idx, ele)
+		newVolume = Clamp(parseFloat(newVolume), 0, 1);
+		if (!pcmPlayer.SuppressAudioVolumeSave())
 		{
-			$(ele).children('.statusBarLabel').on('click', onLabelClick);
-		});
-	}
-	this.setEnabled = function (name, enabled)
+			settings.ui3_audioMute = "0";
+			settings.ui3_audioVolume = newVolume;
+		}
+		pcmPlayer.SetVolume(newVolume);
+	});
+
+	$ele.find('.statusBarLabel').on('click', CameraAudioMuteToggle);
+
+	this.setPosition = function (progressAmount)
 	{
-		var statusEles = statusElements[name];
-		if (statusEles)
-			for (var i = 0; i < statusEles.length; i++)
-				ProgressBar.setEnabled(statusEles[0].$pb, enabled);
+		ProgressBar.setProgress(pb, progressAmount);
+	};
+	this.setEnabled = function (enabled)
+	{
+		ProgressBar.setEnabled(pb, enabled);
 	};
 }
 var ProgressBar =
@@ -4155,7 +4146,6 @@ var ProgressBar =
 			$ele.append(ele.$progressBarInner);
 			$ele.addClass("progressBarOuter");
 			ele.defaultColor = ele.$progressBarInner.css("background-color");
-			ele.defaultBackgroundColor = $ele.css("background-color");
 		}
 	}
 	, setProgress: function ($ele, progressAmount)
@@ -4176,7 +4166,6 @@ var ProgressBar =
 		$ele.addClass("withDragHandle");
 		var ele = $ele.get(0);
 		ele.$dragHandle = $('<div class="statusBarDragHandle"><div class="statusBarDragHandleInner"></div></div>');
-		var dragHandleWidth = ele.$dragHandle.width();
 		$ele.prepend(ele.$dragHandle);
 
 		ele.onDragHandleDragged = function (mouseX)
@@ -4216,28 +4205,9 @@ var ProgressBar =
 				ele.onDragHandleDragged(e.mouseX);
 		});
 	}
-	, getValue: function ($ele)
-	{
-		return $ele.get(0).pbValue;
-	}
 	, addOnProgressChangedListener: function ($ele, onProgressChanged)
 	{
 		$ele.get(0).onProgressChanged = onProgressChanged;
-	}
-	, setColor: function ($ele, progressColor, progressBackgroundColor)
-	{
-		if (progressColor)
-		{
-			if (progressColor == "default")
-				progressColor = $ele.get(0).defaultColor;
-			$ele.get(0).$progressBarInner.css("background-color", progressColor);
-		}
-		if (progressBackgroundColor)
-		{
-			if (progressBackgroundColor == "default")
-				progressBackgroundColor = $ele.get(0).Background;
-			$ele.css("background-color", progressBackgroundColor);
-		}
 	}
 	, setEnabled: function ($ele, enabled)
 	{
@@ -4247,6 +4217,384 @@ var ProgressBar =
 			$ele.addClass("disabled");
 	}
 };
+///////////////////////////////////////////////////////////////
+// Status Area ////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function StatusAreaApi()
+{
+	var self = this;
+	/** [statusAreaComponent] is set when the 'status-area' vue component is created, which is triggered later in the loading routine. */
+	var statusAreaComponent = null;
+	/** Merged with statusAreaComponent.reactiveStatusBarRegistry after the vue component is created. */
+	var statusBarRegistry = {};
+
+	/**
+	 * Register a status bar that the user will be able to choose via UI Settings > Status Area.
+	 * @param {String} uniqueName Unique name of the status bar, displayed in UI Settings and used when getting/setting values.
+	 * @param {String} componentName Vue component name.  If not provided, a generic component will be used that requires the value to be a floating point percentage between 0.0 and 1.0.
+	 * @param {Object} defaultValue An object that is a suitable default value for the status bar.
+	 */
+	this.setStatusBarRegistration = function (uniqueName, componentName, initialValue)
+	{
+		if (statusAreaComponent)
+		{
+			console.log("statusAreaApi.setStatusBarRegistration should be called only during the `StatusArea_Loading` event.");
+			statusAreaComponent.setStatusBarRegistration(uniqueName, componentName, initialValue)
+		}
+		else
+			statusBarRegistry[uniqueName] = { uniqueName: uniqueName, componentName: componentName, value: initialValue };
+	}
+
+	this.setStatusBarRegistration("CPU", "status-bar-cpu", 0.0);
+	this.setStatusBarRegistration("MEM", "status-bar-mem", { bi: 0, memPhys: 1024, load: 0.0 });
+	this.setStatusBarRegistration("DISK", "status-bar-disk", { fullness: 0.0, tooltip: "", error: false });
+	this.setStatusBarRegistration("FPS", "status-bar-fps", { fps: 0, maxFps: 10 });
+
+	this.getStatusBarRegistration = function (uniqueName)
+	{
+		return statusBarRegistry[uniqueName];
+	}
+
+	this.getStatusBarRegistrations = function ()
+	{
+		var arr = new Array();
+		for (var key in statusBarRegistry)
+			arr.push(statusBarRegistry[key]);
+		return arr;
+	}
+
+	this.setValue = function (uniqueName, value)
+	{
+		var r = statusBarRegistry[uniqueName];
+		if (r)
+			r.value = value;
+		else
+			toaster.Error('statusAreaApi.setValue failed. Unrecognized status bar "' + uniqueName + '"');
+	}
+
+	this.getValue = function (uniqueName)
+	{
+		var r = statusBarRegistry[uniqueName];
+		if (r)
+			return r.value;
+		else
+		{
+			toaster.Error('statusAreaApi.getValue failed. Unrecognized status bar "' + uniqueName + '"');
+			return null;
+		}
+	}
+
+	/**
+	 * Returns the status-area vue component instance. Use with caution.
+	 */
+	this.getStatusAreaComponent = function ()
+	{
+		return statusAreaComponent;
+	}
+
+	this.loadUserSettings = function ()
+	{
+		if (statusAreaComponent)
+			statusAreaComponent.loadUserSettings();
+		else
+			toaster.Error("StatusArea.loadUserSettings failed. statusAreaComponent has not been created yet.");
+	}
+
+	Vue.component('status-area', {
+		template: ''
+			+ '<div id="statusArea">'
+			+ '	<div id="stoplightBtn" title="Control Blue Iris\'s Shield state with this button. Right-click to enable or disable button.">'
+			+ '		<div id="stoplightRed"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>' // The stoplight control is created here, but wired-up elsewhere using jQuery.
+			+ '		<div id="stoplightYellow"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>'
+			+ '		<div id="stoplightGreen"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>'
+			+ '	</div>'
+			+ '	<div class="serverStatusLabel" collapsibleid="serverStatus">'
+			+ '' + '{{panelName}}'
+			+ '' + '<div class="serverStatusSmallIcon">'
+			+ '			<component v-for="(b, index) in displayableStatusBars" :key="index" v-bind:is="b.componentName" :tiny="true" :value="b.value"></component>'
+			+ '		</div>'
+			+ '	</div>'
+			+ '	<div class="statusBarsMain">'
+			+ '		<component v-for="(b, index) in displayableStatusBars" :key="index" v-bind:is="b.componentName" :genericLabel="b.uniqueName" :value="b.value"></component>'
+			+ '	</div>'
+			+ '</div>',
+		data: function ()
+		{
+			return {
+				panelName: "Server Status",
+				reactiveStatusBarRegistry: {},
+				userChosenBarNames: []
+			};
+		},
+		created: function ()
+		{
+			for (var key in statusBarRegistry)
+			{
+				var b = statusBarRegistry[key];
+				this.setStatusBarRegistration(b.uniqueName, b.componentName, b.value);
+			}
+			statusBarRegistry = this.reactiveStatusBarRegistry;
+			this.loadUserSettings();
+
+			statusAreaComponent = this;
+		},
+		computed:
+		{
+			displayableStatusBars: function ()
+			{
+				var bars = [];
+				if (this.reactiveStatusBarRegistry)
+				{
+					for (var i = 0; i < this.userChosenBarNames.length; i++)
+					{
+						var uniqueName = this.userChosenBarNames[i];
+						var bar = null;
+						if (uniqueName)
+							bar = this.reactiveStatusBarRegistry[uniqueName];
+						if (!bar)
+							bar = this.reactiveStatusBarRegistry["CPU"];
+						bars.push(bar);
+					}
+				}
+				return bars;
+			}
+		},
+		methods:
+		{
+			setValue: function (uniqueName, value)
+			{
+				var b = this.reactiveStatusBarRegistry[uniqueName]
+				if (b)
+					b.value = value;
+				else
+					toaster.Error('Attempted to set status bar value for unrecognized status bar "' + uniqueName + '"');
+			},
+			getValue: function (uniqueName)
+			{
+				var b = this.reactiveStatusBarRegistry[uniqueName];
+				if (b)
+					return b.value;
+				toaster.Error('Attempted to get status bar value for unrecognized status bar "' + uniqueName + '"');
+				return null;
+			},
+			setStatusBarRegistration: function (uniqueName, componentName, value)
+			{
+				if (!Vue.options.components[componentName])
+				{
+					console.log("statusAreaApi registration \"" + uniqueName + "\" has an invalid component name \"" + componentName + "\".  The \"status-bar-generic\" component will be substituted.");
+					componentName = "status-bar-generic";
+				}
+				var b = this.reactiveStatusBarRegistry[uniqueName]
+				if (b)
+				{
+					b.componentName = componentName;
+					b.value = value;
+				}
+				else
+					this.reactiveStatusBarRegistry[uniqueName] = Vue.observable({
+						uniqueName: uniqueName,
+						componentName: componentName,
+						value: value
+					});
+			},
+			loadUserSettings: function ()
+			{
+				this.panelName = settings.ui3_status_area_name;
+
+				this.userChosenBarNames = [];
+				for (var i = 1; i <= 4; i++)
+				{
+					var uniqueName = settings.getItem("ui3_status_area_bar_key_" + i);
+					this.userChosenBarNames.push(uniqueName);
+				}
+			}
+		}
+	});
+
+	Vue.component('status-bar', {
+		template: ''
+			+ '<div :class="{ statusBar: true, clickableStatusBar: clickable && !tiny, statusTiny: tiny }" :title="tooltipText" @click="onClick">'
+			+ '<div class="statusBarLabel" v-if="!tiny">{{ label ? label.toString().substr(0,4) : \'\' }}</div>'
+			+ '<div class="progressBarOuter"><div class="progressBarInner" :style="myStyle"></div></div>'
+			+ '<div class="statusBarAmount" v-if="!tiny">{{textValue ? textValue.toString().substr(0,4) : \'\'}}</div>'
+			+ '</div>',
+		props:
+		{
+			label: String,
+			percent: Number,
+			color: String,
+			textValue: null,
+			tooltipText: null,
+			clickable: Boolean,
+			tiny: Boolean
+		},
+		computed:
+		{
+			myStyle: function ()
+			{
+				var s = {};
+				s.width = Clamp(this.percent * 100, 0, 100) + "%";
+				if (this.color)
+					s.backgroundColor = this.color;
+				return s;
+			}
+		},
+		methods:
+		{
+			onClick: function (e)
+			{
+				if (!this.tiny)
+					this.$emit("click", e);
+			}
+		}
+	});
+
+	Vue.component('status-bar-generic', {
+		template: ''
+			+ '<status-bar :tiny="tiny" :label="genericLabel" :percent="value" :textValue="textValue"></status-bar>',
+		props:
+		{
+			genericLabel: "ERR",
+			value: Object,
+			tiny: false
+		},
+		computed:
+		{
+			label: function ()
+			{
+				if (!this.genericLabel)
+					return "ERR";
+				return this.genericLabel.toUpperCase();
+			},
+			textValue: function ()
+			{
+				return Math.round(this.value * 100) + "%";
+			}
+		}
+	});
+
+	Vue.component('status-bar-cpu', {
+		template: ''
+			+ '<status-bar :tiny="tiny" label="CPU" :percent="value" :color="color" :textValue="textValue" :tooltipText="tooltipText"></status-bar>',
+		props:
+		{
+			value: 0.0,
+			tiny: false
+		},
+		computed:
+		{
+			color: function ()
+			{
+				if (this.value < 0.7)
+					return null;
+				else if (this.value < 0.8)
+					return "#CCCC00";
+				else if (this.value < 0.87)
+					return "#CCAA00";
+				else if (this.value < 0.95)
+					return "#CC3300";
+				else
+					return "#CC0000";
+			},
+			textValue: function ()
+			{
+				return Math.round(this.value * 100) + "%";
+			},
+			tooltipText: function ()
+			{
+				return "Total CPU usage on server: " + Math.round(this.value * 100) + "%";
+			}
+		}
+	});
+
+	Vue.component('status-bar-mem', {
+		template: ''
+			+ '<status-bar :tiny="tiny" label="MEM" :percent="value.load" :color="color" :textValue="textValue" :tooltipText="tooltipText"></status-bar>',
+		props:
+		{
+			value: { bi: 0, memPhys: 1024, load: 0.0 },
+			tiny: false
+		},
+		computed:
+		{
+			color: function ()
+			{
+				if (this.value.load < 0.95)
+					return null;
+				else
+					return "#CCAA00";
+			},
+			textValue: function ()
+			{
+				return parseInt(this.value.load * 100) + "%";
+			},
+			tooltipText: function ()
+			{
+				var totalMemUsed = this.value.memPhys * this.value.load;
+				var otherProcessesMemUsed = this.value.memPhys - this.value.bi;
+				var memFree = this.value.memPhys - otherProcessesMemUsed;
+				return "Server's Memory Usage: " + formatBytes(totalMemUsed, 2) + "/" + formatBytes(this.value.memPhys, 2) + " (" + parseInt(this.value.load * 100) + "%)"
+					+ "\n\nBlue Iris: " + formatBytes(this.value.bi, 2)
+					+ "\nOther Processes: " + formatBytes(otherProcessesMemUsed, 2)
+					+ "\nFree: " + formatBytes(memFree, 2);
+			}
+		}
+	});
+
+	Vue.component('status-bar-disk', {
+		template: ''
+			+ '<status-bar :tiny="tiny" label="DISK" :percent="value.fullness" :textValue="textValue" :tooltipText="value.tooltip" :clickable="true" @click="onClick"></status-bar>',
+		props:
+		{
+			value: { fullness: 0.0, tooltip: "", error: false },
+			tiny: false
+		},
+		computed:
+		{
+			textValue: function ()
+			{
+				return this.value.error ? "ERR" : (parseInt(this.value.fullness * 100) + "%");
+			}
+		},
+		methods:
+		{
+			onClick: function (e)
+			{
+				statusLoader.diskUsageClick();
+			}
+		}
+	});
+
+	Vue.component('status-bar-fps', {
+		template: ''
+			+ '<status-bar :tiny="tiny" label="FPS" :percent="percent" :color="color" :textValue="value.fps.toString()" tooltipText="Frame rate of video being played by UI3"></status-bar>',
+		props:
+		{
+			value: { fps: 0, maxFps: 10 },
+			tiny: false
+		},
+		computed:
+		{
+			percent: function ()
+			{
+				return Clamp(this.value.fps / this.value.maxFps, 0, 1);
+			},
+			color: function ()
+			{
+				if (this.percent > 0.5)
+					return null;
+				else if (this.percent > 0.25)
+					return "#CCAA00";
+				else if (this.percent > 0.1)
+					return "#CC3300";
+				else
+					return "#CC0000";
+			}
+		}
+	});
+
+	BI_CustomEvent.Invoke("StatusArea_Loading", self); // Addons should register their own status bars and components during this event.
+}
 ///////////////////////////////////////////////////////////////
 // Dropdown Boxes /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -11921,41 +12269,6 @@ function StatusLoader()
 	var $stoplightGreen = $("#stoplightGreen");
 	var $stoplightYellow = $("#stoplightYellow");
 
-	statusBars.addOnProgressChangedListener("cpu", function (cpu)
-	{
-		//if (cpu < 0.5)
-		//	statusBars.setColor("cpu", "#default");
-		//else
-		if (cpu < 0.7)
-			statusBars.setColor("cpu", "default"); // or "#00DDFF");
-		else if (cpu < 0.8)
-			statusBars.setColor("cpu", "#CCCC00");
-		else if (cpu < 0.87)
-			statusBars.setColor("cpu", "#CCAA00");
-		else if (cpu < 0.95)
-			statusBars.setColor("cpu", "#CC3300");
-		else
-			statusBars.setColor("cpu", "#CC0000");
-	});
-	statusBars.addOnProgressChangedListener("mem", function (mem)
-	{
-		if (mem < 0.95)
-			statusBars.setColor("mem", "default");
-		else
-			statusBars.setColor("mem", "#CCAA00");
-	});
-	statusBars.addOnProgressChangedListener("fps", function (fps)
-	{
-		if (fps > 0.5)
-			statusBars.setColor("fps", "default");
-		else if (fps > 0.25)
-			statusBars.setColor("fps", "#CCAA00");
-		else if (fps > 0.1)
-			statusBars.setColor("fps", "#CC3300");
-		else
-			statusBars.setColor("fps", "#CC0000");
-	});
-
 	this.LoadStatus = function ()
 	{
 		loadStatusInternal();
@@ -12020,6 +12333,8 @@ function StatusLoader()
 			HandleChangesInStatus(lrSave, response);
 			if (response && response.data)
 			{
+				//data:
+				// {"signal":"1", "cxns":23, "cpu":9, "gpu":0, "ram":"3418931200", "bits":28, "mem":"3.18G", "memphys":"31.9G", "memload":"27%", "folders":[...], "disks":[...], "profile":1, "lock":"0", "schedule":"Default", "dio":[...], "uptime":"4:20:55:44", "clips":"Clips: 123 items, 1.23T/1.23T; D: +108.6G, E: +69.7G", "time":"1685468503006", "tmessage":"1685468502981", "clipprocess":"", "warnings":"4", "alerts":"5854", "tzone":"-360"}
 				$stoplightDiv.css("opacity", "");
 				if (response.data.signal == "0")
 					$stoplightRed.css("opacity", "1");
@@ -12028,24 +12343,17 @@ function StatusLoader()
 				else if (response.data.signal == "2")
 					$stoplightYellow.css("opacity", "1");
 
-				var cpu = parseInt(response.data.cpu);
-				statusBars.setProgress("cpu", cpu / 100.0, cpu + "%");
-				statusBars.setTooltip("cpu", "Total CPU usage on server: " + cpu + "%");
-				var mem = response.data.mem;
-				var memNum = parseInt(response.data.ram);
-				var memPhys = response.data.memphys ? response.data.memphys : "0B";
-				var memPhysNum = getBytesFromBISizeStr(memPhys);
-				var memLoad = response.data.memload;
-				var memLoadNum = parseFloat(memLoad) / 100;
-				var memUsedNum = memPhysNum * memLoadNum;
-				var memUsed = formatBytes(memUsedNum, 1);
-				var memFreeNum = memPhysNum - memUsedNum;
-				var memFree = formatBytes(memFreeNum, 2);
-				statusBars.setProgress("mem", memLoadNum, memLoad);
-				statusBars.setTooltip("mem", "Server's Memory Usage: " + memUsed + "/" + memPhys + " (" + memLoad + ")"
-					+ "\n\nBlue Iris: " + mem
-					+ "\nOther Processes: " + formatBytes(memUsedNum - memNum, 2)
-					+ "\nFree: " + memFree);
+				statusAreaApi.setValue("CPU", Clamp(parseFloat(response.data.cpu) / 100, 0, 1));
+				var memObj = {
+					bi: response.data.ram && parseInt(response.data.ram)
+						? parseInt(response.data.ram)
+						: getBytesFromBISizeStr(response.data.mem),
+					memPhys: response.data.memphys
+						? getBytesFromBISizeStr(response.data.memphys)
+						: 0,
+					load: parseFloat(response.data.memload) / 100
+				};
+				statusAreaApi.setValue("MEM", memObj);
 
 				// Disk info example: "disks":[{ "disk":"V:", "allocated":1841152, "used":1563676, "free":343444, "total":1907599 }]
 				// Values are in Mebibytes (MiB)
@@ -12060,8 +12368,7 @@ function StatusLoader()
 						totalUsed += disk.used;
 					}
 					var diskPercent = totalAvailable == 0 ? 0 : totalUsed / totalAvailable;
-					statusBars.setProgress("disk", diskPercent, parseInt(diskPercent * 100) + "%");
-					statusBars.setTooltip("disk", "Click to visualize disk usage." + (response.data.clips ? "\n\n" + response.data.clips : ""));
+					statusAreaApi.setValue("DISK", { fullness: diskPercent, tooltip: "Click to visualize disk usage." + (response.data.clips ? "\n\n" + response.data.clips : "") });
 				}
 				else if (response.data.clips)
 				{
@@ -12072,13 +12379,11 @@ function StatusLoader()
 						var used = getBytesFromBISizeStr(match[1]);
 						var total = getBytesFromBISizeStr(match[2]);
 						var diskPercent = total == 0 ? 0 : used / total;
-						statusBars.setProgress("disk", diskPercent, parseInt(diskPercent * 100) + "%");
-						statusBars.setTooltip("disk", response.data.clips);
+						statusAreaApi.setValue("DISK", { fullness: diskPercent, tooltip: response.data.clips });
 					}
 					else
 					{
-						statusBars.setProgress("disk", 0, "ERR");
-						statusBars.setTooltip("disk", "Disk information was in an unexpected format: " + response.data.clips);
+						statusAreaApi.setValue("DISK", { fullness: 0, tooltip: "Disk information was in an unexpected format: " + response.data.clips, error: true });
 					}
 				}
 
@@ -14705,7 +15010,7 @@ function VideoPlayerController()
 	var fpsZeroTimeout = null;
 	var setFpsStatusBarThrottled = throttle(function (currentFps, maxFps)
 	{
-		statusBars.setProgress("fps", (currentFps / maxFps), currentFps);
+		statusAreaApi.setValue("FPS", { fps: currentFps, maxFps: maxFps });
 	}, 250);
 	var RefreshFps = function (imgRequestMs)
 	{
@@ -14720,7 +15025,7 @@ function VideoPlayerController()
 	}
 	var ZeroFps = function ()
 	{
-		statusBars.setProgress("fps", 0, 0);
+		statusAreaApi.setValue("FPS", { fps: 0, maxFps: 0 });
 	}
 	this.PrioritizeTriggeredEnabled = function ()
 	{
@@ -25910,7 +26215,7 @@ function PcmAudioPlayer()
 		var effectiveVolume = settings.ui3_audioMute == "1" ? 0 : parseFloat(settings.ui3_audioVolume);
 		suppressAudioVolumeSave = true;
 		setTimeout(function () { suppressAudioVolumeSave = false; }, 0);
-		statusBars.setProgress("volume", effectiveVolume, "");
+		volumeSlider.setPosition(effectiveVolume);
 	}
 	this.SetVolume = function (newVolume)
 	{
@@ -30940,6 +31245,10 @@ function OnChange_ui3_icons_extraVisibility()
 	cornerStatusIcons.ReInitialize();
 	cameraNameLabels.show();
 }
+function OnChange_ui3_status_area()
+{
+	statusAreaApi.loadUserSettings();
+}
 function OnChange_ui3_fullscreen_videoonly()
 {
 	if (fullScreenModeController.isFullScreen())
@@ -32442,7 +32751,7 @@ function MqttClient()
 						var newVolume = Clamp(parseFloat(value), 0, 100) / 100.0;
 						settings.ui3_audioMute = newVolume === 0 ? "1" : "0";
 						settings.ui3_audioVolume = newVolume;
-						statusBars.setProgress("volume", newVolume, "");
+						volumeSlider.setPosition(newVolume);
 					}
 				}
 				else if (parts[0] === "ui3" && (parts[1] === instance_id || parts[1] === "global") && parts[2] === "playaudio")
@@ -33574,11 +33883,11 @@ function getBytesFromBISizeStr(str)
 	if (str.endsWith("K"))
 		return parseInt(parseFloat(str) * 1024);
 	else if (str.endsWith("M"))
-		return parseInt(parseFloat(str) * 1048576);
+		return parseInt(parseFloat(str) * 1024 * 1024);
 	else if (str.endsWith("G"))
-		return parseInt(parseFloat(str) * 1073741824);
+		return parseInt(parseFloat(str) * 1024 * 1024 * 1024);
 	else if (str.endsWith("T"))
-		return parseInt(parseFloat(str) * 1073741824 * 1024);
+		return parseInt(parseFloat(str) * 1024 * 1024 * 1024 * 1024);
 	else
 		return parseInt(parseFloat(str));
 }
@@ -33586,6 +33895,11 @@ function getBytesFrom_MiB(MiB)
 {
 	return MiB * 1048576;
 }
+/**
+ * Formats the given number of bytes as a string with a suffix ('B', 'K', 'M', etc.) using multiples of 1024.
+ * @param {Number} bytes Number of bytes.
+ * @param {Number} decimals Number of decimal places to include in the string.
+ */
 function formatBytes(bytes, decimals)
 {
 	if (bytes == 0) return '0B';
@@ -33598,6 +33912,11 @@ function formatBytes(bytes, decimals)
 		i = Math.floor(Math.log(bytes) / Math.log(k));
 	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + sizes[i];
 }
+/**
+ * Formats the given number of bytes as a string with a suffix ('B', 'KiB', 'MiB', etc.) using multiples of 1000.
+ * @param {Number} bytes Number of bytes.
+ * @param {Number} decimals Number of decimal places to include in the string.
+ */
 function formatBytes2(bytes, decimals)
 {
 	if (bytes == 0) return '0 B';

@@ -1642,7 +1642,8 @@ div.invisibleLabel
 	margin-left: 5px;
 }
 
-.statusBar
+.statusBar,
+#volumeBarCtrl
 {
 	padding-bottom: 15px;
 	font-size: 15px;
@@ -1650,7 +1651,8 @@ div.invisibleLabel
 	vertical-align: top;
 }
 
-.sizeMedium .statusBar
+.sizeMedium .statusBar,
+.sizeMedium #volumeBarCtrl
 {
 	padding-bottom: 5px;
 	font-size: 13px;
@@ -1658,6 +1660,7 @@ div.invisibleLabel
 }
 
 .sizeSmall .statusBar,
+.sizeSmall #volumeBarCtrl,
 .landscape.tabTimeline .statusBar
 {
 	padding-bottom: 2px;
@@ -1889,16 +1892,12 @@ div.invisibleLabel
 	width: 16px;
 }
 
-#volumeBar .statusBarAmount
-{
-	display: none;
-}
-
-#volumeBar .statusBar
+#volumeBarCtrl
 {
 	display: inline-block;
 	vertical-align: middle;
 	padding-bottom: 0px;
+	font-size: 0px;
 }
 
 .volumeButton

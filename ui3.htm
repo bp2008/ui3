@@ -384,31 +384,7 @@
 				</div>
 			</div>
 		</div>
-		<div id="statusArea">
-			<div id="stoplightBtn" title="Control Blue Iris's Shield state with this button. Right-click to enable or disable button.">
-				<div id="stoplightRed"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>
-				<div id="stoplightYellow"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>
-				<div id="stoplightGreen"><svg class="icon noflip"><use xlink:href="#svg_shield"></use></svg></div>
-			</div>
-			<div class="serverStatusLabel" collapsibleid="serverStatus">
-				Server Status<div class="serverStatusSmallIcon">
-					<div class="statusBar statusTiny" name="cpu"></div>
-					<div class="statusBar statusTiny" name="mem"></div>
-					<div class="statusBar statusTiny" name="disk"></div>
-					<div class="statusBar statusTiny" name="fps"></div>
-				</div>
-			</div>
-			<div class="statusBarsMain">
-				<div class="statusBar" name="cpu" label="CPU" defaultAmountText="0%">
-				</div>
-				<div class="statusBar" name="mem" label="MEM" defaultAmountText="0%">
-				</div>
-				<div class="statusBar clickableStatusBar" name="disk" label="DISK" defaultAmountText="0%" onclick="statusLoader.diskUsageClick();">
-				</div>
-				<div class="statusBar" name="fps" label="FPS" defaultAmountText="0">
-				</div>
-			</div>
-		</div>
+		<status-area></status-area>
 	</div>
 	<div id="layoutbody">
 		<div id="camimg_wrapper"></div>
@@ -451,13 +427,15 @@
 				<div class="pcButton hideWhenLive hidden skipbtn" onclick="BI_Hotkey_SkipBack1Frame()" title="Skip Back 1 Frame" id="pcSkipBack1Frame"><svg class="icon noflip"><use xlink:href="#svg_mio_replay"></use></svg><div class="centerText">1</div></div>
 				<div class="pcButton hideWhenLive hidden skipbtn" onclick="BI_Hotkey_SkipAhead1Frame()" title="Skip Ahead 1 Frame" id="pcSkipAhead1Frame"><svg class="icon noflip invertv"><use xlink:href="#svg_mio_replay"></use></svg><div class="centerText">1</div></div>
 				<div id="volumeBar" class="audioTemporarilyUnavailable">
-					<div id="pcVolume" class="off">
-						<svg class="icon noflip off"><use xlink:href="#svg_mio_volumeOff"></use></svg>
-						<svg class="icon noflip mute"><use xlink:href="#svg_mio_volumeMute"></use></svg>
-						<svg class="icon noflip down"><use xlink:href="#svg_mio_volumeDown"></use></svg>
-						<svg class="icon noflip up"><use xlink:href="#svg_mio_volumeUp"></use></svg>
-					</div>
-					<div class="statusBar" name="volume" label="" defaultAmountText="">
+					<div id="volumeBarCtrl">
+						<div class="statusBarLabel">
+							<div id="pcVolume" class="off">
+								<svg class="icon noflip off"><use xlink:href="#svg_mio_volumeOff"></use></svg>
+								<svg class="icon noflip mute"><use xlink:href="#svg_mio_volumeMute"></use></svg>
+								<svg class="icon noflip down"><use xlink:href="#svg_mio_volumeDown"></use></svg>
+								<svg class="icon noflip up"><use xlink:href="#svg_mio_volumeUp"></use></svg>
+							</div>
+						</div>
 					</div>
 				</div>
 				<div id="playbackProgressText" class="pcText"></div>
@@ -592,6 +570,8 @@
 					alert("Your web server session was lost, probably because of a problem with the session cookie. Redirecting to login page.");
 					location.href = GetAppPath() + "login.htm?autologin=0&page=" + encodeURIComponent(location.pathname);
 				}
+				else if (status === 200)
+					alert("A script resource request failed partway through the response (HTTP status " + status + "):\n" + url.replace(/\/\/.*?\//, '//censored_hostname/'));
 				else
 					alert("A script resource failed to load because of HTTP status " + status + ":\n" + url.replace(/\/\/.*?\//, '//censored_hostname/'));
 			});
