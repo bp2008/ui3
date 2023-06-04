@@ -3218,6 +3218,10 @@ $(function ()
 
 	HandlePreLoadUrlParameters();
 
+	statusAreaApi = new StatusAreaApi();
+
+	new Vue({ el: "#layoutleft" }); // Activates any nested vue components in #layoutleft. This INVALIDATES any previously created DOM element references within #layoutleft, so it needs to happen early.
+
 	biSoundPlayer.TestUserInputRequirement();
 
 	currentPrimaryTab = ValidateTabName(settings.ui3_defaultTab);
@@ -3320,10 +3324,6 @@ $(function ()
 	clipProperties = new ClipProperties();
 
 	clipDownloadDialog = new ClipDownloadDialog();
-
-	statusAreaApi = new StatusAreaApi();
-
-	new Vue({ el: "#layoutleft" }); // Activates any nested vue components in #layoutleft.
 
 	volumeSlider = new VolumeSlider();
 	pcmPlayer.SetAudioVolumeFromSettings();
