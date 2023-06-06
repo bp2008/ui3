@@ -82,7 +82,6 @@
 	"background_color": "#000000",
 	"theme_color": "#3E5F8A",
 	"display": "standalone",
-	"orientation": "any",
 	"start_url": "../ui3.htm",
 	"id": "/ui3.htm",
 	"scope": "%%VIRTDIR%%"
