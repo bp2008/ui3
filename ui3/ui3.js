@@ -624,6 +624,7 @@ var playbackControls = null;
 var clipTimeline = null;
 var hotkeys = null;
 var dateFilter = null;
+var clipFilterSearch = null;
 var hlsPlayer = null;
 var fullScreenModeController = null;
 var maximizedModeController = null;
@@ -1570,6 +1571,15 @@ var defaultSettings =
 				"Oldest First"] // "next clip" is newer, further up the clip list.
 			, label: 'Clip Review Order/Direction'
 			, hint: 'Choose "Oldest First" if you prefer to review clips from oldest to newest.  Affects autoplay direction and Next/Previous button logic.  May affect other aspects of clip navigation in the future.'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_showClipListFilterSearch"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show filter by "search" input'
+			, hint: 'Hiding the search box will allow more vertical space for the clip list'
+			, onChange: OnChange_ui3_showClipListFilterSearch
 			, category: "Clips / Alerts"
 		}
 		, {
@@ -3362,6 +3372,8 @@ $(function ()
 
 	dateFilter = new DateFilter("#dateRangeLabel");
 
+	clipFilterSearch = new ClipFilterSearch();
+
 	hlsPlayer = new HLSPlayer();
 
 	fullScreenModeController = new FullScreenModeController();
@@ -3448,6 +3460,7 @@ $(function ()
 	OnChange_ui3_ptzHome();
 	OnChange_ui3_sideBarPosition();
 	OnChange_ui3_browserZoomEnabled();
+	OnChange_ui3_showClipListFilterSearch();
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -8474,6 +8487,65 @@ function DatePicker(calendarContainerId, datePickerNum, dateFilterObj)
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Clip List Filter Search ////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function ClipFilterSearch()
+{
+	var self = this;
+	var lastQuery = "";
+	$("#clipFilterSearch").on('keydown', function (e)
+	{
+		if (e.key === 'Enter' || e.keyCode === 13)
+		{
+			e.preventDefault();
+			e.stopPropagation();
+			$('#clipFilterSearch').blur();
+			doFilterSearchImmediately();
+		}
+	});
+	$("#clipFilterSearch").on('input change', function (e)
+	{
+		debouncedSearch();
+	});
+	$("#clipFilterSearch").on('blur', function (e)
+	{
+		doFilterSearchImmediately();
+	});
+	this.getQuery = function ()
+	{
+		return $("#clipFilterSearch").val();
+	}
+	this.setQuery = function (queryText)
+	{
+		$("#clipFilterSearch").val(queryText);
+	}
+	this.updateVisibility = function ()
+	{
+		if (settings.ui3_showClipListFilterSearch === "1")
+			$("#clipFilterSearch").parent().show();
+		else
+		{
+			$("#clipFilterSearch").parent().hide();
+			if (self.getQuery())
+			{
+				self.setQuery("");
+				doFilterSearchImmediately();
+			}
+		}
+	}
+	var doFilterSearchImmediately = function ()
+	{
+		var queryText = self.getQuery();
+		if (queryText !== lastQuery)
+		{
+			lastQuery = queryText;
+			console.log("Filter Search", queryText);
+			clipLoader.LoadClips();
+		}
+	};
+	var debouncedSearch = debounce(doFilterSearchImmediately, 1000);
+}
+///////////////////////////////////////////////////////////////
 // Playback Controls //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var overridePlaybackSpeedOptions = null;
@@ -10209,7 +10281,7 @@ function ClipLoader(clipsBodySelector)
 		var loading = videoPlayer.Loading();
 		if (loading.image && (loading.image.isLive || loading.image.isTimeline()))
 			lastLoadedCameraFilter = loading.image.id;
-		loadClipsInternal(lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false, false, null, settings.ui3_current_dbView);
+		loadClipsInternal(lastLoadedCameraFilter, dateFilter.BeginDate, dateFilter.EndDate, false, false, null, settings.ui3_current_dbView, clipFilterSearch.getQuery());
 	}
 	this.UpdateClipList = function ()
 	{
@@ -10226,7 +10298,7 @@ function ClipLoader(clipsBodySelector)
 		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
 			return;
 		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
-		loadClipsInternal(lastLoadedCameraFilter, newestClipDate - 60, Math.round(GetUtcNow() / 1000) + 86400, false, true, null, settings.ui3_current_dbView);
+		loadClipsInternal(lastLoadedCameraFilter, newestClipDate - 60, Math.round(GetUtcNow() / 1000) + 86400, false, true, null, settings.ui3_current_dbView, clipFilterSearch.getQuery());
 	}
 	this.LoadClipsRange = function (camFilter, dateBegin, dateEnd)
 	{
@@ -10236,9 +10308,9 @@ function ClipLoader(clipsBodySelector)
 			if (loading.image && loading.image.isLive)
 				camFilter = loading.image.id;
 		}
-		loadClipsInternal(camFilter, dateBegin, dateEnd, false, false, null, settings.ui3_current_dbView);
+		loadClipsInternal(camFilter, dateBegin, dateEnd, false, false, null, settings.ui3_current_dbView, clipFilterSearch.getQuery());
 	}
-	var loadClipsInternal = function (cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView)
+	var loadClipsInternal = function (cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView, filterSearchQuery)
 	{
 		if (!videoPlayer.Loading().cam)
 			return; // UI hasn't loaded far enough yet.
@@ -10255,7 +10327,7 @@ function ClipLoader(clipsBodySelector)
 			{
 				QueuedClipListLoad = function ()
 				{
-					loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
+					loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView, filterSearchQuery);
 				};
 				return;
 			}
@@ -10297,6 +10369,8 @@ function ClipLoader(clipsBodySelector)
 			args.startdate = myDateStart;
 			args.enddate = myDateEnd;
 		}
+		if (filterSearchQuery)
+			args.search = filterSearchQuery;
 		if (dbView)
 		{
 			// When cmd="alertlist" and dbView="flagged", clip items are included too, but they don't have msec metadata.
@@ -10458,7 +10532,7 @@ function ClipLoader(clipsBodySelector)
 						}
 					$("#clipListDateRange").html("&nbsp;Remaining to load:<br/>&nbsp;&nbsp;&nbsp;" + parseInt((myDateEnd - myDateStart) / 86400) + " days");
 					$.CustomScroll.callMeOnContainerResize();
-					return loadClipsInternal(cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate, dbView);
+					return loadClipsInternal(cameraId, myDateStart, myDateEnd, true, isUpdateOfExistingList, previousClipDate, dbView, filterSearchQuery);
 				}
 			}
 
@@ -10519,7 +10593,7 @@ function ClipLoader(clipsBodySelector)
 				recoveryFunction = function ()
 				{
 					isLoadingAClipList = false;
-					loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView);
+					loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView, filterSearchQuery);
 				};
 
 				if (tryAgain)
@@ -27724,7 +27798,8 @@ function BI_Hotkeys()
 			UpdateCurrentURL();
 		if (!charCode
 			|| $("body").children(".dialog_overlay").length !== 0
-			|| $("body").children(".dialog_wrapper").children(".streamingProfileEditorPanel").length !== 0)
+			|| $("body").children(".dialog_wrapper").children(".streamingProfileEditorPanel").length !== 0
+			|| $("#clipFilterSearch").is(':focus'))
 			return;
 		if (e.ctrlKey)
 			relativePTZ.setToggleButtonState(true);
@@ -31551,6 +31626,10 @@ function OnChange_ui3_extra_playback_controls_padding()
 		$('#pcButtonContainer').addClass("extraPadding");
 	else
 		$('#pcButtonContainer').removeClass("extraPadding");
+}
+function OnChange_ui3_showClipListFilterSearch()
+{
+	clipFilterSearch.updateVisibility();
 }
 function OnChange_ui3_ir_brightness_contrast()
 {

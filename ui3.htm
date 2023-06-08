@@ -88,7 +88,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "244";
+		var ui_version = "245";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -366,6 +366,10 @@
 						<div class="dropdownBox" name="currentGroup"></div>
 						<div class="standardLeftBarBoxSize" id="dateRange" onclick="dateFilter.OpenDatePicker(this);"><svg class="icon calendarIcon"><use xlink:href="#svg_x5F_Calendar2"></use></svg><span id="dateRangeLabel" class="oneLine">All Recent</span></div>
 						<div class="dropdownBox" name="dbView"></div>
+						<div class="clipFilterSearchContainer">
+							<svg class="icon noflip"><use xlink:href="#svg_mio_search"></use></svg>
+							<input type="search" value="" placeholder="search" id="clipFilterSearch" class="selectable">
+						</div>
 					</div>
 				</div>
 				<div class="clipListTopDateWrapper">

@@ -1062,7 +1062,8 @@ div.invisibleLabel
 .dropdownBox,
 .standardLeftBarBoxSize,
 .leftBarBool,
-.profileControls
+.profileControls,
+#clipFilterSearch
 {
 	width: 190px;
 }
@@ -1072,7 +1073,8 @@ div.invisibleLabel
 .sizeMedium .dropdownBox,
 .sizeMedium .standardLeftBarBoxSize,
 .sizeMedium .leftBarBool,
-.sizeMedium .profileControls
+.sizeMedium .profileControls,
+.sizeMedium #clipFilterSearch
 {
 	width: 155px;
 }
@@ -1082,7 +1084,8 @@ div.invisibleLabel
 .sizeSmall .dropdownBox,
 .sizeSmall .standardLeftBarBoxSize,
 .sizeSmall .leftBarBool,
-.sizeSmall .profileControls
+.sizeSmall .profileControls,
+.sizeSmall #clipFilterSearch
 {
 	width: 125px;
 }
@@ -1409,7 +1412,7 @@ div.invisibleLabel
 /* Date Filters */
 #dateRange
 {
-	margin-top: 9px;
+	margin-top: 4px;
 	padding: 6px 7px 6px 10px;
 	font-size: 16px;
 	border: 1px solid var(--button-color);
@@ -1429,7 +1432,7 @@ div.invisibleLabel
 
 .sizeMedium #dateRange
 {
-	margin-top: 6px;
+	margin-top: 3px;
 	padding: 5px 6px 5px 6px;
 	font-size: 14px;
 	line-height: 15px;
@@ -1437,8 +1440,8 @@ div.invisibleLabel
 
 .sizeSmall #dateRange
 {
-	margin-top: 3px;
-	padding: 4px 5px 4px 3px;
+	margin-top: 2px;
+	padding: 1px 5px 1px 3px;
 	font-size: 12px;
 	line-height: 12px;
 }
@@ -1482,9 +1485,9 @@ div.invisibleLabel
 
 .sizeSmall .calendarIcon
 {
-	width: 22px !important;
-	height: 24px !important;
-	top: 0px;
+	width: 20px !important;
+	height: 22px !important;
+	top: 1px;
 }
 
 /* Status Area */
@@ -1982,17 +1985,17 @@ div.invisibleLabel
 
 #layoutLeftRecordingsControls .dropdownBox
 {
-	margin-top: 5px;
+	margin-top: 4px;
 }
 
 .sizeMedium #layoutLeftRecordingsControls .dropdownBox
 {
-	margin-top: 4px;
+	margin-top: 3px;
 }
 
 .sizeSmall #layoutLeftRecordingsControls .dropdownBox
 {
-	margin-top: 3px;
+	margin-top: 2px;
 }
 
 .dropdownBox[name="profile"]
@@ -2231,6 +2234,77 @@ div.invisibleLabel
 	color: #64C35C;
 }
 
+.clipFilterSearchContainer
+{
+	margin-top: 4px;
+}
+
+.sizeMedium .clipFilterSearchContainer
+{
+	margin-top: 3px;
+}
+
+.sizeSmall .clipFilterSearchContainer
+{
+	margin-top: 2px;
+}
+
+.clipFilterSearchContainer
+{
+	position: relative;
+}
+
+	.clipFilterSearchContainer .icon
+	{
+		position: absolute;
+		width: 18px;
+		height: 18px;
+		top: 11px;
+		left: 11px;
+	}
+
+.sizeMedium .clipFilterSearchContainer .icon
+{
+	width: 17px;
+	height: 17px;
+	top: 6px;
+	left: 6px;
+}
+
+.sizeSmall .clipFilterSearchContainer .icon
+{
+	width: 13px;
+	height: 13px;
+	top: 3px;
+	left: 4px;
+}
+
+#clipFilterSearch
+{
+	font-size: 16px;
+	box-sizing: border-box;
+	border: 1px solid var(--button-color);
+	height: 39px;
+	padding-left: 36px;
+	overflow: hidden;
+	background-color: var(--uicontrol-bg-color);
+	display: flex;
+	align-items: center;
+	color: var(--text-color);
+}
+.sizeMedium #clipFilterSearch
+{
+	height: 29px;
+	font-size: 15px;
+	padding-left: 29px;
+}
+
+.sizeSmall #clipFilterSearch
+{
+	height: 19px;
+	font-size: 13px;
+	padding-left: 21px;
+}
 /* Left Bar Checkboxes */
 .leftBarBool
 {
