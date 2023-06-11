@@ -368,7 +368,9 @@
 						<div class="dropdownBox" name="dbView"></div>
 						<div class="clipFilterSearchContainer">
 							<svg class="icon noflip"><use xlink:href="#svg_mio_search"></use></svg>
-							<input type="search" value="" placeholder="search" id="clipFilterSearch" class="selectable">
+							<input type="text" value="" placeholder="prevent autocomplete on search" style="display: none" autocomplete="off" data-lpignore="true" />
+							<input type="password" value="" placeholder="input via dumb tricks" style="display: none" autocomplete="off" data-lpignore="true" />
+							<input type="search" value="" placeholder="search" id="clipFilterSearch" class="selectable" autocomplete="search" data-lpignore="true">
 						</div>
 					</div>
 				</div>
