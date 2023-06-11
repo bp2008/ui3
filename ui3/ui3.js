@@ -4989,6 +4989,7 @@ function DropdownBoxes()
 		new DropdownListItem({ cmd: "ui_settings", text: "UI Settings", icon: "#svg_x5F_Settings", cssClass: "goldenLarger", tooltip: "User interface settings are stored in this browser and are not shared with other computers." })
 		, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "streaming_profiles", text: "Streaming Profiles", icon: "#svg_mio_VideoFilter", cssClass: "goldenLarger" })
+		, new DropdownListItem({ cmd: "copy_current_url", text: "Copy Current URL", icon: "#svg_mio_copy", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger", notificationCounter: function () { return Math.min(99999, statusLoader.getNotificationCounterValue("warnings")); } })
 		, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
@@ -5021,6 +5022,9 @@ function DropdownBoxes()
 						break;
 					case "streaming_profiles":
 						streamingProfileUI.open();
+						break;
+					case "copy_current_url":
+						clipboardHelper.CopyText(location.href);
 						break;
 					case "system_log":
 						systemLog.open();
@@ -10794,6 +10798,11 @@ function ClipLoader(clipsBodySelector)
 		else
 		{
 			retVal.download = retVal.fileNameNoExt + clipData.path.substr(extensionIdx);
+		}
+		if (!clipData.isClip && clipData.fileSize)
+		{
+			retVal.originalFileHref = GetThumbnailPath(clipData.thumbPath, true);
+			retVal.originalFileName = clipData.rawData.file;
 		}
 		return retVal;
 	}
@@ -24505,7 +24514,16 @@ function ClipProperties()
 				$link.text(clipInfo.download);
 				$link.attr("download", clipInfo.download);
 			}
-			$camprop.append(GetInfoEleValue("Download", $link));
+			$camprop.append(GetInfoEleValue("Download Clip", $link));
+
+			if (clipInfo.originalFileHref)
+			{
+				var $link2 = $('<a href="javascript:void(0)"></a>');
+				$link2.attr("href", clipInfo.originalFileHref);
+				$link2.text(clipInfo.originalFileName);
+				$link2.attr("download", clipInfo.originalFileName);
+				$camprop.append(GetInfoEleValue("Download Image", $link2));
+			}
 
 			if (!clipData.isSnapshot)
 			{
