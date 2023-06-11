@@ -3554,6 +3554,7 @@ function ReloadInterface()
 var skipLoadingFirstVideoStream = false;
 var skipLoadingAllVideoStreams = false;
 var startupTimelineMs = null;
+var startupClipFilterSearch = null;
 function HandlePreLoadUrlParameters()
 {
 	// Parameter "developerMode"
@@ -3580,6 +3581,9 @@ function HandlePreLoadUrlParameters()
 	var clipview = UrlParameters.Get("clipview", "v");
 	if (clipview !== '')
 		settings.ui3_current_dbView = clipview;
+
+	// Parameter "clipsearch"
+	startupClipFilterSearch = UrlParameters.Get("clipsearch", "cs");
 
 	// Parameter "group"
 	var group = UrlParameters.Get("group", "g");
@@ -8517,10 +8521,18 @@ function ClipFilterSearch()
 	});
 	this.getQuery = function ()
 	{
-		return $("#clipFilterSearch").val();
+		var queryText = $("#clipFilterSearch").val();
+		if (queryText)
+			return queryText.trim();
+		else
+			return "";
 	}
 	this.setQuery = function (queryText)
 	{
+		if (queryText)
+			queryText = queryText.trim();
+		else
+			queryText = "";
 		$("#clipFilterSearch").val(queryText);
 	}
 	this.updateVisibility = function ()
@@ -10322,6 +10334,15 @@ function ClipLoader(clipsBodySelector)
 		{
 			QueuedClipListLoad = null;
 			return;
+		}
+		if (startupClipFilterSearch)
+		{
+			if (!filterSearchQuery)
+			{
+				filterSearchQuery = startupClipFilterSearch;
+				clipFilterSearch.setQuery(startupClipFilterSearch);
+			}
+			startupClipFilterSearch = null;
 		}
 		if (!previousClipDate)
 			previousClipDate = new Date(0);
