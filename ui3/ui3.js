@@ -23180,6 +23180,7 @@ function ClipListContextMenu()
 		if (clipLoader.GetAllSelected().length > 1)
 			singleClipItems = itemsToDisable;
 		singleClipItems.push("properties");
+		singleClipItems.push("copyurl");
 
 		var hasClipsSelected = false;
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
@@ -23243,6 +23244,7 @@ function ClipListContextMenu()
 			else
 				$("#cm_cliplist_download").text("Download clip");
 			$("#cm_cliplist_delete").text("Delete");
+			$("#cm_cliplist_copyurl").text("Copy " + (clipData.isClip ? "clip" : "alert") + " URL");
 
 			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 			$dl_link.attr("href", clipInfo.href);
@@ -23333,6 +23335,17 @@ function ClipListContextMenu()
 					deleter();
 				}
 				break;
+			case "copyurl":
+				if (allSelectedClipIDs.length === 1)
+				{
+					var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[0]);
+					var search = new URLSearchParams();
+					search.set("rec", clipData.recId);
+					search = "?" + search.toString();
+					var url = location.origin + location.pathname + search;
+					clipboardHelper.CopyText(url);
+				}
+				break;
 			case "larger_thumbnails":
 				toggleLargerClipThumbnails();
 				break;
@@ -23388,6 +23401,7 @@ function ClipListContextMenu()
 				, (addDeleteItem
 					? { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
 					: { type: "skip" })
+				, { text: '<span id="cm_cliplist_copyurl">Copy clip URL</span>', icon: "#svg_mio_copy", alias: "copyurl", action: onContextMenuAction }
 				, { type: "splitLine" }
 				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
@@ -27481,10 +27495,8 @@ function AjaxHistoryManager()
 //////////////////////////////////////////////////////////////////////
 // Update Current URL ////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////
-function UpdateCurrentURL()
+function GetCleanUrlSearchParams()
 {
-	if (!html5HistorySupported || !loadingHelper.DidLoadingFinish())
-		return;
 	var search = new URLSearchParams(location.search);
 	search.delete("tab");
 	search.delete("t");
@@ -27510,6 +27522,13 @@ function UpdateCurrentURL()
 	search.delete("p");
 	search.delete("timeout");
 	search.delete("to");
+	return search;
+}
+function UpdateCurrentURL()
+{
+	if (!html5HistorySupported || !loadingHelper.DidLoadingFinish())
+		return;
+	var search = GetCleanUrlSearchParams();
 
 	search.set("t", currentPrimaryTab);
 
