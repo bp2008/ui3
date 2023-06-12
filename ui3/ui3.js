@@ -23238,10 +23238,10 @@ function ClipListContextMenu()
 			$("#cm_cliplist_flag").text(flagEnable ? "Flag" : "Unflag");
 			$("#cm_cliplist_protect").text(protectEnable ? "Protect" : "Unprotect");
 			$("#cm_cliplist_aiconfirm").text(aiConfirm ? "Mark as AI-confirmed" : "Unmark as AI-confirmed");
-			if (clipData.fileSize)
-				$("#cm_cliplist_download").text("Download (" + htmlEncode(clipData.fileSize) + ")");
+			if (clipData.isClip && clipData.fileSize)
+				$("#cm_cliplist_download").text("Download clip (" + htmlEncode(clipData.fileSize) + ")");
 			else
-				$("#cm_cliplist_download").text("Download");
+				$("#cm_cliplist_download").text("Download clip");
 			$("#cm_cliplist_delete").text("Delete");
 
 			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
@@ -23384,7 +23384,7 @@ function ClipListContextMenu()
 				{ text: '<span id="cm_cliplist_flag">Flag</span>', icon: "#svg_x5F_Flag", iconClass: "", alias: "flag", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_protect">Protect</span>', icon: "#svg_mio_lock", iconClass: "noflip", alias: "protect", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_aiconfirm">(un)Mark as AI-confirmed</span>', icon: "#svg_mio_cbChecked", iconClass: "noflip", alias: "aiconfirm", action: onContextMenuAction }
-				, { text: '<span id="cm_cliplist_download">Download</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
+				, { text: '<span id="cm_cliplist_download">Download clip</span>', icon: "#svg_x5F_Download", alias: "download", action: onContextMenuAction }
 				, (addDeleteItem
 					? { text: '<span id="cm_cliplist_delete">Delete</span>', icon: "#svg_mio_Trash", iconClass: "noflip", alias: "delete", action: onContextMenuAction }
 					: { type: "skip" })
@@ -24577,6 +24577,8 @@ function ClipProperties()
 
 			if (clipInfo.originalFileHref)
 			{
+				// This happens if the object is an alert that has fileSize, which typically indicates a hi-res Jpeg is available.
+				// Opening an alert causes UI3 to populate its fileSize field with data from the clip, so this isn't perfect.
 				var $link2 = $('<a href="javascript:void(0)"></a>');
 				$link2.attr("href", clipInfo.originalFileHref);
 				$link2.text(clipInfo.originalFileName);
