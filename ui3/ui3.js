@@ -23257,7 +23257,7 @@ function ClipListContextMenu()
 			$("#cm_cliplist_flag").text((flagEnable ? "Flag" : "Unflag") + label);
 			$("#cm_cliplist_protect").text((protectEnable ? "Protect" : "Unprotect") + label);
 			$("#cm_cliplist_aiconfirm").text((aiConfirm ? "Mark as AI-confirmed" : "Unmark as AI-confirmed") + label);
-			$("#cm_cliplist_download").text("Download" + label);
+			$("#cm_cliplist_download").text("Download " + allSelectedClipIDs.length + " clips");
 			$("#cm_cliplist_delete").text("Delete" + label);
 			$dl_link.attr("href", "javascript:void(0)");
 			$dl_link.removeAttr("download");
