@@ -3311,6 +3311,7 @@ $(function ()
 		BI_CustomEvent.Invoke("TabLoaded_" + currentPrimaryTab);
 
 		resized();
+		UpdateCurrentURL();
 	});
 	BI_CustomEvent.AddListener("TabLoaded_live", function () { videoPlayer.goLive(); });
 	BI_CustomEvent.AddListener("TabLoaded_clips", function () { clipLoader.LoadClips(); });
@@ -3555,6 +3556,8 @@ var skipLoadingFirstVideoStream = false;
 var skipLoadingAllVideoStreams = false;
 var startupTimelineMs = null;
 var startupClipFilterSearch = null;
+var startupClipFilterBeginDate = null;
+var startupClipFilterEndDate = null;
 function HandlePreLoadUrlParameters()
 {
 	// Parameter "developerMode"
@@ -3584,6 +3587,14 @@ function HandlePreLoadUrlParameters()
 
 	// Parameter "clipsearch"
 	startupClipFilterSearch = UrlParameters.Get("clipsearch", "cs");
+
+	// Parameters "datestart", "dateend"
+	var dateStart = UrlParameters.Get("datestart", "ds");
+	var dateEnd = UrlParameters.Get("dateend", "de");
+	if (dateStart)
+		startupClipFilterBeginDate = getDateFromDateArgument(dateStart);
+	if (dateEnd)
+		startupClipFilterEndDate = getDateFromDateArgument(dateEnd);
 
 	// Parameter "group"
 	var group = UrlParameters.Get("group", "g");
@@ -8392,43 +8403,61 @@ function DateFilter(dateRangeLabelSelector)
 		// Maybe change color of calendar icon while there is a date range selected.
 		clipLoader.LoadClips();
 	}
-	this.OnSelect = function (dateCustom, dateYMD, noonDateObj, ele, datePickerNum)
+	/**
+	 * Assigns the Date object to the given field without triggering a reload of the clip list.
+	 * @param {Date} date Date object.
+	 * @param {Number} datePickerNum 1 for start date, 2 for end date
+	 */
+	this.SelectDate = function (date, datePickerNum)
 	{
 		if (suppressDatePickerCallbacks)
 			return;
-		var startOfDay = GetReverseServerDate(new Date(noonDateObj.getFullYear(), noonDateObj.getMonth(), noonDateObj.getDate()));
+		var dateYMD = date.getFullYear() + "-" + (date.getMonth() + 1).padLeft(2, '0') + "-" + date.getDate().padLeft(2, '0');
+		var startOfDay = GetReverseServerDate(new Date(date.getFullYear(), date.getMonth(), date.getDate()));
 		if ($dateRangeLabel.hasClass("oneLine"))
 		{
 			$dateRangeLabel.removeClass("oneLine");
 			$dateRangeLabel.html('<span id="lblClipDateSub1"></span><br/><span id="lblClipDateSub2"></span>');
 		}
-		if (datePickerNum == 1)
+		suppressDatePickerCallbacks = true;
+		try
 		{
-			self.BeginDate = startOfDay.getTime() / 1000;
-			$("#lblClipDateSub1").text(dateYMD);
-			if (self.BeginDate >= self.EndDate)
+			if (datePickerNum == 1)
 			{
-				self.EndDate = self.BeginDate + 86400; // (86400 seconds in a day)
+				self.BeginDate = startOfDay.getTime() / 1000;
+				$("#lblClipDateSub1").text(dateYMD);
+				dp1.SetDate(dateYMD);
+				if (self.BeginDate >= self.EndDate)
+				{
+					self.EndDate = self.BeginDate + 86400; // (86400 seconds in a day)
+					$("#lblClipDateSub2").text(dateYMD);
+					dp2.SetDate(dateYMD);
+				}
+			}
+			else
+			{
+				self.EndDate = (startOfDay.getTime() / 1000) + 86400; // (86400 seconds in a day)
 				$("#lblClipDateSub2").text(dateYMD);
-				suppressDatePickerCallbacks = true;
 				dp2.SetDate(dateYMD);
-				suppressDatePickerCallbacks = false;
+				if (self.BeginDate >= self.EndDate || self.BeginDate == 0)
+				{
+					self.BeginDate = self.EndDate - 86400; // (86400 seconds in a day)
+					$("#lblClipDateSub1").text(dateYMD);
+					dp1.SetDate(dateYMD);
+				}
 			}
 		}
-		else
+		finally
 		{
-			self.EndDate = (startOfDay.getTime() / 1000) + 86400; // (86400 seconds in a day)
-			$("#lblClipDateSub2").text(dateYMD);
-			if (self.BeginDate >= self.EndDate || self.BeginDate == 0)
-			{
-				self.BeginDate = self.EndDate - 86400; // (86400 seconds in a day)
-				$("#lblClipDateSub1").text(dateYMD);
-				suppressDatePickerCallbacks = true;
-				dp1.SetDate(dateYMD);
-				suppressDatePickerCallbacks = false;
-			}
+			suppressDatePickerCallbacks = false;
 		}
 		// Maybe change color of calendar icon while there is a date range selected.
+	}
+	this.OnSelect = function (dateCustom, dateYMD, noonDateObj, ele, datePickerNum)
+	{
+		if (suppressDatePickerCallbacks)
+			return;
+		self.SelectDate(noonDateObj, datePickerNum);
 		clipLoader.LoadClips();
 	};
 }
@@ -10337,12 +10366,19 @@ function ClipLoader(clipsBodySelector)
 		}
 		if (startupClipFilterSearch)
 		{
-			if (!filterSearchQuery)
-			{
-				filterSearchQuery = startupClipFilterSearch;
-				clipFilterSearch.setQuery(startupClipFilterSearch);
-			}
+			filterSearchQuery = startupClipFilterSearch;
+			clipFilterSearch.setQuery(startupClipFilterSearch);
 			startupClipFilterSearch = null;
+		}
+		if (startupClipFilterBeginDate || startupClipFilterEndDate)
+		{
+			if (startupClipFilterBeginDate)
+				dateFilter.SelectDate(startupClipFilterBeginDate, 1);
+			if (startupClipFilterEndDate)
+				dateFilter.SelectDate(startupClipFilterEndDate, 2);
+			myDateStart = dateFilter.BeginDate;
+			myDateEnd = dateFilter.EndDate;
+			startupClipFilterBeginDate = startupClipFilterEndDate = null;
 		}
 		if (!previousClipDate)
 			previousClipDate = new Date(0);
@@ -10411,6 +10447,8 @@ function ClipLoader(clipsBodySelector)
 		SetClipListShortcutIconState("#open_alerts_btn", dbView === "alerts");
 		SetClipListShortcutIconState("#open_alerts_canceled_btn", dbView === "cancelled");
 		SetClipListShortcutIconState("#open_alerts_confirmed_btn", dbView === "confirmed");
+
+		UpdateCurrentURL();
 
 		var isClipListRequest = args.cmd === "cliplist"; // We can't rely on this anymore to tell us if response items are clips or alerts.
 
@@ -27446,14 +27484,39 @@ function UpdateCurrentURL()
 	if (!html5HistorySupported || !loadingHelper.DidLoadingFinish())
 		return;
 	var search = new URLSearchParams(location.search);
-	search.delete("rec");
-	search.delete("timeline");
-	search.delete("cam");
+	search.delete("tab");
+	search.delete("t");
+	search.delete("clipview");
+	search.delete("v");
+	search.delete("clipsearch");
+	search.delete("cs");
+	search.delete("datestart");
+	search.delete("ds");
+	search.delete("dateend");
+	search.delete("de");
 	search.delete("group");
+	search.delete("g");
+	search.delete("cam");
+	search.delete("c");
+	search.delete("maximize");
+	search.delete("m");
+	search.delete("rec");
+	search.delete("r");
+	search.delete("timeline");
+	search.delete("tl");
+	search.delete("streamingprofile");
+	search.delete("p");
+	search.delete("timeout");
+	search.delete("to");
+
+	search.set("t", currentPrimaryTab);
 
 	var cli = videoPlayer.Loading().image;
 	if (cli.isTimeline())
+	{
 		search.set("timeline", clipTimeline.getCurrentTime());
+		search.delete("t");
+	}
 	else if (!cli.isLive)
 	{
 		var clipData = clipLoader.GetClipFromId(cli.uniqueId);
@@ -27464,10 +27527,23 @@ function UpdateCurrentURL()
 			if (offset > 0)
 				val += "-" + offset;
 			search.set("rec", val);
+			search.delete("t");
 		}
 	}
-	if (cli.isLive || cli.isTimeline())
-		search.set(cli.isGroup ? "group" : "cam", cli.id);
+
+	if (currentPrimaryTab === "clips")
+	{
+		if (dateFilter.BeginDate)
+			search.set("ds", dateSecondsToYMD(dateFilter.BeginDate))
+		if (dateFilter.EndDate && dateFilter.BeginDate !== dateFilter.EndDate - 86400)
+			search.set("de", dateSecondsToYMD(dateFilter.EndDate - 86400))
+		if (clipFilterSearch.getQuery())
+			search.set("v", settings.ui3_current_dbView);
+		if (clipFilterSearch.getQuery())
+			search.set("cs", clipFilterSearch.getQuery());
+	}
+
+	search.set(cli.isGroup ? "group" : "cam", cli.id);
 
 	search = search.toString();
 	if (search.length)
@@ -34993,4 +35069,36 @@ function compareVersions(version1, version2)
 		if (num2 > num1) return -1;
 	}
 	return 0;
+}
+function getDateFromDateArgument(dateArgument)
+{
+	if (!dateArgument)
+		return null;
+
+	// JavaScript date parsing is a bit stupid, e.g. Chrome parses "2022-12-9" and "2022-12-10" as different time zones, so we are rolling our own simple parser here.
+	var date = null;
+	var parts = dateArgument.split(/[-/]/);
+	if (parts.length === 2 || parts.length === 3)
+	{
+		var year = parseInt(parts[0]);
+		var month = parseInt(parts[1]);
+		var day = parts.length === 3 ? parseInt(parts[2]) : 1;
+		if (year && month && day)
+			date = new Date(year, month - 1, day);
+	}
+	if (!date)
+	{
+		// Assume it is a linux epoch timestamp in milliseconds
+		date = parseInt(dateArgument);
+		if (date && date < 253402326000) // <-- Assume this date actually has precision in seconds.
+			date *= 1000;
+	}
+	if (!date)
+		return null;
+	return new Date(date);
+}
+function dateSecondsToYMD(seconds)
+{
+	var date = new Date(seconds * 1000);
+	return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate();
 }
