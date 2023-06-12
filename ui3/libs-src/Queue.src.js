@@ -126,4 +126,20 @@ function Queue()
 				return queue[i];
 		return undefined;
 	};
+
+	/**
+	 * Removes all items that cause the specified predicate to return true.
+	 * @param {Function} where A function to which each item from the queue is passed. The function should return true when the desired item is passed in.
+	 * @returns {Any} Removes all items that cause the specified predicate to return true.
+	 */
+	this.removeAll = function (where)
+	{
+		// An alternate implementation would be to create a new array, fill it with non-matching items, and reset the offset.  However the current implementation is likely faster when there is only one match.
+		for (var i = offset; i < queue.length; i++)
+			if (where(queue[i]))
+			{
+				queue.splice(i, 1);
+				i--;
+			}
+	};
 }

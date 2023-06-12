@@ -1336,6 +1336,45 @@ var defaultSettings =
 			, category: "Timeline"
 		}
 		, {
+			key: "ui3_timeline_currentZoomScaleComment"
+			, value: ""
+			, inputType: "comment"
+			, comment: function () { return 'Current Zoom Scale: <span id="timelineCurrentZoomScaleComment">' + clipTimeline.getZoomScaler().toFixed(1) + '</span>'; }
+			, category: "Timeline"
+		}
+		, {
+			key: "ui3_timeline_minZoomScaler"
+			, value: 7
+			, minValue: 6
+			, maxValue: 8
+			, step: 0.5
+			, inputType: "range"
+			, label: 'Minimum Zoom Scale'
+			, changeOnStep: true
+			, onChange: OnChange_ui3_timeline_minZoomScaler
+			, category: "Timeline"
+		}
+		, {
+			key: "ui3_timeline_alertThumbnailsAppearAtZoomLevel"
+			, value: 8
+			, minValue: 6
+			, maxValue: 30 // Matches maxZoomScaler in ClipTimeline
+			, step: 0.5
+			, inputType: "range"
+			, label: 'Alert Thumbnails Appear At Zoom Level'
+			, changeOnStep: true
+			, onChange: OnChange_ui3_timeline_alertThumbnailsAppearAtZoomLevel
+			, category: "Timeline"
+		}
+		, {
+			key: "ui3_timeline_alertThumbnailsAppearForGroups"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Alert Thumbnails Appear for Groups'
+			, onChange: OnChange_ui3_timeline_alertThumbnailsAppearForGroups
+			, category: "Timeline"
+		}
+		, {
 			key: "ui3_uiStatusSounds"
 			, value: "0"
 			, inputType: "checkbox"
@@ -6597,7 +6636,7 @@ var ptzPresetThumbLoader = new (function ()
 					h: 0,
 					imgEle: img
 				};
-				asyncThumbLoader.Enqueue(img, img.imgData.src);
+				asyncThumbLoader.VisiblePath(img, img.imgData.src);
 			}
 		}
 		ptzButtons.Get$PtzPresets().each(function (idx, ele)
@@ -6622,7 +6661,7 @@ var ptzPresetThumbLoader = new (function ()
 		{
 			var img = camCache[presetNumber];
 			img.imgData.src = self.UrlForPreset(cameraId, presetNumber, true);
-			asyncThumbLoader.Enqueue(img, img.imgData.src);
+			asyncThumbLoader.VisiblePath(img, img.imgData.src);
 		}
 		else
 			self.NotifyPtzCameraSelected(cameraId); // This case shouldn't happen.
@@ -6897,7 +6936,8 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 							isFlag: (a.type & BIDBFLAG_FLAGGED) > 0,
 							isPerson: (a.type & BIDBFLAG_AI_PERSON) > 0,
 							isVehicle: (a.type & BIDBFLAG_AI_VEHICLE) > 0,
-							tracks: a.tracks
+							tracks: a.tracks,
+							recId: a.record ? GetRecIdFromPath(a.record) : undefined
 						});
 					}
 				}
@@ -6931,9 +6971,9 @@ function ClipTimeline()
 	var vehicleImg = new TimelineRasterIcon(timelineVehicleImgSrc);
 	var $tl_root = $();
 	var timelineDataLoader = null;
-	var minZoomScaler = 8;
-	var maxZoomScaler = 30;
-	var minSavedZoomScaler = 8;
+	var minZoomScaler = function () { return Clamp(parseFloat(settings.ui3_timeline_minZoomScaler), 4, 8); }; // default was 8, changed to 7 when alert thumbnails were implemented.
+	var maxZoomScaler = 30; // Has a copy declared in UI Settings ^^
+	var minSavedZoomScaler = 6;
 	var maxSavedZoomScaler = 19;
 	var canvasData = null;
 	/** Number of milliseconds prior to the "live" time that the timeline should not allow to be selected. */
@@ -6944,6 +6984,7 @@ function ClipTimeline()
 	var drawRoundedRectangles = true;
 	var timelineStarfieldOffset = 0;
 	var lastTimelineDrawCurrentTime = -1;
+	var timelineThumbnailLoader;
 
 	var starfield = null;
 
@@ -7056,6 +7097,7 @@ function ClipTimeline()
 				this.AfterResize();
 				this.onOpenVideo();
 				this.canvasRedrawState.interval = setInterval(this.canvasRedraw, 66);
+				timelineThumbnailLoader = new AsyncOffscreenThumbnailDownloader(function () { timeline.drawCanvas() });
 			},
 			beforeDestroy: function ()
 			{
@@ -7077,6 +7119,7 @@ function ClipTimeline()
 				document.removeEventListener("touchcancel", timeline.touchCancel);
 				timeline.$refs.tl_root.removeEventListener("mouseleave", timeline.mouseLeave);
 				timeline.$refs.tl_root.removeEventListener("wheel", timeline.mouseWheel);
+				timelineThumbnailLoader.Stop();
 				timeline = undefined;
 			},
 			methods:
@@ -7281,8 +7324,9 @@ function ClipTimeline()
 				},
 				setZoom_Internal: function (zoom)
 				{
-					this.zoomScaler = Clamp(zoom, minZoomScaler, maxZoomScaler);
-					settings.ui3_timelineZoomScaler = Clamp(zoom, minSavedZoomScaler, maxSavedZoomScaler);
+					this.zoomScaler = Clamp(zoom, minZoomScaler(), maxZoomScaler);
+					$("#timelineCurrentZoomScaleComment").text(this.zoomScaler);
+					settings.ui3_timelineZoomScaler = Clamp(this.zoomScaler, minSavedZoomScaler, maxSavedZoomScaler);
 				},
 				assignLastSetTime: function (time)
 				{
@@ -7321,6 +7365,7 @@ function ClipTimeline()
 
 					var dpr = BI_GetDevicePixelRatio();
 					var zoomFactor = this.zoomFactor / dpr;
+					var zoomScaler = this.zoomScaler;
 					var left = this.left;
 					var right = this.right;
 					var now = GetUtcNow();
@@ -7352,7 +7397,7 @@ function ClipTimeline()
 							// Draw partially-transparent black overlay behind loadable timeline area.
 							var overlayLeft = Math.max(0, -left / zoomFactor);
 							var overlayWidth = Math.min(canvas.width, (now - (self.keepOutTime * 0.8) - left) / zoomFactor);
-							var stepsFromMaxZoomout = maxZoomScaler - this.zoomScaler;
+							var stepsFromMaxZoomout = maxZoomScaler - zoomScaler;
 							var blackBackgroundOpacity = Clamp(stepsFromMaxZoomout / 10, 0, 0.8) + 0.2;
 							ctx.fillStyle = "rgba(0,0,0," + blackBackgroundOpacity + ")";
 							ctx.fillRect(overlayLeft, 0, overlayWidth, canvas.height);
@@ -7362,7 +7407,7 @@ function ClipTimeline()
 						var clipDrawRegionHeight = canvas.height - alertIconSpace;
 						var timelineColorbarHeight = clipDrawRegionHeight / canvasData.colors.length;
 
-						bet.start("Draw clips and alerts");
+						bet.start("Draw clip and alert color bars");
 						// Draw clip rectangles
 						for (var n = 0; n < canvasData.clips.length; n++)
 						{
@@ -7399,7 +7444,50 @@ function ClipTimeline()
 									ctx.fillRect(x, y, w, h);
 							}
 						}
+						if (zoomScaler <= parseFloat(settings.ui3_timeline_alertThumbnailsAppearAtZoomLevel))
+						{
+							if (!videoPlayer.Loading().image.isGroup || settings.ui3_timeline_alertThumbnailsAppearForGroups === "1")
+							{
+								// I tried drawing the images with opacity (ctx.globalAlpha) at futher-out zoom levels, but it is too messy looking.
+								bet.start("Draw alert thumbnails");
+								var oldShadow = { x: ctx.shadowOffsetX, y: ctx.shadowOffsetY, c: ctx.shadowColor, b: ctx.shadowBlur };
+								ctx.shadowOffsetX = -5 * dpr;
+								ctx.shadowOffsetY = 0;
+								ctx.shadowColor = 'rgba(0,0,0,0.67)';
+								ctx.shadowBlur = 10 * dpr;
+								for (var n = 0; n < canvasData.alerts.length; n++)
+								{
+									var alert = canvasData.alerts[n];
+									if (alert.recId)
+									{
+										var vpad = 4;
+										var x = ((alert.time - left) / zoomFactor) + (1 * dpr);
+										var y = alertIconSpace + vpad;
+										var w = 100;
+										var h = (canvasData.colors.length * timelineColorbarHeight) - vpad - vpad;
+										var img = timelineThumbnailLoader.GetImg(alert.recId);
+										if (img && img.loadedSuccessfully)
+											w = (img.naturalWidth / img.naturalHeight) * h;
+										if (x < canvas.width && x >= -w)
+										{
+											if (img && img.loadedSuccessfully)
+												ctx.drawImage(img, x, y, w, h);
+											else
+												timelineThumbnailLoader.Visible(alert.recId);
+										}
+										else
+											timelineThumbnailLoader.Invisible(alert.recId);
+									}
+								}
+								ctx.shadowOffsetX = oldShadow.x;
+								ctx.shadowOffsetY = oldShadow.y;
+								ctx.shadowColor = oldShadow.c;
+								ctx.shadowBlur = oldShadow.b;
+								bet.stop();
+							}
+						}
 
+						bet.start("Draw alert track markers and icons");
 						if (settings.ui3_timeline_alertTrackMarkers === "1")
 						{
 							// Draw alert track markers
@@ -7995,6 +8083,23 @@ function ClipTimeline()
 	this.getVue = function ()
 	{
 		return timeline;
+	}
+	this.setZoomScaler = function (zoomScaler)
+	{
+		if (timeline)
+			timeline.acceptZoom(zoomScaler);
+	}
+	this.getZoomScaler = function ()
+	{
+		if (timeline)
+			return timeline.zoomScaler;
+		else
+			return undefined;
+	}
+	this.redrawCanvas = function ()
+	{
+		if (timeline)
+			timeline.drawCanvas();
 	}
 	this.pointInsideTimeline = function (x, y)
 	{
@@ -10220,8 +10325,7 @@ function ClipData(clip)
 	clipData.roughLength = GetClipLengthFromFileSize(clip.filesize);
 	clipData.roughLengthMs = GetClipLengthMs(clipData.roughLength);
 	clipData.camera = clip.camera;
-	clipData.recId = clip.path.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID, not used for loading imagery
-	clipData.thumbPath = clip.path; // Path used for loading the thumbnail
+	clipData.recId = GetRecIdFromPath(clip.path); // Unique ID, not usually used for loading imagery
 	clipData.hasHighResJpeg = !clipData.isClip && !DoesFileSizeStringHaveOnlyDuration(clip.filesize);
 	clipData.res = clip.res;
 	if (clipData.isClip)
@@ -10240,7 +10344,7 @@ function ClipData(clip)
 		}
 		else
 		{
-			clipData.clipId = clip.clip.replace(/@/g, "").replace(/\..*/g, ""); // Unique ID of the underlying clip.
+			clipData.clipId = GetRecIdFromPath(clip.clip); // Unique ID of the underlying clip.
 			clipData.path = clip.clip; // Path used for loading the video stream
 		}
 		clipData.isNew = false;
@@ -10860,7 +10964,7 @@ function ClipLoader(clipsBodySelector)
 		}
 		if (!clipData.isClip && clipData.fileSize)
 		{
-			retVal.originalFileHref = GetThumbnailPath(clipData.thumbPath, true);
+			retVal.originalFileHref = GetThumbnailPath(clipData.recId, true);
 			retVal.originalFileName = clipData.rawData.file;
 		}
 		return retVal;
@@ -10939,9 +11043,7 @@ function ClipLoader(clipsBodySelector)
 			console.error("ThumbOnAppear called with undefined ele");
 			return;
 		}
-		var path = GetThumbnailPath(ele.thumbPath, false);
-		if (ele.getAttribute('src') != path)
-			asyncThumbnailDownloader.Enqueue(ele, path);
+		asyncThumbnailDownloader.Visible(ele, ele.recId);
 	}
 	var ThumbOnDisappear = function (ele)
 	{
@@ -10950,7 +11052,7 @@ function ClipLoader(clipsBodySelector)
 			console.error("ThumbOnDisappear called with undefined ele");
 			return;
 		}
-		asyncThumbnailDownloader.Dequeue(ele);
+		asyncThumbnailDownloader.Invisible(ele.recId);
 	}
 	var ClipOnAppear = function (clipData)
 	{
@@ -11012,7 +11114,7 @@ function ClipLoader(clipsBodySelector)
 			$clip.get(0).clipData = clipData;
 
 			var thumbEle = $("#t" + clipData.recId).get(0);
-			thumbEle.thumbPath = clipData.thumbPath;
+			thumbEle.recId = clipData.recId;
 
 			if (!isDeleting)
 			{
@@ -11024,7 +11126,7 @@ function ClipLoader(clipsBodySelector)
 
 					if (getMouseoverClipThumbnails())
 					{
-						var thumbPath = GetThumbnailPath(clipData.thumbPath, settings.ui3_hires_jpeg_popups === "1");
+						var thumbPath = GetThumbnailPath(clipData.recId, settings.ui3_hires_jpeg_popups === "1");
 						if (thumbEle.getAttribute("src") == thumbPath)
 							thumbPath = thumbEle;
 						var aspectRatio = thumbEle.naturalWidth / thumbEle.naturalHeight;
@@ -12051,9 +12153,9 @@ function SetClipListShortcutIconState(iconSelector, selected)
 	else
 		$(iconSelector).removeClass("selected");
 }
-function GetThumbnailPath(thumbPath, nativeRes)
+function GetThumbnailPath(pathOrRecId, nativeRes)
 {
-	var id = thumbPath.replace(/@/g, "").replace(/\..*/g, "");
+	var id = GetRecIdFromPath(pathOrRecId);
 	if (nativeRes)
 	{
 		var clipData = clipLoader.GetClipFromId(id);
@@ -12064,7 +12166,10 @@ function GetThumbnailPath(thumbPath, nativeRes)
 		}
 		nativeRes = clipData.hasHighResJpeg;
 	}
-	return currentServer.remoteBaseURL + (nativeRes ? "alerts" : "thumbs") + "/" + thumbPath + "?" + (nativeRes ? "fulljpeg" : "") + currentServer.GetAPISessionArg("&");
+	var qs = (nativeRes ? "fulljpeg" : "") + currentServer.GetAPISessionArg("&");
+	if (qs)
+		qs = "?" + qs;
+	return currentServer.remoteBaseURL + (nativeRes ? "alerts" : "thumbs") + "/@" + id + qs;
 }
 ///////////////////////////////////////////////////////////////
 // Learn Which Days Have Clips ////////////////////////////////
@@ -12219,7 +12324,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 		clipThumbPlaybackActive = true;
 		var clipPreviewNumFrames = self.GetClipPreviewNumFrames();
 		var timeValue = ((frameNum % clipPreviewNumFrames) / clipPreviewNumFrames) * duration;
-		var thumbPath = currentServer.remoteBaseURL + "file/clips/" + clipData.thumbPath + '?time=' + timeValue + "&cache=1&h=" + expectedHeight + currentServer.GetAPISessionArg("&");
+		var thumbPath = currentServer.remoteBaseURL + "file/clips/@" + clipData.recId + '?time=' + timeValue + "&cache=1&h=" + expectedHeight + currentServer.GetAPISessionArg("&");
 		var thumbLabel = camName + " " + GetTimeStr(new Date(clipData.displayDate.getTime() + timeValue));
 		bigThumbHelper.Show($clip, $clip, thumbLabel, thumbPath, expectedWidth, expectedHeight, function ($img, userContext, success)
 		{
@@ -12274,19 +12379,20 @@ function ClipThumbnailVideoPreview_BruteForce()
 ///////////////////////////////////////////////////////////////
 function AsyncClipThumbnailDownloader()
 {
-	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, onLoad, onError, loadCondition);
+	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, onLoad, onError, loadCondition, 250, true);
 	var fallbackImg = 'ui3/noimage.png' + currentServer.GetLocalSessionArg("?");
 	this.Stop = function ()
 	{
 		asyncThumbnailDownloader.Stop();
 	}
-	this.Enqueue = function (img, path)
+	this.Visible = function (img, recId)
 	{
-		asyncThumbnailDownloader.Enqueue(img, path);
+		var path = GetThumbnailPath(recId, false);
+		asyncThumbnailDownloader.Visible(recId, path, img);
 	}
-	this.Dequeue = function (img)
+	this.Invisible = function (recId)
 	{
-		asyncThumbnailDownloader.Dequeue(img);
+		asyncThumbnailDownloader.Invisible(recId);
 	}
 
 	function onLoad(img)
@@ -12310,47 +12416,92 @@ function AsyncClipThumbnailDownloader()
 }
 function AsyncPresetThumbnailDownloader(thumbLoaded, thumbError)
 {
-	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, thumbLoaded, thumbError, loadCondition);
+	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, thumbLoaded, thumbError, loadCondition, 250, true);
 
 	this.Stop = function ()
 	{
 		asyncThumbnailDownloader.Stop();
 	}
-	this.Enqueue = function (img, path)
+	this.VisiblePath = function (img, src)
 	{
-		asyncThumbnailDownloader.Enqueue(img, path);
-	}
-	this.Dequeue = function (img)
-	{
-		asyncThumbnailDownloader.Dequeue(img);
+		asyncThumbnailDownloader.Visible(src, src, img);
 	}
 	function loadCondition(obj)
 	{
 		return true;
 	}
 }
-function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
+function AsyncOffscreenThumbnailDownloader(onLoadCallback)
+{
+	var asyncThumbnailDownloader = new AsyncThumbnailDownloader(3, onLoad, onError, loadCondition, 50, false);
+	var imgIdMap = new FasterObjectMap();
+
+	this.Stop = function ()
+	{
+		asyncThumbnailDownloader.Stop();
+		imgIdMap = new FasterObjectMap();
+	}
+	this.Visible = function (recId)
+	{
+		if (!imgIdMap[recId])
+			imgIdMap[recId] = document.createElement("img");
+		var path = GetThumbnailPath(recId);
+		asyncThumbnailDownloader.Visible(recId, path, imgIdMap[recId]);
+	}
+	this.Invisible = function (recId)
+	{
+		asyncThumbnailDownloader.Invisible(recId);
+	}
+	this.GetImg = function (recId)
+	{
+		return imgIdMap[recId];
+	}
+
+	function onLoad(img)
+	{
+		img.loadedSuccessfully = true;
+		onLoadCallback();
+	}
+	function onError(img)
+	{
+	}
+	function loadCondition(obj)
+	{
+		var src = obj.img.getAttribute('src');
+		return !src || src.length == 0 || src != obj.path;
+	}
+}
+function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition, idleSleepMs, useTemporaryLoadingImage)
 {
 	var self = this;
-	var asyncImageQueue = new Array();
-	var currentlyLoadingImages = new Array();
+	/** Map of key to objects that are queued for loading.  Objects are moved to the [currentlyLoadingObjects] map when they begin loading. */
+	var queuedObjectMap = new FasterObjectMap();
+	/** The queue of image object keys which defines their load order. */
+	var queuedKeys = new Queue();
+	/** Map of key to objects that are currently loading. */
+	var currentlyLoadingObjects = new FasterObjectMap();
 	var stopImageQueue = false;
 	numThreads = Clamp(numThreads, 1, 5);
 	var loadTimeoutMs = 5000;
+	if (!idleSleepMs)
+		idleSleepMs = 250;
+	if (typeof useTemporaryLoadingImage === "undefined")
+		useTemporaryLoadingImage = true;
 
 	this.Stop = function ()
 	{
 		stopImageQueue = true;
-		asyncImageQueue = new Array();
-		currentlyLoadingImages = new Array();
+		queuedObjectMap = new FasterObjectMap();
+		queuedKeys = new Queue();
+		currentlyLoadingObjects = new FasterObjectMap();
 	}
 	var AsyncDownloadQueuedImage = function ()
 	{
 		if (stopImageQueue || currentServer.isLoggingOut)
 			return;
 		var obj = popHighestPriorityImage();
-		if (obj == null)
-			setTimeout(AsyncDownloadQueuedImage, 250);
+		if (!obj)
+			setTimeout(AsyncDownloadQueuedImage, idleSleepMs);
 		else
 		{
 			if (loadCondition(obj))
@@ -12358,7 +12509,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 				var $img = $(obj.img);
 				$img.bind("load.asyncimage", function ()
 				{
-					ImgNotLoading(obj.img);
+					delete currentlyLoadingObjects[obj.key];
 					clearTimeout(obj.loadTimeout);
 					$img.unbind("load.asyncimage error.asyncimage");
 					if (onLoad)
@@ -12368,7 +12519,7 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 				});
 				$img.bind("error.asyncimage", function ()
 				{
-					ImgNotLoading(obj.img);
+					delete currentlyLoadingObjects[obj.key];
 					clearTimeout(obj.loadTimeout);
 					$img.unbind("load.asyncimage error.asyncimage");
 					if (onError)
@@ -12378,67 +12529,77 @@ function AsyncThumbnailDownloader(numThreads, onLoad, onError, loadCondition)
 				});
 				obj.loadTimeout = setTimeout(function ()
 				{
-					ImgNotLoading(obj.img);
+					delete currentlyLoadingObjects[obj.key];
 					$img.unbind("load.asyncimage error.asyncimage");
 					obj.timedOut = true; // This timeout occurs if the element is removed from the DOM before the load is completed.
 					AsyncDownloadQueuedImage();
 				}, loadTimeoutMs);
-				currentlyLoadingImages.push(obj);
+				obj.timedOut = false;
+				currentlyLoadingObjects[obj.key] = obj;
 				$img.attr('src', obj.path);
 			}
 			else // Image is already loaded
+			{
+				self.Invisible(obj.key);
 				AsyncDownloadQueuedImage();
+			}
 		}
 	}
 	var popHighestPriorityImage = function ()
 	{
-		if (asyncImageQueue.length > 0)
+		var key = queuedKeys.dequeue();
+		if (key)
 		{
-			var highest = asyncImageQueue[0];
-			asyncImageQueue.splice(0, 1);
-			return highest;
+			var obj = queuedObjectMap[key];
+			delete queuedObjectMap[key];
+			return obj;
 		}
 		return null;
 	}
-	this.Enqueue = function (img, path)
+	/**
+	 * Adds or updates the given image and queues it for loading.
+	 * @param {String} key Unique identifier string for the image, used for keying.
+	 * @param {String} path URL to load the image from.
+	 * @param {Object} img DOM image element.
+	 */
+	this.Visible = function (key, path, img)
 	{
-		var newObj = new Object();
-		newObj.img = img;
-		newObj.path = path;
-		newObj.timedOut = false;
-		asyncImageQueue.push(newObj);
+		if (currentlyLoadingObjects[key])
+			return;
+		if (queuedObjectMap[key])
+			return;
+		var obj = new Object();
+		obj.img = img;
+		obj.key = key;
+		obj.path = path;
+		queuedObjectMap[key] = obj;
+		queuedKeys.enqueue(key);
 	}
-	var ImgNotLoading = function (img)
+	/**
+	 * Removes the image from the queue, canceling it if it is already downloading.
+	 * @param {String} key Unique identifier string for the image, used for keying.
+	 */
+	this.Invisible = function (key)
 	{
-		for (var i = 0; i < currentlyLoadingImages.length; i++)
+		var obj = currentlyLoadingObjects[key];
+		if (obj)
 		{
-			if (currentlyLoadingImages[i].img == img)
-			{
-				currentlyLoadingImages.splice(i, 1);
-				return;
-			}
+			delete currentlyLoadingObjects[key];
+			clearTimeout(obj.loadTimeout);
+			var $img = $(obj.img);
+			$img.unbind("load.asyncimage error.asyncimage");
+			if (useTemporaryLoadingImage)
+				$img.attr('src', 'ui3/LoadingImage.png' + currentServer.GetLocalSessionArg("?"));
+			setTimeout(AsyncDownloadQueuedImage, idleSleepMs);
+			return;
 		}
-	}
-	this.Dequeue = function (img)
-	{
-		for (var i = 0; i < asyncImageQueue.length; i++)
+		else if (queuedObjectMap[key])
 		{
-			if (asyncImageQueue[i].img == img)
+			delete queuedObjectMap[key];
+			queuedKeys.removeAll(function (item)
 			{
-				asyncImageQueue.splice(i, 1);
-				return;
-			}
-		}
-		for (var i = 0; i < currentlyLoadingImages.length; i++)
-		{
-			if (currentlyLoadingImages[i].img == img)
-			{
-				clearTimeout(currentlyLoadingImages[i].loadTimeout);
-				$(img).unbind("load.asyncimage error.asyncimage").attr('src', 'ui3/LoadingImage.png' + currentServer.GetLocalSessionArg("?"));
-				currentlyLoadingImages.splice(i, 1);
-				setTimeout(AsyncDownloadQueuedImage, 250);
-				return;
-			}
+				return item === key;
+			});
 		}
 	}
 
@@ -24529,7 +24690,7 @@ function ClipProperties()
 		try
 		{
 			var $thumb = $('<img class="clipPropertiesThumb" src="" alt="clip thumbnail"></img>');
-			var thumbPath = GetThumbnailPath(clipData.thumbPath, true);
+			var thumbPath = GetThumbnailPath(clipData.recId, true);
 			$thumb.attr('src', thumbPath);
 			$thumb.css("border-color", "#" + clipData.colorHex);
 			$camprop.append($thumb);
@@ -25240,7 +25401,7 @@ function ExportListDialog()
 
 		$body.find("img.thumb").each(function (idx, ele)
 		{
-			asyncThumbnailDownloader.Enqueue(ele, ele.getAttribute('thumbpath'));
+			asyncThumbnailDownloader.Visible(ele, ele.getAttribute('path'));
 		});
 		dialog.contentChanged(!loadedOnce);
 		loadedOnce = true;
@@ -25249,12 +25410,11 @@ function ExportListDialog()
 	{
 		var linked = item.status === "done";
 		var loadingImg = "ui3/LoadingImage.png" + currentServer.GetLocalSessionArg("?");
-		var thumbUrl = GetThumbnailPath(item.path, false);
 		var thumbStyle = item.status === "done" ? '' : ' style="opacity: 0.5;"';
 		var thumb = '<div class="camlist_thumb">'
 			+ '<div class="camlist_thumb_aligner"></div>'
 			+ '<div class="camlist_thumb_helper">'
-			+ '<img src="' + loadingImg + '" alt="thumbnail" class="thumb" thumbpath="' + thumbUrl + '"' + thumbStyle + ' />'
+			+ '<img src="' + loadingImg + '" alt="thumbnail" class="thumb" path="' + item.path + '"' + thumbStyle + ' />'
 			+ '</div>'
 			+ '</div>';
 
@@ -32903,6 +33063,22 @@ function ProgrammaticSoundPlayer()
 
 	Initialize();
 }
+function OnChange_ui3_timeline_minZoomScaler()
+{
+	if (currentPrimaryTab !== "timeline")
+		$("#topbar_tab_timeline").click();
+	clipTimeline.setZoomScaler(parseFloat(settings.ui3_timeline_minZoomScaler));
+}
+function OnChange_ui3_timeline_alertThumbnailsAppearAtZoomLevel()
+{
+	if (currentPrimaryTab !== "timeline")
+		$("#topbar_tab_timeline").click();
+	clipTimeline.setZoomScaler(parseFloat(settings.ui3_timeline_alertThumbnailsAppearAtZoomLevel));
+}
+function OnChange_ui3_timeline_alertThumbnailsAppearForGroups()
+{
+	clipTimeline.redrawCanvas();
+}
 function OnChange_ui3_uiStatusSounds()
 {
 	var spk = settings.ui3_uiStatusSpeech === "1";
@@ -33885,6 +34061,10 @@ function GetClipFileSize(fileSize)
 	if (parentheticals && parentheticals.length > 0)
 		return parentheticals[0].substr(1, parentheticals[0].length - 2);
 	return "";
+}
+function GetRecIdFromPath(path)
+{
+	return path.replace(/@/g, "").replace(/\..*/g, "");
 }
 function ltrim(str, chars)
 {
