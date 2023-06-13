@@ -1361,7 +1361,7 @@ var defaultSettings =
 			, maxValue: 30 // Matches maxZoomScaler in ClipTimeline
 			, step: 0.5
 			, inputType: "range"
-			, label: 'Alert Thumbnails Appear At Zoom Level'
+			, label: 'Alert Thumbnails Appear At Zoom Scale'
 			, changeOnStep: true
 			, onChange: OnChange_ui3_timeline_alertThumbnailsAppearAtZoomLevel
 			, category: "Timeline"
