@@ -7446,7 +7446,9 @@ function ClipTimeline()
 						}
 						if (zoomScaler <= parseFloat(settings.ui3_timeline_alertThumbnailsAppearAtZoomLevel))
 						{
-							if (!videoPlayer.Loading().image.isGroup || settings.ui3_timeline_alertThumbnailsAppearForGroups === "1")
+							var l = videoPlayer.Loading().image;
+							var isSingleCamera = !l.cams || l.cams.length === 1;
+							if (isSingleCamera || settings.ui3_timeline_alertThumbnailsAppearForGroups === "1")
 							{
 								// I tried drawing the images with opacity (ctx.globalAlpha) at futher-out zoom levels, but it is too messy looking.
 								bet.start("Draw alert thumbnails");
