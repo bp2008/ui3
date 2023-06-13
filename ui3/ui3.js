@@ -1375,6 +1375,13 @@ var defaultSettings =
 			, category: "Timeline"
 		}
 		, {
+			key: "ui3_timeline_drawHoveredAlertOnTop"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Highlight Hovered Thumbnail<div class="settingDesc">When mousing over an alert thumbnail, it will be drawn on top with a white border.</div>'
+			, category: "Timeline"
+		}
+		, {
 			key: "ui3_timeline_alertThumbnailClickLoadsAlertStartTime"
 			, value: "1"
 			, inputType: "checkbox"
@@ -7053,6 +7060,7 @@ function ClipTimeline()
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
 					dragState: { isMouseDown: false, isDragging: false, startX: 0, lastClickAt: -9999, doubleClickTime: 400 },
+					mouseHoverX: -10000,
 					wheelPanState: { isActive: false, timeout: null },
 					/** Helps maintain a decent timeline frame rate while nothing is interacting with the timeline. */
 					canvasRedrawState: { interval: null, lastRedraw: 0 },
@@ -7196,6 +7204,7 @@ function ClipTimeline()
 					}
 					if (e.button === 2)
 						return;
+					timeline.mouseHoverX = e.mouseX;
 					if (pointInsideElement($tl_root, e.mouseX, e.mouseY))
 					{
 						timeline.dragState.startX = e.mouseX;
@@ -7209,6 +7218,7 @@ function ClipTimeline()
 					mouseCoordFixer.fix(e);
 					if (touchEvents.Gate(e))
 						return;
+					timeline.mouseHoverX = e.mouseX;
 					if (timeline.dragState.isMouseDown)
 					{
 						var delta = (e.mouseX - timeline.dragState.startX);
@@ -7229,6 +7239,7 @@ function ClipTimeline()
 					mouseCoordFixer.fix(e);
 					if (touchEvents.Gate(e))
 						return;
+					timeline.mouseHoverX = e.mouseX;
 					if (timeline.dragState.isMouseDown)
 					{
 						var isMultiTouch = touchEvents.isMultiTouch(e);
@@ -7462,42 +7473,32 @@ function ClipTimeline()
 									ctx.fillRect(x, y, w, h);
 							}
 						}
+						var hoveredAlert = null;
 						if (this.shouldShowAlertThumbnails)
 						{
 							// I tried drawing the images with opacity (ctx.globalAlpha) at futher-out zoom levels, but it is too messy looking.
 							bet.start("Draw alert thumbnails");
-							var oldShadow = { x: ctx.shadowOffsetX, y: ctx.shadowOffsetY, c: ctx.shadowColor, b: ctx.shadowBlur };
-							ctx.shadowOffsetX = -5 * dpr;
-							ctx.shadowOffsetY = 0;
-							ctx.shadowColor = 'rgba(0,0,0,0.67)';
-							ctx.shadowBlur = 10 * dpr;
-							for (var n = 0; n < canvasData.alerts.length; n++)
+
+							var hoveredAlertOnTop = settings.ui3_timeline_drawHoveredAlertOnTop === "1";
+							var hoveredAlertThumbnailRecId = this.hoveredAlertThumbnailRecId;
+
+							var y = alertIconSpace + alertThumbVpad;
+							var h = (canvasData.colors.length * timelineColorbarHeight) - alertThumbVpad - alertThumbVpad;
+
+							doWithTempShadowSettings(ctx, -5 * dpr, 0, 'rgba(0,0,0,0.67)', 10 * dpr, function ()
 							{
-								var alert = canvasData.alerts[n];
-								if (alert.recId)
+								for (var n = 0; n < canvasData.alerts.length; n++)
 								{
-									var x = ((alert.time - left) / zoomFactor) + (1 * dpr);
-									var y = alertIconSpace + alertThumbVpad;
-									var w = 100;
-									var h = (canvasData.colors.length * timelineColorbarHeight) - alertThumbVpad - alertThumbVpad;
-									var img = timelineThumbnailLoader.GetImg(alert.recId);
-									if (img && img.loadedSuccessfully)
-										w = (img.naturalWidth / img.naturalHeight) * h;
-									if (x < canvas.width && x >= -w)
+									var alert = canvasData.alerts[n];
+									if (alert && alert.recId)
 									{
-										if (img && img.loadedSuccessfully)
-											ctx.drawImage(img, x, y, w, h);
+										if (hoveredAlertOnTop && alert.recId === hoveredAlertThumbnailRecId)
+											hoveredAlert = alert; // This alert gets drawn later
 										else
-											timelineThumbnailLoader.Visible(alert.recId);
+											drawAlertThumbnail(alert, y, h, left, zoomFactor, dpr, canvas, ctx, false);
 									}
-									else
-										timelineThumbnailLoader.Invisible(alert.recId);
 								}
-							}
-							ctx.shadowOffsetX = oldShadow.x;
-							ctx.shadowOffsetY = oldShadow.y;
-							ctx.shadowColor = oldShadow.c;
-							ctx.shadowBlur = oldShadow.b;
+							});
 							bet.stop();
 						}
 
@@ -7538,6 +7539,13 @@ function ClipTimeline()
 							img.draw(ctx, canvas.width, dpr, ((a.time - left) / zoomFactor), 0);
 						}
 						bet.stop();
+
+						if (hoveredAlert)
+						{
+							bet.start("Draw hovered alert thumbnail");
+							drawAlertThumbnail(hoveredAlert, y, h, left, zoomFactor, dpr, canvas, ctx, true);
+							bet.stop();
+						}
 					}
 
 					if (left < 0 && right > 0)
@@ -7753,7 +7761,7 @@ function ClipTimeline()
 				getAlertThumbnailRecIdAtTime: function (time)
 				{
 					var canvas = this.$refs.clipTimelineCanvas;
-					if (!canvas || !canvasData)
+					if (!canvas || !canvasData || !this.shouldShowAlertThumbnails)
 						return null;
 					var dpr = BI_GetDevicePixelRatio();
 					var alertIconSpace = 12 * dpr;
@@ -7878,6 +7886,15 @@ function ClipTimeline()
 							return true;
 					}
 					return false;
+				},
+				hoveredAlertThumbnailRecId: function ()
+				{
+					if (this.dragState.isMouseDown && this.shouldShowAlertThumbnails && this.mouseHoverX && settings.ui3_timeline_drawHoveredAlertOnTop === "1")
+					{
+						var hoverTime = this.left + pointToElementRelative($tl_root, this.mouseHoverX, 0).x * this.zoomFactor;
+						return this.getAlertThumbnailRecIdAtTime(hoverTime);
+					}
+					return undefined;
 				}
 			},
 			watch:
@@ -7914,6 +7931,10 @@ function ClipTimeline()
 						videoPlayer.Playback_Pause();
 					else if (oldValue && !newValue && videoPlayer.Playback_IsPaused())
 						videoPlayer.Playback_Play();
+				},
+				hoveredAlertThumbnailRecId: function ()
+				{
+					this.drawCanvas();
 				}
 			}
 		});
@@ -8142,6 +8163,60 @@ function ClipTimeline()
 
 		resized();
 	}
+	function doWithTempShadowSettings(ctx, x, y, c, b, fn)
+	{
+		var saved = { x: ctx.shadowOffsetX, y: ctx.shadowOffsetY, c: ctx.shadowColor, b: ctx.shadowBlur }
+		try
+		{
+			ctx.shadowOffsetX = x;
+			ctx.shadowOffsetY = y;
+			ctx.shadowColor = c;
+			ctx.shadowBlur = b;
+			fn();
+		}
+		finally
+		{
+			ctx.shadowOffsetX = saved.x;
+			ctx.shadowOffsetY = saved.y;
+			ctx.shadowColor = saved.c;
+			ctx.shadowBlur = saved.b;
+		}
+	}
+	function drawAlertThumbnail(alert, y, h, left, zoomFactor, dpr, canvas, ctx, highlight)
+	{
+		var x = ((alert.time - left) / zoomFactor) + (1 * dpr);
+		var w = 100;
+		var img = timelineThumbnailLoader.GetImg(alert.recId);
+		if (img && img.loadedSuccessfully)
+			w = (img.naturalWidth / img.naturalHeight) * h;
+		if (x < canvas.width && x >= -w)
+		{
+			if (img && img.loadedSuccessfully)
+			{
+				if (highlight)
+				{
+					doWithTempShadowSettings(ctx, -5 * dpr, 0, 'rgba(0,0,0,0.67)', 10 * dpr, function ()
+					{
+						ctx.drawImage(img, x, y, w, h);
+					});
+
+					var lineWidth = 4 * dpr;
+					var o = lineWidth / 2; // Line offset should be half the width.
+					ctx.beginPath();
+					ctx.lineWidth = lineWidth;
+					ctx.strokeStyle = "rgba(255,255,255,1)";
+					ctx.rect(x - o, y - o, w + o + o, h + o + o);
+					ctx.stroke();
+				}
+				else
+					ctx.drawImage(img, x, y, w, h);
+			}
+			else
+				timelineThumbnailLoader.Visible(alert.recId);
+		}
+		else
+			timelineThumbnailLoader.Invisible(alert.recId);
+	}
 	this.getVue = function ()
 	{
 		return timeline;
@@ -8295,6 +8370,11 @@ var timelineSync = new (function ()
 		var item = queue.dequeue();
 		if (!item)
 			return;
+		// Doing this asynchronously helps avoid a stack overflow in some cases when dragging the timeline back and forth rapidly and releasing it.
+		setTimeout(function () { processItem(item); }, 0);
+	}
+	function processItem(item)
+	{
 		locked = true;
 		try
 		{
