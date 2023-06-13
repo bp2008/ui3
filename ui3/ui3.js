@@ -1375,6 +1375,14 @@ var defaultSettings =
 			, category: "Timeline"
 		}
 		, {
+			key: "ui3_timeline_alertThumbnailClickLoadsAlertStartTime"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Alert Thumb Click Handling<div class="settingDesc">Clicking an alert thumbnail will seek to the alert\'s start time.  Results may be inaccurate when zoomed far out.</div>'
+			, hint: 'UI3 does not have extremely precise timeline data available, so this function works best when zoomed far in.'
+			, category: "Timeline"
+		}
+		, {
 			key: "ui3_uiStatusSounds"
 			, value: "0"
 			, inputType: "checkbox"
@@ -6985,6 +6993,7 @@ function ClipTimeline()
 	var timelineStarfieldOffset = 0;
 	var lastTimelineDrawCurrentTime = -1;
 	var timelineThumbnailLoader;
+	var alertThumbVpad = 4;
 
 	var starfield = null;
 
@@ -7234,6 +7243,16 @@ function ClipTimeline()
 							{
 								timeline.dragState.lastClickAt = now;
 								var time = timeline.left + pointToElementRelative($tl_root, e.mouseX, 0).x * timeline.zoomFactor;
+								if (this.shouldShowAlertThumbnails && settings.ui3_timeline_alertThumbnailClickLoadsAlertStartTime === "1")
+								{
+									var recId = this.getAlertThumbnailRecIdAtTime(time);
+									if (recId)
+									{
+										var alertStartTime = this.getStartTimeOfRecId(recId);
+										if (alertStartTime)
+											time = alertStartTime;
+									}
+								}
 								timeline.assignLastSetTime(time);
 								timeline.userDidSetTime();
 							}
@@ -7365,7 +7384,6 @@ function ClipTimeline()
 
 					var dpr = BI_GetDevicePixelRatio();
 					var zoomFactor = this.zoomFactor / dpr;
-					var zoomScaler = this.zoomScaler;
 					var left = this.left;
 					var right = this.right;
 					var now = GetUtcNow();
@@ -7397,7 +7415,7 @@ function ClipTimeline()
 							// Draw partially-transparent black overlay behind loadable timeline area.
 							var overlayLeft = Math.max(0, -left / zoomFactor);
 							var overlayWidth = Math.min(canvas.width, (now - (self.keepOutTime * 0.8) - left) / zoomFactor);
-							var stepsFromMaxZoomout = maxZoomScaler - zoomScaler;
+							var stepsFromMaxZoomout = maxZoomScaler - this.zoomScaler;
 							var blackBackgroundOpacity = Clamp(stepsFromMaxZoomout / 10, 0, 0.8) + 0.2;
 							ctx.fillStyle = "rgba(0,0,0," + blackBackgroundOpacity + ")";
 							ctx.fillRect(overlayLeft, 0, overlayWidth, canvas.height);
@@ -7444,49 +7462,43 @@ function ClipTimeline()
 									ctx.fillRect(x, y, w, h);
 							}
 						}
-						if (zoomScaler <= parseFloat(settings.ui3_timeline_alertThumbnailsAppearAtZoomLevel))
+						if (this.shouldShowAlertThumbnails)
 						{
-							var l = videoPlayer.Loading().image;
-							var isSingleCamera = !l.cams || l.cams.length === 1;
-							if (isSingleCamera || settings.ui3_timeline_alertThumbnailsAppearForGroups === "1")
+							// I tried drawing the images with opacity (ctx.globalAlpha) at futher-out zoom levels, but it is too messy looking.
+							bet.start("Draw alert thumbnails");
+							var oldShadow = { x: ctx.shadowOffsetX, y: ctx.shadowOffsetY, c: ctx.shadowColor, b: ctx.shadowBlur };
+							ctx.shadowOffsetX = -5 * dpr;
+							ctx.shadowOffsetY = 0;
+							ctx.shadowColor = 'rgba(0,0,0,0.67)';
+							ctx.shadowBlur = 10 * dpr;
+							for (var n = 0; n < canvasData.alerts.length; n++)
 							{
-								// I tried drawing the images with opacity (ctx.globalAlpha) at futher-out zoom levels, but it is too messy looking.
-								bet.start("Draw alert thumbnails");
-								var oldShadow = { x: ctx.shadowOffsetX, y: ctx.shadowOffsetY, c: ctx.shadowColor, b: ctx.shadowBlur };
-								ctx.shadowOffsetX = -5 * dpr;
-								ctx.shadowOffsetY = 0;
-								ctx.shadowColor = 'rgba(0,0,0,0.67)';
-								ctx.shadowBlur = 10 * dpr;
-								for (var n = 0; n < canvasData.alerts.length; n++)
+								var alert = canvasData.alerts[n];
+								if (alert.recId)
 								{
-									var alert = canvasData.alerts[n];
-									if (alert.recId)
+									var x = ((alert.time - left) / zoomFactor) + (1 * dpr);
+									var y = alertIconSpace + alertThumbVpad;
+									var w = 100;
+									var h = (canvasData.colors.length * timelineColorbarHeight) - alertThumbVpad - alertThumbVpad;
+									var img = timelineThumbnailLoader.GetImg(alert.recId);
+									if (img && img.loadedSuccessfully)
+										w = (img.naturalWidth / img.naturalHeight) * h;
+									if (x < canvas.width && x >= -w)
 									{
-										var vpad = 4;
-										var x = ((alert.time - left) / zoomFactor) + (1 * dpr);
-										var y = alertIconSpace + vpad;
-										var w = 100;
-										var h = (canvasData.colors.length * timelineColorbarHeight) - vpad - vpad;
-										var img = timelineThumbnailLoader.GetImg(alert.recId);
 										if (img && img.loadedSuccessfully)
-											w = (img.naturalWidth / img.naturalHeight) * h;
-										if (x < canvas.width && x >= -w)
-										{
-											if (img && img.loadedSuccessfully)
-												ctx.drawImage(img, x, y, w, h);
-											else
-												timelineThumbnailLoader.Visible(alert.recId);
-										}
+											ctx.drawImage(img, x, y, w, h);
 										else
-											timelineThumbnailLoader.Invisible(alert.recId);
+											timelineThumbnailLoader.Visible(alert.recId);
 									}
+									else
+										timelineThumbnailLoader.Invisible(alert.recId);
 								}
-								ctx.shadowOffsetX = oldShadow.x;
-								ctx.shadowOffsetY = oldShadow.y;
-								ctx.shadowColor = oldShadow.c;
-								ctx.shadowBlur = oldShadow.b;
-								bet.stop();
 							}
+							ctx.shadowOffsetX = oldShadow.x;
+							ctx.shadowOffsetY = oldShadow.y;
+							ctx.shadowColor = oldShadow.c;
+							ctx.shadowBlur = oldShadow.b;
+							bet.stop();
 						}
 
 						bet.start("Draw alert track markers and icons");
@@ -7737,6 +7749,43 @@ function ClipTimeline()
 							timeline.seekPreviewLoading = false;
 							timelineSync.unlock();
 						});
+				},
+				getAlertThumbnailRecIdAtTime: function (time)
+				{
+					var canvas = this.$refs.clipTimelineCanvas;
+					if (!canvas || !canvasData)
+						return null;
+					var dpr = BI_GetDevicePixelRatio();
+					var alertIconSpace = 12 * dpr;
+					var clipDrawRegionHeight = canvas.height - alertIconSpace;
+					var timelineColorbarHeight = clipDrawRegionHeight / canvasData.colors.length;
+					var h = (canvasData.colors.length * timelineColorbarHeight) - alertThumbVpad - alertThumbVpad;
+					for (var n = canvasData.alerts.length - 1; n >= 0; n--)
+					{
+						var alert = canvasData.alerts[n];
+						if (alert.recId)
+						{
+							var img = timelineThumbnailLoader.GetImg(alert.recId);
+							if (img && img.loadedSuccessfully)
+							{
+								var wPx = (img.naturalWidth / img.naturalHeight) * h;
+								var wMs = wPx * timeline.zoomFactor;
+								if (time >= alert.time && time <= alert.time + wMs)
+									return alert.recId;
+							}
+						}
+					}
+					return null;
+				},
+				getStartTimeOfRecId: function (recId)
+				{
+					for (var n = 0; n < canvasData.alerts.length; n++)
+					{
+						var alert = canvasData.alerts[n];
+						if (alert.recId === recId)
+							return alert.time;
+					}
+					return null;
 				}
 			},
 			computed:
@@ -7818,6 +7867,17 @@ function ClipTimeline()
 				timelineIsBeingPanned: function ()
 				{
 					return this.dragState.isDragging || this.wheelPanState.isActive || this.seekPreviewLoading;
+				},
+				shouldShowAlertThumbnails: function ()
+				{
+					if (this.zoomScaler <= parseFloat(settings.ui3_timeline_alertThumbnailsAppearAtZoomLevel))
+					{
+						var l = videoPlayer.Loading().image;
+						var isSingleCamera = !l.cams || l.cams.length === 1;
+						if (isSingleCamera || settings.ui3_timeline_alertThumbnailsAppearForGroups === "1")
+							return true;
+					}
+					return false;
 				}
 			},
 			watch:
