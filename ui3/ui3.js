@@ -4336,6 +4336,7 @@ function StatusAreaApi()
 	this.setStatusBarRegistration("Server CPU", "status-bar-cpu", 0.0);
 	this.setStatusBarRegistration("Server Memory", "status-bar-mem", { bi: 0, memPhys: 1024, load: 0.0 });
 	this.setStatusBarRegistration("Server Disk", "status-bar-disk", { fullness: 0.0, tooltip: "", error: false });
+	this.setStatusBarRegistration("Server Uptime", "status-area-uptime", { uptime: "unknown" });
 	this.setStatusBarRegistration("Stream FPS", "status-bar-fps", { fps: 0, maxFps: 10 });
 	this.setStatusBarRegistration("Stream Bit Rate", "status-bar-stream-bit-rate", { video: 0, audio: 0 });
 	this.setStatusBarRegistration("Stream Delay", "status-bar-stream-delay", { netDelay: 0, playerDelay: 0 });
@@ -4541,10 +4542,10 @@ function StatusAreaApi()
 
 	Vue.component('status-bar', {
 		template: ''
-			+ '<div :class="{ statusBar: true, clickableStatusBar: clickable && !tiny, statusTiny: tiny }" :title="tooltipText" @click="onClick">'
+			+ '<div :class="{ statusBar: true, clickableStatusBar: clickable && !tiny, statusTiny: tiny, textOnly: textOnly }" :title="tooltipText" @click="onClick">'
 			+ '<div class="statusBarLabel" v-if="!tiny">{{ label ? label : \'\' }}</div>'
-			+ '<div class="progressBarOuter"><div class="progressBarInner" :style="myStyle"></div></div>'
-			+ '<div class="statusBarAmount" v-if="!tiny">{{ textValue ? textValue.substr(0, 4) : \'\' }}</div>'
+			+ '<div :class="{ progressBarOuter: 1, zeroWidth: textOnly && !tiny }"><div class="progressBarInner" :style="myStyle"></div></div>'
+			+ '<div class="statusBarAmount" v-if="!tiny">{{ textDisplayValue }}</div>'
 			+ '</div>',
 		props:
 		{
@@ -4554,7 +4555,11 @@ function StatusAreaApi()
 			textValue: String,
 			tooltipText: String,
 			clickable: Boolean,
-			tiny: Boolean
+			tiny: Boolean,
+			textOnly: {
+				type: Boolean,
+				default: false
+			}
 		},
 		computed:
 		{
@@ -4565,6 +4570,17 @@ function StatusAreaApi()
 				if (this.color)
 					s.backgroundColor = this.color;
 				return s;
+			},
+			textDisplayValue: function ()
+			{
+				if (this.textValue)
+				{
+					if (this.textOnly)
+						return this.textValue;
+					else
+						return this.textValue.substr(0, 4);
+				}
+				return "";
 			}
 		},
 		methods:
@@ -4690,6 +4706,16 @@ function StatusAreaApi()
 			{
 				statusLoader.diskUsageClick();
 			}
+		}
+	});
+
+	Vue.component('status-area-uptime', {
+		template: ''
+			+ '<status-bar :tiny="tiny" :textOnly="true" label="UPTIME" :percent="1" :textValue="value.uptime" tooltipText="Server Uptime"></status-bar>',
+		props:
+		{
+			value: { type: Object, default: function () { return { uptime: "unknown" }; } },
+			tiny: { type: Boolean, default: false }
 		}
 	});
 
@@ -13073,6 +13099,8 @@ function StatusLoader()
 						statusAreaApi.setValue("Server Disk", { fullness: 0, tooltip: "Disk information was in an unexpected format: " + response.data.clips, error: true });
 					}
 				}
+
+				statusAreaApi.setValue("Server Uptime", { uptime: response.data.uptime });
 
 				notificationCounters.setCounter("#btn_main_menu .notificationCounter", settings.ui3_topbar_warnings_counter === "1"
 					? Math.min(99, self.getNotificationCounterValue("warnings"))

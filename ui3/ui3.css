@@ -1743,6 +1743,8 @@ div.invisibleLabel
 	display: inline-block;
 	width: 50px;
 	vertical-align: top;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .sizeMedium .statusBarLabel
@@ -1755,7 +1757,6 @@ div.invisibleLabel
 {
 	width: 35px;
 }
-
 
 .statusBarAmount
 {
@@ -1792,6 +1793,29 @@ div.invisibleLabel
 	.progressBarOuter.withDragHandle.disabled
 	{
 		cursor: not-allowed;
+	}
+
+.progressBarOuter.zeroWidth
+{
+	width: 0px;
+}
+
+.statusBar.textOnly
+{
+	display: flex;
+}
+
+	.statusBar.textOnly .statusBarLabel
+	{
+		white-space: pre-wrap;
+		width: 100%;
+	}
+
+	.statusBar.textOnly .statusBarAmount
+	{
+		white-space: pre-wrap;
+		width: 100%;
+		text-align: right;
 	}
 /* Volume Bar */
 #volumeBar
@@ -2292,6 +2316,7 @@ div.invisibleLabel
 	align-items: center;
 	color: var(--text-color);
 }
+
 .sizeMedium #clipFilterSearch
 {
 	height: 29px;
