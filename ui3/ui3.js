@@ -193,6 +193,7 @@ var web_workers_supported = false;
 var export_blob_supported = false;
 var exporting_clips_to_avi_supported = false;
 var html5HistorySupported = false;
+var html5HistoryPushEnabled = false;
 var fetch_supported = false;
 var readable_stream_supported = false;
 var webgl_supported = false;
@@ -256,7 +257,8 @@ function DoUIFeatureDetection()
 			fullscreen_supported = ((document.documentElement.requestFullscreen || document.documentElement.msRequestFullscreen || document.documentElement.mozRequestFullScreen || document.documentElement.webkitRequestFullscreen) && (document.exitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen || document.webkitExitFullscreen)) ? true : false;
 			audio_playback_supported = any_h264_playback_supported && web_audio_supported && web_audio_buffer_source_supported && web_audio_buffer_copyToChannel_supported;
 			exporting_clips_to_avi_supported = any_h264_playback_supported && export_blob_supported;
-			html5HistorySupported = isHtml5HistorySupported()
+			html5HistorySupported = isHtml5HistorySupported();
+			html5HistoryPushEnabled = shouldHtml5HistoryPushBeEnabled();
 			flac_supported = isFlacSupported();
 			speech_synthesis_supported = isSpeechSupported();
 
@@ -337,7 +339,7 @@ function DoUIFeatureDetection()
 				{
 					ul_root.append('<li>Fullscreen mode is not supported.</li>');
 				}
-				if (!html5HistorySupported)
+				if (!html5HistoryPushEnabled)
 				{
 					ul_root.append('<li>The back button will not close the current clip or camera, like it does on most other platforms.</li>');
 				}
@@ -435,10 +437,6 @@ function isHtml5HistorySupported()
 {
 	try
 	{
-		if (BrowserIsIOSChrome())
-			return false; // Chrome on iOS has too many history bugs.
-		if (BrowserIsAndroid())
-			return false; // If the back button is overridden on Android, it can't be used to close the browser while UI3 is the first item in history.
 		if (window.history && typeof window.history.state == "object" && typeof window.history.pushState == "function" && typeof window.history.replaceState == "function")
 			return true;
 		return false;
@@ -446,6 +444,19 @@ function isHtml5HistorySupported()
 	{
 		return false;
 	}
+}
+function shouldHtml5HistoryPushBeEnabled()
+{
+	try
+	{
+		if (BrowserIsIOSChrome())
+			return false; // Chrome on iOS has too many history bugs.
+		if (BrowserIsAndroid())
+			return false; // If the back button is overridden on Android, it can't be used to close the browser while UI3 is the first item in history.
+		if (isHtml5HistorySupported())
+			return true;
+	} catch (e) { }
+	return false;
 }
 function requestAnimationFramePolyFill()
 {
@@ -5119,7 +5130,7 @@ function DropdownBoxes()
 						streamingProfileUI.open();
 						break;
 					case "copy_current_url":
-						clipboardHelper.CopyText(location.href);
+						clipboardHelper.CopyText(UpdateCurrentURL());
 						break;
 					case "system_log":
 						systemLog.open();
@@ -27819,7 +27830,7 @@ function AjaxHistoryManager()
 			return false;
 		return true;
 	}
-	if (html5HistorySupported)
+	if (html5HistoryPushEnabled)
 		buttonOverride = new HistoryButtonOverride(BackButtonPressed);
 }
 //////////////////////////////////////////////////////////////////////
@@ -27857,7 +27868,7 @@ function GetCleanUrlSearchParams()
 function UpdateCurrentURL()
 {
 	if (!html5HistorySupported || !loadingHelper.DidLoadingFinish())
-		return;
+		return location.href;
 	var search = GetCleanUrlSearchParams();
 
 	search.set("t", currentPrimaryTab);
@@ -27912,6 +27923,7 @@ function UpdateCurrentURL()
 			console.error(ex);
 		}
 	}
+	return newUrl;
 }
 BindEventsPassive(document, "mouseleave", UpdateCurrentURL);
 /**
