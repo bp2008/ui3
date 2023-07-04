@@ -1393,6 +1393,13 @@ var defaultSettings =
 			, category: "Timeline"
 		}
 		, {
+			key: "ui3_timeline_drawHoveredAlertOnly"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Draw Only Hovered Thumbnail<div class="settingDesc">Only draw the thumbnail currently being moused over.</div>'
+			, category: "Timeline"
+		}
+		, {
 			key: "ui3_timeline_alertThumbnailClickLoadsAlertStartTime"
 			, value: "1"
 			, inputType: "checkbox"
@@ -7511,12 +7518,13 @@ function ClipTimeline()
 							}
 						}
 						var hoveredAlert = null;
+						var hoveredAlertOnTop = settings.ui3_timeline_drawHoveredAlertOnTop === "1";
 						if (this.shouldShowAlertThumbnails)
 						{
 							// I tried drawing the images with opacity (ctx.globalAlpha) at futher-out zoom levels, but it is too messy looking.
 							bet.start("Draw alert thumbnails");
 
-							var hoveredAlertOnTop = settings.ui3_timeline_drawHoveredAlertOnTop === "1";
+							var hoveredAlertOnly = settings.ui3_timeline_drawHoveredAlertOnly === "1";
 							var hoveredAlertThumbnailRecId = this.hoveredAlertThumbnailRecId;
 
 							var y = alertIconSpace + alertThumbVpad;
@@ -7529,10 +7537,12 @@ function ClipTimeline()
 									var alert = canvasData.alerts[n];
 									if (alert && alert.recId)
 									{
-										if (hoveredAlertOnTop && alert.recId === hoveredAlertThumbnailRecId)
+										if ((hoveredAlertOnTop || hoveredAlertOnly) && alert.recId === hoveredAlertThumbnailRecId)
 											hoveredAlert = alert; // This alert gets drawn later
 										else
-											drawAlertThumbnail(alert, y, h, left, zoomFactor, dpr, canvas, ctx, false);
+										{
+											drawAlertThumbnail(alert, y, h, left, zoomFactor, dpr, canvas, ctx, false, !hoveredAlertOnly);
+										}
 									}
 								}
 							});
@@ -7580,7 +7590,7 @@ function ClipTimeline()
 						if (hoveredAlert)
 						{
 							bet.start("Draw hovered alert thumbnail");
-							drawAlertThumbnail(hoveredAlert, y, h, left, zoomFactor, dpr, canvas, ctx, true);
+							drawAlertThumbnail(hoveredAlert, y, h, left, zoomFactor, dpr, canvas, ctx, hoveredAlertOnTop, true);
 							bet.stop();
 						}
 					}
@@ -7805,22 +7815,25 @@ function ClipTimeline()
 					var clipDrawRegionHeight = canvas.height - alertIconSpace;
 					var timelineColorbarHeight = clipDrawRegionHeight / canvasData.colors.length;
 					var h = (canvasData.colors.length * timelineColorbarHeight) - alertThumbVpad - alertThumbVpad;
+					var closestHoveredRecId = null;
 					for (var n = canvasData.alerts.length - 1; n >= 0; n--)
 					{
 						var alert = canvasData.alerts[n];
-						if (alert.recId)
+						if (alert.recId && time >= alert.time)
 						{
 							var img = timelineThumbnailLoader.GetImg(alert.recId);
 							if (img && img.loadedSuccessfully)
 							{
 								var wPx = (img.naturalWidth / img.naturalHeight) * h;
 								var wMs = wPx * timeline.zoomFactor;
-								if (time >= alert.time && time <= alert.time + wMs)
+								if (time <= alert.time + wMs)
 									return alert.recId;
 							}
+							else if (time <= alert.time + 100)
+								closestHoveredRecId = alert.recId;
 						}
 					}
-					return null;
+					return closestHoveredRecId;
 				},
 				getStartTimeOfRecId: function (recId)
 				{
@@ -7926,7 +7939,7 @@ function ClipTimeline()
 				},
 				hoveredAlertThumbnailRecId: function ()
 				{
-					if (this.dragState.isMouseDown && this.shouldShowAlertThumbnails && this.mouseHoverX && settings.ui3_timeline_drawHoveredAlertOnTop === "1")
+					if ((this.dragState.isMouseDown || this.isHovered) && this.shouldShowAlertThumbnails && this.mouseHoverX && (settings.ui3_timeline_drawHoveredAlertOnTop === "1" || settings.ui3_timeline_drawHoveredAlertOnly === "1"))
 					{
 						var hoverTime = this.left + pointToElementRelative($tl_root, this.mouseHoverX, 0).x * this.zoomFactor;
 						return this.getAlertThumbnailRecIdAtTime(hoverTime);
@@ -8219,7 +8232,7 @@ function ClipTimeline()
 			ctx.shadowBlur = saved.b;
 		}
 	}
-	function drawAlertThumbnail(alert, y, h, left, zoomFactor, dpr, canvas, ctx, highlight)
+	function drawAlertThumbnail(alert, y, h, left, zoomFactor, dpr, canvas, ctx, highlight, actuallyDrawImage)
 	{
 		var x = ((alert.time - left) / zoomFactor) + (1 * dpr);
 		var w = 100;
@@ -8230,23 +8243,26 @@ function ClipTimeline()
 		{
 			if (img && img.loadedSuccessfully)
 			{
-				if (highlight)
+				if (actuallyDrawImage)
 				{
-					doWithTempShadowSettings(ctx, -5 * dpr, 0, 'rgba(0,0,0,0.67)', 10 * dpr, function ()
+					if (highlight)
 					{
-						ctx.drawImage(img, x, y, w, h);
-					});
+						doWithTempShadowSettings(ctx, -5 * dpr, 0, 'rgba(0,0,0,0.67)', 10 * dpr, function ()
+						{
+							ctx.drawImage(img, x, y, w, h);
+						});
 
-					var lineWidth = 4 * dpr;
-					var o = lineWidth / 2; // Line offset should be half the width.
-					ctx.beginPath();
-					ctx.lineWidth = lineWidth;
-					ctx.strokeStyle = "rgba(255,255,255,1)";
-					ctx.rect(x - o, y - o, w + o + o, h + o + o);
-					ctx.stroke();
+						var lineWidth = 4 * dpr;
+						var o = lineWidth / 2; // Line offset should be half the width.
+						ctx.beginPath();
+						ctx.lineWidth = lineWidth;
+						ctx.strokeStyle = "rgba(255,255,255,1)";
+						ctx.rect(x - o, y - o, w + o + o, h + o + o);
+						ctx.stroke();
+					}
+					else
+						ctx.drawImage(img, x, y, w, h);
 				}
-				else
-					ctx.drawImage(img, x, y, w, h);
 			}
 			else
 				timelineThumbnailLoader.Visible(alert.recId);
