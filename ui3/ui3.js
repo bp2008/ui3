@@ -6154,11 +6154,11 @@ function PtzButtons()
 		}
 		self.PTZ_async_noguarantee(videoPlayer.Loading().image.id, 100 + parseInt(presetNumber));
 	}
-	this.PTZ_relative = function (x, y, z, onSuccess, onFail)
+	this.PTZ_relative = function (x, y, z, onSuccess, onFail, camData)
 	{
-		if (!ptzControlsEnabled)
-			return;
-		if (!videoPlayer.Loading().image.ptz)
+		if (!camData)
+			camData = videoPlayer.Loading().cam;
+		if (!camData.ptz)
 		{
 			toaster.Error("Current camera is not PTZ");
 			return;
@@ -6166,7 +6166,7 @@ function PtzButtons()
 		x = Clamp(x, 0, 1);
 		y = Clamp(y, 0, 1);
 		z = Clamp(z, -1, 1);
-		self.PTZ_async_noguarantee(videoPlayer.Loading().image.id, 4, undefined, { xperc: x, yperc: y, zperc: z }, onSuccess, onFail);
+		self.PTZ_async_noguarantee(camData.optionValue, 4, undefined, { xperc: x, yperc: y, zperc: z }, onSuccess, onFail);
 	}
 	var PTZ_set_preset = function (presetNumber, description)
 	{
@@ -6472,6 +6472,7 @@ function RelativePTZ()
 	var pos3dDragging = false;
 	var box = $("#relativeptzbox");
 	var $camimg_wrapper = $("#camimg_wrapper");
+	var currentCam = undefined;
 
 	function Initialize()
 	{
@@ -6517,20 +6518,57 @@ function RelativePTZ()
 			var zoomFactor = imageRenderer.zoomHandler.GetZoomFactor();
 			var imgFrameW = $camimg_wrapper.width() * zoomFactor;
 			var imgFrameH = $camimg_wrapper.height() * zoomFactor;
+			var loaded = videoPlayer.Loaded();
+			if (loaded.cam.optionValue !== currentCam.optionValue)
+			{
+				// [loaded.cam] is a group view where the user has middle-clicked on ptz camera [currentCam].
+				// Adjust the calculations to be relative to the camera's frame.
+				var cams = cameraListLoader.GetGroupCams(loaded.cam.optionValue);
+				var rects = cameraListLoader.GetGroupRects(loaded.cam.optionValue);
+				for (var i = 0; i < cams.length; i++)
+				{
+					if (cams[i] === currentCam.optionValue)
+					{
+						// This code is mostly copied from CameraNameLabels
+						var rect = rects[i];
+						var nativeRes = cameraListLoader.isDynamicLayoutEnabled(loaded.image.id)
+							? loaded.image.getActualRect()
+							: loaded.image.getFullRect();
+						var scaleX = imageRenderer.GetPreviousImageDrawInfo().w / nativeRes.w;
+						var scaleY = imageRenderer.GetPreviousImageDrawInfo().h / nativeRes.h;
+						var adjX = rect[0] * scaleX;
+						var adjY = rect[1] * scaleY;
+						var adjW = (rect[2] - rect[0]) * scaleX;
+						var adjH = (rect[3] - rect[1]) * scaleY;
+
+						imgFrameOffset.top += adjY;
+						imgFrameOffset.left += adjX;
+						imgFrameW = adjW;
+						imgFrameH = adjH;
+						break;
+					}
+				}
+			}
 			var z = Math.max(Math.abs(w / imgFrameW), Math.abs(h / imgFrameH));
 			if (w < 0)
 				z *= -1;
 			var xperc = ((pos3dX - imgFrameOffset.left) + (w / 2)) / imgFrameW;
 			var yperc = ((pos3dY - imgFrameOffset.top) + (h / 2)) / imgFrameH;
 
-			ptzButtons.PTZ_relative(xperc, yperc, z, function () { self.flashRelPtzBox(boxSpec.x, boxSpec.y, boxSpec.w, boxSpec.h); });
+			ptzButtons.PTZ_relative(xperc, yperc, z, function () { self.flashRelPtzBox(boxSpec.x, boxSpec.y, boxSpec.w, boxSpec.h); }, undefined, currentCam);
 		}
 	}
 	function Precon_3dPos(e)
 	{
 		if (!videoPlayer.Loading().image.isLive)
 			return;
-		var currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
+
+		currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
+		videoPlayer.DoThingIfImgClickEligible(e, function (camData)
+		{
+			currentCam = camData;
+		});
+
 		if (!currentCam || !currentCam.ptz || !currentCam.ptzdirect)
 			return;
 		return (e.which === 2 || enabled3dPositioning ||
@@ -6538,6 +6576,7 @@ function RelativePTZ()
 	}
 	function ImageArea_MouseDown(e)
 	{
+		mouseCoordFixer.fix(e);
 		if (pos3dDragging)
 		{
 			pos3dDragging = false;
@@ -6547,7 +6586,6 @@ function RelativePTZ()
 		if (Precon_3dPos(e))
 		{
 			videoPlayer.suppressMouseHelper(true);
-			mouseCoordFixer.fix(e);
 			pos3dX = e.mouseX;
 			pos3dY = e.mouseY;
 			pos3dDragging = true;
@@ -14870,7 +14908,7 @@ function VideoPlayerController()
 						if (confirmed)
 							ImgClick(e);
 						else
-							DoThingIfImgClickEligible(e, videoOverlayHelper.ShowFalseLoadingOverlay);
+							self.DoThingIfImgClickEligible(e, videoOverlayHelper.ShowFalseLoadingOverlay);
 					}
 					else if (!confirmed)
 						ImgClick(e);
@@ -15121,9 +15159,13 @@ function VideoPlayerController()
 		}
 		return null;
 	}
-	var DoThingIfImgClickEligible = function (event, thing)
+	/**
+	 * Does all the validation and clicked-camera identification from the ImgClick function, then calls a callback method where the clicked camera is passed in.
+	 * @param {any} event Mouse event object
+	 * @param {Function} thing Function to call after validation
+	 */
+	this.DoThingIfImgClickEligible = function (event, thing)
 	{
-		/// <summary>A silly method that does all the validation and clicked-camera identification from the ImgClick function, then calls a callback method.</summary>
 		if (!currentlyLoadingImage.isLive && !currentlyLoadingImage.isTimeline())
 			return;
 		// mouseCoordFixer.fix(event); // Don't call this more than once per event!
@@ -15147,7 +15189,7 @@ function VideoPlayerController()
 	}
 	var ImgClick = function (event)
 	{
-		DoThingIfImgClickEligible(event, self.ImgClick_Camera);
+		self.DoThingIfImgClickEligible(event, self.ImgClick_Camera);
 	}
 	this.ImgClick_Camera = function (camData)
 	{
