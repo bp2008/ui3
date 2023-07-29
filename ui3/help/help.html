@@ -437,10 +437,15 @@
 									<td><a href="../../ui3.htm?rec=21148130039-10000" target="_blank">ui3.htm?rec=21148130039-10000</a></td>
 								</tr>
 								<tr>
-									<td>timeline=MS<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">tl=</span></td>
+									<td>timeline=DATE<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">tl=</span></td>
 									<td>
 										<p>
-											Opens the timeline tab and seeks to the specified millisecond position. The "MS" value should be a JavaScript timestamp (number of milliseconds since the unix epoch, ignoring leap seconds).
+											Opens the timeline tab and seeks to the specified date and time. The "DATE" value can be:
+											<ul>
+												<li>A JavaScript timestamp (number of milliseconds since the unix epoch, ignoring leap seconds).</li>
+												<li>A negative number of milliseconds to offset from the current time (e.g. (<code>-30000</code> to start 30 seconds back from "live").</li>
+												<li>A date and time string that is parseable by JavaScript's <code>Date.parse()</code> function (e.g. <code>2023-07-29.18:14:00</code>). Be sure to properly <a href="https://www.google.com/search?q=url+encoding" target="_blank">URL-encode</a> your string if you have difficulty using this.</li>
+											</ul>
 										</p>
 										<p style="font-style: italic;">
 											To make it easy to share links, this parameter is automatically entered into the address bar during timeline playback.
@@ -449,10 +454,19 @@
 									<td><a href="../../ui3.htm?timeline=" target="_blank" id="timelineLink">ui3.htm?timeline=</a></td>
 								</tr>
 								<tr>
+									<td>pause=1</td>
+									<td>
+										<p>
+											The specified clip or timeline position will start paused.  Live video currently can't be started paused.
+										</p>
+									</td>
+									<td><a href="../../ui3.htm?timeline=-30000&pause=1" target="_blank">ui3.htm?timeline=-30000&pause=1</a></td>
+								</tr>
+								<tr>
 									<td>streamingprofile=name<br /><span class="urlParameterAlias" title="This shorter alternative can be used instead">p=</span></td>
 									<td>
 										<p>
-											Selects a specific streaming profile at UI3 startup.  The value <code>name</code> must exactly match one of your streaming profiles.  Streaming profile names are case-sensitive and should be URL-encoded when used in a URL parameter.
+											Selects a specific streaming profile at UI3 startup.  The value <code>name</code> must exactly match one of your streaming profiles.  Streaming profile names are case-sensitive and should be <a href="https://www.google.com/search?q=url+encoding" target="_blank">URL-encoded</a> when used in a URL parameter.
 										</p>
 										<p id="streamingProfileListParagraph" style="display: none;">
 											This is a list of your streaming profiles which you may copy from:

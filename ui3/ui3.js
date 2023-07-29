@@ -3627,6 +3627,7 @@ function ReloadInterface()
 var skipLoadingFirstVideoStream = false;
 var skipLoadingAllVideoStreams = false;
 var startupTimelineMs = null;
+var startupPaused = false;
 var startupClipFilterSearch = null;
 var startupClipFilterBeginDate = null;
 var startupClipFilterEndDate = null;
@@ -3719,11 +3720,13 @@ function HandlePreLoadUrlParameters()
 	}
 
 	// Parameter "timeline", value is a millisecond timestamp
-	var timelineMs = UrlParameters.Get("timeline", "tl");
-	if (timelineMs !== '')
+	var timelineMsStr = UrlParameters.Get("timeline", "tl");
+	if (timelineMsStr !== '')
 	{
-		timelineMs = parseInt(timelineMs);
-		if (!isNaN(timelineMs) && timelineMs > 0)
+		var timelineMs = parseInt(timelineMsStr);
+		if (isNaN(timelineMs) || (timelineMs > 0 && timelineMs < 60000))
+			timelineMs = Date.parse(timelineMsStr.replace('_', ' '));
+		if (!isNaN(timelineMs))
 		{
 			settings.ui3_defaultTab = "timeline";
 			skipLoadingAllVideoStreams = true;
@@ -3754,6 +3757,11 @@ function HandlePreLoadUrlParameters()
 		else
 			console.log('"timeout"/"to" URL parameter received invalid value: ' + timeoutParam);
 	}
+
+	// Parameter "pause"
+	var pauseParam = UrlParameters.Get("pause");
+	if (pauseParam === "1" || maximize.toLowerCase() === "true")
+		startupPaused = true;
 }
 function StartupClipOpener(recId, offset)
 {
@@ -7166,6 +7174,8 @@ function ClipTimeline()
 				loadingHelper.SetLoadedStatus("timeline");
 				if (startupTimelineMs !== null)
 				{
+					if (startupTimelineMs < 0)
+						startupTimelineMs = GetUtcNow() + startupTimelineMs;
 					skipLoadingAllVideoStreams = false;
 					developerLog("Timeline component created. Starting playback at " + startupTimelineMs);
 					this.assignLastSetTime(startupTimelineMs);
@@ -16478,6 +16488,13 @@ function JpegVideoModule()
 			offsetPercent = 0;
 		if (loading.isLive)
 			startPaused = false;
+		if (!loading.isLive && startupPaused)
+		{
+			// We don't allow live video to start paused due to a long-standing bugs where the live video will just render black if we do.
+			console.log("Starting video paused");
+			startPaused = true;
+		}
+		startupPaused = false;
 		Activate();
 		if (playbackControls.GetPlayReverse() && offsetPercent === 0)
 			offsetPercent = 1;
@@ -17043,6 +17060,13 @@ function FetchH264VideoModule()
 			offsetPercent = 0;
 		if (loading.isLive)
 			startPaused = false;
+		if (!loading.isLive && startupPaused)
+		{
+			// We don't allow live video to start paused due to a long-standing bugs where the live video will just render black if we do.
+			console.log("Starting video paused");
+			startPaused = true;
+		}
+		startupPaused = false;
 		Activate();
 		lastStatusBlock = null;
 		if (playbackControls.GetPlayReverse() && offsetPercent === 0)
@@ -27921,6 +27945,7 @@ function GetCleanUrlSearchParams()
 	search.delete("p");
 	search.delete("timeout");
 	search.delete("to");
+	search.delete("pause");
 	return search;
 }
 function UpdateCurrentURL()
@@ -27936,6 +27961,8 @@ function UpdateCurrentURL()
 	{
 		search.set("timeline", clipTimeline.getCurrentTime());
 		search.delete("t");
+		if (videoPlayer.Playback_IsPaused())
+			search.set("pause", "1");
 	}
 	else if (!cli.isLive)
 	{
@@ -27948,6 +27975,8 @@ function UpdateCurrentURL()
 				val += "-" + offset;
 			search.set("rec", val);
 			search.delete("t");
+			if (videoPlayer.Playback_IsPaused())
+				search.set("pause", "1");
 		}
 	}
 
