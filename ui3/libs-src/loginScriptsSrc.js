@@ -2,7 +2,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, jsonBaseUrl, appPathFallb
 {
 	if (typeof jsonBaseUrl === "undefined" || jsonBaseUrl === null)
 		jsonBaseUrl = appPath;
-	var reqUrl = jsonBaseUrl + "json";
+	var reqUrl = jsonBaseUrl + "json" + "?_" + encodeURIComponent(args.cmd);
 	$.ajax({
 		type: "POST",
 		url: reqUrl,

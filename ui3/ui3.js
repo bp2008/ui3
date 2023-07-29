@@ -28708,7 +28708,7 @@ function ExecJSON(args, callbackSuccess, callbackFail, synchronous)
 		args.session = sessionManager.GetAPISession();
 	var eventArgs = { id: execJsonCounter++, args: args };
 	BI_CustomEvent.Invoke("ExecJSON_Start", eventArgs);
-	var reqUrl = currentServer.remoteBaseURL + "json";
+	var reqUrl = currentServer.remoteBaseURL + "json" + "?_" + encodeURIComponent(args.cmd);
 	$.ajax({
 		type: 'POST',
 		url: reqUrl,
