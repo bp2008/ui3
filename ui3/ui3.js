@@ -18940,6 +18940,12 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			aFrameWasOnceRendered = true;
 			timestampLastRenderedFrame = meta.timestamp;
 			frameRendered(meta);
+			if (finishedFrameCount === 2)
+			{
+				// This code is to restore the correct rendering state after it was changed to <canvas> when maximizing a camera.
+				// For an unknown reason, the first frame is black, so we shouldn't change rendering state until the second frame is rendered.
+				self.setCanvasRenderingState();
+			}
 			CheckStreamEndCondition();
 		}
 		if (finishedFrameCount > 1)
