@@ -12425,7 +12425,7 @@ function ClipCalendarLoadData(callbackSuccess, callbackFailure)
 		camera = loading.image.id;
 	var args = {
 		cmd: "cliplist",
-		view: "all",
+		view: settings.ui3_current_dbView,
 		camera: camera,
 		tiles: true
 	};
@@ -30155,9 +30155,13 @@ function BIVideoFrame(buf, metadata)
 	this.meta = $.extend({}, metadata);
 	this.isVideo = true;
 	this.frameData = buf;
+	/** The percentage position of this frame in the clip, represented as an integer between 0 and 10000. */
 	this.pos = metadata.pos;
+	/** Millisecond timestamp since the start of the video stream. */
 	this.time = metadata.time;
+	/** Timestamp in milliseconds since the unix epoch (UTC). */
 	this.utc = metadata.utc;
+	/** Size in bytes of the frame data. */
 	this.size = metadata.size;
 	var cachedIsKeyframe = 0;
 	this.isKeyframe = function ()
@@ -34825,7 +34829,7 @@ function formatBytes(bytes, decimals)
 	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + sizes[i];
 }
 /**
- * Formats the given number of bytes as a string with a suffix ('B', 'KiB', 'MiB', etc.) using multiples of 1000.
+ * Formats the given number of bytes as a string with a suffix ('B', 'KiB', 'MiB', etc.) using multiples of 1024.
  * @param {Number} bytes Number of bytes.
  * @param {Number} decimals Number of decimal places to include in the string.
  */
@@ -34841,6 +34845,11 @@ function formatBytes2(bytes, decimals)
 		i = Math.floor(Math.log(bytes) / Math.log(k));
 	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + ' ' + sizes[i];
 }
+/**
+* Formats the given number of bytes as a string with a suffix ('B', 'KB', 'MB', etc.) using multiples of 1000.
+ * @param {Number} bytes Number of bytes.
+ * @param {Number} decimals Number of decimal places to include in the string.
+ */
 function formatBytesF10(bytes, decimals)
 {
 	if (bytes == 0) return '0 B';
@@ -34853,6 +34862,10 @@ function formatBytesF10(bytes, decimals)
 		i = Math.floor(Math.log(bytes) / Math.log(k));
 	return (negative ? '-' : '') + (bytes / Math.pow(k, i)).toFloat(dm) + ' ' + sizes[i];
 }
+/**
+* Formats the given number of bits as a string with a suffix ('bps', 'Kbps', 'Mbps', etc.) using multiples of 1000.
+ * @param {Number} bits Number of bits.
+ */
 function formatBitsPerSecond(bits)
 {
 	if (bits == 0) return '0 bps';
