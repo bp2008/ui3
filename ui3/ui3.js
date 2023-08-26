@@ -6569,22 +6569,23 @@ function RelativePTZ()
 	function Precon_3dPos(e)
 	{
 		if (!videoPlayer.Loading().image.isLive)
-			return;
+			return false;
 
-		currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
-		videoPlayer.DoThingIfImgClickEligible(e, function (camData)
+		if ((e.which === 2 || enabled3dPositioning || (e.getModifierState && e.getModifierState("Control"))))
 		{
-			currentCam = camData;
-		});
+			mouseCoordFixer.fix(e); // <- Doing this at the wrong time creates havoc when doing two-finger zooming on touchscreens.
+			currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
+			videoPlayer.DoThingIfImgClickEligible(e, function (camData)
+			{
+				currentCam = camData;
+			});
 
-		if (!currentCam || !currentCam.ptz || !currentCam.ptzdirect)
-			return;
-		return (e.which === 2 || enabled3dPositioning ||
-			(e.getModifierState && e.getModifierState("Control")));
+			return !!(currentCam && currentCam.ptz && currentCam.ptzdirect);
+		}
+		return false;
 	}
 	function ImageArea_MouseDown(e)
 	{
-		mouseCoordFixer.fix(e);
 		if (pos3dDragging)
 		{
 			pos3dDragging = false;
