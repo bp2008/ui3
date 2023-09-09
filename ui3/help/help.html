@@ -30,6 +30,8 @@
 		var local_bi_session = "%%SESSION%%";
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : "&session=" + local_bi_session;
 		var bi_version = "%%VERSION%%";
+		if (bi_version === "%" + "%" + "VERSION" + "%" + "%")
+			bi_version = Date.now().toString();
 		document.write('<link href="css/bootstrap.min.css?v=' + bi_version + local_bi_session_arg + '" rel="stylesheet" />'
 			+ '<link href="css/help.css?v=' + bi_version + local_bi_session_arg + '" rel="stylesheet" />');
 	</script>
@@ -47,11 +49,11 @@
 						<span class="icon-bar"></span>
 						<span class="icon-bar"></span>
 					</button>
-					<a class="navbar-brand" href="#overview">UI3 Help</a>
+					<a class="navbar-brand" href="#home">UI3 Help</a>
 				</div>
 				<div id="navbar" class="navbar-collapse collapse" role="navigation">
 					<ul class="nav navbar-nav nav-pills">
-						<li class="active"><a data-toggle="pill" href="#overview" id="nav-overview">Overview</a></li>
+						<li class="active"><a data-toggle="pill" href="#home" id="nav-home">Home</a></li>
 						<li><a data-toggle="pill" href="#cameralayout" id="nav-cameralayout">Camera Layout</a></li>
 						<li><a data-toggle="pill" href="#videoplayer" id="nav-videoplayer">Video Player</a></li>
 						<li><a data-toggle="pill" href="#urlparameters" id="nav-urlparameters">URL Parameters</a></li>
@@ -85,139 +87,92 @@
 		<div class="row">
 			<div class="baseContainer">
 				<div class="tab-content">
-					<div class="tab-pane active" id="overview" role="tabpanel" aria-labelledby="nav-overview">
-						<h2>UI3 Help Overview</h2>
-						<p>Please choose a section:</p>
-						<div id="overviewIndex" class="list-group">
+					<div class="tab-pane active" id="home" role="tabpanel" aria-labelledby="nav-home">
+						<h1>UI3 Help - Table of Contents</h1>
+						<p>Choose a section to hide all others:</p>
+						<div id="homeIndex" class="list-group">
 						</div>
 						<h2>Support</h2>
 						<p>If you need support with UI3, the best place to go for help is <a href="https://ipcamtalk.com/forums/blue-iris.30/">the Blue Iris section of the IpCamTalk forum</a>.</p>
 						<p>This interface was developed by community member <a target="_blank" href="https://ipcamtalk.com/members/bp2008.28/">bp2008</a> from <a href="https://ipcamtalk.com/">IpCamTalk</a>.</p>
-					</div>
-					<div class="tab-pane" id="videoplayer" role="tabpanel" aria-labelledby="nav-videoplayer">
-						<h1>Video Player</h1>
-						<p class="bg-info padded-info"><b>Troubleshooting Tip</b><br /><br />If you experience choppy audio in UI3, or have trouble playing clips that were recorded in the MP4 format, try installing the <b>K-Lite Codec Pack</b> on your <b>Blue Iris server</b>.  Beware of bundled adware when installing any codec pack.  You can safely and conveniently get K-Lite Codecs from <b><a href="https://ninite.com/">ninite.com</a></b>.</p>
-						<h2>Audio Streaming</h2>
-						<p>UI3 supports one-way audio streaming from Blue Iris to UI3.  Audio playback is only available when streaming H.264 video, due to the streaming methods used.</p>
-						<h2>Video Codecs <small>(Streaming Quality)</small></h2>
-						<p>UI3 can stream video using two different compression methods: <b>H.264</b> and <b>Jpeg</b>.  H.264 is more efficient with network bandwidth, and usually achieves a higher frame rate, making it the most desirable choice in most circumstances.  H.264 is the default streaming method in browsers which support it.  Jpeg streaming is simpler and can be used in all browsers capable of running UI3.</p>
-						<h3>H.264</h3>
-						<p>UI3 can stream H.264 video if your browser supports it.  You can check for H.264 compatibility by looking in the Streaming Quality dropdown list.  If the only options there are "Jpeg" then your browser is not compatible.  If H.264 is available, it often provides a much smoother video stream.</p>
-						<ul>
-							<li>If your viewing device has insufficient CPU or network speed, H.264 video will become increasingly delayed.  If this happens, UI3 will warn you and suggest that you try a different Streaming Quality option.</li>
-						</ul>
-						<h3>H.264 Streaming Profiles</h3>
-						<h4>Server-side profiles</h4>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="cameralayout" role="tabpanel" aria-labelledby="nav-cameralayout">
+						<h1>Camera Layout</h1>
+						<p>UI3 is unable to directly control the order or exact positioning of your cameras.  To change the order of your cameras, you must enter "Edit Layout" mode in Blue Iris's local console, and drag cameras around.</p>
+						<h2>Optimizing Group Frames</h2>
+						<p>Since Blue Iris 5.5, group video streams have a dynamic resolution intended to best-fit within the viewport you have available.  If you wish to adjust this behavior, there are a few ways to do it:</p>
+						<h3>In UI3</h3>
+						<p>
+							Right-click the group video in UI3, and choose "Group Settings".  Here, you can force a specific aspect ratio for the group frame, adjust the streaming resolution limit to improve quality or save CPU cycles, or toggle features like the camera labels and borders.  Control of the group frame's aspect ratio will be unavailable if you have configured a fixed aspect ratio for the group within Blue Iris's local console.
+						</p>
+						<h3>In the Blue Iris Local Console</h3>
+						<p>
+							In the local console, choose the desired group and click the "Edit Layout" button to the right of the group selection dropdown list.  Then, right click any camera to access a menu of options to configure the group layout.  Most options here also affect UI3.  You can also click and drag cameras to reposition them.
+						</p>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="cameraproperties" role="tabpanel" aria-labelledby="nav-cameraproperties">
+						<h1>Camera Properties</h1>
+						<p><span class="label label-primary">Admin</span> user permission is required to access this functionality.</p>
+						<p>The Camera Properties panel is accessible from the context menu that appears when you right click on a camera (long-press on touchscreens).  This panel contains some information about the camera and provides a set of common administrative controls, such as the ability to reconfigure the motion sensor.  You can also disable a camera from here.  If you disable a camera, you can re-enable it from the Full Camera List in the <a href="#mainmenu">Main Menu</a>.</p>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="export" role="tabpanel" aria-labelledby="nav-export">
+						<h1>Exporting Video</h1>
+						<p>Clips or sections of clips may be exported into MP4, AVI, or WMV formats and then downloaded through UI3.</p>
+						<p>Exported items are kept on your Blue Iris server in the "New" folder as configured in Blue Iris settings, and the files will automatically be managed according to the rules assigned to that folder.  UI3 does not currently offer the ability to delete exported items manually, but you can do this from the Covert/Export queue in Blue Iris's local console.</p>
+						<h3>Begin Exporting</h3>
+						<p>To begin exporting clips, open the Convert/Export interface using one of these methods:</p>
+						<p>
+							<ul>
+								<li>Right-click a clip or alert, then choose <b>Convert/export</b></li>
+								<li>Select multiple clips or alerts, then right-click one of them and choose <b>Convert/export</b></li>
+								<li>Right-click the video player while a recording is open, then choose <b>Convert/export</b></li>
+								<li>Click the Export button <img mysrc="img/ConvertExportIcon.png" alt="icon" style="height: 20px;" /> within the playback controls while a recording is open.</li>
+							</ul>
+						</p>
+						<h3>Configuring an Export Operation</h3>
 						<div class="row">
-							<div class="col-sm-5">
-								<p>Blue Iris provides three streaming profiles called simply "Streaming 0", "Streaming 1", and "Streaming 2".  To find these in Blue Iris's local console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
-								<p>The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, Remote Management, and even the legacy default.htm and jpegpull.htm pages. <b>"Streaming 0" is used by default.</b></p>
-								<p class="bg-info padded-info">Some settings in the "Streaming 0" encoder options affect UI3's default client-side streaming profiles, while some settings are overridden by UI3.</p>
-							</div>
 							<div class="col-sm-7">
-								<img class="img-responsive" mysrc="img/ServerSideStreamingProfile.png" alt="Screenshot of Blue Iris's profile editor" style="margin-bottom: 5px;" />
+								<p>When you open the Convert/Export interface, you will be shown a panel with options related to the export operation.</p>
+								<p>MP4 output format is recommended for best compatibility with 3rd-party applications.</p>
+								<p>Encoder profiles used by the export feature cannot be edited in UI3.  This must be done in the local console of Blue Iris.</p>
+								<p>To export a timelapse, disable the audio track and enable re-encoding video to H.264.</p>
+								<p>
+									If you are exporting a single clip, you may choose a specific time range to export. Drag the green and red knobs to your desired start and stop points:<br />
+									<img class="img-responsive" mysrc="img/ExportRange.png" alt="time range screenshot" style="margin: 5px 0px;" />
+								</p>
 							</div>
-						</div>
-						<h4>Client-side profiles</h4>
-						<div class="row">
 							<div class="col-sm-5">
-								<p>UI3 provides more-intuitive quality choices such as "1080p", "720p", and "480p".  These quality choices each represent a fully-configurable streaming profile, which you can edit by opening the <a href="#mainmenu">Main Menu</a> and choosing the <b>Streaming Profiles</b> option.</p>
-								<p>Each of UI3's streaming profiles must be based on one of the server-side profiles.  All encoding parameters are inherited from this profile unless otherwise specified in UI3.  UI3's default profiles are all based on <b>Streaming 0</b>, but they override the <b>Max Frame Width</b>, <b>Max Frame Height</b>, and <b>Max Bit Rate</b> parameters.  Other parameters, such as <b>Quality</b>, are intentionally left blank so their values will be inherited from <b>Streaming 0</b>.</p>
-								<p>For internet streaming, it is recommended to use one of the built-in profiles with "VBR" in the name, as these use lower quality in order to achieve substantially lower average bit rates.</p>
-								<p>If you want UI3 to use a server-side streaming profile without overriding anything, simply create a new profile in UI3, give it a name, and base it on the desired server-side profile. Leave all the encoding parameters alone, and their values will be inherited from your chosen <b>Base Server Profile</b>.</p>
-								<p class="bg-info padded-info">If you want to share your profile changes with all browsers and devices, <a href="#extensions">see the "Quick Start" section of UI Extensions</a>.</p>
-							</div>
-							<div class="col-sm-7">
-								<img class="img-responsive" mysrc="img/ProfileEditor.png?v=2" alt="Screenshot of the UI3 profile editor" style="margin-bottom: 5px;" />
+								<img class="img-responsive" mysrc="img/ConvertExport.png" alt="Convert/export settings" style="margin-bottom: 5px;" />
 							</div>
 						</div>
-						<h3>H.264 Profile Configuration Tips</h3>
-						<h4>HVA (Hardware Video Acceleration)</h4>
-						<p>You can choose a method of hardware accelerated video encoding if desired.  Nvidia NVENC can be helpful if you have a supported GPU.  Intel QSV in my experience simply does not work and Blue Iris falls back to software encoding. <b>HVA is only settable in server-side profiles and can't be overridden by UI3.</b></p>
-						<h4>Audio</h4>
-						<p>Although the audio codec can be configured in server-side streaming profiles, it has no effect.  It is therefore not an option in UI3's streaming profile system.  If you wish to configure the audio codec received by UI3, find the "Audio Codec" setting in UI3's settings panel.</p>
-						<h4>Quality vs Bit Rate</h4>
-						<p>Blue Iris will encode up to your specified <b>Quality</b> level, automatically reducing quality if necessary to stay within the bit rate limit. For streaming, it is recommended to always use the <b>Limit bitrate</b> setting, otherwise the actual bit rate can get excessively high and in extreme cases this can cause decoding errors.</p>
-						<p>The default quality value (50) is already quite high, so setting it higher is almost never a good idea for remote streaming!  Actually, lower values like 20 can provide enormous bandwidth savings while retaining acceptable visual quality.</p>
-						<p>Lower bit rates work better with devices that have a slow CPU or slow network connection.</p>
-						<h4>Maximum keyframe interval (GOP)</h4>
-						<p>Also known as the i-frame interval.  For UI3, you should <b>set this as high as it goes</b>, which is 300 in a server-side streaming profile.  UI3 lets you set it as high as 1000 frames.  I've seen stream stability problems with values much higher than 1000 frames so UI3 enforces 1000 as its limit.</p>
-						<h4>Maximum B-frames between P-frames</h4>
-						<p>UI3 is not compatible with B-frames.  Keep this set to 0, though evidence suggests this setting has no effect anyway.</p>
-						<h4>Advanced &gt; Profile</h4>
-						<p>"high" profile is recommended for most users. "baseline" profile may reduce CPU requirements slightly at the cost of image quality. <a href="https://www.google.com/search?q=h.264%20profiles" target="_blank">Read more about H.264 profiles.</a></p>
-						<h4>Advanced &gt; Preset</h4>
-						<ul>
-							<li>"ultrafast" - Lowest CPU usage and lowest image quality</li>
-							<li>"superfast" - A good balance between CPU usage and image quality</li>
-							<li>"veryfast" - Slightly better image quality at the cost of higher CPU usage <b>and some video delay</b></li>
-						</ul>
-						<h4>Zero frame latency</h4>
-						<p>Recommended to be enabled for best UI responsiveness. In testing, no perceptible difference was seen with this enabled or disabled.</p>
-						<h4>Full range color</h4>
-						<p>Controls whether Blue Iris will use <a href="https://www.google.com/search?q=limited+rgb+vs+full+rgb">RGB limited (16-235) or RGB full (0-255) color range</a> when encoding video.  Keep this disabled if you do not understand it, because in most hardware configurations enabling it can cause very dark and very bright details to be lost.</p>
-						<h4>Direct-to-wire</h4>
-						<p>For advanced users only.  Direct-to-wire introduces minor compatibility problems in UI3 and substantially reduces camera-switching responsiveness.  However Direct-to-wire can be a helpful optimization for systems that will spent a large amount of time live streaming a single camera, because Blue Iris won't need to re-encode that video stream.</p>
-						<div class="panel panel-info">
-							<div class="panel-heading">From Blue Iris Help File</div>
-							<div class="panel-body">
-								When <b>Direct to Wire</b> is in effect, video is passed directly from a camera’s direct-to-disc
-								frame buffer to the browser UI3 and other clients. This has the huge benefit of using NO
-								CPU for the decoding and re-encoding of the video. However, this also means the video will
-								not have Blue Iris overlays and is limited to either the sub or main stream WITHOUT
-								MODIFICATION—that is, it becomes imperative to manage the stream encoding properties
-								on the camera side. You should have a reasonable key frame rate (0.40 or higher) and use
-								H.264 (as UI3 and the phone apps cannot decode H.265 at this time).
-							</div>
-						</div>
-						<h4>Resize output frame width x height</h4>
-						<p>UI3's client-side streaming profiles all override the width and height by default as one of their primary functions.  The <b>"Resize output frame width x height"</b> setting in the server-side streaming profiles lets you do similarly for other client applications which do not offer their own resolution controls.  Whether you should use this setting or not depends entirely on your personal preference for quality vs efficiency.  Lower resolutions are more efficient to work with.</p>
-						<h4>Retain aspect ratio within frame</h4>
-						<p>Recommended to be enabled, unless you like stretching your video streams to fill a particular shape of display.</p>
-						<h3>Jpeg Streaming</h3>
-						<p>Jpeg streaming is done by requesting Jpeg-compressed snapshots as quickly as possible.  It is not very efficient with network bandwidth and it can't achieve high frame rates over the internet.  However, being a simpler streaming method, it tends to "just work".  Jpeg streaming is capable of extremely high resolutions and excellent image quality.</p>
-						<p class="bg-warning padded-info"><b>Audio playback</b> is <b>not available</b> while streaming Jpeg snapshots.</p>
-						<h2>Context Menu</h2>
-						<p>If you right click (long-press on touchscreens) on a camera, a context menu appears.  The first group of actions are specific to the current video stream, while most other options are specific to the camera you clicked on.  Here, blue icons indicate actions that take effect on the Blue Iris server and require <span class="label label-primary">Admin</span> privilege, while black icons indicate actions that occur in the web UI.</p>
+						<h3>Export Status</h3>
 						<div class="row">
-							<div class="col-sm-3">
-								<img class="img-responsive" mysrc="img/CameraContextMenu.png?v=2" alt="Screenshot of clip list context menu" style="margin-bottom: 5px;" />
+							<div class="col-sm-7">
+								<p>
+									When you push "Begin Export", the export jobs are queued and then a small dialog appears to give you status updates.<br />
+								</p>
+								<p>
+									From here, you can:
+									<ul>
+										<li>Open the Convert/Export List (also found in the <a href="#mainmenu">Main Menu</a>)</li>
+										<li>Enable automatic download of finished exports</li>
+										<li>Download finished exports manually</li>
+									</ul>
+								</p>
 							</div>
-							<div class="col-sm-9">
-								<div class="panel panel-info">
-									<div class="panel-heading">Live View Context Menu Actions</div>
-									<div class="panel-body">
-										<dl class="dl-horizontal">
-											<dt>Open image in new tab</dt>
-											<dd>Opens a snapshot of the current frame in a new tab.</dd>
-											<dt>Save image to disk</dt>
-											<dd>Downloads a high quality copy of the current frame.</dd>
-											<dt>Copy image address</dt>
-											<dd>Copies (to the clipboard) a URL for a high-quality jpeg snapshot from the current stream.  If you are viewing a clip, the URL will honor your playback position.</dd>
-											<dt>Group Settings</dt>
-											<dd>Opens UI3's group settings panel where some display options can be adjusted, along with the resolution/scale of the group stream.</dd>
-											<dt>Camera Name</dt>
-											<dd>This item doesn't do anything.  It serves as a separator and indicator of which camera you clicked.</dd>
-											<dt>Maximize</dt>
-											<dd>Also called "Back to Group" if you are viewing a maximized camera, this item has the same effect as just clicking the camera would have had.</dd>
-											<dt>Trigger Now</dt>
-											<dd><span class="label label-primary">Admin</span> Triggers an alert for this camera in Blue Iris.</dd>
-											<dt>Start/Stop Recording</dt>
-											<dd><span class="label label-primary">Admin</span> Toggles manual recording for this camera in Blue Iris.</dd>
-											<dt>Snapshot in Blue Iris</dt>
-											<dd><span class="label label-primary">Admin</span> Instructs Blue Iris to save a snapshot for this camera.  The snapshot will appear in your clip list.</dd>
-											<dt>Restart Camera</dt>
-											<dd><span class="label label-primary">Admin</span> Instructs Blue Iris to restart this camera.  Useful mostly for debugging purposes or to fix streaming problems affecting just one camera.</dd>
-											<dt>Stats for nerds</dt>
-											<dd>Opens the <a href="#nerdstats">"Stats for nerds" panel</a>, containing low-level information about the current video and audio streams.</dd>
-											<dt>Properties</dt>
-											<dd><span class="label label-primary">Admin</span> Opens a <a href="#cameraproperties">properties panel</a> containing many options for this camera.</dd>
-										</dl>
-									</div>
-								</div>
+							<div class="col-sm-5">
+								<img class="img-responsive" mysrc="img/ExportStatus.png" alt="Export status dialog" style="margin-bottom: 5px;" />
 							</div>
 						</div>
-					</div>
+						<h3>The Convert/Export List</h3>
+						<div class="col-sm-3">
+							<p>This dialog is found in the <a href="#mainmenu">Main Menu</a>, and shows active and recently-finished export jobs.  You may download finished items by clicking on them.</p>
+							<p>
+						</div>
+						<div class="col-sm-9">
+							<img class="img-responsive" mysrc="img/ExportList.png" alt="Convert/Export List" />
+						</div>
+					</div><!--/.tab-pane -->
 					<div class="tab-pane" id="hlsstreams" role="tabpanel" aria-labelledby="nav-hlsstreams">
 						<h1>HLS Streams</h1>
 						<p>Blue Iris can stream any camera or group using the <abbr title="HTTP Live Stream">HLS</abbr> protocol.  Though it is not core functionality, UI3 provides the ability to consume these streams.</p>
@@ -229,7 +184,106 @@
 						<h2>livestream.htm</h2>
 						<p>One of the pages included with UI3 is "livestream.htm" which just plays an HLS stream from Blue Iris and does basically nothing else.  The page takes a single URL parameter "cam" with the short name of the camera or group you wish to view.  Example: <a href="../../livestream.htm?cam=index">livestream.htm?cam=index</a></p>
 						<p class="bg-info padded-info">If you omit the "cam" parameter, livestream.htm will attempt to load "index" (a.k.a. "all cameras" ).</p>
-					</div>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="mainmenu" role="tabpanel" aria-labelledby="nav-mainmenu">
+						<h1><img mysrc="img/MainMenuIcon.png" /> Main Menu</h1>
+						<p>To open the Main Menu, click the three dots in the upper right corner of UI3.</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">Main Menu Actions - Items marked with <span class="label label-primary">Admin</span> can only be accessed by Admin users.</div>
+							<div class="panel-body">
+								<dl class="dl-horizontal">
+									<dt>UI Settings</dt>
+									<dd>Opens the UI Settings panel, which contains many settings and hotkeys.  The settings here are not shared with other devices or browsers.</dd>
+									<dt>About This UI</dt>
+									<dd>Opens the About panel, which contains basic information about UI3.  If some features of UI3 are unavailable in your browser, there will be a note of it in the About panel.</dd>
+									<dt>Streaming Profiles</dt>
+									<dd>Opens the Streaming Profiles panel, which allows you to rearrange, add, edit, or delete streaming profiles.</dd>
+									<dt>System Log</dt>
+									<dd><span class="label label-primary">Admin</span> Opens Blue Iris's System Log.</dd>
+									<dt>User List</dt>
+									<dd><span class="label label-primary">Admin</span> Opens a list of all Blue Iris users configured in your system and shows some information about them.</dd>
+									<dt>Device List</dt>
+									<dd><span class="label label-primary">Admin</span> Opens a list of all mobile devices that have connected to your system.</dd>
+									<dt>Full Camera List</dt>
+									<dd>Opens a list of all cameras configured in your system, even those which are not currently enabled.</dd>
+									<dt>Convert/Export List</dt>
+									<dd>Opens the Convert/Export List panel, which allows you to view current export progress and download exported clips.
+									<dt>Disk Usage</dt>
+									<dd>Opens a panel which shows disk usage pie charts.</dd>
+									<dt>Server Control</dt>
+									<dd><span class="label label-primary">Admin</span> Opens a panel containing a few global Blue Iris options you may set, and provides the ability to remotely reboot the computer running Blue Iris.</dd>
+									<dt>Help</dt>
+									<dd>Opens this help file.</dd>
+									<dt>Log Out</dt>
+									<dd>Log out of your current session and open the login page.</dd>
+								</dl>
+							</div>
+						</div>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="mqtt" role="tabpanel" aria-labelledby="nav-mqtt">
+						<h1>MQTT Remote Control</h1>
+						<p>Since UI3-216, MQTT can be configured as a communication channel to remotely control UI3 instances.  MQTT is a lightweight publish/subscribe messaging system commonly used in home automation.</p>
+						<h3>Prerequisite</h3>
+						<p>To use MQTT in UI3, you must first have access to an MQTT broker with WebSocket support, such as <a href="https://mosquitto.org/">Eclipse Mosquitto&#8482;</a> software.  Mosquitto is commonly installed as an addon to the popular Home Assistant OS running on a Raspberry Pi or a virtual machine or docker container, but the Mosquitto server can also be installed on Windows if desired.  Installing and configuring an MQTT broker is outside the scope of this document.</p>
+						<h3>UI3 Configuration</h3>
+						<p>Go to UI3's Main Menu &gt; UI Settings &gt; MQTT Remote Control section and fill in the WebSocket URL, User Name, and Password fields.  Adjust the Instance ID if you desire (it is randomly generated, but can be edited).  For basic users, the  MQTT Advanced options should be left at their default values.  When ready, enable the MQTT Client via the toggle button labelled "Enable MQTT Client".  Toast messages should quickly appear indicating success or failure of the connection to the MQTT broker.</p>
+						<p class="bg-info padded-info"><b>What are WebSocket URLs?</b><br /><br />WebSocket URLs are very similar to regular web URLs, except instead of beginning with <code>http://</code> or <code>https://</code>, they begin with <code>ws://</code> for unencrypted connections, or <code>wss://</code> for connections that will be secured with TLS.<br /><br />An example WebSocket URL is <code>ws://homeassistant.local:1884/</code> which indicates that the connection should use an unencrypted connection to the host named <code>homeassistant.local</code> on TCP port <code>1884</code>.</p>
+						<h3>Remotely Control UI3's State</h3>
+						<p>You can use UI3's MQTT Remote Control capabilities to change the current live group or camera, maximize or unmaximize the video player, and change the volume of audio streaming.</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">List of MQTT topics used by UI3</div>
+							<div class="panel-body">
+								<dl class="dl-vertical">
+									<dt>ui3/instance_id/state/vid</dt>
+									<dd>The group name or camera short name currently being live-viewed.</dd>
+									<dt>ui3/instance_id/state/maximize</dt>
+									<dd><code>0</code> or <code>1</code> to indicate whether the UI is maximized.</dd>
+									<dt>ui3/instance_id/state/volume</dt>
+									<dd> Audio playback volume from <code>0</code> to <code>100</code> (for the video player's volume control).</dd>
+								</dl>
+							</div><!--/.panel-body -->
+						</div><!--/.panel -->
+						<p>Note the <code>instance_id</code> text in the MQTT topic list above.  <code>instance_id</code> is placeholder text which must be replaced by the Instance ID as configured in UI Settings.  It is this Instance ID which enables you to individually target specific UI3 instances when multiple UI3 instances are connected to the same MQTT broker.  The Instance ID is randomly generated by each web browser you run UI3 in, but it can be modified manually if desired.  It is saved in the browser's Local Storage along with all other UI settings.</p>
+						<p>UI3 subscribes to these topics with its own Instance ID, and reacts when other MQTT clients publish messages to them.</p>
+						<p>UI3 also publishes messages to these topics when the local state changes due to user-interaction, so that other MQTT clients can subscribe to them to learn the current state of the UI3 instance.  This behavior coincidentally allows a UI3 instance to remotely control another UI3 instance if they are both connected to the same MQTT broker, and both have the same Instance ID assigned.</p>
+						<h3>Audio and Text-to-Speech</h3>
+						<p>Enable <b>"Audio/TTS Events"</b> within the advanced MQTT configuration, and you'll be able to command UI3 to play audio files and use text-to-speech to speak arbitrary text strings. When this option is enabled, UI3 will test if audio playback is allowed upon UI startup, and if the browser refuses, UI3 will require user input to finish loading. Some web browsers allow you to explicitly allow audio without user input on certain web sites, and this is recommended if you will be using UI3's audio features.</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">Audio/TTS Topics</div>
+							<div class="panel-body">
+								<dl class="dl-vertical">
+									<dt>ui3/instance_id/playaudio</dt>
+									<dd>Publish an audio file name to this topic, and UI3 will play the sound. For example, publish <code>doorbell.mp3</code> to <code>ui3/instance_id/playaudio</code>. If a previous audio file is still playing, it will be immediately stopped and the new audio file will play. Sound volume is controlled by UI Settings &gt; Event-Triggered Sounds &gt; Sound Effect Volume.</dd>
+									<dt>ui3/instance_id/playaudio/{player_id}</dt>
+									<dd>This alternate topic lets you provide an arbitrary Player ID string for the purpose of allowing multiple sounds to be played concurrently. More about that below.*</dd>
+									<dt>ui3/instance_id/playtts</dt>
+									<dd>Publish some text to this topic, and the web browser's text-to-speech engine will speak the text aloud. The voice can be selected via <b></b>UI Settings &gt; UI Status Sounds &gt; Speech Voice.</dd>
+								</dl>
+							</div><!--/.panel-body -->
+						</div><!--/.panel -->
+						<p>Note the <code>instance_id</code> text in the MQTT topic list above.  <code>instance_id</code> is placeholder text which must be replaced by the Instance ID as configured in UI Settings.</p>
+						<p>For these commands, if you use the text "<code>global</code>" as the Instance ID, then all connected UI3 instances will receive the message.  For example, publish <code>doorbell.mp3</code> to <code>ui3/global/playaudio</code>.</p>
+						<p><b>*{player_id}</b>. Normally, UI3 will only allow one audio file to be played at the same time via MQTT message.  To work around this, you can optionally provide any unique string in place of <code>{player_id}</code> to cause UI3 to use a different player object identified by that string.  For example, you could publish <code>airhorn.mp3</code> to <code>ui3/global/playaudio/A</code> and publish <code>doorbell.mp3</code> to <code>ui3/global/playaudio/B</code> and both audio files would play concurrently.</p>
+						<p>For <code>playaudio</code> messages, the audio files are loaded from the <code>www/sounds</code> subdirectory of your Blue Iris installation.  You can add your own custom audio files there or use the ones provided by default. <code>mp3</code> and <code>wav</code> are the most widely-supported formats.</p>
+						<p>Consider NOT using the "retain" flag when sending audio or TTS commands to UI3.  "retain" would make the messages be received, and audio played, every time a UI3 instance connects to the MQTT broker.</p>
+						<h3>Online Status</h3>
+						<p>MQTT clients can track whether an Instance ID has any connected UI3 instances by looking at children of the <code>ui3/instance_id/online</code> topic as shown in the following screenshot from <a href="http://mqtt-explorer.com/">MQTT Explorer</a>:</p>
+						<p>
+							<img class="img-responsive" mysrc="img/MqttSample.png" alt="MQTT Explorer Screenshot" style="margin-bottom: 5px;" />
+						</p>
+						<p>The above example shows two UI3 windows both sharing the same Instance ID.  One UI3 window is publishing and subscribed to <code>ui3/test_id/state/#</code>, while the other has an advanced configuration where it is only subscribing but not publishing its own local state changes.</p>
+						<p>The 16-character alphanumeric sequences seen here are randomly generated by each browser window running UI3 so that individual browser windows can report their online status to MQTT without overwriting each other when they share an Instance ID.  The possible status messages are <code>pub/sub</code>, <code>pub only</code>, <code>sub only</code>, indicating which functionality is enabled for that browser window.</p>
+						<h3>Tips</h3>
+						<p>If you have trouble understanding how MQTT works, I suggest using <a href="http://mqtt-explorer.com/">MQTT Explorer</a> to view the activity on your MQTT broker in real-time.  This will enable you to easily see what UI3 is doing with MQTT topics.  The tool can also publish messages so you can use it to test UI3's remote control capability.</p>
+						<p>The "All cameras" group is not actually named <code>All cameras</code>. This group is internally named <code>Index</code> and must be referred to as such for remote control purposes.</p>
+						<p>The <code>vid</code> topic is only used for live viewing at this time, but may be extended in the future to support timeline playback or clips/alerts.</p>
+						<p>It is recommended when publishing state changes to UI3, that you always use the "retain" flag.  This provides the most consistent and predictable behavior.  However when publishing <code>playaudio</code> or <code>playtts</code> messages, do NOT use the "retain" flag unless you want the audio to play every time UI3 loads.</p>
+						<h3>Advanced Configuration</h3>
+						<p>UI3 offers several advanced options for its MQTT client.</p>
+						<p>By default, UI3 performs two-way communication with the MQTT broker, both publishing its own state changes and subscribing to receive state changes from the broker. You can individually toggle the publish and subscribe functions in order to have the remote control work only one-way.</p>
+						<p>MQTT supports 3 different "QOS" values (0, 1, 2) for subscribing and for publishing.  Non-zero QOS values attempt to offer additional guarantees of message delivery, but for most users, QOS 0 is sufficient and it is the fastest option.  Advanced users may choose different QOS values individually for publishing and subscribing. QOS 0 ensures that messages are delivered at most one time.  QOS 1 ensures that messages are delivered at least one time.  QOS 2 ensures that messages are delivered exactly one time.</p>
+						<p>By default, UI3 publishes its state messages with the "Retain" flag set in order to help persist the UI state between page loads.  If desired, you can turn this off.</p>
+					</div><!--/.tab-pane -->
 					<div class="tab-pane" id="ptzcontrols" role="tabpanel" aria-labelledby="nav-ptzcontrols">
 						<h1>PTZ Controls</h1>
 						<p>UI3 offers several methods of controlling Pan-Tilt-Zoom (PTZ) cameras.  For correct behavior, each camera must have the appropriate PTZ control profile chosen in Blue Iris.  Not all cameras support all functions that are shown in the user interface.</p>
@@ -253,7 +307,54 @@
 						<p class="bg-info padded-info"><b>3D Positioning Compatibility</b><br /><br />If you know that your camera supports 3D positioning in its web interface, but you can't make it work in Blue Iris or in UI3, try selecting a different PTZ control profile for the camera in Blue Iris.  Blue Iris has multiple choices of PTZ protocol for some popular camera manufacturers, such as Dahua.<br /><br />As of Blue Iris 5.5.6.18, 3D positioning with zoom capability is supported with the "Dahua New V4" PTZ profile.  Other PTZ profiles may offer limited or no support for 3D positioning.<br /><br />3D Positioning support may change with Blue Iris updates and with camera firmware updates.<br /><br />If none of the relevant PTZ profiles enable 3D Positioning with your camera, but you know your camera is capable of 3D positioning, Blue Iris Support may be able to help (requires an active support plan).</p>
 						<h3>Hotkeys</h3>
 						<p>Hotkeys exist for most PTZ functions, and hotkeys work even if you are not on the Live View tab.  With a default hotkey configuration, try the arrow keys to pan and tilt, <code>+</code> and <code>-</code> keys on the number bar to zoom, and <code>[</code> and <code>]</code> keys to adjust focus.  The number keys 0-9 on the number bar are bound to goto PTZ presets.  Holding the CTRL key will temporarily activate "3D Positioning" mode (see "3D Positioning" section above).</p>
-					</div>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="recordings" role="tabpanel" aria-labelledby="nav-recordings">
+						<h1>Recordings</h1>
+						<p>To view recorded video, you must use "Clips" tab at the top of the UI.</p>
+						<h2>Alerts</h2>
+						<p>The "Alerts" tab is gone since UI3-120.  "Alerts" is now one of many dropdown list items on the "Clips" tab.  A "Clip" represents a single video file on disk.  An "Alert" is a bookmark to a specific location in a clip.  A single clip may have multiple associated alerts, or no associated alerts.</p>
+						<h2>Filters</h2>
+						<p>You can filter the Clips list by camera, group, date, and database view ("All clips", "Alerts", "New", "Sentry confirmed", etc.).</p>
+						<p>To filter by camera, simply maximize that camera by clicking on it in the main video area.  To filter by other criteria, use the filter controls above the Clip list.</p>
+						<p><img class="img-responsive" mysrc="img/RecordingFilters.png" alt="Screenshot of recording filters" /></p>
+						<h3>Expanding the Filters</h3>
+						<p>If you don't see the filter controls, that means you have collapsed them by clicking on the "Filter Clips by:" text.  Click the "Filter Clips by:" text again to expand the filter controls section.</p>
+						<h3>Context Menu</h3>
+						<p>If you right click (long-press on touchscreens) on an alert or clip, a context menu appears.</p>
+						<div class="row">
+							<div class="col-sm-3">
+								<img class="img-responsive" mysrc="img/ClipContextMenu.png" alt="Screenshot of clip list context menu" />
+							</div>
+							<div class="col-sm-9">
+								<div class="panel panel-info">
+									<div class="panel-heading">Clip list context menu actions</div>
+									<div class="panel-body">
+										<p><span class="label label-primary">Admin</span> privilege is required for some actions.</p>
+										<dl class="dl-vertical">
+											<dt>Flag <span class="label label-primary">Admin</span></dt>
+											<dd>Flags the specified item(s) to make them easier to find later.</dd>
+											<dt>Protect <span class="label label-primary">Admin</span></dt>
+											<dd>Protects the specified item(s) so they will not be deleted by Blue Iris's space-reclaiming algorithm.</dd>
+											<dt>Download </dt>
+											<dd>Downloads the specified clip(s) file exactly as it exists on the server's disk. Only clips can be downloaded.  If you attempt to download an alert, the browser will download the clip which contains the alert.  The format of the downloaded clip is whatever format you have configured for the camera in Blue Iris.</dd>
+											<dt>Delete <span class="label label-primary">Admin</span></dt>
+											<dd>Deletes the specified item(s).</dd>
+											<dt>Enlarge/Shrink Thumbnails</dt>
+											<dd>Toggles between the standard layout and one that dedicates much more space to thumbnail images.</dd>
+											<dt>Enable/Disable Mouseover Thumbs</dt>
+											<dd>Enables or disables a much larger thumbnail that appears when you mouse over each clip.</dd>
+											<dt>Convert/export</dt>
+											<dd>Opens the interface for exporting the selected items as MP4, AVI, or WMV.</dd>
+											<dt>Properties</dt>
+											<dd>Opens a panel containing properties of the selected clip or alert.</dd>
+										</dl>
+									</div><!--/.panel-body -->
+								</div><!--/.panel -->
+							</div>
+						</div>
+						<h3>Multi-Select</h3>
+						<p>If your device has a physical keyboard, you can hold <span class="label label-default">SHIFT</span> and/or <span class="label label-default">CTRL</span> keys while clicking to select multiple items for bulk operations.</p>
+					</div><!--/.tab-pane -->
 					<div class="tab-pane" id="nerdstats" role="tabpanel" aria-labelledby="nav-nerdstats">
 						<h1>Stats for Nerds</h1>
 						<p>Inspired by YouTube's feature with the same name, UI3 has a "Stats for nerds" panel which shows an assortment of details about the video player.  This information can be useful for troubleshooting, but otherwise it is just fun to look at.</p>
@@ -301,6 +402,53 @@
 								</dl>
 							</div><!--/.panel-body -->
 						</div><!--/.panel -->
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="tips" role="tabpanel" aria-labelledby="nav-tips">
+						<h1>Tips</h1>
+						<ul>
+							<li>Headings in the left toolbar can be clicked to collapse and expand their content.</li>
+							<li>The camera icon in the upper right corner is a quick way to download a snapshot of the current video.</li>
+							<li>
+								Several UI elements have a custom context menu that is accessible by right clicking (long-press on touchscreens).<br />These elements include:
+								<ul>
+									<li>Cameras</li>
+									<li>Alerts and Clips</li>
+									<li>The date filter on Clips tab</li>
+									<li>PTZ Preset buttons</li>
+									<li>Profile and Schedule controls</li>
+									<li>The Stoplight (in the status area at the bottom)</li>
+									<li>The heading that overlays the top of the video player during clip playback</li>
+									<li>The <a href="#hlsstreams">HLS Player</a></li>
+								</ul>
+							</li>
+							<li>The "DISK" status bar in the Status area can be clicked as a shortcut to open the Disk Usage panel.</li>
+						</ul>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="extensions" role="tabpanel" aria-labelledby="nav-extensions">
+						<h1>UI Extensions</h1>
+						<p>Experienced web developers can extend UI3 with custom JavaScript and CSS.</p>
+						<p>Of course if you take the most obvious route and modify <code>ui3.js</code> and <code>ui3.css</code> files directly, you would have to re-apply your changes after every update! To solve this problem, UI3 attemps to load two files which do not exist in releases: <code>ui3-local-overrides.js</code> and <code>ui3-local-overrides.css</code>. You can create either or both of these files and place them in the "ui3" subdirectory of your Blue Iris installation's web root directory ("www").  These two files will be loaded after all the other script and style files, allowing you to conveniently override virtually any default functionality you wish, if you have the programming skills to do so.</p>
+						<h2>Examples</h2>
+						<p>For examples, see <a href="https://github.com/bp2008/ui3/wiki/Local-Overrides-Scripts-and-Styles">https://github.com/bp2008/ui3/wiki/Local-Overrides-Scripts-and-Styles</a></p>
+						<h2>Quick Start <small>- Globally Override Default Settings</small></h2>
+						<p>At the bottom of the UI Settings panel is an item called 'Create Script: "ui3-local-overrides.js"'.  This item is only visible if you have logged in to UI3 as a Blue Iris administrator.</p>
+						<p>When you click the "Download" link, your browser should download a copy of your current settings in the form of a ui3-local-overrides.js file.  If you move this file into your "ui3" subdirectory, then all users will receive your current settings by default.</p>
+						<p>If you want to customize the default values in this auto-generated file, you should first understand some things:</p>
+						<ul class="list-group">
+							<li class="list-group-item">
+								If you manually edit a setting's value in the ui3-local-overrides.js script, you should also increment the Generation number.  Each user (each web browser, really) will only adopt your new default value if the Generation associated with it is a higher number than the generation they had previously.
+								<br /><br />
+								If you make the change in your own web browser and re-download the ui3-local-overrides.js file, this will automatically increment all generation numbers.  Then you just need to replace your old overrides file with the new one.
+							</li>
+							<li class="list-group-item">If you want your default value to ALWAYS be reloaded when UI3 is loaded, set "Always Reload" to true.  Then, the Generation number does not matter, and your specified value will take effect every time UI3 is loaded regardless of how each user has configured it.</li>
+							<li class="list-group-item">To prevent a setting from appearing in the UI Settings panel, change "true" to "false" for the "Options Window" parameter.  Uncategorized settings don't appear in the options window anyway, and some items from the UI Settings panel aren't settings in the first place, but buttons (e.g. to forget saved credentials).</li>
+						</ul>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="storageinfo" role="tabpanel" aria-labelledby="nav-storageinfo">
+						<h1>UI3 Settings Management (Import/Export/Reset Local Storage)</h1>
+						<p>Visit <a href="../storageinfo.htm" target="_blank"><b>storageinfo.htm</b></a> to manage your browser's <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>, including the ability to View, Delete, Import, and Export the settings and other data that UI3 is storing.</p>
+						<h2>Reset UI3 Settings</h2>
+						<p>A basic "Factory Default" reset button is available on the <a href="../reset.htm" target="_blank"><b>reset.htm</b></a> page, in case the main UI3 interface is unable to load.</p>
 					</div><!--/.tab-pane -->
 					<div class="tab-pane" id="urlparameters" role="tabpanel" aria-labelledby="nav-urlparameters">
 						<h1>URL Parameters</h1>
@@ -486,280 +634,144 @@
 								Separate multiple parameters with "&amp;", like this: <a href="../../ui3.htm?tab=clips&cam=porch&maximize=1" target="_blank">ui3.htm?tab=clips&clipview=alerts&cam=porch&maximize=1</a>
 							</div>
 						</div>
-					</div>
-					<div class="tab-pane" id="extensions" role="tabpanel" aria-labelledby="nav-extensions">
-						<h1>UI Extensions</h1>
-						<p>Experienced web developers can extend UI3 with custom JavaScript and CSS.</p>
-						<p>Of course if you take the most obvious route and modify <code>ui3.js</code> and <code>ui3.css</code> files directly, you would have to re-apply your changes after every update! To solve this problem, UI3 attemps to load two files which do not exist in releases: <code>ui3-local-overrides.js</code> and <code>ui3-local-overrides.css</code>. You can create either or both of these files and place them in the "ui3" subdirectory of your Blue Iris installation's web root directory ("www").  These two files will be loaded after all the other script and style files, allowing you to conveniently override virtually any default functionality you wish, if you have the programming skills to do so.</p>
-						<h2>Examples</h2>
-						<p>For examples, see <a href="https://github.com/bp2008/ui3/wiki/Local-Overrides-Scripts-and-Styles">https://github.com/bp2008/ui3/wiki/Local-Overrides-Scripts-and-Styles</a></p>
-						<h2>Quick Start <small>- Globally Override Default Settings</small></h2>
-						<p>At the bottom of the UI Settings panel is an item called 'Create Script: "ui3-local-overrides.js"'.  This item is only visible if you have logged in to UI3 as a Blue Iris administrator.</p>
-						<p>When you click the "Download" link, your browser should download a copy of your current settings in the form of a ui3-local-overrides.js file.  If you move this file into your "ui3" subdirectory, then all users will receive your current settings by default.</p>
-						<p>If you want to customize the default values in this auto-generated file, you should first understand some things:</p>
-						<ul class="list-group">
-							<li class="list-group-item">
-								If you manually edit a setting's value in the ui3-local-overrides.js script, you should also increment the Generation number.  Each user (each web browser, really) will only adopt your new default value if the Generation associated with it is a higher number than the generation they had previously.
-								<br /><br />
-								If you make the change in your own web browser and re-download the ui3-local-overrides.js file, this will automatically increment all generation numbers.  Then you just need to replace your old overrides file with the new one.
-							</li>
-							<li class="list-group-item">If you want your default value to ALWAYS be reloaded when UI3 is loaded, set "Always Reload" to true.  Then, the Generation number does not matter, and your specified value will take effect every time UI3 is loaded regardless of how each user has configured it.</li>
-							<li class="list-group-item">To prevent a setting from appearing in the UI Settings panel, change "true" to "false" for the "Options Window" parameter.  Uncategorized settings don't appear in the options window anyway, and some items from the UI Settings panel aren't settings in the first place, but buttons (e.g. to forget saved credentials).</li>
+					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="videoplayer" role="tabpanel" aria-labelledby="nav-videoplayer">
+						<h1>Video Player</h1>
+						<p class="bg-info padded-info"><b>Troubleshooting Tip</b><br /><br />If you experience choppy audio in UI3, or have trouble playing clips that were recorded in the MP4 format, try installing the <b>K-Lite Codec Pack</b> on your <b>Blue Iris server</b>.  Beware of bundled adware when installing any codec pack.  You can safely and conveniently get K-Lite Codecs from <b><a href="https://ninite.com/">ninite.com</a></b>.</p>
+						<h2>Audio Streaming</h2>
+						<p>UI3 supports one-way audio streaming from Blue Iris to UI3.  Audio playback is only available when streaming H.264 video, due to the streaming methods used.</p>
+						<h2>Video Codecs <small>(Streaming Quality)</small></h2>
+						<p>UI3 can stream video using two different compression methods: <b>H.264</b> and <b>Jpeg</b>.  H.264 is more efficient with network bandwidth, and usually achieves a higher frame rate, making it the most desirable choice in most circumstances.  H.264 is the default streaming method in browsers which support it.  Jpeg streaming is simpler and can be used in all browsers capable of running UI3.</p>
+						<h3>H.264</h3>
+						<p>UI3 can stream H.264 video if your browser supports it.  You can check for H.264 compatibility by looking in the Streaming Quality dropdown list.  If the only options there are "Jpeg" then your browser is not compatible.  If H.264 is available, it often provides a much smoother video stream.</p>
+						<ul>
+							<li>If your viewing device has insufficient CPU or network speed, H.264 video will become increasingly delayed.  If this happens, UI3 will warn you and suggest that you try a different Streaming Quality option.</li>
 						</ul>
-					</div>
-					<div class="tab-pane" id="cameralayout" role="tabpanel" aria-labelledby="nav-cameralayout">
-						<h1>Camera Layout</h1>
-						<p>UI3 is unable to directly control the order or exact positioning of your cameras.  To change the order of your cameras, you must enter "Edit Layout" mode in Blue Iris's local console, and drag cameras around.</p>
-						<h2>Optimizing Group Frames</h2>
-						<p>Since Blue Iris 5.5, group video streams have a dynamic resolution intended to best-fit within the viewport you have available.  If you wish to adjust this behavior, there are a few ways to do it:</p>
-						<h3>In UI3</h3>
-						<p>
-							Right-click the group video in UI3, and choose "Group Settings".  Here, you can force a specific aspect ratio for the group frame, adjust the streaming resolution limit to improve quality or save CPU cycles, or toggle features like the camera labels and borders.  Control of the group frame's aspect ratio will be unavailable if you have configured a fixed aspect ratio for the group within Blue Iris's local console.
-						</p>
-						<h3>In the Blue Iris Local Console</h3>
-						<p>
-							In the local console, choose the desired group and click the "Edit Layout" button to the right of the group selection dropdown list.  Then, right click any camera to access a menu of options to configure the group layout.  Most options here also affect UI3.  You can also click and drag cameras to reposition them.
-						</p>
-					</div>
-					<div class="tab-pane" id="recordings" role="tabpanel" aria-labelledby="nav-recordings">
-						<h1>Recordings</h1>
-						<p>To view recorded video, you must use "Clips" tab at the top of the UI.</p>
-						<h2>Alerts</h2>
-						<p>The "Alerts" tab is gone since UI3-120.  "Alerts" is now one of many dropdown list items on the "Clips" tab.  A "Clip" represents a single video file on disk.  An "Alert" is a bookmark to a specific location in a clip.  A single clip may have multiple associated alerts, or no associated alerts.</p>
-						<h2>Filters</h2>
-						<p>You can filter the Clips list by camera, group, date, and database view ("All clips", "Alerts", "New", "Sentry confirmed", etc.).</p>
-						<p>To filter by camera, simply maximize that camera by clicking on it in the main video area.  To filter by other criteria, use the filter controls above the Clip list.</p>
-						<p><img class="img-responsive" mysrc="img/RecordingFilters.png" alt="Screenshot of recording filters" /></p>
-						<h3>Expanding the Filters</h3>
-						<p>If you don't see the filter controls, that means you have collapsed them by clicking on the "Filter Clips by:" text.  Click the "Filter Clips by:" text again to expand the filter controls section.</p>
-						<h3>Context Menu</h3>
-						<p>If you right click (long-press on touchscreens) on an alert or clip, a context menu appears.</p>
+						<h3>H.264 Streaming Profiles</h3>
+						<h4>Server-side profiles</h4>
+						<div class="row">
+							<div class="col-sm-5">
+								<p>Blue Iris provides three streaming profiles called simply "Streaming 0", "Streaming 1", and "Streaming 2".  To find these in Blue Iris's local console, open <b>Blue Iris Options</b> &gt; <b>Web server</b> tab &gt; <b>Advanced</b>.  Here, you can <b>configure</b> each of the encoder profiles.</p>
+								<p>The three H.264 encoder profiles are shared between Blue Iris's mobile apps, UI3, Remote Management, and even the legacy default.htm and jpegpull.htm pages. <b>"Streaming 0" is used by default.</b></p>
+								<p class="bg-info padded-info">Some settings in the "Streaming 0" encoder options affect UI3's default client-side streaming profiles, while some settings are overridden by UI3.</p>
+							</div>
+							<div class="col-sm-7">
+								<img class="img-responsive" mysrc="img/ServerSideStreamingProfile.png" alt="Screenshot of Blue Iris's profile editor" style="margin-bottom: 5px;" />
+							</div>
+						</div>
+						<h4>Client-side profiles</h4>
+						<div class="row">
+							<div class="col-sm-5">
+								<p>UI3 provides more-intuitive quality choices such as "1080p", "720p", and "480p".  These quality choices each represent a fully-configurable streaming profile, which you can edit by opening the <a href="#mainmenu">Main Menu</a> and choosing the <b>Streaming Profiles</b> option.</p>
+								<p>Each of UI3's streaming profiles must be based on one of the server-side profiles.  All encoding parameters are inherited from this profile unless otherwise specified in UI3.  UI3's default profiles are all based on <b>Streaming 0</b>, but they override the <b>Max Frame Width</b>, <b>Max Frame Height</b>, and <b>Max Bit Rate</b> parameters.  Other parameters, such as <b>Quality</b>, are intentionally left blank so their values will be inherited from <b>Streaming 0</b>.</p>
+								<p>For internet streaming, it is recommended to use one of the built-in profiles with "VBR" in the name, as these use lower quality in order to achieve substantially lower average bit rates.</p>
+								<p>If you want UI3 to use a server-side streaming profile without overriding anything, simply create a new profile in UI3, give it a name, and base it on the desired server-side profile. Leave all the encoding parameters alone, and their values will be inherited from your chosen <b>Base Server Profile</b>.</p>
+								<p class="bg-info padded-info">If you want to share your profile changes with all browsers and devices, <a href="#extensions">see the "Quick Start" section of UI Extensions</a>.</p>
+							</div>
+							<div class="col-sm-7">
+								<img class="img-responsive" mysrc="img/ProfileEditor.png?v=2" alt="Screenshot of the UI3 profile editor" style="margin-bottom: 5px;" />
+							</div>
+						</div>
+						<h3>H.264 Profile Configuration Tips</h3>
+						<h4>HVA (Hardware Video Acceleration)</h4>
+						<p>You can choose a method of hardware accelerated video encoding if desired.  Nvidia NVENC can be helpful if you have a supported GPU.  Intel QSV in my experience simply does not work and Blue Iris falls back to software encoding. <b>HVA is only settable in server-side profiles and can't be overridden by UI3.</b></p>
+						<p><b>Nvidia NVENC Encoding</b> tips as of August 2023:</p>
+						<ul><li>If Max Bit Rate is enabled, then Quality is ignored, in true CBR (Constant Bit Rate) fashion.  This is different from the behavior of Blue Iris's software encoding, which is always Variable Bit Rate.</li></ul>
+						<ul><li>Video streaming may fail in various situations with Quality above 50.  Results may vary.</li></ul>
+						<ul><li>Consumer-grade Nvidia GPUs have a limit on the number of simultaneous streams.</li></ul>
+						<h4>Audio</h4>
+						<p>Although the audio codec can be configured in server-side streaming profiles, it has no effect.  It is therefore not an option in UI3's streaming profile system.  If you wish to configure the audio codec received by UI3, find the "Audio Codec" setting in UI3's settings panel.</p>
+						<h4>Quality vs Bit Rate</h4>
+						<p>Blue Iris will encode up to your specified <b>Quality</b> level, automatically reducing quality if necessary to stay within the bit rate limit. For streaming, it is recommended to always use the <b>Limit bitrate</b> setting, otherwise the actual bit rate can get excessively high and in extreme cases this can cause decoding errors.</p>
+						<p>The default quality value (50) is already quite high, so setting it higher is almost never a good idea for remote streaming!  Actually, lower values like 20 can provide enormous bandwidth savings while retaining acceptable visual quality.</p>
+						<p>Lower bit rates work better with devices that have a slow CPU or slow network connection.</p>
+						<h4>Maximum keyframe interval (GOP)</h4>
+						<p>Also known as the i-frame interval.  For UI3, you should <b>set this as high as it goes</b>, which is 300 in a server-side streaming profile.  UI3 lets you set it as high as 1000 frames.  I've seen stream stability problems with values much higher than 1000 frames so UI3 enforces 1000 as its limit.</p>
+						<h4>Maximum B-frames between P-frames</h4>
+						<p>UI3 is not compatible with B-frames.  Keep this set to 0, though evidence suggests this setting has no effect anyway.</p>
+						<h4>Advanced &gt; Profile</h4>
+						<p>"high" profile is recommended for most users. "baseline" profile may reduce CPU requirements slightly at the cost of image quality. <a href="https://www.google.com/search?q=h.264%20profiles" target="_blank">Read more about H.264 profiles.</a></p>
+						<h4>Advanced &gt; Preset</h4>
+						<ul>
+							<li>"ultrafast" - Lowest CPU usage and lowest image quality</li>
+							<li>"superfast" - A good balance between CPU usage and image quality</li>
+							<li>"veryfast" - Slightly better image quality at the cost of higher CPU usage <b>and some video delay</b></li>
+						</ul>
+						<h4>Zero frame latency</h4>
+						<p>Recommended to be enabled for best UI responsiveness and compatibility. In testing, no perceptible difference was seen with this enabled or disabled.</p>
+						<h4>Full range color</h4>
+						<p>Controls whether Blue Iris will use <a href="https://www.google.com/search?q=limited+rgb+vs+full+rgb">RGB limited (16-235) or RGB full (0-255) color range</a> when encoding video.  Keep this disabled if you do not understand it, because in many hardware configurations enabling it can cause very dark and very bright details to be lost.</p>
+						<h4>Direct-to-wire</h4>
+						<p>For advanced users only.  Direct-to-wire introduces compatibility problems in UI3 and substantially reduces camera-switching responsiveness.  However Direct-to-wire can be a helpful optimization for systems that will spent a large amount of time live streaming a single camera, because Blue Iris won't need to re-encode that video stream.</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">From Blue Iris Help File</div>
+							<div class="panel-body">
+								When <b>Direct to Wire</b> is in effect, video is passed directly from a camera’s direct-to-disc
+								frame buffer to the browser UI3 and other clients. This has the huge benefit of using NO
+								CPU for the decoding and re-encoding of the video. However, this also means the video will
+								not have Blue Iris overlays and is limited to either the sub or main stream WITHOUT
+								MODIFICATION—that is, it becomes imperative to manage the stream encoding properties
+								on the camera side. You should have a reasonable key frame rate (0.40 or higher) and use
+								H.264 (as UI3 and the phone apps cannot decode H.265 at this time).
+							</div>
+						</div>
+						<p><b>"Direct to Wire" Compatibility Problems:</b></p>
+						<ul>
+							<li>H.264 Only</li>
+							<li>Some H.264 streams may not be able to play reliably or at all.  This will vary by client device, by camera, and by your choice of H.264 player in UI3.</li>
+							<li>Image processing functions provided by Blue Iris will not work.  This includes text and image overlays, rotation, 360 dewarping, etc.</li>
+							<li>The resolution, bit rate, and other encoding parameters won't be adjustable via UI3.</li>
+						</ul>
+						<p>Be aware if you choose to enable Direct-to-wire in the <code>Streaming 0</code> profile, this will affect nearly all web streaming and make it more difficult to avoid the compatibility issues.  Instead, create a new Streaming Profile in UI3 that has Direct-to-wire enabled, or use the <code>Streaming 1</code> or <code>Streaming 2</code> profiles.</p>
+						<h4>Resize output frame width x height</h4>
+						<p>UI3's client-side streaming profiles all override the width and height by default as one of their primary functions.  The <b>"Resize output frame width x height"</b> setting in the server-side streaming profiles lets you do similarly for other client applications which do not offer their own resolution controls.  Whether you should use this setting or not depends entirely on your personal preference for quality vs efficiency.  Lower resolutions are more efficient to work with.</p>
+						<h4>Retain aspect ratio within frame</h4>
+						<p>Recommended to be enabled, unless you like stretching your video streams to fill a particular shape of display.</p>
+						<h4>Allow UI3 overrides</h4>
+						<p>Blue Iris's built-in streaming profiles have the option to allow or disallow "UI3 overrides".  Disallowing UI3 overrides will prevent UI3's Streaming Profiles from working as intended, but may be useful for troubleshooting or as an advanced method of controlling your server's resource consumption.</p>
+						<h3>Jpeg Streaming</h3>
+						<p>Jpeg streaming is done by requesting Jpeg-compressed snapshots as quickly as possible.  It is not very efficient with network bandwidth and it can't achieve high frame rates over the internet.  However, being a simpler streaming method, it tends to "just work".  Jpeg streaming is capable of extremely high resolutions and excellent image quality.</p>
+						<p class="bg-warning padded-info"><b>Audio playback</b> is <b>not available</b> while streaming Jpeg snapshots.</p>
+						<h2>Context Menu</h2>
+						<p>If you right click (long-press on touchscreens) on a camera, a context menu appears.  The first group of actions are specific to the current video stream, while most other options are specific to the camera you clicked on.  Here, blue icons indicate actions that take effect on the Blue Iris server and require <span class="label label-primary">Admin</span> privilege, while black icons indicate actions that occur in the web UI.</p>
 						<div class="row">
 							<div class="col-sm-3">
-								<img class="img-responsive" mysrc="img/ClipContextMenu.png" alt="Screenshot of clip list context menu" />
+								<img class="img-responsive" mysrc="img/CameraContextMenu.png?v=2" alt="Screenshot of clip list context menu" style="margin-bottom: 5px;" />
 							</div>
 							<div class="col-sm-9">
 								<div class="panel panel-info">
-									<div class="panel-heading">Clip list context menu actions</div>
+									<div class="panel-heading">Live View Context Menu Actions</div>
 									<div class="panel-body">
-										<p><span class="label label-primary">Admin</span> privilege is required for some actions.</p>
-										<dl class="dl-vertical">
-											<dt>Flag <span class="label label-primary">Admin</span></dt>
-											<dd>Flags the specified item(s) to make them easier to find later.</dd>
-											<dt>Protect <span class="label label-primary">Admin</span></dt>
-											<dd>Protects the specified item(s) so they will not be deleted by Blue Iris's space-reclaiming algorithm.</dd>
-											<dt>Download </dt>
-											<dd>Downloads the specified clip(s) file exactly as it exists on the server's disk. Only clips can be downloaded.  If you attempt to download an alert, the browser will download the clip which contains the alert.  The format of the downloaded clip is whatever format you have configured for the camera in Blue Iris.</dd>
-											<dt>Delete <span class="label label-primary">Admin</span></dt>
-											<dd>Deletes the specified item(s).</dd>
-											<dt>Enlarge/Shrink Thumbnails</dt>
-											<dd>Toggles between the standard layout and one that dedicates much more space to thumbnail images.</dd>
-											<dt>Enable/Disable Mouseover Thumbs</dt>
-											<dd>Enables or disables a much larger thumbnail that appears when you mouse over each clip.</dd>
-											<dt>Convert/export</dt>
-											<dd>Opens the interface for exporting the selected items as MP4, AVI, or WMV.</dd>
+										<dl class="dl-horizontal">
+											<dt>Open image in new tab</dt>
+											<dd>Opens a snapshot of the current frame in a new tab.</dd>
+											<dt>Save image to disk</dt>
+											<dd>Downloads a high quality copy of the current frame.</dd>
+											<dt>Copy image address</dt>
+											<dd>Copies (to the clipboard) a URL for a high-quality jpeg snapshot from the current stream.  If you are viewing a clip, the URL will honor your playback position.</dd>
+											<dt>Group Settings</dt>
+											<dd>Opens UI3's group settings panel where some display options can be adjusted, along with the resolution/scale of the group stream.</dd>
+											<dt>Camera Name</dt>
+											<dd>This item doesn't do anything.  It serves as a separator and indicator of which camera you clicked.</dd>
+											<dt>Maximize</dt>
+											<dd>Also called "Back to Group" if you are viewing a maximized camera, this item has the same effect as just clicking the camera would have had.</dd>
+											<dt>Trigger Now</dt>
+											<dd><span class="label label-primary">Admin</span> Triggers an alert for this camera in Blue Iris.</dd>
+											<dt>Start/Stop Recording</dt>
+											<dd><span class="label label-primary">Admin</span> Toggles manual recording for this camera in Blue Iris.</dd>
+											<dt>Snapshot in Blue Iris</dt>
+											<dd><span class="label label-primary">Admin</span> Instructs Blue Iris to save a snapshot for this camera.  The snapshot will appear in your clip list.</dd>
+											<dt>Restart Camera</dt>
+											<dd><span class="label label-primary">Admin</span> Instructs Blue Iris to restart this camera.  Useful mostly for debugging purposes or to fix streaming problems affecting just one camera.</dd>
+											<dt>Stats for nerds</dt>
+											<dd>Opens the <a href="#nerdstats">"Stats for nerds" panel</a>, containing low-level information about the current video and audio streams.</dd>
 											<dt>Properties</dt>
-											<dd>Opens a panel containing properties of the selected clip or alert.</dd>
+											<dd><span class="label label-primary">Admin</span> Opens a <a href="#cameraproperties">properties panel</a> containing many options for this camera.</dd>
 										</dl>
-									</div><!--/.panel-body -->
-								</div><!--/.panel -->
+									</div>
+								</div>
 							</div>
 						</div>
-						<h3>Multi-Select</h3>
-						<p>If your device has a physical keyboard, you can hold <span class="label label-default">SHIFT</span> and/or <span class="label label-default">CTRL</span> keys while clicking to select multiple items for bulk operations.</p>
-					</div>
-					<div class="tab-pane" id="tips" role="tabpanel" aria-labelledby="nav-tips">
-						<h1>Tips</h1>
-						<ul>
-							<li>Headings in the left toolbar can be clicked to collapse and expand their content.</li>
-							<li>The camera icon in the upper right corner is a quick way to download a snapshot of the current video.</li>
-							<li>
-								Several UI elements have a custom context menu that is accessible by right clicking (long-press on touchscreens).<br />These elements include:
-								<ul>
-									<li>Cameras</li>
-									<li>Alerts and Clips</li>
-									<li>The date filter on Clips tab</li>
-									<li>PTZ Preset buttons</li>
-									<li>Profile and Schedule controls</li>
-									<li>The Stoplight (in the status area at the bottom)</li>
-									<li>The heading that overlays the top of the video player during clip playback</li>
-									<li>The <a href="#hlsstreams">HLS Player</a></li>
-								</ul>
-							</li>
-							<li>The "DISK" status bar in the Status area can be clicked as a shortcut to open the Disk Usage panel.</li>
-						</ul>
-					</div>
-					<div class="tab-pane" id="cameraproperties" role="tabpanel" aria-labelledby="nav-cameraproperties">
-						<h1>Camera Properties</h1>
-						<p><span class="label label-primary">Admin</span> user permission is required to access this functionality.</p>
-						<p>The Camera Properties panel is accessible from the context menu that appears when you right click on a camera (long-press on touchscreens).  This panel contains some information about the camera and provides a set of common administrative controls, such as the ability to reconfigure the motion sensor.  You can also disable a camera from here.  If you disable a camera, you can re-enable it from the Full Camera List in the <a href="#mainmenu">Main Menu</a>.</p>
-					</div><!--/.tab-pane -->
-					<div class="tab-pane" id="mainmenu" role="tabpanel" aria-labelledby="nav-mainmenu">
-						<h1><img mysrc="img/MainMenuIcon.png" /> Main Menu</h1>
-						<p>To open the Main Menu, click the three dots in the upper right corner of UI3.</p>
-						<div class="panel panel-info">
-							<div class="panel-heading">Main Menu Actions - Items marked with <span class="label label-primary">Admin</span> can only be accessed by Admin users.</div>
-							<div class="panel-body">
-								<dl class="dl-horizontal">
-									<dt>UI Settings</dt>
-									<dd>Opens the UI Settings panel, which contains many settings and hotkeys.  The settings here are not shared with other devices or browsers.</dd>
-									<dt>About This UI</dt>
-									<dd>Opens the About panel, which contains basic information about UI3.  If some features of UI3 are unavailable in your browser, there will be a note of it in the About panel.</dd>
-									<dt>Streaming Profiles</dt>
-									<dd>Opens the Streaming Profiles panel, which allows you to rearrange, add, edit, or delete streaming profiles.</dd>
-									<dt>System Log</dt>
-									<dd><span class="label label-primary">Admin</span> Opens Blue Iris's System Log.</dd>
-									<dt>User List</dt>
-									<dd><span class="label label-primary">Admin</span> Opens a list of all Blue Iris users configured in your system and shows some information about them.</dd>
-									<dt>Device List</dt>
-									<dd><span class="label label-primary">Admin</span> Opens a list of all mobile devices that have connected to your system.</dd>
-									<dt>Full Camera List</dt>
-									<dd>Opens a list of all cameras configured in your system, even those which are not currently enabled.</dd>
-									<dt>Convert/Export List</dt>
-									<dd>Opens the Convert/Export List panel, which allows you to view current export progress and download exported clips.
-									<dt>Disk Usage</dt>
-									<dd>Opens a panel which shows disk usage pie charts.</dd>
-									<dt>Server Control</dt>
-									<dd><span class="label label-primary">Admin</span> Opens a panel containing a few global Blue Iris options you may set, and provides the ability to remotely reboot the computer running Blue Iris.</dd>
-									<dt>Help</dt>
-									<dd>Opens this help file.</dd>
-									<dt>Log Out</dt>
-									<dd>Log out of your current session and open the login page.</dd>
-								</dl>
-							</div>
-						</div>
-					</div><!--/.tab-pane -->
-					<div class="tab-pane" id="mqtt" role="tabpanel" aria-labelledby="nav-mqtt">
-						<h1>MQTT Remote Control</h1>
-						<p>Since UI3-216, MQTT can be configured as a communication channel to remotely control UI3 instances.  MQTT is a lightweight publish/subscribe messaging system commonly used in home automation.</p>
-						<h3>Prerequisite</h3>
-						<p>To use MQTT in UI3, you must first have access to an MQTT broker with WebSocket support, such as <a href="https://mosquitto.org/">Eclipse Mosquitto&#8482;</a> software.  Mosquitto is commonly installed as an addon to the popular Home Assistant OS running on a Raspberry Pi or a virtual machine or docker container, but the Mosquitto server can also be installed on Windows if desired.  Installing and configuring an MQTT broker is outside the scope of this document.</p>
-						<h3>UI3 Configuration</h3>
-						<p>Go to UI3's Main Menu &gt; UI Settings &gt; MQTT Remote Control section and fill in the WebSocket URL, User Name, and Password fields.  Adjust the Instance ID if you desire (it is randomly generated, but can be edited).  For basic users, the  MQTT Advanced options should be left at their default values.  When ready, enable the MQTT Client via the toggle button labelled "Enable MQTT Client".  Toast messages should quickly appear indicating success or failure of the connection to the MQTT broker.</p>
-						<p class="bg-info padded-info"><b>What are WebSocket URLs?</b><br /><br />WebSocket URLs are very similar to regular web URLs, except instead of beginning with <code>http://</code> or <code>https://</code>, they begin with <code>ws://</code> for unencrypted connections, or <code>wss://</code> for connections that will be secured with TLS.<br /><br />An example WebSocket URL is <code>ws://homeassistant.local:1884/</code> which indicates that the connection should use an unencrypted connection to the host named <code>homeassistant.local</code> on TCP port <code>1884</code>.</p>
-						<h3>Remotely Control UI3's State</h3>
-						<p>You can use UI3's MQTT Remote Control capabilities to change the current live group or camera, maximize or unmaximize the video player, and change the volume of audio streaming.</p>
-						<div class="panel panel-info">
-							<div class="panel-heading">List of MQTT topics used by UI3</div>
-							<div class="panel-body">
-								<dl class="dl-vertical">
-									<dt>ui3/instance_id/state/vid</dt>
-									<dd>The group name or camera short name currently being live-viewed.</dd>
-									<dt>ui3/instance_id/state/maximize</dt>
-									<dd><code>0</code> or <code>1</code> to indicate whether the UI is maximized.</dd>
-									<dt>ui3/instance_id/state/volume</dt>
-									<dd> Audio playback volume from <code>0</code> to <code>100</code> (for the video player's volume control).</dd>
-								</dl>
-							</div><!--/.panel-body -->
-						</div><!--/.panel -->
-						<p>Note the <code>instance_id</code> text in the MQTT topic list above.  <code>instance_id</code> is placeholder text which must be replaced by the Instance ID as configured in UI Settings.  It is this Instance ID which enables you to individually target specific UI3 instances when multiple UI3 instances are connected to the same MQTT broker.  The Instance ID is randomly generated by each web browser you run UI3 in, but it can be modified manually if desired.  It is saved in the browser's Local Storage along with all other UI settings.</p>
-						<p>UI3 subscribes to these topics with its own Instance ID, and reacts when other MQTT clients publish messages to them.</p>
-						<p>UI3 also publishes messages to these topics when the local state changes due to user-interaction, so that other MQTT clients can subscribe to them to learn the current state of the UI3 instance.  This behavior coincidentally allows a UI3 instance to remotely control another UI3 instance if they are both connected to the same MQTT broker, and both have the same Instance ID assigned.</p>
-						<h3>Audio and Text-to-Speech</h3>
-						<p>Enable <b>"Audio/TTS Events"</b> within the advanced MQTT configuration, and you'll be able to command UI3 to play audio files and use text-to-speech to speak arbitrary text strings. When this option is enabled, UI3 will test if audio playback is allowed upon UI startup, and if the browser refuses, UI3 will require user input to finish loading. Some web browsers allow you to explicitly allow audio without user input on certain web sites, and this is recommended if you will be using UI3's audio features.</p>
-						<div class="panel panel-info">
-							<div class="panel-heading">Audio/TTS Topics</div>
-							<div class="panel-body">
-								<dl class="dl-vertical">
-									<dt>ui3/instance_id/playaudio</dt>
-									<dd>Publish an audio file name to this topic, and UI3 will play the sound. For example, publish <code>doorbell.mp3</code> to <code>ui3/instance_id/playaudio</code>. If a previous audio file is still playing, it will be immediately stopped and the new audio file will play. Sound volume is controlled by UI Settings &gt; Event-Triggered Sounds &gt; Sound Effect Volume.</dd>
-									<dt>ui3/instance_id/playaudio/{player_id}</dt>
-									<dd>This alternate topic lets you provide an arbitrary Player ID string for the purpose of allowing multiple sounds to be played concurrently. More about that below.*</dd>
-									<dt>ui3/instance_id/playtts</dt>
-									<dd>Publish some text to this topic, and the web browser's text-to-speech engine will speak the text aloud. The voice can be selected via <b></b>UI Settings &gt; UI Status Sounds &gt; Speech Voice.</dd>
-								</dl>
-							</div><!--/.panel-body -->
-						</div><!--/.panel -->
-						<p>Note the <code>instance_id</code> text in the MQTT topic list above.  <code>instance_id</code> is placeholder text which must be replaced by the Instance ID as configured in UI Settings.</p>
-						<p>For these commands, if you use the text "<code>global</code>" as the Instance ID, then all connected UI3 instances will receive the message.  For example, publish <code>doorbell.mp3</code> to <code>ui3/global/playaudio</code>.</p>
-						<p><b>*{player_id}</b>. Normally, UI3 will only allow one audio file to be played at the same time via MQTT message.  To work around this, you can optionally provide any unique string in place of <code>{player_id}</code> to cause UI3 to use a different player object identified by that string.  For example, you could publish <code>airhorn.mp3</code> to <code>ui3/global/playaudio/A</code> and publish <code>doorbell.mp3</code> to <code>ui3/global/playaudio/B</code> and both audio files would play concurrently.</p>
-						<p>For <code>playaudio</code> messages, the audio files are loaded from the <code>www/sounds</code> subdirectory of your Blue Iris installation.  You can add your own custom audio files there or use the ones provided by default. <code>mp3</code> and <code>wav</code> are the most widely-supported formats.</p>
-						<p>Consider NOT using the "retain" flag when sending audio or TTS commands to UI3.  "retain" would make the messages be received, and audio played, every time a UI3 instance connects to the MQTT broker.</p>
-						<h3>Online Status</h3>
-						<p>MQTT clients can track whether an Instance ID has any connected UI3 instances by looking at children of the <code>ui3/instance_id/online</code> topic as shown in the following screenshot from <a href="http://mqtt-explorer.com/">MQTT Explorer</a>:</p>
-						<p>
-							<img class="img-responsive" mysrc="img/MqttSample.png" alt="MQTT Explorer Screenshot" style="margin-bottom: 5px;" />
-						</p>
-						<p>The above example shows two UI3 windows both sharing the same Instance ID.  One UI3 window is publishing and subscribed to <code>ui3/test_id/state/#</code>, while the other has an advanced configuration where it is only subscribing but not publishing its own local state changes.</p>
-						<p>The 16-character alphanumeric sequences seen here are randomly generated by each browser window running UI3 so that individual browser windows can report their online status to MQTT without overwriting each other when they share an Instance ID.  The possible status messages are <code>pub/sub</code>, <code>pub only</code>, <code>sub only</code>, indicating which functionality is enabled for that browser window.</p>
-						<h3>Tips</h3>
-						<p>If you have trouble understanding how MQTT works, I suggest using <a href="http://mqtt-explorer.com/">MQTT Explorer</a> to view the activity on your MQTT broker in real-time.  This will enable you to easily see what UI3 is doing with MQTT topics.  The tool can also publish messages so you can use it to test UI3's remote control capability.</p>
-						<p>The "All cameras" group is not actually named <code>All cameras</code>. This group is internally named <code>Index</code> and must be referred to as such for remote control purposes.</p>
-						<p>The <code>vid</code> topic is only used for live viewing at this time, but may be extended in the future to support timeline playback or clips/alerts.</p>
-						<p>It is recommended when publishing state changes to UI3, that you always use the "retain" flag.  This provides the most consistent and predictable behavior.  However when publishing <code>playaudio</code> or <code>playtts</code> messages, do NOT use the "retain" flag unless you want the audio to play every time UI3 loads.</p>
-						<h3>Advanced Configuration</h3>
-						<p>UI3 offers several advanced options for its MQTT client.</p>
-						<p>By default, UI3 performs two-way communication with the MQTT broker, both publishing its own state changes and subscribing to receive state changes from the broker. You can individually toggle the publish and subscribe functions in order to have the remote control work only one-way.</p>
-						<p>MQTT supports 3 different "QOS" values (0, 1, 2) for subscribing and for publishing.  Non-zero QOS values attempt to offer additional guarantees of message delivery, but for most users, QOS 0 is sufficient and it is the fastest option.  Advanced users may choose different QOS values individually for publishing and subscribing. QOS 0 ensures that messages are delivered at most one time.  QOS 1 ensures that messages are delivered at least one time.  QOS 2 ensures that messages are delivered exactly one time.</p>
-						<p>By default, UI3 publishes its state messages with the "Retain" flag set in order to help persist the UI state between page loads.  If desired, you can turn this off.</p>
-					</div><!--/.tab-pane -->
-					<div class="tab-pane" id="export" role="tabpanel" aria-labelledby="nav-export">
-						<h1>Exporting Video</h1>
-						<p>Clips or sections of clips may be exported into MP4, AVI, or WMV formats and then downloaded through UI3.</p>
-						<p>Exported items are kept on your Blue Iris server in the "New" folder as configured in Blue Iris settings, and the files will automatically be managed according to the rules assigned to that folder.  UI3 does not currently offer the ability to delete exported items manually, but you can do this from the Covert/Export queue in Blue Iris's local console.</p>
-						<h3>Begin Exporting</h3>
-						<p>To begin exporting clips, open the Convert/Export interface using one of these methods:</p>
-						<p>
-							<ul>
-								<li>Right-click a clip or alert, then choose <b>Convert/export</b></li>
-								<li>Select multiple clips or alerts, then right-click one of them and choose <b>Convert/export</b></li>
-								<li>Right-click the video player while a recording is open, then choose <b>Convert/export</b></li>
-								<li>Click the Export button <img mysrc="img/ConvertExportIcon.png" alt="icon" style="height: 20px;" /> within the playback controls while a recording is open.</li>
-							</ul>
-						</p>
-						<h3>Configuring an Export Operation</h3>
-						<div class="row">
-							<div class="col-sm-7">
-								<p>When you open the Convert/Export interface, you will be shown a panel with options related to the export operation.</p>
-								<p>MP4 output format is recommended for best compatibility with 3rd-party applications.</p>
-								<p>Encoder profiles used by the export feature cannot be edited in UI3.  This must be done in the local console of Blue Iris.</p>
-								<p>To export a timelapse, disable the audio track and enable re-encoding video to H.264.</p>
-								<p>
-									If you are exporting a single clip, you may choose a specific time range to export. Drag the green and red knobs to your desired start and stop points:<br />
-									<img class="img-responsive" mysrc="img/ExportRange.png" alt="time range screenshot" style="margin: 5px 0px;" />
-								</p>
-							</div>
-							<div class="col-sm-5">
-								<img class="img-responsive" mysrc="img/ConvertExport.png" alt="Convert/export settings" style="margin-bottom: 5px;" />
-							</div>
-						</div>
-						<h3>Export Status</h3>
-						<div class="row">
-							<div class="col-sm-7">
-								<p>
-									When you push "Begin Export", the export jobs are queued and then a small dialog appears to give you status updates.<br />
-								</p>
-								<p>
-									From here, you can:
-									<ul>
-										<li>Open the Convert/Export List (also found in the <a href="#mainmenu">Main Menu</a>)</li>
-										<li>Enable automatic download of finished exports</li>
-										<li>Download finished exports manually</li>
-									</ul>
-								</p>
-							</div>
-							<div class="col-sm-5">
-								<img class="img-responsive" mysrc="img/ExportStatus.png" alt="Export status dialog" style="margin-bottom: 5px;" />
-							</div>
-						</div>
-						<h3>The Convert/Export List</h3>
-						<div class="col-sm-3">
-							<p>This dialog is found in the <a href="#mainmenu">Main Menu</a>, and shows active and recently-finished export jobs.  You may download finished items by clicking on them.</p>
-							<p>
-						</div>
-						<div class="col-sm-9">
-							<img class="img-responsive" mysrc="img/ExportList.png" alt="Convert/Export List" />
-						</div>
-					</div><!--/.tab-pane -->
-					<div class="tab-pane" id="storageinfo" role="tabpanel" aria-labelledby="nav-storageinfo">
-						<h1>UI3 Settings Management (Import/Export/Reset Local Storage)</h1>
-						<p>Visit <a href="../storageinfo.htm" target="_blank"><b>storageinfo.htm</b></a> to manage your browser's <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>, including the ability to View, Delete, Import, and Export the settings and other data that UI3 is storing.</p>
-						<h2>Reset UI3 Settings</h2>
-						<p>A basic "Factory Default" reset button is available on the <a href="../reset.htm" target="_blank"><b>reset.htm</b></a> page, in case the main UI3 interface is unable to load.</p>
-					</div><!--/.tab-pane -->
-					<div class="tab-pane" role="tabpanel" id="template" aria-labelledby="nav-template">
-						<h1>Template</h1>
-						<p></p>
 					</div><!--/.tab-pane -->
 				</div><!--/.tab-content -->
 			</div><!--/.baseContainer -->
@@ -775,97 +787,6 @@
 			+ '<script src="js/bootstrap.min.js?v=' + bi_version + local_bi_session_arg + '"><\/script>'
 			+ '<script src="js/jquery.stickytabs.js?v=' + bi_version + local_bi_session_arg + '"><\/script>'
 			+ '<script src="js/help.js?v=' + bi_version + local_bi_session_arg + '"><\/script>');
-		(function ()
-		{
-			var imgs = document.getElementsByTagName("img");
-			for (var i = 0; i < imgs.length; i++)
-			{
-				var src = imgs[i].getAttribute("mysrc");
-				if (src)
-					imgs[i].src = src + (navigator.cookieEnabled ? "" : "?session=" + local_bi_session);
-			}
-			try
-			{
-				var profileData = JSON.parse(localStorage.ui3_streamingProfileArray);
-				for (var i = 0; i < profileData.length; i++)
-				{
-					var row = $('<tr></tr>');
-					var cell_name = $('<td></td>').text(profileData[i].name);
-					var cell_nameEnc = $('<td></td>').append($('<code></code>').text(encodeURIComponent(profileData[i].name)));
-					row.append(cell_name);
-					row.append(cell_nameEnc);
-					$("#streamingProfileTbody").append(row);
-				}
-				$("#streamingProfileListParagraph").show();
-			}
-			catch (ex)
-			{
-				console.log("Unable to load streaming profiles. Local storage is probably not enabled.");
-				console.error(ex);
-			}
-
-			try
-			{
-				// Set the current time minus one minute in the Timeline example link on the URL Parameters page
-				$("#timelineLink").attr("href", $("#timelineLink").attr("href") + (Date.now() - 60000));
-				$("#timelineLink").text($("#timelineLink").text() + (Date.now() - 60000));
-			}
-			catch (ex)
-			{
-				console.log("Unable to set timelineLink.");
-				console.error(ex);
-			}
-
-			function GetFirstHeading(ele)
-			{
-				for (var i = 1; i <= 9; i++)
-				{
-					var h = ele.find("h" + i).first();
-					if (h.length)
-						return h;
-				}
-				return null;
-			}
-
-			try
-			{
-				// Copy all navbar links to a list on the Overview page.
-				var tabPanels = $('div.tab-pane');
-				var overviewLinks = [];
-				for (var i = 0; i < tabPanels.length; i++)
-				{
-					var tabPanel = tabPanels.eq(i);
-					var firstHeading = GetFirstHeading(tabPanel);
-					if (firstHeading)
-					{
-						var id = tabPanel.attr('id');
-						if (id && id !== '' && id !== 'overview' && id !== 'template')
-						{
-							var dst = $('<a class="list-group-item"></a>');
-							dst.attr('href', "#" + id);
-							var text = firstHeading.text().trim();
-							dst.text(text);
-
-							overviewLinks.push({ key: text, a: dst });
-						}
-					}
-				}
-
-				overviewLinks.sort(function (a, b)
-				{
-					return a.key.localeCompare(b.key);
-				});
-
-				var overviewIndex = $("#overviewIndex");
-				for (var i = 0; i < overviewLinks.length; i++)
-					overviewIndex.append(overviewLinks[i].a);
-			}
-			catch (ex)
-			{
-				console.log("Unable to create list of section links in Overview page.");
-				console.error(ex);
-			}
-		})();
 	</script>
 </body>
 </html>
