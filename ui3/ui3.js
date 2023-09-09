@@ -13636,7 +13636,6 @@ function DiskUsageGUI()
 		var canvas = $canvas.get(0);
 		var ctx = canvas.getContext("2d");
 		var lastend = 0;
-		var myColor = ['#000099', '#0099FF', '#666666', '#222222']
 
 		var myTotal = 0;
 		for (var i = 0; i < data.length; i++)
@@ -24479,8 +24478,8 @@ function CameraProperties(camId)
 							+ GetHtmlOptionElementMarkup("2", "Continuous", response.data.record.toString())
 							+ GetHtmlOptionElementMarkup("3", "Periodic, each", response.data.record.toString())
 							+ GetHtmlOptionElementMarkup("4", "Triggered + periodic", response.data.record.toString())
-							+ GetHtmlOptionElementMarkup("5", "Continuous + Alerts", response.data.record.toString())
-							+ GetHtmlOptionElementMarkup("6", "Continuous + Triggered", response.data.record.toString()));
+							+ GetHtmlOptionElementMarkup("5", "Continuous sub + Alerts", response.data.record.toString())
+							+ GetHtmlOptionElementMarkup("6", "Continuous sub + Triggered", response.data.record.toString()));
 						$generalSection.append($selectRecord);
 						var $selectAlerts = GetSelectRow("Alerts:", "alerts",
 							GetHtmlOptionElementMarkup("-1", "Never", response.data.alerts.toString())
