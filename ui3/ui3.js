@@ -11279,6 +11279,14 @@ function ClipLoader(clipsBodySelector)
 			//	videoPlayer.NotifyClipMetadataChanged(newClipData);
 			//}
 		}
+		if (oldClipData.memo !== newClipData.memo)
+		{
+			oldClipData.memo = newClipData.memo;
+			if (oldClipData.memo)
+				$clip.find('.clipimghelper').append('<div class="clipmemo">' + htmlEncode(oldClipData.memo) + '</div>');
+			else
+				$clip.find('.clipmemo').remove();
+		}
 	}
 	var ThumbOnAppear = function (ele)
 	{
@@ -26309,6 +26317,36 @@ function UpdateClipFlags(path, flags, cbSuccess, cbFailure)
 	}, function ()
 	{
 		toaster.Warning("Failed to update clip properties because of a connection failure");
+		if (typeof cbFailure == "function")
+			cbFailure();
+	});
+}
+///////////////////////////////////////////////////////////////
+// Change Alert Memo //////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function UpdateAlertMemo(path, memo, cbSuccess, cbFailure)
+{
+	ExecJSON({ cmd: "update", path: path, memo: memo }, function (response)
+	{
+		if (typeof response.result != "undefined" && response.result == "fail")
+		{
+			if (typeof cbFailure == "function")
+				cbFailure();
+			else
+				toaster.Warning("Failed to change memo");
+			openLoginDialog(function () { UpdateClipFlags(path, flags, cbSuccess, cbFailure); });
+			return;
+		}
+		else
+		{
+			if (typeof cbSuccess == "function")
+				cbSuccess();
+			else
+				toaster.Success("Memo changed");
+		}
+	}, function ()
+	{
+		toaster.Warning("Failed to change memo because of a connection failure");
 		if (typeof cbFailure == "function")
 			cbFailure();
 	});
