@@ -10877,7 +10877,7 @@ function ClipLoader(clipsBodySelector)
 
 					if (existingClipData)
 					{
-						UpdateExistingClipData(existingClipData, clipData);
+						self.UpdateExistingClipData(existingClipData, clipData);
 					}
 					else // Only register if not already registered
 					{
@@ -11238,7 +11238,7 @@ function ClipLoader(clipsBodySelector)
 		clipData.rawClipData = stats;
 		return true;
 	}
-	var UpdateExistingClipData = function (oldClipData, newClipData)
+	this.UpdateExistingClipData = function (oldClipData, newClipData)
 	{
 		if (oldClipData.recId != newClipData.recId)
 			return;
@@ -23619,6 +23619,7 @@ function ClipListContextMenu()
 			singleClipItems = itemsToDisable;
 		singleClipItems.push("properties");
 		singleClipItems.push("copyurl");
+		singleClipItems.push("editmemo");
 
 		var hasClipsSelected = false;
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
@@ -23790,6 +23791,10 @@ function ClipListContextMenu()
 			case "mouseover_thumbnails":
 				toggleMouseoverClipThumbnails();
 				break;
+			case "editmemo":
+				var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[0]);
+				AskUserForUpdatedMemo(clipData);
+				break;
 			case "convertexport":
 				if (allSelectedClipIDs.length >= 1)
 				{
@@ -23843,6 +23848,8 @@ function ClipListContextMenu()
 				, { type: "splitLine" }
 				, { text: '<span id="cm_cliplist_larger_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_imageLarger", iconClass: "noflip", alias: "larger_thumbnails", action: onContextMenuAction }
 				, { text: '<span id="cm_cliplist_mouseover_thumbnails">Enlarge Thumbnails</span>', icon: "#svg_mio_popout", iconClass: "noflip rotate270", alias: "mouseover_thumbnails", action: onContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "Edit Memo", icon: "#svg_mio_edit", iconClass: "noflip", alias: "editmemo", action: onContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Convert/export", icon: "#svg_mio_launch", iconClass: "noflip", alias: "convertexport", action: onContextMenuAction }
 				, { type: "splitLine" }
@@ -26322,9 +26329,30 @@ function UpdateClipFlags(path, flags, cbSuccess, cbFailure)
 	});
 }
 ///////////////////////////////////////////////////////////////
-// Change Alert Memo //////////////////////////////////////////
+// Change Clip/Alert Memo /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function UpdateAlertMemo(path, memo, cbSuccess, cbFailure)
+function AskUserForUpdatedMemo(clipData)
+{
+	var $input = $('<input type="text" />');
+	var memo = clipData.memo;
+	if (!memo)
+		memo = "";
+	$input.val(memo);
+	var $question = $('<div style="margin:7px 3px 20px 3px;text-align:center;">Memo text:<br><br></div>');
+	$question.append($input);
+	AskYesNo($question, function ()
+	{
+		var newMemo = $input.val();
+		ChangeMemo(clipData.alertPath, newMemo, function ()
+		{
+			var newClipData = JSON.parse(JSON.stringify(clipData));
+			newClipData.memo = newMemo;
+			clipLoader.UpdateExistingClipData(clipData, newClipData);
+			toaster.Success("Memo changed");
+		});
+	}, null, toaster.Error, "Save", "Cancel", "Edit Memo");
+}
+function ChangeMemo(path, memo, cbSuccess, cbFailure)
 {
 	ExecJSON({ cmd: "update", path: path, memo: memo }, function (response)
 	{
@@ -26334,7 +26362,7 @@ function UpdateAlertMemo(path, memo, cbSuccess, cbFailure)
 				cbFailure();
 			else
 				toaster.Warning("Failed to change memo");
-			openLoginDialog(function () { UpdateClipFlags(path, flags, cbSuccess, cbFailure); });
+			openLoginDialog(function () { ChangeMemo(path, memo, cbSuccess, cbFailure); });
 			return;
 		}
 		else
