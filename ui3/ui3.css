@@ -5148,6 +5148,16 @@ div.warningSymbol.button
 	margin: 7px 0px;
 }
 
+.camlist_item_indent
+{
+	margin-left: 10px;
+}
+
+.camlist_item_heading
+{
+	margin: 10px 0px 3px 0px;
+}
+
 .dialogOption_item_info,
 .dialogOption_item_cb,
 .dialogOption_item_ddl,

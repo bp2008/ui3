@@ -24275,12 +24275,79 @@ function CameraListDialog()
 					+ '</div>');
 			}
 		}
-		// Finish up
-		$cameralistcontent.append('<div></div>'
-			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnBlue" onclick="resetNewAlertCounters()" value="reset new alert counters" title="Resets the new alert counters for all cameras" />'
-			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.UpdateCameraThumbnails(true)" value="force refresh thumbnails" title="Thumbnails otherwise update only once per day" />'
-			+ (developerMode ? ' <input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.ShowRawCameraList()" value="view raw data" />' : '')
+		// Add bit rate totals, MP/s, etc.
+		var totalMainBps = 0;
+		var totalSubBps = 0;
+		var totalMpps = 0;
+		var totalMainMpps = 0;
+		var totalSubMpps = 0;
+		var totalSavingsFromSubStreamsMpps = 0;
+		for (var i = 0; i < lastCameraListResponse.data.length; i++)
+		{
+			var cam = lastCameraListResponse.data[i];
+			if (!cameraListLoader.CameraIsGroupOrCycle(cam) && cam.isEnabled && cam.isOnline && !cam.isNoSignal)
+			{
+				totalMainBps += parseInt(cam.BPS);
+				var mainMpps = (parseInt(cam.width) * parseInt(cam.height) * parseFloat(cam.FPS)) / 1000000;
+				var subMpps = 0;
+				totalMainMpps += mainMpps;
+				if (cam.BPS2 && cam.width2 && cam.height2)
+				{
+					totalSubBps += parseInt(cam.BPS2);
+					subMpps = (parseInt(cam.width2) * parseInt(cam.height2) * parseFloat(cam.FPS2)) / 1000000;
+				}
+				if (subMpps)
+				{
+					totalSubMpps += subMpps;
+					totalMpps += subMpps;
+					totalSavingsFromSubStreamsMpps += mainMpps;
+				}
+				else
+					totalMpps += mainMpps;
+			}
+		}
+		$cameralistcontent.append(''
+			+ '<div class="camlist_item_center" style="user-select: all;">'
+			+ '<div style="text-align: left; display: inline-block;">'
+			+ '<div class="camlist_item_heading">'
+			+ 'Total Bit Rate - bits'
+			+ '</div>'
+			+ '<div class="camlist_item_indent">'
+			+ formatBitsPerSecond((totalMainBps + totalSubBps) * 8) + " (Main: "
+			+ formatBitsPerSecond(totalMainBps * 8) + ', Sub: ' + formatBitsPerSecond(totalSubBps * 8) + ")"
+			+ '</div>'
+			+ '<div class="camlist_item_heading">'
+			+ 'Total Bit Rate - bytes'
+			+ '</div>'
+			+ '<div class="camlist_item_indent">'
+			+ formatBytes2(totalMainBps + totalSubBps) + "/s (Main: "
+			+ formatBytes2(totalMainBps) + '/s, Sub: ' + formatBytes2(totalSubBps) + "/s)"
+			+ '</div>'
+			+ '<div class="camlist_item_heading">'
+			+ 'Megapixels Per Second'
+			+ '</div>'
+			+ '<div class="camlist_item_indent">'
+			+ 'Current workload: ' + totalMpps.toFixedNoE(2) + " MP/s"
+			+ '<br>'
+			+ 'All main streams: ' + totalMainMpps.toFixedNoE(2) + " MP/s"
+			+ '<br>'
+			+ 'All sub streams: ' + totalSubMpps.toFixedNoE(2) + " MP/s"
+			+ '<br>'
+			+ 'Sub streams are reducing the workload by: ' + totalSavingsFromSubStreamsMpps.toFixedNoE(2) + " MP/s"
+			+ '</div>'
+			+ '</div>'
+			+ '</div>'
+			+ '<div class="camlist_item_center">'
+			+ '<div class="camlist_item_heading">'
+			+ '<a href="javascript:UIHelp.LearnMore(\'Camera List Totals\')">(learn more)</a>'
+			+ '</div>'
 			+ '</div>');
+		// Finish up
+		$cameralistcontent.append('<div><br></div>'
+			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="resetNewAlertCounters()" value="reset new alert counters" title="Resets the new alert counters for all cameras" /></div>'
+			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.UpdateCameraThumbnails(true)" value="force refresh thumbnails" title="Thumbnails otherwise update only once per day" /></div>'
+			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.ShowRawCameraList()" value="view raw data" /></div>'
+			+ '');
 		self.UpdateCameraThumbnails();
 		modal_cameralistdialog.contentChanged(!loadedOnce);
 		loadedOnce = true;
@@ -24677,6 +24744,13 @@ function CameraProperties(camId)
 			}
 		}
 		$infoSection.append(GetInfo("Last Alert", lastAlert));
+		if (cam.ip)
+		{
+			var url = 'http://' + cam.ip;
+			$infoSection.append('<div class="dialogOption_item dialogOption_item_info" title="This link only works if the IP address responds to HTTP requests on port 80, and the IP address is accessible on your current network.">Web Interface: <a href="' + url + '" target="_blank">'
+				+ url
+				+ '</a></div>');
+		}
 		$infoSection.append('<div class="dialogOption_item dialogOption_item_info"><a title="Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds." href="javascript:hlsPlayer.OpenDialog(\'' + JavaScriptStringEncode(camId) + '\')">'
 			+ '<svg class="icon noflip"><use xlink:href="#svg_mio_ViewStream"></use></svg>'
 			+ ' Open HTTP Live Stream (HLS)</a></div>');
@@ -32787,6 +32861,9 @@ function UIHelpTool()
 			case "Video Player Error":
 				UI3_Video_Player_Error();
 				break;
+			case "Camera List Totals":
+				UI3_Camera_List_Totals();
+				break;
 		}
 	}
 	var Context_Menu_Trigger = function ()
@@ -32960,6 +33037,16 @@ function UIHelpTool()
 			//	dlg.close();
 		});
 		dlg = $ele.modalDialog({ title: 'Troubleshooting Video Player Errors', closeOnOverlayClick: true });
+	}
+	var UI3_Camera_List_Totals = function ()
+	{
+		$('<div class="UIHelp">'
+			+ "The \"Bit Rate\" and \"Megapixels Per Second\" totals shown in UI3 are computed from camera metadata provided by Blue Iris.  UI3's totals may not exactly match Blue Iris's totals for several reasons:"
+			+ "<ul>"
+			+ "<li>Cloned cameras will be counted redundantly, because UI3 doesn't know which cameras are clones (if any).</li>"
+			+ "<li>Sub stream resolutions are often slightly upscaled by Blue Iris to match the aspect ratio of the main stream; UI3 only knows the upscaled size, therefore may slightly overestimate the Megapixels Per Second.</li>"
+			+ "</ul>"
+			+ '</div>').modalDialog({ title: 'Camera List Totals', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
