@@ -10690,8 +10690,8 @@ function ClipLoader(clipsBodySelector)
 			return;
 		if (dateFilter.BeginDate != 0 && dateFilter.EndDate != 0)
 			return;
-		// We request clips starting from 60 seconds earlier so that metadata of recent clips may be updated.
-		loadClipsInternal(lastLoadedCameraFilter, newestClipDate - 60, Math.round(GetUtcNow() / 1000) + 86400, false, true, null, settings.ui3_current_dbView, clipFilterSearch.getQuery());
+		// We request clips starting from 180 seconds earlier so that metadata of recent clips may be updated.
+		loadClipsInternal(lastLoadedCameraFilter, newestClipDate - 180, Math.round(GetUtcNow() / 1000) + 86400, false, true, null, settings.ui3_current_dbView, clipFilterSearch.getQuery());
 	}
 	this.LoadClipsRange = function (camFilter, dateBegin, dateEnd)
 	{
