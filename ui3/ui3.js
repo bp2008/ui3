@@ -17638,6 +17638,15 @@ function FetchH264VideoModule()
 					nativeRes = '<span class="nonMatchingNativeRes">' + nativeRes + '</span>';
 			}
 			var digitalZoom = '<span title="Digital Zoom Factor"> \uD83D\uDD0D' + imageRenderer.zoomHandler.GetZoomFactor().toFixed(2) + 'x</span>';
+			var playerName = self.GetPlayerName();
+			if (playerName)
+			{
+				var hwva = self.IsUsingHardwareAcceleration();
+				if (hwva == 0)
+					playerName += " (no Hardware Accel)";
+				else if (hwva == 1)
+					playerName += " (Hardware Accel)";
+			}
 
 			nerdStats.BeginUpdate();
 			nerdStats.UpdateStat("Viewport", null, $layoutbody.width() + "x" + $layoutbody.height() + GetDevicePixelRatioTag() + digitalZoom);
@@ -17652,6 +17661,8 @@ function FetchH264VideoModule()
 				nerdStats.UpdateStat("Seek Position", (frame.pos / 100).toFixed() + "%");
 			nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frame.utc + GetServerTimeOffset()), true));
 			nerdStats.UpdateStat("Stream Timestamp", frame.timestamp + "ms");
+			if (playerName)
+				nerdStats.UpdateStat("Video Player", playerName);
 			nerdStats.UpdateStat("Codecs", codecs);
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
@@ -17772,6 +17783,21 @@ function FetchH264VideoModule()
 			return true;
 		}
 		return false;
+	}
+	this.GetPlayerName = function ()
+	{
+		return typeof h264_player.GetPlayerName === "function" ? h264_player.GetPlayerName() : "";
+	}
+	this.GetPlayerNameShort = function ()
+	{
+		return typeof h264_player.GetPlayerNameShort === "function" ? h264_player.GetPlayerNameShort() : "";
+	}
+	/**
+	 * -1: unknown, 0: false, 1: true
+	 */
+	this.IsUsingHardwareAcceleration = function ()
+	{
+		return typeof h264_player.IsUsingHardwareAcceleration === "function" ? h264_player.IsUsingHardwareAcceleration() : -1;
 	}
 	Initialize();
 	perfMonInterval = setInterval(MeasurePerformance, 2500);
@@ -18020,6 +18046,21 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		allFramesAccepted = true;
 		CheckStreamEndCondition();
+	}
+	this.GetPlayerName = function ()
+	{
+		return "JavaScript";
+	}
+	this.GetPlayerNameShort = function ()
+	{
+		return "js";
+	}
+	/**
+	 * -1: unknown, 0: false, 1: true
+	 */
+	this.IsUsingHardwareAcceleration = function ()
+	{
+		return 0;
 	}
 
 	Initialize();
@@ -18528,6 +18569,25 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		allFramesAccepted = true;
 		CheckStreamEndCondition();
 	}
+	this.GetPlayerName = function ()
+	{
+		return "NaCl";
+	}
+	this.GetPlayerNameShort = function ()
+	{
+		return "NaCl";
+	}
+	/**
+	 * -1: unknown, 0: false, 1: true
+	 */
+	this.IsUsingHardwareAcceleration = function ()
+	{
+		if (currentH264Player === H264PlayerOptions.NaCl_HWVA_Yes)
+			return 1;
+		else if (currentH264Player === H264PlayerOptions.NaCl_HWVA_No)
+			return 0;
+		return -1;
+	}
 
 	Initialize();
 }
@@ -18810,6 +18870,21 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	this.DrawThumbAsFullCamera = function (cameraId, groupId)
 	{
 		videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId, canvas);
+	}
+	this.GetPlayerName = function ()
+	{
+		return "WebCodecs";
+	}
+	this.GetPlayerNameShort = function ()
+	{
+		return "wc";
+	}
+	/**
+	 * -1: unknown, 0: false, 1: true
+	 */
+	this.IsUsingHardwareAcceleration = function ()
+	{
+		return -1;
 	}
 
 	Initialize();
@@ -19297,6 +19372,21 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 		self.setCanvasRenderingState(true);
 		disableRenderingStateChangesUntilNextFrame = true;
 		videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId);
+	}
+	this.GetPlayerName = function ()
+	{
+		return "HTML5";
+	}
+	this.GetPlayerNameShort = function ()
+	{
+		return "h5";
+	}
+	/**
+	 * -1: unknown, 0: false, 1: true
+	 */
+	this.IsUsingHardwareAcceleration = function ()
+	{
+		return -1;
 	}
 	this.PreviousFrameIsLastFrame = function ()
 	{
@@ -24320,20 +24410,20 @@ function CameraListDialog()
 			+ 'Total Bit Rate - bytes'
 			+ '</div>'
 			+ '<div class="camlist_item_indent">'
-			+ formatBytes2(totalMainBps + totalSubBps) + "/s (Main: "
-			+ formatBytes2(totalMainBps) + '/s, Sub: ' + formatBytes2(totalSubBps) + "/s)"
+			+ formatBytes2(totalMainBps + totalSubBps, 1) + "/s (Main: "
+			+ formatBytes2(totalMainBps, 1) + '/s, Sub: ' + formatBytes2(totalSubBps, 1) + "/s)"
 			+ '</div>'
 			+ '<div class="camlist_item_heading">'
 			+ 'Megapixels Per Second'
 			+ '</div>'
 			+ '<div class="camlist_item_indent">'
-			+ 'Current workload: ' + totalMpps.toFixedNoE(2) + " MP/s"
+			+ 'Current workload: ' + totalMpps.toFixedNoE(1) + " MP/s"
 			+ '<br>'
-			+ 'All main streams: ' + totalMainMpps.toFixedNoE(2) + " MP/s"
+			+ 'All main streams: ' + totalMainMpps.toFixedNoE(1) + " MP/s"
 			+ '<br>'
-			+ 'All sub streams: ' + totalSubMpps.toFixedNoE(2) + " MP/s"
+			+ 'All sub streams: ' + totalSubMpps.toFixedNoE(1) + " MP/s"
 			+ '<br>'
-			+ 'Sub streams are reducing the workload by: ' + totalSavingsFromSubStreamsMpps.toFixedNoE(2) + " MP/s"
+			+ 'Sub streams are reducing the workload by: ' + totalSavingsFromSubStreamsMpps.toFixedNoE(1) + " MP/s"
 			+ '</div>'
 			+ '</div>'
 			+ '</div>'
@@ -30520,6 +30610,7 @@ function UI3NerdStats()
 			, "Seek Position"
 			, "Frame Time"
 			, "Stream Timestamp"
+			, "Video Player"
 			, "Renderer"
 			, "Codecs"
 			, "Video Bit Rate"
