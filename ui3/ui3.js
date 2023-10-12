@@ -243,7 +243,7 @@ function DoUIFeatureDetection()
 			webgl_supported = detectWebGLContext();
 
 			streaming_supported = fetch_supported && readable_stream_supported;
-			h264_js_player_supported = streaming_supported && web_workers_supported && webgl_supported;
+			h264_js_player_supported = streaming_supported && web_workers_supported;
 			pnacl_player_supported = streaming_supported && detectIfPnaclSupported();
 			var mse_support = detectMSESupport();
 			mse_mp4_h264_supported = streaming_supported && (mse_support & 1) > 0;
@@ -281,8 +281,6 @@ function DoUIFeatureDetection()
 						ul.append('<li>Data Streaming</li>');
 					if (!web_workers_supported)
 						ul.append('<li>Web Workers</li>');
-					if (!webgl_supported)
-						ul.append('<li>WebGL</li>');
 					ul_root.append($('<li>The JavaScript H.264 Player requires these unsupported features:</li>').append(ul));
 				}
 				if (!mse_mp4_h264_supported)
@@ -474,7 +472,8 @@ function requestAnimationFramePolyFill()
 function detectWebGLContext()
 {
 	var canvas = document.createElement("canvas");
-	var gl = canvas.getContext("webgl")
+	var gl = canvas.getContext("webgl2")
+		|| canvas.getContext("webgl")
 		|| canvas.getContext("experimental-webgl");
 	return gl && gl instanceof WebGLRenderingContext;
 }
@@ -16932,32 +16931,42 @@ function FetchH264VideoModule()
 		{
 			// This is the automatic player selection algorithm:
 			var isAndroidFF = BrowserIsAndroid() && BrowserIsFirefox();
-			var isIOS16_4_ornewer = GetIOSVersion()[0] === 16 && GetIOSVersion()[1] >= 4;
-			if (mse_mp4_h264_supported && !isAndroidFF && !isIOS16_4_ornewer)
+			var isIOS16_4_upto17 = GetIOSVersion()[0] === 16 && GetIOSVersion()[1] >= 4;
+			var isIOS17_ornewer = GetIOSVersion()[0] >= 17;
+
+			var preferredOrder = [H264PlayerOptions.HTML5, H264PlayerOptions.WebCodecs, H264PlayerOptions.JavaScript, H264PlayerOptions.NaCl_HWVA_Auto];
+			if (isIOS17_ornewer)
+				preferredOrder = [H264PlayerOptions.JavaScript, H264PlayerOptions.WebCodecs, H264PlayerOptions.HTML5];
+			else if (isIOS16_4_upto17)
+				preferredOrder = [H264PlayerOptions.JavaScript];
+			else if (isAndroidFF)
+				preferredOrder = [H264PlayerOptions.WebCodecs, H264PlayerOptions.JavaScript];
+
+			for (var i = 0; i < preferredOrder.length; i++)
 			{
-				isInitialized = false;
-				Initialize(H264PlayerOptions.HTML5);
+				var player = preferredOrder[i];
+				if (isCompatiblePlayer(player))
+				{
+					isInitialized = false;
+					Initialize(player);
+					return;
+				}
 			}
-			else if (webcodecs_h264_player_supported && !browser_is_ios)
-			{
-				isInitialized = false;
-				Initialize(H264PlayerOptions.WebCodecs);
-			}
-			else if (h264_js_player_supported)
-			{
-				isInitialized = false;
-				Initialize(H264PlayerOptions.JavaScript);
-			}
-			else if (pnacl_player_supported)
-			{
-				isInitialized = false;
-				Initialize(H264PlayerOptions.NaCl_HWVA_Auto);
-			}
-			else
-			{
-				toaster.Error("No H.264 player is supported.");
-			}
+			toaster.Error("No H.264 player is supported.");
 		}
+	}
+	var isCompatiblePlayer = function (player)
+	{
+		if (player === H264PlayerOptions.HTML5)
+			return mse_mp4_h264_supported;
+		else if (player === H264PlayerOptions.WebCodecs)
+			return webcodecs_h264_player_supported;
+		else if (player === H264PlayerOptions.JavaScript)
+			return h264_js_player_supported;
+		else if (player === H264PlayerOptions.NaCl_HWVA_Auto || player === H264PlayerOptions.NaCl_HWVA_Yes || player === H264PlayerOptions.NaCl_HWVA_No)
+			return pnacl_player_supported;
+		else
+			return false;
 	}
 	var Activate = function ()
 	{
@@ -17674,7 +17683,7 @@ function FetchH264VideoModule()
 			nerdStats.UpdateStat("Network Delay", netDelay, netDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Player Delay", decoderDelay, decoderDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Delayed Frames", h264_player.GetBufferedFrameCount(), h264_player.GetBufferedFrameCount(), true);
-			if (h264_player.isMsePlayer)
+			if (typeof h264_player.UpdateNerdStats === "function")
 				h264_player.UpdateNerdStats();
 			lastNerdStatsUpdate = performance.now();
 			nerdStats.EndUpdate();
@@ -17871,7 +17880,7 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		if (canvasH != frame.height)
 			canvas.height = canvasH = frame.height;
 		var drawStart = performance.now();
-		display.drawNextOuptutPictureGL(frame.width, frame.height, null, new Uint8Array(frame.data));
+		display.drawNextOutputPicture(frame.width, frame.height, null, frame);
 		var drawEnd = performance.now();
 		lastFrameRenderTime = drawEnd - drawStart;
 		averageRenderTime.Add(lastFrameRenderTime);
@@ -17939,10 +17948,15 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		renderScheduler = new RenderScheduler(renderFrame, dropFrame);
 		decoder = new OpenH264_Decoder(onLoad, onLoadFail, frameDecoded, frameError, criticalWorkerError);
 
-		$("#openh264_player_canvas").remove();
-		$canvas = $('<canvas id="openh264_player_canvas" class="videoCanvas" width="100%" height="100%"></canvas>');
-		canvas = $canvas.get(0);
-		display = new WebGLCanvas(canvas);
+		var createNewCanvas = function ()
+		{
+			$("#openh264_player_canvas").remove();
+			$canvas = $('<canvas id="openh264_player_canvas" class="videoCanvas" width="100%" height="100%"></canvas>');
+			canvas = $canvas.get(0);
+			return canvas;
+		}
+
+		display = new WebGLCanvas(createNewCanvas);
 	}
 	this.Dispose = function ()
 	{
@@ -18061,6 +18075,27 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	this.IsUsingHardwareAcceleration = function ()
 	{
 		return 0;
+	}
+	/**
+	 * -1: unknown, 0: false, 1: true
+	 */
+	this.IsUsingWebGL = function ()
+	{
+		if (display.contextName === "2d")
+			return 0;
+		else if (display.contextName)
+			return 1;
+		else
+			return -1;
+	}
+	this.UpdateNerdStats = function ()
+	{
+		if (display.contextName === "2d")
+			nerdStats.UpdateStat("Renderer", "2d canvas, no WebGL");
+		else if (display.contextName)
+			nerdStats.UpdateStat("Renderer", display.contextName);
+		else
+			nerdStats.UpdateStat("Renderer", "Unknown");
 	}
 
 	Initialize();
