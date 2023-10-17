@@ -65,7 +65,7 @@ if (navigator.cookieEnabled)
  */
 var ui3InstanceId = getRandomAlphanumericStr(16);
 
-if ('serviceWorker' in navigator)
+if ('serviceWorker' in navigator && typeof navigator.serviceWorker === "object" && typeof navigator.serviceWorker.register === "function")
 {
 	window.addEventListener('load', function ()
 	{
