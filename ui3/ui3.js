@@ -16936,7 +16936,7 @@ function FetchH264VideoModule()
 
 			var preferredOrder = [H264PlayerOptions.HTML5, H264PlayerOptions.WebCodecs, H264PlayerOptions.JavaScript, H264PlayerOptions.NaCl_HWVA_Auto];
 			if (isIOS17_ornewer)
-				preferredOrder = [H264PlayerOptions.JavaScript, H264PlayerOptions.WebCodecs, H264PlayerOptions.HTML5];
+				preferredOrder = [H264PlayerOptions.WebCodecs, H264PlayerOptions.JavaScript, H264PlayerOptions.HTML5];
 			else if (isIOS16_4_upto17)
 				preferredOrder = [H264PlayerOptions.JavaScript];
 			else if (isAndroidFF)
