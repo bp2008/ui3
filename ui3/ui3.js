@@ -10806,7 +10806,7 @@ function ClipLoader(clipsBodySelector)
 			if (response.result !== "success")
 			{
 				var failMessage = $('<div class="clipListText clipListFailed">Failed to load. Click to learn more.</div>');
-				var reason = args.cmd + ' response did not indicate "success" result: ' + JSON.stringify(response);
+				var reason = args.cmd + ' response did not indicate "success" result: ' + JSON.stringify(response) + ". Request was: " + JSON.stringify(args);
 				failMessage.on('click', function ()
 				{
 					ShowErrorDialog(reason);
