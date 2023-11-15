@@ -3212,7 +3212,7 @@ $.ajax({
 	},
 	error: function (jqXHR, textStatus, errorThrown)
 	{
-		loadingHelper.SetErrorStatus("svg", 'Error trying to load icons.svg<br/>Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '<br>Status: ' + textStatus + '<br>Error: ' + errorThrown);
+		loadingHelper.SetErrorStatus("svg", 'Error trying to load icons.svg<br/>Response: ' + jqXHR.status + ' ' + jqXHR.statusText + '<br>Status: ' + textStatus + '<br>Error: ' + errorThrown, true);
 	}
 });
 $(function ()
@@ -13688,7 +13688,7 @@ function SessionManager()
 			LogInWithCredentials(currentServer.remoteServerUser, currentServer.remoteServerPass, function (failResponse, errorMessage)
 			{
 				// The login failed
-				loadingHelper.SetErrorStatus("login", 'UI3 was unable to log in to the remote server. ' + errorMessage);
+				loadingHelper.SetErrorStatus("login", 'UI3 was unable to log in to the remote server. ' + errorMessage, false);
 			}, true);
 		}
 		else
@@ -13697,7 +13697,7 @@ function SessionManager()
 			var oldSession = self.GetAPISession();
 			if (!oldSession)
 			{
-				loadingHelper.SetErrorStatus("login", "Blue Iris did not provide the expected session data. This version of UI3 requires Blue Iris 4.8.2.3 or newer.");
+				loadingHelper.SetErrorStatus("login", "Blue Iris did not provide the expected session data. This version of UI3 requires Blue Iris 4.8.2.3 or newer.", false);
 				return;
 			}
 			ExecJSON({ cmd: "login", session: oldSession }, function (response)
@@ -13736,7 +13736,7 @@ function SessionManager()
 							if (response.data.reason == "missing response")
 							{
 								// The { cmd: "login", session: oldSession } method of learning session status always seemed a little hacky.  If this error ever arises, it means Blue Iris has broken this method and we need a replacement.
-								loadingHelper.SetErrorStatus("login", 'Blue Iris sent an authentication challenge instead of session data (probably indicates a Blue Iris bug).');
+								loadingHelper.SetErrorStatus("login", 'Blue Iris sent an authentication challenge instead of session data (probably indicates a Blue Iris bug).', false);
 								return;
 							}
 							else
@@ -13744,20 +13744,19 @@ function SessionManager()
 						}
 						else
 						{
-							loadingHelper.SetErrorStatus("login", 'The current session is invalid or expired.  Reloading this page momentarily.');
-							setTimeout(ReloadInterface, 3000);
+							loadingHelper.SetErrorStatus("login", 'The current session is invalid or expired.', 3000);
 							return;
 						}
 					}
 					else
 					{
 						errorInfo = JSON.stringify(response);
-						loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo);
+						loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo, true);
 					}
 				}
 			}, function (jqXHR, textStatus, errorThrown)
 			{
-				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.ErrorMessageHtml);
+				loadingHelper.SetErrorStatus("login", 'Error contacting Blue Iris server to check session status.<br/>' + jqXHR.ErrorMessageHtml, true);
 			});
 		}
 	}
@@ -14316,7 +14315,7 @@ function CameraListLoader()
 				else
 				{
 					lastResponse = response;
-					loadingHelper.SetErrorStatus("cameraList", "Camera list is empty! Try reloading the page.");
+					loadingHelper.SetErrorStatus("cameraList", "Camera list is empty! Try reloading the page.", true);
 				}
 				return;
 			}
@@ -18347,7 +18346,7 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		var $err = $('<div>Native H.264 player ' + (isCrash ? "crashed" : "error") + '!<br><br>' + player.lastError + '</div>');
 		if (!isLoaded)
 		{
-			loadingHelper.SetErrorStatus("h264");
+			loadingHelper.SetErrorStatus("h264", "The NACL video player failed to load.", true);
 			$err.append($disablePnaclButton);
 			var $explanation = mse_mp4_h264_supported || h264_js_player_supported || webcodecs_h264_player_supported ? $('<div>You can load UI3 by changing to a different player:</div>') : $('<div>You can load UI3 by changing to a JPEG streaming method:</div>');
 			$explanation.css('margin-top', '12px');
@@ -29466,7 +29465,7 @@ function LoadingHelper()
 		}
 		FinishLoadingIfConditionsMet();
 	}
-	this.SetErrorStatus = function (name, errorMessage)
+	this.SetErrorStatus = function (name, errorMessage, reloadTimeoutMs)
 	{
 		var thing = GetThing(name);
 		var loadingStatusObj = $(thing[1]);
@@ -29475,7 +29474,25 @@ function LoadingHelper()
 			loadingStatusObj.html("FAIL");
 			loadingStatusObj.css("color", "#CC0000");
 		}
-		if (typeof errorMessage != "undefined" && errorMessage != null && errorMessage != "")
+
+		if (reloadTimeoutMs === true)
+			reloadTimeoutMs = 3000;
+		else if (typeof reloadTimeoutMs === undefined || reloadTimeoutMs === false || reloadTimeoutMs < 0)
+			reloadTimeoutMs = -1;
+
+		var eventArg = { reloadTimeoutMs: reloadTimeoutMs, showErrorToast: true };
+		BI_CustomEvent.Invoke("UI_Loading_Failed", eventArg);
+
+		if (typeof errorMessage === "undefined" || !errorMessage)
+			errorMessage = "UI3 failed to load.";
+		if (!errorMessage.endsWith("."))
+			errorMessage += ".";
+		if (eventArg.reloadTimeoutMs >= 0)
+		{
+			errorMessage += "  Reloading momentarily...";
+			setTimeout(ReloadInterface, eventArg.reloadTimeoutMs);
+		}
+		if (eventArg.showErrorToast)
 			toaster.Error(errorMessage, 600000);
 	}
 	var GetThing = function (name)
