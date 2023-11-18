@@ -5355,6 +5355,9 @@ function DropdownBoxes()
 			}
 		});
 
+	// This event can be utilized to modify the listDefs collection before it is processed.
+	BI_CustomEvent.Invoke("DropdownBoxes_Initializing", this);
+
 	$dropdownBoxes.each(function (idx, ele)
 	{
 		var $ele = $(ele);
