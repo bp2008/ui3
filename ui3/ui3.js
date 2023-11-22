@@ -6220,37 +6220,42 @@ function PtzButtons()
 			return;
 		ExecJSON({ cmd: "ptz", camera: cameraId }, function (response)
 		{
-			if (videoPlayer.Loading().image.id == cameraId)
+			if (response.result === "fail")
+				toaster.ErrorResponse(response);
+			else
 			{
-				/*
-					brightness:-1
-					contrast:0
-					irmode:0
-					powermode:-1
-					presetnum:15
-					presets:[""]
-					talksamplerate:8000
-				*/
-				currentPtzData = response.data;
-				if (currentPtzData)
+				if (videoPlayer.Loading().image.id == cameraId)
 				{
-					currentPtzData.presetMap = {};
-					if (currentPtzData.presets)
+					/*
+						brightness:-1
+						contrast:0
+						irmode:0
+						powermode:-1
+						presetnum:15
+						presets:[""]
+						talksamplerate:8000
+					*/
+					currentPtzData = response.data;
+					if (currentPtzData)
 					{
-						for (var i = 0; i < currentPtzData.presets.length; i++)
+						currentPtzData.presetMap = {};
+						if (currentPtzData.presets)
 						{
-							var objType = typeof currentPtzData.presets[i];
-							if (objType === "string")
-								currentPtzData.presetMap[i + 1] = MakePresetObj(i + 1, currentPtzData.presets[i]);
-							else if (objType === "object")
-								currentPtzData.presetMap[parseInt(currentPtzData.presets[i].num)] = currentPtzData.presets[i];
+							for (var i = 0; i < currentPtzData.presets.length; i++)
+							{
+								var objType = typeof currentPtzData.presets[i];
+								if (objType === "string")
+									currentPtzData.presetMap[i + 1] = MakePresetObj(i + 1, currentPtzData.presets[i]);
+								else if (objType === "object")
+									currentPtzData.presetMap[parseInt(currentPtzData.presets[i].num)] = currentPtzData.presets[i];
+							}
 						}
+						currentPtzData.cameraId = cameraId;
+						self.SetIRButtonState();
+						self.SetBrightnessButtonState();
+						self.SetContrastButtonState();
 					}
 				}
-				currentPtzData.cameraId = cameraId;
-				self.SetIRButtonState();
-				self.SetBrightnessButtonState();
-				self.SetContrastButtonState();
 			}
 		}, function ()
 		{
@@ -14067,6 +14072,7 @@ function SessionManager()
 						self.HandleSuccessfulLogin(response, true);
 						sessionExpiredToast.remove();
 						sessionExpiredToast = null;
+						videoPlayer.ReopenStreamAtCurrentSeekPosition();
 					}
 					else
 					{
@@ -17559,7 +17565,7 @@ function FetchH264VideoModule()
 		if (message !== "INPUT REQUIRED")
 			toaster.Error(message, 15000);
 	}
-	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
+	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError, isSessionLoss)
 	{
 		if (currentServer.isLoggingOut)
 			return;
@@ -17591,9 +17597,17 @@ function FetchH264VideoModule()
 				else if (!serverTimeLimiter.isNearStreamLimit())
 				{
 					programmaticSoundPlayer.NotifyDisconnected();
-					reconnectingToast.showText("The video stream was lost. Attempting to reconnect...");
 					clearTimeout(failureRecoveryTimeout);
-					failureRecoveryTimeout = setTimeout(ReopenStreamAtCurrentSeekPosition, 2000);
+					if (isSessionLoss)
+					{
+						reconnectingToast.showText("The video player is waiting for session recovery...");
+						sessionManager.ReestablishLostSession();
+					}
+					else
+					{
+						reconnectingToast.showText("The video stream was lost. Attempting to reconnect...");
+						failureRecoveryTimeout = setTimeout(ReopenStreamAtCurrentSeekPosition, 2000);
+					}
 				}
 			}
 		}
@@ -26158,7 +26172,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 		aviEncoder = new AVIEncoder("H264", bitmapInfoHeader, waveFormatEx ? "ulaw" : null, waveFormatEx);
 		progressUpdate(1, "Export progress: 0%");
 	}
-	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
+	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError, isSessionLoss)
 	{
 		if (!exportCompleteCb)
 			return;
@@ -28933,6 +28947,33 @@ function Toaster()
 	{
 		return showToastInternal('error', message, showTime, closeButton, onClick, extendedTimeOut);
 	}
+	this.ErrorResponse = function (responseObject)
+	{
+		var msg;
+		if (responseObject)
+		{
+			var json = JSON.stringify(responseObject);
+			console.log("toaster.ErrorResponse", json);
+			if (responseObject.data && responseObject.data.reason)
+				msg = responseObject.data.reason;
+			else if (responseObject.result === "fail")
+				msg = "JSON API response failed without a reason being given. " + json;
+			else
+				msg = "JSON API response failed for an unknown reason. " + json;
+		}
+		else
+		{
+			console.log("toaster.ErrorResponse(null)");
+			msg = "JSON API response object was null.";
+		}
+		try
+		{
+			var err = new Error();
+			msg += " \n" + err.stack;
+		}
+		catch (ex) { }
+		return showToastInternal('error', msg, 10000);
+	}
 }
 function showSuccessToast(message, showTime, closeButton)
 {
@@ -29892,7 +29933,7 @@ var safeFetch = new (function ()
 		streamEndedCbForActiveFetch = queuedRequest.streamEnded;
 		streamer = new FetchVideoH264Streamer(queuedRequest.url, queuedRequest.headerCallback, queuedRequest.frameCallback, queuedRequest.statusBlockCallback, queuedRequest.streamInfoCallback, StreamEndedWrapper, queuedRequest.options);
 	}
-	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError)
+	var StreamEndedWrapper = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError, isSessionLoss)
 	{
 		if (stopTimeout != null)
 		{
@@ -29901,7 +29942,7 @@ var safeFetch = new (function ()
 		}
 		streamer = null;
 		if (streamEndedCbForActiveFetch)
-			streamEndedCbForActiveFetch(message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError);
+			streamEndedCbForActiveFetch(message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError, isSessionLoss);
 		OpenStreamNow();
 	}
 	var StopTimedOut = function ()
@@ -30002,15 +30043,24 @@ function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockC
 			{
 				if (res.status === 0)
 				{
+					responseError = res.status + " " + res.statusText;
 					HandleGroupableConnectionError();
 					CallStreamEnded("Server unreachable");
 				}
-				else if (res.status === 403 || res.status === 302) // this request may redirect to the login page
+				else if (res.status === 403 || res.redirected || (res.status && res.status.toString().startsWith("3")))
 				{
-					CallStreamEnded("Your session has been lost.");
+					// This will be problematic if the server redirects the video request for any other reason than session loss.
+					if (res.redirected)
+						responseError = "0 fetch redirected";
+					else
+						responseError = res.status + " " + res.statusText;
+					var contentType = res.headers.get("Content-Type");
+					var isSessionLoss = typeof contentType === "string" && !contentType.startsWith("video");
+					CallStreamEnded("Your session has been lost.", undefined, undefined, isSessionLoss);
 				}
 				else if (res.status === 503)
 				{
+					responseError = res.status + " " + res.statusText;
 					HandleGroupableConnectionError();
 					CallStreamEnded("Server responded saying service is unavailable");
 				}
@@ -30086,13 +30136,13 @@ function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockC
 			}
 		});
 	}
-	function CallStreamEnded(message, naturalEndOfStream, wasJpeg)
+	function CallStreamEnded(message, naturalEndOfStream, wasJpeg, isSessionLoss)
 	{
 		if (typeof streamEnded === "function")
 		{
 			try
 			{
-				streamEnded(message, wasJpeg, stopCalledByApp, naturalEndOfStream, responseError);
+				streamEnded(message, wasJpeg, stopCalledByApp, naturalEndOfStream, responseError, isSessionLoss);
 			}
 			catch (e)
 			{
