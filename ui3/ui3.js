@@ -14058,11 +14058,20 @@ function SessionManager()
 	}
 	this.IsInvalidSession = function (jsonResponse)
 	{
-		return jsonResponse
-			&& jsonResponse.result === "fail"
-			&& jsonResponse.data
-			&& typeof jsonResponse.data.reason === "string"
-			&& jsonResponse.data.reason.toUpperCase() === "INVALID SESSION";
+		if (compareVersions(bi_version, "5.8.1.1") >= 0)
+		{
+			return jsonResponse
+				&& jsonResponse.result === "fail"
+				&& jsonResponse.data
+				&& typeof jsonResponse.data.reason === "string"
+				&& jsonResponse.data.reason.toUpperCase() === "INVALID SESSION";
+		}
+		else
+		{
+			// BI prior to 5.8.1.1 did not return a data.reason string in the case of invalid session.
+			return jsonResponse
+				&& jsonResponse.result === "fail";
+		}
 	}
 	this.ReestablishLostSession = function ()
 	{
