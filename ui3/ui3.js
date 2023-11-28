@@ -4960,7 +4960,7 @@ function StatusAreaApi()
 		{
 			onClick: function (e)
 			{
-				if (this.disabled)
+				if (!this.enabled)
 					return;
 				var newSignal;
 				if (this.signal !== 0)
@@ -10741,6 +10741,7 @@ function ClipLoader(clipsBodySelector)
 		{
 			if (isLoadingAClipList)
 			{
+				console.log("Clip list loading is already active. Queuing this request.", arguments);
 				QueuedClipListLoad = function ()
 				{
 					loadClipsInternal(cameraId, myDateStart, myDateEnd, isContinuationOfPreviousLoad, isUpdateOfExistingList, previousClipDate, dbView, filterSearchQuery);
@@ -10813,6 +10814,15 @@ function ClipLoader(clipsBodySelector)
 			recoveryFunction = null;
 			if (response.result !== "success")
 			{
+				isLoadingAClipList = false;
+				if (sessionManager.IsInvalidSession(response))
+				{
+					var failMessage = $('<div class="clipListText clipListFailed">Invalid session. Recovering...</div>');
+					$clipsbody.empty();
+					$clipsbody.append(failMessage);
+					sessionManager.ReestablishLostSession();
+					return;
+				}
 				var failMessage = $('<div class="clipListText clipListFailed">Failed to load. Click to learn more.</div>');
 				var reason = args.cmd + ' response did not indicate "success" result: ' + JSON.stringify(response) + ". Request was: " + JSON.stringify(args);
 				failMessage.on('click', function ()
@@ -13134,7 +13144,7 @@ function StatusLoader()
 			var requestEnd = performance.now();
 			EndConnectionErrors();
 			lastStatusUpdateAt = performance.now();
-			if (response && typeof response.result != "undefined" && response.result == "fail")
+			if (sessionManager.IsInvalidSession(response))
 			{
 				sessionManager.ReestablishLostSession();
 				return;
@@ -13687,6 +13697,7 @@ function SessionManager()
 	var biSoundOptions = ["None"];
 	var biStreamingProfiles = [];
 	var sessionExpiredToast = null;
+	var isRecoveringFromInvalidSession = false;
 	this.supportedHTML5AudioFormats = [".mp3", ".wav"]; // File extensions, in order of preference
 	this.Initialize = function ()
 	{
@@ -13845,6 +13856,8 @@ function SessionManager()
 
 		statusLoader.LoadStatus();
 		cameraListLoader.LoadCameraList();
+		if (isRecoveringFromInvalidSession)
+			clipLoader.LoadClips();
 
 		if (isAdministratorSession)
 		{
@@ -13878,6 +13891,8 @@ function SessionManager()
 		SyncStreamingQualityWarningIcon(true);
 
 		BI_CustomEvent.Invoke("Login Success", response);
+
+		isRecoveringFromInvalidSession = false;
 	}
 	var ProcessSoundsArray = function ()
 	{
@@ -14041,10 +14056,19 @@ function SessionManager()
 				toaster.Error(errorMessage, 3000);
 			});
 	}
+	this.IsInvalidSession = function (jsonResponse)
+	{
+		return jsonResponse
+			&& jsonResponse.result === "fail"
+			&& jsonResponse.data
+			&& typeof jsonResponse.data.reason === "string"
+			&& jsonResponse.data.reason.toUpperCase() === "INVALID SESSION";
+	}
 	this.ReestablishLostSession = function ()
 	{
 		if (sessionExpiredToast)
 			return;
+		isRecoveringFromInvalidSession = true;
 		sessionExpiredToast = toaster.Warning("Your Blue Iris session has expired. Attempting recovery...", 99999999);
 
 		var args = { cmd: "login" };
@@ -14312,7 +14336,7 @@ function CameraListLoader()
 		{
 			lastLoadAt = performance.now();
 			EndConnectionErrors();
-			if (response.result === "fail")
+			if (sessionManager.IsInvalidSession(response))
 			{
 				sessionManager.ReestablishLostSession();
 				return;
@@ -30047,17 +30071,22 @@ function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockC
 					HandleGroupableConnectionError();
 					CallStreamEnded("Server unreachable");
 				}
-				else if (res.status === 403 || res.redirected || (res.status && res.status.toString().startsWith("3")))
+				else if (res.status === 403)
 				{
-					// This will be problematic if the server redirects the video request for any other reason than session loss.
-					if (res.redirected)
-						responseError = "0 fetch redirected";
-					else
-						responseError = res.status + " " + res.statusText;
-					var contentType = res.headers.get("Content-Type");
-					var isSessionLoss = typeof contentType === "string" && !contentType.startsWith("video");
-					CallStreamEnded("Your session has been lost.", undefined, undefined, isSessionLoss);
+					responseError = res.status + " " + res.statusText;
+					CallStreamEnded("Your session has been lost.", undefined, undefined, true);
 				}
+				//else if (res.redirected || (res.status && res.status.toString().startsWith("3")))
+				//{
+				//	// This will be problematic if the server redirects the video request for any other reason than session loss.
+				//	if (res.redirected)
+				//		responseError = "0 fetch redirected";
+				//	else
+				//		responseError = res.status + " " + res.statusText;
+				//	var contentType = res.headers.get("Content-Type");
+				//	var isSessionLoss = typeof contentType !== "string" || !contentType.startsWith("video");
+				//	CallStreamEnded("Your session has been lost.", undefined, undefined, isSessionLoss);
+				//}
 				else if (res.status === 503)
 				{
 					responseError = res.status + " " + res.statusText;
