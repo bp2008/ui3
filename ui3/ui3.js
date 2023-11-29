@@ -554,22 +554,28 @@ function detectAudioSupport()
 		if (AudioContext)
 		{
 			var context = new AudioContext();
-
-			if (typeof context.createGain === "function")
+			try
 			{
-				web_audio_supported = true;
-				web_audio_autoplay_disabled = context.state === "suspended";
-
-				if (typeof context.createBuffer === "function" && typeof context.createBufferSource === "function")
+				if (typeof context.createGain === "function")
 				{
-					var buffer = context.createBuffer(1, 1, 22050);
-					if (buffer)
+					web_audio_supported = true;
+					web_audio_autoplay_disabled = context.state === "suspended";
+
+					if (typeof context.createBuffer === "function" && typeof context.createBufferSource === "function")
 					{
-						web_audio_buffer_source_supported = true;
-						if (typeof buffer.copyFromChannel === "function" && typeof buffer.copyToChannel === "function")
-							web_audio_buffer_copyToChannel_supported = true;
+						var buffer = context.createBuffer(1, 1, 22050);
+						if (buffer)
+						{
+							web_audio_buffer_source_supported = true;
+							if (typeof buffer.copyFromChannel === "function" && typeof buffer.copyToChannel === "function")
+								web_audio_buffer_copyToChannel_supported = true;
+						}
 					}
 				}
+			}
+			finally
+			{
+				context.close();
 			}
 		}
 	}
@@ -19122,12 +19128,14 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	}
 	var onVideoError = function (e)
 	{
-		if (player.error.message.indexOf("DEMUXER_ERROR_COULD_NOT_OPEN: MediaSource endOfStream before demuxer initialization completes") === 0)
+		var errMsg = player.error && player.error.message ? player.error.message : "[player.error.message unavailable]";
+		if (errMsg.indexOf("DEMUXER_ERROR_COULD_NOT_OPEN: MediaSource endOfStream before demuxer initialization completes") === 0)
 			return; // Happens sometimes if the video stream ends very quickly. Some clips may do this if you seek to the very end while they are playing.
 		if (!inputRequiredOverlay.IsActive())
 		{
 			var clickForHelp = '<br><br><a href="javascript:UIHelp.LearnMore(\'Video Player Error\')" class="videoPlayerTroubleshootLink">Click for Help</a>';
-			playerErrorHandler(htmlEncode(player.error.message) + ": " + GetMediaErrorMessage(player.error.code) + clickForHelp);
+			var errCode = player.error && typeof player.error.code === "number" ? player.error.code : -1;
+			playerErrorHandler(htmlEncode(errMsg) + ": " + GetMediaErrorMessage(errCode) + clickForHelp);
 		}
 	}
 	var onPlayerPaused = function (e)
@@ -27453,7 +27461,20 @@ function PcmAudioPlayer()
 	var NewContext = function (sampleRate)
 	{
 		if (context)
+		{
 			context.suspend();
+			if (typeof context.close === "function")
+			{
+				try
+				{
+					context.close();
+				}
+				catch (ex)
+				{
+					toaster.Error(ex);
+				}
+			}
+		}
 		// We must specify the correct sample rate during AudioContext construction, 
 		// or else FLAC will be resampled by the decoder in such a way that it 
 		// introduces a static pop after every audio buffer.
@@ -27483,6 +27504,7 @@ function FakeAudioContext_Dummy()
 	this.currentTime = 0;
 	this.suspend = function () { }
 	this.resume = function () { }
+	this.close = function () { }
 }
 function CameraAudioMuteToggle()
 {
@@ -33508,6 +33530,7 @@ function ProgrammaticSoundPlayer()
 
 	var audioContext = null;
 	var voice = null;
+	var fail = false;
 
 	var Initialize = function ()
 	{
@@ -33538,15 +33561,23 @@ function ProgrammaticSoundPlayer()
 
 	var PrepareAudioContext = function ()
 	{
-		if (!audioContext)
+		if (!web_audio_supported)
+		{
+			console.log("Web audio is not supported.");
+			return false;
+		}
+		if (!audioContext && !fail)
 		{
 			try
 			{
 				//console.log("Preparing Audio Context");
+				var AudioContext = window.AudioContext || window.webkitAudioContext;
 				audioContext = new AudioContext(); // browsers limit the number of concurrent audio contexts
 			}
 			catch (ex)
 			{
+				fail = true;
+				toaster.Error("Unable to create audioContext for sound player: " + ex.stack);
 			}
 		}
 		return !!audioContext;
