@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "29";
+		var login_version = "30";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -344,7 +344,20 @@
 				}
 				else
 				{
-					if ((!response.data || !response.data.reason) && !isNewSession)
+					var isExpired;
+					if (compareVersions(bi_version, "5.8.1.1") >= 0)
+					{
+						isExpired = response.result === "fail"
+							&& response.data
+							&& typeof response.data.reason === "string"
+							&& response.data.reason.toUpperCase() === "INVALID SESSION";
+					}
+					else
+					{
+						// BI prior to 5.8.1.1 did not return a data.reason string in the case of invalid session.
+						isExpired = response.result === "fail" && (!response.data || !response.data.reason);
+					}
+					if (isExpired && !isNewSession)
 					{
 						// This happens when the session we were trying to authenticate has expired.
 						authenticateNewSession();
@@ -356,7 +369,7 @@
 						SetPersistedValue("bi_username", "");
 						SetPersistedValue("bi_password", "");
 						$("#btnLogin").val("Log in");
-						HandleError(response.data ? response.data.reason : "Login failed but Blue Iris did not provide a reason.");
+						HandleError(response.data && response.data.reason ? response.data.reason : "Login failed but Blue Iris did not provide a reason.");
 					}
 				}
 			}, loginFail);
