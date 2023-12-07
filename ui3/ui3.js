@@ -29621,6 +29621,7 @@ function LoadingHelper()
 		resized();
 		videoPlayer.Initialize();
 		ShowIEWarning();
+		BI_CustomEvent.RemoveListener("UI_Settings_Closing", uiSettingsClosingHandler);
 		BI_CustomEvent.Invoke("FinishedLoading");
 	}
 	this.DidLoadingFinish = function ()
@@ -29631,6 +29632,24 @@ function LoadingHelper()
 	{
 		return loadingFinishedAtServerTime;
 	}
+	function uiSettingsClosingHandler()
+	{
+		$("#loadingmsgwrapper").css("z-index", 99999);
+		$("body").addClass("uiIsLoading");
+	}
+	var loadingStallTimeout = setTimeout(function ()
+	{
+		BI_CustomEvent.AddListener("UI_Settings_Closing", uiSettingsClosingHandler);
+		var $btn = $('<div class="loadinglabel" style="text-align:center"><a href="javascript:void(0)" style="color:#8DF;padding:2px 0px">Open UI Settings</a></div>');
+		$btn.find("a").on("click", function ()
+		{
+			$("#loadingmsgwrapper").css("z-index", 999);
+			$("body").removeClass("uiIsLoading");
+			uiSettingsPanel.open();
+		});
+		$("#loadingmsgwrapper .loadingmsgcontent").append($btn);
+	}, 3000);
+
 	$(window).load(function ()
 	{
 		self.SetLoadedStatus("window");
@@ -31819,6 +31838,7 @@ function UISettingsPanel()
 			title: "UI Settings"
 			, overlayOpacity: 0.3
 			, closeOnOverlayClick: true
+			, onClosing: function () { BI_CustomEvent.Invoke("UI_Settings_Closing"); }
 		});
 
 		self.Refresh();
