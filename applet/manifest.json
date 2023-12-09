@@ -3,6 +3,11 @@
 	"name": "%%UI3_PWA_NAME%%",
 	"icons": [
 		{
+			"src": "logos/launcher-icon1024.webp",
+			"sizes": "1024x1024",
+			"type": "image/webp"
+		},
+		{
 			"src": "logos/launcher-icon128.webp",
 			"sizes": "128x128",
 			"type": "image/webp"
@@ -34,9 +39,9 @@
 			"purpose": "maskable"
 		},
 		{
-			"src": "logos/launcher-icon1024.webp",
-			"sizes": "1024x1024",
-			"type": "image/webp"
+			"src": "logos/launcher-icon512.png",
+			"sizes": "512x512",
+			"type": "image/png"
 		},
 		{
 			"src": "logos/launcher-icon48.png",
@@ -66,11 +71,6 @@
 		{
 			"src": "logos/launcher-icon168.png",
 			"sizes": "168x168",
-			"type": "image/png"
-		},
-		{
-			"src": "logos/launcher-icon512.png",
-			"sizes": "512x512",
 			"type": "image/png"
 		},
 		{
