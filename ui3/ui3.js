@@ -14247,7 +14247,14 @@ function SessionManager()
 	this.CanProfileUseOverrides = function (i)
 	{
 		if (typeof i === "undefined" || i === null)
+		{
 			i = genericQualityHelper.GetCurrentProfileIndex();
+			if (i < 0)
+			{
+				genericQualityHelper.QualityChoiceChanged('');
+				i = genericQualityHelper.GetCurrentProfileIndex();
+			}
+		}
 		var p = genericQualityHelper.GetProfileWithIndex(i);
 		if (p.vcodec === "jpeg")
 			return true;
@@ -22323,9 +22330,13 @@ function GenericQualityHelper()
 			if (self.profiles[i].name === settings.ui3_streamingQuality)
 			{
 				if (!self.profiles[i].IsCompatible())
+				{
+					toaster.Warning('Streaming Profile "' + settings.ui3_streamingQuality + '\" is not compatible with this browser instance.');
 					continue;
+				}
 				return i;
 			}
+		toaster.Warning('Streaming Profile "' + settings.ui3_streamingQuality + '" was not found.');
 		return -1;
 	}
 	this.GetAnyCompatibleProfile = function (didRestoreDefaults)
@@ -22418,7 +22429,7 @@ function GenericQualityHelper()
 	}
 	var NotifyQualitySelectionChanged = function (p)
 	{
-		toaster.Info("The active streaming profile has changed to " + p.GetNameEle().html(true), 3000);
+		toaster.Info("The active streaming profile has changed to " + p.GetNameEle().html(), 3000);
 	}
 	this.SetStreamingQualityDropdownBoxItems = function ()
 	{
