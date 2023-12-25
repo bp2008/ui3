@@ -818,7 +818,7 @@ function GetStatusAreaBarOptions()
 	return arr;
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Status Area", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Video Player (Advanced)", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Status Area", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -1014,6 +1014,10 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_uiSettings_category_Video_Player__Advanced_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_uiSettings_category_UI_Status_Sounds_visible"
 			, value: "1"
 		}
@@ -1135,14 +1139,6 @@ var defaultSettings =
 			, category: "General Settings"
 		}
 		, {
-			key: "ui3_doubleClick_behavior"
-			, value: "Recordings"
-			, inputType: "select"
-			, options: ["None", "Live View", "Recordings", "Both"]
-			, label: 'Double-Click to Fullscreen<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a></div>'
-			, category: "Video Player"
-		}
-		, {
 			key: "ui3_edge_fetch_bug_h264_enable"
 			, value: "0"
 			, inputType: "checkbox"
@@ -1190,32 +1186,11 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_html5_delay_compensation"
-			, value: HTML5DelayCompensationOptions.Normal
+			key: "ui3_doubleClick_behavior"
+			, value: "Recordings"
 			, inputType: "select"
-			, options: [HTML5DelayCompensationOptions.None, HTML5DelayCompensationOptions.Weak, HTML5DelayCompensationOptions.Normal, HTML5DelayCompensationOptions.Strong]
-			, label: 'HTML5 Video Delay Compensation <div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'HTML5 Video Delay Compensation\')">(learn more)</a></div>'
-			, preconditionFunc: Precondition_ui3_html5_delay_compensation
-			, category: "Video Player"
-		}
-		, {
-			key: "ui3_jpegSupersampling"
-			, value: 1
-			, minValue: 0.01
-			, maxValue: 2
-			, step: 0.01
-			, inputType: "range"
-			, label: 'Jpeg Video Supersampling Factor'
-			, changeOnStep: true
-			, hint: "(Default: 1)\n\nJpeg video frames loaded by UI3 will have their dimensions scaled by this amount.\n\nLow values save bandwidth, while high values improve quality slightly."
-			, category: "Video Player"
-		}
-		, {
-			key: "ui3_web_audio_autoplay_warning"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Warn if audio playback requires user input'
-			, hint: 'When set to "Yes", a full-page overlay will appear if camera audio playback requires user input. Otherwise, the audio icon will simply turn red.'
+			, options: ["None", "Live View", "Recordings", "Both"]
+			, label: 'Double-Click to Fullscreen<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a></div>'
 			, category: "Video Player"
 		}
 		, {
@@ -1227,34 +1202,20 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_download_snapshot_method"
-			, value: "Server"
-			, inputType: "select"
-			, options: ["Server", "Local (JPEG)", "Local (PNG)"]
-			, label: 'Source of snapshot downloads<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Local Snapshots\')">(learn more)</a></div>'
-			, onChange: OnChange_ui3_download_snapshot_method
+			key: "ui3_web_audio_autoplay_warning"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Warn at startup if audio playback requires user input'
+			, hint: 'When set to "Yes", a full-page overlay will appear if camera audio playback requires user input. Otherwise, the audio icon will simply turn red.'
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_comment_download_snapshot_local"
-			, value: ""
-			, inputType: "comment"
-			, comment: GenerateLocalSnapshotsComment
-			, preconditionFunc: Precondition_ui3_download_snapshot_local
-			, category: "Video Player"
-		}
-		, {
-			key: "ui3_download_snapshot_server_quality"
-			, value: 85
-			, minValue: 1
-			, maxValue: 100
-			, step: 1
-			, unitLabel: "%"
-			, inputType: "range"
-			, label: 'Server-sourced Snapshot Jpeg Quality'
-			, hint: 'Default: 85%'
-			, changeOnStep: false
-			, preconditionFunc: Precondition_ui3_download_snapshot_server
+			key: "ui3_show_picture_in_picture_button"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Picture-in-Picture Button'
+			, hint: 'Requires a supported browser and only works with the HTML5 player.' // Do not include "H.264 player" text, for filtering reasons
+			, onChange: OnChange_ui3_show_picture_in_picture_button
 			, category: "Video Player"
 		}
 		, {
@@ -1276,33 +1237,6 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_show_picture_in_picture_button"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: 'Picture-in-Picture Button'
-			, hint: 'Requires a supported browser and only works with the HTML5 player.' // Do not include "H.264 player" text, for filtering reasons
-			, onChange: OnChange_ui3_show_picture_in_picture_button
-			, category: "Video Player"
-		}
-		, {
-			key: "ui3_audio_codec"
-			, value: flac_supported ? "FLAC" : GetAudioCodecOptions()[0]
-			, inputType: "select"
-			, options: GetAudioCodecOptions()
-			, label: 'Audio Codec' + (!flac_supported ? '<div class="settingDesc">(FLAC unavailable in this browser)</div>' : '')
-			, onChange: OnChange_ui3_audio_codec
-			, category: "Video Player"
-		}
-		, {
-			key: "ui3_audio_buffer_ms"
-			, value: 700
-			, minValue: 0
-			, maxValue: 5000
-			, inputType: "number"
-			, label: 'Audio Buffer Size Milliseconds<div class="settingDesc">(max audio delay)</div>'
-			, category: "Video Player"
-		}
-		, {
 			key: "ui3_dynamicGroupLayout"
 			, value: "1"
 			, inputType: "checkbox"
@@ -1321,6 +1255,140 @@ var defaultSettings =
 			, changeOnStep: false
 			, onChange: OnChange_ui3_maxDynamicGroupImageDimension
 			, category: "Video Player"
+		}
+		, {
+			key: "ui3_comment_h264_acceptable_delay"
+			, value: ""
+			, inputType: "comment"
+			, comment: '<svg class="icon noflip" style="fill: rgb(255,128,0); width: 2em; height: 2em; float: right; margin-left: 10px;"><use xlink:href="#svg_mio_clock"></use></svg> An orange clock icon is shown when video delay exceeds warning thresholds:'
+			, preconditionFunc: Precondition_ui3_h264_choice
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_h264_net_delay_threshold"
+			, value: 2.5
+			, minValue: 0.05
+			, maxValue: 30
+			, step: 0.050
+			, inputType: "range"
+			, unitLabel: " sec"
+			, label: 'Network Delay Warning Threshold'
+			, changeOnStep: true
+			, hint: 'See "Stats for nerds" to monitor video delays.'
+			, preconditionFunc: Precondition_ui3_h264_net_delay_threshold
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_h264_html5_delay_threshold"
+			, value: 6.5
+			, minValue: 0.05
+			, maxValue: 30
+			, step: 0.050
+			, inputType: "range"
+			, unitLabel: " sec"
+			, label: 'Player Delay Warning Threshold'
+			, changeOnStep: true
+			, hint: 'See "Stats for nerds" to monitor video delays.  The HTML5 H.264 player inherently has more delay than other H.264 players, so its acceptable delay setting is stored separately.'
+			, preconditionFunc: Precondition_ui3_h264_html5_delay_threshold
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_h264_delay_threshold"
+			, value: 3
+			, minValue: 0.05
+			, maxValue: 30
+			, step: 0.050
+			, inputType: "range"
+			, unitLabel: " sec"
+			, label: 'Player Delay Threshold'
+			, changeOnStep: true
+			, hint: 'See "Stats for nerds" to monitor video delays.'
+			, preconditionFunc: Precondition_ui3_h264_delay_threshold
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_h264_reset_at_delay"
+			, value: 60
+			, minValue: 1
+			, maxValue: 180
+			, step: 1
+			, inputType: "range"
+			, unitLabel: " sec"
+			, label: 'Restart stream if delay exceeds'
+			, changeOnStep: true
+			, hint: 'The stream will restart if total delay (Network Delay + Player Delay) are above this limit.  See "Stats for nerds" to monitor video delays.'
+			, preconditionFunc: Precondition_ui3_h264_choice
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_html5_delay_compensation"
+			, value: HTML5DelayCompensationOptions.Normal
+			, inputType: "select"
+			, options: [HTML5DelayCompensationOptions.None, HTML5DelayCompensationOptions.Weak, HTML5DelayCompensationOptions.Normal, HTML5DelayCompensationOptions.Strong]
+			, label: 'HTML5 Video Delay Compensation <div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'HTML5 Video Delay Compensation\')">(learn more)</a></div>'
+			, preconditionFunc: Precondition_ui3_html5_delay_compensation
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_download_snapshot_method"
+			, value: "Server"
+			, inputType: "select"
+			, options: ["Server", "Local (JPEG)", "Local (PNG)"]
+			, label: 'Source of snapshot downloads<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Local Snapshots\')">(learn more)</a></div>'
+			, onChange: OnChange_ui3_download_snapshot_method
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_comment_download_snapshot_local"
+			, value: ""
+			, inputType: "comment"
+			, comment: GenerateLocalSnapshotsComment
+			, preconditionFunc: Precondition_ui3_download_snapshot_local
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_download_snapshot_server_quality"
+			, value: 85
+			, minValue: 1
+			, maxValue: 100
+			, step: 1
+			, unitLabel: "%"
+			, inputType: "range"
+			, label: 'Server-sourced Snapshot Jpeg Quality'
+			, hint: 'Default: 85%'
+			, changeOnStep: false
+			, preconditionFunc: Precondition_ui3_download_snapshot_server
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_audio_codec"
+			, value: flac_supported ? "FLAC" : GetAudioCodecOptions()[0]
+			, inputType: "select"
+			, options: GetAudioCodecOptions()
+			, label: 'Audio Codec' + (!flac_supported ? '<div class="settingDesc">(FLAC unavailable in this browser)</div>' : '')
+			, onChange: OnChange_ui3_audio_codec
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_audio_buffer_ms"
+			, value: 700
+			, minValue: 0
+			, maxValue: 5000
+			, inputType: "number"
+			, label: 'Audio Buffer Size Milliseconds<div class="settingDesc">(max audio delay)</div>'
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_jpegSupersampling"
+			, value: 1
+			, minValue: 0.01
+			, maxValue: 2
+			, step: 0.01
+			, inputType: "range"
+			, label: 'Jpeg Video Supersampling Factor'
+			, changeOnStep: true
+			, hint: "(Default: 1)\n\nJpeg video frames loaded by UI3 will have their dimensions scaled by this amount.\n\nLow values save bandwidth, while high values improve quality slightly."
+			, category: "Video Player (Advanced)"
 		}
 		, {
 			key: "ui3_playback_skipDeadAir"
@@ -17782,47 +17850,49 @@ function FetchH264VideoModule()
 		//}
 		var bufferedTime = h264_player.GetBufferedTime();
 		var netDelay = h264_player.GetNetworkDelay();
-		if (netDelay + bufferedTime > 60000)
+		var maxDelaySec = Clamp(parseFloat(settings.ui3_h264_reset_at_delay), 0, 9999);
+		if (netDelay + bufferedTime > maxDelaySec * 1000)
 		{
-			toaster.Warning("Video delay has exceeded 60 seconds. The stream is being automatically reinitialized.");
+			toaster.Warning("Video delay has exceeded " + maxDelaySec.toFloat(2) + " seconds. The stream is being automatically reinitialized.");
 			ReopenStreamAtCurrentSeekPosition();
 			return;
 		}
 		var delayed = false;
 
-		if (netDelay > 2000)
+		var uiSettingsDelayLinkout = 'You can <a href="javascript:uiSettingsPanel.open(\'threshold\')">adjust the delay thresholds in UI Settings</a>.';
+		if (netDelay > parseFloat(settings.ui3_h264_net_delay_threshold) * 1000)
 		{
 			delayed = true;
 			if (perf_warning_net_ticks++ > 0)
 			{
 				// Blue Iris appears to drop frames when it detects the network buffer getting too large, so this delay limit needs to be fairly low.
 				if (showCommonWarnings)
-					perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime. Consider changing the streaming quality.', 10000);
+					perf_warning_net = toaster.Warning('Your network connection is not fast enough to handle this stream in realtime. Consider changing the streaming quality. ' + uiSettingsDelayLinkout, 10000);
 			}
 		}
 		else
 			perf_warning_net_ticks = 0;
 		if (h264_player.isMsePlayer)
 		{
-			if (bufferedTime > h264_player.MaxBufferedTime)
+			if (bufferedTime > parseFloat(settings.ui3_h264_html5_delay_threshold) * 1000)
 			{
 				delayed = true;
 				if (perf_warning_cpu_ticks++ > 0)
 				{
 					if (showCommonWarnings)
-						perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which probably indicates a compatibility issue with the browser you are using. Please try a different browser, or open UI Settings and change the H.264 player to a different option.', 10000);
+						perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which may indicate a compatibility issue with the browser you are using. Please try a different browser, or <a href="javascript:uiSettingsPanel.open(\'H.264 Player\')">open UI Settings and change the H.264 player to a different option</a>. ' + uiSettingsDelayLinkout, 10000);
 				}
 			}
 			else
 				perf_warning_cpu_ticks = 0;
 		}
-		else if (bufferedTime > 3000)
+		else if (bufferedTime > parseFloat(settings.ui3_h264_delay_threshold) * 1000)
 		{
 			delayed = true;
 			if (perf_warning_cpu_ticks++ > 0)
 			{
 				if (showCommonWarnings)
-					perf_warning_cpu = toaster.Warning('This stream is becoming delayed because your CPU is not fast enough. Consider changing the streaming quality.', 10000);
+					perf_warning_cpu = toaster.Warning('This stream is becoming delayed because your CPU is not fast enough. Consider changing the streaming quality. ' + uiSettingsDelayLinkout, 10000);
 			}
 		}
 		else
@@ -19090,7 +19160,6 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	var mseReady = false;
 
 	this.isMsePlayer = true;
-	this.MaxBufferedTime = 6500;
 
 	var delayCompensation;
 	var badAutoplay = new BadAutoplayPreventionDetector();
@@ -32550,6 +32619,18 @@ function Precondition_ui3_streamingProfileBitRateMax()
 function Precondition_ui3_html5_delay_compensation()
 {
 	return (mse_mp4_h264_supported && currentH264Player === H264PlayerOptions.HTML5);
+}
+function Precondition_ui3_h264_net_delay_threshold()
+{
+	return any_h264_playback_supported;
+}
+function Precondition_ui3_h264_html5_delay_threshold()
+{
+	return (mse_mp4_h264_supported && currentH264Player === H264PlayerOptions.HTML5);
+}
+function Precondition_ui3_h264_delay_threshold()
+{
+	return (any_h264_playback_supported && currentH264Player !== H264PlayerOptions.HTML5);
 }
 function Precondition_ui3_download_snapshot_server()
 {
