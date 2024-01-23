@@ -6800,9 +6800,9 @@ var ptzPresetThumbLoader = new (function ()
 			return;
 		asyncThumbLoader = new AsyncPresetThumbnailDownloader(thumbLoaded, thumbError);
 	}
+	/** Call this when a PTZ camera is selected so the thumbnails can begin loading (unless they are already cached). */
 	this.NotifyPtzCameraSelected = function (cameraId)
 	{
-		/// <summary>Call this when a PTZ camera is selected so the thumbnails can begin loading (unless they are already cached).</summary>
 		if (!CameraIsEligible(cameraId))
 			return;
 
@@ -6835,9 +6835,9 @@ var ptzPresetThumbLoader = new (function ()
 			$ele.append(img);
 		});
 	}
+	/** Force-reloads a preset image from the server. */
 	this.ReloadPresetImage = function (cameraId, presetNumber)
 	{
-		/// <summary>Force-reloads a preset image from the server.</summary>
 		if (currentServer.isLoggingOut)
 			return false;
 
@@ -13069,9 +13069,11 @@ function ClipListDynamicTileLoader(clipsBodySelector, callbackCurrentDateFunc)
 		}
 		appearDisappearRegisteredObjects = newClips.concat(appearDisappearRegisteredObjects);
 	}
+	/**
+	 * Calculates new positions for all clip and date tiles in the list. Should be called after UI resizes and after registering new objects.
+	 */
 	this.resizeClipList = function (HeightOfOneClipTilePx, HeightOfOneDateTilePx)
 	{
-		/// <summary>Calculates new positions for all clip and date tiles in the list. Should be called after UI resizes and after registering new objects.</summary>
 		nextY = 0;
 		var scrollTop = $clipsbody.scrollTop();
 		var topmostVisibleElement = null;
@@ -14911,9 +14913,11 @@ function VideoPlayerController()
 	// Prioritize Triggered
 	var pt_currentCam = null;
 
+	/**
+	 * Call this from mouse or touch events that conflict with the VideoPlayer's double-click helper, and past events will no longer count toward new clicks or drags.
+	 */
 	this.suppressMouseHelper = function (invalidateNextEvent)
 	{
-		/// <summary>Call this from mouse or touch events that conflict with the VideoPlayer's double-click helper, and past events will no longer count toward new clicks or drags.</summary>
 		if (mouseHelper)
 			mouseHelper.Invalidate(invalidateNextEvent);
 	}
@@ -16955,9 +16959,9 @@ function JpegVideoModule()
 		}
 	}
 	var getNewImageTimeout = null;
+	/** Calls GetNewImage after increasing delay, to reduce CPU usage a bit while idling */
 	var GetNewImageAfterTimeout = function ()
 	{
-		// <summary>Calls GetNewImage after increasing delay, to reduce CPU usage a bit while idling</summary>
 		getNewImageTimeout = setTimeout(GetNewImage, Math.min(500, 25 + 2 * repeatedSameImageURLs++));
 	}
 	var ClearGetNewImageTimeout = function ()
@@ -18270,9 +18274,11 @@ function RenderScheduler(renderFunc, dropFunc, averageRenderTime)
 		}
 		MaintainSchedule();
 	}
+	/**
+	 * Renders or queues a frame, if any are available. This method will call itself if necessary after rendering until the frame queue is empty.
+	 */
 	var MaintainSchedule = function ()
 	{
-		/// <summary>Renders or queues a frame, if any are available. This method will call itself if necessary after rendering until the frame queue is empty.</summary>
 		clearTimeout(timeout);
 		if (frameQueue.length > 0)
 		{
@@ -18307,14 +18313,14 @@ function RenderScheduler(renderFunc, dropFunc, averageRenderTime)
 	{
 		return (performance.now() - playbackClockStart) + playbackClockOffset;
 	}
+	/** Returns a reference to the first item in the queue. Do not call if the queue is empty. */
 	var PeekOldest = function ()
 	{
-		/// <summary>Returns a reference to the first item in the queue. Do not call if the queue is empty.</summary>
 		return frameQueue[0];
 	}
+	/** Removes and returns a reference to the first item in the queue. Do not call if the queue is empty. */
 	var DequeueOldest = function ()
 	{
-		/// <summary>Removes and returns a reference to the first item in the queue. Do not call if the queue is empty.</summary>
 		return frameQueue.splice(0, 1)[0];
 	}
 	this.Reset = function (newAverageRenderTime)
@@ -18663,29 +18669,29 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	{
 		return finishedFrameCount;
 	}
+	/**
+	 * Returns the number of buffered video frames that have not yet been rendered. 
+	 * If the system has sufficient computational power, this number should remain close to 0.
+	 */
 	this.GetBufferedFrameCount = function ()
 	{
-		/// <summary>
-		/// Returns the number of buffered video frames that have not yet been rendered. 
-		/// If the system has sufficient computational power, this number should remain close to 0.
-		/// </summary>
 		return acceptedFrameCount - finishedFrameCount;
 	}
+	/**
+	 * Returns the approximate number of milliseconds of video delay caused by insufficient network speed.
+	 * If the system has sufficient network bandwidth, this number should remain close to 0.
+	 * One or two frames worth of delay is nothing to worry about.
+	 */
 	this.GetNetworkDelay = function ()
 	{
-		/// <summary>
-		/// Returns the approximate number of milliseconds of video delay caused by insufficient network speed.
-		/// If the system has sufficient network bandwidth, this number should remain close to 0.
-		/// One or two frames worth of delay is nothing to worry about.
-		/// </summary>
 		return netDelayCalc.Calc();
 	}
+	/**
+	 * Returns the number of milliseconds of buffered video frames, calculated as timestampLastAcceptedFrame - timestampLastRenderedFrame.
+	 * If the system has sufficient computational power, this number should remain close to 0.
+	 */
 	this.GetBufferedTime = function ()
 	{
-		/// <summary>
-		/// Returns the number of milliseconds of buffered video frames, calculated as timestampLastAcceptedFrame - timestampLastRenderedFrame.
-		/// If the system has sufficient computational power, this number should remain close to 0.
-		/// </summary>
 		return timestampLastAcceptedFrame - timestampLastRenderedFrame;
 	}
 	this.Flush = function ()
@@ -21047,9 +21053,9 @@ function CornerStatusIcons()
 	{
 		return settings.getItem("ui3_icon_" + iconName) !== "0";
 	}
+	/** This can be called at any time to recreate icons from iconList, e.g. if new icons were added to the array. */
 	this.ReInitialize = function ()
 	{
-		/// <summary>This can be called at any time to recreate icons from iconList, e.g. if new icons were added to the array.</summary>
 		var $container = $("#cornerStatusIcons");
 		$container.empty();
 		iconMap = new FasterObjectMap();
@@ -22198,9 +22204,9 @@ function StreamingProfile()
 		}
 		return $ele;
 	}
+	/** Returns the 6-digit hex string representing the abbreviation color. */
 	this.GetAbbrColor = function ()
 	{
-		/// <summary>Returns the 6-digit hex string representing the abbreviation color.</summary>
 		if (self.aClr && self.aClr.length === 6)
 			return self.aClr;
 		else if (self.aClr && self.aClr.length === 7)
@@ -22454,9 +22460,9 @@ function GenericQualityHelper()
 		self.RestoreDefaultProfiles();
 		return self.GetAnyCompatibleProfile(true);
 	}
+	/** Returns the compatible profile with the lowest non-negative output from valuationFn. */
 	this.FindBestProfile = function (vcodec, valuationFn)
 	{
-		/// <summary>Returns the compatible profile with the lowest non-negative output from valuationFn.</summary>
 		var bestProfile = null;
 		var valueOfBest = -1;
 		for (var i = 0; i < self.profiles.length; i++)
@@ -26106,9 +26112,9 @@ function ExportListDialog()
 ///////////////////////////////////////////////////////////////
 // Clientside Clip Export Dialog //////////////////////////////
 ///////////////////////////////////////////////////////////////
+/** This dialog controls the actual export operation and lacks a normal close button. */
 function ClientsideClipExportDialog(clipData, startTimeMs, endTimeMs, includeAudio)
 {
-	// <summary>This dialog controls the actual export operation and lacks a normal close button.</summary>
 	var self = this;
 	var durationMs = endTimeMs - startTimeMs;
 	var userHasDownloadedAVI = false;
@@ -26372,9 +26378,11 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 	else
 		beginRecording();
 }
+/**
+ * As of BI 4.7.4.4, seeking with "time" does not work if record=1, so this method performs a low-cost seek without the record argument and then the playback object will already be at the correct position, or close enough.
+ */
 function DoExportRecordingOffsetWorkaround(callbackMethod, path, startTimeMs)
 {
-	// <summary>As of BI 4.7.4.4, seeking with "time" does not work if record=1, so this method performs a low-cost seek without the record argument and then the playback object will already be at the correct position, or close enough.</summary>
 	var anyCallback = function ()
 	{
 		if (callbackMethod)
@@ -27572,9 +27580,9 @@ function PcmAudioPlayer()
 	}
 	NewContext();
 }
+/** This object provides a fake implementation to prevent script errors when a real implementation is unavailable. */
 function FakeAudioContext_Dummy()
 {
-	/// <summary>This object provides a fake implementation to prevent script errors when a real implementation is unavailable.</summary>
 	this.isFakeAudioContext = true;
 	this.createGain = function () { }
 	this.onstatechange = null;
@@ -29392,11 +29400,11 @@ function BitRateCalculator()
 	this.GetBPS = function ()
 	{
 		cleanup();
-		return sum;
+		return sum / (self.averageOverMs / 1000);
 	}
 	this.GetBestGuess = function ()
 	{
-		return best;
+		return best / (self.averageOverMs / 1000);
 	}
 	var cleanup = function ()
 	{
@@ -29413,9 +29421,9 @@ function BitRateDataPoint(bytes)
 ///////////////////////////////////////////////////////////////
 // Efficient Rolling Average Calculator ///////////////////////
 ///////////////////////////////////////////////////////////////
+/** Calculates rolling averages. */
 function RollingAverage(MAXSAMPLES)
 {
-	/// <summary>Calculates rolling averages.</summary>
 	if (!MAXSAMPLES)
 		MAXSAMPLES = 10;
 	var tickindex = 0;
@@ -29595,9 +29603,9 @@ function SessionTimeout()
 	{
 		return parseFloat(settings.ui3_timeout) * 60 * 1000;
 	}
+	/** Returns the number of milliseconds until idle timeout occurs, or the string "Idle timeout is not enabled". */
 	this.GetMsUntilTimeout = function ()
 	{
-		/// <summary>Returns the number of milliseconds until idle timeout occurs, or the string "Idle timeout is not enabled".</summary>
 		if (getTimeoutMs() > 0)
 		{
 			var waited = performance.now() - timerStarted;
@@ -30619,9 +30627,9 @@ function BITMAPINFOHEADER(buf)
 	this.biClrUsed = ReadUInt32LE(buf, offsetWrapper);
 	this.biClrImportant = ReadUInt32LE(buf, offsetWrapper);
 }
+/** This is only loosely based on the WAVEFORMATEX structure. */
 function WAVEFORMATEX(buf)
 {
-	/// <summary>This is only loosely based on the WAVEFORMATEX structure.</summary>
 	this.raw = buf;
 	var offsetWrapper = { offset: 0 };
 	if (buf.length >= 14)
@@ -30713,9 +30721,9 @@ function BIAudioFrame(buf, formatHeader)
 ///////////////////////////////////////////////////////////////
 // GhettoStream ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+/** A class which consumes Uint8Array objects and produces Uint8Array objects of whatever size you want by concatenating the inputs as needed. */
 function GhettoStream()
 {
-	// <summary>A class which consumes Uint8Array objects and produces Uint8Array objects of whatever size you want by concatenating the inputs as needed.</summary>
 	var self = this;
 	var dataQueue = new Queue();
 	var totalCachedBytes = 0;
@@ -30723,15 +30731,15 @@ function GhettoStream()
 	{
 		return totalCachedBytes;
 	};
+	/** Writes the specified Uint8Array to the stream so it can be read later. */
 	this.Write = function (newArray)
 	{
-		/// <summary>Writes the specified Uint8Array to the stream so it can be read later.</summary>
 		dataQueue.enqueue(newArray);
 		totalCachedBytes += newArray.length;
 	};
+	/** Reads the specified number of bytes from the stream, returning null if not enough bytes are available yet. */
 	this.Read = function (byteCount)
 	{
-		/// <summary>Reads the specified number of bytes from the stream, returning null if not enough bytes are available yet.</summary>
 		if (byteCount > totalCachedBytes)
 			return null;
 
@@ -31557,20 +31565,22 @@ function DragAndDropHelper($list, onItemMoved)
 ///////////////////////////////////////////////////////////////
 // Mouse Event Helper / Double Click Helper ///////////////////
 ///////////////////////////////////////////////////////////////
+/**
+ * Handles double-click events in a consistent way between touch and non-touch devices.
+ * @param {Object} $ele jQuery object containing elements to listen for clicks on.
+ * @param {Object} $excludeRecordings jQuery object containing elements to ignore clicks on while viewing a recording (maybe these are nested inside [$ele]). May be null.
+ * @param {Object} $excludeLive jQuery object containing elements to ignore clicks on while viewing live video (maybe these are nested inside [$ele]). Also, cbOnDragStart will not be called when the drag starts in one of these elements regardless of playback mode.  May be null.
+ * @param {Function} excludeFunc Called by all mouse/touch down/up events; if this returns true, the event is excluded from consideration for clicks and drag starts.
+ * @param {Function} cbOnSingleClick Callback function that is called when a single click occurs.  The first argument is the event object, and the second argument is a boolean indicating whether the single click is confirmed (If false, it may be part of a future double-click.  If true, it is to be treated as a standalone single-click.).
+ * @param {Function} cbOnDoubleClick Callback function that is called when a double click occurs.  The first argument is the event object.
+ * @param {Function} cbDragStart Called when dragging begins, which happens after a non-excluded mouse/touch down event followed by cursor movement exceeding mouseMoveTolerance.
+ * @param {Function} cbDragMove Called when the cursor moves while a button is down.
+ * @param {Function} cbDragEnd Called when dragging ends, which is on any mouse or touch up event whether the drag start callback was called or not.
+ * @param {Number} doubleClickTimeMS (Optional; default: 300) Maximum milliseconds between clicks to consider two clicks a double-click.
+ * @param {Number} mouseMoveTolerance (Optional; default: 5) Maximum number of pixels the mouse can move before it is considered a drag instead of a click.
+ */
 function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, cbOnSingleClick, cbOnDoubleClick, cbDragStart, cbDragMove, cbDragEnd, doubleClickTimeMS, mouseMoveTolerance)
 {
-	/// <summary>Handles double-click events in a consistent way between touch and non-touch devices.</summary>
-	/// <param name="$ele">jQuery object containing elements to listen for clicks on.</param>
-	/// <param name="$excludeRecordings">jQuery object containing elements to ignore clicks on while viewing a recording (maybe these are nested inside [$ele]). May be null.</param>
-	/// <param name="$excludeLive">jQuery object containing elements to ignore clicks on while viewing live video (maybe these are nested inside [$ele]). Also, cbOnDragStart will not be called when the drag starts in one of these elements regardless of playback mode.  May be null.</param>
-	/// <param name="excludeFunc">Called by all mouse/touch down/up events; if this returns true, the event is excluded from consideration for clicks and drag starts.</param>
-	/// <param name="cbOnSingleClick">Callback function that is called when a single click occurs.  The first argument is the event object, and the second argument is a boolean indicating whether the single click is confirmed (If false, it may be part of a future double-click.  If true, it is to be treated as a standalone single-click.).</param>
-	/// <param name="cbOnDoubleClick">Callback function that is called when a double click occurs.  The first argument is the event object.</param>
-	/// <param name="cbDragStart">Called when dragging begins, which happens after a non-excluded mouse/touch down event followed by cursor movement exceeding mouseMoveTolerance.</param>
-	/// <param name="cbDragMove">Called when the cursor moves while a button is down.</param>
-	/// <param name="cbDragEnd">Called when dragging ends, which is on any mouse or touch up event whether the drag start callback was called or not.</param>
-	/// <param name="doubleClickTimeMS">(Optional; default: 300) Maximum milliseconds between clicks to consider two clicks a double-click.</param>
-	/// <param name="mouseMoveTolerance">(Optional; default: 5) Maximum number of pixels the mouse can move before it is considered a drag instead of a click.</param>
 	var self = this;
 	if (!$ele || $ele.length < 1)
 		return;
@@ -31815,9 +31825,9 @@ function MouseEventHelper($ele, $excludeRecordings, $excludeLive, excludeFunc, c
 			setTimeout(clearExclusion, 0);
 		}
 	}
+	/** Sets the Excluded flag on all logged mouse events, causing them to not count toward clicks or double clicks. */
 	this.Invalidate = function (invalidateNextEvent)
 	{
-		/// <summary>Sets the Excluded flag on all logged mouse events, causing them to not count toward clicks or double clicks.</summary>
 		lastMouseUp1.Excluded = lastMouseUp2.Excluded = lastMouseDown1.Excluded = lastMouseDown2.Excluded = true;
 		excludeNextEvent = invalidateNextEvent;
 		clearTimeout(singleClickTimeout);

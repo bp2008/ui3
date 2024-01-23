@@ -12,21 +12,21 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 	var MAX_RIFF_SIZE = 1073741824; // Maximum size of one chunk
 	var AVI_INDEX_OF_CHUNKS = 1; // 8-bit flag value for bIndexType in AVISTDINDEX.
 
+	/**
+		32 bit chunk ID
+		Can be any 4-character ASCII string, however some chunk IDs are required or common in AVI
+		"avih" = MainAVIHeader, appearing in the LIST "hdrl" chunk.
+		"JUNK" = garbage data, essentially free space which can be used later when rewriting the AVI headers after finished writing the audio/video frames.
+		For audio/video frames, this is a chunk id: 2 hex digits specifying stream number and 2 letters specifying the data:
+			"db" = video (uncompressed)
+			"dc" = video (compressed)
+			"wb" = audio
+			"tx" = text
+		The "db" and "dc" terms only loosely refer to compression.  H.264 i-frames for example can be listed as "db".
+		"ix##" can be used to define index blocks which appear in "movi" list blocks just like frame blocks appear in there.
+	 */
 	function CHUNK(fourCC)
 	{
-		/// <summary>
-		/// 32 bit chunk ID
-		/// Can be any 4-character ASCII string, however some chunk IDs are required or common in AVI
-		/// "avih" = MainAVIHeader, appearing in the LIST "hdrl" chunk.
-		/// "JUNK" = garbage data, essentially free space which can be used later when rewriting the AVI headers after finished writing the audio/video frames.
-		/// For audio/video frames, this is a chunk id: 2 hex digits specifying stream number and 2 letters specifying the data 
-		///		"db" = video (uncompressed)
-		///		"dc" = video (compressed)
-		///		"wb" = audio
-		///		"tx" = text
-		/// The "db" and "dc" terms only loosely refer to compression.  H.264 i-frames for example can be listed as "db".
-		/// "ix##" can be used to define index blocks which appear in "movi" list blocks just like frame blocks appear in there.
-		/// </summary>
 		this.dwFourCC = fourCC;
 		this.dwSize = 0; // 32 bit; not valid until the chunk is already serialized.
 		this.data = null; // UInt8Array (byte array) or object implementing SerializeToGhettoStream.  Typically contains headers or video/audio data or index entries.
@@ -68,43 +68,45 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 				stream.Write(new Uint8Array(1));
 		};
 	}
-	// LIST is just a chunk where the first 4 bytes of the data section are kept separately from the byte array.
+	// 
+	/**
+		LIST is just a chunk where the first 4 bytes of the data section are kept separately from the byte array.
+
+		32 bit list type
+		dwListType can have many different values.
+
+		"AVI " (note the space after "AVI")
+		Type of first RIFF-List chunk in the AVI file.
+
+		"hdrl"
+		Header list, this is the first child of the first RIFF in the AVI file, and contains one "avih", one or more "strl" (the number of which must match avih's dwStreams property), one "odml", optionally followed by a "JUNK" chunk.
+
+		"strl"
+		Stream list which describes a stream.
+
+		"odml"
+		ODMLExtendedAVIHeader wrapper list
+
+		"dmlh"
+		ODMLExtendedAVIHeader
+
+		"AVIX"
+		Type of all following RIFF-List chunks in the AVI file.  By utilizing multiple AVIX chunks, an AVI can exceed the traditional 1 GB limit.
+
+		"movi"
+		List of audio/video frames.  Located in "AVI " or "AVIX" lists.
+
+		"idx1"
+		Optional index chunk telling where in the file each of the A/V frames are.  Helps with seeking.  This chunk simply contains a dump of 
+
+		"indx"
+		Index of indexes (points at multiple indexes present throughout the AVI file).  Also known as the "Super Index".
+	 */
 	function LIST(fourCC, listType)
 	{
 		// Prefix 'dw' is DWORD (4 bytes)
 		this.dwFourCC = fourCC; // 32 bit, "RIFF" (RIFF-List) or "LIST" (List)
 		this.dwSize = 0; // 32 bit; not valid until the chunk is already serialized.
-		/// <summary>
-		/// 32 bit list type
-		/// dwListType can have many different values.
-		///
-		/// "AVI " (note the space after "AVI")
-		/// Type of first RIFF-List chunk in the AVI file.
-		///
-		/// "hdrl"
-		/// Header list, this is the first child of the first RIFF in the AVI file, and contains one "avih", one or more "strl" (the number of which must match avih's dwStreams property), one "odml", optionally followed by a "JUNK" chunk.
-		///
-		/// "strl"
-		/// Stream list which describes a stream.
-		///
-		/// "odml"
-		/// ODMLExtendedAVIHeader wrapper list
-		///
-		/// "dmlh"
-		/// ODMLExtendedAVIHeader
-		///
-		/// "AVIX"
-		/// Type of all following RIFF-List chunks in the AVI file.  By utilizing multiple AVIX chunks, an AVI can exceed the traditional 1 GB limit.
-		///
-		/// "movi"
-		/// List of audio/video frames.  Located in "AVI " or "AVIX" lists.
-		///
-		/// "idx1"
-		/// Optional index chunk telling where in the file each of the A/V frames are.  Helps with seeking.  This chunk simply contains a dump of 
-		///
-		/// "indx"
-		/// Index of indexes (points at multiple indexes present throughout the AVI file).  Also known as the "Super Index".
-		/// </summary>
 		this.dwListType = listType;
 		this.children = new Array(); // The serialized binary size of this should equal dwSize - 4 (because dwListType is included in dwSize)
 		this.offset = -1;
@@ -340,9 +342,11 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 	///////////////////////////////////////////////////////////////
 	// GhettoStream ///////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////
+	/**
+	 * A class which consumes Uint8Array objects and produces Uint8Array objects of whatever size you want by concatenating the inputs as needed.
+	 */
 	function GhettoStream()
 	{
-		// <summary>A class which consumes Uint8Array objects and produces Uint8Array objects of whatever size you want by concatenating the inputs as needed.</summary>
 		var self = this;
 		var dataQueue = new Queue();
 		var totalCachedBytes = 0;
@@ -350,15 +354,15 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 		{
 			return totalCachedBytes;
 		};
+		/** Writes the specified Uint8Array to the stream so it can be read later. */
 		this.Write = function (newArray)
 		{
-			/// <summary>Writes the specified Uint8Array to the stream so it can be read later.</summary>
 			dataQueue.enqueue(newArray);
 			totalCachedBytes += newArray.length;
 		};
+		/** Reads the specified number of bytes from the stream, returning null if not enough bytes are available yet. */
 		this.Read = function (byteCount)
 		{
-			/// <summary>Reads the specified number of bytes from the stream, returning null if not enough bytes are available yet.</summary>
 			if (byteCount > totalCachedBytes)
 				return null;
 
@@ -576,9 +580,9 @@ function AVIEncoder(videoFourCC, bi /* BitmapInfoHeader */, audioFourCC, wf /* W
 		movi.children.push(chunk);
 		audioSampleCount += frameData.length / wf.wBitsPerSample.dwSampleSize;
 	};
+	/** Finishes the AVI structure in memory and serializes it to a Uint8Array, which is returned. */
 	this.FinishAndGetUint8Array = function (FPS)
 	{
-		// <summary>Finishes the AVI structure in memory and serializes it to a Uint8Array, which is returned.</summary>
 		return SerializeAVIStructure(FPS);
 	};
 }
