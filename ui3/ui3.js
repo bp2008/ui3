@@ -29601,7 +29601,10 @@ function SessionTimeout()
 
 	var getTimeoutMs = function ()
 	{
-		return parseFloat(settings.ui3_timeout) * 60 * 1000;
+		var ms = parseFloat(settings.ui3_timeout) * 60 * 1000;
+		if (ms > 0 && ms < 30000)
+			return 30000;
+		return ms;
 	}
 	/** Returns the number of milliseconds until idle timeout occurs, or the string "Idle timeout is not enabled". */
 	this.GetMsUntilTimeout = function ()
