@@ -14040,14 +14040,19 @@ function SessionManager()
 
 		if (permission_clips)
 		{
-			$("#topbar_tab_clips,#topbar_tab_timeline,#open_all_clips_btn,#open_alerts_btn").show();
+			$("#topbar_tab_clips,#topbar_tab_timeline").show();
 		}
 		else
 		{
-			$("#topbar_tab_clips,#topbar_tab_timeline,#open_all_clips_btn,#open_alerts_btn").hide();
+			$("#topbar_tab_clips,#topbar_tab_timeline").hide();
 			if (currentPrimaryTab != "live")
 				$("#topbar_tab_live").click();
 		}
+
+		OnChange_ui3_topbar_allclips_shortcut_show();
+		OnChange_ui3_topbar_alerts_shortcut_show();
+		OnChange_ui3_topbar_alerts_confirmed_shortcut_show();
+		OnChange_ui3_topbar_alerts_canceled_shortcut_show();
 	}
 	/**
 	 * Gets the session ID that is currently used for API and video access.
@@ -32566,28 +32571,28 @@ function OnChange_ui3_time24hour()
 }
 function OnChange_ui3_topbar_allclips_shortcut_show()
 {
-	if (settings.ui3_topbar_allclips_shortcut_show === "1")
-		$("#open_all_clips_btn").removeClass('hidden');
+	if (sessionManager.HasPermission_Clips && settings.ui3_topbar_allclips_shortcut_show === "1")
+		$("#open_all_clips_btn").show();
 	else
-		$("#open_all_clips_btn").addClass('hidden');
+		$("#open_all_clips_btn").hide();
 }
 function OnChange_ui3_topbar_alerts_shortcut_show()
 {
-	if (settings.ui3_topbar_alerts_shortcut_show === "1")
+	if (sessionManager.HasPermission_Clips && settings.ui3_topbar_alerts_shortcut_show === "1")
 		$("#open_alerts_btn").show();
 	else
 		$("#open_alerts_btn").hide();
 }
 function OnChange_ui3_topbar_alerts_canceled_shortcut_show()
 {
-	if (settings.ui3_topbar_alerts_canceled_shortcut_show === "1")
+	if (sessionManager.HasPermission_Clips && settings.ui3_topbar_alerts_canceled_shortcut_show === "1")
 		$("#open_alerts_canceled_btn").show();
 	else
 		$("#open_alerts_canceled_btn").hide();
 }
 function OnChange_ui3_topbar_alerts_confirmed_shortcut_show()
 {
-	if (settings.ui3_topbar_alerts_confirmed_shortcut_show === "1")
+	if (sessionManager.HasPermission_Clips && settings.ui3_topbar_alerts_confirmed_shortcut_show === "1")
 		$("#open_alerts_confirmed_btn").show();
 	else
 		$("#open_alerts_confirmed_btn").hide();
