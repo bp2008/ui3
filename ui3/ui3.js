@@ -10228,6 +10228,14 @@ function ExportControls()
 		// call global resized
 		resized();
 	}
+	this.SetStartTime = function (percent)
+	{
+		exportOffsetStart.setPosition(percent);
+	}
+	this.SetEndTime = function (percent)
+	{
+		exportOffsetEnd.setPosition(percent);
+	}
 	this.Disable = function ()
 	{
 		if (!controlsEnabled)
@@ -10265,6 +10273,7 @@ function ExportControls()
 	{
 		exportOffsetStart.setZIndex(1);
 		exportOffsetEnd.setZIndex(1);
+		control.setZIndex(2);
 	}
 	Initialize();
 }
@@ -10406,7 +10415,6 @@ function ExportOffsetControl($handle, defaultPolePosition, offsetChanged, onFocu
 			videoPlayer.Playback_Pause();
 		if (typeof onFocused === "function")
 			onFocused(self);
-		this.setZIndex(2);
 	}
 	this.mouseMove = function (e)
 	{
@@ -23483,6 +23491,8 @@ function CanvasContextMenu()
 			case "downloadclip":
 				return true;
 			case "convertexport":
+			case "set_start_frame":
+			case "set_end_frame":
 				if (lastRecordContextMenuSelectedClip)
 				{
 					var unexportableReason = clipLoader.GetUnexportableReason(lastRecordContextMenuSelectedClip);
@@ -23491,6 +23501,10 @@ function CanvasContextMenu()
 					else
 						exportControls.Enable(lastRecordContextMenuSelectedClip.recId);
 				}
+				if (this.data.alias === "set_start_frame")
+					exportControls.SetStartTime(videoPlayer.GetClipPlaybackPositionPercent());
+				else if (this.data.alias === "set_end_frame")
+					exportControls.SetEndTime(videoPlayer.GetClipPlaybackPositionPercent());
 				break;
 			case "closeclip":
 				clipLoader.CloseCurrentClip();
@@ -23559,10 +23573,13 @@ function CanvasContextMenu()
 				{ text: "Open image in new tab", icon: "#svg_mio_Tab", iconClass: "noflip", alias: "opennewtab", action: onRecordContextMenuAction }
 				, { text: '<div id="cmroot_recordview_downloadbutton_findme" style="display:none"></div>Save image to disk', icon: "#svg_x5F_Snapshot", alias: "saveas", action: onRecordContextMenuAction }
 				, { text: '<span id="cmroot_recordview_downloadclipbutton">Download clip</span>', icon: "#svg_x5F_Download", alias: "downloadclip", action: onRecordContextMenuAction }
-				, { text: 'Convert/export', icon: "#svg_mio_launch", iconClass: "noflip", alias: "convertexport", action: onRecordContextMenuAction }
 				, { text: "Copy image address", icon: "#svg_mio_copy", iconClass: "noflip", alias: "copyimageaddress", action: onRecordContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "<span id=\"contextMenuClipName\">Clip Name</span>", icon: "", alias: "clipname" }
+				, { type: "splitLine" }
+				, { text: 'Convert/export', icon: "#svg_mio_launch", iconClass: "noflip", alias: "convertexport", action: onRecordContextMenuAction }
+				, { text: "Set start frame", icon: "#svg_mio_download", iconClass: "noflip rotate90 setStartFrame", alias: "set_start_frame", action: onRecordContextMenuAction }
+				, { text: "Set end frame", icon: "#svg_mio_download", iconClass: "noflip rotate270 setEndFrame", alias: "set_end_frame", action: onRecordContextMenuAction }
 				, { type: "splitLine" }
 				, ThreeStateMenuItem.Create("motionoverlays", "Motion overlays", onRecordContextMenuAction)
 				, ThreeStateMenuItem.Create("textoverlays", "Text/graphic overlays", onRecordContextMenuAction)
