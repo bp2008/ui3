@@ -9878,6 +9878,11 @@ function SeekBar()
 		}
 		var seekhintLabelHtml = msToTime(seekHintMs, msec < 30000 ? 1 : 0);
 		var clipData = clipLoader.GetClipFromId(videoPlayer.Loading().image.uniqueId);
+		if (!clipData)
+		{
+			console.error("updateSeekHint could not find clipData for ID " + videoPlayer.Loading().image.uniqueId);
+			return;
+		}
 		if (!clipLoader.ClipLikelyHasGaps(clipData))
 			seekhintLabelHtml = seekhintLabelHtml + '<div class="seekTimeReal">' + GetTimeStr(new Date(clipData.clipStartDate.getTime() + seekHintMs)) + '</div>';
 		seekhint_label.html(seekhintLabelHtml);
