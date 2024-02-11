@@ -7120,9 +7120,9 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 						processed.alerts.push({
 							time: timeOffset + (a.x1 * msecpp),
 							len: (a.x2 - a.x1) * msecpp,
-							isFlag: (a.type & BIDBFLAG_FLAGGED) > 0,
-							isPerson: (a.type & BIDBFLAG_AI_PERSON) > 0,
-							isVehicle: (a.type & BIDBFLAG_AI_VEHICLE) > 0,
+							isFlag: (a.type & BIDBFLAG.FLAGGED) > 0,
+							isPerson: (a.type & BIDBFLAG.AI_PERSON) > 0,
+							isVehicle: (a.type & BIDBFLAG.AI_VEHICLE) > 0,
 							tracks: a.tracks,
 							recId: a.record ? GetRecIdFromPath(a.record) : undefined
 						});
@@ -10202,7 +10202,7 @@ function ExportControls()
 
 		var startTime = 0;
 		var endTime = 1;
-		if ((clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) !== 0)
+		if ((clipData.flags & BIDBFLAG.ALERT_OFFSETTIME) !== 0)
 		{
 			startTime = clipData.offsetMs / (fileDuration - 1);
 			endTime = (clipData.offsetMs + clipData.roughLengthMs) / (fileDuration - 1);
@@ -10690,7 +10690,7 @@ function ClipData(clip)
 	clipData.alertPath = clip.path; // Alert path if this is an alert, otherwise just another copy of the clip path.
 	clipData.offsetMs = clip.offset ? clip.offset : 0;
 	clipData.flags = clip.flags;
-	clipData.audio = (clip.flags & BIDBFLAG_AUDIO) > 0;
+	clipData.audio = (clip.flags & BIDBFLAG.AUDIO) > 0;
 	clipData.date = new Date(clip.date * 1000);
 	clipData.displayDate = GetServerDate(clipData.date);
 	clipData.colorHex = BlueIrisColorToCssColor(clip.color);
@@ -11461,8 +11461,8 @@ function ClipLoader(clipsBodySelector)
 				+ '</div>'
 				+ '<div class="clipcolorbar" style="background-color: #' + clipData.colorHex + ';"></div>'
 				+ '<div class="clipdesc"><div class="cliptime">' + timeStr + '</div><div class="clipcam">' + camName + '</div></div>'
-				+ '<div class="clipIconWrapper ' + GetClipIconClasses(clipData) + '">'
-				+ GetClipIcons(clipData)
+				+ '<div class="clipIconWrapper">'
+				+ clipIcons.getIconHtmlForClipTile(clipData)
 				+ '</div>'
 				+ '</div>');
 			$clipsbody.append($clip);
@@ -11779,92 +11779,6 @@ function ClipLoader(clipsBodySelector)
 			return;
 		exportControls.Enable(cli.uniqueId);
 	}
-	var GetClipIconClasses = function (clipData)
-	{
-		var classes = [];
-		if ((clipData.flags & BIDBFLAG_FLAGGED) > 0)
-			classes.push(GetClipIconClass("flag"));
-		if ((clipData.flags & BIDBFLAG_PROTECTED) > 0)
-			classes.push(GetClipIconClass("protect"));
-		if (clipData.isNew)
-			classes.push(GetClipIconClass("is_new"));
-		if ((clipData.flags & BIDBFLAG_AI_CONFIRMED_X) > 0)
-			classes.push(GetClipIconClass("trigger_sentry"));
-		return classes.join(" ");
-	}
-	var GetClipIconClass = function (name)
-	{
-		return "icon_" + name;
-	}
-	var GetClipIcons = function (clipData)
-	{
-		var icons = [];
-		if (settings.ui3_clipicon_trigger_sentry == "1")
-			icons.push(self.GetClipIcon("trigger_sentry"));
-		if ((clipData.flags & BIDBFLAG_AI_OCCUPIED_X) > 0 && settings.ui3_clipicon_trigger_sentry_occupied == "1")
-			icons.push(self.GetClipIcon("trigger_sentry_occupied"));
-		if ((clipData.flags & BIDBFLAG_ALERT_MOTION) > 0 && settings.ui3_clipicon_trigger_motion == "1")
-			icons.push(self.GetClipIcon("trigger_motion"));
-		if ((clipData.flags & BIDBFLAG_ALERT_AUDIO) > 0 && settings.ui3_clipicon_trigger_audio == "1")
-			icons.push(self.GetClipIcon("trigger_audio"));
-		if ((clipData.flags & BIDBFLAG_ALERT_EXTERNAL) > 0 && settings.ui3_clipicon_trigger_external == "1")
-			icons.push(self.GetClipIcon("trigger_external"));
-		if ((clipData.flags & BIDBFLAG_ALERT_GROUP) > 0 && settings.ui3_clipicon_trigger_group == "1")
-			icons.push(self.GetClipIcon("trigger_group"));
-		if ((clipData.flags & BIDBFLAG_AUDIO) > 0 && settings.ui3_clipicon_clip_audio == "1")
-			icons.push(self.GetClipIcon("clip_audio"));
-		if ((clipData.flags & BIDBFLAG_ARCHIVE) > 0 && settings.ui3_clipicon_clip_backingup == "1")
-			icons.push(self.GetClipIcon("clip_backingup"));
-		if ((clipData.flags & BIDBFLAG_ARCHIVED) > 0 && settings.ui3_clipicon_clip_backup == "1")
-			icons.push(self.GetClipIcon("clip_backedup"));
-		if (settings.ui3_clipicon_is_new === "1")
-			icons.push(self.GetClipIcon("is_new"));
-		if (settings.ui3_clipicon_protect == "1")
-			icons.push(self.GetClipIcon("protect"));
-		icons.push(self.GetClipIcon("flag"));
-		return icons.join("");
-	}
-	this.GetClipIcon = function (name)
-	{
-		switch (name)
-		{
-			case "trigger_sentry":
-				return GetClipIcon_Internal(name, "#svg_mio_cbChecked", true, "AI-verified alert");
-			case "trigger_sentry_occupied":
-				return GetClipIcon_Internal(name, "#sentry_human", true, "AI-verified continuation of a previous alert");
-			case "trigger_motion":
-				return GetClipIcon_Internal(name, "#svg_mio_run", true, "Triggered by motion detection");
-			case "trigger_audio":
-				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Triggered by audio");
-			case "trigger_external":
-				return GetClipIcon_Internal(name, "#svg_x5F_Alert1", false, "Triggered by external source");
-			case "trigger_group":
-				return GetClipIcon_Internal(name, "#svg_mio_quilt", true, "The group was triggered");
-			case "clip_audio":
-				return GetClipIcon_Internal(name, "#svg_mio_volumeUp", true, "Clip has audio");
-			case "clip_backingup":
-				return GetClipIcon_Internal(name, "#svg_mio_cloudUploading", true, "Clip is being backed up");
-			case "clip_backedup":
-				return GetClipIcon_Internal(name, "#svg_mio_cloudUploaded", true, "Clip has been backed up");
-			case "protect":
-				return GetClipIcon_Internal(name, "#svg_mio_lock", true, "Item is protected");
-			case "flag":
-				return GetClipIcon_Internal(name, "#svg_x5F_Flag", false, "Item is flagged");
-			case "is_recording":
-				return GetClipIcon_Internal(name, "#svg_x5F_Stoplight", false, "Clip is still recording");
-			case "nosignal":
-				return GetClipIcon_Internal(name, "#svg_x5F_Error", false, "Camera was in a no-signal state");
-			case "is_new":
-				return GetClipIcon_Internal(name, "#svg_x5F_Stoplight", true, "Alert is newer than you have seen before");
-		}
-		return "";
-	}
-	var GetClipIcon_Internal = function (name, svgId, noflip, title)
-	{
-		return '<div class="clipicon ' + GetClipIconClass(name) + '"'
-			+ (title ? (' title="' + title + '"') : '')
-			+ '><svg class="icon' + (noflip ? ' noflip' : '') + '"><use xlink:href="' + svgId + '"></use></svg></div>'
-	}
 	this.updateNewAlertIcons = function ()
 	{
 		if (currentPrimaryTab !== "clips")
@@ -11890,8 +11804,8 @@ function ClipLoader(clipsBodySelector)
 						var $clip = $("#c" + clipData.recId);
 						if ($clip.length !== 0)
 						{
-							var $flags = $clip.find(".clipIconWrapper");
-							$flags.removeClass(GetClipIconClass("is_new"));
+							var $icons = $clip.find(".clipIconWrapper");
+							$icons.html(clipIcons.getIconHtmlForClipTile(clipData));
 						}
 					}
 					else if (!clipData.isNew && val)
@@ -11900,8 +11814,8 @@ function ClipLoader(clipsBodySelector)
 						var $clip = $("#c" + clipData.recId);
 						if ($clip.length !== 0)
 						{
-							var $flags = $clip.find(".clipIconWrapper");
-							$flags.addClass(GetClipIconClass("is_new"));
+							var $icons = $clip.find(".clipIconWrapper");
+							$icons.html(clipIcons.getIconHtmlForClipTile(clipData));
 						}
 					}
 				}
@@ -11928,7 +11842,7 @@ function ClipLoader(clipsBodySelector)
 		else
 		{
 			// This is an alert we're trying to export.  We can probably set a range.
-			if ((clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) !== 0)
+			if ((clipData.flags & BIDBFLAG.ALERT_OFFSETTIME) !== 0)
 			{
 				args.startms = clipData.offsetMs;
 				args.msec = clipData.roughLengthMs;
@@ -11987,7 +11901,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ToggleClipProtect = function (clipData, onSuccess, onFailure)
 	{
-		ToggleFlag(clipData, BIDBFLAG_PROTECTED, function (clipData, flagIsSet)
+		ToggleFlag(clipData, BIDBFLAG.PROTECTED, BIDBFLAG.PROTECTED, function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
 				self.HideClipProtect(clipData);
@@ -11999,7 +11913,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ToggleClipFlag = function (clipData, onSuccess, onFailure)
 	{
-		ToggleFlag(clipData, BIDBFLAG_FLAGGED, function (clipData, flagIsSet)
+		ToggleFlag(clipData, BIDBFLAG.FLAGGED, BIDBFLAG.FLAGGED, function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
 				self.HideClipFlag(clipData);
@@ -12011,7 +11925,12 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ToggleAlertAiConfirmed = function (clipData, onSuccess, onFailure)
 	{
-		ToggleFlag(clipData, BIDBFLAG_AI_CONFIRMED_X, function (clipData, flagIsSet)
+		var flag;
+		if ((clipData.flags & BIDBFLAG.AI_CONFIRMED) > 0)
+			flag = BIDBFLAG.ALERT_CANCELLED;
+		else
+			flag = BIDBFLAG.AI_CONFIRMED;
+		ToggleFlag(clipData, flag, BIDBFLAG.ALERT_CANCELLED | BIDBFLAG.AI_CONFIRMED, function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
 				self.HideAiConfirmed(clipData);
@@ -12021,17 +11940,29 @@ function ClipLoader(clipsBodySelector)
 				onSuccess(clipData);
 		}, onFailure);
 	}
-	var ToggleFlag = function (clipData, flag, onSuccess, onFailure)
+	var ToggleFlag = function (clipData, flag, mask, onSuccess, onFailure)
 	{
 		var flagIsSet = (clipData.flags & flag) > 0;
-		var newFlags = flagIsSet ? clipData.flags ^ flag : clipData.flags | flag;
-		UpdateClipFlags('@' + clipData.recId, newFlags, function ()
+		var newFlags = flagIsSet ? 0 : flag;
+		UpdateClipFlags('@' + clipData.recId, newFlags, mask, function ()
 		{
 			// Success setting flag state
-			clipData.flags = newFlags;
+			clipData.flags = SetFlags(clipData.flags, newFlags, mask);
 			if (onSuccess)
 				onSuccess(clipData, flagIsSet);
 		}, onFailure);
+	}
+	/**
+	 * @param {Number} flags The original number where each bit is a different flag.
+	 * @param {Number} flagsToSet The bits to set.
+	 * @param {Number} mask The bits of [mask] which are 1 indicate the bits to copy from [flagsToSet] to [flags]. 
+	 * @returns {Number} The modified number with bits changed.
+	 */
+	function SetFlags(flags, flagsToSet, mask)
+	{
+		let result = flags & ~mask; // Clear the bits of flags that are set in mask
+		result |= (flagsToSet & mask); // Set the bits that are set in both mask and flagsToSet
+		return result;
 	}
 	this.HideClipFlag = function (clipData)
 	{
@@ -12041,8 +11972,8 @@ function ClipLoader(clipsBodySelector)
 		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
-		var $flags = $clip.find(".clipIconWrapper");
-		$flags.removeClass(GetClipIconClass("flag"));
+		var $icons = $clip.find(".clipIconWrapper");
+		$icons.html(clipIcons.getIconHtmlForClipTile(clipData));
 	}
 	this.ShowClipFlag = function (clipData)
 	{
@@ -12052,24 +11983,24 @@ function ClipLoader(clipsBodySelector)
 		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
-		var $flags = $clip.find(".clipIconWrapper");
-		$flags.addClass(GetClipIconClass("flag"));
+		var $icons = $clip.find(".clipIconWrapper");
+		$icons.html(clipIcons.getIconHtmlForClipTile(clipData));
 	}
 	this.HideClipProtect = function (clipData)
 	{
 		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
-		var $flags = $clip.find(".clipIconWrapper");
-		$flags.removeClass(GetClipIconClass("protect"));
+		var $icons = $clip.find(".clipIconWrapper");
+		$icons.html(clipIcons.getIconHtmlForClipTile(clipData));
 	}
 	this.ShowClipProtect = function (clipData)
 	{
 		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
-		var $flags = $clip.find(".clipIconWrapper");
-		$flags.addClass(GetClipIconClass("protect"));
+		var $icons = $clip.find(".clipIconWrapper");
+		$icons.html(clipIcons.getIconHtmlForClipTile(clipData));
 	}
 	this.RepairClipFlagState = function (clipData)
 	{
@@ -12080,23 +12011,23 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ClipDataIndicatesFlagged = function (clipData)
 	{
-		return (clipData.flags & BIDBFLAG_FLAGGED) > 0;
+		return (clipData.flags & BIDBFLAG.FLAGGED) > 0;
 	}
 	this.HideAiConfirmed = function (clipData)
 	{
 		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
-		var $flags = $clip.find(".clipIconWrapper");
-		$flags.removeClass(GetClipIconClass("trigger_sentry"));
+		var $icons = $clip.find(".clipIconWrapper");
+		$icons.html(clipIcons.getIconHtmlForClipTile(clipData));
 	}
 	this.ShowAiConfirmed = function (clipData)
 	{
 		var $clip = $("#c" + clipData.recId);
 		if ($clip.length == 0)
 			return;
-		var $flags = $clip.find(".clipIconWrapper");
-		$flags.addClass(GetClipIconClass("trigger_sentry"));
+		var $icons = $clip.find(".clipIconWrapper");
+		$icons.html(clipIcons.getIconHtmlForClipTile(clipData));
 	}
 	this.RepairAiConfirmedState = function (clipData)
 	{
@@ -12107,7 +12038,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.AlertDataIndicatesAIConfirmed = function (clipData)
 	{
-		return (clipData.flags & BIDBFLAG_AI_CONFIRMED_X) > 0;
+		return (clipData.flags & BIDBFLAG.AI_CONFIRMED) > 0;
 	}
 	this.Multi_Flag = function (clipIDs, flagEnable, idx, myToast)
 	{
@@ -12304,7 +12235,7 @@ function ClipLoader(clipsBodySelector)
 			}
 			else if (o.operation == "protect")
 			{
-				var isProtected = (clipData.flags & BIDBFLAG_PROTECTED) > 0;
+				var isProtected = (clipData.flags & BIDBFLAG.PROTECTED) > 0;
 				if ((isProtected && !o.args.protectEnable) || (!isProtected && o.args.protectEnable))
 				{
 					self.ToggleClipProtect(clipData, function ()
@@ -15575,7 +15506,7 @@ function VideoPlayerController()
 	this.LoadClip = function (clipData)
 	{
 		var fileTypeInfo = clipLoader.GetClipFileTypeInfo(clipData);
-		if ((clipData.flags & BIDBFLAG_RECORDING) > 0 && !fileTypeInfo.isBVR)
+		if ((clipData.flags & BIDBFLAG.RECORDING) > 0 && !fileTypeInfo.isBVR)
 		{
 			toaster.Info("Unable to open this " + (clipData.isClip ? "clip" : "alert") + " because the clip is still recording and the file type is not bvr.");
 			return;
@@ -16673,7 +16604,7 @@ function JpegVideoModule()
 				videoPlayer.lastFrameUtc = (clipData.date.getTime() - offset) + clipPlaybackPosition;
 				if (!clipData.isSnapshot && !clipData.isClip)
 				{
-					if (honorAlertOffset && (clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) == 0)
+					if (honorAlertOffset && (clipData.flags & BIDBFLAG.ALERT_OFFSETTIME) == 0)
 						toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
 					// Load clip stats for this alert.
 					clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
@@ -17334,7 +17265,7 @@ function FetchH264VideoModule()
 				if (honorAlertOffset && !clipData.isSnapshot)
 				{
 					var offsetMs = clipData.offsetMs;
-					if (!clipData.isClip && (clipData.flags & BIDBFLAG_ALERT_OFFSETTIME) == 0)
+					if (!clipData.isClip && (clipData.flags & BIDBFLAG.ALERT_OFFSETTIME) == 0)
 					{
 						toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
 						path = clipData.alertPath;
@@ -23957,11 +23888,11 @@ function ClipListContextMenu()
 			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
 			if (clipData)
 			{
-				if ((clipData.flags & BIDBFLAG_FLAGGED) == 0)
+				if ((clipData.flags & BIDBFLAG.FLAGGED) == 0)
 					flagEnable = true;
-				if ((clipData.flags & BIDBFLAG_PROTECTED) == 0)
+				if ((clipData.flags & BIDBFLAG.PROTECTED) == 0)
 					protectEnable = true;
-				if ((clipData.flags & BIDBFLAG_AI_CONFIRMED_X) == 0)
+				if ((clipData.flags & BIDBFLAG.AI_CONFIRMED) == 0)
 					aiConfirm = true;
 			}
 		}
@@ -25364,34 +25295,7 @@ function ClipProperties()
 
 			$camprop.append(GetInfoEleValue("Resolution", clipData.res));
 
-			if ((clipData.flags & BIDBFLAG_AI_CONFIRMED_X) > 0)
-				$camprop.append(GetIcon("trigger_sentry", "AI-verified alert"));
-			if ((clipData.flags & BIDBFLAG_AI_OCCUPIED_X) > 0)
-				$camprop.append(GetIcon("trigger_sentry_occupied", "AI-verified continuation of a previous alert"));
-			if ((clipData.flags & BIDBFLAG_ALERT_MOTION) > 0)
-				$camprop.append(GetIcon("trigger_motion", "Triggered by motion detection"));
-			if ((clipData.flags & BIDBFLAG_ALERT_AUDIO) > 0)
-				$camprop.append(GetIcon("trigger_audio", "Triggered by audio"));
-			if ((clipData.flags & BIDBFLAG_ALERT_EXTERNAL) > 0)
-				$camprop.append(GetIcon("trigger_external", "Triggered by external source such as DIO or manual trigger"));
-			if ((clipData.flags & BIDBFLAG_ALERT_GROUP) > 0)
-				$camprop.append(GetIcon("trigger_group", "The group was triggered"));
-			if ((clipData.flags & BIDBFLAG_AUDIO) > 0)
-				$camprop.append(GetIcon("clip_audio", "Clip has audio"));
-			if ((clipData.flags & BIDBFLAG_ARCHIVE) > 0)
-				$camprop.append(GetIcon("clip_backingup", "Clip is currently being backed up"));
-			if ((clipData.flags & BIDBFLAG_ARCHIVED) > 0)
-				$camprop.append(GetIcon("clip_backedup", "Clip has been backed up"));
-			if ((clipData.flags & BIDBFLAG_PROTECTED) > 0)
-				$camprop.append(GetIcon("protect", "Item is protected"));
-			if ((clipData.flags & BIDBFLAG_FLAGGED) > 0)
-				$camprop.append(GetIcon("flag", "Flagged"));
-			if ((clipData.flags & BIDBFLAG_RECORDING) > 0)
-				$camprop.append(GetIcon("is_recording", "Clip is still recording"));
-			if ((clipData.flags & BIDBFLAG_ALERT_NOSIGNAL) > 0)
-				$camprop.append(GetIcon("nosignal", "Camera had no signal"));
-			if (clipData.isNew)
-				$camprop.append(GetIcon("is_new", "Alert is newer than you have seen before"));
+			$camprop.append(clipIcons.getIconHtmlForClipProperties(clipData));
 
 			var $link = $('<a href="javascript:void(0)">Click here to download the clip.</a>');
 			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
@@ -25445,12 +25349,6 @@ function ClipProperties()
 			, overlayOpacity: 0.3
 			, closeOnOverlayClick: true
 		});
-	}
-	var GetIcon = function (icon, label)
-	{
-		var $iconRow = $('<div class="dialogOption_item clipprop_item_info"></div>');
-		$iconRow.append(clipLoader.GetClipIcon(icon)).append(label);
-		return $iconRow;
 	}
 	var GetInfo = function (label, value, isHtml)
 	{
@@ -26672,9 +26570,11 @@ function TriggerCamera(camId)
 ///////////////////////////////////////////////////////////////
 // Change Clip Flags State ////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function UpdateClipFlags(path, flags, cbSuccess, cbFailure)
+function UpdateClipFlags(path, flags, mask, cbSuccess, cbFailure)
 {
-	ExecJSON({ cmd: "update", path: path, flags: flags }, function (response)
+	if (typeof mask === "function")
+		toaster.Error("The UpdateClipFlags API has changed. 3rd argument is now mask.");
+	ExecJSON({ cmd: "update", path: path, flags: flags, mask: mask }, function (response)
 	{
 		if (typeof response.result != "undefined" && response.result == "fail")
 		{
@@ -26682,7 +26582,7 @@ function UpdateClipFlags(path, flags, cbSuccess, cbFailure)
 				cbFailure();
 			else
 				toaster.Warning("Failed to update clip properties");
-			openLoginDialog(function () { UpdateClipFlags(path, flags, cbSuccess, cbFailure); });
+			openLoginDialog(function () { UpdateClipFlags(path, flags, mask, cbSuccess, cbFailure); });
 			return;
 		}
 		else
@@ -33540,49 +33440,50 @@ var b0010_0000 = 1 << 5; // 32
 var b0100_0000 = 1 << 6; // 64
 var b1000_0000 = 1 << 7; // 128
 
-var BIDBFLAG_AUDIO = 1;
-var BIDBFLAG_FLAGGED = 1 << 1;
-var BIDBFLAG_PROTECTED = 1 << 2;
-var BIDBFLAG_CORRUPT = 1 << 3;
-var BIDBFLAG_DELETE = 1 << 4;
-var BIDBFLAG_DELETED = 1 << 5;
-var BIDBFLAG_ARCHIVE = 1 << 6;
-var BIDBFLAG_ARCHIVED = 1 << 7;
-var BIDBFLAG_RECORDING = 1 << 8;
-var BIDBFLAG_EXPORT = 1 << 9;
-var BIDBFLAG_EXPORTED = 1 << 10;
-var BIDBFLAG_SPECIALOBJ = 1 << 11;
+var BIDBFLAG = {
+	AUDIO: 1,
+	FLAGGED: 1 << 1,
+	PROTECTED: 1 << 2,
+	CORRUPT: 1 << 3,
+	DELETE: 1 << 4,
+	DELETED: 1 << 5,
+	ARCHIVE: 1 << 6,
+	ARCHIVED: 1 << 7,
+	RECORDING: 1 << 8,
+	EXPORT: 1 << 9,
+	EXPORTED: 1 << 10,
+	SPECIALOBJ: 1 << 11,
 
-var BIDBFLAG_AI_CONFIRMED_X = 1 << 14;
-var BIDBFLAG_AI_OCCUPIED_X = 1 << 15;
+	AI_CONFIRMED_X: 1 << 14,
+	AI_OCCUPIED_X: 1 << 15,
 
-var BIDBFLAG_ALERT_OFFSETTIME = 1 << 16;
-var BIDBFLAG_ALERT_MOTION = 1 << 17;
-var BIDBFLAG_ALERT_ONVIF = 1 << 18;
-var BIDBFLAG_ALERT_AUDIO = 1 << 19;
-var BIDBFLAG_ALERT_EXTERNAL = 1 << 20;
-var BIDBFLAG_ALERT_DIO = 1 << 21;
-var BIDBFLAG_ALERT_GROUP = 1 << 22;
-var BIDBFLAG_ALERT_CANCELLED = 1 << 23;
-var BIDBFLAG_ALERT_NOSIGNAL = 1 << 24;
-var BIDBFLAG_ALERT_HIDDEN = 1 << 24;
+	ALERT_OFFSETTIME: 1 << 16,
+	ALERT_MOTION: 1 << 17,
+	ALERT_ONVIF: 1 << 18,
+	ALERT_AUDIO: 1 << 19,
+	ALERT_EXTERNAL: 1 << 20,
+	ALERT_DIO: 1 << 21,
+	ALERT_GROUP: 1 << 22,
+	ALERT_CANCELLED: 1 << 23,
+	ALERT_NOSIGNAL: 1 << 24,
+	ALERT_HIDDEN: 1 << 24,
 
-var BIDBFLAG_AI_PERSON = 1 << 26;
-var BIDBFLAG_AI_VEHICLE = 1 << 27;
-var BIDBFLAG_AI_CONFIRMED = 1 << 28;
-var BIDBFLAG_AI_OCCUPIED = 1 << 29;
+	AI_PERSON: 1 << 26,
+	AI_VEHICLE: 1 << 27,
+	AI_CONFIRMED: 1 << 28,
+	AI_OCCUPIED: 1 << 29
+};
 
+BIDBFLAG.ALERT_TRIGGERBITS = (BIDBFLAG.ALERT_MOTION
+	| BIDBFLAG.ALERT_NOSIGNAL
+	| BIDBFLAG.ALERT_AUDIO
+	| BIDBFLAG.ALERT_EXTERNAL
+	| BIDBFLAG.ALERT_ONVIF
+	| BIDBFLAG.ALERT_DIO
+	| BIDBFLAG.ALERT_GROUP
+	| BIDBFLAG.ALERT_CANCELLED);
 
-var BIDBFLAG_ALERT_TRIGGERBITS = (BIDBFLAG_ALERT_MOTION
-	| BIDBFLAG_ALERT_NOSIGNAL
-	| BIDBFLAG_ALERT_AUDIO
-	| BIDBFLAG_ALERT_EXTERNAL
-	| BIDBFLAG_ALERT_ONVIF
-	| BIDBFLAG_ALERT_DIO
-	| BIDBFLAG_ALERT_GROUP
-	| BIDBFLAG_ALERT_CANCELLED);
-
-var NO_SHOW_ON_TIMELINE = BIDBFLAG_DELETED | BIDBFLAG_ALERT_HIDDEN;
+var NO_SHOW_ON_TIMELINE = BIDBFLAG.DELETED | BIDBFLAG.ALERT_HIDDEN;
 
 var TRIGGER_SOURCE_MOTION = (1 << 1);
 var TRIGGER_SOURCE_ONVIF = (1 << 2);
@@ -33592,6 +33493,118 @@ var TRIGGER_SOURCE_DIO = (1 << 5);
 var TRIGGER_SOURCE_GROUP = (1 << 6);
 var TRIGGER_SOURCE_CANCELLED = (1 << 7);
 var TRIGGER_SOURCE_NOSIGNAL = (1 << 8);
+
+function DecodeClipFlags(flags)
+{
+	var names = [];
+	for (let property in BIDBFLAG)
+	{
+		if (BIDBFLAG.hasOwnProperty(property) && (flags & BIDBFLAG[property]) > 0)
+			names.push(property);
+	}
+	return names.join(", ");
+}
+///////////////////////////////////////////////////////////////
+// Clip Icons Helper //////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+var clipIcons = new (function ()
+{
+	var self = this;
+	this.icons = new FasterObjectMap();
+	/**
+	 * Declares (creates or updates) the icon with the given iconId.
+	 * @param {String} iconId unique identifier string for the icon
+	 * @param {String} svgId id attribute of the svg graphic
+	 * @param {Boolean} noflip true if the "noflip" css class needs to be applied to the svg
+	 * @param {String} descriptionText Description text to use in tooltips and Clip/Alert properties panel
+	 * @param {Number} flags Flags which must be found in the clip data for this icon to appear.  If 0, no flags are required.
+	 * @param {String} clipListDisplaySetting UI3 settings key which must have value "1" in order for this icon to appear. May be null or empty.
+	 * @param {Function} conditionFn Condition function accepting clipData argument which must return true in order for this icon to appear. May be null.
+	 */
+	this.setIcon = function (iconId, svgId, noflip, descriptionText, flags, clipListDisplaySetting, conditionFn)
+	{
+		this.icons[iconId] = { iconId: iconId, svgId: svgId, noflip: noflip, descriptionText: descriptionText, flags: flags, clipListDisplaySetting: clipListDisplaySetting, conditionFn: conditionFn };
+	}
+	this.setIcon("trigger_sentry", "#svg_mio_cbChecked", true, "AI-confirmed (or manually confirmed) alert", BIDBFLAG.AI_CONFIRMED, "ui3_clipicon_trigger_sentry");
+	this.setIcon("trigger_sentry_occupied", "#sentry_human", true, "", BIDBFLAG.AI_OCCUPIED, "ui3_clipicon_trigger_sentry_occupied");
+	this.setIcon("alert_cancelled", "#svg_x5F_HoldProfile", false, "Alert was cancelled", BIDBFLAG.ALERT_CANCELLED, "");
+	this.setIcon("ai_person", "#svg_mio_man", true, "AI detected a person", BIDBFLAG.AI_PERSON, "");
+	this.setIcon("ai_vehicle", "#svg_mio_directions_car", true, "AI detected a vehicle", BIDBFLAG.AI_VEHICLE, "");
+	this.setIcon("trigger_motion", "#svg_mio_run", true, "Triggered by motion detection", BIDBFLAG.ALERT_MOTION, "ui3_clipicon_trigger_motion");
+	this.setIcon("trigger_audio", "#svg_mio_volumeUp", true, "Triggered by audio", BIDBFLAG.ALERT_AUDIO, "ui3_clipicon_trigger_audio");
+	this.setIcon("trigger_external", "#svg_x5F_Alert1", false, "Triggered by external source such as DIO or manual trigger", BIDBFLAG.ALERT_EXTERNAL, "ui3_clipicon_trigger_external");
+	this.setIcon("trigger_group", "#svg_mio_quilt", true, "The group was triggered", BIDBFLAG.ALERT_GROUP, "ui3_clipicon_trigger_group");
+	this.setIcon("clip_audio", "#svg_mio_volumeUp", true, "Clip has audio", BIDBFLAG.AUDIO, "ui3_clipicon_clip_audio");
+	this.setIcon("clip_backingup", "#svg_mio_cloudUploading", true, "Clip is currently being backed up", BIDBFLAG.ARCHIVE, "ui3_clipicon_clip_backingup");
+	this.setIcon("clip_backedup", "#svg_mio_cloudUploaded", true, "Clip has been backed up", BIDBFLAG.ARCHIVED, "ui3_clipicon_clip_backup");
+	this.setIcon("protect", "#svg_mio_lock", true, "Item is protected", BIDBFLAG.PROTECTED, "ui3_clipicon_protect");
+	this.setIcon("flag", "#svg_x5F_Flag", false, "Item is flagged", BIDBFLAG.FLAGGED, "");
+	this.setIcon("is_recording", "#svg_x5F_Stoplight", false, "Clip is still recording", BIDBFLAG.RECORDING, "");
+	this.setIcon("nosignal", "#svg_x5F_Error", false, "Camera had no signal", BIDBFLAG.ALERT_NOSIGNAL, "");
+	this.setIcon("is_new", "#svg_x5F_Stoplight", true, "Alert is newer than you have seen before", 0, "ui3_clipicon_is_new", function (clipData) { return clipData.isNew; });
+
+	this.getIconsAffectingClip = function (clipData, checkUserSettings)
+	{
+		var arr = [];
+		for (var iconId in self.icons)
+		{
+			var icon = self.icons[iconId];
+			if (icon.flags && (clipData.flags & icon.flags) <= 0)
+				continue;
+			if (checkUserSettings && icon.clipListDisplaySetting && settings[icon.clipListDisplaySetting] !== "1")
+				continue;
+			if (typeof icon.conditionFn === "function")
+			{
+				try
+				{
+					if (!icon.conditionFn(clipData))
+						continue;
+				}
+				catch (ex)
+				{
+					toaster.Error(ex);
+					continue;
+				}
+			}
+			arr.push(icon);
+		}
+		return arr;
+	}
+	this.getIconHtmlForClipTile = function (clipData)
+	{
+		var iconObjects = self.getIconsAffectingClip(clipData, true);
+		var html = [];
+		for (var i = 0; i < iconObjects.length; i++)
+			html.push(self.GetClipIconHtml(iconObjects[i]));
+		return html.join("");
+	}
+	this.getIconHtmlForClipProperties = function (clipData)
+	{
+		var iconObjects = self.getIconsAffectingClip(clipData, false);
+		var html = [];
+		for (var i = 0; i < iconObjects.length; i++)
+		{
+			html.push('<div class="dialogOption_item clipprop_item_info">');
+			html.push(self.GetClipIconHtml(iconObjects[i]));
+			html.push(iconObjects[i].descriptionText);
+			html.push('</div>');
+		}
+		return html.join("");
+	}
+	this.getIconIds = function ()
+	{
+		var ids = [];
+		for (var property in self.icons)
+			ids.push(property);
+		return ids;
+	}
+	this.GetClipIconHtml = function (icon)
+	{
+		return '<div class="clipicon"'
+			+ (icon.descriptionText ? (' title="' + icon.descriptionText + '"') : '')
+			+ '><svg class="icon' + (icon.noflip ? ' noflip' : '') + '"><use xlink:href="' + icon.svgId + '"></use></svg></div>'
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // Zones Bitmask //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////

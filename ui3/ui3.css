@@ -66,8 +66,6 @@
 	--badge-color: var(--main-highlight-color);
 	--badge-hover-color: var(--dropdown-item-blue-color);
 	--badge-selected-color: #bad8ff;
-	--badge-sentry-color: #d04959;
-	--badge-sentry-hover-color: #F66476;
 	--timeline-background-color: #000000;
 	/* Context Menus */
 	--context-menu-icon-highlight-color: #0097F0;
@@ -2804,17 +2802,6 @@ div.invisibleLabel
 	{
 		color: var(--badge-selected-color);
 	}
-
-.clipIconWrapper .clipicon.icon_trigger_sentry_occupied
-{
-	color: var(--badge-sentry-color);
-}
-
-.cliptile.enabled.selected .clipIconWrapper .clipicon.icon_trigger_sentry_occupied,
-.cliptile.enabled.selected:hover .clipIconWrapper .clipicon.icon_trigger_sentry_occupied
-{
-	color: var(--badge-sentry-hover-color);
-}
 
 .sizeMedium .cliptile,
 .sizeMedium .datetile,
