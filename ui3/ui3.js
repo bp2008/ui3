@@ -12002,7 +12002,7 @@ function ClipLoader(clipsBodySelector)
 	 */
 	function SetFlags(flags, flagsToSet, mask)
 	{
-		let result = flags & ~mask; // Clear the bits of flags that are set in mask
+		var result = flags & ~mask; // Clear the bits of flags that are set in mask
 		result |= (flagsToSet & mask); // Set the bits that are set in both mask and flagsToSet
 		return result;
 	}
@@ -33539,7 +33539,7 @@ var TRIGGER_SOURCE_NOSIGNAL = (1 << 8);
 function DecodeClipFlags(flags)
 {
 	var names = [];
-	for (let property in BIDBFLAG)
+	for (var property in BIDBFLAG)
 	{
 		if (BIDBFLAG.hasOwnProperty(property) && (flags & BIDBFLAG[property]) > 0)
 			names.push(property);
