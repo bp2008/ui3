@@ -1759,14 +1759,35 @@ var defaultSettings =
 			key: "ui3_clipicon_trigger_sentry"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_cbChecked"></use></svg> for AI-verified alerts'
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_cbChecked"></use></svg> for AI-confirmed alerts'
 			, category: "Clip / Alert Icons"
 		}
 		, {
 			key: "ui3_clipicon_trigger_sentry_occupied"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_human"></use></svg> for AI-verified alerts that continue a previous alert'
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#sentry_human"></use></svg> for AI-confirmed alerts that continue a previous alert'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_ai_person"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_man"></use></svg> when AI detected a person'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_ai_vehicle"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_directions_car"></use></svg> when AI detected a vehicle'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_alert_cancelled"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_HoldProfile"></use></svg> for alerts that were cancelled'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -1795,6 +1816,27 @@ var defaultSettings =
 			, value: "1"
 			, inputType: "checkbox"
 			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_lock"></use></svg> for protected items'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_flag"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Flag"></use></svg> for flagged items'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_is_recording"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon"><use xlink:href="#svg_x5F_Stoplight"></use></svg> while the clip is still recording'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_nosignal"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_x5F_Error"></use></svg> for alerts where the camera had no signal'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -33525,11 +33567,11 @@ var clipIcons = new (function ()
 	{
 		this.icons[iconId] = { iconId: iconId, svgId: svgId, noflip: noflip, descriptionText: descriptionText, flags: flags, clipListDisplaySetting: clipListDisplaySetting, conditionFn: conditionFn };
 	}
-	this.setIcon("trigger_sentry", "#svg_mio_cbChecked", true, "AI-confirmed (or manually confirmed) alert", BIDBFLAG.AI_CONFIRMED, "ui3_clipicon_trigger_sentry");
-	this.setIcon("trigger_sentry_occupied", "#sentry_human", true, "", BIDBFLAG.AI_OCCUPIED, "ui3_clipicon_trigger_sentry_occupied");
-	this.setIcon("alert_cancelled", "#svg_x5F_HoldProfile", false, "Alert was cancelled", BIDBFLAG.ALERT_CANCELLED, "");
-	this.setIcon("ai_person", "#svg_mio_man", true, "AI detected a person", BIDBFLAG.AI_PERSON, "");
-	this.setIcon("ai_vehicle", "#svg_mio_directions_car", true, "AI detected a vehicle", BIDBFLAG.AI_VEHICLE, "");
+	this.setIcon("trigger_ai_confirmed", "#svg_mio_cbChecked", true, "AI-confirmed (or manually confirmed) alert", BIDBFLAG.AI_CONFIRMED, "ui3_clipicon_trigger_sentry");
+	this.setIcon("trigger_ai_occupied", "#sentry_human", true, "", BIDBFLAG.AI_OCCUPIED, "ui3_clipicon_trigger_sentry_occupied");
+	this.setIcon("ai_person", "#svg_mio_man", true, "AI detected a person", BIDBFLAG.AI_PERSON, "ui3_clipicon_ai_person");
+	this.setIcon("ai_vehicle", "#svg_mio_directions_car", true, "AI detected a vehicle", BIDBFLAG.AI_VEHICLE, "ui3_clipicon_ai_vehicle");
+	this.setIcon("alert_cancelled", "#svg_x5F_HoldProfile", false, "Alert was cancelled", BIDBFLAG.ALERT_CANCELLED, "ui3_clipicon_alert_cancelled");
 	this.setIcon("trigger_motion", "#svg_mio_run", true, "Triggered by motion detection", BIDBFLAG.ALERT_MOTION, "ui3_clipicon_trigger_motion");
 	this.setIcon("trigger_audio", "#svg_mio_volumeUp", true, "Triggered by audio", BIDBFLAG.ALERT_AUDIO, "ui3_clipicon_trigger_audio");
 	this.setIcon("trigger_external", "#svg_x5F_Alert1", false, "Triggered by external source such as DIO or manual trigger", BIDBFLAG.ALERT_EXTERNAL, "ui3_clipicon_trigger_external");
@@ -33538,9 +33580,9 @@ var clipIcons = new (function ()
 	this.setIcon("clip_backingup", "#svg_mio_cloudUploading", true, "Clip is currently being backed up", BIDBFLAG.ARCHIVE, "ui3_clipicon_clip_backingup");
 	this.setIcon("clip_backedup", "#svg_mio_cloudUploaded", true, "Clip has been backed up", BIDBFLAG.ARCHIVED, "ui3_clipicon_clip_backup");
 	this.setIcon("protect", "#svg_mio_lock", true, "Item is protected", BIDBFLAG.PROTECTED, "ui3_clipicon_protect");
-	this.setIcon("flag", "#svg_x5F_Flag", false, "Item is flagged", BIDBFLAG.FLAGGED, "");
-	this.setIcon("is_recording", "#svg_x5F_Stoplight", false, "Clip is still recording", BIDBFLAG.RECORDING, "");
-	this.setIcon("nosignal", "#svg_x5F_Error", false, "Camera had no signal", BIDBFLAG.ALERT_NOSIGNAL, "");
+	this.setIcon("flag", "#svg_x5F_Flag", false, "Item is flagged", BIDBFLAG.FLAGGED, "ui3_clipicon_flag");
+	this.setIcon("is_recording", "#svg_x5F_Stoplight", false, "Clip is still recording", BIDBFLAG.RECORDING, "ui3_clipicon_is_recording");
+	this.setIcon("nosignal", "#svg_x5F_Error", false, "Camera had no signal", BIDBFLAG.ALERT_NOSIGNAL, "ui3_clipicon_nosignal");
 	this.setIcon("is_new", "#svg_x5F_Stoplight", true, "Alert is newer than you have seen before", 0, "ui3_clipicon_is_new", function (clipData) { return clipData.isNew; });
 
 	this.getIconsAffectingClip = function (clipData, checkUserSettings)
