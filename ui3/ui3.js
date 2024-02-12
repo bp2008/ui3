@@ -3145,8 +3145,7 @@ function OverrideDefaultSetting(key, value, IncludeInOptionsWindow, AlwaysReload
 			defaultSettings[i].value = value;
 			defaultSettings[i].AlwaysReload = AlwaysReload;
 			defaultSettings[i].Generation = Generation;
-			if (!IncludeInOptionsWindow)
-				defaultSettings[i].label = null;
+			defaultSettings[i].IncludeInOptionsWindow = IncludeInOptionsWindow;
 			break;
 		}
 }
@@ -31871,7 +31870,7 @@ function UISettingsPanel()
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
 			var s = defaultSettings[i];
-			if (s.label)
+			if (s.label && (typeof s.IncludeInOptionsWindow == "undefined" || s.IncludeInOptionsWindow))
 			{
 				if (typeof s.category == "undefined")
 					s.category = "Uncategorized";
@@ -31937,7 +31936,7 @@ function UISettingsPanel()
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
 			var s = defaultSettings[i];
-			var isDisplayable = (s.label || (s.comment && s.inputType === "comment")) && s.category === category;
+			var isDisplayable = (s.label || (s.comment && s.inputType === "comment")) && s.category === category && (typeof s.IncludeInOptionsWindow == "undefined" || s.IncludeInOptionsWindow);
 			if (isDisplayable && (typeof s.preconditionFunc !== "function" || s.preconditionFunc()) && processFilter(s))
 			{
 				var $row = $('<div class="uiSettingsRow withDefaultBtn"></div>');
