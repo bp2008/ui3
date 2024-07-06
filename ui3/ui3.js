@@ -818,7 +818,7 @@ function GetStatusAreaBarOptions()
 	return arr;
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Video Player (Advanced)", "Timeline", "UI Status Sounds", "Top Bar", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Status Area", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Video Player (Advanced)", "Timeline", "UI Status Sounds", "Top Bar", "Side Bar", "Status Area", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -1030,6 +1030,14 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
+			key: "ui3_cps_uiSettings_category_Side_Bar_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_Status_Area_visible"
+			, value: "1"
+		}
+		, {
 			key: "ui3_cps_uiSettings_category_Clips___Alerts_visible"
 			, value: "1"
 		}
@@ -1059,10 +1067,6 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_cps_uiSettings_category_MQTT_Remote_Control_visible"
-			, value: "1"
-		}
-		, {
-			key: "ui3_cps_uiSettings_category_Status_Area_visible"
 			, value: "1"
 		}
 		, {
@@ -1123,15 +1127,6 @@ var defaultSettings =
 			, options: ["Auto", "Yes", "No"]
 			, label: "Portrait Layout"
 			, onChange: OnChange_ui3_portrait_layout
-			, category: "General Settings"
-		}
-		, {
-			key: "ui3_sideBarPosition"
-			, value: "Left"
-			, inputType: "select"
-			, options: ["Left", "Right"]
-			, label: "Side Bar Position"
-			, onChange: OnChange_ui3_sideBarPosition
 			, category: "General Settings"
 		}
 		, {
@@ -1594,6 +1589,47 @@ var defaultSettings =
 			, hint: 'This action occurs when you click the system name in the upper left.'
 			, onChange: setSystemNameButtonState
 			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_sidebar_visible_on_live"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show Side Bar on Live View Tab'
+			, onChange: resized
+			, category: "Side Bar"
+		}
+		, {
+			key: "ui3_sidebar_visible_on_clips"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show Side Bar on Clips Tab'
+			, onChange: resized
+			, category: "Side Bar"
+		}
+		, {
+			key: "ui3_sidebar_visible_on_timeline"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show Side Bar on Timeline Tab'
+			, onChange: resized
+			, category: "Side Bar"
+		}
+		, {
+			key: "ui3_show_sidebar_hidden_button"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show Icon when Side Bar Hidden<div class="settingDesc">(icon appears by System Name)</div>'
+			, onChange: HandleSidebarVisibilityChange
+			, category: "Side Bar"
+		}
+		, {
+			key: "ui3_sideBarPosition"
+			, value: "Left"
+			, inputType: "select"
+			, options: ["Left", "Right"]
+			, label: "Side Bar Position"
+			, onChange: OnChange_ui3_sideBarPosition
+			, category: "Side Bar"
 		}
 		, {
 			key: "ui3_clipPreviewEnabled"
@@ -3012,6 +3048,14 @@ var defaultSettings =
 			, category: "MQTT Remote Control"
 		}
 		, {
+			key: "ui3_status_area_show"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show Status Area in Side Bar'
+			, onChange: resized
+			, category: "Status Area" // Note all status area settings should contain the text "status area" in a filterable field.
+		}
+		, {
 			key: "ui3_status_area_name"
 			, value: "Server Status"
 			, inputType: "select"
@@ -3019,7 +3063,7 @@ var defaultSettings =
 			, label: 'Status Area Label'
 			, hint: 'You can change the label shown in the status area.'
 			, onChange: OnChange_ui3_status_area
-			, category: "Status Area" // Note all status area settings should contain the text "status area" in a filterable field.
+			, category: "Status Area"
 		}
 		, {
 			key: "ui3_status_area_bar_key_1"
@@ -3963,6 +4007,8 @@ function StartupClipOpener(recId, offset)
 ///////////////////////////////////////////////////////////////
 function resized()
 {
+	HandleSidebarVisibilityChange();
+
 	var windowW = $(window).width();
 	var windowH = $(window).height();
 	var sideBarRight = settings.ui3_sideBarPosition === "Right";
@@ -3990,20 +4036,21 @@ function resized()
 
 	var topVis = layouttop.is(":visible");
 	var sidebarVis = layoutsidebar.is(":visible");
+	var statusAreaVis = statusArea.is(":visible");
 	var botVis = layoutbottom.is(":visible");
 
 	var topH = topVis ? layouttop.height() : 0;
 	var botH = botVis ? layoutbottom.height() : 0;
 	var sidebarH = sidebarVis ? (windowH - topH) : 0;
 	var sidebarW = sidebarVis ? layoutsidebar.width() : 0;
-	var statusH = statusArea.outerHeight(true);
+	var statusH = statusAreaVis ? statusArea.outerHeight(true) : 0;
 	// layouttop is sized with flexbox since UI3-269
 
 	// Size layoutsidebar
 	var sidebarT = topH;
 	var $dragBar = $("#sidebarPortraitDragbar");
 	var dragBarH = 0;
-	if (settings.ui3_is_maximized !== "1")
+	if (settings.ui3_is_maximized !== "1" && sidebarVis)
 	{
 		if (currentPrimaryTab == "timeline")
 		{
@@ -4249,6 +4296,33 @@ function UiSizeHelper()
 	SetSize(settings.ui3_preferred_ui_scale);
 
 	setTimeout(function () { self.SetUISizeByName(settings.ui3_preferred_ui_scale); }, 0);
+}
+function HandleSidebarVisibilityChange()
+{
+	if (settings.ui3_status_area_show === "1")
+	{
+		$("#statusArea").removeClass('disabledBySetting');
+	}
+	else
+	{
+		$("#statusArea").addClass('disabledBySetting');
+	}
+
+	if ((currentPrimaryTab === "live" && settings.ui3_sidebar_visible_on_live === "0")
+		|| (currentPrimaryTab === "clips" && settings.ui3_sidebar_visible_on_clips === "0")
+		|| (currentPrimaryTab === "timeline" && (settings.ui3_sidebar_visible_on_timeline === "0" || settings.ui3_status_area_show !== "1")))
+	{
+		$('#layoutleft').addClass('disabledBySetting');
+		if (settings.ui3_show_sidebar_hidden_button === "1")
+			$('#sidebar_hidden_button').addClass('visible');
+		else
+			$('#sidebar_hidden_button').removeClass('visible');
+	}
+	else
+	{
+		$('#layoutleft').removeClass('disabledBySetting');
+		$('#sidebar_hidden_button').removeClass('visible');
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Portrait Layout Sidebar Resize Bar /////////////////////////
@@ -5761,6 +5835,7 @@ function getSystemNameButtonOptions()
 	var opts = new Array();
 	for (var i = 0; i < mmItems.length; i++)
 		opts.push(mmItems[i].text);
+	opts.push("Toggle Side Bar");
 	opts.push("Do Nothing");
 	return opts;
 }
@@ -5773,6 +5848,17 @@ function systemNameButtonClick()
 			dropdownBoxes.listDefs["mainMenu"].onItemClick(mmItems[i]);
 			return;
 		}
+	if (settings.ui3_system_name_button === "Toggle Side Bar")
+	{
+		if (currentPrimaryTab === "live")
+			settings.ui3_sidebar_visible_on_live = settings.ui3_sidebar_visible_on_live === "1" ? "0" : "1";
+		else if (currentPrimaryTab === "clips")
+			settings.ui3_sidebar_visible_on_clips = settings.ui3_sidebar_visible_on_clips === "1" ? "0" : "1";
+		else if (currentPrimaryTab === "timeline")
+			settings.ui3_sidebar_visible_on_timeline = settings.ui3_sidebar_visible_on_timeline === "1" ? "0" : "1";
+		resized();
+		return;
+	}
 }
 function setSystemNameButtonState()
 {
@@ -5780,6 +5866,11 @@ function setSystemNameButtonState()
 		$("#systemnamewrapper").removeClass("hot");
 	else
 		$("#systemnamewrapper").addClass("hot");
+}
+function SidebarHiddenButtonClick(e)
+{
+	e.stopPropagation();
+	uiSettingsPanel.open('Side Bar');
 }
 ///////////////////////////////////////////////////////////////
 // Left Bar Boolean Options ///////////////////////////////////
@@ -32724,6 +32815,17 @@ function OnChange_ui3_browserZoomEnabled()
 	SetBrowserZoom(settings.ui3_browserZoomEnabled === "1");
 	imageRenderer.onToggleBrowserZoom();
 }
+function SetBrowserZoom(enable)
+{
+	if (enable)
+		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1');
+	else
+		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no');
+}
+function OnChange_ui3_invert_ptz_focus_buttons()
+{
+	ptzButtons.UpdatePtzButtonMappings();
+}
 function OnChange_ui3_video_loading_overlay()
 {
 	if (settings.ui3_video_loading_overlay === "1")
@@ -32749,17 +32851,6 @@ function OnChange_ui3_video_loading_animation()
 		$('#camimg_loading_anim').addClass('disabledBySetting');
 		$('#camimg_false_loading_anim').addClass('disabledBySetting');
 	}
-}
-function SetBrowserZoom(enable)
-{
-	if (enable)
-		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1');
-	else
-		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no');
-}
-function OnChange_ui3_invert_ptz_focus_buttons()
-{
-	ptzButtons.UpdatePtzButtonMappings();
 }
 ///////////////////////////////////////////////////////////////
 // Form Field Helpers /////////////////////////////////////////

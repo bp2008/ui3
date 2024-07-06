@@ -474,4 +474,11 @@
 <symbol id="svg_mio_download" viewBox="3 3 18 18">
 	<path d="M5,20h14v-2H5V20z M19,9h-4V3H9v6H5l7,7L19,9z"/>
 </symbol>
+<symbol id="svg_mio_view_sidebar" viewBox="2 2 20 20">
+	<path d="M16,20H2V4h14V20z M18,8h4V4h-4V8z M18,20h4v-4h-4V20z M18,14h4v-4h-4V14z"/>
+</symbol>
+<symbol id="sidebar_hidden" viewBox="0 0 60 72">
+	<path d="M0 0v22h60V0Zm6 6h48v10H6Z" class="svg_topbar" />
+	<path d="M0 42v12h6V42ZM22 42v12h6V42ZM0 36h6v-6h6v-6H0ZM16 24v6h6v6h6V24ZM28 60h-6v6h-6v6h12zM12 72v-6H6v-6H0v12z" class="svg_sidebar" />
+</symbol>
 </svg>

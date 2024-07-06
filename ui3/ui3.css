@@ -243,6 +243,11 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	background-color: var(--panel-bg-color);
 }
 
+	#layoutleft.disabledBySetting
+	{
+		display: none;
+	}
+
 .clipExportPanel
 {
 	width: 256px;
@@ -454,6 +459,44 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 .developerMode #systemnamewrapper
 {
 	background-color: #a35513;
+}
+
+#systemnamewrapper
+{
+	position: relative;
+}
+
+	#systemnamewrapper #sidebar_hidden_button
+	{
+		display: none;
+		line-height: 0px;
+		font-size: 0px;
+		position: absolute;
+		left: 0px;
+		top: 2px;
+		opacity: 0.4;
+		/*background-color: rgba(0,0,0,0.4);*/
+	}
+
+		#systemnamewrapper #sidebar_hidden_button:hover
+		{
+			opacity: 0.8;
+		}
+
+		#systemnamewrapper #sidebar_hidden_button svg
+		{
+			width: 32px;
+			height: 32px;
+		}
+
+		#systemnamewrapper #sidebar_hidden_button.visible
+		{
+			display: block;
+		}
+
+svg .svg_sidebar
+{
+	opacity: 0.667;
 }
 
 .topbar_tab
@@ -1548,6 +1591,10 @@ div.invisibleLabel
 	bottom: 15px; /* Coupled: #sidebarPortraitDragbar top and height, #layoutleft margin-top, #statusArea bottom */
 }
 
+#statusArea.disabledBySetting
+{
+	display: none;
+}
 
 .serverStatusLabel
 {
