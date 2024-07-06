@@ -3970,43 +3970,7 @@ function resized()
 	var sidebarH = sidebarVis ? (windowH - topH) : 0;
 	var sidebarW = sidebarVis ? layoutsidebar.width() : 0;
 	var statusH = statusArea.outerHeight(true);
-	// Size layouttop
-	// Measure width of objects in top bar
-	var systemNameWidth = systemnamewrapper.width();
-	var topTabCurrentWidth = -1000;
-	var topWidthNoTabs = 5; // Workaround for rounding errors
-	var topTabCount = 0;
-	layouttop.children().each(function (idx, ele)
-	{
-		var $ele = $(ele);
-		var w = $ele.outerWidth(true);
-		if ($ele.hasClass("topbar_tab"))
-		{
-			topTabCurrentWidth = w;
-			topTabCount++;
-		}
-		else if ($ele.attr("id") != "systemnamewrapper")
-			topWidthNoTabs += w;
-	});
-	// Determine how much space is needed for top bar
-	var topTabDesiredWidth = portrait ? uiSizeHelper.GetPreferredSidebarSize() : sidebarW;
-	var topTabAllowableWidth = topTabDesiredWidth;
-	var systemNameAllowableWidth = topTabDesiredWidth;
-	var topBarDesiredWidth = topWidthNoTabs + (4 * topTabDesiredWidth);
-	var topTabMinWidth = 42;
-	if (topBarDesiredWidth > windowW)
-	{
-		topTabAllowableWidth = Math.min(topTabDesiredWidth, ((windowW - topWidthNoTabs) - topTabDesiredWidth) / topTabCount);
-		if (topTabAllowableWidth < topTabMinWidth)
-		{
-			topTabAllowableWidth = topTabMinWidth;
-			systemNameAllowableWidth = (windowW - topWidthNoTabs) - (topTabAllowableWidth * topTabCount);
-		}
-	}
-	if (topTabCurrentWidth != topTabAllowableWidth)
-		layouttop.children(".topbar_tab").css("width", topTabAllowableWidth + "px");
-	if (systemNameWidth != systemNameAllowableWidth)
-		systemnamewrapper.css("width", systemNameAllowableWidth + "px");
+	// layouttop is sized with flexbox since UI3-269
 
 	// Size layoutsidebar
 	var sidebarT = topH;

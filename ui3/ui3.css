@@ -210,6 +210,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	background-color: var(--panel-bg-color);
 	overflow: hidden;
 	z-index: 100;
+	display: flex;
 }
 
 .sizeMedium #layouttop
@@ -344,12 +345,57 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 }
 
 /* Top Bar / Tabs */
-#topbar_vertical_align_helper
+#layouttop > *
 {
-	display: inline-block;
-	width: 0px;
-	height: 100%;
-	vertical-align: middle;
+	flex: 0 0 auto;
+}
+
+#layouttop > #systemnamewrapper
+{
+	flex: 0 1 auto;
+}
+
+#layouttop > .topbar_tab
+{
+	flex: 0 1 auto;
+	min-width: 32px;
+}
+
+#layouttop > #topbar_gap
+{
+	flex: 1 1 auto;
+}
+
+@media (min-width: 500px)
+{
+	#layouttop > .topbar_tab
+	{
+		flex-shrink: 2;
+	}
+}
+
+@media (min-width: 600px)
+{
+	.sizeSmall #layouttop > #systemnamewrapper
+	{
+		flex-shrink: 0;
+	}
+}
+
+@media (min-width: 750px)
+{
+	.sizeMedium #layouttop > #systemnamewrapper
+	{
+		flex-shrink: 0;
+	}
+}
+
+@media (min-width: 1000px)
+{
+	.sizeLarge #layouttop > #systemnamewrapper
+	{
+		flex-shrink: 0;
+	}
 }
 
 #systemnamewrapper, .topbar_tab
@@ -481,11 +527,6 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 #topbar_tab_timeline
 {
 	position: relative;
-}
-
-.topbar_right_floating
-{
-	float: right;
 }
 
 #btn_main_menu
@@ -624,17 +665,17 @@ div.icon, a.icon
 			color: var(--text-active-color);
 		}
 
-.topbar_right_floating.icon.selected
+.topbar_icon.icon.selected
 {
 	color: var(--dropdown-item-blue-color);
 }
 
-	.topbar_right_floating.icon.selected:hover
+	.topbar_icon.icon.selected:hover
 	{
 		color: var(--dropdown-item-blue-hover-color);
 	}
 
-	.topbar_right_floating.icon.selected:active
+	.topbar_icon.icon.selected:active
 	{
 		color: var(--dropdown-item-blue-active-color);
 	}
@@ -5841,10 +5882,12 @@ div::-webkit-scrollbar-corner
 		background-color: #EA2D2D;
 		box-shadow: 0px 0px 5px rgba(255,255,255,0.5) inset;
 	}
+
 .setStartFrame
 {
 	color: rgba(0,128,0,0.75);
 }
+
 .setEndFrame
 {
 	color: rgba(255,0,0,0.75);
