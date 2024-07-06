@@ -1014,7 +1014,11 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_cps_uiSettings_category_Video_Player__Advanced_visible"
+			key: "ui3_cps_uiSettings_category_Video_Player__Advanced__visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_Timeline_visible"
 			, value: "1"
 		}
 		, {
@@ -1046,7 +1050,7 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_cps_uiSettings_category_Camera_Labels_visible"
+			key: "ui3_cps_uiSettings_category_UI3_Camera_Labels_visible"
 			, value: "1"
 		}
 		, {
@@ -1054,7 +1058,7 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_cps_uiSettings_category_MQTT_Remote_Control"
+			key: "ui3_cps_uiSettings_category_MQTT_Remote_Control_visible"
 			, value: "1"
 		}
 		, {
