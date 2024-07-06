@@ -1585,6 +1585,17 @@ var defaultSettings =
 			, category: "Top Bar"
 		}
 		, {
+			key: "ui3_system_name_button"
+			, value: "About This UI"
+			, inputType: "select"
+			, options: []
+			, getOptions: getSystemNameButtonOptions
+			, label: 'System Name Button Action'
+			, hint: 'This action occurs when you click the system name in the upper left.'
+			, onChange: setSystemNameButtonState
+			, category: "Top Bar"
+		}
+		, {
 			key: "ui3_clipPreviewEnabled"
 			, value: "1"
 			, inputType: "checkbox"
@@ -3143,17 +3154,6 @@ var defaultSettings =
 			, inputType: "select"
 			, label: 'Context Menu Trigger<br><a href="javascript:UIHelp.LearnMore(\'Context Menu Trigger\')">(learn more)</a>'
 			, onChange: OnChange_ui3_contextMenus_trigger
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_system_name_button"
-			, value: "About This UI"
-			, inputType: "select"
-			, options: []
-			, getOptions: getSystemNameButtonOptions
-			, label: 'System Name Button Action'
-			, hint: 'This action occurs when you click the system name in the upper left.'
-			, onChange: setSystemNameButtonState
 			, category: "Extra"
 		}
 	];
