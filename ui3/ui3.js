@@ -1513,6 +1513,14 @@ var defaultSettings =
 			, category: "UI Status Sounds"
 		}
 		, {
+			key: "ui3_topbar_save_snapshot_btn_show"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: "Save Snapshot Button"
+			, onChange: OnChange_ui3_topbar_save_snapshot_btn_show
+			, category: "Top Bar"
+		}
+		, {
 			key: "ui3_topbar_allclips_shortcut_show"
 			, value: "1"
 			, inputType: "checkbox"
@@ -3637,6 +3645,7 @@ $(function ()
 	}
 
 	OnChange_ui3_time24hour();
+	OnChange_ui3_topbar_save_snapshot_btn_show();
 	OnChange_ui3_topbar_allclips_shortcut_show();
 	OnChange_ui3_topbar_alerts_shortcut_show();
 	OnChange_ui3_topbar_alerts_confirmed_shortcut_show();
@@ -32499,6 +32508,13 @@ function GetPreferredContextMenuTrigger()
 function OnChange_ui3_time24hour()
 {
 	use24HourTime = settings.ui3_time24hour == "1";
+}
+function OnChange_ui3_topbar_save_snapshot_btn_show()
+{
+	if (settings.ui3_topbar_save_snapshot_btn_show === "1")
+		$("#save_snapshot_btn").show();
+	else
+		$("#save_snapshot_btn").hide();
 }
 function OnChange_ui3_topbar_allclips_shortcut_show()
 {
