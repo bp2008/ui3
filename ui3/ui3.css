@@ -3514,6 +3514,18 @@ body + div
 	visibility: hidden;
 }
 
+#camimg_loading.disabledBySetting,
+#camimg_false_loading.disabledBySetting
+{
+	background-color: rgba(0,0,0,0);
+}
+
+#camimg_loading_anim.disabledBySetting,
+#camimg_false_loading_anim.disabledBySetting
+{
+	visibility: hidden;
+}
+
 #camimg_false_loading_anim
 {
 	display: block;

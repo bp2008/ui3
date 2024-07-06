@@ -1395,6 +1395,22 @@ var defaultSettings =
 			, category: "Video Player (Advanced)"
 		}
 		, {
+			key: "ui3_video_loading_overlay"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Darken Video While Loading'
+			, onChange: OnChange_ui3_video_loading_overlay
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_video_loading_animation"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Spinner Animation While Loading'
+			, onChange: OnChange_ui3_video_loading_animation
+			, category: "Video Player (Advanced)"
+		}
+		, {
 			key: "ui3_playback_skipDeadAir"
 			, value: 0
 			, inputType: "threeState"
@@ -3658,6 +3674,8 @@ $(function ()
 	OnChange_ui3_extra_playback_controls_padding();
 	OnChange_ui3_ir_brightness_contrast();
 	OnChange_ui3_ptzHome();
+	OnChange_ui3_video_loading_overlay();
+	OnChange_ui3_video_loading_animation();
 	OnChange_ui3_sideBarPosition();
 	OnChange_ui3_browserZoomEnabled();
 	OnChange_ui3_showClipListFilterSearch();
@@ -32705,6 +32723,32 @@ function OnChange_ui3_browserZoomEnabled()
 {
 	SetBrowserZoom(settings.ui3_browserZoomEnabled === "1");
 	imageRenderer.onToggleBrowserZoom();
+}
+function OnChange_ui3_video_loading_overlay()
+{
+	if (settings.ui3_video_loading_overlay === "1")
+	{
+		$('#camimg_loading').removeClass('disabledBySetting');
+		$('#camimg_false_loading').removeClass('disabledBySetting');
+	}
+	else
+	{
+		$('#camimg_loading').addClass('disabledBySetting');
+		$('#camimg_false_loading').addClass('disabledBySetting');
+	}
+}
+function OnChange_ui3_video_loading_animation()
+{
+	if (settings.ui3_video_loading_animation === "1")
+	{
+		$('#camimg_loading_anim').removeClass('disabledBySetting');
+		$('#camimg_false_loading_anim').removeClass('disabledBySetting');
+	}
+	else
+	{
+		$('#camimg_loading_anim').addClass('disabledBySetting');
+		$('#camimg_false_loading_anim').addClass('disabledBySetting');
+	}
 }
 function SetBrowserZoom(enable)
 {
