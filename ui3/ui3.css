@@ -146,6 +146,11 @@ svg.stroke
 	width: 40px;
 }
 /* Main */
+html
+{
+	overscroll-behavior: none; /* Prevents overscroll of the entire page on iOS when swiping down in PWA */
+}
+
 a[role="button"]
 {
 	cursor: pointer;
