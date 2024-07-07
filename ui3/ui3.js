@@ -1594,7 +1594,7 @@ var defaultSettings =
 			key: "ui3_sidebar_visible_on_live"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: 'Show Side Bar on Live View Tab'
+			, label: 'Show Side Bar<div class="settingDesc">on Live View Tab</div>'
 			, onChange: resized
 			, category: "Side Bar"
 		}
@@ -1602,15 +1602,7 @@ var defaultSettings =
 			key: "ui3_sidebar_visible_on_clips"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: 'Show Side Bar on Clips Tab'
-			, onChange: resized
-			, category: "Side Bar"
-		}
-		, {
-			key: "ui3_sidebar_visible_on_timeline"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: 'Show Side Bar on Timeline Tab'
+			, label: 'Show Side Bar<div class="settingDesc">on Clips tab</div>'
 			, onChange: resized
 			, category: "Side Bar"
 		}
@@ -1630,6 +1622,84 @@ var defaultSettings =
 			, label: "Side Bar Position"
 			, onChange: OnChange_ui3_sideBarPosition
 			, category: "Side Bar"
+		}
+		, {
+			key: "ui3_status_area_show"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show Status Area<div class="settingDesc">on Live View tab</div>'
+			, onChange: resized
+			, category: "Status Area" // Note all status area settings should contain the text "status area" in a filterable field.
+		}
+		, {
+			key: "ui3_status_area_show_clips"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show Status Area<div class="settingDesc">on Clips tab</div>'
+			, onChange: resized
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_show_timeline"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Show Status Area<div class="settingDesc">on Timeline tab</div>'
+			, onChange: resized
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_name"
+			, value: "Server Status"
+			, inputType: "select"
+			, options: ["Server Status", "Status"]
+			, label: 'Status Area Label'
+			, hint: 'You can change the label shown in the status area.'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_bar_key_1"
+			, value: "Server CPU"
+			, inputType: "select"
+			, options: []
+			, getOptions: GetStatusAreaBarOptions
+			, label: 'Status Bar 1'
+			, hint: 'Choose what is shown in bar 1 of the Status Area'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_bar_key_2"
+			, value: "Server Memory"
+			, inputType: "select"
+			, options: []
+			, getOptions: GetStatusAreaBarOptions
+			, label: 'Status Bar 2'
+			, hint: 'Choose what is shown in bar 2 of the Status Area'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_bar_key_3"
+			, value: "Server Disk"
+			, inputType: "select"
+			, options: []
+			, getOptions: GetStatusAreaBarOptions
+			, label: 'Status Bar 3'
+			, hint: 'Choose what is shown in bar 3 of the Status Area'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
+		}
+		, {
+			key: "ui3_status_area_bar_key_4"
+			, value: "Stream FPS"
+			, inputType: "select"
+			, options: []
+			, getOptions: GetStatusAreaBarOptions
+			, label: 'Status Bar 4'
+			, hint: 'Choose what is shown in bar 4 of the Status Area'
+			, onChange: OnChange_ui3_status_area
+			, category: "Status Area"
 		}
 		, {
 			key: "ui3_clipPreviewEnabled"
@@ -3048,68 +3118,6 @@ var defaultSettings =
 			, category: "MQTT Remote Control"
 		}
 		, {
-			key: "ui3_status_area_show"
-			, value: "1"
-			, inputType: "checkbox"
-			, label: 'Show Status Area in Side Bar'
-			, onChange: resized
-			, category: "Status Area" // Note all status area settings should contain the text "status area" in a filterable field.
-		}
-		, {
-			key: "ui3_status_area_name"
-			, value: "Server Status"
-			, inputType: "select"
-			, options: ["Server Status", "Status"]
-			, label: 'Status Area Label'
-			, hint: 'You can change the label shown in the status area.'
-			, onChange: OnChange_ui3_status_area
-			, category: "Status Area"
-		}
-		, {
-			key: "ui3_status_area_bar_key_1"
-			, value: "Server CPU"
-			, inputType: "select"
-			, options: []
-			, getOptions: GetStatusAreaBarOptions
-			, label: 'Status Bar 1'
-			, hint: 'Choose what is shown in bar 1 of the Status Area'
-			, onChange: OnChange_ui3_status_area
-			, category: "Status Area"
-		}
-		, {
-			key: "ui3_status_area_bar_key_2"
-			, value: "Server Memory"
-			, inputType: "select"
-			, options: []
-			, getOptions: GetStatusAreaBarOptions
-			, label: 'Status Bar 2'
-			, hint: 'Choose what is shown in bar 2 of the Status Area'
-			, onChange: OnChange_ui3_status_area
-			, category: "Status Area"
-		}
-		, {
-			key: "ui3_status_area_bar_key_3"
-			, value: "Server Disk"
-			, inputType: "select"
-			, options: []
-			, getOptions: GetStatusAreaBarOptions
-			, label: 'Status Bar 3'
-			, hint: 'Choose what is shown in bar 3 of the Status Area'
-			, onChange: OnChange_ui3_status_area
-			, category: "Status Area"
-		}
-		, {
-			key: "ui3_status_area_bar_key_4"
-			, value: "Stream FPS"
-			, inputType: "select"
-			, options: []
-			, getOptions: GetStatusAreaBarOptions
-			, label: 'Status Bar 4'
-			, hint: 'Choose what is shown in bar 4 of the Status Area'
-			, onChange: OnChange_ui3_status_area
-			, category: "Status Area"
-		}
-		, {
 			key: "ui3_fullscreen_videoonly"
 			, value: "1"
 			, inputType: "checkbox"
@@ -4029,7 +4037,6 @@ function resized()
 	var el_layoutbottom = layoutbottom.get(0);
 	var statusArea = $("#statusArea");
 	var llrControls = $("#layoutLeftRecordingsControls");
-	var systemnamewrapper = $("#systemnamewrapper");
 	var camimg_loading_anim = $("#camimg_loading_anim,#camimg_false_loading_anim");
 	var videoCenter_Icons = $("#camimg_playIcon,#camimg_pauseIcon");
 	var videoCenter_Bg = $("#camimg_centerIconBackground");
@@ -4050,7 +4057,7 @@ function resized()
 	var sidebarT = topH;
 	var $dragBar = $("#sidebarPortraitDragbar");
 	var dragBarH = 0;
-	if (settings.ui3_is_maximized !== "1" && sidebarVis)
+	if (settings.ui3_is_maximized !== "1")
 	{
 		if (currentPrimaryTab == "timeline")
 		{
@@ -4061,15 +4068,18 @@ function resized()
 			sidebarT = windowH - sidebarH;
 			$dragBar.hide();
 		}
-		else if (portrait)
+		else if (sidebarVis)
 		{
-			sidebarH = Math.round(sidebarResizeBar.getSidebarSize() * (windowH - topH - botH));
-			sidebarT = windowH - sidebarH;
-			$dragBar.show();
-			dragBarH = $dragBar.height();
+			if (portrait)
+			{
+				sidebarH = Math.round(sidebarResizeBar.getSidebarSize() * (windowH - topH - botH));
+				sidebarT = windowH - sidebarH;
+				$dragBar.show();
+				dragBarH = $dragBar.height();
+			}
+			else
+				$dragBar.hide();
 		}
-		else
-			$dragBar.hide();
 	}
 	layoutsidebar.css("top", sidebarT + "px");
 	layoutsidebar.css("height", sidebarH + "px");
@@ -4299,30 +4309,54 @@ function UiSizeHelper()
 }
 function HandleSidebarVisibilityChange()
 {
-	if (settings.ui3_status_area_show === "1")
-	{
-		$("#statusArea").removeClass('disabledBySetting');
-	}
-	else
-	{
-		$("#statusArea").addClass('disabledBySetting');
-	}
+	var showSidebar = false;
+	var showSidebarHiddenButton = false;
+	var showStatusArea = false;
 
 	if ((currentPrimaryTab === "live" && settings.ui3_sidebar_visible_on_live === "0")
-		|| (currentPrimaryTab === "clips" && settings.ui3_sidebar_visible_on_clips === "0")
-		|| (currentPrimaryTab === "timeline" && (settings.ui3_sidebar_visible_on_timeline === "0" || settings.ui3_status_area_show !== "1")))
+		|| (currentPrimaryTab === "clips" && settings.ui3_sidebar_visible_on_clips === "0"))
 	{
-		$('#layoutleft').addClass('disabledBySetting');
+		showSidebar = false;
 		if (settings.ui3_show_sidebar_hidden_button === "1")
-			$('#sidebar_hidden_button').addClass('visible');
+			showSidebarHiddenButton = true;
 		else
-			$('#sidebar_hidden_button').removeClass('visible');
+			showSidebarHiddenButton = false;
 	}
 	else
 	{
-		$('#layoutleft').removeClass('disabledBySetting');
-		$('#sidebar_hidden_button').removeClass('visible');
+		showSidebar = true;
+		showSidebarHiddenButton = false;
 	}
+
+	if ((currentPrimaryTab === "live" && settings.ui3_status_area_show === "0")
+		|| (currentPrimaryTab === "clips" && settings.ui3_status_area_show_clips === "0")
+		|| (currentPrimaryTab === "timeline" && settings.ui3_status_area_show_timeline === "0"))
+	{
+		showStatusArea = false;
+		if (currentPrimaryTab === "timeline")
+			showSidebar = false;
+	}
+	else
+	{
+		showStatusArea = true;
+		if (currentPrimaryTab === "timeline")
+			showSidebar = true;
+	}
+
+	if (showSidebar)
+		$('#layoutleft').removeClass('disabledBySetting');
+	else
+		$('#layoutleft').addClass('disabledBySetting');
+
+	if (showSidebarHiddenButton)
+		$("#sidebar_hidden_button").addClass('visible');
+	else
+		$("#sidebar_hidden_button").removeClass('visible');
+
+	if (showStatusArea)
+		$("#statusArea").removeClass('disabledBySetting');
+	else
+		$("#statusArea").addClass('disabledBySetting');
 }
 ///////////////////////////////////////////////////////////////
 // Portrait Layout Sidebar Resize Bar /////////////////////////
@@ -5851,12 +5885,15 @@ function systemNameButtonClick()
 	if (settings.ui3_system_name_button === "Toggle Side Bar")
 	{
 		if (currentPrimaryTab === "live")
+		{
 			settings.ui3_sidebar_visible_on_live = settings.ui3_sidebar_visible_on_live === "1" ? "0" : "1";
+			resized();
+		}
 		else if (currentPrimaryTab === "clips")
+		{
 			settings.ui3_sidebar_visible_on_clips = settings.ui3_sidebar_visible_on_clips === "1" ? "0" : "1";
-		else if (currentPrimaryTab === "timeline")
-			settings.ui3_sidebar_visible_on_timeline = settings.ui3_sidebar_visible_on_timeline === "1" ? "0" : "1";
-		resized();
+			resized();
+		}
 		return;
 	}
 }
