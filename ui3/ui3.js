@@ -214,6 +214,7 @@ var cookies_accessible = false;
 var fetch_streams_cant_close_bug = false;
 var flac_supported = false;
 var speech_synthesis_supported = false;
+var gamepad_api_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -261,6 +262,7 @@ function DoUIFeatureDetection()
 			html5HistoryPushEnabled = shouldHtml5HistoryPushBeEnabled();
 			flac_supported = isFlacSupported();
 			speech_synthesis_supported = isSpeechSupported();
+			gamepad_api_supported = typeof navigator.getGamepads === "function";
 
 			$(function ()
 			{
@@ -348,6 +350,10 @@ function DoUIFeatureDetection()
 				if (fetch_streams_cant_close_bug)
 				{
 					ul_root.append('<li>This browser has a compatibility issue which makes H.264 streams not close properly, leading to stability problems.  H.264 playback is disabled by default, but may be re-enabled in UI Settings -&gt; Video Player.</li>');
+				}
+				if (!gamepad_api_supported)
+				{
+					ul_root.append('<li>Gamepads/Joysticks are not supported.</li>');
 				}
 				if (ul_root.children().length > 0)
 				{
@@ -631,6 +637,7 @@ var genericQualityHelper = null;
 var streamingProfileUI = null;
 var relativePTZ = null;
 var ptzButtons = null;
+var gamepadPtzController = null;
 var playbackHeader = null;
 var exportControls = null;
 var clipExportPanel = null;
@@ -3172,7 +3179,13 @@ var defaultSettings =
 			, hint: 'If enabled, smaller icon will be focus near.  If disabled, the larger icon will be focus near.'
 			, onChange: OnChange_ui3_invert_ptz_focus_buttons
 			, category: "Extra"
-
+		}
+		, {
+			key: "ui3_experimental_gamepad_ptz"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'PTZ control via Gamepad<div class="settingDesc">(experimental)</div>'
+			, category: "Extra"
 		}
 		, {
 			key: "ui3_show_cameras_in_group_dropdowns"
@@ -3507,6 +3520,8 @@ $(function ()
 	relativePTZ = new RelativePTZ();
 
 	ptzButtons = new PtzButtons();
+
+	gamepadPtzController = new GamepadPtzController();
 
 	if (!any_h264_playback_supported)
 		loadingHelper.SetLoadedStatus("h264"); // We aren't going to load the player, so clear the loading step.
@@ -6563,11 +6578,11 @@ function PtzButtons()
 					{
 						unsafePtzActionQueued = function ()
 						{
-							self.PTZ_unsafe_async_guarantee(currentPtzCamId, currentPtz, 1);
+							self.PTZ_unsafe_async_guarantee(currentPtzCamId, currentPtz, 1, { stop: true }); // stop: true is something I just made up to make it easier to tell the intent of the JSON payload.  Blue Iris is not expected to read it.
 						};
 					}
 					else
-						self.PTZ_unsafe_async_guarantee(currentPtzCamId, currentPtz, 1);
+						self.PTZ_unsafe_async_guarantee(currentPtzCamId, currentPtz, 1, { stop: true });
 				}
 				unsafePtzActionNeedsStopped = false;
 			}
@@ -7076,6 +7091,293 @@ var ptzPresetThumbLoader = new (function ()
 		return true;
 	}
 })();
+///////////////////////////////////////////////////////////////
+// Gamepad PTZ ////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function GamepadPtzController()
+{
+	var self = this;
+	var states = new FasterObjectMap();
+	var startedLoop = false;
+	var lastUnsafePtzCmd = null;
+	// Button ID constants
+	var UP = 12;
+	var DOWN = 13;
+	var LEFT = 14;
+	var RIGHT = 15;
+	var A = 0;
+	var B = 1;
+	var X = 2;
+	var Y = 3;
+
+	function Initialize()
+	{
+		if (gamepad_api_supported)
+		{
+			window.addEventListener("gamepadconnected", gamepadConnected);
+			window.addEventListener("gamepaddisconnected", gamepadDisconnected);
+			console.log("Gamepad API initialized.");
+			//var arr = navigator.getGamepads();
+			//if (arr)
+			//	for (var i = 0; i < arr.length; i++)
+			//		addGamepad(arr[i]);
+		}
+	}
+
+	function gamepadConnected(e)
+	{
+		addGamepad(e.gamepad);
+
+		if (!startedLoop)
+		{
+			requestAnimationFrame(gamepadLoop);
+			startedLoop = true;
+		}
+	}
+
+	function gamepadDisconnected(e)
+	{
+		delete states[e.gamepad.index];
+		console.log(
+			"Gamepad disconnected from index %d: %s",
+			e.gamepad.index,
+			e.gamepad.id,
+		);
+	}
+
+	function addGamepad(gamepad)
+	{
+		if (gamepad)
+		{
+			states[gamepad.index] = new UI3GamepadState(gamepad);
+
+			console.log(
+				"Gamepad connected at index %d: %s. %d buttons, %d axes.",
+				gamepad.index,
+				gamepad.id,
+				gamepad.buttons.length,
+				gamepad.axes.length,
+			);
+		}
+	}
+
+	//function removeGamepad(gamepad)
+	//{
+	//	if (gamepad)
+	//	{
+	//		for (var i = 0; i < wrappers.length; i++)
+	//			if (wrappers[i] === gamepad)
+	//				wrappers.splice(i, 1);
+	//	}
+	//}
+
+	function gamepadLoop()
+	{
+		if (settings.ui3_experimental_gamepad_ptz === "1")
+		{
+			var arr = navigator.getGamepads();
+			for (var i = 0; i < arr.length; i++)
+			{
+				try
+				{
+					var gamepad = arr[i];
+					if (gamepad)
+					{
+						var state = states[gamepad.index];
+						if (!state)
+						{
+							states[gamepad.index] = state = new UI3GamepadState(gamepad);
+							console.log("Gamepad at index " + gamepad.index + " was discovered during loop iteration.");
+						}
+						state.handleInputs(gamepad);
+					}
+				}
+				catch (ex)
+				{
+					toaster.Error(ex);
+				}
+			}
+			try
+			{
+				var ptzCmds = ptzButtons.GetPtzCmds();
+				var unsafePtzCmd = null;
+				if (IsButtonPressed(A))
+					unsafePtzCmd = ptzCmds["PTZzoomOut"];
+				else if (IsButtonPressed(Y))
+					unsafePtzCmd = ptzCmds["PTZzoomIn"];
+				else if (IsButtonPressed(B))
+					unsafePtzCmd = ptzCmds["PTZfocusSmall"];
+				else if (IsButtonPressed(X))
+					unsafePtzCmd = ptzCmds["PTZfocusLarge"];
+				else if (IsButtonPressed(UP) || IsSimpleAnalogDirectionHeld(UP))
+				{
+					if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
+						unsafePtzCmd = ptzCmds["PTZordinalNW"];
+					else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
+						unsafePtzCmd = ptzCmds["PTZordinalNE"];
+					else
+						unsafePtzCmd = ptzCmds["PTZcardinalUp"];
+				}
+				else if (IsButtonPressed(DOWN) || IsSimpleAnalogDirectionHeld(DOWN))
+				{
+					if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
+						unsafePtzCmd = ptzCmds["PTZordinalSW"];
+					else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
+						unsafePtzCmd = ptzCmds["PTZordinalSE"];
+					else
+						unsafePtzCmd = ptzCmds["PTZcardinalDown"];
+				}
+				else if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
+					unsafePtzCmd = ptzCmds["PTZcardinalLeft"];
+				else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
+					unsafePtzCmd = ptzCmds["PTZcardinalRight"];
+
+				var needsStopped = (unsafePtzCmd === null && lastUnsafePtzCmd !== null) || (unsafePtzCmd !== null && lastUnsafePtzCmd !== null && unsafePtzCmd !== lastUnsafePtzCmd);
+				lastUnsafePtzCmd = unsafePtzCmd;
+
+				if (needsStopped)
+				{
+					BI_PTZ_Action(lastUnsafePtzCmd, true);
+				}
+				else if (unsafePtzCmd !== null)
+				{
+					BI_PTZ_Action(unsafePtzCmd, false);
+				}
+			}
+			catch (ex)
+			{
+				toaster.Error(ex);
+			}
+		}
+		requestAnimationFrame(gamepadLoop);
+	}
+	function IsButtonPressed(button)
+	{
+		for (var key in states)
+		{
+			var state = states[key];
+			if (state.IsButtonPressed(button))
+				return true;
+		}
+	}
+	function IsSimpleAnalogDirectionHeld(direction)
+	{
+		var limit = 0.5;
+		var nlimit = limit * -1;
+		if (direction === LEFT)
+			return GetAxisValue(0) <= nlimit;
+		else if (direction === RIGHT)
+			return GetAxisValue(0) >= limit;
+		else if (direction === UP)
+			return GetAxisValue(1) <= nlimit;
+		else if (direction === DOWN)
+			return GetAxisValue(1) >= limit;
+		return false;
+	}
+	/**
+	 * Gets the current value of the specified axis.  Across all connected controllers, the controller with the largest absolute value of the axis position is the one whose value is returned.  May return undefined if no connected controller reports having a value for this axis.
+	 * @param {Number} axisIndex Axis index (0-based)
+	 */
+	function GetAxisValue(axisIndex)
+	{
+		var best = undefined;
+		var bestAbs = 0;
+		for (var key in states)
+		{
+			var state = states[key];
+			var value = state.GetAxisValue(axisIndex);
+			var absValue = Math.abs(value);
+			if (absValue > bestAbs)
+			{
+				bestAbs = absValue;
+				best = value;
+			}
+		}
+		return best;
+	}
+	Initialize();
+}
+function UI3GamepadState(gamepad)
+{
+	var self = this;
+	var lastButtons = [];
+	var lastAxes = [];
+
+	this.handleInputs = function (gamepad)
+	{
+		for (var i = 0; i < gamepad.axes.length; i++)
+		{
+			var axis = gamepad.axes[i];
+			axis = NormalizeAnalog(axis);
+
+			var lastAxis;
+			if (lastAxes.length > i)
+				lastAxis = lastAxes[i];
+			else
+				lastAxes.push(lastAxis = 0);
+			lastAxes[i] = axis;
+
+			//if (axis != lastAxis)
+			//{
+			//	console.log("Gamepad " + gamepad.index + " axis " + i + " value " + axis);
+			//}
+		}
+		for (var i = 0; i < gamepad.buttons.length; i++)
+		{
+			var button = gamepad.buttons[i];
+			button = { pressed: button.pressed, value: NormalizeAnalog(button.value) };
+
+			var lastButton;
+			if (lastButtons.length > i)
+				lastButton = lastButtons[i];
+			else
+				lastButtons.push(lastButton = { pressed: false, value: 0 });
+			lastButtons[i] = button;
+
+			//if (button.pressed != lastButton.pressed)
+			//{
+			//	onButtonPressed(i, button.pressed);
+			//	//if (button.pressed)
+			//	//{
+			//	//	console.log("Gamepad " + gamepad.index + " button " + i + " pressed.");
+			//	//}
+			//	//else
+			//	//{
+			//	//	console.log("Gamepad " + gamepad.index + " button " + i + " released.");
+			//	//}
+			//}
+
+			//if (button.value != lastButton.value)
+			//{
+			//	console.log("Gamepad " + gamepad.index + " button " + i + " value " + button.value);
+			//}
+		}
+	}
+	function onButtonPressed(buttonIndex, pressed)
+	{
+	}
+	function NormalizeAnalog(value)
+	{
+		if (Math.abs(value) < 0.2)
+			value = 0; // Dead zone of 0.2
+		return Math.round(value * 10) / 10;
+	}
+
+	this.IsButtonPressed = function (button)
+	{
+		var state = lastButtons[button];
+		if (state)
+			return state.pressed;
+		return false;
+	};
+
+	this.GetAxisValue = function (axisIndex)
+	{
+		if (axisIndex >= 0 && axisIndex < lastAxes.length)
+			return lastAxes[axisIndex];
+		return undefined;
+	};
+}
 ///////////////////////////////////////////////////////////////
 // Timeline ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
