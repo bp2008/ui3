@@ -66,8 +66,10 @@
 			</div>
 			<p><input type="button" value="Import" :disabled="!selectedImportFile" @click="importSelectedFile" /> {{selectedImportFileDescription}}</p>
 			<h2>Local Storage Erase</h2>
+			<p>This will "factory reset" UI3 in this web browser.</p>
 			<p><input type="button" value="Erase All Local Storage Data" @click="onEraseAllLocalStorage()" /></p>
 		</template>
+		<p>&nbsp;</p>
 		<p><a href="../ui3.htm">Go to UI3</a></p>
 	</div>
 	<script>

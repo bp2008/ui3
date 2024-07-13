@@ -32531,17 +32531,17 @@ function UISettingsPanel()
 	var Add_ImportAllSettingsButton = function (cat, rowIdx)
 	{
 		var $row = $('<div id="importAllSettingsBtn" class="uiSettingsRow dialogOption_item dialogOption_item_info"></div>');
-		var $input = $('<a class="input" href="javascript:void(0)">Import</a>');
-		$input.on('click', function ()
-		{
-			SimpleDialog.InputText("Import All Settings", "Paste settings that were previously exported.<br>If import is successful, UI3 will be reloaded.", function (inputText)
-			{
-				if (self.ImportSettingsJson(inputText))
-					ReloadInterface();
-			});
-		});
+		var $input = $('<a class="input" href="ui3/storageinfo.htm">ui3/storageinfo.htm</a>');
+		//$input.on('click', function ()
+		//{
+		//	SimpleDialog.InputText("Import All Settings", "Paste settings that were previously exported.<br>If import is successful, UI3 will be reloaded.", function (inputText)
+		//	{
+		//		if (self.ImportSettingsJson(inputText))
+		//			ReloadInterface();
+		//	});
+		//});
 		$row.append($input);
-		$row.append(GetDialogOptionLabel('Import All Settings'));
+		$row.append(GetDialogOptionLabel('Import All Settings<div class="settingDesc">(via <a href="ui3/storageinfo.htm">ui3/storageinfo.htm</a>)</div>'));
 		if (rowIdx++ % 2 == 1)
 			$row.addClass('everyOther');
 		cat.$section.append($row);
