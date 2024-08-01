@@ -74,8 +74,8 @@
 			"type": "image/png"
 		},
 		{
-			"src": "logos/launcher-icon192_ios.webp",
-			"sizes": "192x192",
+			"src": "logos/launcher-icon256_ios.webp",
+			"sizes": "256x256",
 			"type": "image/png"
 		}
 	],

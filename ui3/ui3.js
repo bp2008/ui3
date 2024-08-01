@@ -7523,9 +7523,8 @@ var isSendingJoystickCommand = false;
 var joystickDebugToast = null;
 function reverseBits(num)
 {
-
-	let reversed = num.toString(2);
-	const padding = "0";
+	var reversed = num.toString(2);
+	var padding = "0";
 	reversed = padding.repeat(16 - reversed.length) + reversed;
 	return parseInt(reversed.split('').reverse().join(''), 2);
 }
