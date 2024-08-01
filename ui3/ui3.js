@@ -6077,6 +6077,13 @@ function PtzButtons()
 	ptzTitles["PTZordinalSW"] = "Down Left";
 	ptzTitles["PTZordinalSE"] = "Down Right";
 
+	var ptzSvgIds = {};
+	for (var key in ptzCmds)
+	{
+		if (ptzCmds.hasOwnProperty(key))
+			ptzSvgIds[ptzCmds[key]] = key;
+	}
+
 	/**
 	 * Call to assign new PTZ button mappings based on UI settings.
 	 */
@@ -6095,6 +6102,13 @@ function PtzButtons()
 	this.GetPtzCmds = function ()
 	{
 		return ptzCmds;
+	}
+	/**
+	 * Returns the map of PTZ command number to svgid.
+	 */
+	this.GetPtzSvgIds = function ()
+	{
+		return ptzSvgIds;
 	}
 	/**
 	 * Returns the map of svgid to tooltip text for PTZ button mappings.
@@ -7241,8 +7255,11 @@ function GamepadPtzController()
 				}
 				else if (unsafePtzCmd !== null)
 				{
+					//var ptzSvgIds = ptzButtons.GetPtzSvgIds();
+					//console.log(ptzSvgIds[unsafePtzCmd]);
 					BI_PTZ_Action(unsafePtzCmd, false);
 				}
+				//PTZ_Joystick_Input(GetAxisValue(0), GetAxisValue(1), IsButtonPressed(Y) || GetAnalogButtonValue(7), IsButtonPressed(A) || GetAnalogButtonValue(6));
 			}
 			catch (ex)
 			{
@@ -7251,14 +7268,35 @@ function GamepadPtzController()
 		}
 		requestAnimationFrame(gamepadLoop);
 	}
-	function IsButtonPressed(button)
+	function IsButtonPressed(buttonIndex)
 	{
 		for (var key in states)
 		{
 			var state = states[key];
-			if (state.IsButtonPressed(button))
+			if (state.IsButtonPressed(buttonIndex))
 				return true;
 		}
+	}
+	/**
+	 * Gets the current value of the specified analog button.  Across all connected controllers, the controller with the largest absolute value of the button position is the one whose value is returned.  May return undefined if no connected controller reports having a value for this button.
+	 * @param {Number} buttonIndex Button index (0-based)
+	 */
+	function GetAnalogButtonValue(buttonIndex)
+	{
+		var best = undefined;
+		var bestAbs = 0;
+		for (var key in states)
+		{
+			var state = states[key];
+			var value = state.GetAnalogButtonValue(buttonIndex);
+			var absValue = Math.abs(value);
+			if (absValue > bestAbs)
+			{
+				bestAbs = absValue;
+				best = value;
+			}
+		}
+		return best;
 	}
 	function IsSimpleAnalogDirectionHeld(direction)
 	{
@@ -7296,6 +7334,23 @@ function GamepadPtzController()
 		return best;
 	}
 	Initialize();
+}
+try
+{
+	var ui3GamepadJoystickDeadzone_internal = 0.2;
+	if (typeof Object.defineProperty == "function")
+	{
+		Object.defineProperty(window, "ui3GamepadJoystickDeadzone", {
+			get: function () { return ui3GamepadJoystickDeadzone_internal; },
+			set: function (value) { ui3GamepadJoystickDeadzone_internal = Clamp(value, 0.01, 0.99); }
+		});
+	}
+	else
+		window.ui3GamepadJoystickDeadzone = ui3GamepadJoystickDeadzone_internal;
+}
+catch (ex)
+{
+	console.error(ex);
 }
 function UI3GamepadState(gamepad)
 {
@@ -7358,26 +7413,147 @@ function UI3GamepadState(gamepad)
 	}
 	function NormalizeAnalog(value)
 	{
-		if (Math.abs(value) < 0.2)
-			value = 0; // Dead zone of 0.2
-		return Math.round(value * 10) / 10;
+		if (Math.abs(value) < ui3GamepadJoystickDeadzone)
+			value = 0;
+		return value;
+		//return Math.round(value * 10) / 10;
 	}
 
-	this.IsButtonPressed = function (button)
+	this.IsButtonPressed = function (buttonIndex)
 	{
-		var state = lastButtons[button];
+		var state = lastButtons[buttonIndex];
 		if (state)
 			return state.pressed;
 		return false;
 	};
-
 	this.GetAxisValue = function (axisIndex)
 	{
 		if (axisIndex >= 0 && axisIndex < lastAxes.length)
 			return lastAxes[axisIndex];
 		return undefined;
 	};
+	this.GetAnalogButtonValue = function (buttonIndex)
+	{
+		var state = lastButtons[buttonIndex];
+		if (state)
+			return state.value;
+		return false;
+	};
 }
+function TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOut)
+{
+	function axisValueToSpeed(a)
+	{
+		var normalized = (Math.abs(a) - ui3GamepadJoystickDeadzone) / (1 - ui3GamepadJoystickDeadzone);
+		var scaledUp = Clamp(Math.round(normalized * 15), 1, 15);
+		scaledUp = ~~scaledUp; // cast to int
+		//console.log("normalized", normalized, "scaledUp", scaledUp);
+		return scaledUp & 0b1111;
+	}
+	var dbg = "";// "axisX " + axisX + ", axisY " + axisY;
+	var bitmask = 0;
+	if (axisZoomIn > 0)
+	{
+		bitmask |= (1 << 13);
+		bitmask |= axisValueToSpeed(axisZoomIn) << 4;
+		dbg += " zoom in";
+	}
+	else if (axisZoomOut > 0)
+	{
+		bitmask |= (1 << 14);
+		bitmask |= axisValueToSpeed(axisZoomOut) << 4;
+		dbg += " zoom out";
+	}
+	if (bitmask === 0)
+	{
+		if (axisY < 0)
+		{
+			bitmask |= (1 << 11); // tilt up
+			bitmask |= axisValueToSpeed(axisY);
+			dbg += " up " + axisValueToSpeed(axisY);
+		}
+		else if (axisY > 0)
+		{
+			bitmask |= (1 << 12); // tilt down
+			bitmask |= axisValueToSpeed(axisY);
+			dbg += " down " + axisValueToSpeed(axisY);
+		}
+
+		if (axisX < 0)
+		{
+			bitmask |= (1 << 10); // pan left
+			bitmask |= axisValueToSpeed(axisX) << 4;
+			dbg += " left " + axisValueToSpeed(axisX);
+		}
+		else if (axisX > 0)
+		{
+			bitmask |= (1 << 9); // pan right
+			bitmask |= axisValueToSpeed(axisX) << 4;
+			dbg += " right " + axisValueToSpeed(axisX);
+		}
+	}
+	if (joystickDebug)
+		console.log(dbg);
+
+	//bitmask = reverseBits(bitmask);
+	//// Endian Swap //
+	//var lsb = bitmask & 0b11111111;
+	//var msb = bitmask & 0b1111111100000000;
+	//bitmask = (lsb << 8) | (msb >> 8);
+	///////////////////
+
+	if (bitmask === 0)
+	{
+		if (joystickDebugToast)
+		{
+			joystickDebugToast.remove();
+			joystickDebugToast = null;
+		}
+	}
+	else if (!joystickDebugToast)
+		joystickDebugToast = toaster.Info('<div id="joystickDebugToast" style="white-space:pre-wrap"></div>', 99999999, false, null, 99999999);
+	$("#joystickDebugToast").text("Joystick: " + bitmask + "\n"
+		+ "Binary: " + dec2bin(bitmask).padLeft(16, "0") + "\n"
+		+ "English: " + dbg);
+	return bitmask;
+}
+var joystickDebug = false;
+var lastJoystickValue = null;
+var isSendingJoystickCommand = false;
+var joystickDebugToast = null;
+function reverseBits(num)
+{
+
+	let reversed = num.toString(2);
+	const padding = "0";
+	reversed = padding.repeat(16 - reversed.length) + reversed;
+	return parseInt(reversed.split('').reverse().join(''), 2);
+}
+function PTZ_Joystick_Input(axisX, axisY, axisZoomIn, axisZoomOut)
+{
+	if (isSendingJoystickCommand)
+		return;
+	var loading = videoPlayer.Loading();
+	if (loading.image.ptz && loading.image.isLive)
+	{
+		var jsVal = TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOut);
+		if (jsVal != lastJoystickValue)
+		{
+			var args = { cmd: "ptz", camera: loading.image.id, joystick: jsVal };
+			console.log("Sending PTZ joystick # " + dec2bin(jsVal).padLeft(16, "0"));
+			//isSendingJoystickCommand = true;
+			ExecJSON(args, function (response)
+			{
+				isSendingJoystickCommand = false;
+				lastJoystickValue = jsVal;
+			}, function ()
+			{
+				isSendingJoystickCommand = false;
+			});
+		}
+	}
+}
+
 ///////////////////////////////////////////////////////////////
 // Timeline ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -19699,7 +19875,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 		$parent = $('<div id="videoElement_wrapper"></div>');
 		$("#camimg_store").append($parent);
 
-		// If the video element is muted, browsers are more likely to let it play without user interaction.
+		// If the video element is muted, browsers are more likely to allow it play without user interaction.
 		var $player = $('<video id="html5MseVideoEle" muted></video>');
 		$parent.append($player);
 		player = $player.get(0);
@@ -26700,7 +26876,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 		{
 			if (aviEncoder && totalVideoFrames > 0)
 			{
-				// At least one frame was received before the failure.  Provide the AVI but let it be known that we didn't get all we expected.
+				// At least one frame was received before the failure.  Provide the AVI but make it known that we didn't get all we expected.
 				HandleAviReady(false, -1);
 			}
 			else
@@ -28257,6 +28433,67 @@ function HLSPlayer()
 		$ele.contextmenu(optionHls);
 	};
 }
+///////////////////////////////////////////////////////////////
+// Live Stream in Dialog Window ///////////////////////////////
+///////////////////////////////////////////////////////////////
+//function LiveStreamDialogWindow(camId)
+//{
+//	var self = this;
+//	var dialog = null;
+//	var streamer = null;
+//	var playerModule = null;
+
+//	function Initialize()
+//	{
+//		if (!any_h264_playback_supported)
+//		{
+//			toaster.Error("Unable to open a Live Stream Dialog Window because no H.264 player is supported.");
+//			return;
+//		}
+
+//		streamer = new SynchronousStreamFetcher();
+
+//		container = $('<div style="overflow: hidden;padding:0px;"></div>');
+
+//		if (any_h264_playback_supported)
+//		{
+//			playerModule = new FetchH264VideoModule();
+//		}
+
+//		dialog = container.dialog(
+//			{
+//				title: htmlEncode(cameraListLoader.GetCameraName(camId))
+//				, onClosing: DialogClosing
+//			});
+
+//		else
+//		{
+//			if (initSucceeded)
+//				BeginHlsPlayback(camId);
+//		}
+//	}
+//	function DialogClosing()
+//	{
+//		streamer.CloseStream();
+//		streamer = null;
+
+//		container = null;
+//		dialog = null;
+//	}
+
+//	this.CloseDialog = function ()
+//	{
+//		if (dialog != null)
+//			if (dialog.close())
+//				dialog = null;
+//	}
+//	this.IsOpen = function ()
+//	{
+//		return !!dialog;
+//	}
+
+//	Initialize();
+//}
 ///////////////////////////////////////////////////////////////
 // MediaSession (OS-provided media controls) //////////////////
 ///////////////////////////////////////////////////////////////
@@ -30437,7 +30674,7 @@ function LoadImagePromise(url, headers, imageSizeBytes)
 ///////////////////////////////////////////////////////////////
 // Fetch /video/ h.264 streaming //////////////////////////////
 ///////////////////////////////////////////////////////////////
-var safeFetch = new (function ()
+function SynchronousStreamFetcher()
 {
 	// This object makes sure only one fetch connection is open at a time, to keep from overloading Blue Iris.
 	// And to (slightly) reduce the risk of this bug:
@@ -30508,11 +30745,12 @@ var safeFetch = new (function ()
 		stopTimeout = null;
 		toaster.Error('Video streaming connection stuck open! You should reload the page.', 600000, true);
 	}
-})();
-var UINT32_MAX = 4294967296;
+}
+var safeFetch = new SynchronousStreamFetcher();
 function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockCallback, streamInfoCallback, streamEnded, options)
 {
 	var self = this;
+	var UINT32_MAX = 4294967296;
 	var cancel_streaming = false;
 	var stopCalledByApp = false;
 	var reader = null;

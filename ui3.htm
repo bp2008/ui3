@@ -88,7 +88,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "272";
+		var ui_version = "272-pwa-test";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -106,7 +106,7 @@
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : local_bi_session_arg_always;
 		document.getElementById("ui3manifest").href = 'applet/manifest.json?v=' + combined_version;
 		document.getElementById("ui3launcher1").href = 'applet/logos/launcher-icon48.png?v=' + combined_version;
-		document.getElementById("ui3launcher2").href = 'applet/launcher-icon.png?v=' + combined_version;
+		document.getElementById("ui3launcher2").href = 'applet/logos/launcher-icon192_ios.webp?v=' + combined_version;
 		document.write('<link href="ui3/libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
 			+ '<link href="ui3/ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
 			+ '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />');
