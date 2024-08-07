@@ -76,7 +76,7 @@
 		{
 			"src": "logos/launcher-icon256_ios.webp",
 			"sizes": "256x256",
-			"type": "image/png"
+			"type": "image/webp"
 		}
 	],
 	"background_color": "#000000",
