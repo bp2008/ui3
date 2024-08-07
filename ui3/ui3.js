@@ -7213,53 +7213,57 @@ function GamepadPtzController()
 			}
 			try
 			{
-				var ptzCmds = ptzButtons.GetPtzCmds();
-				var unsafePtzCmd = null;
-				if (IsButtonPressed(A))
-					unsafePtzCmd = ptzCmds["PTZzoomOut"];
-				else if (IsButtonPressed(Y))
-					unsafePtzCmd = ptzCmds["PTZzoomIn"];
-				else if (IsButtonPressed(B))
-					unsafePtzCmd = ptzCmds["PTZfocusSmall"];
-				else if (IsButtonPressed(X))
-					unsafePtzCmd = ptzCmds["PTZfocusLarge"];
-				else if (IsButtonPressed(UP) || IsSimpleAnalogDirectionHeld(UP))
+				if (joystickDev)
+					PTZ_Joystick_Input(GetAxisValue(0), GetAxisValue(1), IsButtonPressed(Y) || GetAnalogButtonValue(7), IsButtonPressed(A) || GetAnalogButtonValue(6));
+				else
 				{
-					if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
-						unsafePtzCmd = ptzCmds["PTZordinalNW"];
+					var ptzCmds = ptzButtons.GetPtzCmds();
+					var unsafePtzCmd = null;
+					if (IsButtonPressed(A))
+						unsafePtzCmd = ptzCmds["PTZzoomOut"];
+					else if (IsButtonPressed(Y))
+						unsafePtzCmd = ptzCmds["PTZzoomIn"];
+					else if (IsButtonPressed(B))
+						unsafePtzCmd = ptzCmds["PTZfocusSmall"];
+					else if (IsButtonPressed(X))
+						unsafePtzCmd = ptzCmds["PTZfocusLarge"];
+					else if (IsButtonPressed(UP) || IsSimpleAnalogDirectionHeld(UP))
+					{
+						if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
+							unsafePtzCmd = ptzCmds["PTZordinalNW"];
+						else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
+							unsafePtzCmd = ptzCmds["PTZordinalNE"];
+						else
+							unsafePtzCmd = ptzCmds["PTZcardinalUp"];
+					}
+					else if (IsButtonPressed(DOWN) || IsSimpleAnalogDirectionHeld(DOWN))
+					{
+						if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
+							unsafePtzCmd = ptzCmds["PTZordinalSW"];
+						else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
+							unsafePtzCmd = ptzCmds["PTZordinalSE"];
+						else
+							unsafePtzCmd = ptzCmds["PTZcardinalDown"];
+					}
+					else if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
+						unsafePtzCmd = ptzCmds["PTZcardinalLeft"];
 					else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
-						unsafePtzCmd = ptzCmds["PTZordinalNE"];
-					else
-						unsafePtzCmd = ptzCmds["PTZcardinalUp"];
-				}
-				else if (IsButtonPressed(DOWN) || IsSimpleAnalogDirectionHeld(DOWN))
-				{
-					if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
-						unsafePtzCmd = ptzCmds["PTZordinalSW"];
-					else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
-						unsafePtzCmd = ptzCmds["PTZordinalSE"];
-					else
-						unsafePtzCmd = ptzCmds["PTZcardinalDown"];
-				}
-				else if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
-					unsafePtzCmd = ptzCmds["PTZcardinalLeft"];
-				else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
-					unsafePtzCmd = ptzCmds["PTZcardinalRight"];
+						unsafePtzCmd = ptzCmds["PTZcardinalRight"];
 
-				var needsStopped = (unsafePtzCmd === null && lastUnsafePtzCmd !== null) || (unsafePtzCmd !== null && lastUnsafePtzCmd !== null && unsafePtzCmd !== lastUnsafePtzCmd);
-				lastUnsafePtzCmd = unsafePtzCmd;
+					var needsStopped = (unsafePtzCmd === null && lastUnsafePtzCmd !== null) || (unsafePtzCmd !== null && lastUnsafePtzCmd !== null && unsafePtzCmd !== lastUnsafePtzCmd);
+					lastUnsafePtzCmd = unsafePtzCmd;
 
-				if (needsStopped)
-				{
-					BI_PTZ_Action(lastUnsafePtzCmd, true);
+					if (needsStopped)
+					{
+						BI_PTZ_Action(lastUnsafePtzCmd, true);
+					}
+					else if (unsafePtzCmd !== null)
+					{
+						//var ptzSvgIds = ptzButtons.GetPtzSvgIds();
+						//console.log(ptzSvgIds[unsafePtzCmd]);
+						BI_PTZ_Action(unsafePtzCmd, false);
+					}
 				}
-				else if (unsafePtzCmd !== null)
-				{
-					//var ptzSvgIds = ptzButtons.GetPtzSvgIds();
-					//console.log(ptzSvgIds[unsafePtzCmd]);
-					BI_PTZ_Action(unsafePtzCmd, false);
-				}
-				//PTZ_Joystick_Input(GetAxisValue(0), GetAxisValue(1), IsButtonPressed(Y) || GetAnalogButtonValue(7), IsButtonPressed(A) || GetAnalogButtonValue(6));
 			}
 			catch (ex)
 			{
@@ -7518,6 +7522,7 @@ function TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOu
 	return bitmask;
 }
 var joystickDebug = false;
+var joystickDev = false;
 var lastJoystickValue = null;
 var isSendingJoystickCommand = false;
 var joystickDebugToast = null;
@@ -7540,7 +7545,7 @@ function PTZ_Joystick_Input(axisX, axisY, axisZoomIn, axisZoomOut)
 		{
 			var args = { cmd: "ptz", camera: loading.image.id, joystick: jsVal };
 			console.log("Sending PTZ joystick # " + dec2bin(jsVal).padLeft(16, "0"));
-			//isSendingJoystickCommand = true;
+			isSendingJoystickCommand = true;
 			ExecJSON(args, function (response)
 			{
 				isSendingJoystickCommand = false;

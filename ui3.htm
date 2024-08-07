@@ -104,7 +104,14 @@
 			combined_version += "-" + Date.now();
 		var local_bi_session_arg_always = local_bi_session ? "&session=" + local_bi_session : "";
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : local_bi_session_arg_always;
-		document.getElementById("ui3manifest").href = 'applet/manifest.json?v=' + combined_version;
+		function GetAppPath()
+		{
+			var appPath = "/" + appPath_raw.replace(/^\/+|\/+$/g, '');
+			if (appPath[appPath.length - 1] !== '/')
+				appPath = appPath + "/";
+			return appPath;
+		}
+		document.getElementById("ui3manifest").href = GetAppPath() + 'applet/manifest.json?v=' + combined_version;
 		document.getElementById("ui3launcher1").href = 'applet/logos/launcher-icon48.png?v=' + combined_version;
 		document.getElementById("ui3launcher2").href = 'applet/logos/launcher-icon256_ios.webp?v=' + combined_version;
 		document.write('<link href="ui3/libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
@@ -542,13 +549,6 @@
 	</div>
 	<script>
 		var loadingFailed403 = false;
-		function GetAppPath()
-		{
-			var appPath = "/" + appPath_raw.replace(/^\/+|\/+$/g, '');
-			if (appPath[appPath.length - 1] !== '/')
-				appPath = appPath + "/";
-			return appPath;
-		}
 		function checkResourceHttpStatus(url, callback)
 		{
 			var req = new XMLHttpRequest();
