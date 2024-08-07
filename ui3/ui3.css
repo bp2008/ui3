@@ -5018,7 +5018,7 @@ div.warningSymbol.button
 	text-align: center;
 }
 
-/* Camera Properties / Camera List / Clip Properties / Convert/Export List */
+/* Camera Properties / Camera List / Clip Properties / Convert/Export Queue */
 
 #cameralistdialog, #convertexportlistdialog
 {
@@ -5057,6 +5057,16 @@ div.warningSymbol.button
 	right: unset;
 	bottom: unset;
 	left: 7px;
+}
+
+#convertexportlistcontent .queuedCancelNotice
+{
+	display: none;
+}
+
+#convertexportlistcontent.hasItemsRemaining .queuedCancelNotice
+{
+	display: block;
 }
 
 .icon16
@@ -5162,6 +5172,12 @@ div.warningSymbol.button
 	{
 		padding-top: 90px;
 	}
+
+#convertexportlistcontent .exportlist_item.active,
+#convertexportlistcontent .exportlist_item.active .noLinkOverlay
+{
+	color: #00FF00;
+}
 
 .camlist_thumb
 {

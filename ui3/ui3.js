@@ -641,7 +641,7 @@ var gamepadPtzController = null;
 var playbackHeader = null;
 var exportControls = null;
 var clipExportPanel = null;
-var exportAPIStatusToast = null;
+var exportAPIStatusDialog = null;
 var seekBar = null;
 var playbackControls = null;
 var clipTimeline = null;
@@ -3640,7 +3640,7 @@ $(function ()
 
 	clipExportPanel = new ClipExportPanel();
 
-	exportAPIStatusToast = new ExportAPIStatusToast();
+	exportAPIStatusDialog = new ExportAPIStatusDialog();
 
 	seekBar = new SeekBar();
 
@@ -5347,7 +5347,7 @@ function DropdownBoxes()
 		, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
-		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export List", icon: "#svg_mio_launch", cssClass: "blueLarger" })
+		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export Queue", icon: "#svg_mio_launch", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "server_control", text: "Server Control", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
 		, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
@@ -26283,7 +26283,7 @@ function ClipExportPanel()
 
 		self.Close();
 
-		clipLoader.Multi_Export(state.recIdArray, exportOptions, exportAPIStatusToast.show);
+		clipLoader.Multi_Export(state.recIdArray, exportOptions, exportAPIStatusDialog.show);
 	}
 
 	this.UpdateRangeSelection = function (percentStart, percentEnd)
@@ -26314,9 +26314,9 @@ function ClipExportPanel()
 	Initialize();
 }
 ///////////////////////////////////////////////////////////////
-// Export API Status Toast ////////////////////////////////////
+// Export API Status Dialog ///////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function ExportAPIStatusToast()
+function ExportAPIStatusDialog()
 {
 	var self = this;
 
@@ -26370,7 +26370,7 @@ function ExportAPIStatusToast()
 							$activeItem = $body.find(".active_item");
 							$itemsQueued = $body.find(".items_queued");
 
-							var $fullDialogLink = $('<a role="button" tabindex="0">Open Convert/Export List</a>');
+							var $fullDialogLink = $('<a role="button" tabindex="0">Open Convert/Export Queue</a>');
 							$fullDialogLink.on('click', exportListDialog.open);
 							$body.append($('<div class="fullDialogLink"></div>').append($fullDialogLink));
 
@@ -26490,6 +26490,17 @@ function ExportAPIStatusToast()
 			}
 		}
 	}
+	this.notifyDeletingItem = function (path)
+	{
+		for (var i = 0; i < items.length; i++)
+		{
+			if (items[i].path === path)
+			{
+				items.splice(i, 1);
+				return;
+			}
+		}
+	}
 	var DialogClosing = function ()
 	{
 		isActive = false;
@@ -26515,7 +26526,8 @@ function ExportListDialog()
 
 	var dialog = null;
 	var $body = null;
-	var itemMap = {};
+	var $content = null;
+	var itemMap = new FasterObjectMap();
 	var loadedOnce = false;
 	var refreshTimeout = null;
 	var asyncThumbnailDownloader = null;
@@ -26525,14 +26537,15 @@ function ExportListDialog()
 		CloseDialog();
 
 		var $dlg = $('<div id="convertexportlistdialog"></div>');
-		var $content = $('<div id="convertexportlistcontent"></div>');
-		$content.append('<div class="heading">Click any item to download it.</div>');
+		$content = $('<div id="convertexportlistcontent"></div>');
+		$content.append('<div class="heading">Finished exports are accessible in <a href="javascript:clipLoader.LoadView(\'new.clipboard\')">Clips &gt; Clipboard</a>.<br></div>');
+		$content.append('<div class="heading queuedCancelNotice">Click any "Queued" item below to cancel it.</div>');
 		$body = $('<div></div>');
 		$content.append($body);
 		$dlg.append($content);
 
 		dialog = $dlg.dialog({
-			title: "Convert/Export List"
+			title: "Convert/Export Queue"
 			, onClosing: DialogClosing
 			, onRefresh: function () { refresh(); }
 		});
@@ -26540,6 +26553,26 @@ function ExportListDialog()
 		asyncThumbnailDownloader = new AsyncClipThumbnailDownloader();
 
 		refresh();
+	}
+	this.notifyDeletingItem = function (pathDeleting)
+	{
+		var queuedItemCount = 0;
+		for (var path in itemMap)
+		{
+			var item = itemMap[path];
+			if (pathDeleting === path)
+			{
+				item.jqEle.remove();
+				delete itemMap[path];
+			}
+			else if (item.status === 'queued')
+				queuedItemCount++;
+		}
+
+		if (queuedItemCount > 0)
+			$content.addClass("hasItemsRemaining");
+		else
+			$content.removeClass("hasItemsRemaining");
 	}
 	var refresh = function ()
 	{
@@ -26554,7 +26587,7 @@ function ExportListDialog()
 					if (response.data && (response.data.length === 0 || response.data.length > 0))
 						ExportListLoaded(response.data);
 					else
-						toaster.Warning("Data missing in Convert/Export List response.");
+						toaster.Warning("Data missing in Convert/Export Queue response.");
 					refreshTimeout = setTimeout(refresh, 4000);
 				}
 			}
@@ -26567,9 +26600,14 @@ function ExportListDialog()
 	{
 		if (!dialog)
 			return;
+		var seenItems = new FasterObjectMap();
+		var queuedItemCount = 0;
 		for (var i = itemArray.length - 1; i > -1; i--)
 		{
 			var newItem = itemArray[i];
+			if (newItem.status === "queued")
+				queuedItemCount++;
+			seenItems[newItem.path] = newItem;
 			var oldItem = itemMap[newItem.path];
 			if (oldItem)
 			{
@@ -26580,7 +26618,7 @@ function ExportListDialog()
 					|| oldItem.uri !== newItem.uri)
 				{
 					// Item data has changed.  Replace GUI element.
-					var $newBox = $(GetExportItemBox(newItem));
+					var $newBox = GetExportItemBox(newItem);
 					newItem.jqEle = $newBox;
 					itemMap[newItem.path] = newItem;
 					oldItem.jqEle.replaceWith($newBox);
@@ -26589,10 +26627,21 @@ function ExportListDialog()
 			else
 			{
 				// Item is new. Add GUI element.
-				var $newBox = $(GetExportItemBox(newItem));
+				var $newBox = GetExportItemBox(newItem);
 				newItem.jqEle = $newBox;
 				itemMap[newItem.path] = newItem;
 				$body.prepend($newBox);
+			}
+		}
+
+		// Remove items that are no longer in the payload from the server.
+		for (var path in itemMap)
+		{
+			if (!seenItems[path])
+			{
+				var oldItem = itemMap[path];
+				oldItem.jqEle.remove();
+				delete itemMap[path];
 			}
 		}
 
@@ -26600,12 +26649,17 @@ function ExportListDialog()
 		{
 			asyncThumbnailDownloader.Visible(ele, ele.getAttribute('path'));
 		});
+
+		if (queuedItemCount > 0)
+			$content.addClass("hasItemsRemaining");
+		else
+			$content.removeClass("hasItemsRemaining");
+
 		dialog.contentChanged(!loadedOnce);
 		loadedOnce = true;
 	}
 	var GetExportItemBox = function (item)
 	{
-		var linked = item.status === "done";
 		var loadingImg = "ui3/LoadingImage.png" + currentServer.GetLocalSessionArg("?");
 		var thumbStyle = item.status === "done" ? '' : ' style="opacity: 0.5;"';
 		var thumb = '<div class="camlist_thumb">'
@@ -26619,49 +26673,64 @@ function ExportListDialog()
 		var tsHtml = '<div class="timestamp">' + GetDateDisplayStr(startDate) + '<br>' + GetTimeStr(startDate) + '</div>';
 		var link = '<div>' + thumb + '<div class="camlist_label">' + tsHtml + htmlEncode(GetFilenameFromPath(item.uri)) + '</div></div>';
 		var noLinkOverlay = '';
-		var errorClick = '';
+		var onClick = null;
 		var clipsize = item.filesize ? ('<div class="clipdur clipsize">' + htmlEncode(item.filesize) + '</div>') : '';
 		var clipdur = item.msec ? ('<div class="clipdur">' + msToTime(parseInt(item.msec)) + '</div>') : '';
-		if (linked)
-		{
-			var exported_clip_url = currentServer.remoteBaseURL + 'clips/' + item.uri + currentServer.GetAPISessionArg("?");
-			link = '<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(GetFilenameFromPath(item.uri)) + '">' + link + '</a>';
-		}
-		else
-		{
-			var labelUpper = item.status;
-			var labelLower = null;
-			var spinnerHtml = '<div style="width:50px;height:50px;margin: 35px 55px" class="spinOverlay spin1s">'
-				+ '<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
-				+ '</div>';
-			if (item.status === "queued")
-			{
-				labelUpper = "Queued";
-			}
-			else if (item.status === "active")
-			{
-				labelUpper = "Exporting";
-				labelLower = parseInt(item.progress) + "%";
-			}
-			else if (item.status === "error")
-			{
-				labelUpper = "Error<br><br>Click for Details";
-				errorClick = ' onclick="SimpleDialog.Text(&quot;This clip failed to export due to an error:\\n\\n' + htmlAttributeEncode(JavaScriptStringEncode(item.error)) + '&quot;)"';
-				spinnerHtml = '';
-				linked = true;
-			}
-			labelUpper = '<div class="noLinkOverlay">' + labelUpper + '</div>';
-			if (labelLower)
-				labelLower = '<div class="noLinkOverlay lower">' + labelLower + '</div>';
 
-			noLinkOverlay = spinnerHtml + labelUpper + labelLower;
+		var addClasses = [];
+		var labelUpper = item.status;
+		var labelLower = null;
+		var spinnerHtml = '<div style="width:50px;height:50px;margin: 35px 55px" class="spinOverlay spin1s">'
+			+ '<svg class="icon noflip stroke"><use xlink:href="#svg_stroke_loading_circle"></use></svg>'
+			+ '</div>';
+		if (item.status === "queued")
+		{
+			labelUpper = "Queued";
+			onClick = function ()
+			{
+				DeleteItemFromConvertExportQueue_WithConfirmation(item.path);
+			};
+			addClasses.push("queued");
 		}
-		return '<div class="exportlist_item camlist_thumbbox' + (linked ? ' linked' : '') + '"' + errorClick + '>'
+		else if (item.status === "active")
+		{
+			labelUpper = "Exporting";
+			labelLower = parseInt(item.progress) + "%";
+			addClasses.push("active");
+		}
+		else if (item.status === "error")
+		{
+			// This may not be able to appear anymore because Blue Iris does not show "done" status anymore.
+			labelUpper = "Error<br><br>Click for Details";
+			onClick = function ()
+			{
+				SimpleDialog.Text('This clip failed to export due to an error:\\n\\n' + item.error)
+			};
+			spinnerHtml = '';
+			addClasses.push("error");
+		}
+		labelUpper = '<div class="noLinkOverlay">' + labelUpper + '</div>';
+		if (labelLower)
+			labelLower = '<div class="noLinkOverlay lower">' + labelLower + '</div>';
+
+		noLinkOverlay = spinnerHtml + labelUpper + labelLower;
+
+		var $newBox = $('<div class="exportlist_item camlist_thumbbox">'
 			+ link
 			+ clipsize
 			+ clipdur
 			+ noLinkOverlay
-			+ '</div>';
+			+ '</div>');
+		if (onClick)
+		{
+			$newBox.on('click', onClick);
+			$newBox.addClass("linked");
+		}
+		for (var i = 0; i < addClasses.length; i++)
+		{
+			$newBox.addClass(addClasses[i]);
+		}
+		return $newBox;
 	}
 	var DialogClosing = function ()
 	{
@@ -26679,6 +26748,49 @@ function ExportListDialog()
 		if (dialog)
 			dialog.close();
 	}
+}
+function DeleteItemFromConvertExportQueue_WithConfirmation(path, onDeleteCallback)
+{
+	SimpleDialog.ConfirmText("Are you sure you want to cancel the selected Convert/Export item?", function ()
+	{
+		DeleteItemFromConvertExportQueue(path, onDeleteCallback);
+	});
+}
+function DeleteItemFromConvertExportQueue(path, onDeleteCallback)
+{
+	var args = { cmd: "export", path: path, delete: true };
+
+	var failCallback = function (msg)
+	{
+		toaster.Error("Export delete command failed: " + msg, 15000);
+		if (typeof onFailure === "function")
+			onFailure(msg);
+	};
+
+	exportAPIStatusDialog.notifyDeletingItem(path);
+	exportListDialog.notifyDeletingItem(path);
+
+	ExecJSON(args, function (response)
+	{
+		if (response.result === "success")
+		{
+			if (typeof onDeleteCallback === "function")
+				onDeleteCallback();
+		}
+		else
+		{
+			console.log("export delete command failed:", response);
+			if (response.result === "fail" && response.status)
+				failCallback(response.status);
+			else
+				failCallback("No reason was given for the failure.");
+		}
+	}
+		, function (jqXHR, textStatus, errorThrown)
+		{
+			console.log("export delete command failed:", jqXHR.ErrorMessageHtml);
+			failCallback(jqXHR.ErrorMessageHtml);
+		});
 }
 ///////////////////////////////////////////////////////////////
 // Clientside Clip Export Dialog //////////////////////////////
