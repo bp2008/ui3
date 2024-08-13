@@ -20479,13 +20479,14 @@ var HTML5VideoBreakDetector = new (function ()
 		}
 		if (playerWasReady)
 		{
-			if (didPlayAFrame && isWaitingState && acceptedFrameCount - finishedFrameCount >= 5 && player.readyState < 3)
+			if (didPlayAFrame && isWaitingState && acceptedFrameCount - finishedFrameCount >= 8 && player.readyState < 3)
 			{
 				if (lastStallAtTime < 0)
 					lastStallAtTime = now;
 				if (now - lastFrameRenderedAtTime > stallTimeout && now - lastStallAtTime > stallTimeout)
 				{
-					stallTimeout += 2000; // Add 2 seconds to stall time each time a stall is detected, so that on badly-behaving systems it won't be as disruptive.
+					if (stallTimeout < 16000)
+						stallTimeout += 2000; // Add 2 seconds to stall time each time a stall is detected, so that on badly-behaving systems it won't be as disruptive.
 					return true;
 				}
 			}
