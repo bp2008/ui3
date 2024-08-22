@@ -7155,7 +7155,7 @@ function GamepadPtzController()
 		console.log(
 			"Gamepad disconnected from index %d: %s",
 			e.gamepad.index,
-			e.gamepad.id,
+			e.gamepad.id
 		);
 	}
 
@@ -7170,7 +7170,7 @@ function GamepadPtzController()
 				gamepad.index,
 				gamepad.id,
 				gamepad.buttons.length,
-				gamepad.axes.length,
+				gamepad.axes.length
 			);
 		}
 	}
@@ -7452,7 +7452,7 @@ function TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOu
 		var scaledUp = Clamp(Math.round(normalized * 15), 1, 15);
 		scaledUp = ~~scaledUp; // cast to int
 		//console.log("normalized", normalized, "scaledUp", scaledUp);
-		return scaledUp & 0b1111;
+		return scaledUp & 15; // 15 is 0b1111;
 	}
 	var dbg = "";// "axisX " + axisX + ", axisY " + axisY;
 	var bitmask = 0;
