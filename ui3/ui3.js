@@ -5425,16 +5425,22 @@ function DropdownBoxes()
 					switch (item.cmd)
 					{
 						case "off":
-							ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 34);
-							ptzButtons.SetIRButtonState(0);
+							ptzButtons.vue().enqueuePtzAction(loading.id, 34, undefined, function ()
+							{
+								ptzButtons.SetIRButtonState(0);
+							});
 							break;
 						case "on":
-							ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 35);
-							ptzButtons.SetIRButtonState(1);
+							ptzButtons.vue().enqueuePtzAction(loading.id, 35, undefined, function ()
+							{
+								ptzButtons.SetIRButtonState(1);
+							});
 							break;
 						case "auto":
-							ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 36);
-							ptzButtons.SetIRButtonState(2);
+							ptzButtons.vue().enqueuePtzAction(loading.id, 36, undefined, function ()
+							{
+								ptzButtons.SetIRButtonState(2);
+							});
 							break;
 					}
 			}
@@ -5448,8 +5454,10 @@ function DropdownBoxes()
 				if (loading.ptz && loading.isLive)
 				{
 					var newBrightness = Clamp(parseInt(item.cmd), 0, 15);
-					ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 11 + newBrightness);
-					ptzButtons.SetBrightnessButtonState(newBrightness);
+					ptzButtons.vue().enqueuePtzAction(loading.id, 11 + newBrightness, undefined, function ()
+					{
+						ptzButtons.SetBrightnessButtonState(newBrightness);
+					});
 				}
 			}
 		});
@@ -5462,8 +5470,10 @@ function DropdownBoxes()
 				if (loading.ptz && loading.isLive)
 				{
 					var newContrast = Clamp(parseInt(item.cmd), 0, 6);
-					ptzButtons.PTZ_unsafe_async_guarantee(loading.id, 27 + newContrast);
-					ptzButtons.SetContrastButtonState(newContrast);
+					ptzButtons.vue().enqueuePtzAction(loading.id, 27 + newContrast, undefined, function ()
+					{
+						ptzButtons.SetContrastButtonState(newContrast);
+					});
 				}
 			}
 		});
@@ -5994,11 +6004,7 @@ function PtzButtons()
 	var $hoveredEle = null;
 	var $activeEle = null;
 
-	var unsafePtzActionNeedsStopped = false;
-	var currentPtz = "0";
-	var currentPtzCamId = "";
-	var unsafePtzActionQueued = null;
-	var unsafePtzActionInProgress = false;
+	var ptzActionPending = false;
 	var currentPtzData = null;
 
 	var count = GetPtzPresetShowCount();
@@ -6077,11 +6083,31 @@ function PtzButtons()
 	ptzTitles["PTZordinalSW"] = "Down Left";
 	ptzTitles["PTZordinalSE"] = "Down Right";
 
+	var ptzStateKeys = {}; // Map of svgid to array of input state property names that should cause the svg to light up when active.
+	ptzStateKeys["PTZhome"] = [];
+	ptzStateKeys["PTZzoomIn"] = ["zin"];
+	ptzStateKeys["PTZzoomOut"] = ["zout"];
+	ptzStateKeys["PTZfocusLarge"] = ["flarge"];
+	ptzStateKeys["PTZfocusSmall"] = ["fsmall"];
+	ptzStateKeys["PTZstop"] = [];
+	ptzStateKeys["PTZcardinalUp"] = ["up"];
+	ptzStateKeys["PTZcardinalRight"] = ["right"];
+	ptzStateKeys["PTZcardinalDown"] = ["down"];
+	ptzStateKeys["PTZcardinalLeft"] = ["left"];
+	ptzStateKeys["PTZordinalNE"] = ["up", "right"];
+	ptzStateKeys["PTZordinalNW"] = ["up", "left"];
+	ptzStateKeys["PTZordinalSW"] = ["down", "left"];
+	ptzStateKeys["PTZordinalSE"] = ["down", "right"];
+
+	var allPtzSvgIds = [];
 	var ptzSvgIds = {};
 	for (var key in ptzCmds)
 	{
 		if (ptzCmds.hasOwnProperty(key))
+		{
+			allPtzSvgIds.push(key);
 			ptzSvgIds[ptzCmds[key]] = key;
+		}
 	}
 
 	/**
@@ -6159,7 +6185,7 @@ function PtzButtons()
 	{
 		$ptzButtons.attr("title", ptzTitles[btn.svgid]);
 		$hoveredEle = $(btn);
-		setColor($hoveredEle, textHoverColor);
+		self.vue().guiButtonBeingHovered = btn;
 	}
 	// onHoverLeave called whenever a mouse pointer leaves any button or a mouse up event is triggered
 	var onHoverLeave = function ()
@@ -6167,21 +6193,37 @@ function PtzButtons()
 		if ($hoveredEle != null)
 		{
 			$ptzButtons.removeAttr("title");
-			setColor($hoveredEle, $hoveredEle.get(0).defaultColor);
+			self.vue().guiButtonBeingHovered = null;
 			$hoveredEle = null;
 		}
 		if ($activeEle != null)
 		{
-			self.SendOrQueuePtzCommand(null, null, true);
-			setColor($activeEle, $activeEle.get(0).defaultColor);
+			var stateKeys = ptzStateKeys[$activeEle.get(0).svgid];
+			for (var i = 0; i < stateKeys.length; i++)
+			{
+				var key = stateKeys[i];
+				self.vue().guiButtonState[key] = 0;
+			}
 			$activeEle = null;
 		}
 	}
 	var onButtonMouseDown = function (btn)
 	{
-		self.SendOrQueuePtzCommand(videoPlayer.Loading().image.id, ptzCmds[btn.svgid], false);
+		var stateKeys = ptzStateKeys[btn.svgid];
+		if (stateKeys.length)
+		{
+			for (var i = 0; i < stateKeys.length; i++)
+			{
+				var key = stateKeys[i];
+				self.vue().guiButtonState[key] = 1;
+			}
+		}
+		else
+		{
+			// This button has no reactive state assignment; therefore it must be triggered the old-fashioned way.
+			self.vue().enqueuePtzAction(videoPlayer.Loading().image.id, ptzCmds[btn.svgid]);
+		}
 		$activeEle = $(btn);
-		setColor($activeEle, textActiveColor);
 	}
 	var onPointerMove = function (e)
 	{
@@ -6258,7 +6300,7 @@ function PtzButtons()
 	});
 	$ptzHome.on('click', function ()
 	{
-		self.SendOrQueuePtzCommand(videoPlayer.Loading().image.id, ptzCmds["PTZhome"], false);
+		self.vue().enqueuePtzAction(videoPlayer.Loading().image.id, ptzCmds["PTZhome"]);
 	});
 	var GetHoveredPTZButton = function (x, y)
 	{
@@ -6266,11 +6308,13 @@ function PtzButtons()
 		var point = [x / sizeMultiplier, y / sizeMultiplier];
 		var buttonId = FindPolyForPoint(point);
 		if (buttonId != null)
-		{
-			var visibleGraphicContainer = GetVisibleGraphicContainer();
-			return visibleGraphicContainer ? visibleGraphicContainer.graphicObjects[buttonId] : null;
-		}
+			return GetPTZButtonEle(buttonId);
 		return null;
+	}
+	var GetPTZButtonEle = function (svgId)
+	{
+		var visibleGraphicContainer = GetVisibleGraphicContainer();
+		return visibleGraphicContainer ? visibleGraphicContainer.graphicObjects[svgId] : null;
 	}
 	var FindPolyForPoint = function (point)
 	{
@@ -6317,6 +6361,7 @@ function PtzButtons()
 			$ptzHome.addClass("disabled");
 			setColor($ptzBackgroundGraphics, ptzpadDisabledColor);
 		}
+		self.vue().resetGuiButtonState();
 		var currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
 		if (videoPlayer.Loading().image.isLive && currentCam && currentCam.ptzdirect && ptzControlsEnabled)
 		{
@@ -6429,7 +6474,7 @@ function PtzButtons()
 			toaster.Error("Current camera is not PTZ");
 			return;
 		}
-		self.PTZ_async_noguarantee(videoPlayer.Loading().image.id, 100 + parseInt(presetNumber));
+		self.vue().enqueuePtzAction(videoPlayer.Loading().image.id, 100 + parseInt(presetNumber));
 	}
 	this.PTZ_relative = function (x, y, z, onSuccess, onFail, camData)
 	{
@@ -6443,7 +6488,7 @@ function PtzButtons()
 		x = Clamp(x, 0, 1);
 		y = Clamp(y, 0, 1);
 		z = Clamp(z, -1, 1);
-		self.PTZ_async_noguarantee(camData.optionValue, 4, undefined, { xperc: x, yperc: y, zperc: z }, onSuccess, onFail);
+		self.vue().enqueuePtzAction(camData.optionValue, 4, { xperc: x, yperc: y, zperc: z }, onSuccess, onFail);
 	}
 	var PTZ_set_preset = function (presetNumber, description)
 	{
@@ -6568,139 +6613,110 @@ function PtzButtons()
 		}
 	}
 	// PTZ Actions //
-	window.addEventListener("beforeunload", function ()
+	/**
+	 * Performs a safe PTZ action (one that will not leave things in a moving state regardless of whether it succeeds or fails).
+	 * The function provides no automatic retry in case of failure; use the onSuccess and onFail callback methods to handle the result either way.
+	 */
+	var PTZ_async_noguarantee = function (cameraId, ptzCmd, extraArgs, onSuccess, onFail)
 	{
-		if (unsafePtzActionNeedsStopped)
-		{
-			unsafePtzActionNeedsStopped = false;
-			unsafePtzActionQueued = null;
-			if (!unsafePtzActionInProgress)
-				self.PTZ_unsafe_sync_guarantee(currentPtzCamId, currentPtz, 1);
-		}
-		return;
-	});
-	this.SendOrQueuePtzCommand = function (ptzCamId, ptzCmd, isStopCommand)
-	{
-		ptzCmd = parseInt(ptzCmd);
-		if (isStopCommand)
-		{
-			if (unsafePtzActionNeedsStopped)
-			{
-				if (currentPtzCamId != null && currentPtz != null)
-				{
-					if (unsafePtzActionInProgress)
-					{
-						unsafePtzActionQueued = function ()
-						{
-							self.PTZ_unsafe_async_guarantee(currentPtzCamId, currentPtz, 1, { stop: true }); // stop: true is something I just made up to make it easier to tell the intent of the JSON payload.  Blue Iris is not expected to read it.
-						};
-					}
-					else
-						self.PTZ_unsafe_async_guarantee(currentPtzCamId, currentPtz, 1, { stop: true });
-				}
-				unsafePtzActionNeedsStopped = false;
-			}
-		}
-		else
-		{
-			if (!unsafePtzActionNeedsStopped && !unsafePtzActionInProgress && unsafePtzActionQueued == null)
-			{
-				// All-clear for new start command
-				currentPtzCamId = ptzCamId;
-				currentPtz = ptzCmd;
-				unsafePtzActionNeedsStopped = true;
-				self.PTZ_unsafe_async_guarantee(currentPtzCamId, currentPtz, 1);
-			}
-		}
-	}
-	this.PTZ_async_noguarantee = function (cameraId, ptzCmd, updown, extraArgs, onSuccess, onFail)
-	{
+		if (ptzActionPending)
+			throw new Error("PTZ_async_noguarantee called while another call was active.");
 		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd) };
-		if (updown == "1")
-			args.updown = 1;
-		else if (updown == "2")
-			args.button = 64;
 		if (extraArgs)
 			args = $.extend(args, extraArgs);
+		ptzActionPending = true;
 		ExecJSON(args, function (response)
 		{
-			if (response && response.result === "success")
+			ptzActionPending = false;
+			try
 			{
-				if (typeof onSuccess === "function")
-					onSuccess();
-			}
-			else
-			{
-				if (typeof onFail !== "function")
-					onFail = function (messageHtml) { toaster.Error("PTZ command failed. " + messageHtml); }
-
-				if (!response)
-					onFail("No response body.");
-				else if (response.result && response.result === "fail")
+				if (response && response.result === "success")
 				{
-					if (response.status)
-						onFail("Status: " + htmlEncode(response.status));
-					else if (response.data && response.data.reason)
-						onFail("Reason: " + htmlEncode(response.data.reason));
-					else
-						onFail("No failure reason was given.");
+					if (typeof onSuccess === "function")
+						onSuccess();
 				}
 				else
-					onFail("Unexpected response: " + htmlEncode(JSON.stringify(response)));
+				{
+					if (typeof onFail !== "function")
+						onFail = function (messageHtml) { toaster.Error("PTZ command failed. " + messageHtml); }
+
+					if (!response)
+						onFail("No response body.");
+					else if (response.result && response.result === "fail")
+					{
+						if (response.status)
+							onFail("Status: " + htmlEncode(response.status));
+						else if (response.data && response.data.reason)
+							onFail("Reason: " + htmlEncode(response.data.reason));
+						else
+							onFail("No failure reason was given.");
+					}
+					else
+						onFail("Unexpected response: " + htmlEncode(JSON.stringify(response)));
+				}
+			}
+			finally
+			{
+				self.vue().ptzChangeRespond();
 			}
 		}, function (jqXHR, textStatus, errorThrown)
 		{
-			if (typeof onFail === "function")
+			ptzActionPending = false;
+			try
+			{
+				if (typeof onFail !== "function")
+					onFail = function (messageHtml) { toaster.Error("PTZ command failed. " + messageHtml); }
 				onFail(jqXHR.ErrorMessageHtml);
+			}
+			finally
+			{
+				self.vue().ptzChangeRespond();
+			}
 		});
 	}
-	this.PTZ_unsafe_async_guarantee = function (cameraId, ptzCmd, updown, extraArgs)
+	/**
+	 * Performs an unsafe PTZ action (one that starts or stops a persistent PTZ movement state, and therefore must be carefully handled).
+	 * This function retries automatically until the command receives a "success" response.
+	 */
+	var PTZ_unsafe_async_guarantee = function (cameraId, ptzCmd, extraArgs)
 	{
-		unsafePtzActionInProgress = true;
-		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd) };
-		if (updown == "1")
-			args.updown = 1;
-		else if (updown == "2")
-			args.button = 64;
+		if (ptzActionPending)
+			throw new Error("PTZ_unsafe_async_guarantee called while another call was active.");
+		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd), updown: 1 };
 		if (extraArgs)
 			args = $.extend(args, extraArgs);
+		ptzActionPending = true;
 		ExecJSON(args, function (response)
 		{
-			unsafePtzActionInProgress = false;
-			if (unsafePtzActionQueued != null)
-			{
-				unsafePtzActionQueued();
-				unsafePtzActionQueued = null;
-			}
+			ptzActionPending = false;
+			self.vue().ptzChangeRespond();
 		}, function ()
 		{
 			setTimeout(function ()
 			{
-				self.PTZ_unsafe_async_guarantee(cameraId, ptzCmd, updown);
+				PTZ_unsafe_async_guarantee(cameraId, ptzCmd, extraArgs);
 			}, 100);
 		});
 	}
-	this.PTZ_unsafe_sync_guarantee = function (cameraId, ptzCmd, updown, extraArgs)
+	/**
+	 * Performs an unsafe PTZ action (one that starts or stops a persistent PTZ movement state, and therefore must be carefully handled).
+	 * The command is performed synchronously (pauses page execution) and should only be used if the page is exiting and you need to stop a PTZ motor.
+	 * This function retries automatically until the command receives a "success" response.
+	 */
+	var PTZ_unsafe_sync_guarantee = function (cameraId, ptzCmd, extraArgs)
 	{
-		unsafePtzActionInProgress = true;
-		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd) };
-		if (updown == "1")
-			args.updown = 1;
-		else if (updown == "2")
-			args.button = 64;
+		if (ptzActionPending)
+			throw new Error("PTZ_unsafe_sync_guarantee called while another call was active.");
+		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd), updown: 1 };
 		if (extraArgs)
 			args = $.extend(args, extraArgs);
+		ptzActionPending = true;
 		ExecJSON(args, function (response)
 		{
-			unsafePtzActionInProgress = false;
-			if (unsafePtzActionQueued != null)
-			{
-				unsafePtzActionQueued();
-				unsafePtzActionQueued = null;
-			}
+			ptzActionPending = false;
 		}, function ()
 		{
-			self.PTZ_unsafe_sync_guarantee(cameraId, ptzCmd, updown);
+			PTZ_unsafe_sync_guarantee(cameraId, ptzCmd, extraArgs);
 		}, true);
 	}
 	this.Get$PtzPresets = function ()
@@ -6739,6 +6755,357 @@ function PtzButtons()
 		if (typeof contrast != "undefined")
 			currentPtzData.contrast = contrast;
 		$contrastButtonLabel.text("Contrast " + currentPtzData.contrast);
+	}
+	// ptzButtonsVue is a vue component that uses reactivity to handle the PTZ button state.
+	var ptzButtonsVue = null;
+	ptzButtonsVue = new Vue({
+		template: '<div id="ptzButtonsVue"></div>',
+		data: function ()
+		{
+			return {
+				hotkeyState: CreateBIPtzState(),
+				guiButtonState: CreateBIPtzState(),
+				joystickState: CreateBIPtzState(),
+				oneTimeActionQueue: new Queue(),
+				allPtzStates: [],
+				unsafe_currentPtzCmd: null, // The button number which is currently activating or activated via the "unsafe"/"updown" method.  This will be "number" type or null.
+				unsafe_currentPtzCamId: "", // The camera ID upon which the unsafe_currentPtzCmd was applied. (if not falsy)
+				pageExiting: false,
+				guiButtonBeingHovered: null,
+				currentCamIsPtz: false
+			};
+		},
+		created: function ()
+		{
+			this.allPtzStates.push(this.hotkeyState);
+			this.allPtzStates.push(this.guiButtonState);
+			this.allPtzStates.push(this.joystickState);
+			ptzButtonsVue = this;
+			BI_CustomEvent.AddListener("OpenVideo", function (loading)
+			{
+				ptzButtonsVue.currentCamIsPtz = loading.ptz;
+			});
+			BI_CustomEvent.AddListener("VisibilityChanged", this.onVisibilityChanged);
+			BI_CustomEvent.AddListener("FinishedLoading", this.ptzChangeRespond);
+			window.addEventListener("beforeunload", this.stopUnsafeActionsBeforeUnload);
+			window.addEventListener('blur', this.onBrowserLostFocus);
+		},
+		mounted: function ()
+		{
+		},
+		computed:
+		{
+			mergedState: function ()
+			{
+				// Merge the hotkeyState, guiButtonState, joystickState
+				var state = CreateBIPtzState();
+				for (var key in state)
+				{
+					if (Object.prototype.hasOwnProperty.call(state, key))
+					{
+						state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key], this.joystickState[key]);
+					}
+				}
+				return state;
+			},
+			guiButtonColors: function ()
+			{
+				// Derive GUI button colors from hover state and PTZ hotkey/button/joystick/etc state.
+				// There are 3 possible colors for each button:
+				// default color (button-specific) if not active and not hovered
+				// hover color if hovered
+				// active color if active
+				var hoveredSvgId = this.guiButtonBeingHovered ? this.guiButtonBeingHovered.svgid : null;
+				var colors = {};
+				for (var i = 0; i < allPtzSvgIds.length; i++)
+				{
+					var svgId = allPtzSvgIds[i];
+					colors[svgId] = null;
+					if (hoveredSvgId === svgId)
+						colors[svgId] = textHoverColor;
+					if (shouldSvgBeActive(svgId))
+						colors[svgId] = textActiveColor;
+				}
+				return colors;
+			},
+			ptzButtonId: function ()
+			{
+				var s = this.mergedState;
+				var btnId = null;
+				if (s.zout)
+					btnId = ptzCmds["PTZzoomOut"];
+				else if (s.zin)
+					btnId = ptzCmds["PTZzoomIn"];
+				else if (s.fsmall)
+					btnId = ptzCmds["PTZfocusSmall"];
+				else if (s.flarge)
+					btnId = ptzCmds["PTZfocusLarge"];
+				else if (s.up)
+				{
+					if (s.left)
+						btnId = ptzCmds["PTZordinalNW"];
+					else if (s.right)
+						btnId = ptzCmds["PTZordinalNE"];
+					else
+						btnId = ptzCmds["PTZcardinalUp"];
+				}
+				else if (s.down)
+				{
+					if (s.left)
+						btnId = ptzCmds["PTZordinalSW"];
+					else if (s.right)
+						btnId = ptzCmds["PTZordinalSE"];
+					else
+						btnId = ptzCmds["PTZcardinalDown"];
+				}
+				else if (s.left)
+					btnId = ptzCmds["PTZcardinalLeft"];
+				else if (s.right)
+					btnId = ptzCmds["PTZcardinalRight"];
+				return btnId;
+			},
+			/**
+			 * True if a PTZ motor is believed to be active according to the current state of this object.
+			 */
+			isMotorRunning: function ()
+			{
+				return !!(typeof this.unsafe_currentPtzCmd === "number" && this.unsafe_currentPtzCamId);
+			}
+		},
+		methods:
+		{
+			/**
+			 * This method gets called any time the current PTZ state needs to be inspected and handled.
+			 */
+			ptzChangeRespond: function ()
+			{
+				if (!loadingHelper.DidLoadingFinish())
+					return;
+				if (ptzActionPending)
+					return;
+
+				var ptzCmd = this.ptzButtonId;
+				var loading = videoPlayer.Loading();
+				var ptzAvailable = loading.image.ptz && loading.image.isLive;
+				if (!ptzAvailable)
+				{
+					ptzCmd = null; // This will cause any previously-active command to be stopped.
+					this.oneTimeActionQueue.clear();
+				}
+				if (this.pageExiting)
+					ptzCmd = null;
+				if (this.oneTimeActionQueue.getLength())
+					ptzCmd = null; // Stop the currently-active command so we can empty the one-time action queue.
+
+				this.applySvgButtonColors();
+
+				if (typeof ptzCmd !== "number")
+				{
+					// Based on available inputs, no PTZ action should be active at this time
+					if (this.isMotorRunning)
+					{
+						if (developerMode)
+							console.log("Stopping active PTZ action.", ptzSvgIds[this.unsafe_currentPtzCmd]);
+						// A PTZ action is currently active, so stop it.
+						PTZ_unsafe_async_guarantee(this.unsafe_currentPtzCamId, this.unsafe_currentPtzCmd, { stop: true });
+						this.unsafe_currentPtzCmd = null;
+						this.unsafe_currentPtzCamId = "";
+					}
+					else if (ptzAvailable)
+					{
+						var ota = this.oneTimeActionQueue.dequeue();
+						if (ota)
+							PTZ_async_noguarantee(ota.cameraId, ota.buttonNumber, ota.extraArgs, ota.onSuccess, ota.onFail);
+					}
+				}
+				else if (this.isMotorRunning)
+				{
+					// A PTZ action is currently active.
+					if (ptzCmd === this.unsafe_currentPtzCmd && loading.image.id === this.unsafe_currentPtzCamId)
+					{
+						// The active PTZ action is the one we want active.  Do not stop it.
+					}
+					else
+					{
+						if (developerMode)
+							console.log("Stopping active PTZ action to begin another.", ptzSvgIds[this.unsafe_currentPtzCmd]);
+						// Stop the active action.
+						PTZ_unsafe_async_guarantee(this.unsafe_currentPtzCamId, this.unsafe_currentPtzCmd, { stop: true });
+						this.unsafe_currentPtzCmd = null;
+						this.unsafe_currentPtzCamId = "";
+					}
+				}
+				else if (loading.image.ptz && loading.image.isLive)
+				{
+					if (developerMode)
+						console.log("Starting PTZ action.", ptzSvgIds[ptzCmd]);
+					// Start a PTZ action.
+					PTZ_unsafe_async_guarantee(loading.image.id, ptzCmd);
+					this.unsafe_currentPtzCmd = ptzCmd;
+					this.unsafe_currentPtzCamId = loading.image.id;
+				}
+			},
+			stopUnsafeActionsBeforeUnload: function (event)
+			{
+				if (this.isMotorRunning)
+				{
+					// Cancel the event as stated by the standard.
+					event.preventDefault();
+					// Chrome requires returnValue to be set.
+					event.returnValue = 'Preventing close so a PTZ stop command can be sent'; // This message is not shown to user as of Chrome 129, but maybe in the future or in other browsers?
+					// As of Chrome 129, the browser will freeze the page while it asks if the user wants to stay on the page (via modal dialog).
+					// The remainder of this function is allowed to execute, and the PTZ stop command does get sent before the modal dialog is closed sent before the user has time to click anything.
+					// While the modal dialog is open, the video stream will build up delay.
+					// Queue a video stream reload for the next animation frame so that it reloads when the user closes the modal dialog and rendering is allowed to resume.
+					this.resetAllButtonState();
+					this.ptzChangeRespond();
+					SimpleDialog.Text("Window close was prevented so UI3 could send a stop command to an active PTZ motor.\n\nPlease try again.");
+					requestAnimationFrame(function () { videoPlayer.ReopenStreamAtCurrentSeekPosition(); });
+				}
+				else
+					ptzButtonsVue.pageExiting = true;
+			},
+			onVisibilityChanged: function (visibleNow)
+			{
+				if (!visibleNow && this.isMotorRunning)
+				{
+					console.log("Stopping PTZ motor due to page no longer being visible");
+					this.resetAllButtonState();
+					this.ptzChangeRespond();
+				}
+			},
+			onBrowserLostFocus: function (event)
+			{
+				if (this.isMotorRunning)
+				{
+					console.log("Stopping PTZ motor due to the browser losing focus");
+					this.resetAllButtonState();
+					this.ptzChangeRespond();
+				}
+			},
+			/**
+			 * Returns true if the given SVG ID from the PTZ pad should be displayed in its "active" style due to currently known inputs.
+			 */
+			shouldSvgBeActive: function (svgId)
+			{
+				var stateKeys = ptzStateKeys[svgId];
+				var allPtzStates = this.allPtzStates;
+				var anyOk = false;
+				for (var i = 0; i < stateKeys.length; i++)
+				{
+					var key = stateKeys[i];
+					var isOk = false;
+					for (var j = 0; j < allPtzStates.length; j++)
+					{
+						var state = allPtzStates[j];
+						if (state[key] > 0)
+						{
+							isOk = true;
+							break;
+						}
+					}
+					if (!isOk)
+						return false;
+					anyOk = true;
+				}
+				return anyOk;
+			},
+			applySvgButtonColors: function ()
+			{
+				var visibleGraphicContainer = GetVisibleGraphicContainer();
+				if (!visibleGraphicContainer)
+					return;
+
+				var hoveredSvgId = this.guiButtonBeingHovered ? this.guiButtonBeingHovered.svgid : null;
+				for (var i = 0; i < allPtzSvgIds.length; i++)
+				{
+					var svgId = allPtzSvgIds[i];
+					var ele = visibleGraphicContainer.graphicObjects[svgId];
+					if (!ele)
+						continue;
+					var desiredColor = ele.defaultColor;
+					if (hoveredSvgId === svgId)
+						desiredColor = textHoverColor;
+					if (this.shouldSvgBeActive(svgId))
+						desiredColor = textActiveColor;
+					var $ele = $(ele);
+					if ($ele.hasClass(desiredColor))
+						continue;
+					setColor($ele, desiredColor);
+				}
+			},
+			resetGuiButtonState: function ()
+			{
+				for (var key in this.guiButtonState)
+				{
+					if (this.guiButtonState.hasOwnProperty(key))
+					{
+						this.guiButtonState[key] = 0;
+					}
+				}
+				this.applySvgButtonColors();
+			},
+			resetAllButtonState: function ()
+			{
+				for (var i = 0; i < this.allPtzStates.length; i++)
+				{
+					var state = this.allPtzStates[i];
+					for (var key in state)
+					{
+						if (state.hasOwnProperty(key))
+						{
+							state[key] = 0;
+						}
+					}
+				}
+				this.applySvgButtonColors();
+			},
+			/**
+			 * Enqueues a PTZ action to occur safely and as soon as possible.  If there is an active PTZ action (e.g. panning motor), that action will be temporarily stopped so this queued action can execute safely without throwing Blue Iris's camera instance into a bad state.
+			 * @param {String} cameraId Camera short name (ID)
+			 * @param {Number} buttonNumber PTZ command button number
+			 * @param {Object} extraArgs Extra arguments to the ptz command.  Use with care.
+			 * @param {Function} onSuccess Callback to be called upon success.
+			 * @param {Function} onFail Callback to be called upon failure.
+			 */
+			enqueuePtzAction: function (cameraId, buttonNumber, extraArgs, onSuccess, onFail)
+			{
+				var ota = { cameraId: cameraId, buttonNumber: buttonNumber, extraArgs: extraArgs, onSuccess: onSuccess, onFail: onFail };
+				this.oneTimeActionQueue.enqueue(ota);
+				this.ptzChangeRespond();
+			}
+		},
+		watch:
+		{
+			//mergedState: {
+			//	deep: true,
+			//	handler: function (newValue, oldValue)
+			//	{
+			//		console.log("hotkeyState", this.hotkeyState);
+			//		console.log("merged state", this.mergedState);
+			//		console.log("ptzButtonId", this.ptzButtonId);
+			//	}
+			//},
+			ptzButtonId: function (newBtnId, oldBtnId)
+			{
+				this.ptzChangeRespond();
+			},
+			guiButtonBeingHovered: function (newBtn, oldBtn)
+			{
+				this.applySvgButtonColors();
+			},
+			currentCamIsPtz: function ()
+			{
+				this.ptzChangeRespond();
+			}
+		}
+	});
+	/**
+	 * Gets the Vue component that handles sending PTZ movement commands to Blue Iris in reaction to user inputs.
+	 */
+	this.vue = function ()
+	{
+		return ptzButtonsVue;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -7113,7 +7480,6 @@ function GamepadPtzController()
 	var self = this;
 	var states = new FasterObjectMap();
 	var startedLoop = false;
-	var lastUnsafePtzCmd = null;
 	// Button ID constants
 	var UP = 12;
 	var DOWN = 13;
@@ -7217,52 +7583,15 @@ function GamepadPtzController()
 					PTZ_Joystick_Input(GetAxisValue(0), GetAxisValue(1), IsButtonPressed(Y) || GetAnalogButtonValue(7), IsButtonPressed(A) || GetAnalogButtonValue(6));
 				else
 				{
-					var ptzCmds = ptzButtons.GetPtzCmds();
-					var unsafePtzCmd = null;
-					if (IsButtonPressed(A))
-						unsafePtzCmd = ptzCmds["PTZzoomOut"];
-					else if (IsButtonPressed(Y))
-						unsafePtzCmd = ptzCmds["PTZzoomIn"];
-					else if (IsButtonPressed(B))
-						unsafePtzCmd = ptzCmds["PTZfocusSmall"];
-					else if (IsButtonPressed(X))
-						unsafePtzCmd = ptzCmds["PTZfocusLarge"];
-					else if (IsButtonPressed(UP) || IsSimpleAnalogDirectionHeld(UP))
-					{
-						if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
-							unsafePtzCmd = ptzCmds["PTZordinalNW"];
-						else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
-							unsafePtzCmd = ptzCmds["PTZordinalNE"];
-						else
-							unsafePtzCmd = ptzCmds["PTZcardinalUp"];
-					}
-					else if (IsButtonPressed(DOWN) || IsSimpleAnalogDirectionHeld(DOWN))
-					{
-						if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
-							unsafePtzCmd = ptzCmds["PTZordinalSW"];
-						else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
-							unsafePtzCmd = ptzCmds["PTZordinalSE"];
-						else
-							unsafePtzCmd = ptzCmds["PTZcardinalDown"];
-					}
-					else if (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT))
-						unsafePtzCmd = ptzCmds["PTZcardinalLeft"];
-					else if (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT))
-						unsafePtzCmd = ptzCmds["PTZcardinalRight"];
-
-					var needsStopped = (unsafePtzCmd === null && lastUnsafePtzCmd !== null) || (unsafePtzCmd !== null && lastUnsafePtzCmd !== null && unsafePtzCmd !== lastUnsafePtzCmd);
-					lastUnsafePtzCmd = unsafePtzCmd;
-
-					if (needsStopped)
-					{
-						BI_PTZ_Action(lastUnsafePtzCmd, true);
-					}
-					else if (unsafePtzCmd !== null)
-					{
-						//var ptzSvgIds = ptzButtons.GetPtzSvgIds();
-						//console.log(ptzSvgIds[unsafePtzCmd]);
-						BI_PTZ_Action(unsafePtzCmd, false);
-					}
+					var state = ptzButtons.vue().joystickState;
+					state.zout = IsButtonPressed(A) ? 1 : 0;
+					state.zin = IsButtonPressed(Y) ? 1 : 0;
+					state.fsmall = IsButtonPressed(X) ? 1 : 0;
+					state.flarge = IsButtonPressed(B) ? 1 : 0;
+					state.up = (IsButtonPressed(UP) || IsSimpleAnalogDirectionHeld(UP)) ? 1 : 0;
+					state.down = (IsButtonPressed(DOWN) || IsSimpleAnalogDirectionHeld(DOWN)) ? 1 : 0;
+					state.left = (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT)) ? 1 : 0;
+					state.right = (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT)) ? 1 : 0;
 				}
 			}
 			catch (ex)
@@ -14999,9 +15328,9 @@ function CameraListLoader()
 			else if (AnyTimeSensitiveCameraStatusEffectsEnabled() || videoPlayer.PrioritizeTriggeredEnabled() || $("#campropdialog").length)
 				shouldDelay = false;
 			if (shouldDelay)
-				CallScheduler();
+				CallScheduler(successCallbackFunc);
 			else
-				self.LoadCameraList();
+				self.LoadCameraList(successCallbackFunc);
 		}, 1000);
 	};
 
@@ -15009,7 +15338,7 @@ function CameraListLoader()
 	{
 		if (documentIsHidden() && lastResponse !== null && typeof successCallbackFunc !== "function")
 		{
-			CallScheduler();
+			CallScheduler(successCallbackFunc);
 			return;
 		}
 		clearTimeout(cameraListUpdateTimeout);
@@ -15031,7 +15360,10 @@ function CameraListLoader()
 			if (typeof (response.data) == "undefined" || response.data.length == 0)
 			{
 				if (firstCameraListLoaded)
+				{
 					toaster.Error("Camera list is empty!");
+					CallScheduler(successCallbackFunc);
+				}
 				else
 				{
 					lastResponse = response;
@@ -29499,33 +29831,31 @@ function BI_Hotkey_DigitalPanRight_Up()
 {
 	hotkeys.digitalPanRight_isActive = false;
 }
-function BI_Hotkey_PtzUp() { BI_PTZ_Action(2); }
-function BI_Hotkey_PtzUp_Up() { BI_PTZ_Action(2, true); }
-function BI_Hotkey_PtzDown() { BI_PTZ_Action(3); }
-function BI_Hotkey_PtzDown_Up() { BI_PTZ_Action(3, true); }
-function BI_Hotkey_PtzLeft() { BI_PTZ_Action(0); }
-function BI_Hotkey_PtzLeft_Up() { BI_PTZ_Action(0, true); }
-function BI_Hotkey_PtzRight() { BI_PTZ_Action(1); }
-function BI_Hotkey_PtzRight_Up() { BI_PTZ_Action(1, true); }
-function BI_Hotkey_PtzIn() { BI_PTZ_Action(5); }
-function BI_Hotkey_PtzIn_Up() { BI_PTZ_Action(5, true); }
-function BI_Hotkey_PtzOut() { BI_PTZ_Action(6); }
-function BI_Hotkey_PtzOut_Up() { BI_PTZ_Action(6, true); }
-function BI_Hotkey_PtzFocusFar() { BI_PTZ_Action(-2); }
-function BI_Hotkey_PtzFocusFar_Up() { BI_PTZ_Action(-2, true); }
-function BI_Hotkey_PtzFocusNear() { BI_PTZ_Action(-1); }
-function BI_Hotkey_PtzFocusNear_Up() { BI_PTZ_Action(-1, true); }
+function CreateBIPtzState()
+{
+	return { up: 0, down: 0, left: 0, right: 0, zin: 0, zout: 0, fsmall: 0, flarge: 0 };
+}
+function BI_Hotkey_PtzUp() { ptzButtons.vue().hotkeyState.up = 1; }
+function BI_Hotkey_PtzUp_Up() { ptzButtons.vue().hotkeyState.up = 0; }
+function BI_Hotkey_PtzDown() { ptzButtons.vue().hotkeyState.down = 1; }
+function BI_Hotkey_PtzDown_Up() { ptzButtons.vue().hotkeyState.down = 0; }
+function BI_Hotkey_PtzLeft() { ptzButtons.vue().hotkeyState.left = 1; }
+function BI_Hotkey_PtzLeft_Up() { ptzButtons.vue().hotkeyState.left = 0; }
+function BI_Hotkey_PtzRight() { ptzButtons.vue().hotkeyState.right = 1; }
+function BI_Hotkey_PtzRight_Up() { ptzButtons.vue().hotkeyState.right = 0; }
+function BI_Hotkey_PtzIn() { ptzButtons.vue().hotkeyState.zin = 1; }
+function BI_Hotkey_PtzIn_Up() { ptzButtons.vue().hotkeyState.zin = 0; }
+function BI_Hotkey_PtzOut() { ptzButtons.vue().hotkeyState.zout = 1; }
+function BI_Hotkey_PtzOut_Up() { ptzButtons.vue().hotkeyState.zout = 0; }
+function BI_Hotkey_PtzFocusFar() { ptzButtons.vue().hotkeyState.fsmall = 1; }
+function BI_Hotkey_PtzFocusFar_Up() { ptzButtons.vue().hotkeyState.fsmall = 0; }
+function BI_Hotkey_PtzFocusNear() { ptzButtons.vue().hotkeyState.flarge = 1; }
+function BI_Hotkey_PtzFocusNear_Up() { ptzButtons.vue().hotkeyState.flarge = 0; }
 function BI_Hotkey_PtzPreset(presetNum)
 {
 	var loading = videoPlayer.Loading();
 	if (loading.image.ptz && loading.image.isLive)
-		ptzButtons.PTZ_async_noguarantee(loading.image.id, 100 + parseInt(presetNum));
-}
-function BI_PTZ_Action(ptzCmd, isStopCommand)
-{
-	var loading = videoPlayer.Loading();
-	if (loading.image.ptz && loading.image.isLive)
-		ptzButtons.SendOrQueuePtzCommand(loading.image.id, ptzCmd, isStopCommand);
+		ptzButtons.vue().enqueuePtzAction(loading.image.id, 100 + parseInt(presetNum));
 }
 function BI_Hotkeys()
 {

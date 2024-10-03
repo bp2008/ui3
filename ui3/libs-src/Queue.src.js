@@ -142,4 +142,12 @@ function Queue()
 				i--;
 			}
 	};
+	/**
+	 * Removes all items from the queue.
+	 */
+	this.clear = function ()
+	{
+		queue = [];
+		offset = 0;
+	}
 }
