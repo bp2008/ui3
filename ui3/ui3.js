@@ -7839,6 +7839,7 @@ function GamepadPtzController()
 						else
 							Y = state.down;
 						PTZ_Joystick_Input(X, Y, state.zin, state.zout);
+						ptzButtons.vue().applySvgButtonColors();
 					}
 				}
 			}
@@ -7862,7 +7863,10 @@ function GamepadPtzController()
 		state.right = 0;
 
 		if (settings.ui3_experimental_joystick_api === "1")
+		{
 			PTZ_Joystick_Input(0, 0, 0, 0);
+			ptzButtons.vue().applySvgButtonColors();
+		}
 	}
 	function ReadBinding(binding)
 	{
