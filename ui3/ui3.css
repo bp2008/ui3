@@ -6305,6 +6305,12 @@ ul.extraSpacing li
 	font-weight: bold;
 	color: #00d900;
 }
+
+.ptzSectionComment
+{
+	text-align: center;
+	font-weight: bold;
+}
 /* Audio Visualizer */
 #ui3AudioVisualizerPanel
 {
@@ -6342,6 +6348,34 @@ ul.extraSpacing li
 	{
 		background: var(--dialog-bg-color);
 	}
+/* Gamepad Preview */
+#ui3gamepad_preview
+{
+	width: 350px;
+}
+
+.gamepadTestHeading
+{
+	text-align: center;
+	font-weight: bold;
+	margin-bottom: 5px;
+}
+
+.gamepadTestDescription
+{
+	margin-bottom: 10px;
+}
+
+#ui3gamepadTestOutput
+{
+	margin-top: 5px;
+}
+
+.gamepadBindingsComment
+{
+	text-align: center;
+	font-weight: bold;
+}
 /* Misc */
 .icode
 {

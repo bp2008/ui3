@@ -825,7 +825,7 @@ function GetStatusAreaBarOptions()
 	return arr;
 }
 var settings = null;
-var settingsCategoryList = ["General Settings", "Video Player", "Video Player (Advanced)", "Timeline", "UI Status Sounds", "Top Bar", "Side Bar", "Status Area", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
+var settingsCategoryList = ["General Settings", "Video Player", "Video Player (Advanced)", "Timeline", "UI Status Sounds", "Top Bar", "Side Bar", "Status Area", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "PTZ", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
 	[
 		{
@@ -1058,6 +1058,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_cps_uiSettings_category_Event_Triggered_Sounds_visible"
+			, value: "1"
+		}
+		, {
+			key: "ui3_cps_uiSettings_category_PTZ_visible"
 			, value: "1"
 		}
 		, {
@@ -2099,7 +2103,7 @@ var defaultSettings =
 			, options: []
 			, getOptions: getBISoundOptions
 			, alwaysRefreshOptions: true
-			, label: 'Camera Triggered<div class="settingDesc">(before AI-verification)'
+			, label: 'Camera Triggered<div class="settingDesc">(before AI-verification)</div>'
 			, onChange: function () { biSoundPlayer.PlayEvent("trigger"); }
 			, category: "Event-Triggered Sounds"
 		}
@@ -2127,6 +2131,243 @@ var defaultSettings =
 			, onChange: function () { biSoundPlayer.AdjustVolume(); }
 			, changeOnStep: true
 			, category: "Event-Triggered Sounds"
+		}
+		, {
+			key: "ui3_comment_ptz_section"
+			, value: ""
+			, inputType: "comment"
+			, comment: '<div class="ptzSectionComment">(Pan, Tilt, Zoom)</div>'
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_ptzPresetShowCount"
+			, value: "20"
+			, inputType: "select"
+			, options: ["0", "10", "20", "30", "40"]
+			, label: 'PTZ Preset Count'
+			, onChange: OnChange_ui3_ptzPresetShowCount
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_swap_ptz_focus_buttons"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Swap PTZ Focus Near/Far<div class="settingDesc">(affects graphical PTZ pad layout)</div>'
+			, hint: 'If NO, the "Focus Near" icon will be on the left. If YES, the "Focus Near" icon will be on the right.'
+			, onChange: OnChange_ui3_swap_ptz_focus_buttons
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_ptzHome"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'PTZ Home Button'
+			, onChange: OnChange_ui3_ptzHome
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_ptz_enabled"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_gamepad"></use></svg> Enable Gamepad Controls'
+			, hint: 'Enables gamepads and joysticks to be used for PTZ control'
+			, onChange: OnChange_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_comment_ptz_gamepad_display"
+			, value: ""
+			, inputType: "comment"
+			, comment: function ()
+			{
+				return '<div class="gamepadTestHeading">Gamepad Test</div>'
+					+ '<div title="The combined inputs of all connected gamepads are shown here.">'
+					+ getSvgIconToEmbed("ui3gamepad", "ui3gamepad_preview", "icon noflip")
+					+ '</div>'
+					+ '<div id="ui3gamepadTestOutput"><div>No gamepad activity detected yet ...</div></div>';
+			}
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_analog_deadzone"
+			, value: 0.2
+			, minValue: 0.01
+			, maxValue: 0.99
+			, step: 0.01
+			, inputType: "range"
+			, label: 'Analog Input Deadzone'
+			, hint: '(PTZ) Increase the deadzone if your joystick(s) or analog buttons show activity while not being touched.'
+			, changeOnStep: true
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_comment_ptz_gamepad_bindings"
+			, value: ""
+			, inputType: "comment"
+			, comment: '<div class="gamepadBindingsComment">Gamepad Bindings</div>'
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_pan_left"
+			, value: "axis 0 -"
+			, gamepad_binding: true
+			, label: "Pan Left"
+			, hint: "PTZ Pan Left"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_pan_left2"
+			, value: "button 14"
+			, gamepad_binding: true
+			, label: "Pan Left (extra binding)"
+			, hint: "PTZ Pan Left"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_pan_right"
+			, value: "axis 0 +"
+			, gamepad_binding: true
+			, label: "Pan Right"
+			, hint: "PTZ Pan Right"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_pan_right2"
+			, value: "button 15"
+			, gamepad_binding: true
+			, label: "Pan Right (extra binding)"
+			, hint: "PTZ Pan Right"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_tilt_up"
+			, value: "axis 1 -"
+			, gamepad_binding: true
+			, label: "Tilt Up"
+			, hint: "PTZ Tilt Up"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_tilt_up2"
+			, value: "button 12"
+			, gamepad_binding: true
+			, label: "Tilt Up (extra binding)"
+			, hint: "PTZ Tilt Up"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_tilt_down"
+			, value: "axis 1 +"
+			, gamepad_binding: true
+			, label: "Tilt Down"
+			, hint: "PTZ Tilt Down"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_tilt_down2"
+			, value: "button 13"
+			, gamepad_binding: true
+			, label: "Tilt Down (extra binding)"
+			, hint: "PTZ Tilt Down"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_zoom_out"
+			, value: "button 0"
+			, gamepad_binding: true
+			, label: "Zoom Out"
+			, hint: "PTZ Zoom Out"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_zoom_out2"
+			, value: "button 6"
+			, gamepad_binding: true
+			, label: "Zoom Out (extra binding)"
+			, hint: "PTZ Zoom Out"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_zoom_in"
+			, value: "button 3"
+			, gamepad_binding: true
+			, label: "Zoom In"
+			, hint: "PTZ Zoom In"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_zoom_in2"
+			, value: "button 7"
+			, gamepad_binding: true
+			, label: "Zoom In (extra binding)"
+			, hint: "PTZ Zoom In"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_focus_near"
+			, value: "button 2"
+			, gamepad_binding: true
+			, label: "Focus Near"
+			, hint: "PTZ Focus Near"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_focus_near2"
+			, value: "unbound"
+			, gamepad_binding: true
+			, label: "Focus Near (extra binding)"
+			, hint: "PTZ Focus Near"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_focus_far"
+			, value: "button 1"
+			, gamepad_binding: true
+			, label: "Focus Far"
+			, hint: "PTZ Focus Far"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_focus_far2"
+			, value: "unbound"
+			, gamepad_binding: true
+			, label: "Focus Far (extra binding)"
+			, hint: "PTZ Focus Far"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_experimental_joystick_api"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Experimental Joystick API<div class="settingDesc">(enables variable-speed PTZ control via compatible gamepad devices)</div>'
+			, hint: 'Enables gamepads and joysticks to be used for PTZ control'
+			, onChange: OnChange_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_comment_ptz_hotkeys"
+			, value: ""
+			, inputType: "comment"
+			, comment: 'PTZ keyboard binds are in the Hotkeys section below.'
+			, category: "PTZ"
 		}
 		, {
 			key: "ui3_hotkey_maximizeVideoArea"
@@ -2482,16 +2723,6 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
-			key: "ui3_hotkey_ptzFocusFar"
-			, value: "0|0|0|221" // 221: ]
-			, hotkey: true
-			, label: "PTZ Focus Far"
-			, hint: "If the current live camera is PTZ, focuses the camera further away."
-			, actionDown: BI_Hotkey_PtzFocusFar
-			, actionUp: BI_Hotkey_PtzFocusFar_Up
-			, category: "Hotkeys"
-		}
-		, {
 			key: "ui3_hotkey_ptzFocusNear"
 			, value: "0|0|0|219" // 219: [
 			, hotkey: true
@@ -2499,6 +2730,16 @@ var defaultSettings =
 			, hint: "If the current live camera is PTZ, focuses the camera closer."
 			, actionDown: BI_Hotkey_PtzFocusNear
 			, actionUp: BI_Hotkey_PtzFocusNear_Up
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_ptzFocusFar"
+			, value: "0|0|0|221" // 221: ]
+			, hotkey: true
+			, label: "PTZ Focus Far"
+			, hint: "If the current live camera is PTZ, focuses the camera further away."
+			, actionDown: BI_Hotkey_PtzFocusFar
+			, actionUp: BI_Hotkey_PtzFocusFar_Up
 			, category: "Hotkeys"
 		}
 		, {
@@ -3150,41 +3391,8 @@ var defaultSettings =
 			key: "ui3_ir_brightness_contrast"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'PTZ: IR, Brightness, Contrast<br><a href="javascript:UIHelp.LearnMore(\'IR Brightness Contrast\')">(learn more)</a>'
+			, label: 'IR, Brightness, Contrast Controls<br><a href="javascript:UIHelp.LearnMore(\'IR Brightness Contrast\')">(learn more)</a>'
 			, onChange: OnChange_ui3_ir_brightness_contrast
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_ptzHome"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'PTZ: Home Button'
-			, onChange: OnChange_ui3_ptzHome
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_ptzPresetShowCount"
-			, value: "20"
-			, inputType: "select"
-			, options: ["0", "10", "20", "30", "40"]
-			, label: 'PTZ Preset Count'
-			, onChange: OnChange_ui3_ptzPresetShowCount
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_invert_ptz_focus_buttons"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'Swap PTZ Focus Near/Far'
-			, hint: 'If enabled, smaller icon will be focus near.  If disabled, the larger icon will be focus near.'
-			, onChange: OnChange_ui3_invert_ptz_focus_buttons
-			, category: "Extra"
-		}
-		, {
-			key: "ui3_experimental_gamepad_ptz"
-			, value: "0"
-			, inputType: "checkbox"
-			, label: 'PTZ control via Gamepad<div class="settingDesc">(experimental)</div>'
 			, category: "Extra"
 		}
 		, {
@@ -6039,8 +6247,8 @@ function PtzButtons()
 	var hitPolys = {};
 	hitPolys["PTZzoomIn"] = [[64, 64], [82, 82], [91, 77], [99, 77], [106, 81], [126, 64], [116, 58], [105, 53], [86, 53], [74, 58]];
 	hitPolys["PTZzoomOut"] = [[64, 126], [82, 108], [91, 113], [99, 113], [106, 109], [126, 126], [116, 132], [105, 137], [86, 137], [74, 132]];
-	hitPolys["PTZfocusLarge"] = [[126, 64], [108, 82], [113, 91], [113, 99], [109, 106], [126, 126], [132, 116], [137, 105], [137, 86], [132, 74]];
-	hitPolys["PTZfocusSmall"] = [[64, 64], [82, 82], [77, 91], [77, 99], [81, 106], [64, 126], [58, 116], [53, 105], [53, 86], [58, 74]];
+	hitPolys["PTZfocusLarge"] = [[64, 64], [82, 82], [77, 91], [77, 99], [81, 106], [64, 126], [58, 116], [53, 105], [53, 86], [58, 74]];
+	hitPolys["PTZfocusSmall"] = [[126, 64], [108, 82], [113, 91], [113, 99], [109, 106], [126, 126], [132, 116], [137, 105], [137, 86], [132, 74]];
 	hitPolys["PTZstop"] = [[82, 82], [91, 77], [99, 77], [108, 82], [113, 91], [113, 99], [108, 108], [99, 113], [91, 113], [82, 108], [77, 99], [77, 91]];
 	hitPolys["PTZcardinalUp"] = [[52, 9], [74, 58], [86, 53], [105, 53], [116, 58], [138, 9], [96, 0]];
 	hitPolys["PTZcardinalRight"] = [[181, 52], [132, 74], [138, 86], [138, 105], [132, 116], [181, 138], [190, 96]];
@@ -6050,6 +6258,13 @@ function PtzButtons()
 	hitPolys["PTZordinalNW"] = [[52, 9], [74, 58], [66, 63], [63, 66], [58, 74], [9, 52], [19, 19]];
 	hitPolys["PTZordinalSW"] = [[52, 181], [74, 132], [66, 127], [63, 124], [58, 116], [9, 138], [19, 171]];
 	hitPolys["PTZordinalSE"] = [[138, 181], [116, 132], [124, 127], [127, 124], [132, 116], [181, 138], [171, 171]];
+
+	if (settings.ui3_swap_ptz_focus_buttons === "1")
+	{
+		var tmp = hitPolys["PTZfocusLarge"];
+		hitPolys["PTZfocusLarge"] = hitPolys["PTZfocusSmall"];
+		hitPolys["PTZfocusSmall"] = tmp;
+	}
 
 	var ptzCmds = {};
 	ptzCmds["PTZhome"] = 4;
@@ -6087,8 +6302,8 @@ function PtzButtons()
 	ptzStateKeys["PTZhome"] = [];
 	ptzStateKeys["PTZzoomIn"] = ["zin"];
 	ptzStateKeys["PTZzoomOut"] = ["zout"];
-	ptzStateKeys["PTZfocusLarge"] = ["flarge"];
-	ptzStateKeys["PTZfocusSmall"] = ["fsmall"];
+	ptzStateKeys["PTZfocusLarge"] = ["fnear"];
+	ptzStateKeys["PTZfocusSmall"] = ["ffar"];
 	ptzStateKeys["PTZstop"] = [];
 	ptzStateKeys["PTZcardinalUp"] = ["up"];
 	ptzStateKeys["PTZcardinalRight"] = ["right"];
@@ -6110,18 +6325,6 @@ function PtzButtons()
 		}
 	}
 
-	/**
-	 * Call to assign new PTZ button mappings based on UI settings.
-	 */
-	this.UpdatePtzButtonMappings = function ()
-	{
-		var invertFocus = settings.ui3_invert_ptz_focus_buttons == "1";
-		ptzCmds["PTZfocusLarge"] = invertFocus ? -2 : -1;
-		ptzCmds["PTZfocusSmall"] = invertFocus ? -1 : -2;
-		ptzTitles["PTZfocusLarge"] = invertFocus ? "Focus Far" : "Focus Near";
-		ptzTitles["PTZfocusSmall"] = invertFocus ? "Focus Near" : "Focus Far";
-	}
-	this.UpdatePtzButtonMappings();
 	/**
 	 * Returns the map of svgid to PTZ command number for PTZ button mappings.
 	 */
@@ -6153,7 +6356,7 @@ function PtzButtons()
 	$ptzGraphics.each(function (idx, ele)
 	{
 		var $ele = $(ele);
-		ele.svgid = $ele.attr('svgid');
+		ele.svgid = PtzFocusSwapSvgId($ele.attr('svgid'));
 		var layoutParts = $ele.attr('layoutR').split(' ');
 		ele.layout = {
 			x: parseFloat(layoutParts[0])
@@ -6167,11 +6370,26 @@ function PtzButtons()
 		$ele.css("width", ele.layout.w + "px");
 		$ele.css("height", ele.layout.h + "px");
 
-		$ele.append('<svg class="icon"><use xlink:href="#svg_x5F_' + ele.svgid + '"></use></svg>');
+		var classes = "icon";
+		if (settings.ui3_swap_ptz_focus_buttons !== "1" && (ele.svgid === "PTZfocusLarge" || ele.svgid === "PTZfocusSmall"))
+			classes += " invertv";
+		$ele.append('<svg class="' + classes + '"><use xlink:href="#svg_x5F_' + ele.svgid + '"></use></svg>');
 		ele.defaultColor = $ele.hasClass("ptzBackground") ? ptzpadColor : panelBgColor;
 		setColor($ele, ele.defaultColor);
 		ele.parentNode.graphicObjects[ele.svgid] = ele;
 	});
+
+	function PtzFocusSwapSvgId(svgid)
+	{
+		if (settings.ui3_swap_ptz_focus_buttons === "1")
+		{
+			if (svgid === "PTZfocusSmall")
+				return "PTZfocusLarge";
+			if (svgid === "PTZfocusLarge")
+				return "PTZfocusSmall";
+		}
+		return svgid;
+	}
 
 	BI_CustomEvent.AddListener("afterResize", function ()
 	{
@@ -6678,11 +6896,11 @@ function PtzButtons()
 	 * Performs an unsafe PTZ action (one that starts or stops a persistent PTZ movement state, and therefore must be carefully handled).
 	 * This function retries automatically until the command receives a "success" response.
 	 */
-	var PTZ_unsafe_async_guarantee = function (cameraId, ptzCmd, extraArgs)
+	var PTZ_unsafe_async_guarantee = function (cameraId, ptzCmd, isStop, extraArgs)
 	{
 		if (ptzActionPending)
 			throw new Error("PTZ_unsafe_async_guarantee called while another call was active.");
-		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd), updown: 1 };
+		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd), updown: isStop ? 0 : 1 };
 		if (extraArgs)
 			args = $.extend(args, extraArgs);
 		ptzActionPending = true;
@@ -6694,7 +6912,7 @@ function PtzButtons()
 		{
 			setTimeout(function ()
 			{
-				PTZ_unsafe_async_guarantee(cameraId, ptzCmd, extraArgs);
+				PTZ_unsafe_async_guarantee(cameraId, ptzCmd, isStop, extraArgs);
 			}, 100);
 		});
 	}
@@ -6703,11 +6921,11 @@ function PtzButtons()
 	 * The command is performed synchronously (pauses page execution) and should only be used if the page is exiting and you need to stop a PTZ motor.
 	 * This function retries automatically until the command receives a "success" response.
 	 */
-	var PTZ_unsafe_sync_guarantee = function (cameraId, ptzCmd, extraArgs)
+	var PTZ_unsafe_sync_guarantee = function (cameraId, ptzCmd, isStop, extraArgs)
 	{
 		if (ptzActionPending)
 			throw new Error("PTZ_unsafe_sync_guarantee called while another call was active.");
-		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd), updown: 1 };
+		var args = { cmd: "ptz", camera: cameraId, button: parseInt(ptzCmd), updown: isStop ? 0 : 1 };
 		if (extraArgs)
 			args = $.extend(args, extraArgs);
 		ptzActionPending = true;
@@ -6716,7 +6934,7 @@ function PtzButtons()
 			ptzActionPending = false;
 		}, function ()
 		{
-			PTZ_unsafe_sync_guarantee(cameraId, ptzCmd, extraArgs);
+			PTZ_unsafe_sync_guarantee(cameraId, ptzCmd, isStop, extraArgs);
 		}, true);
 	}
 	this.Get$PtzPresets = function ()
@@ -6799,11 +7017,15 @@ function PtzButtons()
 			{
 				// Merge the hotkeyState, guiButtonState, joystickState
 				var state = CreateBIPtzState();
+				var jsExp = settings.ui3_experimental_joystick_api === "1";
 				for (var key in state)
 				{
 					if (Object.prototype.hasOwnProperty.call(state, key))
 					{
-						state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key], this.joystickState[key]);
+						if (jsExp)
+							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key]);
+						else
+							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key], this.joystickState[key]);
 					}
 				}
 				return state;
@@ -6836,9 +7058,9 @@ function PtzButtons()
 					btnId = ptzCmds["PTZzoomOut"];
 				else if (s.zin)
 					btnId = ptzCmds["PTZzoomIn"];
-				else if (s.fsmall)
+				else if (s.ffar)
 					btnId = ptzCmds["PTZfocusSmall"];
-				else if (s.flarge)
+				else if (s.fnear)
 					btnId = ptzCmds["PTZfocusLarge"];
 				else if (s.up)
 				{
@@ -6907,7 +7129,7 @@ function PtzButtons()
 						if (developerMode)
 							console.log("Stopping active PTZ action.", ptzSvgIds[this.unsafe_currentPtzCmd]);
 						// A PTZ action is currently active, so stop it.
-						PTZ_unsafe_async_guarantee(this.unsafe_currentPtzCamId, this.unsafe_currentPtzCmd, { stop: true });
+						PTZ_unsafe_async_guarantee(this.unsafe_currentPtzCamId, this.unsafe_currentPtzCmd, true, { stop: true });
 						this.unsafe_currentPtzCmd = null;
 						this.unsafe_currentPtzCamId = "";
 					}
@@ -6930,7 +7152,7 @@ function PtzButtons()
 						if (developerMode)
 							console.log("Stopping active PTZ action to begin another.", ptzSvgIds[this.unsafe_currentPtzCmd]);
 						// Stop the active action.
-						PTZ_unsafe_async_guarantee(this.unsafe_currentPtzCamId, this.unsafe_currentPtzCmd, { stop: true });
+						PTZ_unsafe_async_guarantee(this.unsafe_currentPtzCamId, this.unsafe_currentPtzCmd, true, { stop: true });
 						this.unsafe_currentPtzCmd = null;
 						this.unsafe_currentPtzCamId = "";
 					}
@@ -6940,7 +7162,7 @@ function PtzButtons()
 					if (developerMode)
 						console.log("Starting PTZ action.", ptzSvgIds[ptzCmd]);
 					// Start a PTZ action.
-					PTZ_unsafe_async_guarantee(loading.image.id, ptzCmd);
+					PTZ_unsafe_async_guarantee(loading.image.id, ptzCmd, false);
 					this.unsafe_currentPtzCmd = ptzCmd;
 					this.unsafe_currentPtzCamId = loading.image.id;
 				}
@@ -7489,6 +7711,14 @@ function GamepadPtzController()
 	var B = 1;
 	var X = 2;
 	var Y = 3;
+	var gamepadPreviewStyle = InjectStyleBlock("");
+	var existingGamepadStyle = "";
+	var existingGamepadTestOutputHtml = "";
+
+	BI_CustomEvent.AddListener("UI_Settings_Refreshed", function ()
+	{
+		existingGamepadTestOutputHtml = "";
+	});
 
 	function Initialize()
 	{
@@ -7529,7 +7759,7 @@ function GamepadPtzController()
 	{
 		if (gamepad)
 		{
-			states[gamepad.index] = new UI3GamepadState(gamepad);
+			states[gamepad.index] = new UI3GamepadState();
 
 			console.log(
 				"Gamepad connected at index %d: %s. %d buttons, %d axes.",
@@ -7553,45 +7783,21 @@ function GamepadPtzController()
 
 	function gamepadLoop()
 	{
-		if (settings.ui3_experimental_gamepad_ptz === "1")
+		var arr = navigator.getGamepads();
+		for (var i = 0; i < arr.length; i++)
 		{
-			var arr = navigator.getGamepads();
-			for (var i = 0; i < arr.length; i++)
-			{
-				try
-				{
-					var gamepad = arr[i];
-					if (gamepad)
-					{
-						var state = states[gamepad.index];
-						if (!state)
-						{
-							states[gamepad.index] = state = new UI3GamepadState(gamepad);
-							console.log("Gamepad at index " + gamepad.index + " was discovered during loop iteration.");
-						}
-						state.handleInputs(gamepad);
-					}
-				}
-				catch (ex)
-				{
-					toaster.Error(ex);
-				}
-			}
 			try
 			{
-				if (joystickDev)
-					PTZ_Joystick_Input(GetAxisValue(0), GetAxisValue(1), IsButtonPressed(Y) || GetAnalogButtonValue(7), IsButtonPressed(A) || GetAnalogButtonValue(6));
-				else
+				var gamepad = arr[i];
+				if (gamepad)
 				{
-					var state = ptzButtons.vue().joystickState;
-					state.zout = IsButtonPressed(A) ? 1 : 0;
-					state.zin = IsButtonPressed(Y) ? 1 : 0;
-					state.fsmall = IsButtonPressed(X) ? 1 : 0;
-					state.flarge = IsButtonPressed(B) ? 1 : 0;
-					state.up = (IsButtonPressed(UP) || IsSimpleAnalogDirectionHeld(UP)) ? 1 : 0;
-					state.down = (IsButtonPressed(DOWN) || IsSimpleAnalogDirectionHeld(DOWN)) ? 1 : 0;
-					state.left = (IsButtonPressed(LEFT) || IsSimpleAnalogDirectionHeld(LEFT)) ? 1 : 0;
-					state.right = (IsButtonPressed(RIGHT) || IsSimpleAnalogDirectionHeld(RIGHT)) ? 1 : 0;
+					var state = states[gamepad.index];
+					if (!state)
+					{
+						states[gamepad.index] = state = new UI3GamepadState();
+						console.log("Gamepad at index " + gamepad.index + " was discovered during loop iteration.");
+					}
+					state.handleInputs(gamepad);
 				}
 			}
 			catch (ex)
@@ -7599,7 +7805,95 @@ function GamepadPtzController()
 				toaster.Error(ex);
 			}
 		}
+		try
+		{
+			if (settings.ui3_gamepad_ptz_enabled === "1")
+			{
+				if (uiSettingsPanel.isOpen())
+				{
+					UpdateGamepadPreview(arr);
+					ClearJoystickInputStates();
+				}
+				else 
+				{
+					var state = ptzButtons.vue().joystickState;
+					state.zout = Math.max(ReadBinding(settings.ui3_gamepad_binding_zoom_out), ReadBinding(settings.ui3_gamepad_binding_zoom_out2));
+					state.zin = Math.max(ReadBinding(settings.ui3_gamepad_binding_zoom_in), ReadBinding(settings.ui3_gamepad_binding_zoom_in2));
+					state.fnear = Math.max(ReadBinding(settings.ui3_gamepad_binding_focus_near), ReadBinding(settings.ui3_gamepad_binding_focus_near2));
+					state.ffar = Math.max(ReadBinding(settings.ui3_gamepad_binding_focus_far), ReadBinding(settings.ui3_gamepad_binding_focus_far2));
+					state.up = Math.max(ReadBinding(settings.ui3_gamepad_binding_tilt_up), ReadBinding(settings.ui3_gamepad_binding_tilt_up2));
+					state.down = Math.max(ReadBinding(settings.ui3_gamepad_binding_tilt_down), ReadBinding(settings.ui3_gamepad_binding_tilt_down2));
+					state.left = Math.max(ReadBinding(settings.ui3_gamepad_binding_pan_left), ReadBinding(settings.ui3_gamepad_binding_pan_left2));
+					state.right = Math.max(ReadBinding(settings.ui3_gamepad_binding_pan_right), ReadBinding(settings.ui3_gamepad_binding_pan_right2));
+
+					if (settings.ui3_experimental_joystick_api === "1")
+					{
+						var X = 0;
+						if (state.left >= state.right)
+							X = -state.left;
+						else
+							X = state.right;
+						var Y = 0;
+						if (state.up >= state.down)
+							Y = -state.up;
+						else
+							Y = state.down;
+						PTZ_Joystick_Input(X, Y, state.zin, state.zout);
+					}
+				}
+			}
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
 		requestAnimationFrame(gamepadLoop);
+	}
+	function ClearJoystickInputStates()
+	{
+		var state = ptzButtons.vue().joystickState;
+		state.zout = 0;
+		state.zin = 0;
+		state.ffar = 0;
+		state.fnear = 0;
+		state.up = 0;
+		state.down = 0;
+		state.left = 0;
+		state.right = 0;
+
+		if (settings.ui3_experimental_joystick_api === "1")
+			PTZ_Joystick_Input(0, 0, 0, 0);
+	}
+	function ReadBinding(binding)
+	{
+		if (typeof binding !== "string")
+			return 0;
+		if (binding.indexOf("button ") === 0)
+		{
+			var buttonIndex = parseInt(binding.substr("button ".length));
+			if (!isNaN(buttonIndex))
+			{
+				return GetAnalogButtonValue(buttonIndex) ?? 0;
+			}
+		}
+		else if (binding.indexOf("axis ") === 0)
+		{
+			var axisIndex = parseInt(binding.substr("axis ".length));
+			if (!isNaN(axisIndex))
+			{
+				var v = GetAxisValue(axisIndex) ?? 0;
+				if (v)
+				{
+					var negative = binding.indexOf("-") > 0;
+					if (negative && v < 0)
+						return -v;
+					else if (!negative && v > 0)
+						return v;
+				}
+				return 0;
+			}
+		}
+		return 0;
 	}
 	function IsButtonPressed(buttonIndex)
 	{
@@ -7666,33 +7960,116 @@ function GamepadPtzController()
 		}
 		return best;
 	}
+	function UpdateGamepadPreview(gamepads)
+	{
+		var htmlParts = [];
+		var buttons = [];
+		var styleParts = [];
+
+		for (var i = 0; i < gamepads.length; i++)
+		{
+			try
+			{
+				var gamepad = gamepads[i];
+				if (gamepad)
+					htmlParts.push("<div>Gamepad " + (i + 1) + ": " + gamepad.id + "</div>");
+			}
+			catch (ex)
+			{
+				toaster.Error(ex);
+			}
+		}
+
+		// Read axis inputs
+		var a0 = GetAxisValue(0) ?? 0;
+		var a1 = GetAxisValue(1) ?? 0;
+		var a2 = GetAxisValue(2) ?? 0;
+		var a3 = GetAxisValue(3) ?? 0;
+		if (a0 || a1)
+		{
+			if (a0)
+			{
+				if (a0 < 0)
+					buttons.push("axis 0 -");
+				else
+					buttons.push("axis 0 +");
+			}
+			if (a1)
+			{
+				if (a1 < 0)
+					buttons.push("axis 1 -");
+				else
+					buttons.push("axis 1 +");
+			}
+			styleParts.push("#ui3gamepad_preview .b10 { fill: #888888 !important; transform: translate(" + (a0 * 20) + "px, " + (a1 * 20) + "px); }");
+		}
+		if (a2 || a3)
+		{
+			if (a2)
+			{
+				if (a2 < 0)
+					buttons.push("axis 2 -");
+				else
+					buttons.push("axis 2 +");
+			}
+			if (a3)
+			{
+				if (a3 < 0)
+					buttons.push("axis 3 -");
+				else
+					buttons.push("axis 3 +");
+			}
+			styleParts.push("#ui3gamepad_preview .b11 { fill: #888888 !important; transform: translate(" + (a2 * 20) + "px, " + (a3 * 20) + "px); }");
+		}
+
+		// Read button inputs
+		for (var b = 0; b < 16; b++)
+		{
+			var v = GetAnalogButtonValue(b);
+			if (v > 0)
+			{
+				buttons.push(b);
+				var color = "hsl(0deg, 0%, " + (30 + (v * 70)) + "%)";
+				styleParts.push("#ui3gamepad_preview .b" + b + " { fill: " + color + " !important; }");
+			}
+		}
+
+		htmlParts.push("<div>Buttons: " + buttons.join(", ") + "</div>");
+
+		var gamepadStyle = styleParts.join('\n');
+		if (gamepadStyle !== existingGamepadStyle)
+		{
+			existingGamepadStyle = gamepadStyle;
+			gamepadPreviewStyle(gamepadStyle);
+		}
+
+		var newGamepadTestOutputHtml = htmlParts.join("\n");
+		if (newGamepadTestOutputHtml !== existingGamepadTestOutputHtml)
+		{
+			var ele = document.getElementById("ui3gamepadTestOutput");
+			if (ele)
+			{
+				existingGamepadTestOutputHtml = newGamepadTestOutputHtml;
+				ele.innerHTML = newGamepadTestOutputHtml;
+			}
+		}
+	}
 	Initialize();
 }
-try
+function GetGamepadAnalogDeadzone()
 {
-	var ui3GamepadJoystickDeadzone_internal = 0.2;
-	if (typeof Object.defineProperty == "function")
-	{
-		Object.defineProperty(window, "ui3GamepadJoystickDeadzone", {
-			get: function () { return ui3GamepadJoystickDeadzone_internal; },
-			set: function (value) { ui3GamepadJoystickDeadzone_internal = Clamp(value, 0.01, 0.99); }
-		});
-	}
-	else
-		window.ui3GamepadJoystickDeadzone = ui3GamepadJoystickDeadzone_internal;
+	return Clamp(parseFloat(settings.ui3_gamepad_analog_deadzone), 0.01, 0.99);
 }
-catch (ex)
-{
-	console.error(ex);
-}
-function UI3GamepadState(gamepad)
+function UI3GamepadState()
 {
 	var self = this;
 	var lastButtons = [];
 	var lastAxes = [];
+	var deadzone = GetGamepadAnalogDeadzone();
 
 	this.handleInputs = function (gamepad)
 	{
+		deadzone = GetGamepadAnalogDeadzone();
 		for (var i = 0; i < gamepad.axes.length; i++)
 		{
 			var axis = gamepad.axes[i];
@@ -7705,10 +8082,8 @@ function UI3GamepadState(gamepad)
 				lastAxes.push(lastAxis = 0);
 			lastAxes[i] = axis;
 
-			//if (axis != lastAxis)
-			//{
-			//	console.log("Gamepad " + gamepad.index + " axis " + i + " value " + axis);
-			//}
+			if (axis !== 0 && lastAxis === 0)
+				BI_CustomEvent.Invoke("GamepadAction", { key: "axis " + i + " " + (axis < 0 ? "-" : "+"), value: axis });
 		}
 		for (var i = 0; i < gamepad.buttons.length; i++)
 		{
@@ -7722,34 +8097,18 @@ function UI3GamepadState(gamepad)
 				lastButtons.push(lastButton = { pressed: false, value: 0 });
 			lastButtons[i] = button;
 
-			//if (button.pressed != lastButton.pressed)
-			//{
-			//	onButtonPressed(i, button.pressed);
-			//	//if (button.pressed)
-			//	//{
-			//	//	console.log("Gamepad " + gamepad.index + " button " + i + " pressed.");
-			//	//}
-			//	//else
-			//	//{
-			//	//	console.log("Gamepad " + gamepad.index + " button " + i + " released.");
-			//	//}
-			//}
-
-			//if (button.value != lastButton.value)
-			//{
-			//	console.log("Gamepad " + gamepad.index + " button " + i + " value " + button.value);
-			//}
+			if (button.pressed && !lastButton.pressed)
+				BI_CustomEvent.Invoke("GamepadAction", { key: "button " + i, value: button.value });
 		}
-	}
-	function onButtonPressed(buttonIndex, pressed)
-	{
 	}
 	function NormalizeAnalog(value)
 	{
-		if (Math.abs(value) < ui3GamepadJoystickDeadzone)
-			value = 0;
-		return value;
-		//return Math.round(value * 10) / 10;
+		if (Math.abs(value) < deadzone)
+			return 0;
+		var negative = value < 0;
+		value = Math.abs(value);
+		var normalized = (value - deadzone) / (1 - deadzone);
+		return negative ? -normalized : normalized;
 	}
 
 	this.IsButtonPressed = function (buttonIndex)
@@ -7777,10 +8136,8 @@ function TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOu
 {
 	function axisValueToSpeed(a)
 	{
-		var normalized = (Math.abs(a) - ui3GamepadJoystickDeadzone) / (1 - ui3GamepadJoystickDeadzone);
-		var scaledUp = Clamp(Math.round(normalized * 15), 1, 15);
+		var scaledUp = Clamp(Math.round(Math.abs(a) * 15), 1, 15);
 		scaledUp = ~~scaledUp; // cast to int
-		//console.log("normalized", normalized, "scaledUp", scaledUp);
 		return scaledUp & 15; // 15 is 0b1111;
 	}
 	var dbg = "";// "axisX " + axisX + ", axisY " + axisY;
@@ -7789,13 +8146,13 @@ function TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOu
 	{
 		bitmask |= (1 << 13);
 		bitmask |= axisValueToSpeed(axisZoomIn) << 4;
-		dbg += " zoom in";
+		dbg += " zoom in " + axisValueToSpeed(axisZoomIn);
 	}
 	else if (axisZoomOut > 0)
 	{
 		bitmask |= (1 << 14);
 		bitmask |= axisValueToSpeed(axisZoomOut) << 4;
-		dbg += " zoom out";
+		dbg += " zoom out " + axisValueToSpeed(axisZoomOut);
 	}
 	if (bitmask === 0)
 	{
@@ -7851,7 +8208,6 @@ function TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOu
 	return bitmask;
 }
 var joystickDebug = false;
-var joystickDev = false;
 var lastJoystickValue = null;
 var isSendingJoystickCommand = false;
 var joystickDebugToast = null;
@@ -29833,7 +30189,7 @@ function BI_Hotkey_DigitalPanRight_Up()
 }
 function CreateBIPtzState()
 {
-	return { up: 0, down: 0, left: 0, right: 0, zin: 0, zout: 0, fsmall: 0, flarge: 0 };
+	return { up: 0, down: 0, left: 0, right: 0, zin: 0, zout: 0, ffar: 0, fnear: 0 };
 }
 function BI_Hotkey_PtzUp() { ptzButtons.vue().hotkeyState.up = 1; }
 function BI_Hotkey_PtzUp_Up() { ptzButtons.vue().hotkeyState.up = 0; }
@@ -29847,10 +30203,10 @@ function BI_Hotkey_PtzIn() { ptzButtons.vue().hotkeyState.zin = 1; }
 function BI_Hotkey_PtzIn_Up() { ptzButtons.vue().hotkeyState.zin = 0; }
 function BI_Hotkey_PtzOut() { ptzButtons.vue().hotkeyState.zout = 1; }
 function BI_Hotkey_PtzOut_Up() { ptzButtons.vue().hotkeyState.zout = 0; }
-function BI_Hotkey_PtzFocusFar() { ptzButtons.vue().hotkeyState.fsmall = 1; }
-function BI_Hotkey_PtzFocusFar_Up() { ptzButtons.vue().hotkeyState.fsmall = 0; }
-function BI_Hotkey_PtzFocusNear() { ptzButtons.vue().hotkeyState.flarge = 1; }
-function BI_Hotkey_PtzFocusNear_Up() { ptzButtons.vue().hotkeyState.flarge = 0; }
+function BI_Hotkey_PtzFocusFar() { ptzButtons.vue().hotkeyState.ffar = 1; }
+function BI_Hotkey_PtzFocusFar_Up() { ptzButtons.vue().hotkeyState.ffar = 0; }
+function BI_Hotkey_PtzFocusNear() { ptzButtons.vue().hotkeyState.fnear = 1; }
+function BI_Hotkey_PtzFocusNear_Up() { ptzButtons.vue().hotkeyState.fnear = 0; }
 function BI_Hotkey_PtzPreset(presetNum)
 {
 	var loading = videoPlayer.Loading();
@@ -33009,9 +33365,10 @@ function UISettingsPanel()
 			title: "UI Settings"
 			, overlayOpacity: 0.3
 			, closeOnOverlayClick: true
-			, onClosing: function () { BI_CustomEvent.Invoke("UI_Settings_Closing"); }
+			, onClosing: function () { modal_dialog = null; BI_CustomEvent.Invoke("UI_Settings_Closing"); }
 		});
 
+		BI_CustomEvent.Invoke("UI_Settings_Opening");
 		self.Refresh();
 	}
 	this.Refresh = function ()
@@ -33019,6 +33376,7 @@ function UISettingsPanel()
 		if (!modal_dialog)
 			return;
 
+		BI_CustomEvent.Invoke("UI_Settings_Refreshing");
 		$content.empty();
 		sections = [];
 		var loadedAny = false;
@@ -33029,6 +33387,7 @@ function UISettingsPanel()
 			$content.append('<div class="filterTextNoMatch">Your filter text did not match anything.</div>');
 
 		modal_dialog.contentChanged(true);
+		BI_CustomEvent.Invoke("UI_Settings_Refreshed");
 	}
 	var LoadCategory = function (category)
 	{
@@ -33069,6 +33428,12 @@ function UISettingsPanel()
 					formFields.onChange = HandleHotkeyChange;
 					if (!fullscreen_supported && s.key === 'ui3_hotkey_togglefullscreen')
 						formFields.label += '<br>(Unavailable)';
+					$row.append(UIFormField(formFields));
+				}
+				else if (s.gamepad_binding)
+				{
+					formFields.inputType = "gamepad_binding";
+					formFields.onChange = TextChanged;
 					$row.append(UIFormField(formFields));
 				}
 				else if (s.inputType === "checkbox")
@@ -33536,6 +33901,10 @@ function UISettingsPanel()
 		$expandCollapse.attr("myaction", "e");
 		$expandCollapse.val("Expand All");
 	}
+	this.isOpen = function ()
+	{
+		return !!modal_dialog;
+	}
 }
 function GenerateLocalSnapshotsComment()
 {
@@ -33846,9 +34215,17 @@ function SetBrowserZoom(enable)
 	else
 		$('meta[name="viewport"]').attr('content', 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no');
 }
-function OnChange_ui3_invert_ptz_focus_buttons()
+function OnChange_ui3_swap_ptz_focus_buttons()
 {
-	ptzButtons.UpdatePtzButtonMappings();
+	ReloadToTakeEffectToast();
+}
+function OnChange_ui3_gamepad_ptz_enabled()
+{
+	uiSettingsPanel.Refresh();
+}
+function Precondition_ui3_gamepad_ptz_enabled()
+{
+	return settings.ui3_gamepad_ptz_enabled === "1"
 }
 function OnChange_ui3_video_loading_overlay()
 {
@@ -33913,6 +34290,11 @@ function UIFormField(args)
 				var textValue = getHotkeyTextValueFromHotkeyValue(o.defaultValue);
 				$input.val(textValue);
 				o.onChange(null, o.tag, $input, textValue, o.defaultValue);
+			}
+			else if (o.inputType === "gamepad_binding")
+			{
+				$input.val(o.defaultValue);
+				o.onChange(null, o.tag, $input);
 			}
 			else
 			{
@@ -34101,6 +34483,58 @@ function UIFormFieldInternal(o)
 		$inputWrapper.append($input);
 		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>')
 		$row.append($inputWrapper);
+		$row.append(GetDialogOptionLabel(o.label));
+		return $row;
+	}
+	else if (o.inputType === "gamepad_binding")
+	{
+		var $input = $('<input type="button" />');
+		$input.val(o.value ? o.value : "unbound");
+
+		$input.on('click', function (e)
+		{
+			var gamepadBindingDialog = null;
+			var LearnGamepadBinding = function (gamepad_action)
+			{
+				$input.val(gamepad_action.key);
+				o.onChange(e, o.tag, $input);
+				if (gamepadBindingDialog)
+				{
+					gamepadBindingDialog.close();
+					gamepadBindingDialog = null;
+				}
+			}
+
+			BI_CustomEvent.AddListener("GamepadAction", LearnGamepadBinding);
+
+			var $dlg = $('<div style="white-space: pre-wrap; padding: 10px;">'
+				+ '<div style="text-align: center; margin-bottom: 2em;">Binding "' + o.label + '"</div>'
+				+ '<div><img src="ui3/ajax-loader-big.gif" role="presentation" alt="" /></div>'
+				+ '<div style="text-align: center; margin-bottom: 2em;">(listening for a gamepad action)</div>'
+				+ '</div>');
+			var $unbindBtn = $('<div style="text-align: center;"><input type="button" value="unbind" /></div>');
+			$unbindBtn.find('input').on('click', function ()
+			{
+				$input.val("unbound");
+				o.onChange(e, o.tag, $input);
+				if (gamepadBindingDialog)
+				{
+					gamepadBindingDialog.close();
+					gamepadBindingDialog = null;
+				}
+			});
+			$dlg.append($unbindBtn);
+			$dlg.append('<div style="text-align: center; margin-top: 1em;">(close this dialog to cancel)</div>');
+			gamepadBindingDialog = $dlg.modalDialog({
+				onClosing: function ()
+				{
+					BI_CustomEvent.RemoveListener("GamepadAction", LearnGamepadBinding);
+				}
+			});
+		});
+
+		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>')
+		$row.append($input);
 		$row.append(GetDialogOptionLabel(o.label));
 		return $row;
 	}
@@ -37357,4 +37791,27 @@ function dateSecondsToYMD(seconds)
 {
 	var date = new Date(seconds * 1000);
 	return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate();
+}
+function getSvgIconToEmbed(svgId, newId, classes)
+{
+	if (typeof classes === "undefined")
+	{
+		if (svgId.indexOf('svg_mio') === 0)
+			classes = "icon noflip";
+		else
+			classes = "icon";
+	}
+
+	var str = document.getElementById(svgId).outerHTML;
+	str = str.replace('<symbol ', '<svg ');
+	str = str.replace('</symbol>', '</svg>');
+	if (classes)
+		str = str.replace('<svg ', '<svg class="' + classes + '" ');
+	if (str.indexOf('xmlns=') < 0)
+		str = str.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+	if (newId)
+		str = str.replace(' id="' + svgId + '"', ' id="' + newId + '"');
+	else
+		str = str.replace(' id="' + svgId + '"', '');
+	return str;
 }
