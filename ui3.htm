@@ -50,6 +50,8 @@
 				var biVersionStr = "unknown";
 				if (typeof bi_version != "undefined")
 					biVersionStr = bi_version;
+				if (!url)
+					url = "";
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
 				var errStr = "An unexpected error has occurred in " + location.pathname + " (v " + uiVersionStr + " / " + biVersionStr + "). A full refresh may solve the problem (CTRL + F5). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent;
 
@@ -88,7 +90,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "276";
+		var ui_version = "277";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";

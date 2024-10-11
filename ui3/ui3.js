@@ -7877,7 +7877,7 @@ function GamepadPtzController()
 			var buttonIndex = parseInt(binding.substr("button ".length));
 			if (!isNaN(buttonIndex))
 			{
-				return GetAnalogButtonValue(buttonIndex) ?? 0;
+				return firstNonFalsy(GetAnalogButtonValue(buttonIndex), 0);
 			}
 		}
 		else if (binding.indexOf("axis ") === 0)
@@ -7885,7 +7885,7 @@ function GamepadPtzController()
 			var axisIndex = parseInt(binding.substr("axis ".length));
 			if (!isNaN(axisIndex))
 			{
-				var v = GetAxisValue(axisIndex) ?? 0;
+				var v = firstNonFalsy(GetAxisValue(axisIndex), 0);
 				if (v)
 				{
 					var negative = binding.indexOf("-") > 0;
@@ -7985,10 +7985,10 @@ function GamepadPtzController()
 		}
 
 		// Read axis inputs
-		var a0 = GetAxisValue(0) ?? 0;
-		var a1 = GetAxisValue(1) ?? 0;
-		var a2 = GetAxisValue(2) ?? 0;
-		var a3 = GetAxisValue(3) ?? 0;
+		var a0 = firstNonFalsy(GetAxisValue(0), 0);
+		var a1 = firstNonFalsy(GetAxisValue(1), 0);
+		var a2 = firstNonFalsy(GetAxisValue(2), 0);
+		var a3 = firstNonFalsy(GetAxisValue(3), 0);
 		if (a0 || a1)
 		{
 			if (a0)
@@ -37818,4 +37818,15 @@ function getSvgIconToEmbed(svgId, newId, classes)
 	else
 		str = str.replace(' id="' + svgId + '"', '');
 	return str;
+}
+function firstNonFalsy()
+{
+	if (arguments.length)
+	{
+		for (var i = 0; i < arguments.length; i++)
+			if (arguments[i])
+				return arguments[i];
+		return arguments[arguments.length - 1];
+	}
+	return undefined;
 }
