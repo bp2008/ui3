@@ -8296,6 +8296,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	var loadedState = { camera: null, left: 0, right: 0, zoomScaler: 0, loadedAt: -99999 };
 	/** True if a loading operation is currently active. */
 	var isRunning = false;
+	var lastFailure = -999999;
 	var refreshTimelineInterval = setInterval(Update, 1001);
 	/** Call to request that new Timeline data be requested if necessary.  Optionally takes a new visible range argument. */
 	this.NewParameters = function (left, right, zoomScaler, camera)
@@ -8352,6 +8353,7 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 			})
 			.catch(function (err)
 			{
+				lastFailure = performance.now();
 				var errHtml;
 				if (typeof err === "string")
 					errHtml = err;
@@ -8371,6 +8373,9 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 	 */
 	function RequiresUpdatedView()
 	{
+		if (performance.now() - lastFailure < 1000)
+			return false; // Throttle retry after failure by at least 1 second.
+
 		if (parameters.camera === null)
 			return false; // We don't require data yet.
 
