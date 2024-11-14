@@ -15082,7 +15082,6 @@ function SessionManager()
 			ExecJSON({ cmd: "login", session: oldSession }, function (response)
 			{
 				lastResponse = response;
-				var errorInfo = "";
 				if (response.result)
 				{
 					if (response.result == "success")
@@ -15110,27 +15109,30 @@ function SessionManager()
 					}
 					else if (response.result == "fail")
 					{
-						if (response.data)
+						if (response.data && response.data.reason)
 						{
 							if (response.data.reason == "missing response")
 							{
 								// The { cmd: "login", session: oldSession } method of learning session status always seemed a little hacky.  If this error ever arises, it means Blue Iris has broken this method and we need a replacement.
 								loadingHelper.SetErrorStatus("login", 'Blue Iris sent an authentication challenge instead of session data (probably indicates a Blue Iris bug).', false);
-								return;
 							}
-							else
-								errorInfo = JSON.stringify(response);
+							else if (self.IsInvalidSession(response))
+							{
+								loadingHelper.SetErrorStatus("login", 'Blue Iris says your session is invalid.', true);
+							}
+							else 
+							{
+								loadingHelper.SetErrorStatus("login", 'Session status check failed: ' + htmlEncode(response.data.reason), true);
+							}
 						}
 						else
 						{
-							loadingHelper.SetErrorStatus("login", 'The current session is invalid or expired.', 3000);
-							return;
+							loadingHelper.SetErrorStatus("login", 'Session status check failed without giving a reason. ' + htmlEncode(JSON.stringify(response)), true);
 						}
 					}
 					else
 					{
-						errorInfo = JSON.stringify(response);
-						loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + errorInfo, true);
+						loadingHelper.SetErrorStatus("login", 'Unrecognized response when getting session status. ' + htmlEncode(JSON.stringify(response)), true);
 					}
 				}
 			}, function (jqXHR, textStatus, errorThrown)
@@ -15421,21 +15423,21 @@ function SessionManager()
 				toaster.Error(errorMessage, 3000);
 			});
 	}
-	this.IsInvalidSession = function (jsonResponse)
+	this.IsInvalidSession = function (response)
 	{
 		if (compareVersions(bi_version, "5.8.1.1") >= 0)
 		{
-			return jsonResponse
-				&& jsonResponse.result === "fail"
-				&& jsonResponse.data
-				&& typeof jsonResponse.data.reason === "string"
-				&& jsonResponse.data.reason.toUpperCase() === "INVALID SESSION";
+			return response
+				&& response.result === "fail"
+				&& response.data
+				&& typeof response.data.reason === "string"
+				&& response.data.reason.toUpperCase() === "INVALID SESSION";
 		}
 		else
 		{
 			// BI prior to 5.8.1.1 did not return a data.reason string in the case of invalid session.
-			return jsonResponse
-				&& jsonResponse.result === "fail";
+			return response
+				&& response.result === "fail";
 		}
 	}
 	this.ReestablishLostSession = function ()
