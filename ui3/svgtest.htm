@@ -47,7 +47,13 @@
 			border: 1px solid black;
 			margin: 5px;
 			padding: 5px;
+			cursor: pointer;
 		}
+
+			.iconBox:hover
+			{
+				background-color: rgba(0,0,0,0.05);
+			}
 
 		.svgWrapper
 		{
@@ -74,10 +80,19 @@
 
 		#svgLargeContainer
 		{
-			margin-top: 20px;
 			display: flex;
 			flex-direction: column;
 			align-items: center;
+		}
+
+		#copied
+		{
+			font-size: 16px;
+			color: #009900;
+			font-weight: bold;
+			background-color: #FFFFFF;
+			height: 20px;
+			opacity: 0;
 		}
 
 		#svgName
@@ -86,11 +101,20 @@
 			align-items: center;
 			font-size: 16px;
 			padding: 2px 4px;
+			margin-bottom: 20px;
 			background-color: rgba(255,200,0,0.15);
 			border: 1px dotted rgba(255,200,0,0.75);
-			margin-bottom: 20px;
+		}
+
+		#svgLargeContainer.enabled #svgName
+		{
 			cursor: pointer;
 		}
+
+			#svgLargeContainer.enabled #svgName:hover
+			{
+				background-color: rgba(255,200,0,0.25);
+			}
 
 		#svgLarge
 		{
@@ -125,6 +149,13 @@
 	<script type="text/javascript">
 		$(function ()
 		{
+			try
+			{
+				if (localStorage.ui3_svgtest_padding === "1")
+					$("#cb_svgPadding").attr("checked", "checked");
+			}
+			catch (ex) { }
+
 			$("#svgContainer").load("icons.svg?r=" + Date.now(), function ()
 			{
 				var $root = $("#root");
@@ -134,29 +165,46 @@
 					var icon_id = $icon.attr("id");
 					var doInverse = icon_id.indexOf('svg_x5F_') == 0;
 					var doStroke = icon_id.indexOf('svg_stroke_') == 0;
-					var $btn = $('<div class="iconBox">'
+					var $btn = $('<div class="iconBox" tabindex="0" role="button">'
 						+ '<div class="svgWrapper"><svg class="icon' + (doInverse ? ' iconInverse' : '') + (doStroke ? ' stroke' : '') + '"><use xlink:href="#' + icon_id + '"></use></svg></div>'
 						+ ' <div class="label">' + icon_id + '</div> '
 						+ '</div>');
-					$btn.on('click', function ()
+					$btn.on('click keydown', function (e)
 					{
-						$("#svgNameDiv").text(icon_id);
-						$("#svgLarge").html($btn.find('svg').parent().html());
-						$("#svgLargeContainer").addClass("enabled")
-						window.scrollTo(0, $(document).height());
+						if (typeof e.keyCode === "undefined" || e.keyCode === 13 || e.keyCode === 32)
+						{
+							$("#svgNameDiv").text(icon_id);
+							$("#svgLarge").html($btn.find('svg').parent().html());
+							$("#svgLargeContainer").addClass("enabled")
+							window.scrollTo(0, $(document).height());
+							$("#svgName").attr("title", "click to copy svg name");
+							$("#svgName").focus();
+						}
 					});
 					$root.append($btn);
 				});
-				$("#svgName").on('click', function ()
-				{
-					if ($("#svgLargeContainer").hasClass("enabled"))
-						CopyToClipboard($("#svgNameDiv").text());
-				});
+				$("#svgName").on('click keydown', copySvgName);
+				setPaddingState();
 			});
 		});
-		function svgPaddingClicked()
+		function copySvgName(e)
 		{
-			$(".svgWrapper").css("padding", $("#cb_svgPadding").is(":checked") ? "5px" : "0px");
+			if (typeof e.keyCode === "undefined" || e.keyCode === 13 || e.keyCode === 32)
+			{
+				if ($("#svgLargeContainer").hasClass("enabled"))
+					CopyToClipboard($("#svgNameDiv").text());
+			}
+		}
+		function setPaddingState()
+		{
+			var showPadding = $("#cb_svgPadding").is(":checked");
+			try
+			{
+				localStorage.ui3_svgtest_padding = showPadding ? "1" : "0";
+			}
+			catch (ex) { }
+			$(".svgWrapper").css("padding", showPadding ? "5px" : "0px");
+			$(".svgWrapper").css("margin", !showPadding ? "5px" : "0px");
 		}
 		function CopyToClipboard(text)
 		{
@@ -165,6 +213,13 @@
 				var data = [new ClipboardItem({ "text/plain": new Blob([text.trim()], { type: "text/plain" }) })];
 				navigator.clipboard.write(data).then(function ()
 				{
+					$("#copied").stop(true, true);
+					$("#copied").css("opacity", "1");
+					$("#copied").fadeOut(1000, function ()
+					{
+						$("#copied").css("opacity", "0");
+						$("#copied").show();
+					});
 				}, function ()
 				{
 					alert("Unable to copy text to clipboard.");
@@ -178,12 +233,13 @@
 	</script>
 </head>
 <body>
-	<div><label><input type="checkbox" id="cb_svgPadding" onclick="svgPaddingClicked()" checked="checked" />Padding</label></div>
+	<div><label><input type="checkbox" id="cb_svgPadding" onclick="setPaddingState()" />Padding</label></div>
 	<div id="root">
 	</div>
 	<div id="svgContainer" style="display:none"></div>
 	<div id="svgLargeContainer">
-		<div id="svgName">
+		<div id="copied">Copied!</div>
+		<div id="svgName" tabindex="0" role="button">
 			<div id="svgNameDiv">
 				Click an SVG to preview it here:
 			</div>
