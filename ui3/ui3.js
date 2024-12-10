@@ -35245,7 +35245,7 @@ function NumberToBinaryBooleans(number)
 {
 	var result = [];
 	var binStr = number.toString(2);
-	for (let i = binStr.length - 1; i >= 0; i--)
+	for (var i = binStr.length - 1; i >= 0; i--)
 		result.push(binStr[i] === "1");
 	return result;
 }
