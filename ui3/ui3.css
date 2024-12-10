@@ -6386,3 +6386,15 @@ ul.extraSpacing li
 	border: 1px solid #808080;
 	padding: 0px 2px;
 }
+
+.toast-error
+{
+	white-space: pre-wrap;
+}
+
+.clipicon.icon-ai_person,
+.clipicon.icon-ai_vehicle,
+.clipicon.icon-ai_wildlife
+{
+	color: #FF5F00;
+}

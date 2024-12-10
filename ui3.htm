@@ -40,7 +40,7 @@
 
 		// If messages stating "An unexpected error has occurred" become troublesome, you can disable it by deleting this script block!
 		// Also, be sure to report the problem so I can fix it!
-		window.onerror = function (msg, url, line, charIdx)
+		window.onerror = function (msg, url, line, charIdx, err)
 		{
 			try
 			{
@@ -53,14 +53,22 @@
 				if (!url)
 					url = "";
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
-				var errStr = "An unexpected error has occurred in " + location.pathname + " (v " + uiVersionStr + " / " + biVersionStr + "). A full refresh may solve the problem (CTRL + F5). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent;
+				var errDetails = "\nat " + url + " [" + line + ":" + charIdx + "]";
+				try
+				{
+					if (err && err.stack)
+						errDetails = err.stack.replace(new RegExp(location.origin, "g"), "");
+				}
+				catch (ex) { }
+				var errHeading = "An unexpected error has occurred in " + location.pathname + " (v " + uiVersionStr + " / " + biVersionStr + ").";
+				var errStr = errHeading + " A full refresh may solve the problem (CTRL + F5). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + errDetails + "\n" + navigator.userAgent;
 
 				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, uiVersionStr: uiVersionStr, biVersionStr: biVersionStr };
 				for (var i = 0; i < suppressErrorCallbacks.length; i++)
 				{
 					try
 					{
-						if (suppressErrorCallbacks[i](errObj))
+						if (suppressErrorCallbacks[i](errObj, err))
 						{
 							try { console.log("The following error report was suppressed by callback " + i + ":"); console.error(errStr); }
 							catch (ex) { }
@@ -77,11 +85,12 @@
 
 				try
 				{
-					if (toaster)
-						toaster.Error(errStr, 600000);
+					toaster.Error(errStr, 600000);
 				}
-				catch (ex) { }
-				alert(errStr);
+				catch (ex)
+				{
+				}
+				prompt(errStr, "Please COPY this text to share with support.  Error in UI3 (v " + uiVersionStr + " / " + biVersionStr + ")\n\n" + errDetails + "\n\n" + navigator.userAgent);
 			}
 			catch (ex)
 			{
@@ -90,7 +99,7 @@
 		};
 	</script>
 	<script type="text/javascript">
-		var ui_version = "277";
+		var ui_version = "278-r1";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";

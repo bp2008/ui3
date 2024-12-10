@@ -1929,14 +1929,21 @@ var defaultSettings =
 			key: "ui3_clipicon_ai_person"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_man"></use></svg> when AI detected a person'
+			, label: '<svg class="icon clipicon noflip icon-ai_person"><use xlink:href="#svg_mio_man"></use></svg> when AI detected a person'
 			, category: "Clip / Alert Icons"
 		}
 		, {
 			key: "ui3_clipicon_ai_vehicle"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: '<svg class="icon clipicon noflip"><use xlink:href="#svg_mio_directions_car"></use></svg> when AI detected a vehicle'
+			, label: '<svg class="icon clipicon noflip icon-ai_vehicle"><use xlink:href="#svg_mio_directions_car"></use></svg> when AI detected a vehicle'
+			, category: "Clip / Alert Icons"
+		}
+		, {
+			key: "ui3_clipicon_ai_wildlife"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon noflip icon-ai_wildlife"><use xlink:href="#wildlife"></use></svg> when AI detected wildlife'
 			, category: "Clip / Alert Icons"
 		}
 		, {
@@ -5730,7 +5737,7 @@ function DropdownBoxes()
 				this.items.push(new DropdownListItem({ id: "confirmed", text: "Confirmed alerts", icon: "#svg_mio_cbChecked", iconClass: "smallIcon greenIcon" }));
 				this.items.push(new DropdownListItem({ id: "people", text: "Person alerts", icon: "#svg_mio_man", iconClass: "smallIcon orangeIcon" }));
 				this.items.push(new DropdownListItem({ id: "vehicles", text: "Vehicle alerts", icon: "#svg_mio_directions_car", iconClass: "smallIcon orangeIcon" }));
-
+				this.items.push(new DropdownListItem({ id: "wildlife", text: "Wildlife alerts", icon: "#wildlife", iconClass: "smallIcon orangeIcon" }));
 				this.items.push(new DropdownListItem({ id: "separator" }));
 
 				this.items.push(new DropdownListItem({ id: "zonea", text: "Zone A alerts", icon: "#blank", iconClass: "smallIcon" }));
@@ -8279,6 +8286,13 @@ var timelinePersonImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAA
 	+ "w5jEy9bhXC9IzU4zcix54TZdOMFEjrWy4Pm3uN10M3lmgJNHeyHIphk/TmGg83Bai/2gVj4VRw94WP1HcCeMR+wg/dxlp7oP+LTEwhfKtV5ovcJ8kYWNTjBE6dW28NG7uKhdjYg3m9x7y"
 	+ "0Y9rkWYThZ3USrXOue0fV6/x9BrzKHUckyeByoV18wlcHiYU+0w+Df32Iji6FY96h3HDvBzmffb8Z01P+Cvv1neotK1Yba9/2Ko8GBJsLjF4JHYffUX858Obvlvv8ZmrOB8E/gDEteiey"
 	+ "c1xP8AAAAASUVORK5CYII=";
+var timelineWildlifeImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAYCAMAAADJYP15AAAA1VBMVEUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	+ "AAAAAAAAAAAMAgAAAAAAAAAAAAAAAAAAAAAUAwAlCAAAAAAAAAAAAAAAAAAvDgAxDgAAAAAAAAAAAAAAAAAAAAD/XwD8XgD0WgDxWQDHSQHuWADrVwDkVADXTwCrPgCcNwCELgD3XADmV"
+	+ "QDMSwDESAC8RAC0QQCkOgB5KgBwJgBKFgBAEgDfUwHiUwDbUQDPTQCnPACXNQCQMwC+RgG9RQGNMQFcHwG1QgCvPwBkIQBaHQBOGADS5e0IAAAAH3RSTlMARAescya2sUksJPTkx4kyHB"
+	+ "YQ88i8qJaSd3VoYFI8iuR3UQAAASFJREFUKM9Vz9dywjAQQFFRQg8Q0uuVbDA2pveanvz/J2UlB0LOi2evZ1aScgqZTCatVAkoqIN0mTfqSj0Qc/qXz4iHpJS6Z/E/b/qSG1U6XDQOO/J"
+	+ "Yj5dY+X2uQRiMEUvTg7qL2bssA63NBPpa64jsbTa5FG2ZV+DJp484UUUGXyxlboGRzwuzAUWVIpoykrkNvuyaMxlRUzg9bToQGfMMc6goYtOVsvvkV9N4oFhp3cXajuGcqRzQkbyWvTsg"
+	+ "cKfSlDGWPJffW1hosXbZRzKRF8BQW2bKzGtNyKsC1thox4fkOeopAx9SEz24uj5RIsfmUN2rXE2Dp4+MSCX5Wx8L9xnfXsIPWl277F1yspswfMWaDdtNKLpcKmNVbnI4VWk/Uuw3cWXVV"
+	+ "n8AAAAASUVORK5CYII=";
 var timelineVehicleImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAYCAYAAADpnJ2CAAADHklEQVRIx93Vy29VVRQG8N++9/S0tAVLKNa2iFwiNSQaiIQakwZaH"
 	+ "wP/AzVEHDAwDnSs0RiNkUQHxolxgASMkUQZ+pj5JDFWiTFEpS1U24CiwAXSR9rb3nscnF1B0sclztjJyTk556z17e9b316Lm32FZb6l6I73G1kVnI33ugFT9OLlCHoj6yxewuBioGEZsP"
 	+ "0NQe+2VmlTsT6kmSo/TarMZQbx3GKgYSmw1qD3+Xukj2yksYisDi1rfDrOaydUJpcAvR6whAPo27dJ+uIOKlW++pO52vJgaYHdXTQUeOU47/6ugmPYh9+WqtsDGC2lsk8GZJcfk72xXRb"
@@ -8460,9 +8474,10 @@ function TimelineDataLoader(callbackStartedLoading, callbackGotData, callbackErr
 						processed.alerts.push({
 							time: timeOffset + (a.x1 * msecpp),
 							len: (a.x2 - a.x1) * msecpp,
-							isFlag: (a.type & BIDBFLAG.FLAGGED) > 0,
-							isPerson: (a.type & BIDBFLAG.AI_PERSON) > 0,
-							isVehicle: (a.type & BIDBFLAG.AI_VEHICLE) > 0,
+							isFlag: NumberHasFlags(a.type, BIDBFLAG.FLAGGED),
+							isPerson: NumberHasFlags(a.type, BIDBFLAG.AI_PERSON),
+							isVehicle: NumberHasFlags(a.type, BIDBFLAG.AI_VEHICLE),
+							isWildlife: NumberHasFlags(a.type, BIDBFLAG.AI_WILDLIFE),
 							tracks: a.tracks,
 							recId: a.record ? GetRecIdFromPath(a.record) : undefined
 						});
@@ -8496,6 +8511,7 @@ function ClipTimeline()
 	var flagImg = new TimelineRasterIcon(timelineFlagImgSrc);
 	var personImg = new TimelineRasterIcon(timelinePersonImgSrc);
 	var vehicleImg = new TimelineRasterIcon(timelineVehicleImgSrc);
+	var wildlifeImg = new TimelineRasterIcon(timelineWildlifeImgSrc);
 	var $tl_root = $();
 	var timelineDataLoader = null;
 	var minZoomScaler = function () { return Clamp(parseFloat(settings.ui3_timeline_minZoomScaler), 4, 8); }; // default was 8, changed to 7 when alert thumbnails were implemented.
@@ -9053,6 +9069,8 @@ function ClipTimeline()
 								img = personImg;
 							else if (a.isVehicle)
 								img = vehicleImg;
+							else if (a.isWildlife)
+								img = wildlifeImg;
 							img.draw(ctx, canvas.width, dpr, ((a.time - left) / zoomFactor), 0);
 						}
 						bet.stop();
@@ -11542,7 +11560,7 @@ function ExportControls()
 
 		var startTime = 0;
 		var endTime = 1;
-		if ((clipData.flags & BIDBFLAG.ALERT_OFFSETTIME) !== 0)
+		if (NumberHasFlags(clipData.flags, BIDBFLAG.ALERT_OFFSETTIME))
 		{
 			startTime = clipData.offsetMs / (fileDuration - 1);
 			endTime = (clipData.offsetMs + clipData.roughLengthMs) / (fileDuration - 1);
@@ -12030,7 +12048,7 @@ function ClipData(clip)
 	clipData.alertPath = clip.path; // Alert path if this is an alert, otherwise just another copy of the clip path.
 	clipData.offsetMs = clip.offset ? clip.offset : 0;
 	clipData.flags = clip.flags;
-	clipData.audio = (clip.flags & BIDBFLAG.AUDIO) > 0;
+	clipData.audio = NumberHasFlags(clip.flags, BIDBFLAG.AUDIO);
 	clipData.date = new Date(clip.date * 1000);
 	clipData.displayDate = GetServerDate(clipData.date);
 	clipData.colorHex = BlueIrisColorToCssColor(clip.color);
@@ -12237,6 +12255,7 @@ function ClipLoader(clipsBodySelector)
 
 		ExecJSON(args, function (response)
 		{
+		zoomScaler.getFUIOL();
 			failedLoadToast.hide();
 			recoveryFunction = null;
 			if (response.result !== "success")
@@ -13182,7 +13201,7 @@ function ClipLoader(clipsBodySelector)
 		else
 		{
 			// This is an alert we're trying to export.  We can probably set a range.
-			if ((clipData.flags & BIDBFLAG.ALERT_OFFSETTIME) !== 0)
+			if (NumberHasFlags(clipData.flags, BIDBFLAG.ALERT_OFFSETTIME))
 			{
 				args.startms = clipData.offsetMs;
 				args.msec = clipData.roughLengthMs;
@@ -13266,11 +13285,11 @@ function ClipLoader(clipsBodySelector)
 	this.ToggleAlertAiConfirmed = function (clipData, onSuccess, onFailure)
 	{
 		var flag;
-		if ((clipData.flags & BIDBFLAG.AI_CONFIRMED) > 0)
+		if (NumberHasFlags(clipData.flags, BIDBFLAG.AI_CONFIRMED))
 			flag = BIDBFLAG.ALERT_CANCELLED;
 		else
 			flag = BIDBFLAG.AI_CONFIRMED;
-		ToggleFlag(clipData, flag, BIDBFLAG.ALERT_CANCELLED | BIDBFLAG.AI_CONFIRMED, function (clipData, flagIsSet)
+		ToggleFlag(clipData, flag, UI3_BINARY_OR(BIDBFLAG.ALERT_CANCELLED, BIDBFLAG.AI_CONFIRMED), function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
 				self.HideAiConfirmed(clipData);
@@ -13282,7 +13301,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	var ToggleFlag = function (clipData, flag, mask, onSuccess, onFailure)
 	{
-		var flagIsSet = (clipData.flags & flag) > 0;
+		var flagIsSet = NumberHasFlags(clipData.flags, flag);
 		var newFlags = flagIsSet ? 0 : flag;
 		UpdateClipFlags('@' + clipData.recId, newFlags, mask, function ()
 		{
@@ -13300,8 +13319,8 @@ function ClipLoader(clipsBodySelector)
 	 */
 	function SetFlags(flags, flagsToSet, mask)
 	{
-		var result = flags & ~mask; // Clear the bits of flags that are set in mask
-		result |= (flagsToSet & mask); // Set the bits that are set in both mask and flagsToSet
+		var result = UI3_BINARY_AND(flags, UI3_BINARY_INVERT(mask)); // Clear the bits of flags that are set in mask
+		result = UI3_BINARY_OR(result, UI3_BINARY_AND(flagsToSet, mask)); // Set the bits that are set in both mask and flagsToSet
 		return result;
 	}
 	this.HideClipFlag = function (clipData)
@@ -13351,7 +13370,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ClipDataIndicatesFlagged = function (clipData)
 	{
-		return (clipData.flags & BIDBFLAG.FLAGGED) > 0;
+		return NumberHasFlags(clipData.flags, BIDBFLAG.FLAGGED);
 	}
 	this.HideAiConfirmed = function (clipData)
 	{
@@ -13378,7 +13397,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.AlertDataIndicatesAIConfirmed = function (clipData)
 	{
-		return (clipData.flags & BIDBFLAG.AI_CONFIRMED) > 0;
+		return NumberHasFlags(clipData.flags, BIDBFLAG.AI_CONFIRMED);
 	}
 	this.Multi_Flag = function (clipIDs, flagEnable, idx, myToast)
 	{
@@ -13575,7 +13594,7 @@ function ClipLoader(clipsBodySelector)
 			}
 			else if (o.operation == "protect")
 			{
-				var isProtected = (clipData.flags & BIDBFLAG.PROTECTED) > 0;
+				var isProtected = NumberHasFlags(clipData.flags, BIDBFLAG.PROTECTED);
 				if ((isProtected && !o.args.protectEnable) || (!isProtected && o.args.protectEnable))
 				{
 					self.ToggleClipProtect(clipData, function ()
@@ -16851,7 +16870,7 @@ function VideoPlayerController()
 	this.LoadClip = function (clipData)
 	{
 		var fileTypeInfo = clipLoader.GetClipFileTypeInfo(clipData);
-		if ((clipData.flags & BIDBFLAG.RECORDING) > 0 && !fileTypeInfo.isBVR)
+		if (NumberHasFlags(clipData.flags, BIDBFLAG.RECORDING) && !fileTypeInfo.isBVR)
 		{
 			toaster.Info("Unable to open this " + (clipData.isClip ? "clip" : "alert") + " because the clip is still recording and the file type is not bvr.");
 			return;
@@ -17949,7 +17968,7 @@ function JpegVideoModule()
 				videoPlayer.lastFrameUtc = (clipData.date.getTime() - offset) + clipPlaybackPosition;
 				if (!clipData.isSnapshot && !clipData.isClip)
 				{
-					if (honorAlertOffset && (clipData.flags & BIDBFLAG.ALERT_OFFSETTIME) == 0)
+					if (honorAlertOffset && !NumberHasFlags(clipData.flags, BIDBFLAG.ALERT_OFFSETTIME))
 						toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
 					// Load clip stats for this alert.
 					clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
@@ -18610,7 +18629,7 @@ function FetchH264VideoModule()
 				if (honorAlertOffset && !clipData.isSnapshot)
 				{
 					var offsetMs = clipData.offsetMs;
-					if (!clipData.isClip && (clipData.flags & BIDBFLAG.ALERT_OFFSETTIME) == 0)
+					if (!clipData.isClip && !NumberHasFlags(clipData.flags, BIDBFLAG.ALERT_OFFSETTIME))
 					{
 						toaster.Warning("Blue Iris did not provide an offset in milliseconds for this alert, so it may begin at the wrong position.", 10000);
 						path = clipData.alertPath;
@@ -22138,17 +22157,17 @@ function GetCameraOverlayIcons(cameraId)
 	{
 		var ts = cam.triggerSource;
 		if (settings.ui3_camera_overlay_icon_motion_trigger === "1"
-			&& (ts & TRIGGER_SOURCE_MOTION) > 0)
+			&& NumberHasFlags(ts, TRIGGER_SOURCE_MOTION))
 		{
 			icons.push({ id: "motion_trigger", svg: "#svg_mio_run", iconclass: "noflip" });
 		}
 		if (settings.ui3_camera_overlay_icon_audio_trigger === "1"
-			&& (ts & TRIGGER_SOURCE_AUDIO) > 0)
+			&& NumberHasFlags(ts, TRIGGER_SOURCE_AUDIO))
 		{
 			icons.push({ id: "audio_trigger", svg: "#svg_mio_volumeUp", iconclass: "noflip" });
 		}
 		if (settings.ui3_camera_overlay_icon_generic_trigger === "1"
-			&& ((ts & TRIGGER_SOURCE_ONVIF) > 0 || (ts & TRIGGER_SOURCE_EXTERNAL) > 0 || (ts & TRIGGER_SOURCE_DIO) > 0 || (ts & TRIGGER_SOURCE_GROUP) > 0))
+			&& (NumberHasFlags(ts, TRIGGER_SOURCE_ONVIF) || NumberHasFlags(ts, TRIGGER_SOURCE_EXTERNAL) || NumberHasFlags(ts, TRIGGER_SOURCE_DIO) || NumberHasFlags(ts, TRIGGER_SOURCE_GROUP)))
 		{
 			icons.push({ id: "generic_trigger", svg: "#svg_x5F_Alert1" });
 		}
@@ -23096,9 +23115,9 @@ function GroupCfg()
 		var value = self.Get(image, key);
 		if (value === 1 || value === 2)
 		{
-			flagMask.mask |= (1 << index);
+			flagMask.mask = UI3_BINARY_OR(flagMask.mask, UI3_BINARY_FLAG(index));
 			if (value === 2)
-				flagMask.flags |= (1 << index);
+				flagMask.flags = UI3_BINARY_OR(flagMask.flags, UI3_BINARY_FLAG(index));
 		}
 	}
 	this.GetResolutionThatWouldBeLockedIn = function (image)
@@ -25234,11 +25253,11 @@ function ClipListContextMenu()
 			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
 			if (clipData)
 			{
-				if ((clipData.flags & BIDBFLAG.FLAGGED) == 0)
+				if (!NumberHasFlags(clipData.flags, BIDBFLAG.FLAGGED))
 					flagEnable = true;
-				if ((clipData.flags & BIDBFLAG.PROTECTED) == 0)
+				if (!NumberHasFlags(clipData.flags, BIDBFLAG.PROTECTED))
 					protectEnable = true;
-				if ((clipData.flags & BIDBFLAG.AI_CONFIRMED) == 0)
+				if (!NumberHasFlags(clipData.flags, BIDBFLAG.AI_CONFIRMED))
 					aiConfirm = true;
 			}
 		}
@@ -35068,7 +35087,13 @@ var b0001_0000 = 1 << 4; // 16
 var b0010_0000 = 1 << 5; // 32
 var b0100_0000 = 1 << 6; // 64
 var b1000_0000 = 1 << 7; // 128
-
+// JavaScript can't conveniently left shift beyond 30.  Add more flags as needed to this object:
+var HIGHFLAGS = {
+	F31: 2147483648,
+	F32: 4294967296,
+	F33: 8589934592,
+	F34: 17179869184
+}
 var BIDBFLAG = {
 	AUDIO: 1,
 	FLAGGED: 1 << 1,
@@ -35100,7 +35125,9 @@ var BIDBFLAG = {
 	AI_PERSON: 1 << 26,
 	AI_VEHICLE: 1 << 27,
 	AI_CONFIRMED: 1 << 28,
-	AI_OCCUPIED: 1 << 29
+	AI_OCCUPIED: 1 << 29,
+	ALERT_AI: 1 << 30,
+	AI_WILDLIFE: HIGHFLAGS.F31
 };
 
 BIDBFLAG.ALERT_TRIGGERBITS = (BIDBFLAG.ALERT_MOTION
@@ -35112,7 +35139,7 @@ BIDBFLAG.ALERT_TRIGGERBITS = (BIDBFLAG.ALERT_MOTION
 	| BIDBFLAG.ALERT_GROUP
 	| BIDBFLAG.ALERT_CANCELLED);
 
-var NO_SHOW_ON_TIMELINE = BIDBFLAG.DELETED | BIDBFLAG.ALERT_HIDDEN;
+var NO_SHOW_ON_TIMELINE = UI3_BINARY_OR(BIDBFLAG.DELETED, BIDBFLAG.ALERT_HIDDEN);
 
 var TRIGGER_SOURCE_MOTION = (1 << 1);
 var TRIGGER_SOURCE_ONVIF = (1 << 2);
@@ -35123,12 +35150,112 @@ var TRIGGER_SOURCE_GROUP = (1 << 6);
 var TRIGGER_SOURCE_CANCELLED = (1 << 7);
 var TRIGGER_SOURCE_NOSIGNAL = (1 << 8);
 
+/**
+ * Returns true if all the binary bits set in the second number are also set in the first number.
+ * JavaScript can't do bitwise operations across its full range of supported integer numbers.
+ * @param {Number} number The number containing 0 or more flags.
+ * @param {Number} flags The flag or flags that you wish to determine if they exist in the first number.
+ */
+function NumberHasFlags(number, flags)
+{
+	if (number % 1 !== 0)
+		throw new Error("NumberHasFlags failed. number " + number + " is not an integer.");
+	if (flags % 1 !== 0)
+		throw new Error("NumberHasFlags failed. flags " + flags + " is not an integer.");
+	if (number >= 0 && number < 2147483648 && flags >= 0 && flags < 2147483648)
+		return (number & flags) === flags;
+	var numberAsStr = number.toString(2);
+	var flagsAsStr = flags.toString(2);
+	var diff = numberAsStr.length - flagsAsStr.length;
+	if (diff > 0)
+		numberAsStr = numberAsStr.substring(diff); // If `number` produces a longer string, trim it so we compare the correct number of digits.
+	else if (diff < 0)
+		return false; // if `flags` produces a longer string, it must have a flag set that is not set in `number`.
+	for (var i = 0; i < flagsAsStr.length; i++)
+	{
+		if (flagsAsStr[i] === '1' && numberAsStr[i] !== '1')
+			return false;
+	}
+	return true;
+}
+function UI3_BINARY_AND(a, b)
+{
+	if (a >= 0 && a < 2147483648 && b >= 0 && b < 2147483648)
+		return a & b;
+	a = a.toString(2);
+	b = b.toString(2);
+	if (a.length > b.length)
+		b = b.padLeft(a.length, "0");
+	else if (b.length > a.length)
+		a = a.padLeft(b.length, "0");
+	var resultArr = [];
+	for (var i = 0; i < a.length; i++)
+		resultArr.push(a[i] === "1" && b[i] === "1" ? "1" : "0");
+	return parseInt(resultArr.join(""), 2);
+}
+function UI3_BINARY_OR(a, b)
+{
+	if (a >= 0 && a < 2147483648 && b >= 0 && b < 2147483648)
+		return a | b;
+	a = a.toString(2);
+	b = b.toString(2);
+	if (a.length > b.length)
+		b = b.padLeft(a.length, "0");
+	else if (b.length > a.length)
+		a = a.padLeft(b.length, "0");
+	var resultArr = [];
+	for (var i = 0; i < a.length; i++)
+		resultArr.push(a[i] === "1" || b[i] === "1" ? "1" : "0");
+	return parseInt(resultArr.join(""), 2);
+}
+function UI3_BINARY_XOR(a, b)
+{
+	if (a >= 0 && a < 2147483648 && b >= 0 && b < 2147483648)
+		return a ^ b;
+	a = a.toString(2);
+	b = b.toString(2);
+	if (a.length > b.length)
+		b = b.padLeft(a.length, "0");
+	else if (b.length > a.length)
+		a = a.padLeft(b.length, "0");
+	var resultArr = [];
+	for (var i = 0; i < a.length; i++)
+		resultArr.push((a[i] === "1" || b[i] === "1") && a[i] !== b[i] ? "1" : "0");
+	return parseInt(resultArr.join(""), 2);
+}
+function UI3_BINARY_INVERT(a)
+{
+	a = a.toString(2).padLeft(53, '0');
+	var resultArr = [];
+	for (var i = 0; i < a.length; i++)
+		resultArr.push(a[i] === "1" ? "0" : "1");
+	return parseInt(resultArr.join(""), 2);
+}
+function UI3_BINARY_FLAG(idx)
+{
+	if (idx > 53)
+		throw new Error("JavaScript cannot safely represent flag index " + idx + " without using BigInt");
+	var resultArr = [];
+	resultArr.push("1");
+	for (var i = 0; i < idx; i++)
+		resultArr.push("0");
+	return parseInt(resultArr.join(""), 2);
+}
+
+function NumberToBinaryBooleans(number)
+{
+	var result = [];
+	var binStr = number.toString(2);
+	for (let i = binStr.length - 1; i >= 0; i--)
+		result.push(binStr[i] === "1");
+	return result;
+}
 function DecodeClipFlags(flags)
 {
 	var names = [];
 	for (var property in BIDBFLAG)
 	{
-		if (BIDBFLAG.hasOwnProperty(property) && (flags & BIDBFLAG[property]) > 0)
+		if (BIDBFLAG.hasOwnProperty(property) && NumberHasFlags(flags, BIDBFLAG[property]))
 			names.push(property);
 	}
 	return names.join(", ");
@@ -35158,6 +35285,7 @@ var clipIcons = new (function ()
 	this.setIcon("trigger_ai_occupied", "#sentry_human", true, "", BIDBFLAG.AI_OCCUPIED, "ui3_clipicon_trigger_sentry_occupied");
 	this.setIcon("ai_person", "#svg_mio_man", true, "AI detected a person", BIDBFLAG.AI_PERSON, "ui3_clipicon_ai_person");
 	this.setIcon("ai_vehicle", "#svg_mio_directions_car", true, "AI detected a vehicle", BIDBFLAG.AI_VEHICLE, "ui3_clipicon_ai_vehicle");
+	this.setIcon("ai_wildlife", "#wildlife", true, "AI detected wildlife", BIDBFLAG.AI_WILDLIFE, "ui3_clipicon_ai_wildlife");
 	this.setIcon("alert_cancelled", "#svg_x5F_HoldProfile", false, "Alert was cancelled", BIDBFLAG.ALERT_CANCELLED, "ui3_clipicon_alert_cancelled");
 	this.setIcon("trigger_motion", "#svg_mio_run", true, "Triggered by motion detection", BIDBFLAG.ALERT_MOTION, "ui3_clipicon_trigger_motion");
 	this.setIcon("trigger_audio", "#svg_mio_volumeUp", true, "Triggered by audio", BIDBFLAG.ALERT_AUDIO, "ui3_clipicon_trigger_audio");
@@ -35178,7 +35306,7 @@ var clipIcons = new (function ()
 		for (var iconId in self.icons)
 		{
 			var icon = self.icons[iconId];
-			if (icon.flags && (clipData.flags & icon.flags) <= 0)
+			if (icon.flags && !NumberHasFlags(clipData.flags, icon.flags))
 				continue;
 			if (checkUserSettings && icon.clipListDisplaySetting && settings[icon.clipListDisplaySetting] !== "1")
 				continue;
@@ -35229,9 +35357,9 @@ var clipIcons = new (function ()
 	}
 	this.GetClipIconHtml = function (icon)
 	{
-		return '<div class="clipicon"'
-			+ (icon.descriptionText ? (' title="' + icon.descriptionText + '"') : '')
-			+ '><svg class="icon' + (icon.noflip ? ' noflip' : '') + '"><use xlink:href="' + icon.svgId + '"></use></svg></div>'
+		return '<div class="clipicon icon-' + htmlAttributeEncode(icon.iconId) + '"'
+			+ (icon.descriptionText ? (' title="' + htmlAttributeEncode(icon.descriptionText) + '"') : '')
+			+ '><svg class="icon' + (icon.noflip ? ' noflip' : '') + '"><use xlink:href="' + htmlAttributeEncode(icon.svgId) + '"></use></svg></div>'
 	}
 })();
 ///////////////////////////////////////////////////////////////
