@@ -12255,7 +12255,6 @@ function ClipLoader(clipsBodySelector)
 
 		ExecJSON(args, function (response)
 		{
-		zoomScaler.getFUIOL();
 			failedLoadToast.hide();
 			recoveryFunction = null;
 			if (response.result !== "success")
