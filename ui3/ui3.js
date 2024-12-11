@@ -35158,9 +35158,9 @@ var TRIGGER_SOURCE_NOSIGNAL = (1 << 8);
 function NumberHasFlags(number, flags)
 {
 	if (number % 1 !== 0)
-		throw new Error("NumberHasFlags failed. number " + number + " is not an integer.");
-	if (flags % 1 !== 0)
-		throw new Error("NumberHasFlags failed. flags " + flags + " is not an integer.");
+		return false; // Assume it is 0
+	if (flags % 1 !== 0 || flags === 0)
+		return false;
 	if (number >= 0 && number < 2147483648 && flags >= 0 && flags < 2147483648)
 		return (number & flags) === flags;
 	var numberAsStr = number.toString(2);
