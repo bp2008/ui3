@@ -35158,7 +35158,7 @@ var TRIGGER_SOURCE_NOSIGNAL = (1 << 8);
 function NumberHasFlags(number, flags)
 {
 	if (number % 1 !== 0)
-		return false; // Assume it is 0
+		return false; // number is not an integer. treat it like 0
 	if (flags % 1 !== 0 || flags === 0)
 		return false;
 	if (number >= 0 && number < 2147483648 && flags >= 0 && flags < 2147483648)
