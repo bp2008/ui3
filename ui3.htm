@@ -35,6 +35,10 @@
 			function (err)
 			{
 				return err.msg && err.msg.indexOf("EvalError") > -1 && err.msg.indexOf("debug-evaluate") > -1;
+			},
+			function (err, ex)
+			{
+				return err.msg && err.msg.indexOf("getBoundingClientRect") > -1 && ex && ex.stack.indexOf("at testUserInput ") > -1; // AutoplayStopper extension
 			}
 		];
 
