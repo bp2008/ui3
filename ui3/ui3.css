@@ -6269,6 +6269,12 @@ ul.extraSpacing li
 	margin-bottom: 10px;
 }
 
+.dialogOption_label ul
+{
+	margin-top: 0px;
+	margin-bottom: 0px;
+}
+
 #serverTimeLimits
 {
 	display: flex;

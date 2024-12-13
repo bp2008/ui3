@@ -1255,15 +1255,16 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_maxDynamicGroupImageDimension"
-			, value: 1440
-			, minValue: 240
-			, maxValue: 7680
-			, step: 8
+			key: "ui3_maxDynamicGroupImageMegapixels"
+			, value: 2.1
+			, minValue: 0.1
+			, maxValue: 32
+			, step: 0.1
 			, inputType: "range"
-			, label: 'Dynamic Group Max Resolution<div class="settingDesc">(strongly affects server CPU usage)</div>'
+			, unitLabel: " megapixels"
+			, label: 'Dynamic Group Max Resolution<div class="settingDesc">(can strongly affect server CPU usage)</div>'
 			, changeOnStep: false
-			, onChange: OnChange_ui3_maxDynamicGroupImageDimension
+			, onChange: OnChange_ui3_maxDynamicGroupImageMegapixels
 			, category: "Video Player"
 		}
 		, {
@@ -3709,6 +3710,17 @@ $(function ()
 				if (localStorage.ui3_h264_choice3 !== H264PlayerOptions.HTML5 && localStorage.ui3_h264_choice3 !== H264PlayerOptions.WebCodecs)
 					settings.ui3_h264_choice4 = localStorage.ui3_h264_choice3;
 				delete localStorage.ui3_h264_choice3;
+			}
+			if (typeof localStorage.ui3_maxDynamicGroupImageDimension !== "undefined")
+			{
+				// UI3-280 specifies dynamic group max resolution as a megapixel count, no longer a rectangle dimension limit.
+				var d = parseFloat(localStorage.ui3_maxDynamicGroupImageDimension);
+				if (d && !isNaN(d))
+				{
+					console.log("Migrating Dynamic Group Max Resolution setting to new style (UI3-280).");
+					settings.ui3_maxDynamicGroupImageMegapixels = Math.ceil(d * d / 100000) / 10; // Round up to nearest tenth.
+				}
+				delete localStorage.ui3_maxDynamicGroupImageDimension;
 			}
 		}
 	}
@@ -17814,7 +17826,7 @@ function JpegVideoModule()
 						var loaded = videoPlayer.Loaded().image;
 						var nativeRes = "";
 						if (cameraListLoader.isDynamicLayoutEligible(loaded.id))
-							nativeRes = " (dynamically sized group)";
+							nativeRes = ' <a href="javascript:OpenGroupSettings()">[edit]</a>';
 						else
 						{
 							nativeRes = " (Native: " + loading.getFullRect().toString() + ")";
@@ -19085,7 +19097,7 @@ function FetchH264VideoModule()
 				interFrame = frame.duration ? frame.duration : 0;
 			var nativeRes = "";
 			if (cameraListLoader.isDynamicLayoutEligible(loading.id))
-				nativeRes = " (dynamically sized group)";
+				nativeRes = ' <a href="javascript:OpenGroupSettings()">[edit]</a>';
 			else
 			{
 				nativeRes = " (Native: " + loading.fullwidth + "x" + loading.fullheight + ")";
@@ -21396,7 +21408,7 @@ function ImageRenderer()
 	previousImageDraw.z = 10;
 
 	this.minGroupImageDimension = 240; // Strictly >= 240 or else dynamic group layouts are broken
-	// Max group image dimension is now a ui setting.
+	this.maxGroupImageDimension = 7680; // Strictly <= 7680 or else dynamic group layouts are broken
 
 	var $layoutbody = $("#layoutbody");
 	var $camimg_wrapper = $("#camimg_wrapper");
@@ -21418,9 +21430,10 @@ function ImageRenderer()
 				x = lockedResolution; // This dynamic-resolution video source has a preferred size saved.
 			else
 				x = new ui3Rect($layoutbody.width(), $layoutbody.height()); // Size this dynamic-resolution video according to the viewport
-			x.MultiplyBy(100000); // Drastically enlarge so that it will fill the bounding box later.
+			x.MultiplyBy(100000); // Drastically enlarge so that it will fill the bounding box we apply below.
 			// Apply dynamic stream limits
-			x.ApplyBoundingBox(new ui3Rect(self.getMaxGroupImageDimension(), self.getMaxGroupImageDimension()));
+			x.EnforceMaxArea(self.getMaxGroupImageMegapixels() * 1000000);
+			x.ApplyBoundingBox(new ui3Rect(self.maxGroupImageDimension, self.maxGroupImageDimension));
 			x.ExpandAround(new ui3Rect(self.minGroupImageDimension, self.minGroupImageDimension));
 		}
 		else
@@ -21832,15 +21845,15 @@ function ImageRenderer()
 		}
 	}
 	/**
-	 * Returns the max group image dimension setting, clamped within required boundaries.
+	 * Returns the maximum safe value to use as dimensions of a dynamic group image.
 	 */
-	this.getMaxGroupImageDimension = function ()
+	this.getMaxGroupImageMegapixels = function ()
 	{
-		var d = parseInt(settings.ui3_maxDynamicGroupImageDimension);
+		var d = parseFloat(settings.ui3_maxDynamicGroupImageMegapixels);
 		if (!d || isNaN(d))
-			return 1280;
+			return 2.1;
 		else
-			return Math.min(d, 7680); // Strictly <= 7680 or else dynamic group layouts are broken
+			return Clamp(d, 0.1, 59); // 59 megapixels is larger than 7680x7680.
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -24418,18 +24431,23 @@ function GroupLayoutDialog()
 				collapsible.$section.append('<div style="padding: 8px; margin-bottom: 10px; border: 2px dotted #FF0000;">This section has no effect while Dynamic Group Layout is disabled in UI Settings &gt; Video Player.</div>');
 			collapsible.$section.append(UIFormField({
 				inputType: "range"
-				, value: imageRenderer.getMaxGroupImageDimension()
-				, minValue: 240
-				, maxValue: 7680
-				, step: 8
-				, label: 'Dynamic Group Max Resolution<div class="settingDesc">(strongly affects server CPU usage)<br>(this setting affects all dynamic groups)</div>'
+				, value: parseFloat(settings.ui3_maxDynamicGroupImageMegapixels)
+				, minValue: 0.1
+				, maxValue: 32
+				, step: 0.1
+				, unitLabel: " MP"
+				, label: 'Dynamic Group Max Resolution'
 				, tag: "maxDynRes",
 				onChange: function (e, tag, $input)
 				{
-					settings.ui3_maxDynamicGroupImageDimension = $input.val();
-					OnChange_ui3_maxDynamicGroupImageDimension();
+					settings.ui3_maxDynamicGroupImageMegapixels = $input.val();
+					OnChange_ui3_maxDynamicGroupImageMegapixels();
 				}
 			}));
+			collapsible.$section.append('<div class="dialogOption_label"><ul>'
+				+ '<li>Can strongly affect server CPU usage.</li>'
+				+ '<li>This setting affects all dynamic groups.</li>'
+				+ '<li>Stream size may also be limited by the active Streaming Quality profile.</li>');
 			collapsible.$section.append(UIFormField({
 				inputType: "checkbox"
 				, value: !lockedResolution
@@ -24451,11 +24469,11 @@ function GroupLayoutDialog()
 				}
 			}));
 			$whLbl = $('<div class="dialogOption_label">Group Frame Size Target:'
-				+ '<div class="settingDesc">(will be rescaled by UI3)</div></div>');
+				+ '<div class="settingDesc">(This defines an aspect ratio. The final size depends on "Dynamic Group Max Resolution" and the active streaming profile.)</div></div>');
 			$layoutWidth = UIFormField({
 				inputType: "number"
 				, minValue: imageRenderer.minGroupImageDimension
-				, maxValue: Math.max(7680, imageRenderer.getMaxGroupImageDimension())
+				, maxValue: imageRenderer.maxGroupImageDimension
 				, step: 8
 				, value: lockedResolution ? lockedResolution.w : 1920
 				, label: "Width"
@@ -24469,7 +24487,7 @@ function GroupLayoutDialog()
 			$layoutHeight = UIFormField({
 				inputType: "number"
 				, minValue: imageRenderer.minGroupImageDimension
-				, maxValue: Math.max(7680, imageRenderer.getMaxGroupImageDimension())
+				, maxValue: imageRenderer.maxGroupImageDimension
 				, step: 8
 				, value: lockedResolution ? lockedResolution.h : 1080
 				, label: "Height"
@@ -25064,6 +25082,10 @@ function CanvasContextMenu()
 		, clickType: GetPreferredContextMenuTrigger()
 	};
 	$("#layoutbody").contextmenu(optionTimeline);
+}
+function OpenGroupSettings()
+{
+	groupLayoutDialog.Show(videoPlayer.Loaded().image);
 }
 var ThreeStateMenuItem = new (function ()
 {
@@ -33988,7 +34010,7 @@ function OnChange_ui3_bypass_single_camera_groups()
 {
 	cameraListLoader.LoadCameraList();
 }
-function OnChange_ui3_maxDynamicGroupImageDimension()
+function OnChange_ui3_maxDynamicGroupImageMegapixels()
 {
 	videoPlayer.ReopenStreamAtCurrentSeekPosition();
 }
@@ -37744,14 +37766,16 @@ function ui3Modulus(n, m)
 /**
  * Constructor for ui3Rect. Contains a width and height and provides scaling functions.
  * @param {Number} w Rectangle width
- * @param {aNumberny} h Rectangle height
+ * @param {Number} h Rectangle height
  */
 function ui3Rect(w, h)
 {
 	if (typeof w !== "number" || typeof h !== "number")
 		throw Error("ui3Rect was constructed with an invalid or missing argument.");
 	var self = this;
+	/** Width of the rectangle (float) */
 	this.w = w;
+	/** Height of the rectangle (float) */
 	this.h = h;
 	/**
 	 * Downscales this rectangle if necessary, but does not upscale, to fit within the given rectangle.  Preserve's this rectangle's aspect ratio.  Returns self.
@@ -37832,6 +37856,17 @@ function ui3Rect(w, h)
 	{
 		self.w = MakeDivisibleBy8(self.w);
 		self.h = MakeDivisibleBy8(self.h);
+		return self;
+	}
+	/** Shrinks the box if necessary so that the area (w*h) is less than or equal to the given number.  Preserves aspect ratio. */
+	this.EnforceMaxArea = function (max)
+	{
+		if (self.w * self.h > max)
+		{
+			var myAspect = self.AspectRatio();
+			self.h = Math.sqrt(max / myAspect);
+			self.w = self.h * myAspect;
+		}
 		return self;
 	}
 	/** Returns a copy of this rectangle. */
