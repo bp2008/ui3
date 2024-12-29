@@ -12030,6 +12030,8 @@ function ClipData(clip)
 	//	continue; // [flagged hack] The "flagged" view loads both alerts and clips at the same time, so this hack skips the unwanted items.
 	if (clip.memo)
 		clipData.memo = clip.memo;
+	if (clip.plate)
+		clipData.plate = clip.plate;
 	clipData.roughLength = GetClipLengthFromFileSize(clip.filesize);
 	clipData.roughLengthMs = GetClipLengthMs(clipData.roughLength);
 	clipData.camera = clip.camera;
@@ -12753,13 +12755,23 @@ function ClipLoader(clipsBodySelector)
 			//	videoPlayer.NotifyClipMetadataChanged(newClipData);
 			//}
 		}
-		if (oldClipData.memo !== newClipData.memo)
+		if (oldClipData.memo !== newClipData.memo
+			|| oldClipData.plate !== newClipData.plate)
 		{
 			oldClipData.memo = newClipData.memo;
-			if (oldClipData.memo)
-				$clip.find('.clipimghelper').append('<div class="clipmemo">' + htmlEncode(oldClipData.memo) + '</div>');
+			oldClipData.plate = newClipData.plate;
+
+			var newOverlayTxt = clipLoader.GetClipOverlayText(newClipData);
+			var $overlayEle = $clip.find('.clipmemo');
+			if (newOverlayTxt)
+			{
+				if ($overlayEle.length)
+					$overlayEle.text(newOverlayTxt);
+				else
+					$overlayEle = $clip.find('.clipimghelper').append('<div class="clipmemo">' + htmlEncode(newOverlayTxt) + '</div>');
+			}
 			else
-				$clip.find('.clipmemo').remove();
+				$overlayEle.remove();
 		}
 	}
 	var ThumbOnAppear = function (ele)
@@ -12820,12 +12832,13 @@ function ClipLoader(clipsBodySelector)
 			var clipDur = GetClipDurStrFromMs(clipData.roughLength);
 			var clipDurTitle = clipDur == 'S' ? ' title="Snapshot"' : '';
 			var camName = cameraListLoader.GetCameraName(clipData.camera);
-			var clipMemo = clipData.memo ? '<div class="clipmemo">' + htmlEncode(clipData.memo) + '</div>' : '';
+			var overlayTxt = self.GetClipOverlayText(clipData);
+			var clipOverlayHtml = overlayTxt ? '<div class="clipmemo">' + htmlEncode(overlayTxt) + '</div>' : '';
 			$clip = $('<div id="c' + clipData.recId + '" class="cliptile ' + enabledOrDisabled + '" style="top:' + clipData.y + 'px"' + clipTitle + '>'
 				+ '<div class="verticalAlignHelper"></div>'
 				+ '<div class="clipimghelper">'
 				+ '<div class="verticalAlignHelper"></div>'
-				+ clipMemo
+				+ clipOverlayHtml
 				+ '<div class="clipdur"' + clipDurTitle + '>' + clipDur + '</div>'
 				+ '<img id="t' + clipData.recId + '" src="ui3/LoadingImage.png' + currentServer.GetLocalSessionArg("?") + '" />'
 				+ '</div>'
@@ -13791,6 +13804,21 @@ function ClipLoader(clipsBodySelector)
 	this.RedrawClipList = function ()
 	{
 		tileLoader.appearDisappearCheck();
+	}
+	this.GetClipOverlayText = function (clipData)
+	{
+		var str = "";
+		if (clipData.plate)
+			str = clipData.plate;
+		if (clipData.memo)
+		{
+			if (str)
+				str += "; ";
+			str += clipData.memo;
+		}
+		if (!str)
+			str = null;
+		return str;
 	}
 	// Some things must be initialized after methods are defined ...
 	lastClipTileSize = getClipTileSize();
@@ -26679,7 +26707,13 @@ function ClipProperties()
 			else
 				$camprop.append(GetInfo("Zones", new AlertZonesMask(clipData.rawData.zones).toString()));
 
-			$camprop.append(GetInfoEleValue("Resolution", clipData.res));
+			$camprop.append(GetInfo("Resolution", clipData.res));
+
+			if (clipData.memo)
+				$camprop.append(GetInfo("Memo", clipData.memo));
+
+			if (clipData.plate)
+				$camprop.append(GetInfo("License Plate", clipData.plate));
 
 			$camprop.append(clipIcons.getIconHtmlForClipProperties(clipData));
 
@@ -26716,7 +26750,7 @@ function ClipProperties()
 				$camprop.append(GetInfoEleValue("Convert/export", $exportBtn));
 			}
 
-			$camprop.append(GetInfoEleValue("File Name", clipData.rawData.file));
+			$camprop.append(GetInfo("File Name", clipData.rawData.file));
 
 			if (developerMode)
 			{
