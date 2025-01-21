@@ -16004,31 +16004,67 @@ function CameraListLoader()
 	}
 	function ScaledRectsWorkaround(image)
 	{
-		// Last noted in BI 5.5.6.2:
+		var condition;
+
+		// Noted in BI 5.5.6.2:
 		// H.264 group streams
-		//  * Dynamic Layout: scaled reclist 
+		//  * Dynamic Layout: scaled reclist
 		//  * Static Layout: scaled reclist
 		// JPEG group streams
-		//  * Dynamic Layout: scaled reclist 
-		//  * Static Layout: unscaled reclist
+		//  * Dynamic Layout: scaled reclist
+		//  * Static Layout: unscaled reclist (if the Aspect Ratio of the group is fixed in the local console)
 		// To work around this inconsistency, this method will unscale the static layout reclist for static layout h264 group streams..
 
-		if (image.rects && videoPlayer.CurrentPlayerModuleName() === "h264" && !cameraListLoader.isDynamicLayoutEnabled(image.id))
+		//condition = image.rects && videoPlayer.CurrentPlayerModuleName() === "h264" && !cameraListLoader.isDynamicLayoutEnabled(image.id);
+
+		// In 2025-01-21 (BI 5.9.9.22) it was noted that jpeg group streams configured serverside to allow dynamic layout have incorrect click handling in UI3 when dynamic layout is disabled in UI3.
+		// Therefore I am changing the scaling condition.
+
+		condition = image.rects && !cameraListLoader.isDynamicLayoutEnabled(image.id)
+			&& (videoPlayer.CurrentPlayerModuleName() === "h264" ||
+				!self.IsRectsOutOfBounds(image));
+
+		console.log(condition, JSON.stringify(image.rects));
+		if (condition)
 		{
-			var rects = new Array(image.rects.length);
 			var nativeRes = image.getFullRect();
 			var actualRes = image.getActualRect();
 			var scaleX = nativeRes.w / actualRes.w;
 			var scaleY = nativeRes.h / actualRes.h;
 			var scale = (scaleX + scaleY) / 2;
-			for (var i = 0; i < rects.length; i++)
+			if (scale !== 1)
 			{
-				var r = image.rects[i];
-				rects[i] = [r[0] * scale, r[1] * scale, r[2] * scale, r[3] * scale];
+				var rects = new Array(image.rects.length);
+				for (var i = 0; i < rects.length; i++)
+				{
+					var r = image.rects[i];
+					rects[i] = [r[0] * scale, r[1] * scale, r[2] * scale, r[3] * scale];
+				}
+				return rects;
 			}
-			return rects;
 		}
 		return image.rects;
+	}
+	/**
+	 * Returns true if the given image's rects array contains coordinates outside the image's actual dimensions. 
+	 * @param {BICameraData} image BICameraData instance
+	 */
+	this.IsRectsOutOfBounds = function (image)
+	{
+		if (image.rects)
+		{
+			var actualRes = image.getActualRect();
+			var roundingError = 2;
+			actualRes.w += roundingError;
+			actualRes.h += roundingError;
+			for (var i = 0; i < image.rects.length; i++)
+			{
+				var r = image.rects[i];
+				if (r[0] > actualRes.w || r[1] > actualRes.h || r[2] > actualRes.w || r[3] > actualRes.h)
+					return true;
+			}
+		}
+		return false;
 	}
 	this.GetGroupCams = function (groupId)
 	{
