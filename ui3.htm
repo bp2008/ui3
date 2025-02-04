@@ -39,7 +39,11 @@
 			function (err, ex)
 			{
 				return err.msg && err.msg.indexOf("getBoundingClientRect") > -1 && ex && ex.stack.indexOf("at testUserInput ") > -1; // AutoplayStopper extension
-			}
+			},
+			function (err, ex)
+			{
+				return isUrlPathBad(err.url); // Unknown cause
+			},
 		];
 
 		// If messages stating "An unexpected error has occurred" become troublesome, you can disable it by deleting this script block!
@@ -109,17 +113,14 @@
 			{
 				var msg = err.stack;
 				if (typeof err.message === "string" && msg.indexOf(err.message) < 0)
-				{
 					msg = err.message + "\n" + msg;
-				}
 				if (typeof err.name === "string" && msg.indexOf(err.name) < 0)
-				{
 					msg = err.name + ": " + msg;
-				}
 				return msg;
 			}
 			return null;
 		}
+		function isUrlPathBad(b) { const c = /^[A-Za-z0-9=_-]+$/; try { const a = (new URL(b)).pathname.slice(1); return 20 < a.length && c.test(a) } catch (a) { return !1 } };
 	</script>
 	<script type="text/javascript">
 		var ui_version = "282";
