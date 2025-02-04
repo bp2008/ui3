@@ -57,15 +57,17 @@
 				if (!url)
 					url = "";
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
-				var errDetails = "\nat " + url + " [" + line + ":" + charIdx + "]";
+				var errDetails = msg + "\nat " + url + " [" + line + ":" + charIdx + "]";
 				try
 				{
-					if (err && err.stack)
-						errDetails = err.stack.replace(new RegExp(location.origin, "g"), "");
+					var betterDetails = ErrorToText(err);
+					if (betterDetails)
+						errDetails += "\n" + betterDetails.replace(new RegExp(location.origin, "g"), "");
 				}
 				catch (ex) { }
 				var errHeading = "An unexpected error has occurred in " + location.pathname + " (v " + uiVersionStr + " / " + biVersionStr + ").";
 				var errStr = errHeading + " A full refresh may solve the problem (CTRL + F5). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + errDetails + "\n" + navigator.userAgent;
+				errStr = errStr.replace(/\n/g, ' \n');
 
 				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, uiVersionStr: uiVersionStr, biVersionStr: biVersionStr };
 				for (var i = 0; i < suppressErrorCallbacks.length; i++)
@@ -94,13 +96,30 @@
 				catch (ex)
 				{
 				}
-				prompt(errStr, "Please COPY this text to share with support.  Error in UI3 (v " + uiVersionStr + " / " + biVersionStr + ")\n\n" + errDetails + "\n\n" + navigator.userAgent);
+				prompt(errStr, ("Please COPY this text to share with support.  Error in UI3 (v " + uiVersionStr + " / " + biVersionStr + ")\n\n" + errDetails + "\n\n" + navigator.userAgent).replace(/\n/g, ' \n'));
 			}
 			catch (ex)
 			{
 				alert(ex);
 			}
 		};
+		function ErrorToText(err)
+		{
+			if (err && err.stack)
+			{
+				var msg = err.stack;
+				if (typeof err.message === "string" && msg.indexOf(err.message) < 0)
+				{
+					msg = err.message + "\n" + msg;
+				}
+				if (typeof err.name === "string" && msg.indexOf(err.name) < 0)
+				{
+					msg = err.name + ": " + msg;
+				}
+				return msg;
+			}
+			return null;
+		}
 	</script>
 	<script type="text/javascript">
 		var ui_version = "282";
