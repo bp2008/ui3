@@ -5544,7 +5544,8 @@ a[role="button"].showPasswordButton
 }
 
 	.clipprop_item_info .clipicon,
-	.uiSettingsRow .clipicon
+	.uiSettingsRow .clipicon,
+	.dialogOption_item .clipicon
 	{
 		width: 20px;
 		height: 20px;

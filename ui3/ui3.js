@@ -616,6 +616,7 @@ var toaster = new Toaster();
 var ajaxHistoryManager;
 var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
+var ui3CamSettings = null;
 var clipboardHelper;
 var uiSizeHelper = null;
 var uiSettingsPanel = null;
@@ -1112,6 +1113,10 @@ var defaultSettings =
 		, {
 			key: "ui3_timelineZoomScaler"
 			, value: 13
+		}
+		, {
+			key: "ui3_cam_settings_map" // Stores a JSON-serialized map of camera settings keyed by camera ID. Accessed via Camera Properties.
+			, value: "{}"
 		}
 		, {
 			key: "ui3_timeout"
@@ -2075,6 +2080,24 @@ var defaultSettings =
 			, value: "1"
 			, inputType: "checkbox"
 			, label: '<svg class="icon clipicon noflip" style="fill: rgba(255,0,0,1)"><use xlink:href="#svg_x5F_HoldProfile"></use></svg> if Webcasting Disabled'
+			, onChange: OnChange_ui3_camera_overlay_icons
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_camera_overlay_icon_paused"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon" style="fill: rgba(255,128,64,1)"><use xlink:href="#svg_x5F_Pause"></use></svg> if Paused'
+			, hint: 'Icon shows if the Pause function is active (a "paused" camera behaves as if the Shield icon is red).'
+			, onChange: OnChange_ui3_camera_overlay_icons
+			, category: "Event-Triggered Icons"
+		}
+		, {
+			key: "ui3_camera_overlay_icon_new_alerts"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon" style="fill: rgba(255,255,0,1)"><use xlink:href="#svg_x5F_Alert2"></use></svg> if Camera Has New Alerts<div class="settingDesc">(see camera properties for per-camera setting)</div>'
+			, hint: 'Icon shows if the camera has alerts newer than you have seen.'
 			, onChange: OnChange_ui3_camera_overlay_icons
 			, category: "Event-Triggered Icons"
 		}
@@ -3438,7 +3461,15 @@ var defaultSettings =
 			, category: "Extra"
 		}
 	];
-
+var ui3CamSettingsDefaults = [
+	{
+		key: "overlay_icon_new_alerts"
+		, value: "0"
+		, inputType: "checkbox"
+		, label: 'Overlay icon <svg class="icon clipicon" style="fill: rgba(255,255,0,1)"><use xlink:href="#svg_x5F_Alert2"></use></svg><div class="settingDesc">if Camera Has New Alerts</div>'
+		, onChange: OnChange_ui3_camera_overlay_icons
+	}
+];
 var obsoleteSettings = { ui3_openFirstRecording: true, ui3_contextMenus_longPress: true };
 
 /**
@@ -3823,6 +3854,8 @@ $(function ()
 	});
 	BI_CustomEvent.AddListener("TabLoaded_live", function () { videoPlayer.goLive(); });
 	BI_CustomEvent.AddListener("TabLoaded_clips", function () { clipLoader.LoadClips(); });
+
+	ui3CamSettings = new UI3CamSettings();
 
 	clipboardHelper = new ClipboardHelper();
 
@@ -16024,7 +16057,7 @@ function CameraListLoader()
 			&& (videoPlayer.CurrentPlayerModuleName() === "h264" ||
 				!self.IsRectsOutOfBounds(image));
 
-		console.log(condition, JSON.stringify(image.rects));
+		//console.log(condition, JSON.stringify(image.rects));
 		if (condition)
 		{
 			var nativeRes = image.getFullRect();
@@ -22209,7 +22242,9 @@ function CameraNameLabels()
 						for (var n = 0; n < icons.length; n++)
 						{
 							var icon = icons[n];
-							sb.Append('<div class="cameraOverlayIcon" style="color: #FF0000;">');
+							if (!icon.color)
+								icon.color = "#FF0000";
+							sb.Append('<div class="cameraOverlayIcon" style="color: ' + icon.color + ';">');
 							sb.Append('<svg class="icon' + (icon.iconclass ? " " + icon.iconclass : "") + '"><use xlink:href="' + icon.svg + '"></use></svg>');
 							sb.Append('</div>');
 						}
@@ -22247,6 +22282,17 @@ function GetCameraOverlayIcons(cameraId)
 		{
 			icons.push({ id: "generic_trigger", svg: "#svg_x5F_Alert1" });
 		}
+		if (settings.ui3_camera_overlay_icon_paused === "1"
+			&& cam.pause > 0)
+		{
+			icons.push({ id: "camera_paused", svg: "#svg_x5F_Pause", color: "rgba(255,128,64,1)" });
+		}
+		if ((settings.ui3_camera_overlay_icon_new_alerts === "1"
+			|| ui3CamSettings.get(cameraId, "overlay_icon_new_alerts") === "1")
+			&& cam.newalerts > 0)
+		{
+			icons.push({ id: "camera_paused", svg: "#svg_x5F_Alert2", color: "rgba(255,255,0,1)" });
+		}
 		if (settings.ui3_camera_overlay_icon_webcasting_disabled === "1"
 			&& !cam.webcast)
 		{
@@ -22258,7 +22304,10 @@ function GetCameraOverlayIcons(cameraId)
 function AnyCameraOverlayIconsEnabled()
 {
 	return AnyCameraTriggerOverlayIconsEnabled()
-		|| settings.ui3_camera_overlay_icon_webcasting_disabled === "1";
+		|| settings.ui3_camera_overlay_icon_webcasting_disabled === "1"
+		|| settings.ui3_camera_overlay_icon_paused === "1"
+		|| settings.ui3_camera_overlay_icon_new_alerts === "1"
+		|| ui3CamSettings.any(cs => cs.get("overlay_icon_new_alerts") === "1" && cameraListLoader.GetCameraWithId(cs.getCamId()));
 }
 function AnyCameraTriggerOverlayIconsEnabled()
 {
@@ -26216,6 +26265,7 @@ function CameraProperties(camId)
 					try
 					{
 						AppendInformationSection();
+						AppendUI3CamSettingsSection();
 
 						var cam = cameraListLoader.GetCameraWithId(camId);
 
@@ -26337,6 +26387,7 @@ function CameraProperties(camId)
 						modal_cameraPropDialog.setLoadingState(false);
 
 						AppendInformationSection();
+						AppendUI3CamSettingsSection();
 
 						var $adminSection = $('<div style="margin: 12px; border: 1px solid currentColor; padding: 8px;"></div>');
 						var $adminLoginBtn = $('<a role="button">Upgrade to Administrator</a>');
@@ -26370,6 +26421,33 @@ function CameraProperties(camId)
 			$infoSection = collapsible.$section;
 			UpdateInformationSection(cam);
 			$camprop.append($infoSection);
+		}
+	}
+	var AppendUI3CamSettingsSection = function ()
+	{
+		if ($camprop.length == 0)
+			return;
+
+		var cam = cameraListLoader.GetCameraWithId(camId);
+		if (cam)
+		{
+			var collapsible = new CollapsibleSection('gs', "UI3 Settings", modal_cameraPropDialog);
+			$camprop.append(collapsible.$heading);
+			var $ui3Section = collapsible.$section;
+			var camSettings = ui3CamSettings.getCamSettings(camId);
+			for (var i = 0; i < ui3CamSettingsDefaults.length; i++)
+			{
+				var s = ui3CamSettingsDefaults[i];
+				if (s.inputType === "checkbox")
+				{
+					$ui3Section.append(GetCamPropCheckbox(s.key, s.label, camSettings.get(s.key) === "1", camSettings.onChangeCheckbox));
+				}
+				else
+				{
+					console.log('inputType "' + s.inputType + '" is not supported in ui3CamSettingsDefaults.');
+				}
+			}
+			$camprop.append($ui3Section);
 		}
 	}
 	var UpdateInformationSection = function (cam)
@@ -26703,6 +26781,128 @@ function Camera_OpenRaw(camId)
 	{
 		toaster.Warning("Unable to load camera properties for " + camId);
 	});
+}
+function UI3CamSettings()
+{
+	var self = this;
+
+	var defaultSettingsMap = new FasterObjectMap();
+	for (var i = 0; i < ui3CamSettingsDefaults.length; i++)
+	{
+		var s = ui3CamSettingsDefaults[i];
+		defaultSettingsMap[s.key] = s;
+	}
+
+	var json = settings.ui3_cam_settings_map;
+	var map;
+	if (json)
+	{
+		try
+		{
+			map = JSON.parse(json);
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
+	}
+	if (!map)
+		map = {};
+	var settingsObjectMap = new FasterObjectMap();
+	this.getCamSettings = function (camId)
+	{
+		var camSettings = settingsObjectMap[camId];
+		if (!camSettings)
+			settingsObjectMap[camId] = camSettings = new UI3PerCamSettings(camId, map, self);
+		return camSettings;
+	}
+	this.get = function (camId, key)
+	{
+		return self.getCamSettings(camId).get(key);
+	}
+	this.set = function (camId, key, value)
+	{
+		self.getCamSettings(camId).set(key, value);
+	}
+	this.getDefaultSetting = function (key)
+	{
+		return defaultSettingsMap[key];
+	}
+	/**
+	 * Returns true if any of the camera settings objects stored within cause a [predicate] function to return true.
+	 * @param {Function} predicate A function which is called with each camera's settings object.  If the predicate returns true, the [any] function returns true.
+	 */
+	this.any = function (predicate)
+	{
+		for (var camId in map)
+		{
+			if (map.hasOwnProperty(camId))
+			{
+				var camSettings = self.getCamSettings(camId);
+				if (predicate(camSettings))
+					return true;
+			}
+		}
+		return false;
+	}
+}
+function UI3PerCamSettings(camId, map, ui3CamSettings)
+{
+	var self = this;
+
+	this.getCamId = function ()
+	{
+		return camId;
+	}
+	this.get = function (key)
+	{
+		var camSettings = map[camId];
+		if (camSettings)
+		{
+			var existingValue = camSettings[key];
+			if (typeof existingValue !== "undefined")
+				return existingValue;
+		}
+		return self.getDefaultValue(camId, key);
+	}
+	this.set = function (key, value)
+	{
+		var camSettings = map[camId];
+		if (!camSettings)
+			map[camId] = camSettings = {};
+		if (camSettings[key] !== value)
+		{
+			camSettings[key] = value;
+			var json = JSON.stringify(map);
+			settings.ui3_cam_settings_map = json;
+		}
+	}
+	this.getDefaultValue = function (key)
+	{
+		var s = ui3CamSettings.getDefaultSetting(key);
+		if (s)
+			return s.value;
+		return undefined;
+	}
+	this.onChangeCheckbox = function (key, value)
+	{
+		self.set(key, value ? "1" : "0");
+		CallOnChangeCallback(ui3CamSettings.getDefaultSetting(key));
+	}
+	var CallOnChangeCallback = function (s)
+	{
+		if (s && typeof s.onChange == "function")
+		{
+			try
+			{
+				s.onChange(self.get(s.key));
+			}
+			catch (ex)
+			{
+				toaster.Error(ex);
+			}
+		}
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Clip Properties Dialog /////////////////////////////////////
