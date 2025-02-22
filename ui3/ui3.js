@@ -22283,7 +22283,7 @@ function GetCameraOverlayIcons(cameraId)
 			icons.push({ id: "generic_trigger", svg: "#svg_x5F_Alert1" });
 		}
 		if (settings.ui3_camera_overlay_icon_paused === "1"
-			&& cam.pause > 0)
+			&& cam.isPaused)
 		{
 			icons.push({ id: "camera_paused", svg: "#svg_x5F_Pause", color: "rgba(255,128,64,1)" });
 		}
