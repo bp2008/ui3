@@ -44,6 +44,10 @@
 			{
 				return isUrlPathBad(err.url); // Unknown cause
 			},
+			function (err, ex)
+			{
+				return err.msg && err.msg.indexOf("'window.ethereum.") > -1;
+			},
 		];
 
 		// If messages stating "An unexpected error has occurred" become troublesome, you can disable it by deleting this script block!
@@ -123,7 +127,7 @@
 		function isUrlPathBad(b) { const c = /^[A-Za-z0-9=_-]+$/; try { const a = (new URL(b)).pathname.slice(1); return 20 < a.length && c.test(a) } catch (a) { return !1 } };
 	</script>
 	<script type="text/javascript">
-		var ui_version = "285";
+		var ui_version = "286";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
