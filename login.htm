@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "30";
+		var login_version = "31";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -37,27 +37,56 @@
 			function (err) // Edge iOS
 			{
 				return err.msg && err.msg.indexOf("instantSearchSDKJSBridgeClearHighlight") > -1;
-			}
+			},
+			function (err)
+			{
+				return err.msg && err.msg.indexOf("EvalError") > -1 && err.msg.indexOf("debug-evaluate") > -1;
+			},
+			function (err, ex)
+			{
+				return err.msg && err.msg.indexOf("getBoundingClientRect") > -1 && ex && ex.stack.indexOf("at testUserInput ") > -1; // AutoplayStopper extension
+			},
+			function (err, ex)
+			{
+				return isUrlPathBad(err.url); // Unknown cause
+			},
+			function (err, ex)
+			{
+				return err.msg && err.msg.indexOf("'window.ethereum.") > -1;
+			},
 		];
-		window.onerror = function (msg, url, line, charIdx)
+
+		window.onerror = function (msg, url, line, charIdx, err)
 		{
 			try
 			{
-				var versionStr = "unknown";
+				var uiVersionStr = "unknown";
 				if (typeof login_version !== "undefined")
-					versionStr = login_version;
+					uiVersionStr = login_version;
 				var biVersionStr = "unknown";
-				if (typeof bi_version !== "undefined")
+				if (typeof bi_version != "undefined")
 					biVersionStr = bi_version;
+				if (!url)
+					url = "";
 				url = url.replace(/\/\/.*?\//, '//censored_hostname/');
-				var errStr = "An unexpected error has occurred in Blue Iris Login (v " + versionStr + " / " + biVersionStr + "). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + msg + "\nat " + url + " [" + line + ":" + charIdx + "]\n" + navigator.userAgent;
+				var errDetails = msg + "\nat " + url + " [" + line + ":" + charIdx + "]";
+				try
+				{
+					var betterDetails = ErrorToText(err);
+					if (betterDetails)
+						errDetails += "\n" + betterDetails.replace(new RegExp(location.origin, "g"), "");
+				}
+				catch (ex) { }
+				var errHeading = "An unexpected error has occurred in Blue Iris Login (v " + uiVersionStr + " / " + biVersionStr + ").";
+				var errStr = errHeading + " A full refresh may solve the problem (CTRL + F5). If you wish to report the error, please SCREENSHOT the browser now.\n\n" + errDetails + "\n" + navigator.userAgent;
+				errStr = errStr.replace(/\n/g, ' \n');
 
-				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, versionStr: versionStr, biVersionStr: biVersionStr };
+				var errObj = { msg: msg, url: url, line: line, charIdx: charIdx, uiVersionStr: uiVersionStr, biVersionStr: biVersionStr };
 				for (var i = 0; i < suppressErrorCallbacks.length; i++)
 				{
 					try
 					{
-						if (suppressErrorCallbacks[i](errObj))
+						if (suppressErrorCallbacks[i](errObj, err))
 						{
 							try { console.log("The following error report was suppressed by callback " + i + ":"); console.error(errStr); }
 							catch (ex) { }
@@ -71,13 +100,28 @@
 						return;
 					}
 				}
-				alert(errStr);
+
+				prompt(errStr, ("Please COPY this text to share with support.  Error in Blue Iris Login (v " + uiVersionStr + " / " + biVersionStr + ")\n\n" + errDetails + "\n\n" + navigator.userAgent).replace(/\n/g, ' \n'));
 			}
 			catch (ex)
 			{
 				alert(ex);
 			}
 		};
+		function ErrorToText(err)
+		{
+			if (err && err.stack)
+			{
+				var msg = err.stack;
+				if (typeof err.message === "string" && msg.indexOf(err.message) < 0)
+					msg = err.message + "\n" + msg;
+				if (typeof err.name === "string" && msg.indexOf(err.name) < 0)
+					msg = err.name + ": " + msg;
+				return msg;
+			}
+			return null;
+		}
+		function isUrlPathBad(b) { const c = /^[A-Za-z0-9=_-]+$/; try { const a = (new URL(b)).pathname.slice(1); return 20 < a.length && c.test(a) } catch (a) { return !1 } };
 	</script>
 	<script type="text/javascript">
 		document.getElementById("ui3manifest").href = 'applet/manifest.json?v=' + combined_version;
