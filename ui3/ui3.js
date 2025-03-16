@@ -1455,7 +1455,7 @@ var defaultSettings =
 			key: "ui3_timeline_currentZoomScaleComment"
 			, value: ""
 			, inputType: "comment"
-			, comment: function () { return 'Current Zoom Scale: <span id="timelineCurrentZoomScaleComment">' + clipTimeline.getZoomScaler().toFixed(1) + '</span>'; }
+			, comment: function () { return 'Current Zoom Scale: <span id="timelineCurrentZoomScaleComment">' + (clipTimeline && clipTimeline.getZoomScaler() ? clipTimeline.getZoomScaler().toFixed(1) : "[timeline not loaded!]") + '</span>'; }
 			, category: "Timeline"
 		}
 		, {
