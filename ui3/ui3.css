@@ -728,6 +728,108 @@ div.icon, a.icon
 		color: var(--dropdown-item-blue-active-color);
 	}
 
+/* Update Available Notification (UPD) */
+.updateAvailable
+{
+	display: none;
+	position: absolute;
+	color: #63C35B;
+	padding: 1px 3px;
+	border-radius: 2px;
+	bottom: 0px;
+	right: 0px;
+}
+
+	.updateAvailable .icon
+	{
+		width: 24px;
+		height: 24px;
+		margin-bottom: 8px;
+		margin-right: 2px;
+	}
+
+.sizeMedium .updateAvailable .icon
+{
+	width: 20px;
+	height: 20px;
+	margin-bottom: 6px;
+	margin-right: 0px;
+}
+
+.sizeSmall .updateAvailable .icon
+{
+	width: 12px;
+	height: 12px;
+	margin-bottom: 6px;
+	margin-right: 0px;
+}
+
+.sizeSmaller .updateAvailable .icon
+{
+	width: 8px;
+	height: 8px;
+	margin-bottom: 6px;
+	margin-right: -2px;
+}
+
+.updateAvailable:after
+{
+	content: 'UPD';
+	background-color: #3b8934;
+	color: #FFFFFF;
+	font-size: 10px;
+	padding: 1px 3px;
+	border-radius: 2px;
+	position: absolute;
+	bottom: 0px;
+	right: 0px;
+}
+
+.sizeMedium .updateAvailable:after
+{
+	font-size: 9px;
+	padding: 1px 2px;
+}
+
+.sizeSmall .updateAvailable:after
+{
+	font-size: 6px;
+	padding: 1px 2px;
+}
+
+.sizeSmaller .updateAvailable:after
+{
+	content: 'UP';
+}
+
+.updateAvailable.full
+{
+	top: 0px;
+	bottom: 0px;
+	right: 0px;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+}
+
+	.updateAvailable.full:after
+	{
+		content: 'Update Available';
+		font-size: 14px;
+		position: static;
+		flex: 0 0;
+		text-align: center;
+	}
+
+.sizeMedium .updateAvailable.full:after
+{
+	font-size: 12px;
+}
+
+.sizeSmall .updateAvailable.full:after
+{
+	font-size: 10px;
+}
 /* Notification Counters */
 .notificationCounter
 {

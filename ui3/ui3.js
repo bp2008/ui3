@@ -5609,7 +5609,7 @@ function DropdownBoxes()
 		, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export Queue", icon: "#svg_mio_launch", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
-		, new DropdownListItem({ cmd: "server_control", text: "Server Control", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Blue Iris Settings" })
+		, new DropdownListItem({ cmd: "server_control", text: "Server Control", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Control Blue Iris Server", updateAvailableFn: function () { return sessionManager.UpdateAvailable(); } })
 		, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
 	];
@@ -6055,6 +6055,16 @@ function DropdownBoxes()
 				var $nc = $('<div class="notificationCounter">' + htmlEncode(notificationCounterValue) + '</div>');
 				$item.append($nc);
 				$nc.show();
+			}
+		}
+		if (typeof item.updateAvailableFn === "function")
+		{
+			var updateAvailableValue = item.updateAvailableFn();
+			if (updateAvailableValue)
+			{
+				$item.css("position", "relative");
+				var $upd = $('<div class="updateAvailable full" title="A Blue Iris update is available!"></div>');
+				$item.append($upd);
 			}
 		}
 		$item.click(function ()
@@ -14541,18 +14551,23 @@ function StatusLoader()
 	this.LoadProfile = function (profileNum)
 	{
 		if (profileNum >= -1 && profileNum <= 7)
-			loadStatusInternal(profileNum);
+			loadStatusInternal({ profileNum: profileNum });
 		else
 			toaster.Error("Cannot load profile " + profileNum);
 	}
 	this.SetStoplight = function (signal)
 	{
 		if (typeof signal !== "undefined" && signal >= 0 && signal <= 2)
-			loadStatusInternal(null, signal);
+			loadStatusInternal({ stoplightState: signal });
 		else
 			toaster.Error("Cannot set Shield state: " + signal);
 	}
-	var loadStatusInternal = function (profileNum, stoplightState, schedule)
+	this.InstallUpdate = function (version)
+	{
+		if (version)
+			loadStatusInternal({ installVersion: version });
+	}
+	var loadStatusInternal = function (statusArgs)
 	{
 		if (statusUpdateTimeout != null)
 			clearTimeout(statusUpdateTimeout);
@@ -14568,26 +14583,36 @@ function StatusLoader()
 			}
 		}
 		var args = { cmd: "status" };
-		if (typeof profileNum != "undefined" && profileNum != null)
+		if (statusArgs)
 		{
-			if (sessionManager.HasPermission_ChangeProfile())
-				args.profile = parseInt(profileNum);
-			else
-				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
-		}
-		if (typeof stoplightState != "undefined" && stoplightState != null)
-		{
-			if (sessionManager.HasPermission_ChangeProfile())
-				args.signal = parseInt(stoplightState);
-			else
-				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
-		}
-		if (typeof schedule != "undefined" && schedule != null)
-		{
-			if (sessionManager.HasPermission_ChangeProfile())
-				args.schedule = schedule;
-			else
-				openLoginDialog(function () { loadStatusInternal(profileNum, stoplightState, schedule); });
+			if (typeof statusArgs.profileNum != "undefined" && statusArgs.profileNum != null)
+			{
+				if (sessionManager.HasPermission_ChangeProfile())
+					args.profile = parseInt(statusArgs.profileNum);
+				else
+					openLoginDialog(function () { loadStatusInternal(statusArgs); });
+			}
+			if (typeof statusArgs.stoplightState != "undefined" && statusArgs.stoplightState != null)
+			{
+				if (sessionManager.HasPermission_ChangeProfile())
+					args.signal = parseInt(statusArgs.stoplightState);
+				else
+					openLoginDialog(function () { loadStatusInternal(statusArgs); });
+			}
+			if (typeof statusArgs.schedule != "undefined" && statusArgs.schedule != null)
+			{
+				if (sessionManager.HasPermission_ChangeProfile())
+					args.schedule = statusArgs.schedule;
+				else
+					openLoginDialog(function () { loadStatusInternal(statusArgs); });
+			}
+			if (typeof statusArgs.installVersion != "undefined" && statusArgs.installVersion != null)
+			{
+				if (sessionManager.HasPermission_InstallUpdate())
+					args.update = ConvertVersionNumberToInsaneInt(statusArgs.installVersion) + ", 0";
+				else
+					openLoginDialog(function () { loadStatusInternal(statusArgs); });
+			}
 		}
 		var requestStart = performance.now();
 		ExecJSON(args, function (response)
@@ -14839,7 +14864,7 @@ function StatusLoader()
 	}
 	this.ChangeSchedule = function (scheduleName)
 	{
-		loadStatusInternal(null, null, scheduleName);
+		loadStatusInternal({ schedule: scheduleName });
 	}
 	this.SetProfileButtonsEnabled = function (enabled)
 	{
@@ -14868,14 +14893,14 @@ function StatusLoader()
 		{
 			if (!lastResponse || $scheduleLockBtn.hasClass("disabled"))
 				return;
-			loadStatusInternal(-1);
+			loadStatusInternal({ profileNum: -1 });
 		},
 		function ()
 		{
 			if (!lastResponse || $scheduleLockBtn.hasClass("disabled"))
 				return;
 			if (parseInt(lastResponse.data.lock) !== 0)
-				loadStatusInternal(-1);
+				loadStatusInternal({ profileNum: -1 });
 			else
 				toaster.Info("Long press to disable automatic scheduling.");
 		});
@@ -14907,6 +14932,25 @@ function StatusLoader()
 		}
 		return 0;
 	}
+}
+function ConvertVersionNumberToInsaneInt(version)
+{
+	var parts = version.split('.');
+	if (parts.length !== 4)
+		throw new Error('"' + version + '" is not a recognized version number format.');
+	// Convert each part to a two-digit HEX and concatenate
+	var hexString =
+		('00' + parseInt(parts[0], 10).toString(16)).slice(-2) +
+		('00' + parseInt(parts[1], 10).toString(16)).slice(-2) +
+		('00' + parseInt(parts[2], 10).toString(16)).slice(-2) +
+		('00' + parseInt(parts[3], 10).toString(16)).slice(-2);
+	// Parse the HEX string as a 32-bit integer (big-endian order)
+	var bigEndianInt32 =
+		parseInt(hexString.slice(6, 8), 16) * Math.pow(256, 0) +
+		parseInt(hexString.slice(4, 6), 16) * Math.pow(256, 1) +
+		parseInt(hexString.slice(2, 4), 16) * Math.pow(256, 2) +
+		parseInt(hexString.slice(0, 2), 16) * Math.pow(256, 3);
+	return bigEndianInt32;
 }
 ///////////////////////////////////////////////////////////////
 // Disk Usage GUI /////////////////////////////////////////////
@@ -15145,6 +15189,7 @@ function SessionManager()
 	var permission_audio = true;
 	var permission_clips = true;
 	var permission_clipcreate = false;
+	var permission_installupdate = false;
 	var biSoundOptions = ["None"];
 	var biStreamingProfiles = [];
 	var sessionExpiredToast = null;
@@ -15304,6 +15349,7 @@ function SessionManager()
 		permission_audio = getBoolMaybe(lastResponse.data.audio, true);
 		permission_clips = getBoolMaybe(lastResponse.data.clips, true);
 		permission_clipcreate = getBoolMaybe(lastResponse.data.clipcreate, isAdministratorSession);
+		permission_installupdate = isAdministratorSession;
 
 		HandleUpdatedPermissions();
 
@@ -15342,6 +15388,7 @@ function SessionManager()
 		ProcessSoundsArray();
 		ProcessStreamsArray();
 		SyncStreamingQualityWarningIcon(true);
+		ProcessVersionAvailability();
 
 		BI_CustomEvent.Invoke("Login Success", response);
 
@@ -15721,6 +15768,23 @@ function SessionManager()
 			return stream.overrides;
 		return true;
 	}
+	var ProcessVersionAvailability = function ()
+	{
+		if (self.UpdateAvailable())
+		{
+			$("#btn_main_menu .updateAvailable").show();
+		}
+		else
+		{
+			$("#btn_main_menu .updateAvailable").hide();
+		}
+	}
+	this.UpdateAvailable = function ()
+	{
+		return !!(lastResponse && lastResponse.data && lastResponse.data.newversion && lastResponse.data.version
+			&& lastResponse.data.version !== lastResponse.data.newversion
+			&& permission_installupdate);
+	}
 	this.HasPermission_ChangeProfile = function ()
 	{
 		return permission_changeprofile;
@@ -15744,6 +15808,10 @@ function SessionManager()
 	this.HasPermission_ClipCreate = function ()
 	{
 		return permission_clipcreate;
+	}
+	this.HasPermission_InstallUpdate = function ()
+	{
+		return permission_installupdate;
 	}
 	this.GetBISoundOptions = function ()
 	{
@@ -28556,6 +28624,33 @@ function ServerControl()
 			$row.append($input);
 			$row.append(GetDialogOptionLabel("Reboot Server Computer"));
 			$sysconfig.append($row);
+
+			if (sessionManager.UpdateAvailable() && sessionManager.HasPermission_InstallUpdate())
+			{
+				var sessionResponse = sessionManager.GetLastResponse();
+				var version = sessionResponse.data.newversion;
+				$row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
+				$input = $('<input type="button" value="Update" />');
+				$input.on('click', function ()
+				{
+					SimpleDialog.ConfirmText("This function will cause Blue Iris to download and install version " + version + ".\n\nIt is recommended to have remote desktop access available in case the update fails and Blue Iris becomes unreachable.\n\nDo you wish to proceed?"
+						, function ()
+						{
+							toaster.Warning("Update Starting.  Blue Iris should restart soon.", 60000);
+							CloseSysConfigDialog();
+							statusLoader.InstallUpdate(version);
+						}
+						, function ()
+						{
+							toaster.Info("Update Canceled");
+						}
+						, { yesText: "Begin Update", noText: "Cancel" });
+				});
+				$row.append($input);
+				$row.append(GetDialogOptionLabel("Install Update " + version));
+				$sysconfig.append($row);
+			}
+
 
 			if (modal_servercontroldialog !== null)
 				modal_servercontroldialog.contentChanged(true);
