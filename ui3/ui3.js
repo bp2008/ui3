@@ -1592,8 +1592,17 @@ var defaultSettings =
 			key: "ui3_topbar_warnings_counter"
 			, value: "1"
 			, inputType: "checkbox"
-			, label: 'Show New Warnings Counter<div class="settingDesc">(appears on Main Menu / System Log)</div>'
+			, label: 'Show New Warnings Counter<div class="settingDesc">(appears on Main Menu &amp; System Log)</div>'
 			, onChange: OnChange_ui3_topbar_warnings_counter
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_show_update_available_notice"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Update Available Notice<div class="settingDesc">(icon overlaid on Main Menu when a Blue Iris update is available. Requires administrator privilege)</div>'
+			, hint: 'UI3 cannot independently check for updates.  UI3 learns of update availability from Blue Iris during UI3 startup.'
+			, onChange: OnChange_ui3_show_update_available_notice
 			, category: "Top Bar"
 		}
 		, {
@@ -15388,7 +15397,7 @@ function SessionManager()
 		ProcessSoundsArray();
 		ProcessStreamsArray();
 		SyncStreamingQualityWarningIcon(true);
-		ProcessVersionAvailability();
+		self.ProcessVersionAvailability();
 
 		BI_CustomEvent.Invoke("Login Success", response);
 
@@ -15768,9 +15777,9 @@ function SessionManager()
 			return stream.overrides;
 		return true;
 	}
-	var ProcessVersionAvailability = function ()
+	this.ProcessVersionAvailability = function ()
 	{
-		if (self.UpdateAvailable())
+		if (self.UpdateAvailable() && settings.ui3_show_update_available_notice === "1")
 		{
 			$("#btn_main_menu .updateAvailable").show();
 		}
@@ -28585,6 +28594,7 @@ function ServerControl()
 			if ($sysconfig.length == 0)
 				return;
 			$sysconfig.empty();
+			AddInstallUpdateButton($sysconfig);
 			$sysconfig.append(GetCustomCheckbox('archive', "Clip Web Archival (FTP)", response.data.archive, SetSysConfig));
 			$sysconfig.append(GetCustomCheckbox('schedule', "Global Schedule", response.data.schedule, SetSysConfig));
 			$sysconfig.append(UIFormField({
@@ -28597,60 +28607,7 @@ function ServerControl()
 					SetSysConfig(tag, $input.val());
 				}
 			}));
-			var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
-			var $input = $('<input type="button" value="Reboot" />');
-			$input.on('click', function ()
-			{
-				SimpleDialog.ConfirmText("This function will cause the computer running Blue Iris to be restarted.\n\nDo you wish to proceed?\n\n(confirmation 1/2)", function ()
-				{
-					SimpleDialog.ConfirmHtml("If the remote computer fails to reboot for any reason, you may be unable to access the system.  Please remember that Windows Updates may slow down or interfere with the reboot procedure.<br><br>Click <b>Yes</b> to send the restart command now.<br><br>(confirmation 2/2)", function ()
-					{
-						console.log("Sending REBOOT command to Blue Iris");
-
-						ExecJSON({ cmd: "status", reboot: true }, function (response)
-						{
-							console.log("REBOOT command was sent successfully");
-							SimpleDialog.Text("The server was instructed to reboot.\n\n"
-								+ "Blue Iris should stop responding shortly.\n\n"
-								+ "Windows may take longer than usual to reboot if there were any updates ready to install.");
-							toaster.Success("The server was instructed to reboot.", 60000);
-						}, function (jqXHR, textStatus, errorThrown)
-						{
-							toaster.Error("An error occurred. The server may not have received the reboot command.<br>" + jqXHR.ErrorMessageHtml);
-						});
-					});
-				});
-			});
-			$row.append($input);
-			$row.append(GetDialogOptionLabel("Reboot Server Computer"));
-			$sysconfig.append($row);
-
-			if (sessionManager.UpdateAvailable() && sessionManager.HasPermission_InstallUpdate())
-			{
-				var sessionResponse = sessionManager.GetLastResponse();
-				var version = sessionResponse.data.newversion;
-				$row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
-				$input = $('<input type="button" value="Update" />');
-				$input.on('click', function ()
-				{
-					SimpleDialog.ConfirmText("This function will cause Blue Iris to download and install version " + version + ".\n\nIt is recommended to have remote desktop access available in case the update fails and Blue Iris becomes unreachable.\n\nDo you wish to proceed?"
-						, function ()
-						{
-							toaster.Warning("Update Starting.  Blue Iris should restart soon.", 60000);
-							CloseSysConfigDialog();
-							statusLoader.InstallUpdate(version);
-						}
-						, function ()
-						{
-							toaster.Info("Update Canceled");
-						}
-						, { yesText: "Begin Update", noText: "Cancel" });
-				});
-				$row.append($input);
-				$row.append(GetDialogOptionLabel("Install Update " + version));
-				$sysconfig.append($row);
-			}
-
+			AddRebootServerButton($sysconfig);
 
 			if (modal_servercontroldialog !== null)
 				modal_servercontroldialog.contentChanged(true);
@@ -28696,6 +28653,68 @@ function ServerControl()
 		{
 			toaster.Error('Unable to contact Blue Iris server to set ' + htmlEncode(key) + ' value.', 3000);
 		});
+	}
+	var AddRebootServerButton = function ($sysconfig)
+	{
+		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
+		var $input = $('<input type="button" value="Reboot" />');
+		$input.on('click', function ()
+		{
+			SimpleDialog.ConfirmText("This function will cause the computer running Blue Iris to be restarted.\n\nDo you wish to proceed?\n\n(confirmation 1/2)", function ()
+			{
+				SimpleDialog.ConfirmHtml("If the remote computer fails to reboot for any reason, you may be unable to access the system.  Please remember that Windows Updates may slow down or interfere with the reboot procedure.<br><br>Click <b>Yes</b> to send the restart command now.<br><br>(confirmation 2/2)", function ()
+				{
+					console.log("Sending REBOOT command to Blue Iris");
+
+					ExecJSON({ cmd: "status", reboot: true }, function (response)
+					{
+						console.log("REBOOT command was sent successfully");
+						SimpleDialog.Text("The server was instructed to reboot.\n\n"
+							+ "Blue Iris should stop responding shortly.\n\n"
+							+ "Windows may take longer than usual to reboot if there were any updates ready to install.");
+						toaster.Success("The server was instructed to reboot.", 60000);
+					}, function (jqXHR, textStatus, errorThrown)
+					{
+						toaster.Error("An error occurred. The server may not have received the reboot command.<br>" + jqXHR.ErrorMessageHtml);
+					});
+				});
+			});
+		});
+		$row.append($input);
+		$row.append(GetDialogOptionLabel("Reboot Server Computer"));
+		$sysconfig.append($row);
+	}
+	var AddInstallUpdateButton = function ($sysconfig)
+	{
+		if (sessionManager.UpdateAvailable() && sessionManager.HasPermission_InstallUpdate())
+		{
+			var sessionResponse = sessionManager.GetLastResponse();
+			var version = sessionResponse.data.newversion;
+			var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
+			var $input = $('<input type="button" value="Update" />');
+			$input.on('click', function ()
+			{
+				SimpleDialog.ConfirmText("This function will cause Blue Iris to download and install version " + version + ".\n\nIt is recommended to have remote desktop access available in case the update fails and Blue Iris becomes unreachable.\n\nDo you wish to proceed?"
+					, function ()
+					{
+						toaster.Warning("Update Starting.  Blue Iris should restart soon.", 60000);
+						CloseSysConfigDialog();
+						statusLoader.InstallUpdate(version);
+					}
+					, function ()
+					{
+						toaster.Info("Update Canceled");
+					}
+					, { yesText: "Begin Update", noText: "Cancel" });
+			});
+			$row.append($input);
+			$row.append(GetDialogOptionLabel("Install Update " + version));
+			$sysconfig.append($row);
+
+			$row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
+			$row.append(GetDialogOptionLabel('<a href="javascript:uiSettingsPanel.open(\'Update Available\')">Configure "Update Available Notice"</a>'));
+			$sysconfig.append($row);
+		}
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -34469,6 +34488,10 @@ function OnChange_ui3_topbar_alerts_shortcut_counter()
 function OnChange_ui3_topbar_warnings_counter()
 {
 	statusLoader.LoadStatus();
+}
+function OnChange_ui3_show_update_available_notice()
+{
+	sessionManager.ProcessVersionAvailability();
 }
 function OnChange_ui3_h264_choice()
 {
