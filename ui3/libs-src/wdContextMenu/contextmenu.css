@@ -19,10 +19,11 @@
 }
 .b-m-item, .b-m-idisable
 {
-    padding: 4px 2px;
-    margin: 0 2px 0 3px;
-    cursor: normal;
-    line-height:100%;
+	padding: 3px 1px;
+	border: 1px solid transparent;
+	margin: 0 2px 0 3px;
+	cursor: normal;
+	line-height: 100%;
 }
 .b-m-idisable
 {
@@ -51,7 +52,7 @@
 .b-m-ifocus {
 	background: url(data:image/gif;base64,R0lGODlhAQAWAIAAAOvz/dno+yH5BAAAAAAALAAAAAABABYAAAIFhI+hy1oAOw==) repeat-x bottom;
 	border: 1px solid #AACCF6;
-	padding: 3px 1px ;
+	padding: 3px 1px;
     margin: 0 2px 0 3px;
     cursor: normal;
     line-height:100%;
