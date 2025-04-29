@@ -12119,6 +12119,8 @@ function ClipData(clip)
 	clipData.displayDate = GetServerDate(clipData.date);
 	clipData.colorHex = BlueIrisColorToCssColor(clip.color);
 	clipData.fileSize = GetClipFileSize(clip.filesize);
+	var fileNameParts = ParseFileName(clip.path);
+	clipData.fileExtType = fileNameParts.type.toUpperCase();
 	if (clipData.isSnapshot)
 		clipData.msec = clipData.roughLengthMs = 2000;
 	else if (clipData.isClip && typeof clip.msec != "undefined" && !isNaN(clip.msec))
@@ -13870,6 +13872,13 @@ function ClipLoader(clipsBodySelector)
 		}
 		if (!str)
 			str = null;
+		return str;
+	}
+	this.GetClipDownloadText = function (clipData)
+	{
+		var str = "Download " + clipData.fileExtType;
+		if (clipData.fileSize)
+			str += " (" + htmlEncode(clipData.fileSize) + ")";
 		return str;
 	}
 	// Some things must be initialized after methods are defined ...
@@ -15821,6 +15830,14 @@ function SessionManager()
 	this.HasPermission_InstallUpdate = function ()
 	{
 		return permission_installupdate;
+	}
+	this.HasPermission_DownloadClip = function (clipData)
+	{
+		if (!permission_clips)
+			return false;
+		if (!clipData.fileExtType === "BVR")
+			return self.IsAdministratorSession();
+		return true;
 	}
 	this.GetBISoundOptions = function ()
 	{
@@ -24934,14 +24951,18 @@ function CanvasContextMenu()
 		, clickType: GetPreferredContextMenuTrigger()
 	};
 	$("#layoutbody").contextmenu(optionLive);
+
 	var onShowRecordContextMenu = function (menu)
 	{
-		menu.applyrule(
-			{
-				name: "disable_clipname",
-				disable: true,
-				items: ["clipname"]
-			});
+		var disable_items = ["clipname"];
+		var enable_items = ["opennewtab", "saveas", "copyimageaddress", "convertexport", "set_start_frame", "set_end_frame", "submenu_motionoverlays", "submenu_textoverlays", "closeclip", "statsfornerds", "properties"];
+		var clipData = lastRecordContextMenuSelectedClip;
+		if (sessionManager.HasPermission_DownloadClip(clipData))
+			enable_items.push("downloadclip");
+		else
+			disable_items.push("downloadclip");
+		menu.applyrule({ name: "disable_items", disable: true, items: disable_items });
+		menu.applyrule({ name: "enable_items", disable: false, items: enable_items });
 	}
 	var onTriggerRecordContextMenu = function (e)
 	{
@@ -24953,7 +24974,6 @@ function CanvasContextMenu()
 		videoOverlayHelper.HideTemporaryIcons();
 
 		var clipData = lastRecordContextMenuSelectedClip = clipLoader.GetClipFromId(videoPlayer.Loading().image.uniqueId);
-		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
@@ -24966,13 +24986,20 @@ function CanvasContextMenu()
 
 		var $dlBtnLabel = $("#cmroot_recordview_downloadclipbutton");
 		var $dlBtn = $dlBtnLabel.closest(".b-m-item");
-		if (clipData.fileSize)
-			$dlBtnLabel.text("Download clip (" + htmlEncode(clipData.fileSize) + ")");
-		else
-			$dlBtnLabel.text("Download clip");
 		if ($dlBtn.parent().attr("id") != "cmroot_recordview_downloadcliplink")
 			$dlBtn.wrap('<a id="cmroot_recordview_downloadcliplink" style="display:block" href="" target="_blank"></a>');
-		$dlBtn.parent().attr("href", clipInfo.href).attr("download", clipInfo.download);
+		var $dlLink = $("#cmroot_recordview_downloadcliplink");
+		if (sessionManager.HasPermission_DownloadClip(clipData))
+		{
+			$dlBtnLabel.text(clipLoader.GetClipDownloadText(clipData));
+			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
+			$dlLink.attr("href", clipInfo.href).attr("download", clipInfo.download);
+		}
+		else
+		{
+			$dlBtnLabel.text("(download unavailable)");
+			$dlLink.removeAttr("href", "javascript:void(0)").removeAttr("download");
+		}
 
 		var name = clipLoader.GetClipDisplayName(clipData);
 		$("#contextMenuClipName").text(name).closest(".b-m-item,.b-m-idisable").attr("title", name);
@@ -25411,22 +25438,23 @@ function ClipListContextMenu()
 
 	var onShowMenu = function (menu)
 	{
-		var itemsToEnable = ["flag", "protect", "download", "larger_thumbnails", "mouseover_thumbnails", "convertexport"];
+		var itemsToEnable = ["flag", "protect", "larger_thumbnails", "mouseover_thumbnails", "convertexport"];
 		var itemsToDisable = [];
 
 		if (addDeleteItem)
 			itemsToEnable.push("delete");
 		var singleClipItems = itemsToEnable;
-		if (clipLoader.GetAllSelected().length > 1)
+		if (allSelectedClipIDs.length > 1)
 			singleClipItems = itemsToDisable;
 		singleClipItems.push("properties");
 		singleClipItems.push("copyurl");
 		singleClipItems.push("editmemo");
 
 		var hasClipsSelected = false;
+		var clipData;
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
 		{
-			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
+			clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
 			if (clipData.isClip)
 			{
 				hasClipsSelected = true;
@@ -25435,6 +25463,12 @@ function ClipListContextMenu()
 		}
 		if (!hasClipsSelected)
 			itemsToEnable.push("aiconfirm");
+
+		if (allSelectedClipIDs.length !== 1 || sessionManager.HasPermission_DownloadClip(clipData))
+			itemsToEnable.push("download");
+		else
+			itemsToDisable.push("download");
+
 
 		menu.applyrule({ name: "disable_items", disable: true, items: itemsToDisable });
 		menu.applyrule({ name: "enable_items", disable: false, items: itemsToEnable });
@@ -25446,6 +25480,7 @@ function ClipListContextMenu()
 		if (downloadClipButton.parent().attr("id") != "cmroot_cliplist_downloadcliplink")
 			downloadClipButton.wrap('<a id="cmroot_cliplist_downloadcliplink" style="display:block" href="javascript:void(0)" target="_blank"></a>');
 		var $dl_link = $("#cmroot_cliplist_downloadcliplink");
+		$dl_link.removeAttr("href").removeAttr("download");
 
 		var recId = e.currentTarget.id.substr(1);
 		if (!clipLoader.IsClipSelected(recId))
@@ -25480,19 +25515,18 @@ function ClipListContextMenu()
 			$("#cm_cliplist_flag").text(flagEnable ? "Flag" : "Unflag");
 			$("#cm_cliplist_protect").text(protectEnable ? "Protect" : "Unprotect");
 			$("#cm_cliplist_aiconfirm").text(aiConfirm ? "Mark as AI-confirmed" : "Unmark as AI-confirmed");
-			if (clipData.isClip && clipData.fileSize)
-				$("#cm_cliplist_download").text("Download clip (" + htmlEncode(clipData.fileSize) + ")");
+			if (sessionManager.HasPermission_DownloadClip(clipData))
+			{
+				$("#cm_cliplist_download").text(clipLoader.GetClipDownloadText(clipData));
+				var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
+				$dl_link.attr("href", clipInfo.href);
+				if (clipInfo.download)
+					$dl_link.attr("download", clipInfo.download);
+			}
 			else
-				$("#cm_cliplist_download").text("Download clip");
+				$("#cm_cliplist_download").text("(download unavailable)");
 			$("#cm_cliplist_delete").text("Delete");
 			$("#cm_cliplist_copyurl").text("Copy " + (clipData.isClip ? "clip" : "alert") + " URL");
-
-			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
-			$dl_link.attr("href", clipInfo.href);
-			if (clipInfo.download)
-				$dl_link.attr("download", clipInfo.download);
-			else
-				$dl_link.removeAttr("download");
 		}
 		else if (allSelectedClipIDs.length > 1)
 		{
@@ -25502,8 +25536,6 @@ function ClipListContextMenu()
 			$("#cm_cliplist_aiconfirm").text((aiConfirm ? "Mark as AI-confirmed" : "Unmark as AI-confirmed") + label);
 			$("#cm_cliplist_download").text("Download " + allSelectedClipIDs.length + " clips");
 			$("#cm_cliplist_delete").text("Delete" + label);
-			$dl_link.attr("href", "javascript:void(0)");
-			$dl_link.removeAttr("download");
 		}
 
 		if (getLargerClipThumbnails())
@@ -27030,15 +27062,21 @@ function ClipProperties()
 
 			$camprop.append(clipIcons.getIconHtmlForClipProperties(clipData));
 
-			var $link = $('<a href="javascript:void(0)">Click here to download the clip.</a>');
+			$camprop.append(GetInfoEleValue("File Type", clipData.fileExtType));
 			var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
-			$link.attr("href", clipInfo.href);
-			if (clipInfo.download)
+			if (sessionManager.HasPermission_DownloadClip(clipData))
 			{
-				$link.text(clipInfo.download);
-				$link.attr("download", clipInfo.download);
+				var $link = $('<a href="javascript:void(0)">Click here to download the clip.</a>');
+				$link.attr("href", clipInfo.href);
+				if (clipInfo.download)
+				{
+					$link.text(clipInfo.download);
+					$link.attr("download", clipInfo.download);
+				}
+				$camprop.append(GetInfoEleValue("Download " + clipData.fileExtType, $link));
+				if (clipData.fileExtType === "BVR")
+					$camprop.append('<div class="dialogOption_item clipprop_item_info">&nbsp; (BVR files are only playable in Blue Iris.)</div>');
 			}
-			$camprop.append(GetInfoEleValue("Download Clip", $link));
 
 			if (clipInfo.originalFileHref)
 			{
@@ -27118,14 +27156,24 @@ function ClipDownloadDialog()
 
 		$camprop.append('<div class="dialogOption_item clipprop_item_info">Click each link to download the desired clips.</div>');
 		$camprop.append('<div class="dialogOption_item clipprop_item_info">Each link will disappear after it is clicked, so you can\'t accidentally download duplicates.</div>');
+		var numNotLinked = 0;
 		for (var i = 0; i < allSelectedClipIDs.length; i++)
-			$camprop.append(GetLink(allSelectedClipIDs[i]));
+		{
+			var clipData = clipLoader.GetClipFromId(allSelectedClipIDs[i]);
+			if (sessionManager.HasPermission_DownloadClip(clipData))
+			{
+				$camprop.append(GetLink(clipData));
+			}
+			else
+				numNotLinked++;
+		}
+		if (numNotLinked > 0)
+			$camprop.append('<div class="dialogOption_item clipprop_item_info">' + numNotLinked + ' selected clip' + (numNotLinked === 1 ? ' is' : 's are') + ' not available to download because your session has insufficient permission.</div>');
 
 		$dlg.dialog({ title: "Download Multiple Clips" });
 	}
-	var GetLink = function (recId)
+	var GetLink = function (clipData)
 	{
-		var clipData = clipLoader.GetClipFromId(recId);
 		var clipInfo = clipLoader.GetDownloadClipInfo(clipData);
 		var $link = $('<a href=""></a>');
 		$link.attr("href", clipInfo.href);
@@ -38386,4 +38434,19 @@ function firstNonFalsy()
 		return arguments[arguments.length - 1];
 	}
 	return undefined;
+}
+function ParseFileName(fileName)
+{
+	var fileNameNoExt = fileName;
+	var extension = "";
+	var type = "";
+	var extensionIdx = fileName.lastIndexOf(".");
+	if (extensionIdx > -1)
+	{
+		fileNameNoExt = fileName.substr(0, extensionIdx);
+		extension = fileName.substr(extensionIdx);
+		if (fileName.length > extensionIdx)
+			type = fileName.substr(extensionIdx + 1);
+	}
+	return { name: fileNameNoExt, extension: extension, type: type };
 }
