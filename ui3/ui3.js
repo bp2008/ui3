@@ -3813,16 +3813,23 @@ $(function ()
 		});
 	$(".topbar_tab").click(function ()
 	{
+		var $ele = $(this);
+		var tabName = $ele.attr("name");
+		if (!developerMode && sessionManager && !sessionManager.HasPermission_Clips() && tabName !== "live")
+		{
+			console.log("Session does not have permission to use " + tabName + ". Switching to live tab.");
+			$("#topbar_tab_live").click();
+			return;
+		}
 		SetClipListShortcutIconState("#open_all_clips_btn", false);
 		SetClipListShortcutIconState("#open_alerts_btn", false);
 		SetClipListShortcutIconState("#open_alerts_canceled_btn", false);
 		SetClipListShortcutIconState("#open_alerts_confirmed_btn", false);
 
-		var $ele = $(this);
 		$(".topbar_tab").removeClass("selected");
 		$ele.addClass("selected");
 
-		currentPrimaryTab = settings.ui3_defaultTab = $ele.attr("name");
+		currentPrimaryTab = settings.ui3_defaultTab = tabName;
 
 		clipExportPanel.Abort();
 
@@ -15488,7 +15495,10 @@ function SessionManager()
 		{
 			$("#topbar_tab_clips,#topbar_tab_timeline").hide();
 			if (currentPrimaryTab != "live")
+			{
+				console.log("Session does not have permission to use " + currentPrimaryTab + ". Switching to live tab.");
 				$("#topbar_tab_live").click();
+			}
 		}
 
 		OnChange_ui3_topbar_allclips_shortcut_show();
