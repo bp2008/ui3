@@ -3406,6 +3406,14 @@ var defaultSettings =
 			, category: "MQTT Remote Control"
 		}
 		, {
+			key: "ui3_mqttToastEvents"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Toast Events'
+			, hint: "If enabled, UI3 can be commanded to show toast messages via MQTT (see help file)."
+			, category: "MQTT Remote Control"
+		}
+		, {
 			key: "ui3_fullscreen_videoonly"
 			, value: "1"
 			, inputType: "checkbox"
@@ -4211,9 +4219,7 @@ function HandlePreLoadUrlParameters()
 	var timelineMsStr = UrlParameters.Get("timeline", "tl");
 	if (timelineMsStr !== '')
 	{
-		var timelineMs = parseInt(timelineMsStr);
-		if (isNaN(timelineMs) || (timelineMs > 0 && timelineMs < 60000))
-			timelineMs = Date.parse(timelineMsStr.replace('_', ' '));
+		var timelineMs = ParseTimelineStartStr(timelineMsStr);
 		if (!isNaN(timelineMs))
 		{
 			settings.ui3_defaultTab = "timeline";
@@ -4251,6 +4257,13 @@ function HandlePreLoadUrlParameters()
 	if (pauseParam === "1" || maximize.toLowerCase() === "true")
 		startupPaused = true;
 }
+function ParseTimelineStartStr(str)
+{
+	var timelineMs = parseInt(str);
+	if (isNaN(timelineMs) || (timelineMs > 0 && timelineMs < 60000))
+		timelineMs = Date.parse(str.toString().replace('_', ' '));
+	return timelineMs;
+}
 function StartupClipOpener(recId, offset)
 {
 	function Initialize()
@@ -4286,18 +4299,6 @@ function StartupClipOpener(recId, offset)
 			else
 				OpenClipFromStats(stats);
 		});
-	}
-	function OpenClipFromStats(stats)
-	{
-		if (stats)
-		{
-			var clipData = new ClipData(stats);
-			clipLoader.SetStartupClip(clipData);
-		}
-		else
-		{
-			videoPlayer.LoadHomeGroup();
-		}
 	}
 	Initialize();
 }
@@ -9901,6 +9902,10 @@ function ClipTimeline()
 	{
 		if (timeline)
 		{
+			if (typeof timestampMs === "string" || (timestampMs > 0 && timestampMs < 60000))
+				timestampMs = ParseTimelineStartStr(timestampMs.toString());
+			if (timestampMs < 0)
+				timestampMs = GetUtcNow() + timestampMs;
 			timeline.assignLastSetTime(timestampMs);
 			timeline.userDidSetTime();
 		}
@@ -13894,6 +13899,18 @@ function ClipLoader(clipsBodySelector)
 	setInterval(self.UpdateClipList, 6000);
 	BI_CustomEvent.AddListener("ClipList_Updated", ClipList_Updated);
 	$clipsbody.on('scroll', ClipsBodyScroll);
+}
+function OpenClipFromStats(stats)
+{
+	if (stats)
+	{
+		var clipData = new ClipData(stats);
+		clipLoader.SetStartupClip(clipData);
+	}
+	else
+	{
+		videoPlayer.LoadHomeGroup();
+	}
 }
 function DbViewIsAlerts(dbView)
 {
@@ -31016,6 +31033,10 @@ function Toaster()
 	{
 		return showToastInternal('error', message, showTime, closeButton, onClick, extendedTimeOut);
 	}
+	this.Show = function (type, message, showTime, closeButton, onClick, extendedTimeOut)
+	{
+		return showToastInternal(type, message, showTime, closeButton, onClick, extendedTimeOut);
+	}
 	this.ErrorResponse = function (responseObject)
 	{
 		var msg;
@@ -36477,6 +36498,10 @@ function MqttClient()
 				{
 					handlePlayAudio(parts[3], message.payloadString);
 				}
+				else if (parts[0] === "ui3" && (parts[1] === instance_id || parts[1] === "global") && parts[2] === "toast")
+				{
+					MqttShowToast(parts[3], message.payloadString);
+				}
 			}
 			else if (parts.length === 3)
 			{
@@ -36486,6 +36511,8 @@ function MqttClient()
 						handlePlayTTS(message.payloadString);
 					else if (parts[2] === "playaudio")
 						handlePlayAudio(null, message.payloadString);
+					else if (parts[2] === "toast")
+						MqttShowToast(null, message.payloadString);
 				}
 			}
 		}
@@ -36623,6 +36650,186 @@ function MqttTopicState()
 	{
 		return map[key];
 	}
+}
+var MqttToastMap = new FasterObjectMap();
+function MqttShowToast(toastId, jsonArg)
+{
+	if (settings.ui3_mqttToastEvents !== "1")
+	{
+		console.log("MQTT Toast Events are not enabled. Ignoring request:", jsonArg);
+		return;
+	}
+	var args;
+	if (jsonArg)
+	{
+		try
+		{
+			args = JSON.parse(jsonArg);
+			if (typeof args === "string")
+				args = { msg: args };
+		}
+		catch (ex) { args = { msg: jsonArg }; }
+	}
+	if (!args)
+	{
+		console.log("MQTT Toast Event rejected:", jsonArg);
+		return;
+	}
+
+	// Argument "timeout"
+	if (typeof args.timeout !== "number")
+		args.timeout = -1;
+
+	// Argument "type"
+	if (typeof args.type !== "string")
+		args.type = "info";
+	args.type = args.type.toLowerCase();
+	if (args.type !== "success" && args.type !== "info" && args.type !== "warning" && args.type !== "error")
+		args.type = "info";
+
+	// Argument "click"
+	if (typeof args.click !== "string")
+		args.click = "";
+	var onClick = null;
+	if (args.click.length > 0)
+	{
+		if (args.click == "alerts")
+			onClick = function ()
+			{
+				if (currentPrimaryTab !== "clips" || settings.ui3_current_dbView !== "alerts")
+					clipLoader.LoadView("alerts");
+			};
+		else if (args.click == "clips")
+			onClick = function ()
+			{
+				if (currentPrimaryTab !== "clips" || settings.ui3_current_dbView !== "all")
+					clipLoader.LoadView("all");
+			};
+		else if (args.click.startsWith("alerts:") || args.click.startsWith("clips:"))
+			onClick = function () { PlayRecordingIdFromToast(args.click); };
+		else if (args.click == "timeline")
+			onClick = function ()
+			{
+				if (currentPrimaryTab !== "timeline")
+					$("#topbar_tab_timeline").click();
+			};
+		else if (args.click.startsWith("timeline:"))
+			onClick = function ()
+			{
+				if (currentPrimaryTab !== "timeline")
+					$("#topbar_tab_timeline").click();
+				var timelineStartStr = args.click.substr("timeline:".length);
+				var timelineStart = ParseTimelineStartStr(timelineStartStr);
+				if (!isNaN(timelineStart))
+					clipTimeline.seekTo(timelineStart);
+				else
+					toaster.Error("Unable to understand timeline date: " + htmlEncode(timelineStartStr));
+			};
+		else if (args.click == "live")
+			onClick = function () { $("#topbar_tab_live").click(); };
+		else
+			toaster.Error("Unrecognized MQTT toast click action: " + htmlEncode(args.click), 30000);
+	}
+	if (typeof args.cam !== "string")
+		args.cam = "";
+	if (args.cam)
+	{
+		var originalOnClick = onClick;
+		onClick = function ()
+		{
+			var cam = cameraListLoader.GetCameraWithId(args.cam);
+			if (cam)
+				videoPlayer.LoadLiveCamera(cam);
+			else
+				toaster.Error("Unable to load camera: " + htmlEncode(args.cam));
+			if (originalOnClick)
+				originalOnClick();
+		};
+	}
+
+	// Toast ID
+	try
+	{
+		toastId = toastId.toString();
+	}
+	catch (ex) { }
+	if (typeof toastId !== "string" || !toastId)
+		toastId = "defaultToastId";
+
+	if (MqttToastMap[toastId])
+		MqttToastMap[toastId].remove();
+
+	MqttToastMap[toastId] = toaster.Show(args.type, htmlEncode(args.msg), args.timeout, !args.noCloseButton, onClick, args.timeout);
+
+}
+function PlayRecordingIdFromToast(str)
+{
+	if (sessionManager.HasPermission_Clips())
+	{
+		if (str.startsWith("alerts:"))
+		{
+			var recId = str.substr("alerts:".length);
+			if (recId.length > 0)
+			{
+				if (currentPrimaryTab !== "clips" || settings.ui3_current_dbView !== "alerts")
+					clipLoader.LoadView("alerts");
+				PlayRecordingId(recId);
+			}
+		}
+		else if (str.startsWith("clips:"))
+		{
+			var recId = str.substr("clips:".length);
+			if (recId.length > 0)
+			{
+				if (currentPrimaryTab !== "clips")
+					$("#topbar_tab_clips").click();
+				PlayRecordingId(recId);
+			}
+		}
+	}
+	else
+	{
+		toaster.Error("This session does not have permission to view clips.");
+	}
+}
+function PlayRecordingId(recId)
+{
+	recId = ltrim(recId, "@");
+	if (!recId.startsWith("@"))
+		recId = "@" + recId;
+	var offset = 0;
+	var idxHyphen = recId.lastIndexOf('-');
+	if (idxHyphen > 0)
+	{
+		offset = parseInt(recId.substr(idxHyphen + 1));
+		if (isNaN(offset))
+			offset = 0;
+		recId = recId.substr(0, idxHyphen);
+	}
+	clipStatsLoader.LoadClipStats(recId, null, false, function (stats)
+	{
+		if (!stats)
+			toaster.Warning("The recording with ID " + htmlEncode(recId) + " could not be opened.");
+		else
+		{
+			if (offset && offset > 0)
+			{
+				if (offset > stats.msec || stats.msec - offset < 100)
+					offset = 0;
+				stats.offset = offset;
+			}
+		}
+
+		if (!loadingHelper.DidLoadingFinish())
+		{
+			BI_CustomEvent.AddListener("FinishedLoading", function ()
+			{
+				OpenClipFromStats(stats);
+			});
+		}
+		else
+			OpenClipFromStats(stats);
+	});
 }
 ///////////////////////////////////////////////////////////////
 // Stopwatch //////////////////////////////////////////////////

@@ -267,6 +267,78 @@
 						<p><b>*{player_id}</b>. Normally, UI3 will only allow one audio file to be played at the same time via MQTT message.  To work around this, you can optionally provide any unique string in place of <code>{player_id}</code> to cause UI3 to use a different player object identified by that string.  For example, you could publish <code>airhorn.mp3</code> to <code>ui3/global/playaudio/A</code> and publish <code>doorbell.mp3</code> to <code>ui3/global/playaudio/B</code> and both audio files would play concurrently.</p>
 						<p>For <code>playaudio</code> messages, the audio files are loaded from the <code>www/sounds</code> subdirectory of your Blue Iris installation.  You can add your own custom audio files there or use the ones provided by default. <code>mp3</code> and <code>wav</code> are the most widely-supported formats.</p>
 						<p>Consider NOT using the "retain" flag when sending audio or TTS commands to UI3.  "retain" would make the messages be received, and audio played, every time a UI3 instance connects to the MQTT broker.</p>
+						<a id="toast_events"></a>
+						<h3>Toast Events</h3>
+						<p>Within the advanced MQTT configuration is a yes/no toggle for "Toast Events".  When enabled, this lets you use MQTT to command UI3 instances to display a toast message.</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">Toast Topics</div>
+							<div class="panel-body">
+								<dl class="dl-vertical">
+									<dt>ui3/instance_id/toast</dt>
+									<dd>Publish a message to this topic, and UI3 will display the message in a toast.  Read more about advanced message formatting below under the heading "Advanced Usage".</dd>
+									<dt>ui3/instance_id/toast/{toast_id}</dt>
+									<dd>Normally, if you publish multiple toasts sequentially, they will replace each other.  To allow multiple toasts to exist simultaneously, provide a unique string of text as "{toast_id}".</dd>
+								</dl>
+							</div><!--/.panel-body -->
+						</div><!--/.panel -->
+						<h4>Global Toasts</h4>
+						<p>If you publish to the special instance ID "<code>global</code>", the message will be sent to all MQTT-connected UI3 instances.</p>
+						<h4>Basic Usage</h4>
+						<p>If you publish to <code>ui3/global/toast</code> the message <code>Test Message</code>, then a toast will appear saying <code>Test Message</code>.</p>
+						<h4>Advanced Usage</h4>
+						<p>To customize the toast style, duration, and click action, UI3 accepts a message in JSON format with the following properties:</p>
+						<div class="panel panel-info">
+							<div class="panel-heading">Advanced Toast Messages: JSON Properties</div>
+							<div class="panel-body">
+								<dl class="dl-horizontal">
+									<dt>msg</dt>
+									<dd><code>(type: String)</code> The message to show in the toast.</dd>
+									<dt>type</dt>
+									<dd><code>(type: String)</code> The type of toast to show.  One of: <code>success</code>, <code>info</code>, <code>warning</code>, <code>error</code>. Default: <code>info</code>.</dd>
+									<dt>timeout</dt>
+									<dd><code>(type: Number)</code> The number of milliseconds the toast should be shown before it automatically disappears. Use <code>-1</code> or omit the <code>timeout</code> property to have the toast remain open until manually closed.</dd>
+									<dt>click</dt>
+									<dd><code>(type: String)</code> A click action. See available click actions below.</dd>
+									<dt>cam</dt>
+									<dd><code>(type: String)</code> The "short name" of a camera or group to open when the toast is clicked (occurs just before the regular click action).</dd>
+									<dt>noCloseButton</dt>
+									<dd><code>(type: Boolean)</code> If <code>true</code>, the close button will be omitted.  A close button provides a way to dismiss a toast without triggering its click action.</dd>
+								</dl>
+							</div><!--/.panel-body -->
+						</div><!--/.panel -->
+						<div class="panel panel-info">
+							<div class="panel-heading">Advanced Toast Messages: "click" actions</div>
+							<div class="panel-body">
+								<ul>
+									<li><code>live</code> - Navigate to the "Live View" tab.</li>
+									<li><code>clips</code> - Navigate to the "Clips" tab.</li>
+									<li><code>clips:REC</code> - Navigate to the "Clips" tab and begin playing the recording identified by <code>REC</code>. The <code>REC</code> value should be the numeric portion of a clip's database ID. For example, a clip might have database ID <code>@21148130039</code>, so you could use <code>clips:21148130039</code>.</li>
+									<li><code>clips:REC-OFFSET</code> - Same as above, but you can also provide a start offset in milliseconds, e.g. <code>clips:21148130039-2000</code>.</li>
+									<li><code>alerts</code> - Navigate to the "Clips" tab and filter to the "alerts" database view.</li>
+									<li><code>alerts:REC</code> - Navigate to the "Clips" tab, filter to the "alerts" database view, and begin playing the recording identified by <code>REC</code>.</li>
+									<li><code>alerts:REC-OFFSET</code> - Same as above, but you can also provide a start offset in milliseconds.</li>
+									<li><code>timeline</code> - Navigate to the "Timeline" tab.</li>
+									<li>
+										<code>timeline:DATE</code> - Navigate to the "Timeline" tab. The <code>DATE</code> value can be:
+										<ul>
+											<li>A JavaScript timestamp (number of milliseconds since the unix epoch, ignoring leap seconds).</li>
+											<li>A negative number of milliseconds to offset from the current time (e.g. (<code>-30000</code> to start 30 seconds back from "live").</li>
+											<li>A date and time string that is parseable by JavaScript's <code>Date.parse()</code> function (e.g. <code>2023-07-29.18:14:00</code>).</li>
+										</ul>
+									</li>
+								</ul>
+							</div><!--/.panel-body -->
+						</div><!--/.panel -->
+						<p>Examples:</p>
+						<ol>
+							<li><code>{ "msg": "GO LIVE", "click": "live", "type": "success", "timeout": 5000 }</code></li>
+							<li><code>{ "msg": "Go live to the front door", "click": "live", "type": "success", "timeout": 7500, "cam": "frontdoor" }</code></li>
+							<li><code>{ "msg": "Front Door Alert", "click": "alerts:21148130039", "type": "warning" }</code></li>
+							<li><code>{ "msg": "Go back a minute", "click": "timeline:-60000", "type": "info", "timeout": 10000 }</code></li>
+							<li><code>{ "msg": "It's a trap!", "click": "timeline:0", "type": "error", "noCloseButton": true }</code></li>
+						</ol>
+						<h4>"retain" not recommended for Toast Events</h4>
+						<p>Consider NOT using the "retain" flag when sending toast commands to UI3.  "retain" would make the messages be received and processed every time a UI3 instance connects to the MQTT broker.</p>
 						<h3>Online Status</h3>
 						<p>MQTT clients can track whether an Instance ID has any connected UI3 instances by looking at children of the <code>ui3/instance_id/online</code> topic as shown in the following screenshot from <a href="http://mqtt-explorer.com/">MQTT Explorer</a>:</p>
 						<p>
