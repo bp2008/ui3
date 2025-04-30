@@ -319,10 +319,10 @@
 									<li><code>alerts:REC-OFFSET</code> - Same as above, but you can also provide a start offset in milliseconds.</li>
 									<li><code>timeline</code> - Navigate to the "Timeline" tab.</li>
 									<li>
-										<code>timeline:DATE</code> - Navigate to the "Timeline" tab. The <code>DATE</code> value can be:
+										<code>timeline:DATE</code> - Navigate to the "Timeline" tab and seek to the specified date and time. The <code>DATE</code> value can be:
 										<ul>
 											<li>A JavaScript timestamp (number of milliseconds since the unix epoch, ignoring leap seconds).</li>
-											<li>A negative number of milliseconds to offset from the current time (e.g. (<code>-30000</code> to start 30 seconds back from "live").</li>
+											<li>A negative number of milliseconds to offset from the current time (e.g. <code>-30000</code> to start 30 seconds back from "live").</li>
 											<li>A date and time string that is parseable by JavaScript's <code>Date.parse()</code> function (e.g. <code>2023-07-29.18:14:00</code>).</li>
 										</ul>
 									</li>
@@ -664,7 +664,7 @@
 											Opens the timeline tab and seeks to the specified date and time. The "DATE" value can be:
 											<ul>
 												<li>A JavaScript timestamp (number of milliseconds since the unix epoch, ignoring leap seconds).</li>
-												<li>A negative number of milliseconds to offset from the current time (e.g. (<code>-30000</code> to start 30 seconds back from "live").</li>
+												<li>A negative number of milliseconds to offset from the current time (e.g. <code>-30000</code> to start 30 seconds back from "live").</li>
 												<li>A date and time string that is parseable by JavaScript's <code>Date.parse()</code> function (e.g. <code>2023-07-29.18:14:00</code>). Be sure to properly <a href="https://www.google.com/search?q=url+encoding" target="_blank">URL-encode</a> your string if you have difficulty using this.</li>
 											</ul>
 										</p>
