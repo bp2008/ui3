@@ -15862,7 +15862,7 @@ function SessionManager()
 	{
 		if (!permission_clips)
 			return false;
-		if (!clipData.fileExtType === "BVR")
+		if (clipData.fileExtType === "BVR")
 			return self.IsAdministratorSession();
 		return true;
 	}
@@ -24982,7 +24982,16 @@ function CanvasContextMenu()
 	var onShowRecordContextMenu = function (menu)
 	{
 		var disable_items = ["clipname"];
-		var enable_items = ["opennewtab", "saveas", "copyimageaddress", "convertexport", "set_start_frame", "set_end_frame", "submenu_motionoverlays", "submenu_textoverlays", "closeclip", "statsfornerds", "properties"];
+		var enable_items = ["opennewtab", "saveas", "copyimageaddress", "convertexport", "set_start_frame", "set_end_frame"
+			, "submenu_motionoverlays"
+			, "motionoverlays_nopreference"
+			, "motionoverlays_off"
+			, "motionoverlays_on"
+			, "submenu_textoverlays"
+			, "textoverlays_nopreference"
+			, "textoverlays_off"
+			, "textoverlays_on"
+			, "closeclip", "statsfornerds", "properties"];
 		var clipData = lastRecordContextMenuSelectedClip;
 		if (sessionManager.HasPermission_DownloadClip(clipData))
 			enable_items.push("downloadclip");
@@ -34534,28 +34543,28 @@ function OnChange_ui3_topbar_save_snapshot_btn_show()
 }
 function OnChange_ui3_topbar_allclips_shortcut_show()
 {
-	if (sessionManager.HasPermission_Clips && settings.ui3_topbar_allclips_shortcut_show === "1")
+	if (sessionManager.HasPermission_Clips() && settings.ui3_topbar_allclips_shortcut_show === "1")
 		$("#open_all_clips_btn").show();
 	else
 		$("#open_all_clips_btn").hide();
 }
 function OnChange_ui3_topbar_alerts_shortcut_show()
 {
-	if (sessionManager.HasPermission_Clips && settings.ui3_topbar_alerts_shortcut_show === "1")
+	if (sessionManager.HasPermission_Clips() && settings.ui3_topbar_alerts_shortcut_show === "1")
 		$("#open_alerts_btn").show();
 	else
 		$("#open_alerts_btn").hide();
 }
 function OnChange_ui3_topbar_alerts_canceled_shortcut_show()
 {
-	if (sessionManager.HasPermission_Clips && settings.ui3_topbar_alerts_canceled_shortcut_show === "1")
+	if (sessionManager.HasPermission_Clips() && settings.ui3_topbar_alerts_canceled_shortcut_show === "1")
 		$("#open_alerts_canceled_btn").show();
 	else
 		$("#open_alerts_canceled_btn").hide();
 }
 function OnChange_ui3_topbar_alerts_confirmed_shortcut_show()
 {
-	if (sessionManager.HasPermission_Clips && settings.ui3_topbar_alerts_confirmed_shortcut_show === "1")
+	if (sessionManager.HasPermission_Clips() && settings.ui3_topbar_alerts_confirmed_shortcut_show === "1")
 		$("#open_alerts_confirmed_btn").show();
 	else
 		$("#open_alerts_confirmed_btn").hide();
