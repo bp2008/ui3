@@ -277,7 +277,7 @@
 									<dt>ui3/instance_id/toast</dt>
 									<dd>Publish a message to this topic, and UI3 will display the message in a toast.  Read more about advanced message formatting below under the heading "Advanced Usage".</dd>
 									<dt>ui3/instance_id/toast/{toast_id}</dt>
-									<dd>Normally, if you publish multiple toasts sequentially, they will replace each other.  To allow multiple toasts to exist simultaneously, provide a unique string of text as "{toast_id}".</dd>
+									<dd>When you publish a toast, it replaces the previous toast that was published with the same <code>{toast_id}</code>.  To allow multiple toasts to exist on-screen simultaneously, provide unique <code>{toast_id}</code> values for each, or use the word "multi" as the <code>{toast_id}</code>.</dd>
 								</dl>
 							</div><!--/.panel-body -->
 						</div><!--/.panel -->

@@ -36763,10 +36763,12 @@ function MqttShowToast(toastId, jsonArg)
 	}
 	catch (ex) { }
 	if (typeof toastId !== "string" || !toastId)
-		toastId = "defaultToastId";
-
-	if (MqttToastMap[toastId])
-		MqttToastMap[toastId].remove();
+		toastId = "multi";
+	if (toastId !== "multi")
+	{
+		if (MqttToastMap[toastId])
+			MqttToastMap[toastId].remove();
+	}
 
 	MqttToastMap[toastId] = toaster.Show(args.type, htmlEncode(args.msg), args.timeout, !args.noCloseButton, onClick, args.timeout);
 
@@ -37819,6 +37821,8 @@ function NumberCompare(a, b)
 }
 function getBytesFromBISizeStr(str)
 {
+	if (str.endsWith("B")) // 2025-05-20: BI changed at an unknown time to begin using units like "GB" instead of just "G".  E.g. In the 'memphys' field of a status response.
+		str = str.substr(0, str.length - 1);
 	if (str.endsWith("K"))
 		return parseInt(parseFloat(str) * 1024);
 	else if (str.endsWith("M"))
