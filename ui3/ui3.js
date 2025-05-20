@@ -15518,6 +15518,11 @@ function SessionManager()
 			}
 		}
 
+		if (permission_changeprofile)
+			$("#profileStatusBox,#globalScheduleBox").show();
+		else
+			$("#profileStatusBox,#globalScheduleBox").hide();
+
 		OnChange_ui3_topbar_allclips_shortcut_show();
 		OnChange_ui3_topbar_alerts_shortcut_show();
 		OnChange_ui3_topbar_alerts_confirmed_shortcut_show();
