@@ -81,6 +81,38 @@ if ('serviceWorker' in navigator && typeof navigator.serviceWorker === "object" 
 	});
 }
 
+// Remove bitwarden extension overlay that is frequently getting shown in the upper left corner of UI3 for no reason (probably because it sees the login form despite it being invisible).
+try
+{
+	var observer = new MutationObserver(function (mutations)
+	{
+		try
+		{
+			if (loginModal)
+				return;
+			//console.log("Bitwarden browser extension pattern detector running.");
+			for (var i = 0; i < mutations.length; i++)
+			{
+				var mutation = mutations[i];
+				for (var j = 0; j < mutation.addedNodes.length; j++)
+				{
+					var node = mutation.addedNodes[j];
+					if (node.nodeType === 1 && node.nodeName !== "DIV" && node.hasAttribute('style') && node.getAttribute('style').includes('display: initial !important'))
+					{
+						console.log("Bitwarden browser extension pattern detector removed node:", node);
+						node.remove();
+					}
+				}
+			}
+		}
+		catch { }
+	});
+
+	// Start observing document.body for added elements
+	observer.observe(document.body, { childList: true });
+}
+catch { }
+
 //
 ///////////////////////////////////////////////////////////////
 // Host Redirection, Proxy Handling ///////////////////////////
@@ -16823,7 +16855,8 @@ function VideoPlayerController()
 		var mouseRelX = parseFloat((event.mouseX - layoutbodyOffset.left) - imgPos.left) / imageRenderer.GetPreviousImageDrawInfo().w;
 		var mouseRelY = parseFloat((event.mouseY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
 
-		var nativeRes = cameraListLoader.isDynamicLayoutEnabled(currentlyLoadedImage.id)
+		var dyn = cameraListLoader.isDynamicLayoutEnabled(currentlyLoadedImage.id);
+		var nativeRes = dyn || true
 			? { w: currentlyLoadedImage.actualwidth, h: currentlyLoadedImage.actualheight }
 			: { w: currentlyLoadedImage.fullwidth, h: currentlyLoadedImage.fullheight };
 		var x = nativeRes.w * mouseRelX;
