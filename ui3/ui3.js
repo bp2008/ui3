@@ -16682,6 +16682,13 @@ function VideoPlayerController()
 		currentlyLoadingCamera = GetUpdatedCameraData(currentlyLoadingCamera);
 		currentlyLoadedCamera = GetUpdatedCameraData(currentlyLoadedCamera);
 
+		if (currentlyLoadingCamera.width != currentlyLoadingImage.fullwidth
+			|| currentlyLoadingCamera.height != currentlyLoadingImage.fullheight)
+		{
+			currentlyLoadingImage.fullwidth = currentlyLoadingCamera.width;
+			currentlyLoadingImage.fullheight = currentlyLoadingCamera.height;
+			//self.CameraOrResolutionChange(); // May be necessary, but maybe not?
+		}
 		if (currentlyLoadingImage.isLive)
 		{
 			var wasAutoMaximized = pt_currentCam && pt_currentCam === currentlyLoadingCamera.optionValue;
