@@ -16856,7 +16856,7 @@ function VideoPlayerController()
 		var mouseRelY = parseFloat((event.mouseY - layoutbodyOffset.top) - imgPos.top) / imageRenderer.GetPreviousImageDrawInfo().h;
 
 		var dyn = cameraListLoader.isDynamicLayoutEnabled(currentlyLoadedImage.id);
-		var nativeRes = dyn || true
+		var nativeRes = dyn
 			? { w: currentlyLoadedImage.actualwidth, h: currentlyLoadedImage.actualheight }
 			: { w: currentlyLoadedImage.fullwidth, h: currentlyLoadedImage.fullheight };
 		var x = nativeRes.w * mouseRelX;
