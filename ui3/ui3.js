@@ -105,13 +105,13 @@ try
 				}
 			}
 		}
-		catch { }
+		catch (ex) { }
 	});
 
 	// Start observing document.body for added elements
 	observer.observe(document.body, { childList: true });
 }
-catch { }
+catch (ex) { }
 
 //
 ///////////////////////////////////////////////////////////////
