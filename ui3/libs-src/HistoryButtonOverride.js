@@ -16,7 +16,7 @@ function HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed)
 		else if (history.state.customHistoryStage === 3)
 			history.back();
 	};
-	$(window).bind("popstate", function ()
+	function hboPopState()
 	{
 		// Called when history navigation occurs.
 		if (history.state === null || !activated)
@@ -45,7 +45,8 @@ function HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed)
 			else
 				history.back(); // No forward-history to go to, so undo the forward operation.
 		}
-	});
+	}
+	$(window).on("popstate", hboPopState);
 	if (history.state === null)
 	{
 		// This is the first page load. Inject new history states to help identify back/forward button presses.
@@ -62,6 +63,13 @@ function HistoryButtonOverride(BackButtonPressed, ForwardButtonPressed)
 		history.forward();
 	else if (history.state.customHistoryStage === 3)
 		history.back();
+
+	this.Destroy = function ()
+	{
+		activated = false;
+		$(window).off("popstate", hboPopState);
+		history.back();
+	}
 
 	activated = true;
 }

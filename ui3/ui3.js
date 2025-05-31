@@ -1638,6 +1638,14 @@ var defaultSettings =
 			, category: "Top Bar"
 		}
 		, {
+			key: "ui3_system_name_button_text_override"
+			, value: ""
+			, inputType: "text"
+			, label: 'System Name Button Text Override<div class="settingDesc">(keep empty to use system name from BI settings)</div>'
+			, onChange: setSystemNameButtonTextState
+			, category: "Top Bar"
+		}
+		, {
 			key: "ui3_system_name_button"
 			, value: "About This UI"
 			, inputType: "select"
@@ -1646,6 +1654,15 @@ var defaultSettings =
 			, label: 'System Name Button Action'
 			, hint: 'This action occurs when you click the system name in the upper left.'
 			, onChange: setSystemNameButtonState
+			, category: "Top Bar"
+		}
+		, {
+			key: "ui3_system_name_button_link"
+			, value: ""
+			, inputType: "text"
+			, class: "column_reverse"
+			, label: 'System Name Button Link<div class="settingDesc">example: "https://host/"</div>'
+			, preconditionFunc: Precondition_ui3_system_name_button_link
 			, category: "Top Bar"
 		}
 		, {
@@ -3822,6 +3839,7 @@ $(function ()
 
 	currentPrimaryTab = ValidateTabName(settings.ui3_defaultTab);
 
+	setSystemNameButtonTextState();
 	setSystemNameButtonState();
 
 	relativePTZ = new RelativePTZ();
@@ -6214,6 +6232,7 @@ function getSystemNameButtonOptions()
 	for (var i = 0; i < mmItems.length; i++)
 		opts.push(mmItems[i].text);
 	opts.push("Toggle Side Bar");
+	opts.push("Follow a Link");
 	opts.push("Do Nothing");
 	return opts;
 }
@@ -6240,6 +6259,11 @@ function systemNameButtonClick()
 		}
 		return;
 	}
+	else if (settings.ui3_system_name_button === "Follow a Link")
+	{
+		location.href = settings.ui3_system_name_button_link;
+		return;
+	}
 }
 function setSystemNameButtonState()
 {
@@ -6247,11 +6271,24 @@ function setSystemNameButtonState()
 		$("#systemnamewrapper").removeClass("hot");
 	else
 		$("#systemnamewrapper").addClass("hot");
+	if (uiSettingsPanel)
+		uiSettingsPanel.Refresh();
+}
+function setSystemNameButtonTextState()
+{
+	if (settings.ui3_system_name_button_text_override)
+		$("#systemname").text(settings.ui3_system_name_button_text_override);
+	else if (sessionManager && sessionManager.sysName)
+		$("#systemname").text(sessionManager.sysName);
 }
 function SidebarHiddenButtonClick(e)
 {
 	e.stopPropagation();
 	uiSettingsPanel.open('Side Bar');
+}
+function Precondition_ui3_system_name_button_link()
+{
+	return settings.ui3_system_name_button === "Follow a Link";
 }
 ///////////////////////////////////////////////////////////////
 // Left Bar Boolean Options ///////////////////////////////////
@@ -15269,6 +15306,7 @@ function SessionManager()
 	var sessionExpiredToast = null;
 	var isRecoveringFromInvalidSession = false;
 	this.supportedHTML5AudioFormats = [".mp3", ".wav"]; // File extensions, in order of preference
+	this.sysName = $("#systemname").text();
 	this.Initialize = function ()
 	{
 		// Called once during page initialization
@@ -15403,9 +15441,9 @@ function SessionManager()
 		loadingHelper.SetLoadedStatus("login");
 		self.SetAPISession(lastResponse.session);
 
-		var sysName = lastResponse.data["system name"];
-		var appName = SysNameToAppName(sysName);
-		$("#systemname").text(sysName);
+		this.sysName = lastResponse.data["system name"];
+		var appName = SysNameToAppName(this.sysName);
+		setSystemNameButtonTextState();
 		document.title = appName;
 		if (lastResponse.data && lastResponse.data.profiles && lastResponse.data.profiles.length > 0)
 			statusLoader.SetCurrentProfileNames(lastResponse.data.profiles);
@@ -30322,9 +30360,15 @@ function AjaxHistoryManager()
 	// This class manages the back and forward buttons in a custom way.
 	var self = this;
 	var buttonOverride;
+	var allowExitUI3 = false;
 
 	var BackButtonPressed = function ()
 	{
+		if (allowExitUI3)
+		{
+			allowExitUI3 = false;
+			return false;
+		}
 		var loading = videoPlayer.Loading();
 		if (loading.image.isTimeline())
 		{
@@ -30343,6 +30387,36 @@ function AjaxHistoryManager()
 	}
 	if (html5HistoryPushEnabled)
 		buttonOverride = new HistoryButtonOverride(BackButtonPressed);
+
+	/**
+	 * Undoes and deletes the history button override script.
+	 */
+	this.Destroy = function ()
+	{
+		if (buttonOverride)
+		{
+			buttonOverride.Destroy();
+			buttonOverride = null;
+		}
+	}
+	/**
+	 * Navigates back in the browser history, bypassing custom back button handling.  This will exit UI3 if there is anything else in the history stack to navigate to.
+	 */
+	this.NavigateBack = function ()
+	{
+		allowExitUI3 = true;
+		try
+		{
+			tabVisibleStopwatch.Set(5000);
+			settings.bi_lastunload = Date.now();
+			console.log('UI3 is navigating back. Automatic login will be suppressed for the next 5 seconds.');
+			history.back();
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
+	}
 }
 //////////////////////////////////////////////////////////////////////
 // Update Current URL ////////////////////////////////////////////////
@@ -36943,6 +37017,20 @@ function UI3Stopwatch()
 		if (isRunning)
 			time += performance.now() - startTime;
 		return time;
+	}
+	/**
+	 * Sets the elapsed time to the specified value in milliseconds.
+	 * @param {Number} timeMs The time in milliseconds to set the elapsed time to.
+	 */
+	this.Set = function (timeMs)
+	{
+		if (isRunning)
+		{
+			accumulatedTime = 0;
+			startTime = performance.now() - timeMs;
+		}
+		else
+			accumulatedTime = timeMs;
 	}
 }
 ///////////////////////////////////////////////////////////////
