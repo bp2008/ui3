@@ -6085,13 +6085,13 @@ div::-webkit-scrollbar-corner
 /* Stats for nerds */
 .statsForNerds
 {
-	padding-bottom: 6px;
+	padding-bottom: 6px 4px;
 	box-sizing: border-box;
 }
 
 .statsRow
 {
-	width: 320px;
+	/*width: 320px;*/
 	height: 16px;
 	line-height: 16px;
 	margin-top: 1px;
@@ -6103,7 +6103,7 @@ div::-webkit-scrollbar-corner
 .statsName
 {
 	display: inline-block;
-	width: 105px;
+	/*width: 105px;*/
 	height: 16px;
 	margin-right: 8px;
 	overflow: hidden;
@@ -6114,7 +6114,7 @@ div::-webkit-scrollbar-corner
 .statsValue
 {
 	display: inline-block;
-	width: 200px;
+	/*width: 200px;*/
 	height: 16px;
 	overflow: hidden;
 }
@@ -6122,7 +6122,7 @@ div::-webkit-scrollbar-corner
 .statsGraphValue
 {
 	display: inline-block;
-	width: 132px;
+	/*width: 132px;*/
 	margin-right: 3px;
 	height: 16px;
 	display: none;

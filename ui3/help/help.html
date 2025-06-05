@@ -466,10 +466,10 @@
 									<dd><span class="label label-info">H.264</span> The time in milliseconds between frame renders.  If this graph jumps around a lot, it is evidence that the video stream is not smooth.  Many cameras don't capture frames at a constant interval when they aren't streaming at their maximum frame rate, so it isn't uncommon to see a pattern like 50ms, 50ms, 100ms, 50ms, 50ms, 100ms.</dd>
 									<dt>Frame Timing Error</dt>
 									<dd><span class="label label-info">H.264</span> This is the difference between the time a frame was supposed to be rendered and the time it was actually rendered.  The closer this is to zero, the better.</dd>
-									<dt>Network Delay</dt>
-									<dd><span class="label label-info">H.264</span> The estimated video delay caused by insufficient network speed.  Values of a few hundred milliseconds are completely normal and nothing to worry about.</dd>
+									<dt>Src/Network Delay</dt>
+									<dd><span class="label label-info">H.264</span> The estimated video delay caused by insufficient network speed or performance problems at the video source.  Spikes of a few hundred milliseconds are completely normal and nothing to worry about.</dd>
 									<dt>Player Delay</dt>
-									<dd><span class="label label-info">H.264</span> The estimated video delay caused by insufficient CPU speed.  Values of a few hundred milliseconds are completely normal and nothing to worry about.  A small amount of player delay is often intentional in order to keep the Frame Timing Error as close to zero as possible.</dd>
+									<dd><span class="label label-info">H.264</span> The estimated video delay caused by a performance problem on the device running UI3.  Values of a few hundred milliseconds are completely normal and nothing to worry about.  A small amount of player delay is often intentional in order to keep the Frame Timing Error as close to zero as possible.</dd>
 									<dt>Delayed Frames</dt>
 									<dd><span class="label label-info">H.264</span> The number of frames that have been received but not yet decoded and rendered.  This directly correlates with Player Delay and low values (0-2) are completely normal. A small number of delayed frames is often intentional in order to keep the Frame Timing Error as close to zero as possible.</dd>
 								</dl>

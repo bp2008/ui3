@@ -97,9 +97,9 @@ try
 				for (var j = 0; j < mutation.addedNodes.length; j++)
 				{
 					var node = mutation.addedNodes[j];
-					if (node.nodeType === 1 && node.nodeName !== "DIV" && node.hasAttribute('style') && node.getAttribute('style').includes('display: initial !important'))
+					if (node.nodeType === 1 && node.nodeName !== "DIV" && node.hasAttribute('style') && node.getAttribute('style').includes('box-shadow: initial !important'))
 					{
-						console.log("Bitwarden browser extension pattern detector removed node:", node);
+						console.log("Bitwarden browser extension pattern detector removed node:", node.nodeName);
 						node.remove();
 					}
 				}
@@ -1320,7 +1320,7 @@ var defaultSettings =
 			, step: 0.050
 			, inputType: "range"
 			, unitLabel: " sec"
-			, label: 'Network Delay Warning Threshold'
+			, label: 'Source/Network Delay Warning Threshold'
 			, changeOnStep: true
 			, hint: 'See "Stats for nerds" to monitor video delays.'
 			, preconditionFunc: Precondition_ui3_h264_net_delay_threshold
@@ -1364,7 +1364,7 @@ var defaultSettings =
 			, unitLabel: " sec"
 			, label: 'Restart stream if delay exceeds'
 			, changeOnStep: true
-			, hint: 'The stream will restart if total delay (Network Delay + Player Delay) are above this limit.  See "Stats for nerds" to monitor video delays.'
+			, hint: 'The stream will restart if total delay (Source/Network Delay + Player Delay) are above this limit.  See "Stats for nerds" to monitor video delays.'
 			, preconditionFunc: Precondition_ui3_h264_choice
 			, category: "Video Player (Advanced)"
 		}
@@ -3719,6 +3719,8 @@ function AttachDefaultSettingsProperties(storageWrapper)
 ///////////////////////////////////////////////////////////////
 // UI Loading /////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+/** This is set to true when the synchronous loading function has completed, but typically before async stuff has finished loading. */
+var ui3_loading_ended = false;
 // Load svg before document.ready, to give it a head-start.
 $.ajax({
 	url: "ui3/icons.svg?v=" + combined_version + local_bi_session_arg,
@@ -4108,6 +4110,7 @@ $(function ()
 		}
 	});
 
+	ui3_loading_ended = true;
 	BI_CustomEvent.Invoke("UI_Loading_End");
 });
 function OnChange_ui3_dynamicGroupLayout()
@@ -17553,10 +17556,12 @@ function VideoPlayerController()
 	{
 		statusAreaApi.setValue("Stream FPS", { fps: currentFps, maxFps: maxFps });
 	}, 250);
+	var currentFps = 0;
+	var maxFps = 0;
 	var RefreshFps = function (imgRequestMs)
 	{
-		var currentFps = fpsCounter.getFPS(imgRequestMs);
-		var maxFps = currentlyLoadingCamera.FPS || 10;
+		currentFps = fpsCounter.getFPS(imgRequestMs);
+		maxFps = currentlyLoadingCamera.FPS || 10;
 		setFpsStatusBarThrottled(currentFps, maxFps);
 
 		// This allows the FPS to change to 0 if connectivity is lost or greatly reduced
@@ -17564,9 +17569,18 @@ function VideoPlayerController()
 			clearTimeout(fpsZeroTimeout);
 		fpsZeroTimeout = setTimeout(ZeroFps, 4000);
 	}
+	setInterval(function ()
+	{
+		currentFps = fpsCounter.peekFPS();
+		setFpsStatusBarThrottled(currentFps, maxFps);
+	}, 250);
 	var ZeroFps = function ()
 	{
 		statusAreaApi.setValue("Stream FPS", { fps: 0, maxFps: 0 });
+	}
+	this.GetFpsData = function ()
+	{
+		return { currentFps: currentFps, maxFps: maxFps };
 	}
 	this.PrioritizeTriggeredEnabled = function ()
 	{
@@ -18151,8 +18165,10 @@ function JpegVideoModule()
 						nerdStats.UpdateStat("Frame Time", GetDateStr(new Date(frameUtc + GetServerTimeOffset()), true));
 						nerdStats.UpdateStat("Codecs", "jpeg");
 						nerdStats.UpdateStat("Jpeg Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
+						var fps = fpsCounter.peekFPS();
 						nerdStats.UpdateStat("Jpeg Frame Size", imageSizeBytes, formatBytes(imageSizeBytes, 2), true);
 						nerdStats.UpdateStat("Jpeg Loading Time", msLoadingTime, Math.round(msLoadingTime) + "ms", true);
+						nerdStats.UpdateStat("Jpeg Frame Rate", fps, fps.toFixed(0) + " FPS", true);
 						nerdStats.EndUpdate();
 					}
 
@@ -18624,7 +18640,7 @@ function FetchH264VideoModule()
 	var lastStreamBeganAt = 0;
 	var playbackPaused = false;
 	var perfMonInterval;
-	var lastNerdStatsUpdate = performance.now();
+	var nerdStatsRefreshInterval = null;
 	var isLoadingRecordedSnapshot = false;
 	var endSnapshotDisplayTimeout = null;
 	var failLimiter = new FailLimiter(5, 20000);
@@ -18634,7 +18650,7 @@ function FetchH264VideoModule()
 	var didRequestAudio = false;
 	var canRequestAudio = false;
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
-	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, rawtime: 0, utc: Date.now(), expectedInterframe: 100 };
+	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, rawtime: 0, utc: Date.now(), expectedInterframe: 100, size: 0 };
 	var audioCodec = "";
 
 	var loading = new BICameraData();
@@ -18704,6 +18720,14 @@ function FetchH264VideoModule()
 				}
 			}
 			toaster.Error("No H.264 player is supported.");
+		}
+	}
+	var postInitialize = function ()
+	{
+		if (h264_player)
+		{
+			perfMonInterval = setInterval(MeasurePerformance, 2500);
+			nerdStatsRefreshInterval = setInterval(refreshNerdStats, 16);
 		}
 	}
 	var isCompatiblePlayer = function (player)
@@ -19278,6 +19302,10 @@ function FetchH264VideoModule()
 	{
 		if (typeof frame.width === "undefined")
 			return;
+
+		var timeNow = performance.now();
+
+		// Copy everything needed by "Stats for nerds".
 		lastFrameMetadata.width = frame.width;
 		lastFrameMetadata.height = frame.height;
 		lastFrameMetadata.pos = frame.pos;
@@ -19285,17 +19313,18 @@ function FetchH264VideoModule()
 		lastFrameMetadata.rawtime = frame.rawtime;
 		lastFrameMetadata.utc = frame.utc;
 		lastFrameMetadata.size = frame.size;
+		lastFrameMetadata.duration = frame.duration;
 		lastFrameMetadata.expectedInterframe = frame.expectedInterframe;
+		lastFrameMetadata.actualInterframe = frame.actualInterframe = timeNow - lastFrameAt;
 
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
 
-		var timeNow = performance.now();
-		videoPlayer.ImageRendered({ id: loading.uniqueId, w: frame.width, h: frame.height, loadingTime: lastFrameAt - timeNow, utc: frame.utc, isFirstFrame: lastStreamBeganAt === lastFrameAt });
+		videoPlayer.ImageRendered({ id: loading.uniqueId, w: frame.width, h: frame.height, loadingTime: frame.actualInterframe, utc: frame.utc, isFirstFrame: lastStreamBeganAt === lastFrameAt });
 		if (loading.isLive || loading.isTimeline())
 			playbackControls.FrameTimestampUpdated(false);
 		else
 			playbackControls.FrameTimestampUpdated(frame.utc);
-		writeNerdStats(frame, timeNow);
+		//refreshNerdStats(frame, timeNow); // UI3-295: "Stats for nerds" refreshes are now decoupled from video frame rendering for H.264 players.
 		lastFrameAt = timeNow;
 		if (playbackPaused)
 		{
@@ -19374,10 +19403,14 @@ function FetchH264VideoModule()
 			currentSeekPositionPercent = 1;
 		videoPlayer.Playback_Ended(reverse);
 	}
-	var writeNerdStats = function (frame, perfNow)
+	var refreshNerdStats = function ()
 	{
-		if (!perfNow)
-			perfNow = performance.now();
+		if (isCurrentlyActive && ui3_loading_ended)
+			writeNerdStats();
+	}
+	var writeNerdStats = function ()
+	{
+		var frame = lastFrameMetadata;
 
 		var netDelay = h264_player.GetNetworkDelay().toFloat();
 		var decoderDelay = h264_player.GetBufferedTime().toFloat();
@@ -19392,8 +19425,7 @@ function FetchH264VideoModule()
 			if (streamHasAudio == 1 && audioCodec)
 				codecs += ", " + audioCodec;
 			var interFrame = frame.expectedInterframe;
-			var actualInterFrame = perfNow - lastFrameAt;
-			var interFrameError = Math.abs(frame.expectedInterframe - actualInterFrame);
+			var interFrameError = Math.abs(frame.expectedInterframe - frame.actualInterframe);
 			if (h264_player.isMsePlayer)
 				interFrame = frame.duration ? frame.duration : 0;
 			var nativeRes = "";
@@ -19439,12 +19471,13 @@ function FetchH264VideoModule()
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
 			if (!h264_player.isMsePlayer)
 				nerdStats.UpdateStat("Frame Timing Error", interFrameError, interFrameError.toFixed() + "ms", true);
-			nerdStats.UpdateStat("Network Delay", netDelay, netDelay.toFixed().padLeft(4, '0') + "ms", true);
+			var currentFps = fpsCounter.peekFPS();
+			nerdStats.UpdateStat("Frame Rate", currentFps, currentFps.toFixed(0) + " FPS", true);
+			nerdStats.UpdateStat("Src/Network Delay", netDelay, netDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Player Delay", decoderDelay, decoderDelay.toFixed().padLeft(4, '0') + "ms", true);
 			nerdStats.UpdateStat("Delayed Frames", h264_player.GetBufferedFrameCount(), h264_player.GetBufferedFrameCount(), true);
 			if (typeof h264_player.UpdateNerdStats === "function")
 				h264_player.UpdateNerdStats();
-			lastNerdStatsUpdate = performance.now();
 			nerdStats.EndUpdate();
 		}
 
@@ -19465,8 +19498,6 @@ function FetchH264VideoModule()
 				toaster.Warning('The video player is not currently active.', 10000);
 			return;
 		}
-		if (perfNow - lastNerdStatsUpdate > 3000 && perfNow - lastActivatedAt > 3000)
-			writeNerdStats(lastFrameMetadata, perfNow);
 		//if (perf_warning_net)
 		//{
 		//	perf_warning_net.remove();
@@ -19570,7 +19601,7 @@ function FetchH264VideoModule()
 		return typeof h264_player.IsUsingHardwareAcceleration === "function" ? h264_player.IsUsingHardwareAcceleration() : -1;
 	}
 	Initialize();
-	perfMonInterval = setInterval(MeasurePerformance, 2500);
+	postInitialize();
 }
 ///////////////////////////////////////////////////////////////
 // openh264_player ////////////////////////////////////////////
@@ -21602,7 +21633,7 @@ function NetDelayCalc()
 			// Keep adjusting the baseline over the first 1 second.
 			// The timing of the first few frames is a bit unstable sometimes and can result in reporting 
 			// of several hundred ms of network lag that doesn't really exist.
-			if (realTime - firstRealTime >= 2000)
+			if (frameCounter > 3 && realTime - firstRealTime >= 2000)
 			{
 				adjustBaseline = false;
 			}
@@ -31422,6 +31453,14 @@ function FPSCounter1()
 		queue.enqueue(now);
 		return queue.getLength();
 	};
+	this.peekFPS = function ()
+	{
+		var now = performance.now();
+		// Trim times older than 1 second
+		while (!queue.isEmpty() && now - queue.peek() >= 1000)
+			queue.dequeue();
+		return queue.getLength();
+	}
 }
 function FPSCounter2()
 {
@@ -31449,6 +31488,11 @@ function FPSCounter2()
 	{
 		return (1000 / CalcAverageTick(newtick)).toFloat(1);
 	};
+	this.peekFPS = function ()
+	{
+		console.log("peekFPS is not implemented properly in FPSCounter2");
+		return (1000 / (ticksum / MAXSAMPLES)).toFloat(1);
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Bit rate calculator ////////////////////////////////////////
@@ -32947,6 +32991,7 @@ function ReadSubArray(buf, offsetWrapper, byteLength)
 function UI3NerdStats()
 {
 	var self = this;
+	var objSizes = { panel: 0, statsRow: 0, statsName: 0, statsValue: 0, statsGraphValue: 0 };
 	var dialog = null;
 	var $root;
 	var isInitialized = false;
@@ -32970,12 +33015,14 @@ function UI3NerdStats()
 			, "Frame Size"
 			, "Inter-Frame Time"
 			, "Frame Timing Error"
-			, "Network Delay"
+			, "Frame Rate"
+			, "Src/Network Delay"
 			, "Player Delay"
 			, "Delayed Frames"
 			, "Jpeg Bit Rate"
 			, "Jpeg Frame Size"
 			, "Jpeg Loading Time"
+			, "Jpeg Frame Rate"
 		];
 	this.statClickEvents = [
 		{ name: "Audio Bit Rate", handler: CreateAudioVisualizer },
@@ -32985,8 +33032,14 @@ function UI3NerdStats()
 	{
 		if (dialog)
 			dialog.close();
+		var windowWidth = window.innerWidth;
+		objSizes.panel = 328 + Clamp(windowWidth - 700, 0, 68); // This allows the panel to expand by up to 68px if the window is wider than 700px.
+		objSizes.statsRow = objSizes.panel - 8;
+		objSizes.statsName = 105;
+		objSizes.statsValue = objSizes.statsRow - objSizes.statsName - 15;
+		objSizes.statsGraphValue = objSizes.statsValue - 68;
 		isInitialized = false;
-		$root = $('<div class="statsForNerds">Video playback must start before stats are available.</div>');
+		$root = $('<div class="statsForNerds" style="width: ' + objSizes.panel + 'px;">Video playback must start before stats are available.</div>');
 		dialog = $root.dialog(
 			{
 				title: "Stats for nerds"
@@ -33036,7 +33089,7 @@ function UI3NerdStats()
 		var row = statsRows[name];
 		if (!row)
 		{
-			row = statsRows[name] = new StatsRow(name);
+			row = statsRows[name] = new StatsRow(name, objSizes);
 			$root.append(row.GetEleRef());
 			dialog.contentChanged(false, true);
 		}
@@ -33106,13 +33159,13 @@ function UI3NerdStats()
 			row.Hide();
 	}
 }
-function StatsRow(name)
+function StatsRow(name, objSizes)
 {
 	var self = this;
-	var $root = $('<div class="statsRow"></div>');
-	var $name = $('<div class="statsName">' + name + '</div>');
-	var $value = $('<div class="statsValue"></div>');
-	var $graphValue = $('<div class="statsGraphValue"></div>');
+	var $root = $('<div class="statsRow" style="width: ' + objSizes.statsRow + 'px"></div>');
+	var $name = $('<div class="statsName" style="width: ' + objSizes.statsName + 'px">' + name + '</div>');
+	var $value = $('<div class="statsValue" style="width: ' + objSizes.statsValue + 'px"></div>');
+	var $graphValue = $('<div class="statsGraphValue" style="width: ' + objSizes.statsGraphValue + 'px"></div>');
 	var $htmlValue = $('<div class="statsHtmlValue"></div>');
 	$value.append($graphValue).append($htmlValue);
 	$root.append($name);
@@ -33193,7 +33246,7 @@ function SimpleGraph()
 	var self = this;
 	var $canvas = $('<canvas class="simpleGraph"></canvas>');
 	var canvas = $canvas.get(0);
-	var dpiScale = 1;//BI_GetDevicePixelRatio();
+	var dpiScale = 2;//BI_GetDevicePixelRatio();
 	var dataIndex = 0;
 	var buffer = null;
 	var previousMaximum;
@@ -33215,7 +33268,7 @@ function SimpleGraph()
 	}
 	var Refresh = function ()
 	{
-		dpiScale = 1;//BI_GetDevicePixelRatio(); // Rendering pixel-perfect on high DPI devices makes the graph harder to read because one pixel horizontally is one frame.
+		//dpiScale = BI_GetDevicePixelRatio(); // Rendering pixel-perfect on high DPI devices makes the graph harder to read because one pixel horizontally is one frame.
 		var h = Math.ceil($canvas.height() * dpiScale);
 		if (canvas.height != h)
 			canvas.height = h;
