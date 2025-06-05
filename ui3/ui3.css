@@ -6086,6 +6086,7 @@ div::-webkit-scrollbar-corner
 .statsForNerds
 {
 	padding-bottom: 6px 4px;
+	min-height: 160px; /* Improves auto-positioning upon open */
 	box-sizing: border-box;
 }
 

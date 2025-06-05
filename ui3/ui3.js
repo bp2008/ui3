@@ -32994,6 +32994,8 @@ function UI3NerdStats()
 	var objSizes = { panel: 0, statsRow: 0, statsName: 0, statsValue: 0, statsGraphValue: 0 };
 	var dialog = null;
 	var $root;
+	var didRepositionAfterFirstDraw = false;
+	var openedAt = 0;
 	var isInitialized = false;
 	var isUpdating = false;
 	var hideOnEndUpdate = {};
@@ -33038,6 +33040,8 @@ function UI3NerdStats()
 		objSizes.statsName = 105;
 		objSizes.statsValue = objSizes.statsRow - objSizes.statsName - 15;
 		objSizes.statsGraphValue = objSizes.statsValue - 68;
+		didRepositionAfterFirstDraw = false;
+		openedAt = performance.now();
 		isInitialized = false;
 		$root = $('<div class="statsForNerds" style="width: ' + objSizes.panel + 'px;">Video playback must start before stats are available.</div>');
 		dialog = $root.dialog(
@@ -33121,6 +33125,11 @@ function UI3NerdStats()
 			}
 		if (hidSome)
 			dialog.contentChanged(false, true);
+		if (!didRepositionAfterFirstDraw && performance.now() - openedAt < 500)
+		{
+			dialog.contentChanged(true, true);
+			didRepositionAfterFirstDraw = true;
+		}
 	}
 	/**
 	 * Adds or updates the value with the specified name.
@@ -33326,6 +33335,7 @@ function SimpleGraph()
 		}
 		ctx.stroke();
 		ctx.strokeStyle = "#0097F0";
+		ctx.lineWidth = dpiScale;
 		ctx.beginPath();
 		ctx.moveTo(dataIndex, 0);
 		ctx.lineTo(dataIndex, h);
