@@ -17948,10 +17948,10 @@ var videoModulesShared = new (function VideoModulesShared()
 	{
 		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageUnscaled(cameraId, groupId);
 		if (!thumbBounds)
-			return;
+			return false;
 		var groupObj = cameraListLoader.GetCameraWithId(groupId);
 		if (!groupObj)
-			return;
+			return false;
 
 		if (!CANVAS)
 			CANVAS = canvas;
@@ -17996,15 +17996,16 @@ var videoModulesShared = new (function VideoModulesShared()
 		CANVAS.height = backbuffer_canvas.height;
 		var context2d = CANVAS.getContext("2d");
 		context2d.drawImage(backbuffer_canvas, 0, 0, CANVAS.width, CANVAS.height, 0, 0, CANVAS.width, CANVAS.height);
+		return true;
 	}
 	this.DrawThumbAsFullCamera = function (cameraId, groupId, CANVAS)
 	{
 		var thumbBounds = cameraListLoader.GetCameraBoundsInCurrentGroupImageScaled(cameraId, groupId);
 		if (!thumbBounds)
-			return;
+			return false;
 		var cameraObj = cameraListLoader.GetCameraWithId(cameraId);
 		if (!cameraObj)
-			return;
+			return false;
 
 		if (!CANVAS)
 			CANVAS = canvas;
@@ -18024,6 +18025,7 @@ var videoModulesShared = new (function VideoModulesShared()
 		CANVAS.height = backbuffer_canvas.height;
 		var context2d = CANVAS.getContext("2d");
 		context2d.drawImage(backbuffer_canvas, 0, 0, CANVAS.width, CANVAS.height, 0, 0, CANVAS.width, CANVAS.height);
+		return true;
 	}
 	this.RenderImage = function (image)
 	{
@@ -18589,11 +18591,11 @@ function JpegVideoModule()
 	}
 	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
-		videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId);
+		return videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId);
 	}
 	this.DrawThumbAsFullCamera = function (cameraId, groupId)
 	{
-		videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId);
+		return videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId);
 	}
 	var imgLoadTimeout = null;
 	var SetImageLoadTimeout = function ()
@@ -19584,19 +19586,13 @@ function FetchH264VideoModule()
 	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
 		if (h264_player.DrawFullCameraAsThumb)
-		{
-			h264_player.DrawFullCameraAsThumb(cameraId, groupId);
-			return true;
-		}
+			return h264_player.DrawFullCameraAsThumb(cameraId, groupId);
 		return false;
 	}
 	this.DrawThumbAsFullCamera = function (cameraId, groupId)
 	{
 		if (h264_player.DrawThumbAsFullCamera)
-		{
-			h264_player.DrawThumbAsFullCamera(cameraId, groupId);
-			return true;
-		}
+			return h264_player.DrawThumbAsFullCamera(cameraId, groupId);
 		return false;
 	}
 	this.GetPlayerName = function ()
@@ -20708,11 +20704,11 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
-		videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId, canvas);
+		return videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId, canvas);
 	}
 	this.DrawThumbAsFullCamera = function (cameraId, groupId)
 	{
-		videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId, canvas);
+		return videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId, canvas);
 	}
 	this.GetPlayerName = function ()
 	{
@@ -21209,13 +21205,13 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	{
 		self.setCanvasRenderingState(true);
 		disableRenderingStateChangesUntilNextFrame = true;
-		videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId);
+		return videoModulesShared.DrawFullCameraAsThumb(cameraId, groupId);
 	}
 	this.DrawThumbAsFullCamera = function (cameraId, groupId)
 	{
 		self.setCanvasRenderingState(true);
 		disableRenderingStateChangesUntilNextFrame = true;
-		videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId);
+		return videoModulesShared.DrawThumbAsFullCamera(cameraId, groupId);
 	}
 	this.GetPlayerName = function ()
 	{
