@@ -22165,7 +22165,7 @@ function ImageRenderer()
 			return false;
 		if (e.pointerType === "touch" && settings.ui3_allow_touch_swipe_gestures !== "1")
 			return false;
-		// If player is zoomed in at all, the touch events are used for video panning so we need to disable swipe actions.
+		// If player is zoomed in at all, the input events are used for video panning so we need to disable swipe actions.
 		if (!self.zoomHandler.IsZoomedInMoreThanFit()) 
 		{
 			if (e.direction === HammerConstants.DIRECTION_LEFT)
