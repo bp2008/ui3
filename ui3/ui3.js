@@ -1455,6 +1455,20 @@ var defaultSettings =
 			, category: "Video Player (Advanced)"
 		}
 		, {
+			key: "ui3_allow_touch_swipe_gestures"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Touchscreen Swipe Gestures<div class="settingDesc">(swipe left and right to switch cameras)</div>'
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_allow_mouse_swipe_gestures"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Mouse Swipe Gestures<div class="settingDesc">(swipe left and right to switch cameras)</div>'
+			, category: "Video Player (Advanced)"
+		}
+		, {
 			key: "ui3_playback_skipDeadAir"
 			, value: 0
 			, inputType: "threeState"
@@ -3334,7 +3348,7 @@ var defaultSettings =
 			key: "ui3_browserZoomEnabled"
 			, value: "0"
 			, inputType: "checkbox"
-			, label: 'Browser Native Zoom<div class="settingDesc">(enabling this will disable ui3\'s video player touchscreen pinch handling)</div>'
+			, label: 'Browser Native Zoom<div class="settingDesc">(enabling this will disable ui3\'s video player touchscreen pinch and swipe handling)</div>'
 			, onChange: OnChange_ui3_browserZoomEnabled
 			, category: "Digital Zoom"
 		}
@@ -22145,6 +22159,35 @@ function ImageRenderer()
 		self.CamImgDragEnd(e);
 		pinchZoomState.active = false;
 	}
+	function onSwipe(e)
+	{
+		if (e.pointerType === "mouse" && settings.ui3_allow_mouse_swipe_gestures !== "1")
+			return false;
+		if (e.pointerType === "touch" && settings.ui3_allow_touch_swipe_gestures !== "1")
+			return false;
+		// If player is zoomed in at all, the touch events are used for video panning so we need to disable swipe actions.
+		if (!self.zoomHandler.IsZoomedInMoreThanFit()) 
+		{
+			if (e.direction === HammerConstants.DIRECTION_LEFT)
+			{
+				BI_Hotkey_PreviousCamera();
+			}
+			else if (e.direction === HammerConstants.DIRECTION_RIGHT)
+			{
+				BI_Hotkey_NextCamera();
+			}
+		}
+	}
+	var HammerConstants = {
+		DIRECTION_NONE: 1,
+		DIRECTION_LEFT: 2,
+		DIRECTION_RIGHT: 4,
+		DIRECTION_UP: 8,
+		DIRECTION_DOWN: 16,
+		DIRECTION_HORIZONTAL: 6,
+		DIRECTION_VERTICAL: 24,
+		DIRECTION_ALL: 30
+	};
 	this.onToggleBrowserZoom = function ()
 	{
 		if (settings.ui3_browserZoomEnabled === "1")
@@ -22153,7 +22196,7 @@ function ImageRenderer()
 			{
 				ReloadToTakeEffectToast();
 				// The following hammer destruction methods do not re-enable native browser zoom over the video player.
-				hammertime.off('pinchstart pinchmove pinchend');
+				hammertime.off('pinchstart pinchmove pinchend swipe');
 				hammertime.get('pinch').set({ enable: false });
 				hammertime.stop(true);
 				hammertime.destroy();
@@ -22173,6 +22216,8 @@ function ImageRenderer()
 				hammertime.on('pinchstart', onPinchStart);
 				hammertime.on('pinchmove', onPinchMove);
 				hammertime.on('pinchend', onPinchEnd);
+				hammertime.get('swipe').set({ direction: HammerConstants.DIRECTION_HORIZONTAL });
+				hammertime.on('swipe', onSwipe);
 			}
 		}
 	}
@@ -22820,7 +22865,7 @@ function KeepScreenAlive()
 	var badAutoplay = new BadAutoplayPreventionDetector();
 	try
 	{
-		noSleep = new NoSleep({ allowNativeWakeLock: false, overridePlayFunc: function (player) { return badAutoplay.Play(player); } });
+		noSleep = new NoSleep({ overridePlayFunc: function (player) { return badAutoplay.Play(player); } });
 		if (noSleep.noSleepVideo)
 			$(noSleep.noSleepVideo).css("top", "0px")
 				.css("left", "0px")
