@@ -1469,6 +1469,14 @@ var defaultSettings =
 			, category: "Video Player (Advanced)"
 		}
 		, {
+			key: "ui3_touch_gestures_reverse"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Reverse Swipe Gestures'
+			, hint: 'By default, swiping left goes to the next camera and swiping right goes to the previous camera.'
+			, category: "Video Player (Advanced)"
+		}
+		, {
 			key: "ui3_playback_skipDeadAir"
 			, value: 0
 			, inputType: "threeState"
@@ -22166,11 +22174,17 @@ function ImageRenderer()
 		{
 			if (e.direction === HammerConstants.DIRECTION_LEFT)
 			{
-				BI_Hotkey_PreviousCamera();
+				if (settings.ui3_touch_gestures_reverse === "1")
+					BI_Hotkey_PreviousCamera();
+				else
+					BI_Hotkey_NextCamera();
 			}
 			else if (e.direction === HammerConstants.DIRECTION_RIGHT)
 			{
-				BI_Hotkey_NextCamera();
+				if (settings.ui3_touch_gestures_reverse === "1")
+					BI_Hotkey_NextCamera();
+				else
+					BI_Hotkey_PreviousCamera();
 			}
 		}
 	}
