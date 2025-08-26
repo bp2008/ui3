@@ -1,3 +1,20 @@
 ﻿2025-08-25
 
-I determined https://github.com/sgilroy/no-sleep/ to be the best fork of no-sleep.  I downloaded it, modified it to support circumventing autoplay-disabling addons and to create the window.NoSleep object, then built it (npm install) (npm run build).  Then minified with closure-compiler-v20250706.jar.  Build output, minified, and source code (7z) are in the same directory as this file.
+I determined https://github.com/sgilroy/no-sleep/ to be the best fork of no-sleep.
+I downloaded it, modified it:
+
+* to support circumventing autoplay-disabling addons
+* and to create the window.NoSleep object
+* and to build with "babel" targeting ES5 to be compatible with IE9
+  * that required using "tsup" instead of "vite" to do the build.
+
+And then I built it:
+
+```
+npm install
+npm run build:legacy
+```
+
+The current release was not minified with closure-compiler-v20250706.jar, but that is an option.
+
+Build output and source code (7z) are in the same directory as this file.

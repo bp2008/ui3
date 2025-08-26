@@ -22583,7 +22583,7 @@ function AnyCameraOverlayIconsEnabled()
 		|| settings.ui3_camera_overlay_icon_webcasting_disabled === "1"
 		|| settings.ui3_camera_overlay_icon_paused === "1"
 		|| settings.ui3_camera_overlay_icon_new_alerts === "1"
-		|| ui3CamSettings.any(cs => cs.get("overlay_icon_new_alerts") === "1" && cameraListLoader.GetCameraWithId(cs.getCamId()));
+		|| ui3CamSettings.any(function (cs) { return cs.get("overlay_icon_new_alerts") === "1" && cameraListLoader.GetCameraWithId(cs.getCamId()); });
 }
 function AnyCameraTriggerOverlayIconsEnabled()
 {
@@ -22859,35 +22859,69 @@ function KeepScreenAlive()
 	var self = this;
 	var noSleep;
 	var badAutoplay = new BadAutoplayPreventionDetector();
+	var enabled = false;
 	try
 	{
 		noSleep = new NoSleep({ overridePlayFunc: function (player) { return badAutoplay.Play(player); } });
 		if (noSleep.noSleepVideo)
+		{
+			var zIndexTop = parseInt($("#layouttop").css('z-index'));
 			$(noSleep.noSleepVideo).css("top", "0px")
-				.css("left", "0px")
+				.css("right", "0px")
 				.css("width", "1px")
 				.css("height", "1px")
-				.css("z-index", "-1");
+				.css("z-index", (zIndexTop + 1).toString())
+				.css("opacity", "0.1")
+				.css("pointer-events", "none");
+		}
 		BI_CustomEvent.AddListener("OpenVideo", function (loading)
 		{
-			noSleep.enable(document.title);
+			self.enable();
 		});
 		BI_CustomEvent.AddListener("Playback_Pause", function (loading)
 		{
-			noSleep.disable();
+			self.disable();
 		});
 		BI_CustomEvent.AddListener("Playback_Play", function (loading)
 		{
-			noSleep.enable(document.title);
+			self.enable();
+		});
+		// During the UI_Loading sequence, a fake document click event is issued.  Skip that and wait for a real user input.
+		BI_CustomEvent.AddListener("UI_Loading_End", function ()
+		{
+			document.addEventListener('click', enableNoSleep, false);
 		});
 	}
 	catch (ex)
 	{
 		toaster.Error(ex);
 	}
+	function enableNoSleep()
+	{
+		document.removeEventListener('click', enableNoSleep, false);
+		self.enable(true); // Make absolutely sure the noSleep.enable() method is called here.
+	}
+	this.enable = function (force)
+	{
+		if (!enabled || force)
+		{
+			noSleep.enable();
+			console.log("enable");
+			enabled = true;
+		}
+	}
+	this.disable = function ()
+	{
+		if (enabled || self.isEnabled())
+		{
+			noSleep.disable();
+			console.log("disable");
+			enabled = false;
+		}
+	}
 	this.isEnabled = function ()
 	{
-		return noSleep && noSleep.enabled;
+		return noSleep && noSleep.isEnabled;
 	}
 	this.getNoSleepObject = function ()
 	{
