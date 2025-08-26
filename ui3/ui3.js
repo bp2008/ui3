@@ -2341,6 +2341,7 @@ var defaultSettings =
 			, label: 'Analog Input Deadzone'
 			, hint: '(PTZ) Increase the deadzone if your joystick(s) or analog buttons show activity while not being touched.'
 			, changeOnStep: true
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
 			, category: "PTZ"
 		}
 		, {
@@ -2529,6 +2530,7 @@ var defaultSettings =
 			, label: 'Experimental Joystick API<div class="settingDesc">(enables variable-speed PTZ control via compatible gamepad devices)</div>'
 			, hint: 'Enables gamepads and joysticks to be used for PTZ control'
 			, onChange: OnChange_ui3_gamepad_ptz_enabled
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
 			, category: "PTZ"
 		}
 		, {
