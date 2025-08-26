@@ -2496,6 +2496,33 @@ var defaultSettings =
 			, category: "PTZ"
 		}
 		, {
+			key: "ui3_gamepad_binding_previous_camera"
+			, value: "unbound"
+			, gamepad_binding: true
+			, label: "Previous Camera"
+			, hint: "Load the previous camera"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_next_camera"
+			, value: "unbound"
+			, gamepad_binding: true
+			, label: "Next Camera"
+			, hint: "Load the next camera"
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_gamepad_binding_restart_camera"
+			, value: "unbound"
+			, gamepad_binding: true
+			, label: "Restart Camera"
+			, hint: "Restart the currently selected camera instance in Blue Iris.  If a single live camera is not selected, this will merely restart the video stream (behavior subject to change)."
+			, preconditionFunc: Precondition_ui3_gamepad_ptz_enabled
+			, category: "PTZ"
+		}
+		, {
 			key: "ui3_experimental_joystick_api"
 			, value: "0"
 			, inputType: "checkbox"
@@ -7296,6 +7323,18 @@ function PtzButtons()
 			isMotorRunning: function ()
 			{
 				return !!(typeof this.unsafe_currentPtzCmd === "number" && this.unsafe_currentPtzCamId);
+			},
+			previousCamera_pressed: function ()
+			{
+				return this.joystickState.previousCamera;
+			},
+			nextCamera_pressed: function ()
+			{
+				return this.joystickState.nextCamera;
+			},
+			restartCamera_pressed: function ()
+			{
+				return this.joystickState.restartCamera;
 			}
 		},
 		methods:
@@ -7523,6 +7562,27 @@ function PtzButtons()
 			currentCamIsPtz: function ()
 			{
 				this.ptzChangeRespond();
+			},
+			previousCamera_pressed: function ()
+			{
+				if (this.previousCamera_pressed)
+					BI_Hotkey_PreviousCamera();
+			},
+			nextCamera_pressed: function ()
+			{
+				if (this.nextCamera_pressed)
+					BI_Hotkey_NextCamera();
+			},
+			restartCamera_pressed: function ()
+			{
+				if (this.restartCamera_pressed)
+				{
+					var img = videoPlayer.Loading().image;
+					if (img.isLive && cameraListLoader.CameraIsAlone(videoPlayer.Loading().cam))
+						ResetCamera(img.id);
+					else
+						videoPlayer.ReopenStreamAtCurrentSeekPosition();
+				}
 			}
 		}
 	});
@@ -8029,6 +8089,9 @@ function GamepadPtzController()
 					state.down = Math.max(ReadBinding(settings.ui3_gamepad_binding_tilt_down), ReadBinding(settings.ui3_gamepad_binding_tilt_down2));
 					state.left = Math.max(ReadBinding(settings.ui3_gamepad_binding_pan_left), ReadBinding(settings.ui3_gamepad_binding_pan_left2));
 					state.right = Math.max(ReadBinding(settings.ui3_gamepad_binding_pan_right), ReadBinding(settings.ui3_gamepad_binding_pan_right2));
+					state.previousCamera = !!ReadBinding(settings.ui3_gamepad_binding_previous_camera);
+					state.nextCamera = !!ReadBinding(settings.ui3_gamepad_binding_next_camera);
+					state.restartCamera = !!ReadBinding(settings.ui3_gamepad_binding_restart_camera);
 
 					if (settings.ui3_experimental_joystick_api === "1")
 					{
@@ -8065,6 +8128,9 @@ function GamepadPtzController()
 		state.down = 0;
 		state.left = 0;
 		state.right = 0;
+		state.previousCamera = false;
+		state.nextCamera = false;
+		state.restartCamera = false;
 
 		if (settings.ui3_experimental_joystick_api === "1")
 		{
@@ -31039,7 +31105,7 @@ function BI_Hotkey_DigitalPanRight_Up()
 }
 function CreateBIPtzState()
 {
-	return { up: 0, down: 0, left: 0, right: 0, zin: 0, zout: 0, ffar: 0, fnear: 0 };
+	return { up: 0, down: 0, left: 0, right: 0, zin: 0, zout: 0, ffar: 0, fnear: 0, previousCamera: false, nextCamera: false, restartCamera: false };
 }
 function BI_Hotkey_PtzUp() { ptzButtons.vue().hotkeyState.up = 1; }
 function BI_Hotkey_PtzUp_Up() { ptzButtons.vue().hotkeyState.up = 0; }
