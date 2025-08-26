@@ -1940,6 +1940,37 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Seek with Sub Stream<div class="settingDesc">for better performance</div>'
 			, hint: 'Only affects recordings that include main and sub streams'
+			, keywords: "sub stream substream main stream mainstream"
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_playback_speed_mainStreamComment"
+			, value: ""
+			, inputType: "comment"
+			, comment: function () { return 'Playback rates from <span id="playback_speed_mainStreamComment">' + (playbackControls ? playbackControls.GetMainStreamSpeedRangeComment() : "[playback controls not loaded!]") + '</span> use main stream.'; }
+			, keywords: "sub stream substream main stream mainstream"
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_reverse_speed_substream_threshold"
+			, value: function () { return GetClosestNumericValueFromArray(GetPlaybackSpeedSubStreamOptions(), "2"); }
+			, inputType: "select"
+			, options: []
+			, getOptions: GetPlaybackSpeedSubStreamOptions
+			, label: 'Prefer sub stream at reverse speed: '
+			, onChange: OnChange_ui3_reverse_speed_substream_threshold
+			, keywords: "sub stream substream main stream mainstream"
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_forward_speed_substream_threshold"
+			, value: function () { return GetClosestNumericValueFromArray(GetPlaybackSpeedSubStreamOptions(), "4"); }
+			, inputType: "select"
+			, options: []
+			, getOptions: GetPlaybackSpeedSubStreamOptions
+			, label: 'Prefer sub stream at forward speed: '
+			, onChange: OnChange_ui3_forward_speed_substream_threshold
+			, keywords: "sub stream substream main stream mainstream"
 			, category: "Clips / Alerts"
 		}
 		, {
@@ -10552,6 +10583,41 @@ function ClipFilterSearch()
 // Playback Controls //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 var overridePlaybackSpeedOptions = null;
+function GetPlaybackSpeedOptions()
+{
+	if (overridePlaybackSpeedOptions && overridePlaybackSpeedOptions.length)
+		return overridePlaybackSpeedOptions;
+	else
+		return [0.125, 0.25, 0.5, 1, 2, 4, 6, 8, 16, 32, 64, 128, 256];
+}
+function GetPlaybackSpeedSubStreamOptions()
+{
+	var arr = GetPlaybackSpeedOptions();
+	arr.push(arr[arr.length - 1] + 1);
+	for (var i = 0; i < arr.length; i++)
+		arr[i] = arr[i].toString();
+	return arr;
+}
+function GetClosestNumericValueFromArray(arr, val)
+{
+	if (!arr || !arr.length)
+		throw new Error("Input array must be non-empty");
+	val = parseFloat(val);
+	var closest = parseFloat(arr[0]);
+	var minDiff = Math.abs(closest - val);
+
+	for (var i = 1; i < arr.length; i++)
+	{
+		var diff = Math.abs(parseFloat(arr[i]) - val);
+		if (diff < minDiff)
+		{
+			minDiff = diff;
+			closest = parseFloat(arr[i]);
+		}
+	}
+
+	return closest.toString();
+}
 function PlaybackControls()
 {
 	var self = this;
@@ -10570,12 +10636,7 @@ function PlaybackControls()
 	var playReverse = settings.ui3_playback_reverse == "1";
 	var autoplay = settings.ui3_playback_autoplay == "1";
 	var loopingEnabled = settings.ui3_playback_loop == "1";
-	var SpeedOptions =
-		[
-			0.125, 0.25, 0.5, 1, 2, 4, 6, 8, 16, 32, 64, 128, 256
-		];
-	if (overridePlaybackSpeedOptions && overridePlaybackSpeedOptions.length)
-		SpeedOptions = overridePlaybackSpeedOptions;
+	var SpeedOptions = GetPlaybackSpeedOptions();
 	var playSpeed = 1;
 	for (var i = 0; i < SpeedOptions.length; i++)
 		if (SpeedOptions[i] == settings.ui3_playback_speed)
@@ -11063,6 +11124,37 @@ function PlaybackControls()
 	this.SettingsPanelIsOpen = function (e)
 	{
 		return $playbackSettings.length > 0;
+	}
+	this.GetSpeedBasedSubstreamArgument = function ()
+	{
+		if (playSpeed !== 1)
+		{
+			var substreamThreshold = playReverse
+				? parseFloat(settings.ui3_reverse_speed_substream_threshold)
+				: parseFloat(settings.ui3_forward_speed_substream_threshold);
+			if (substreamThreshold && !isNaN(substreamThreshold) && playSpeed >= substreamThreshold)
+				return "&decode=-1";
+		}
+		return "";
+	}
+	this.GetMainStreamSpeedRangeComment = function ()
+	{
+		var options = GetPlaybackSpeedOptions();
+		if (!options || !options.length)
+			return "No playback speed options!";
+		var subStreamReverseThreshold = parseFloat(settings.ui3_reverse_speed_substream_threshold);
+		var subStreamForwardThreshold = parseFloat(settings.ui3_forward_speed_substream_threshold);
+		var mainStreamReverseThreshold = 0;
+		var mainStreamForwardThreshold = 0;
+		for (var i = 0; i < options.length; i++)
+		{
+			var opt = options[i];
+			if (opt < subStreamReverseThreshold)
+				mainStreamReverseThreshold = opt;
+			if (opt < subStreamForwardThreshold)
+				mainStreamForwardThreshold = opt;
+		}
+		return "-" + mainStreamReverseThreshold + "x to " + mainStreamForwardThreshold + "x";
 	}
 	this.GetPlaybackSpeed = function ()
 	{
@@ -18504,11 +18596,11 @@ function JpegVideoModule()
 
 		// We force the session arg into all image requests because we don't need them to be cached and we want copied URLs to work without forcing login.
 		if (loading.isTimeline())
-			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + overlayArgs;
+			lastSnapshotUrl = currentServer.remoteBaseURL + "time/" + loading.path + '?jpeg' + timelineSpeedArg + timelinePosArg + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + overlayArgs + playbackControls.GetSpeedBasedSubstreamArgument();
 		else if (loading.isLive)
 			lastSnapshotUrl = currentServer.remoteBaseURL + "image/" + loading.path + '?nc=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true);
 		else
-			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs;
+			lastSnapshotUrl = currentServer.remoteBaseURL + "file/clips/" + loading.path + '?time=' + timeValue.dropDecimalsStr() + currentServer.GetAPISessionArg("&", true) + overlayArgs + playbackControls.GetSpeedBasedSubstreamArgument();
 		var imgSrcPath = lastSnapshotFullUrl = lastSnapshotUrl + qualityArg + groupArgs;
 
 		if (imageLoadingState.loadedUrl == imgSrcPath)
@@ -18953,7 +19045,7 @@ function FetchH264VideoModule()
 			var speedArg = "&speed=" + Math.round(speed);
 			var skipDeadAirArg = playbackControls.GetSkipDeadAirArg();
 			overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
-			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + '&pos=' + Math.floor(loading.timelineStart) + jumpArg + audioArg + profileArgs + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs;
+			videoUrl = currentServer.remoteBaseURL + "time/" + loading.path + currentServer.GetAPISessionArg("?", true) + '&opaque=' + ui3InstanceId + '&pos=' + Math.floor(loading.timelineStart) + jumpArg + audioArg + profileArgs + groupArgs + speedArg + skipDeadAirArg + "&extend=2" + overlayArgs + playbackControls.GetSpeedBasedSubstreamArgument();
 		}
 		else if (loading.isLive)
 		{
@@ -19048,7 +19140,7 @@ function FetchH264VideoModule()
 			}
 			speed = Math.round(speed);
 			fetchOptions.timestampScale = speed / 100;
-			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + profileArgs + "&extend=2" + offsetArg + overlayArgs;
+			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + profileArgs + "&extend=2" + offsetArg + overlayArgs + playbackControls.GetSpeedBasedSubstreamArgument();
 		}
 		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
 		volumeIconHelper.setEnabled(loading.audio);
@@ -34640,6 +34732,8 @@ function UISettingsPanel()
 			return true;
 		if (s.inputType === "comment" && filterFind(s.comment, query))
 			return true;
+		if (filterFind(s.keywords, query))
+			return true;
 		return false;
 	}
 	var filterFind = function (field, query)
@@ -34967,6 +35061,14 @@ function OnChange_ui3_pc_delete_button()
 function OnChange_ui3_allow_clip_deletion()
 {
 	OnChange_ui3_pc_delete_button();
+}
+function OnChange_ui3_reverse_speed_substream_threshold()
+{
+	$("#playback_speed_mainStreamComment").text(playbackControls ? playbackControls.GetMainStreamSpeedRangeComment() : "[playback controls not loaded!]");
+}
+function OnChange_ui3_forward_speed_substream_threshold()
+{
+	OnChange_ui3_reverse_speed_substream_threshold();
 }
 function OnChange_ui3_extra_playback_controls_padding()
 {
