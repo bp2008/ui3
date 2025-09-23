@@ -7656,7 +7656,7 @@ function RelativePTZ()
 			var imgFrameW = $camimg_wrapper.width() * zoomFactor;
 			var imgFrameH = $camimg_wrapper.height() * zoomFactor;
 			var loaded = videoPlayer.Loaded();
-			if (loaded.cam.optionValue !== currentCam.optionValue)
+			if (!iEquals(loaded.cam.optionValue, currentCam.optionValue))
 			{
 				// [loaded.cam] is a group view where the user has middle-clicked on ptz camera [currentCam].
 				// Adjust the calculations to be relative to the camera's frame.
@@ -7664,7 +7664,7 @@ function RelativePTZ()
 				var rects = cameraListLoader.GetGroupRects(loaded.cam.optionValue);
 				for (var i = 0; i < cams.length; i++)
 				{
-					if (cams[i] === currentCam.optionValue)
+					if (iEquals(cams[i], currentCam.optionValue))
 					{
 						// This code is mostly copied from CameraNameLabels
 						var rect = rects[i];
@@ -16324,7 +16324,7 @@ function CameraListLoader()
 						if (cam)
 						{
 							videoPlayer.LoadLiveCamera(cam);
-							didLoadStream = videoPlayer.Loading().image.id === cam.optionValue;
+							didLoadStream = iEquals(videoPlayer.Loading().image.id, cam.optionValue);
 						}
 					}
 					if (!didLoadStream)
@@ -16336,7 +16336,7 @@ function CameraListLoader()
 							if (cam)
 							{
 								videoPlayer.LoadLiveCamera(cam);
-								didLoadStream = videoPlayer.Loading().image.id === cam.optionValue;
+								didLoadStream = iEquals(videoPlayer.Loading().image.id, cam.optionValue);
 							}
 						}
 					}
@@ -16504,7 +16504,7 @@ function CameraListLoader()
 		{
 			if (self.CameraIsGroup(cam))
 				return !!cam.dynamic;
-			else if (self.CameraIsCycle(cam) && groupId === "@Index")
+			else if (self.CameraIsCycle(cam) && iEquals(groupId, "@index"))
 			{
 				cam = self.GetCameraWithId(groupId.substr(1));
 				if (cam && !self.IsFakeGroup(groupId))
@@ -16550,8 +16550,16 @@ function CameraListLoader()
 	}
 	this.GetCameraWithId = function (cameraId)
 	{
-		return cameraIdToCameraMap[cameraId];
+		var match = cameraIdToCameraMap[cameraId];
+		if (!match)
+			match = self.FindCameraWithSimilarId(cameraId);
+		return match;
 	}
+	/**
+	 * Finds a camera by case-insensitive match of its ID.
+	 * @param {String} cameraId Camera ID to search for.
+	 * @return {Object} Camera object if found, or undefined if not found.
+	 */
 	this.FindCameraWithSimilarId = function (cameraId)
 	{
 		var cameraIdLower = cameraId.toLowerCase();
@@ -16560,7 +16568,7 @@ function CameraListLoader()
 			if (id.toLowerCase() === cameraIdLower && Object.prototype.hasOwnProperty.call(cameraIdToCameraMap, id))
 				return cameraIdToCameraMap[id];
 		}
-		return null;
+		return undefined;
 	}
 	this.MakeFakeCamBasedOnClip = function (clipData)
 	{
@@ -16601,7 +16609,7 @@ function CameraListLoader()
 			{
 				if (self.CameraIsGroupOrCycle(lastResponse.data[i]))
 				{
-					if (lastResponse.data[i].optionValue == groupId)
+					if (iEquals(lastResponse.data[i].optionValue, groupId))
 					{
 						return lastResponse.data[i];
 					}
@@ -16914,7 +16922,7 @@ function VideoPlayerController()
 		}
 		if (currentlyLoadingImage.isLive)
 		{
-			var wasAutoMaximized = pt_currentCam && pt_currentCam === currentlyLoadingCamera.optionValue;
+			var wasAutoMaximized = pt_currentCam && iEquals(pt_currentCam, currentlyLoadingCamera.optionValue);
 			if (self.PrioritizeTriggeredEnabled())
 			{
 				if (pt_currentCam)
@@ -17127,11 +17135,11 @@ function VideoPlayerController()
 		{
 			// Do nothing
 		}
-		else if (camData.isFakeGroup && settings.ui3_defaultCameraGroupId === camData.optionValue)
+		else if (camData.isFakeGroup && iEquals(settings.ui3_defaultCameraGroupId, camData.optionValue))
 		{
 			// Do nothing
 		}
-		else if (cameraListLoader.singleCameraGroupMap[settings.ui3_defaultCameraGroupId] && cameraListLoader.singleCameraGroupMap[settings.ui3_defaultCameraGroupId] === camData.optionValue)
+		else if (cameraListLoader.singleCameraGroupMap[settings.ui3_defaultCameraGroupId] && iEquals(cameraListLoader.singleCameraGroupMap[settings.ui3_defaultCameraGroupId], camData.optionValue))
 		{
 			// Do nothing
 		}
@@ -17146,11 +17154,11 @@ function VideoPlayerController()
 	}
 	this.ImgClick_Camera = function (camData)
 	{
-		if (camData.optionValue == currentlyLoadedImage.id)
+		if (iEquals(camData.optionValue, currentlyLoadedImage.id))
 		{
 			// Back to Group
 			camData = self.GetCurrentHomeGroupObj();
-			if (camData.optionValue === currentlyLoadedImage.id)
+			if (iEquals(camData.optionValue, currentlyLoadedImage.id))
 				return;
 			var didRenderThing = false;
 			if (debug_cameraChange_scaleOut && playerModule.DrawFullCameraAsThumb)
@@ -17256,7 +17264,7 @@ function VideoPlayerController()
 		var camList = cameraListLoader.GetLastResponse();
 		for (var i = 0; i < camList.data.length; i++)
 		{
-			if (camList.data[i].optionValue == groupId)
+			if (iEquals(camList.data[i].optionValue, groupId))
 			{
 				if (cameraListLoader.CameraIsGroupOrCycle(camList.data[i]))
 				{
@@ -17809,7 +17817,7 @@ function VideoPlayerController()
 			var rects = xRecList ? JSON.parse('[' + xRecList + ']') : null;
 			if (!cams.length || !rects.length)
 				return;
-			if (currentlyLoadingImage.id === camId)
+			if (iEquals(currentlyLoadingImage.id, camId))
 			{
 				var oldSerialized = JSON.stringify(currentlyLoadingImage.cams) + JSON.stringify(currentlyLoadingImage.rects);
 				var newSerialized = JSON.stringify(cams) + JSON.stringify(rects);
@@ -17820,7 +17828,7 @@ function VideoPlayerController()
 					BI_CustomEvent.Invoke("DynamicGroupLayoutLoaded");
 				}
 			}
-			if (currentlyLoadedImage.id === camId)
+			if (iEquals(currentlyLoadedImage.id, camId))
 			{
 				currentlyLoadedImage.cams = cams;
 				currentlyLoadedImage.rects = rects;
@@ -23450,7 +23458,7 @@ var biSoundPlayer = new (function ()
 		{
 			for (var i = 0; i < cameraList.length; i++)
 			{
-				if (cameraList[i].optionValue === videoPlayer.Loading().image.id)
+				if (iEquals(cameraList[i].optionValue, videoPlayer.Loading().image.id))
 				{
 					cams.push(cameraList[i]);
 					break;
@@ -23648,6 +23656,10 @@ function GroupCfg()
 		var json = settings.ui3_groupCfg;
 		if (json)
 			cfg = JSON.parse(json);
+		if (!cfg)
+			cfg = {};
+		// Blue Iris recently changed the "All cameras" group key from "Index" to "index" and said they use case-insensitive matching.
+		normalizeKeysToLower(cfg);
 	}
 	catch (ex)
 	{
@@ -23773,13 +23785,29 @@ function GroupCfg()
 			return "";
 		var camData = cameraListLoader.GetCameraWithId(image.id);
 		if (camData && cameraListLoader.CameraIsGroupOrCycle(camData))
-			return image.id;
+			return image.id.toLowerCase();
 		else if (image.isTimeline())
 			return "*ui3_timeline_pseudocam";
 		else
 			return "";
 	}
 }
+function normalizeKeysToLower(obj)
+{
+	for (var key in obj)
+	{
+		if (obj.hasOwnProperty(key))
+		{
+			var lowerKey = key.toLowerCase();
+			if (lowerKey !== key)
+			{
+				obj[lowerKey] = obj[key];
+				delete obj[key];
+			}
+		}
+	}
+}
+
 ///////////////////////////////////////////////////////////////
 // Customizable Streaming Profiles ////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -25241,7 +25269,7 @@ function CanvasContextMenu()
 			$("#contextMenuCameraName").text(camName);
 			$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons below are specific to the camera: " + camName);
 			var $maximize = $("#contextMenuMaximize");
-			var isMaxAlready = (camData.optionValue == videoPlayer.Loaded().image.id && homeGroupObj == null);
+			var isMaxAlready = (iEquals(camData.optionValue, videoPlayer.Loaded().image.id) && homeGroupObj == null);
 			$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
 			$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
 		}
@@ -25593,7 +25621,7 @@ function CanvasContextMenu()
 			$("#contextMenuTimelineCameraName").text(camName);
 			$("#contextMenuTimelineCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons below are specific to the camera: " + camName);
 			var $maximize = $("#contextMenuTimelineMaximize");
-			var isMaxAlready = (camData.optionValue == videoPlayer.Loaded().image.id && homeGroupObj == null);
+			var isMaxAlready = (iEquals(camData.optionValue, videoPlayer.Loaded().image.id) && homeGroupObj == null);
 			$maximize.text(isMaxAlready ? "Back to Group" : "Maximize");
 			$maximize.parent().prev().find("use").attr("xlink:href", isMaxAlready ? "#svg_mio_FullscreenExit" : "#svg_mio_Fullscreen");
 		}
@@ -27179,7 +27207,7 @@ function CameraProperties(camId)
 				if (restartCameraAfter)
 					ResetCamera(camId);
 				cameraListLoader.LoadCameraList();
-				if (key === "webcast" && !buttonStateIsOn && videoPlayer.Loading().cam.optionValue === camId)
+				if (key === "webcast" && !buttonStateIsOn && iEquals(videoPlayer.Loading().cam.optionValue, camId))
 					videoPlayer.LoadFirstAvailableCameraGroup();
 			},
 			function (jqXHR, textStatus, errorThrown)
@@ -30888,7 +30916,7 @@ function LoadNextOrPreviousCamera(offset)
 
 	for (var i = 0; i < cams.length; i++)
 	{
-		if (cams[i] == loading.cam.optionValue)
+		if (iEquals(cams[i], loading.cam.optionValue))
 		{
 			idxCurrentMaximizedCamera = i;
 			break;
@@ -30913,7 +30941,7 @@ function LoadNextOrPreviousCamera(offset)
 		var newCameraId = cams[idxCurrentMaximizedCamera];
 		var newCamera = cameraListLoader.GetCameraWithId(newCameraId);
 		videoPlayer.ImgClick_Camera(newCamera);
-		if (videoPlayer.Loading().cam.optionValue === newCameraId)
+		if (iEquals(videoPlayer.Loading().cam.optionValue, newCameraId))
 			break;
 	}
 }
@@ -36925,7 +36953,7 @@ function MqttClient()
 						else
 						{
 							var camData = cameraListLoader.GetCameraWithId(value);
-							if (camData && videoPlayer.Loading().image.id !== camData.optionValue)
+							if (camData && iEquals(videoPlayer.Loading().image.id, camData.optionValue))
 								videoPlayer.LoadLiveCamera(camData);
 						}
 					}
@@ -37893,7 +37921,18 @@ String.prototype.endsWithCaseInsensitive = function (suffix)
 	if (this.length < suffix.length)
 		return false;
 	return this.substr(this.length - suffix.length).toLowerCase() === suffix.toLowerCase();
-};
+};/**
+ * Returns true if the given strings are equal with a case-insensitive comparison.
+ * @param {String} s1 First string.
+ * @param {String} s2 Second string.
+ * @returns True if the given strings are equal with a case-insensitive comparison.
+ */
+function iEquals(s1, s2)
+{
+	if (typeof s1 !== "string" || typeof s2 !== "string")
+		return false;
+	return s1.toLowerCase() == s2.toLowerCase();
+}
 String.prototype.toFloat = function (digits)
 {
 	return parseFloat(this.toFixed(digits));
