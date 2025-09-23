@@ -1147,7 +1147,7 @@ var defaultSettings =
 			, value: 13
 		}
 		, {
-			key: "ui3_cam_settings_map" // Stores a JSON-serialized map of camera settings keyed by camera ID. Accessed via Camera Properties.
+			key: "ui3_cam_settings_map" // Stores a JSON-serialized map of camera settings keyed by camera ID (normalized to lower case). Accessed via Camera Properties.
 			, value: "{}"
 		}
 		, {
@@ -16148,8 +16148,7 @@ function CameraListLoader()
 	var lastResponse = null;
 	var lastLoadAt = -999999;
 	var cameraIdToCameraMap = new Object();
-	this.singleCameraGroupMap = {};
-	this.cameraIdToCameraMap = cameraIdToCameraMap;
+	var singleCameraGroupNameMap = {};
 	var firstCameraListLoaded = false;
 	var cameraListUpdateTimeout = null;
 	var webcastingWarning;
@@ -16215,8 +16214,8 @@ function CameraListLoader()
 			var numGroups = 0;
 			var numCameras = 0;
 			var camIdsInGroups = {};
-			var allCameras = {};
-			self.singleCameraGroupMap = {};
+			//var allCameras = {};
+			singleCameraGroupNameMap = {};
 			// See what we've got
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
@@ -16225,7 +16224,7 @@ function CameraListLoader()
 					o.webcast = true;
 				if (typeof o.ptzdirect === "undefined" && o.ptz)
 					o.ptzdirect = true;
-				allCameras[o.optionValue] = o;
+				//allCameras[o.optionValue.toLowerCase()] = o;
 			}
 			for (var i = 0; i < lastResponse.data.length; i++)
 			{
@@ -16240,7 +16239,7 @@ function CameraListLoader()
 							// My current best fix is to maintain this map of group name to camera short name for every group that has just a single camera.
 							// When the LoadLiveCamera method is instructed to load a group in this map, the single camera is loaded instead.
 							// So the dropdown box behaves a little inconsistently, but the group still exists in UI3.
-							self.singleCameraGroupMap[obj.optionValue] = obj.group[0];
+							singleCameraGroupNameMap[obj.optionValue.toLowerCase()] = obj.group[0];
 						}
 						else
 						{
@@ -16302,7 +16301,7 @@ function CameraListLoader()
 			dropdownBoxes.listDefs["currentGroup"].rebuildItems(lastResponse.data);
 			cameraIdToCameraMap = new Object();
 			for (var i = 0; i < lastResponse.data.length; i++)
-				cameraIdToCameraMap[lastResponse.data[i].optionValue] = lastResponse.data[i];
+				cameraIdToCameraMap[lastResponse.data[i].optionValue.toLowerCase()] = lastResponse.data[i];
 			if (!firstCameraListLoaded
 				|| (self.GetCameraWithId(videoPlayer.Loading().image.id) == null
 					&& videoPlayer.Loading().image
@@ -16548,27 +16547,25 @@ function CameraListLoader()
 		}
 		return null;
 	}
-	this.GetCameraWithId = function (cameraId)
-	{
-		var match = cameraIdToCameraMap[cameraId];
-		if (!match)
-			match = self.FindCameraWithSimilarId(cameraId);
-		return match;
-	}
 	/**
 	 * Finds a camera by case-insensitive match of its ID.
 	 * @param {String} cameraId Camera ID to search for.
 	 * @return {Object} Camera object if found, or undefined if not found.
 	 */
+	this.GetCameraWithId = function (cameraId)
+	{
+		if (typeof cameraId !== "string")
+			return undefined;
+		return cameraIdToCameraMap[cameraId.toLowerCase()];
+	}
+	/**
+	 * (deprecated) Finds a camera by case-insensitive match of its ID.
+	 * @param {String} cameraId Camera ID to search for.
+	 * @return {Object} Camera object if found, or undefined if not found.
+	 */
 	this.FindCameraWithSimilarId = function (cameraId)
 	{
-		var cameraIdLower = cameraId.toLowerCase();
-		for (var id in cameraIdToCameraMap)
-		{
-			if (id.toLowerCase() === cameraIdLower && Object.prototype.hasOwnProperty.call(cameraIdToCameraMap, id))
-				return cameraIdToCameraMap[id];
-		}
-		return undefined;
+		return self.GetCameraWithId(cameraId);
 	}
 	this.MakeFakeCamBasedOnClip = function (clipData)
 	{
@@ -16592,7 +16589,7 @@ function CameraListLoader()
 	}
 	this.GetCameraName = function (cameraId)
 	{
-		var cam = cameraIdToCameraMap[cameraId];
+		var cam = self.GetCameraWithId(cameraId);
 		if (cam)
 		{
 			if (self.CameraIsGroupOrCycle(cam))
@@ -16685,6 +16682,24 @@ function CameraListLoader()
 			}
 		}
 		return false;
+	}
+	/**
+	 * Returns the group object for a single-camera group, if it exists.
+	 * @param {String} groupId ID of the group to check (not case sensitive).
+	 */
+	this.getSingleCameraGroupNameById = function(groupId)
+	{
+		if (typeof groupId !== "string")
+			return undefined;
+		return singleCameraGroupNameMap[groupId.toLowerCase()];
+	}
+	/**
+	 * Gets the current camera ID to camera object map (a new map is created each time the camlist is polled).
+	 * @returns {Object} Map of camera ID string (normalized to lower case) to camera object.
+	 */
+	this.getCameraIdToCameraMap = function ()
+	{
+		return cameraIdToCameraMap;
 	}
 }
 function DontShowWebcastingWarningAgain()
@@ -17139,7 +17154,7 @@ function VideoPlayerController()
 		{
 			// Do nothing
 		}
-		else if (cameraListLoader.singleCameraGroupMap[settings.ui3_defaultCameraGroupId] && iEquals(cameraListLoader.singleCameraGroupMap[settings.ui3_defaultCameraGroupId], camData.optionValue))
+		else if (cameraListLoader.getSingleCameraGroupNameById(settings.ui3_defaultCameraGroupId) && iEquals(cameraListLoader.getSingleCameraGroupNameById(settings.ui3_defaultCameraGroupId), camData.optionValue))
 		{
 			// Do nothing
 		}
@@ -17321,9 +17336,9 @@ function VideoPlayerController()
 				return;
 			}
 		}
-		if (cameraListLoader.singleCameraGroupMap[camData.optionValue])
+		if (cameraListLoader.getSingleCameraGroupNameById(camData.optionValue))
 		{
-			var maybeCamData = cameraListLoader.GetCameraWithId(cameraListLoader.singleCameraGroupMap[camData.optionValue]);
+			var maybeCamData = cameraListLoader.GetCameraWithId(cameraListLoader.getSingleCameraGroupNameById(camData.optionValue));
 			if (maybeCamData.isEnabled && maybeCamData.webcast)
 				camData = maybeCamData;
 		}
@@ -17382,8 +17397,6 @@ function VideoPlayerController()
 		}
 
 		var cam = cameraListLoader.GetCameraWithId(clipData.camera);
-		if (!cam)
-			cam = cameraListLoader.FindCameraWithSimilarId(clipData.camera);
 		if (!cam)
 			cam = cameraListLoader.MakeFakeCamBasedOnClip(clipData);
 		if (cam)
@@ -23545,6 +23558,9 @@ function ClipOverlayCfg()
 		var json = settings.ui3_clipOverlayCfg;
 		if (json)
 			cfg = JSON.parse(json);
+		if (!cfg)
+			cfg = {};
+		normalizeKeysToLower(cfg);
 	}
 	catch (ex)
 	{
@@ -23554,6 +23570,7 @@ function ClipOverlayCfg()
 	{
 		if (camId)
 		{
+			camId = camId.toLowerCase();
 			var camCfg = cfg[camId];
 			if (camCfg)
 			{
@@ -23566,6 +23583,7 @@ function ClipOverlayCfg()
 	}
 	var Set = function (camId, type, val)
 	{
+		camId = camId.toLowerCase();
 		var isTimelinePseudo = camId === "*ui3_timeline_pseudocam";
 		var camData = isTimelinePseudo ? null : cameraListLoader.GetCameraWithId(camId);
 		if (isTimelinePseudo || (camData && !cameraListLoader.CameraIsGroupOrCycle(camData)))
@@ -27344,12 +27362,14 @@ function UI3CamSettings()
 	}
 	if (!map)
 		map = {};
+	normalizeKeysToLower(map);
 	var settingsObjectMap = new FasterObjectMap();
 	this.getCamSettings = function (camId)
 	{
-		var camSettings = settingsObjectMap[camId];
+		var camIdNormalized = camId.toLowerCase();
+		var camSettings = settingsObjectMap[camIdNormalized];
 		if (!camSettings)
-			settingsObjectMap[camId] = camSettings = new UI3PerCamSettings(camId, map, self);
+			settingsObjectMap[camIdNormalized] = camSettings = new UI3PerCamSettings(camId, map, self);
 		return camSettings;
 	}
 	this.get = function (camId, key)
@@ -27384,6 +27404,7 @@ function UI3CamSettings()
 }
 function UI3PerCamSettings(camId, map, ui3CamSettings)
 {
+	var camIdNormalized = camId.toLowerCase();
 	var self = this;
 
 	this.getCamId = function ()
@@ -27392,20 +27413,20 @@ function UI3PerCamSettings(camId, map, ui3CamSettings)
 	}
 	this.get = function (key)
 	{
-		var camSettings = map[camId];
+		var camSettings = map[camIdNormalized];
 		if (camSettings)
 		{
 			var existingValue = camSettings[key];
 			if (typeof existingValue !== "undefined")
 				return existingValue;
 		}
-		return self.getDefaultValue(camId, key);
+		return self.getDefaultValue(key);
 	}
 	this.set = function (key, value)
 	{
-		var camSettings = map[camId];
+		var camSettings = map[camIdNormalized];
 		if (!camSettings)
-			map[camId] = camSettings = {};
+			map[camIdNormalized] = camSettings = {};
 		if (camSettings[key] !== value)
 		{
 			camSettings[key] = value;
@@ -37921,7 +37942,8 @@ String.prototype.endsWithCaseInsensitive = function (suffix)
 	if (this.length < suffix.length)
 		return false;
 	return this.substr(this.length - suffix.length).toLowerCase() === suffix.toLowerCase();
-};/**
+};
+/**
  * Returns true if the given strings are equal with a case-insensitive comparison.
  * @param {String} s1 First string.
  * @param {String} s2 Second string.
