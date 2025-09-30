@@ -16687,7 +16687,7 @@ function CameraListLoader()
 	 * Returns the group object for a single-camera group, if it exists.
 	 * @param {String} groupId ID of the group to check (not case sensitive).
 	 */
-	this.getSingleCameraGroupNameById = function(groupId)
+	this.getSingleCameraGroupNameById = function (groupId)
 	{
 		if (typeof groupId !== "string")
 			return undefined;
@@ -18856,6 +18856,7 @@ function FetchH264VideoModule()
 	var canRequestAudio = false;
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
 	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, rawtime: 0, utc: Date.now(), expectedInterframe: 100, size: 0 };
+	var framesSinceLastKeyframe = 0;
 	var audioCodec = "";
 
 	var loading = new BICameraData();
@@ -19510,6 +19511,8 @@ function FetchH264VideoModule()
 
 		var timeNow = performance.now();
 
+		framesSinceLastKeyframe = frame.keyframe ? 0 : (framesSinceLastKeyframe + 1);
+
 		// Copy everything needed by "Stats for nerds".
 		lastFrameMetadata.width = frame.width;
 		lastFrameMetadata.height = frame.height;
@@ -19521,6 +19524,8 @@ function FetchH264VideoModule()
 		lastFrameMetadata.duration = frame.duration;
 		lastFrameMetadata.expectedInterframe = frame.expectedInterframe;
 		lastFrameMetadata.actualInterframe = frame.actualInterframe = timeNow - lastFrameAt;
+		lastFrameMetadata.keyframe = frame.keyframe;
+		lastFrameMetadata.framesSinceKey = framesSinceLastKeyframe;
 
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
 
@@ -19672,7 +19677,8 @@ function FetchH264VideoModule()
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
 			nerdStats.UpdateStat("Audio Buffer", audioBufferSize, audioBufferSize.toFixed(0) + "ms", true);
-			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true);
+			nerdStats.UpdateStat("Frames since key", frame.framesSinceKey, frame.framesSinceKey, true);
+			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true, (frame.keyframe ? "#FF0000" : undefined));
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
 			if (!h264_player.isMsePlayer)
 				nerdStats.UpdateStat("Frame Timing Error", interFrameError, interFrameError.toFixed() + "ms", true);
@@ -21345,7 +21351,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 				{
 					// Some browsers started having a noticeable delay before their first onTimeUpdate call, so we call frameRendered early for the first frame, causing the video element to be resized at a more appropriate time.
 					earlyFrameRenderCalled = true;
-					var startMeta = $.extend({}, frame.meta);
+					var startMeta = $.extend({}, lastFrame.meta);
 					startMeta.width = currentStreamBitmapInfo.biWidth;
 					startMeta.height = currentStreamBitmapInfo.biHeight;
 					startMeta.timestamp = startMeta.time;
@@ -33127,6 +33133,8 @@ function BIVideoFrame(buf, metadata)
 		}
 		return false;
 	}
+	/** True if this is a keyframe */
+	this.keyframe = this.meta.keyframe = self.isKeyframe();
 }
 function BIAudioFrame(buf, formatHeader)
 {
@@ -33312,6 +33320,7 @@ function UI3NerdStats()
 			, "Video Bit Rate"
 			, "Audio Bit Rate"
 			, "Audio Buffer"
+			, "Frames since key"
 			, "Frame Size"
 			, "Inter-Frame Time"
 			, "Frame Timing Error"
@@ -33435,8 +33444,9 @@ function UI3NerdStats()
 	 * @param {any} value Raw value
 	 * @param {any} htmlValue HTML-formatted value
 	 * @param {Boolean} onGraph If true, graph the raw value.
+	 * @param {String} graphColor This data point on the graph gets colored in this color.  If falsy, the default graph color is used.
 	 */
-	this.UpdateStat = function (name, value, htmlValue, onGraph)
+	this.UpdateStat = function (name, value, htmlValue, onGraph, graphColor)
 	{
 		if (!dialog)
 			return;
@@ -33450,7 +33460,7 @@ function UI3NerdStats()
 		}
 		if (isUpdating)
 			hideOnEndUpdate[name] = false;
-		row.SetValue(value, htmlValue, onGraph);
+		row.SetValue(value, htmlValue, onGraph, graphColor);
 	}
 	/**
 	 * Immediately hides the specified row.  Designed to be called outside of an organized update.
@@ -33482,7 +33492,7 @@ function StatsRow(name, objSizes)
 	var hidden = true;
 	var graph = null;
 
-	this.SetValue = function (value, htmlValue, addToGraph)
+	this.SetValue = function (value, htmlValue, addToGraph, graphColor)
 	{
 		if (hidden)
 		{
@@ -33497,7 +33507,7 @@ function StatsRow(name, objSizes)
 		if (addToGraph)
 		{
 			CreateGraph();
-			graph.AddValue(value, true);
+			graph.AddValue(value, true, graphColor);
 		}
 		else
 			DestroyGraph();
@@ -33562,13 +33572,13 @@ function SimpleGraph()
 	{
 		return $canvas;
 	}
-	this.AddValue = function (value, drawNow)
+	this.AddValue = function (value, drawNow, graphColor)
 	{
 		if (!buffer)
 			Refresh();
 		if (dataIndex >= buffer.length)
 			dataIndex = 0;
-		buffer[dataIndex] = value;
+		buffer[dataIndex] = { value: value, graphColor: graphColor };
 		dataIndex++;
 		if (drawNow)
 			Draw();
@@ -33616,20 +33626,47 @@ function SimpleGraph()
 		var max = 0;
 		for (var i = 0; i < w; i++)
 		{
-			if (buffer[i] > max)
-				max = buffer[i];
+			var item = buffer[i];
+			if (item && item.value > max)
+				max = item.value;
 		}
 		ctx.strokeStyle = "#aaaaaa";
 		ctx.beginPath();
+		var colored = new FasterObjectMap();
 		for (var i = 0; i < w; i++)
 		{
-			var v = buffer[i];
+			var item = buffer[i];
+			if (!item)
+				continue;
+			var v = item.value;
 			if (v <= 0)
 				continue;
+			if (item.graphColor)
+			{
+				if (!colored[item.graphColor])
+					colored[item.graphColor] = [];
+				colored[item.graphColor].push(i);
+			}
 			var percentH = 1 - (v / max);
 			var scaledH = percentH * h;
 			ctx.moveTo(i, h);
 			ctx.lineTo(i, scaledH);
+		}
+		for (var color in colored)
+		{
+			ctx.stroke();
+			ctx.strokeStyle = color;
+			ctx.beginPath();
+			var itemIndices = colored[color];
+			for (var n = 0; n < itemIndices.length; n++)
+			{
+				var i = itemIndices[n];
+				var v = buffer[i].value;
+				var percentH = 1 - (v / max);
+				var scaledH = percentH * h;
+				ctx.moveTo(i, h);
+				ctx.lineTo(i, scaledH);
+			}
 		}
 		ctx.stroke();
 		ctx.strokeStyle = "#0097F0";
