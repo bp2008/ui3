@@ -1178,6 +1178,15 @@ var defaultSettings =
 			, category: "General Settings"
 		}
 		, {
+			key: "ui3_color_theme"
+			, value: "Auto"
+			, inputType: "select"
+			, options: ["Auto", "Blue Iris 6", "Blue Iris 6 Black", "Blue Iris 5", "Blue Iris 5 Black", "Legacy UI3"]
+			, label: "Color Theme"
+			, onChange: OnChange_ui3_color_theme
+			, category: "General Settings"
+		}
+		, {
 			key: "ui3_time24hour"
 			, value: localeUses24HourTime() ? "1" : "0"
 			, inputType: "checkbox"
@@ -4145,6 +4154,7 @@ $(function ()
 		togglableContextMenus.push(new ContextMenu_EnableDisableItem(item[0], item[1], item[2], item[3], item[4], item[5], item[6]));
 	}
 
+	OnChange_ui3_color_theme();
 	OnChange_ui3_time24hour();
 	OnChange_ui3_topbar_save_snapshot_btn_show();
 	OnChange_ui3_topbar_allclips_shortcut_show();
@@ -19555,9 +19565,12 @@ function FetchH264VideoModule()
 		cornerStatusIcons.Hide("trigger");
 		cornerStatusIcons.Hide("motion");
 		cornerStatusIcons.Hide("recording");
-		BI_CustomEvent.Invoke("Video Stream Ended", arguments);
-		if (!safeFetch.IsActive())
-			volumeIconHelper.setColorIdle();
+		if (videoFinishedStreaming || videoPlayer.Playback_IsPaused())
+		{
+			BI_CustomEvent.Invoke("Video Stream Ended", arguments);
+			if (!safeFetch.IsActive())
+				volumeIconHelper.setColorIdle();
+		}
 		if (wasJpeg)
 			return;
 		if (videoFinishedStreaming)
@@ -23107,7 +23120,6 @@ function KeepScreenAlive()
 		if (!enabled || force)
 		{
 			noSleep.enable();
-			console.log("enable");
 			enabled = true;
 		}
 	}
@@ -23116,7 +23128,6 @@ function KeepScreenAlive()
 		if (enabled || self.isEnabled())
 		{
 			noSleep.disable();
-			console.log("disable");
 			enabled = false;
 		}
 	}
@@ -29745,7 +29756,7 @@ function PcmAudioPlayer()
 	var DequeueBufferSource = function ()
 	{
 		pendingBufferQueue.dequeue();
-		if (pendingBufferQueue.isEmpty())
+		if (pendingBufferQueue.isEmpty() && !videoPlayer.Playback_IsPaused())
 			volumeIconHelper.setColorLoading();
 	}
 	this.GetBufferedMs = function ()
@@ -34982,6 +34993,10 @@ function OnChange_ui3_preferred_ui_scale(newValue)
 function OnChange_ui3_portrait_layout()
 {
 	resized();
+}
+function OnChange_ui3_color_theme()
+{
+	SetColorTheme(settings.ui3_color_theme);
 }
 function OnChange_ui3_sideBarPosition()
 {

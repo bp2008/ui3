@@ -1,14 +1,15 @@
 :root
 {
 	/* Main / Misc */
-	--main-highlight-color: #3E5F8A;
-	--panel-bg-color: #181818;
+	--main-highlight-color: #4840a7;
+	--panel-bg-color: #0C0C0C;
+	--zebra-stripe-bg-color: rgba(255,255,255,0.09);
 	--cliplist-bg-color: #101010;
-	--contextmenu-server-icon-color: #444E4F;
+	--contextmenu-server-icon-color: #6b61d4;
 	--button-color: #BBB1B0;
 	--ptzpad-color: #6d6868;
 	--ptzpad-disabled-color: #2d2c2c;
-	--text-color: #BFBFBF;
+	--text-color: #AEAEAE;
 	--text-hover-color: #D9DBDF;
 	--text-active-color: #FFFFFF;
 	--pctext-color: #E8E8E8;
@@ -21,10 +22,13 @@
 	--audio-error-color: #F00000;
 	--audio-idle-color: var(--button-color);
 	--seek-bar-color: #2C82C9;
+	--slidercb-color: var(--dialog-link-color);
+	--progress-bar-outer-color: #292e33;
+	--topbar-tab-hover-bg-color: rgba(255,255,255,0.15);
 	/* Dropdowns, Calendar, SquareButtons */
-	--uicontrol-bg-color: #101010;
-	--uicontrol-hover-bg-color: #303030;
-	--uicontrol-active-bg-color: #505050;
+	--uicontrol-bg-color: transparent;
+	--uicontrol-hover-bg-color: rgba(255,255,255,0.125);
+	--uicontrol-active-bg-color: rgba(255,255,255,0.2);
 	/* Dropdowns */
 	--dropdown-item-bg-color: #000000;
 	--dropdown-item-hover-bg-color: #303030;
@@ -32,9 +36,9 @@
 	--dropdown-item-color: var(--text-color);
 	--dropdown-item-hover-color: var(--text-hover-color);
 	--dropdown-item-active-color: var(--text-active-color);
-	--dropdown-item-blue-color: #618dc7;
-	--dropdown-item-blue-hover-color: #7db0f3;
-	--dropdown-item-blue-active-color: #8fbefd;
+	--dropdown-item-blue-color: hsl(245deg 71% 71%);
+	--dropdown-item-blue-hover-color: hsl(245deg 81% 81%);
+	--dropdown-item-blue-active-color: hsl(245deg 91% 91%);
 	--dropdown-item-golden-color: #C8B11C;
 	--dropdown-item-golden-hover-color: #e6cf35;
 	--dropdown-item-golden-active-color: #ffe84e;
@@ -43,19 +47,20 @@
 	--dropdown-item-red-active-color: #ffb944;
 	/* Dialogs */
 	--dialog-bg-color: var(--panel-bg-color);
-	--dialog-border-color: #404040;
-	--dialog-color: #cdcdcd;
-	--dialog-titlebar-bg-color: var(--main-highlight-color);
-	--dialog-titlebar-bottom-border-color: #2b405d;
-	--dialog-titlebar-color: #cdcdcd;
+	--dialog-border-color: #4840A7;
+	--dialog-color: #bcbcbc;
+	--dialog-titlebar-bg-color: hsl(245deg 44.35% 22.55%); /* #242053 */
+	--dialog-titlebar-bottom-border-color: hsl(245deg 33% 17%);
+	--dialog-titlebar-color: #c6c6c6;
+	--dialog-link-color: #889eff;
 	/* Collapsible headings in dialogs */
 	--collapsible-heading-bg-color: var(--panel-bg-color);
 	--collapsible-heading-hover-bg-color: #333333;
 	--collapsible-heading-active-bg-color: #404040;
 	--collapsible-heading-color: #808080;
-	--collapsible-heading-expanded-bg-color: #404040;
-	--collapsible-heading-expanded-hover-bg-color: #4a4a4a;
-	--collapsible-heading-expanded-active-bg-color: #505050;
+	--collapsible-heading-expanded-bg-color: hsl(245deg 45% 34%);
+	--collapsible-heading-expanded-hover-bg-color: hsl(245deg 55% 44%);
+	--collapsible-heading-expanded-active-bg-color: hsl(245deg 65% 54%);
 	--collapsible-heading-expanded-color: #cdcdcd;
 	/* Streaming Profile List */
 	--streaming-profile-item-bg-color: #272727;
@@ -68,9 +73,125 @@
 	--badge-selected-color: #bad8ff;
 	--timeline-background-color: #000000;
 	/* Context Menus */
+	--context-menu-icon-highlight-color: #796dff;
+}
+
+.blue-iris-5:root,
+.blue-iris-5-black:root
+{
+	--main-highlight-color: #3E5F8A;
+	--panel-bg-color: #181818;
+	--zebra-stripe-bg-color: rgba(255,255,255,0.05);
+	--text-color: #BFBFBF;
+	--slidercb-color: #6ea8dd;
+	--progress-bar-outer-color: #383E47;
+	--topbar-tab-hover-bg-color: rgba(255,255,255,0.2);
+	/* Dropdowns, Calendar, SquareButtons */
+	--uicontrol-bg-color: #101010;
+	--uicontrol-hover-bg-color: #303030;
+	--uicontrol-active-bg-color: #505050;
+	/* Dropdowns */
+	--dropdown-item-blue-color: #618dc7;
+	--dropdown-item-blue-hover-color: #7db0f3;
+	--dropdown-item-blue-active-color: #8fbefd;
+	/* Dialogs */
+	--dialog-border-color: #404040;
+	--dialog-color: #cdcdcd;
+	--dialog-titlebar-bg-color: var(--main-highlight-color);
+	--dialog-titlebar-bottom-border-color: #2b405d;
+	--dialog-titlebar-color: #cdcdcd;
+	--dialog-link-color: #8DF;
+	/* Collapsible headings in dialogs */
+	--collapsible-heading-expanded-bg-color: #404040;
+	--collapsible-heading-expanded-hover-bg-color: #4a4a4a;
+	--collapsible-heading-expanded-active-bg-color: #505050;
+	/* Context Menus */
 	--context-menu-icon-highlight-color: #0097F0;
 }
 
+.blue-iris-6-black:root,
+.blue-iris-5-black:root
+{
+	--panel-bg-color: #000000;
+	--zebra-stripe-bg-color: rgba(255,255,255,0.1);
+}
+
+.legacy-ui3:root
+{
+	/* Main / Misc */
+	--main-highlight-color: #0097F0;
+	--panel-bg-color: #15171B;
+	--zebra-stripe-bg-color: rgba(255,255,255,0.05);
+	--cliplist-bg-color: #15171B;
+	--contextmenu-server-icon-color: #0097F0;
+	--button-color: #969BA7;
+	--ptzpad-color: #363B46;
+	--ptzpad-disabled-color: #20242b;
+	--text-color: #969BA7;
+	--audio-playing-color: #00F000;
+	--seek-bar-color: var(--main-highlight-color);
+	--slidercb-color: #6ea8dd;
+	--progress-bar-outer-color: #383E47;
+	--topbar-tab-hover-bg-color: rgba(255,255,255,0.2);
+	/* Dropdowns, Calendar, SquareButtons */
+	--uicontrol-bg-color: transparent;
+	--uicontrol-hover-bg-color: rgba(255,255,255,0.1);
+	--uicontrol-active-bg-color: rgba(255,255,255,0.3);
+	/* Dropdowns */
+	--dropdown-item-bg-color: #2C2E31;
+	--dropdown-item-hover-bg-color: #444444;
+	--dropdown-item-active-bg-color: #666666;
+	--dropdown-item-color: #DDDDDD;
+	--dropdown-item-hover-color: #EEEEEE;
+	--dropdown-item-active-color: #FFFFFF;
+	--dropdown-item-blue-color: #0097F0;
+	--dropdown-item-blue-hover-color: #4dbeff;
+	--dropdown-item-blue-active-color: #99daff;
+	--dropdown-item-golden-color: #BBBB00;
+	--dropdown-item-golden-hover-color: #DDDD00;
+	--dropdown-item-golden-active-color: #FFFF00;
+	/* Dialogs */
+	--dialog-bg-color: #393939;
+	--dialog-border-color: #1870B5;
+	--dialog-color: #cdcdcd;
+	--dialog-titlebar-bg-color: #272727;
+	--dialog-titlebar-bottom-border-color: #15273f;
+	--dialog-titlebar-color: #cdcdcd;
+	--dialog-link-color: #8DF;
+	/* Collapsible headings in dialogs */
+	--collapsible-heading-bg-color: #424242;
+	--collapsible-heading-hover-bg-color: #4a4a4a;
+	--collapsible-heading-active-bg-color: #505050;
+	--collapsible-heading-expanded-bg-color: #626262;
+	--collapsible-heading-expanded-hover-bg-color: #6a6a6a;
+	--collapsible-heading-expanded-active-bg-color: #707070;
+	/* Streaming Profile List */
+	--streaming-profile-item-bg-color: #424242;
+	--streaming-profile-item-hover-bg-color: #525252;
+	/* Clip List */
+	--badge-color: #2b4bc6;
+	--badge-hover-color: #0035ff;
+	--badge-selected-color: #95C7FC;
+	/* Context Menus */
+	--context-menu-icon-highlight-color: var(--main-highlight-color);
+}
+
+.dialog_content a,
+.dialog_content a:visited
+{
+	color: var(--dialog-link-color);
+}
+
+.sliderCb[type=checkbox]:checked + label:after
+{
+	background: var(--slidercb-color);
+}
+
+.sliderCb[type=checkbox]:checked + label .ui:after
+{
+	color: var(--slidercb-color)
+}
+/* End themes */
 .panel-bg-color
 {
 	color: var(--panel-bg-color);
@@ -514,7 +635,7 @@ svg .svg_sidebar
 	.topbar_tab:hover
 	{
 		color: var(--text-hover-color);
-		background-color: rgba(255,255,255,0.2);
+		background-color: var(--topbar-tab-hover-bg-color);
 	}
 
 	.topbar_tab.selected
@@ -1551,7 +1672,7 @@ div.invisibleLabel
 {
 	position: relative;
 	display: inline-block;
-	background-color: #383E47;
+	background-color: var(--progress-bar-outer-color);
 	width: 100px;
 	height: 16px;
 	vertical-align: top;
@@ -3446,8 +3567,8 @@ div.invisibleLabel
 	right: 0px;
 	width: 36px;
 	box-sizing: border-box;
-	border-top: 1px solid #383E47;
-	border-left: 1px solid #383E47;
+	border-top: 1px solid var(--dialog-border-color);
+	border-left: 1px solid var(--dialog-border-color);
 	padding-top: 1px;
 	background-color: var(--panel-bg-color);
 	cursor: default;
@@ -3911,7 +4032,8 @@ body + div
 .playbackSettings
 {
 	position: absolute;
-	background-color: rgba(0,0,0,0.85);
+	background-color: rgba(0,0,0,0.667);
+	backdrop-filter: blur(12px);
 	color: var(--text-active-color);
 	right: 20px;
 	bottom: 120px;
@@ -6307,7 +6429,7 @@ div::-webkit-scrollbar-corner
 	.uiSettingsRow.everyOther,
 	.profileEditorRow.everyOther
 	{
-		background-color: rgba(255,255,255,0.05);
+		background-color: var(--zebra-stripe-bg-color);
 	}
 
 	/*#uiSettingsPanel input[type="button"]
@@ -6445,6 +6567,7 @@ ul.extraSpacing li
 	{
 		border-bottom-color: var(--dialog-titlebar-bottom-border-color);
 		background-color: var(--dialog-titlebar-bg-color);
+		color: var(--dialog-titlebar-color);
 	}
 
 	.dialog_wrapper.darkTheme .dialog_close,

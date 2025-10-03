@@ -150,6 +150,28 @@
 				appPath = appPath + "/";
 			return appPath;
 		}
+		var ui3_color_themes = ["blue-iris-6-black", "blue-iris-6", "blue-iris-5", "blue-iris-5-black", "legacy-ui3"];
+		function SetColorTheme(theme)
+		{
+			for (var i = 0; i < ui3_color_themes.length; i++)
+				document.documentElement.classList.remove(ui3_color_themes[i]);
+			if (!theme)
+				theme = "auto";
+			theme = theme.replace(/ /g, '-').toLowerCase();
+			if (theme === "auto")
+			{
+				if (bi_version.indexOf("6.") === 0)
+					theme = "blue-iris-6";
+				else if (bi_version.indexOf("5.") === 0)
+					theme = "blue-iris-5";
+				else if (bi_version.indexOf("4.") === 0)
+					theme = "legacy-ui3";
+				else
+					theme = "blue-iris-5";
+			}
+			document.documentElement.classList.add(theme);
+		}
+		try { SetColorTheme(); } catch (e) { console.error(e); }
 		document.getElementById("ui3manifest").href = GetAppPath() + 'applet/manifest.json?v=' + combined_version;
 		document.getElementById("ui3launcher1").href = 'applet/logos/launcher-icon48.png?v=' + combined_version;
 		document.getElementById("ui3launcher2").href = 'applet/logos/launcher-icon256_ios.webp?v=' + combined_version;
