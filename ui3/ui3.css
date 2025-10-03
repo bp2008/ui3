@@ -67,11 +67,12 @@
 	--streaming-profile-item-hover-bg-color: #404040;
 	--streaming-profile-item-ghost-bg-color: rgba(255,255,255,0.1);
 	/* Clip List */
-	--datetile-bg-color: #383E47;
+	--datetile-bg-color: hsl(245, 22%, 29%);
 	--badge-color: var(--main-highlight-color);
 	--badge-hover-color: var(--dropdown-item-blue-color);
 	--badge-selected-color: #bad8ff;
 	--timeline-background-color: #000000;
+	--timeline-legend-bg-color: hsl(245deg 44.35% 22.55%);
 	/* Context Menus */
 	--context-menu-icon-highlight-color: #796dff;
 }
@@ -105,6 +106,9 @@
 	--collapsible-heading-expanded-bg-color: #404040;
 	--collapsible-heading-expanded-hover-bg-color: #4a4a4a;
 	--collapsible-heading-expanded-active-bg-color: #505050;
+	/* Clip List */
+	--datetile-bg-color: #383E47;
+	--timeline-legend-bg-color: var(--datetile-bg-color);
 	/* Context Menus */
 	--context-menu-icon-highlight-color: #0097F0;
 }
@@ -169,9 +173,11 @@
 	--streaming-profile-item-bg-color: #424242;
 	--streaming-profile-item-hover-bg-color: #525252;
 	/* Clip List */
+	--datetile-bg-color: #383E47;
 	--badge-color: #2b4bc6;
 	--badge-hover-color: #0035ff;
 	--badge-selected-color: #95C7FC;
+	--timeline-legend-bg-color: var(--datetile-bg-color);
 	/* Context Menus */
 	--context-menu-icon-highlight-color: var(--main-highlight-color);
 }
@@ -991,7 +997,7 @@ div.icon, a.icon
 .layoutleft-track-handle
 {
 	width: 8px;
-	background-color: #383E47;
+	background-color: var(--datetile-bg-color);
 }
 /* Left Bar Misc */
 .leftBarBox
@@ -3487,7 +3493,7 @@ div.invisibleLabel
 .timelineLegendBar
 {
 	height: 16px;
-	background-color: var(--datetile-bg-color);
+	background-color: var(--timeline-legend-bg-color);
 	position: relative;
 }
 
@@ -3506,14 +3512,14 @@ div.invisibleLabel
 	position: absolute;
 	height: 15px;
 	top: 1px;
-	background-color: var(--datetile-bg-color);
+	background-color: var(--timeline-legend-bg-color);
 	color: var(--text-active-color);
 	border-left: 1px solid var(--text-active-color);
 	padding-left: 2px;
 	padding-right: 4px;
 	font-size: 12px;
 	white-space: nowrap;
-	box-shadow: -3px 0px 4px var(--datetile-bg-color);
+	box-shadow: -3px 0px 4px var(--timeline-legend-bg-color);
 	z-index: 2;
 }
 
