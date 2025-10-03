@@ -188,12 +188,12 @@
 	color: var(--dialog-link-color);
 }
 
-.sliderCb[type=checkbox]:checked + label:after
+.sliderCb[type="checkbox"]:checked + label:after
 {
 	background: var(--slidercb-color);
 }
 
-.sliderCb[type=checkbox]:checked + label .ui:after
+.sliderCb[type="checkbox"]:checked + label .ui:after
 {
 	color: var(--slidercb-color)
 }
