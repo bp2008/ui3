@@ -19242,12 +19242,6 @@ function FetchH264VideoModule()
 			fetchOptions.timestampScale = speed / 100;
 			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + profileArgs + "&extend=2" + offsetArg + overlayArgs + playbackControls.GetSpeedBasedSubstreamArgument();
 		}
-		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
-		volumeIconHelper.setEnabled(loading.audio);
-		if (didRequestAudio && loading.audio)
-			volumeIconHelper.setColorLoading();
-		else
-			volumeIconHelper.setColorIdle();
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		reconnectDelayedToast.hide();
 		if (startPaused)
@@ -19263,6 +19257,12 @@ function FetchH264VideoModule()
 			StopStreaming();
 			safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded, fetchOptions);
 		}
+		// We can't 100% trust loading.audio, but we can trust it enough to use it as a hint for the GUI.
+		volumeIconHelper.setEnabled(loading.audio);
+		if (didRequestAudio && loading.audio)
+			volumeIconHelper.setColorLoading();
+		else
+			volumeIconHelper.setColorIdle();
 		UpdateCurrentURL();
 		BI_CustomEvent.Invoke("OpenVideo", loading);
 	}
