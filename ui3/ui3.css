@@ -76,8 +76,8 @@
 	--context-menu-icon-highlight-color: #796dff;
 }
 
-.blue-iris-5:root,
-.blue-iris-5-black:root
+.theme-blue-iris-5:root,
+.theme-blue-iris-5-black:root
 {
 	--main-highlight-color: #3E5F8A;
 	--panel-bg-color: #181818;
@@ -109,14 +109,14 @@
 	--context-menu-icon-highlight-color: #0097F0;
 }
 
-.blue-iris-6-black:root,
-.blue-iris-5-black:root
+.theme-blue-iris-6-black:root,
+.theme-blue-iris-5-black:root
 {
 	--panel-bg-color: #000000;
 	--zebra-stripe-bg-color: rgba(255,255,255,0.1);
 }
 
-.legacy-ui3:root
+.theme-legacy-ui3:root
 {
 	/* Main / Misc */
 	--main-highlight-color: #0097F0;
