@@ -37034,7 +37034,7 @@ function MqttClient()
 						else
 						{
 							var camData = cameraListLoader.GetCameraWithId(value);
-							if (camData && iEquals(videoPlayer.Loading().image.id, camData.optionValue))
+							if (camData && !iEquals(videoPlayer.Loading().image.id, camData.optionValue))
 								videoPlayer.LoadLiveCamera(camData);
 						}
 					}
