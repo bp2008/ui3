@@ -1,11 +1,12 @@
 :root
 {
 	/* Main / Misc */
-	--main-highlight-color: #4840a7;
+	--main-highlight-color: hsl(245, 38%, 39%);
+	--colorAccent1: rgba(62,125,182,1);
+	--colorAccent2: rgba(74,144,114,1);
 	--panel-bg-color: #0C0C0C;
 	--zebra-stripe-bg-color: rgba(255,255,255,0.09);
 	--cliplist-bg-color: #101010;
-	--contextmenu-server-icon-color: #6b61d4;
 	--button-color: #BBB1B0;
 	--ptzpad-color: #6d6868;
 	--ptzpad-disabled-color: #2d2c2c;
@@ -18,13 +19,17 @@
 	--profile-pause-color: #E3D246;
 	--profile-stop-color: #DC164F;
 	--audio-playing-color: #63C35B;
-	--audio-loading-color: #F0F000;
+	--audio-loading-color: #E0E000;
 	--audio-error-color: #F00000;
 	--audio-idle-color: var(--button-color);
-	--seek-bar-color: #2C82C9;
+	--seek-bar-color: hsl(245, 50%, 70%);
 	--slidercb-color: var(--dialog-link-color);
+	--progress-bar-inner-color: hsl(245, 50%, 60%);
 	--progress-bar-outer-color: #292e33;
+	--status-bar-inner-color: hsl(245, 40%, 50%);
 	--topbar-tab-hover-bg-color: rgba(255,255,255,0.15);
+	--system-name-bg-color: #393378;
+	--system-name-hot-hover-bg-color: var(--main-highlight-color);
 	/* Dropdowns, Calendar, SquareButtons */
 	--uicontrol-bg-color: transparent;
 	--uicontrol-hover-bg-color: rgba(255,255,255,0.125);
@@ -36,9 +41,9 @@
 	--dropdown-item-color: var(--text-color);
 	--dropdown-item-hover-color: var(--text-hover-color);
 	--dropdown-item-active-color: var(--text-active-color);
-	--dropdown-item-blue-color: hsl(245deg 71% 71%);
-	--dropdown-item-blue-hover-color: hsl(245deg 81% 81%);
-	--dropdown-item-blue-active-color: hsl(245deg 91% 91%);
+	--dropdown-item-blue-color: hsl(245, 71%, 71%);
+	--dropdown-item-blue-hover-color: hsl(245, 81%, 81%);
+	--dropdown-item-blue-active-color: hsl(245, 91%, 91%);
 	--dropdown-item-golden-color: #C8B11C;
 	--dropdown-item-golden-hover-color: #e6cf35;
 	--dropdown-item-golden-active-color: #ffe84e;
@@ -47,10 +52,10 @@
 	--dropdown-item-red-active-color: #ffb944;
 	/* Dialogs */
 	--dialog-bg-color: var(--panel-bg-color);
-	--dialog-border-color: #4840A7;
+	--dialog-border-color: #393378;
 	--dialog-color: #bcbcbc;
-	--dialog-titlebar-bg-color: hsl(245deg 44.35% 22.55%); /* #242053 */
-	--dialog-titlebar-bottom-border-color: hsl(245deg 33% 17%);
+	--dialog-titlebar-bg-color: hsl(245, 45%, 34%); /* #36307e */
+	--dialog-titlebar-bottom-border-color: hsl(245, 45%, 17%);
 	--dialog-titlebar-color: #c6c6c6;
 	--dialog-link-color: #889eff;
 	/* Collapsible headings in dialogs */
@@ -58,9 +63,9 @@
 	--collapsible-heading-hover-bg-color: #333333;
 	--collapsible-heading-active-bg-color: #404040;
 	--collapsible-heading-color: #808080;
-	--collapsible-heading-expanded-bg-color: hsl(245deg 45% 34%);
-	--collapsible-heading-expanded-hover-bg-color: hsl(245deg 55% 44%);
-	--collapsible-heading-expanded-active-bg-color: hsl(245deg 65% 54%);
+	--collapsible-heading-expanded-bg-color: hsl(245, 45%, 34%);
+	--collapsible-heading-expanded-hover-bg-color: hsl(245, 55%, 44%);
+	--collapsible-heading-expanded-active-bg-color: hsl(245, 65%, 54%);
 	--collapsible-heading-expanded-color: #cdcdcd;
 	/* Streaming Profile List */
 	--streaming-profile-item-bg-color: #272727;
@@ -72,7 +77,8 @@
 	--badge-hover-color: var(--dropdown-item-blue-color);
 	--badge-selected-color: #bad8ff;
 	--timeline-background-color: #000000;
-	--timeline-legend-bg-color: hsl(245deg 44.35% 22.55%);
+	--timeline-legend-bg-color: hsl(245, 29%, 22%);
+	--timeline-center-bar-color: hsl(200,100%,50%,75%);
 	/* Context Menus */
 	--context-menu-icon-highlight-color: #796dff;
 }
@@ -84,9 +90,14 @@
 	--panel-bg-color: #181818;
 	--zebra-stripe-bg-color: rgba(255,255,255,0.05);
 	--text-color: #BFBFBF;
+	--audio-loading-color: #F0F000;
+	--seek-bar-color: #2C82C9;
 	--slidercb-color: #6ea8dd;
+	--progress-bar-inner-color: var(--main-highlight-color);
 	--progress-bar-outer-color: #383E47;
+	--status-bar-inner-color: var(--main-highlight-color);
 	--topbar-tab-hover-bg-color: rgba(255,255,255,0.2);
+	--system-name-bg-color: var(--main-highlight-color);
 	/* Dropdowns, Calendar, SquareButtons */
 	--uicontrol-bg-color: #101010;
 	--uicontrol-hover-bg-color: #303030;
@@ -109,6 +120,7 @@
 	/* Clip List */
 	--datetile-bg-color: #383E47;
 	--timeline-legend-bg-color: var(--datetile-bg-color);
+	--timeline-center-bar-color: rgba(0,213,255,0.75);
 	/* Context Menus */
 	--context-menu-icon-highlight-color: #0097F0;
 }
@@ -127,16 +139,19 @@
 	--panel-bg-color: #15171B;
 	--zebra-stripe-bg-color: rgba(255,255,255,0.05);
 	--cliplist-bg-color: #15171B;
-	--contextmenu-server-icon-color: #0097F0;
 	--button-color: #969BA7;
 	--ptzpad-color: #363B46;
 	--ptzpad-disabled-color: #20242b;
 	--text-color: #969BA7;
 	--audio-playing-color: #00F000;
+	--audio-loading-color: #F0F000;
 	--seek-bar-color: var(--main-highlight-color);
 	--slidercb-color: #6ea8dd;
+	--progress-bar-inner-color: var(--main-highlight-color);
 	--progress-bar-outer-color: #383E47;
+	--status-bar-inner-color: var(--main-highlight-color);
 	--topbar-tab-hover-bg-color: rgba(255,255,255,0.2);
+	--system-name-bg-color: var(--main-highlight-color);
 	/* Dropdowns, Calendar, SquareButtons */
 	--uicontrol-bg-color: transparent;
 	--uicontrol-hover-bg-color: rgba(255,255,255,0.1);
@@ -178,6 +193,7 @@
 	--badge-hover-color: #0035ff;
 	--badge-selected-color: #95C7FC;
 	--timeline-legend-bg-color: var(--datetile-bg-color);
+	--timeline-center-bar-color: rgba(0,213,255,0.75);
 	/* Context Menus */
 	--context-menu-icon-highlight-color: var(--main-highlight-color);
 }
@@ -574,7 +590,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 #systemnamewrapper
 {
 	height: 100%;
-	background-color: var(--main-highlight-color);
+	background-color: var(--system-name-bg-color);
 	color: var(--text-active-color);
 }
 
@@ -582,6 +598,11 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 	{
 		cursor: pointer;
 	}
+
+		#systemnamewrapper.hot:hover
+		{
+			background-color: var(--system-name-hot-hover-bg-color);
+		}
 
 .sideBarRight #systemnamewrapper
 {
@@ -1711,9 +1732,14 @@ div.invisibleLabel
 .progressBarInner
 {
 	background-color: #3E5F8A; /* IE hack */
-	background-color: var(--main-highlight-color);
+	background-color: var(--progress-bar-inner-color);
 	width: 0%;
 	height: 100%;
+}
+
+#statusArea .progressBarInner
+{
+	background-color: var(--status-bar-inner-color);
 }
 /* Date Filters */
 #dateRange
@@ -3599,7 +3625,7 @@ div.invisibleLabel
 	top: 0px;
 	height: 100%;
 	width: 2px;
-	background-color: rgba(0,213,255,0.75);
+	background-color: var(--timeline-center-bar-color);
 	z-index: 2;
 }
 

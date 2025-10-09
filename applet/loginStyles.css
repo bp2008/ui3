@@ -67,6 +67,7 @@ body
 	background: radial-gradient(ellipse at center, #45484d 0%,#000000 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
 	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#45484d', endColorstr='#000000',GradientType=0 ); /* IE6-9 fallback on horizontal gradient */
 }
+
 svg.icon
 {
 	fill: currentColor;
@@ -75,6 +76,7 @@ svg.icon
 	transform: scaleY(-1);
 	pointer-events: none; /* Firefox otherwise fires document.mouseleave when mousing over svg */
 }
+
 .b-m-mpanel
 {
 	font-family: Consolas, Arial, sans-serif;
@@ -272,4 +274,51 @@ a, a:visited
 {
 	border: 1px dashed #777;
 	margin-top: -1px;
+}
+
+.theme-blue-iris-6:root body
+{
+	background-image: url(login_logo.webp);
+	background-size: cover;
+	background-position: center center;
+	background-repeat: no-repeat;
+	background-attachment: fixed;
+	backdrop-filter: blur(16px);
+}
+
+.theme-blue-iris-6:root .btn:focus
+{
+	box-shadow: inset 0 -5px 45px rgba(100,100,100,0.25), 0 1px 1px rgba(255,255,255,0.6);
+	outline: 2px solid rgba(255,255,255,0.1);
+}
+
+.theme-blue-iris-6:root .btn
+{
+	background-color: hsl(245deg 45% 38%);
+	box-shadow: inset 0 -5px 45px rgba(0,0,0,0.25), 0 1px 1px rgb(255,255,255,0.25);
+}
+
+	.theme-blue-iris-6:root .btn:hover
+	{
+		background-color: hsl(245deg 50% 45%);
+	}
+
+	.theme-blue-iris-6:root .btn:active
+	{
+		background-color: hsl(245deg 55% 53%);
+	}
+
+.theme-blue-iris-6:root a, .theme-blue-iris-6:root a:visited
+{
+	color: #889eff;
+}
+
+.theme-blue-iris-6:root [type="checkbox"]:checked + label:after
+{
+	background: #889eff;
+}
+
+.theme-blue-iris-6:root [type="checkbox"]:checked + label .ui:after
+{
+	color: #889eff;
 }

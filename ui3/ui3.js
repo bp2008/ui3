@@ -29108,6 +29108,7 @@ function ServerControl()
 				return;
 			$sysconfig.empty();
 			AddInstallUpdateButton($sysconfig);
+			AddChangelogButton($sysconfig);
 			$sysconfig.append(GetCustomCheckbox('archive', "Clip Web Archival (FTP)", response.data.archive, SetSysConfig));
 			$sysconfig.append(GetCustomCheckbox('schedule', "Global Schedule", response.data.schedule, SetSysConfig));
 			$sysconfig.append(UIFormField({
@@ -29228,6 +29229,12 @@ function ServerControl()
 			$row.append(GetDialogOptionLabel('<a href="javascript:uiSettingsPanel.open(\'Update Available\')">Configure "Update Available Notice"</a>'));
 			$sysconfig.append($row);
 		}
+	}
+	var AddChangelogButton = function ($sysconfig)
+	{
+		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
+		$row.append(GetDialogOptionLabel('<a href="https://blueirissoftware.com/changelog.pdf" target="_blank">View Blue Iris changelog <svg class="icon noflip"><use xlink:href="#svg_mio_launch"></use></svg></a>'));
+		$sysconfig.append($row);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -33631,7 +33638,7 @@ function SimpleGraph()
 		var ctx = canvas.getContext("2d");
 
 		ctx.fillStyle = "#222222";
-		ctx.fillRect(0, 0, w, h);
+		ctx.fillRect(-1, 0, w + 1, h); // Clear an extra 1px on left side to work around a firefox bug where clearing does not affect the left edge.
 		ctx.lineWidth = 1;
 		//var min = 9007199254740991;
 		var max = 0;

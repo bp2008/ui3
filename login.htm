@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "31";
+		var login_version = "32";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -122,6 +122,17 @@
 			return null;
 		}
 		function isUrlPathBad(b) { const c = /^[A-Za-z0-9=_-]+$/; try { const a = (new URL(b)).pathname.slice(1); return 20 < a.length && c.test(a) } catch (a) { return !1 } };
+		function SetColorTheme()
+		{
+			var theme;
+			if (bi_version && bi_version.indexOf("6.") === 0)
+				theme = "blue-iris-6";
+			else
+				theme = "blue-iris-5";
+			theme = "theme-" + theme;
+			document.documentElement.classList.add(theme);
+		}
+		try { SetColorTheme(); } catch (e) { console.error(e); }
 	</script>
 	<script type="text/javascript">
 		document.getElementById("ui3manifest").href = 'applet/manifest.json?v=' + combined_version;
