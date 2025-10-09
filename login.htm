@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "32";
+		var login_version = "33";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -137,7 +137,7 @@
 	<script type="text/javascript">
 		document.getElementById("ui3manifest").href = 'applet/manifest.json?v=' + combined_version;
 		document.getElementById("ui3launcher1").href = 'applet/logos/launcher-icon48.png?v=' + combined_version;
-		document.getElementById("ui3launcher2").href = 'applet/launcher-icon.png?v=' + combined_version;
+		document.getElementById("ui3launcher2").href = 'applet/logos/launcher-icon256_ios.webp?v=' + combined_version;
 	</script>
 	<style type="text/css">
 		body
