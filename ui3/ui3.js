@@ -11619,7 +11619,7 @@ function SeekBar()
 			}
 			else
 				qualityArgs = "&w=" + sizeToRequest.w + "&h=" + sizeToRequest.h + "&q=50&stream=0&decode=-1";
-			var url = RemoveUrlParameters(videoPlayer.GetLastSnapshotUrl(), "time", "w", "h", "q", "stream");
+			var url = RemoveUrlParameters(videoPlayer.GetLastSnapshotUrl(), "time", "w", "h", "q", "stream", "decode");
 			url += "&time=" + msec + qualityArgs;
 			seekhint_img.attr('src', url);
 		}
@@ -18868,6 +18868,7 @@ function FetchH264VideoModule()
 	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, rawtime: 0, utc: Date.now(), expectedInterframe: 100, size: 0 };
 	var framesSinceLastKeyframe = 0;
 	var audioCodec = "";
+	var currentStreamBitmapInfo = null;
 
 	var loading = new BICameraData();
 
@@ -19380,6 +19381,7 @@ function FetchH264VideoModule()
 	}
 	var streamInfoCallback = function (bitmapInfoHeader, waveFormatEx)
 	{
+		currentStreamBitmapInfo = bitmapInfoHeader;
 		if (typeof h264_player.streamInfoCallback === "function")
 			h264_player.streamInfoCallback(bitmapInfoHeader, waveFormatEx);
 	}
@@ -19644,7 +19646,11 @@ function FetchH264VideoModule()
 		if (nerdStats.IsOpen())
 		{
 			var loaded = videoPlayer.Loaded().image;
-			var codecs = "h264";
+			var codecs = "";
+			if (currentStreamBitmapInfo)
+				codecs = currentStreamBitmapInfo.biCompression;
+			if (!codecs)
+				codecs = "unknown video";
 			if (streamHasAudio == 1 && audioCodec)
 				codecs += ", " + audioCodec;
 			var interFrame = frame.expectedInterframe;
@@ -21468,8 +21474,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	}
 	this.streamInfoCallback = function (bitmapInfoHeader, waveFormatEx)
 	{
-		if (bitmapInfoHeader)
-			currentStreamBitmapInfo = bitmapInfoHeader;
+		currentStreamBitmapInfo = bitmapInfoHeader;
 	}
 	/**
 	 * Enables or disables canvas rendering.
@@ -30882,6 +30887,11 @@ function RemoveUrlParameters(url)
 	{
 		root = search.substr(0, idxQmark + 1);
 		search = search.substr(idxQmark + 1);
+	}
+	if (root === "" && search.startsWith("&"))
+	{
+		root = "&";
+		search = search.substr(1);
 	}
 	search = new URLSearchParams(search);
 	for (var i = 1; i < arguments.length; i++)
