@@ -1455,7 +1455,7 @@
         // Remaining data after last start code
         var left = null;
         if (lastIndex < length) {
-          left = buffer.subarray(lastIndex, length);
+          result.push(buffer.subarray(lastIndex, length));
         }
         return [result, left];
       }
@@ -2160,7 +2160,7 @@
         // Remaining data after last start code
         var left = null;
         if (lastIndex < length) {
-          left = buffer.subarray(lastIndex, length);
+          result.push(buffer.subarray(lastIndex, length));
         }
         return [result, left];
       }
@@ -2712,7 +2712,7 @@
         this.mp4track.fps = config.fps || this.mp4track.fps;
         this.mp4track.width = config.width;
         this.mp4track.height = config.height;
-        this.mp4track.codec = "hvc1.".concat(config.profile_idc, ".").concat(config.profile_compatibility_flags.toString(16)) + ".L".concat(config.level_idc).concat(config.tier_flag ? 'H' : 'L') + ".".concat(config.constraint_indicator_flags.map(function (b) {
+        this.mp4track.codec = "hvc1.".concat(config.profile_idc, ".").concat(config.profile_compatibility_flags.toString(16)) + ".".concat(config.tier_flag ? 'H' : 'L').concat(config.level_idc) + ".".concat(config.constraint_indicator_flags.map(function (b) {
           return b.toString(16);
         }).join('.').toUpperCase());
         this.mp4track.hvcC = {
