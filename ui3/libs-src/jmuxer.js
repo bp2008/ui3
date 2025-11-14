@@ -4,6 +4,30 @@
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.JMuxer = factory(global.stream));
 })(this, (function (stream) { 'use strict';
 
+/** Added by bp2008 */
+function reverseBits(n)
+{
+    var result = 0;
+    for (var i = 0; i < 32; i++)
+    {
+        // Shift result left to make room
+        result <<= 1;
+        // Add the least significant bit of n
+        result |= (n & 1);
+        // Shift n right to process the next bit
+        n >>>= 1;
+    }
+    // Ensure result is treated as unsigned 32-bit
+    return result >>> 0;
+}
+/** Added by bp2008 */
+function removeTrailingDotZero(input)
+{
+  // Use regex to strip all trailing ".0" sequences
+  return input.replace(/(?:\.0)+$/, '');
+}
+
+
   function _arrayLikeToArray(r, a) {
     (null == a || a > r.length) && (a = r.length);
     for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e];
@@ -2712,9 +2736,13 @@
         this.mp4track.fps = config.fps || this.mp4track.fps;
         this.mp4track.width = config.width;
         this.mp4track.height = config.height;
-        this.mp4track.codec = "hvc1.".concat(config.profile_idc, ".").concat(config.profile_compatibility_flags.toString(16)) + ".".concat(config.tier_flag ? 'H' : 'L').concat(config.level_idc) + ".".concat(config.constraint_indicator_flags.map(function (b) {
-          return b.toString(16);
-        }).join('.').toUpperCase());
+        this.mp4track.codec =
+            "hvc1"
+            + "." + (config.profile_space ? String.fromCharCode(64 + config.profile_space) : '') // Map [0,1,2,3] to ['','A','B','C']
+            + config.profile_idc
+            + "." + reverseBits(config.profile_compatibility_flags).toString(16)
+            + "." + (config.tier_flag ? 'H' : 'L') + config.level_idc
+            + "." + removeTrailingDotZero(config.constraint_indicator_flags.map(function (b) { return b.toString(16); }).join('.').toUpperCase());
         this.mp4track.hvcC = {
           profile_space: config.profile_space,
           tier_flag: config.tier_flag,
