@@ -1,2470 +1,3416 @@
-var JMuxer = (function () {
-'use strict';
+(function (global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('stream')) :
+  typeof define === 'function' && define.amd ? define(['stream'], factory) :
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.JMuxer = factory(global.stream));
+})(this, (function (stream) { 'use strict';
 
-var logger = void 0;
-var errorLogger = void 0;
-
-function setLogger() {
-    /*eslint-disable */
-    logger = console.log;
-    errorLogger = console.error;
-    /*eslint-enable */
-}
-
-
-
-function log(message) {
-    if (logger) {
-        for (var _len = arguments.length, optionalParams = Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
-            optionalParams[_key - 1] = arguments[_key];
-        }
-
-        logger.apply(undefined, [message].concat(optionalParams));
-    }
-}
-function error(message) {
-    if (errorLogger) {
-        for (var _len2 = arguments.length, optionalParams = Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++) {
-            optionalParams[_key2 - 1] = arguments[_key2];
-        }
-
-        errorLogger.apply(undefined, [message].concat(optionalParams));
-    }
-}
-
-var asyncGenerator = function () {
-  function AwaitValue(value) {
-    this.value = value;
+  function _arrayLikeToArray(r, a) {
+    (null == a || a > r.length) && (a = r.length);
+    for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e];
+    return n;
   }
-
-  function AsyncGenerator(gen) {
-    var front, back;
-
-    function send(key, arg) {
-      return new Promise(function (resolve, reject) {
-        var request = {
-          key: key,
-          arg: arg,
-          resolve: resolve,
-          reject: reject,
-          next: null
+  function _arrayWithHoles(r) {
+    if (Array.isArray(r)) return r;
+  }
+  function _arrayWithoutHoles(r) {
+    if (Array.isArray(r)) return _arrayLikeToArray(r);
+  }
+  function _assertThisInitialized(e) {
+    if (void 0 === e) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+    return e;
+  }
+  function _classCallCheck(a, n) {
+    if (!(a instanceof n)) throw new TypeError("Cannot call a class as a function");
+  }
+  function _defineProperties(e, r) {
+    for (var t = 0; t < r.length; t++) {
+      var o = r[t];
+      o.enumerable = o.enumerable || !1, o.configurable = !0, "value" in o && (o.writable = !0), Object.defineProperty(e, _toPropertyKey(o.key), o);
+    }
+  }
+  function _createClass(e, r, t) {
+    return r && _defineProperties(e.prototype, r), t && _defineProperties(e, t), Object.defineProperty(e, "prototype", {
+      writable: !1
+    }), e;
+  }
+  function _createForOfIteratorHelper(r, e) {
+    var t = "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
+    if (!t) {
+      if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e && r && "number" == typeof r.length) {
+        t && (r = t);
+        var n = 0,
+          F = function () {};
+        return {
+          s: F,
+          n: function () {
+            return n >= r.length ? {
+              done: !0
+            } : {
+              done: !1,
+              value: r[n++]
+            };
+          },
+          e: function (r) {
+            throw r;
+          },
+          f: F
         };
-
-        if (back) {
-          back = back.next = request;
-        } else {
-          front = back = request;
-          resume(key, arg);
+      }
+      throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    var o,
+      a = !0,
+      u = !1;
+    return {
+      s: function () {
+        t = t.call(r);
+      },
+      n: function () {
+        var r = t.next();
+        return a = r.done, r;
+      },
+      e: function (r) {
+        u = !0, o = r;
+      },
+      f: function () {
+        try {
+          a || null == t.return || t.return();
+        } finally {
+          if (u) throw o;
         }
-      });
-    }
-
-    function resume(key, arg) {
-      try {
-        var result = gen[key](arg);
-        var value = result.value;
-
-        if (value instanceof AwaitValue) {
-          Promise.resolve(value.value).then(function (arg) {
-            resume("next", arg);
-          }, function (arg) {
-            resume("throw", arg);
-          });
-        } else {
-          settle(result.done ? "return" : "normal", result.value);
-        }
-      } catch (err) {
-        settle("throw", err);
       }
-    }
-
-    function settle(type, value) {
-      switch (type) {
-        case "return":
-          front.resolve({
-            value: value,
-            done: true
-          });
-          break;
-
-        case "throw":
-          front.reject(value);
-          break;
-
-        default:
-          front.resolve({
-            value: value,
-            done: false
-          });
-          break;
-      }
-
-      front = front.next;
-
-      if (front) {
-        resume(front.key, front.arg);
-      } else {
-        back = null;
-      }
-    }
-
-    this._invoke = send;
-
-    if (typeof gen.return !== "function") {
-      this.return = undefined;
-    }
-  }
-
-  if (typeof Symbol === "function" && Symbol.asyncIterator) {
-    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
-      return this;
     };
   }
+  function _createSuper(t) {
+    var r = _isNativeReflectConstruct();
+    return function () {
+      var e,
+        o = _getPrototypeOf(t);
+      if (r) {
+        var s = _getPrototypeOf(this).constructor;
+        e = Reflect.construct(o, arguments, s);
+      } else e = o.apply(this, arguments);
+      return _possibleConstructorReturn(this, e);
+    };
+  }
+  function _defineProperty(e, r, t) {
+    return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
+      value: t,
+      enumerable: !0,
+      configurable: !0,
+      writable: !0
+    }) : e[r] = t, e;
+  }
+  function _getPrototypeOf(t) {
+    return _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function (t) {
+      return t.__proto__ || Object.getPrototypeOf(t);
+    }, _getPrototypeOf(t);
+  }
+  function _inherits(t, e) {
+    if ("function" != typeof e && null !== e) throw new TypeError("Super expression must either be null or a function");
+    t.prototype = Object.create(e && e.prototype, {
+      constructor: {
+        value: t,
+        writable: !0,
+        configurable: !0
+      }
+    }), Object.defineProperty(t, "prototype", {
+      writable: !1
+    }), e && _setPrototypeOf(t, e);
+  }
+  function _isNativeReflectConstruct() {
+    try {
+      var t = !Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function () {}));
+    } catch (t) {}
+    return (_isNativeReflectConstruct = function () {
+      return !!t;
+    })();
+  }
+  function _iterableToArray(r) {
+    if ("undefined" != typeof Symbol && null != r[Symbol.iterator] || null != r["@@iterator"]) return Array.from(r);
+  }
+  function _iterableToArrayLimit(r, l) {
+    var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
+    if (null != t) {
+      var e,
+        n,
+        i,
+        u,
+        a = [],
+        f = !0,
+        o = !1;
+      try {
+        if (i = (t = t.call(r)).next, 0 === l) {
+          if (Object(t) !== t) return;
+          f = !1;
+        } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0);
+      } catch (r) {
+        o = !0, n = r;
+      } finally {
+        try {
+          if (!f && null != t.return && (u = t.return(), Object(u) !== u)) return;
+        } finally {
+          if (o) throw n;
+        }
+      }
+      return a;
+    }
+  }
+  function _nonIterableRest() {
+    throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+  }
+  function _nonIterableSpread() {
+    throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+  }
+  function _possibleConstructorReturn(t, e) {
+    if (e && ("object" == typeof e || "function" == typeof e)) return e;
+    if (void 0 !== e) throw new TypeError("Derived constructors may only return object or undefined");
+    return _assertThisInitialized(t);
+  }
+  function _setPrototypeOf(t, e) {
+    return _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function (t, e) {
+      return t.__proto__ = e, t;
+    }, _setPrototypeOf(t, e);
+  }
+  function _slicedToArray(r, e) {
+    return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest();
+  }
+  function _toConsumableArray(r) {
+    return _arrayWithoutHoles(r) || _iterableToArray(r) || _unsupportedIterableToArray(r) || _nonIterableSpread();
+  }
+  function _toPrimitive(t, r) {
+    if ("object" != typeof t || !t) return t;
+    var e = t[Symbol.toPrimitive];
+    if (void 0 !== e) {
+      var i = e.call(t, r || "default");
+      if ("object" != typeof i) return i;
+      throw new TypeError("@@toPrimitive must return a primitive value.");
+    }
+    return ("string" === r ? String : Number)(t);
+  }
+  function _toPropertyKey(t) {
+    var i = _toPrimitive(t, "string");
+    return "symbol" == typeof i ? i : i + "";
+  }
+  function _typeof(o) {
+    "@babel/helpers - typeof";
 
-  AsyncGenerator.prototype.next = function (arg) {
-    return this._invoke("next", arg);
-  };
+    return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) {
+      return typeof o;
+    } : function (o) {
+      return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
+    }, _typeof(o);
+  }
+  function _unsupportedIterableToArray(r, a) {
+    if (r) {
+      if ("string" == typeof r) return _arrayLikeToArray(r, a);
+      var t = {}.toString.call(r).slice(8, -1);
+      return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0;
+    }
+  }
 
-  AsyncGenerator.prototype.throw = function (arg) {
-    return this._invoke("throw", arg);
-  };
+  var logger;
+  var errorLogger;
+  function setLogger(log, err) {
+    /*eslint-disable */
+    logger = log;
+    errorLogger = err;
+    /*eslint-enable */
+  }
+  function log(message) {
+    if (logger) {
+      for (var _len = arguments.length, optionalParams = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+        optionalParams[_key - 1] = arguments[_key];
+      }
+      logger.apply(void 0, [message].concat(optionalParams));
+    }
+  }
+  function error(message) {
+    if (errorLogger) {
+      for (var _len2 = arguments.length, optionalParams = new Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++) {
+        optionalParams[_key2 - 1] = arguments[_key2];
+      }
+      errorLogger.apply(void 0, [message].concat(optionalParams));
+    }
+  }
 
-  AsyncGenerator.prototype.return = function (arg) {
-    return this._invoke("return", arg);
-  };
+  var Event = /*#__PURE__*/function () {
+    function Event(type) {
+      _classCallCheck(this, Event);
+      this.listener = {};
+      this.type = type | '';
+    }
+    _createClass(Event, [{
+      key: "on",
+      value: function on(event, fn) {
+        if (!this.listener[event]) {
+          this.listener[event] = [];
+        }
+        this.listener[event].push(fn);
+        return true;
+      }
+    }, {
+      key: "off",
+      value: function off(event, fn) {
+        if (this.listener[event]) {
+          var index = this.listener[event].indexOf(fn);
+          if (index > -1) {
+            this.listener[event].splice(index, 1);
+          }
+          return true;
+        }
+        return false;
+      }
+    }, {
+      key: "offAll",
+      value: function offAll() {
+        this.listener = {};
+      }
+    }, {
+      key: "dispatch",
+      value: function dispatch(event) {
+        for (var _len = arguments.length, data = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+          data[_key - 1] = arguments[_key];
+        }
+        if (this.listener[event]) {
+          this.listener[event].map(function (each) {
+            each.apply(null, data);
+          });
+          return true;
+        }
+        return false;
+      }
+    }]);
+    return Event;
+  }();
 
-  return {
-    wrap: function (fn) {
-      return function () {
-        return new AsyncGenerator(fn.apply(this, arguments));
+  /**
+   * Generate MP4 Box
+   * taken from: https://github.com/dailymotion/hls.js
+   */
+
+  var MP4 = /*#__PURE__*/function () {
+    function MP4() {
+      _classCallCheck(this, MP4);
+    }
+    _createClass(MP4, null, [{
+      key: "init",
+      value: function init() {
+        MP4.types = {
+          avc1: [],
+          // codingname
+          avcC: [],
+          btrt: [],
+          dinf: [],
+          dref: [],
+          esds: [],
+          ftyp: [],
+          hdlr: [],
+          hev1: [],
+          hvcC: [],
+          mdat: [],
+          mdhd: [],
+          mdia: [],
+          mfhd: [],
+          minf: [],
+          moof: [],
+          moov: [],
+          mp4a: [],
+          mvex: [],
+          mvhd: [],
+          sdtp: [],
+          stbl: [],
+          stco: [],
+          stsc: [],
+          stsd: [],
+          stsz: [],
+          stts: [],
+          tfdt: [],
+          tfhd: [],
+          traf: [],
+          trak: [],
+          trun: [],
+          trex: [],
+          tkhd: [],
+          vmhd: [],
+          smhd: []
+        };
+        var i;
+        for (i in MP4.types) {
+          if (MP4.types.hasOwnProperty(i)) {
+            MP4.types[i] = [i.charCodeAt(0), i.charCodeAt(1), i.charCodeAt(2), i.charCodeAt(3)];
+          }
+        }
+        var videoHdlr = new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00, 0x00, 0x00,
+        // pre_defined
+        0x76, 0x69, 0x64, 0x65,
+        // handler_type: 'vide'
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x56, 0x69, 0x64, 0x65, 0x6f, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x72, 0x00 // name: 'VideoHandler'
+        ]);
+        var audioHdlr = new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00, 0x00, 0x00,
+        // pre_defined
+        0x73, 0x6f, 0x75, 0x6e,
+        // handler_type: 'soun'
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x53, 0x6f, 0x75, 0x6e, 0x64, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x72, 0x00 // name: 'SoundHandler'
+        ]);
+        MP4.HDLR_TYPES = {
+          video: videoHdlr,
+          audio: audioHdlr
+        };
+        var dref = new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00, 0x00, 0x01,
+        // entry_count
+        0x00, 0x00, 0x00, 0x0c,
+        // entry_size
+        0x75, 0x72, 0x6c, 0x20,
+        // 'url' type
+        0x00,
+        // version 0
+        0x00, 0x00, 0x01 // entry_flags
+        ]);
+        var stco = new Uint8Array([0x00,
+        // version
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00, 0x00, 0x00 // entry_count
+        ]);
+        MP4.STTS = MP4.STSC = MP4.STCO = stco;
+        MP4.STSZ = new Uint8Array([0x00,
+        // version
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00, 0x00, 0x00,
+        // sample_size
+        0x00, 0x00, 0x00, 0x00 // sample_count
+        ]);
+        MP4.VMHD = new Uint8Array([0x00,
+        // version
+        0x00, 0x00, 0x01,
+        // flags
+        0x00, 0x00,
+        // graphicsmode
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00 // opcolor
+        ]);
+        MP4.SMHD = new Uint8Array([0x00,
+        // version
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00,
+        // balance
+        0x00, 0x00 // reserved
+        ]);
+        MP4.STSD = new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00, 0x00, 0x01]); // entry_count
+
+        var majorBrand = new Uint8Array([105, 115, 111, 109]); // isom
+        var avc1Brand = new Uint8Array([97, 118, 99, 49]); // avc1
+        var minorVersion = new Uint8Array([0, 0, 0, 1]);
+        MP4.FTYP = MP4.box(MP4.types.ftyp, majorBrand, minorVersion, majorBrand, avc1Brand);
+        MP4.DINF = MP4.box(MP4.types.dinf, MP4.box(MP4.types.dref, dref));
+      }
+    }, {
+      key: "box",
+      value: function box(type) {
+        for (var _len = arguments.length, payload = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+          payload[_key - 1] = arguments[_key];
+        }
+        var size = 8,
+          i = payload.length,
+          len = i,
+          result;
+        // calculate the total size we need to allocate
+        while (i--) {
+          size += payload[i].byteLength;
+        }
+        result = new Uint8Array(size);
+        result[0] = size >> 24 & 0xff;
+        result[1] = size >> 16 & 0xff;
+        result[2] = size >> 8 & 0xff;
+        result[3] = size & 0xff;
+        result.set(type, 4);
+        // copy the payload into the result
+        for (i = 0, size = 8; i < len; ++i) {
+          // copy payload[i] array @ offset size
+          result.set(payload[i], size);
+          size += payload[i].byteLength;
+        }
+        return result;
+      }
+    }, {
+      key: "hdlr",
+      value: function hdlr(type) {
+        return MP4.box(MP4.types.hdlr, MP4.HDLR_TYPES[type]);
+      }
+    }, {
+      key: "mdat",
+      value: function mdat(data) {
+        return MP4.box(MP4.types.mdat, data);
+      }
+    }, {
+      key: "mdhd",
+      value: function mdhd(timescale, duration) {
+        return MP4.box(MP4.types.mdhd, new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00, 0x00, 0x02,
+        // creation_time
+        0x00, 0x00, 0x00, 0x03,
+        // modification_time
+        timescale >> 24 & 0xFF, timescale >> 16 & 0xFF, timescale >> 8 & 0xFF, timescale & 0xFF,
+        // timescale
+        duration >>> 24 & 0xFF, duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF,
+        // duration
+        0x55, 0xc4,
+        // 'und' language (undetermined)
+        0x00, 0x00]));
+      }
+    }, {
+      key: "mdia",
+      value: function mdia(track) {
+        return MP4.box(MP4.types.mdia, MP4.mdhd(track.timescale, track.duration), MP4.hdlr(track.type), MP4.minf(track));
+      }
+    }, {
+      key: "mfhd",
+      value: function mfhd(sequenceNumber) {
+        return MP4.box(MP4.types.mfhd, new Uint8Array([0x00, 0x00, 0x00, 0x00,
+        // flags
+        sequenceNumber >> 24, sequenceNumber >> 16 & 0xFF, sequenceNumber >> 8 & 0xFF, sequenceNumber & 0xFF // sequence_number
+        ]));
+      }
+    }, {
+      key: "minf",
+      value: function minf(track) {
+        if (track.type === 'audio') {
+          return MP4.box(MP4.types.minf, MP4.box(MP4.types.smhd, MP4.SMHD), MP4.DINF, MP4.stbl(track));
+        } else {
+          return MP4.box(MP4.types.minf, MP4.box(MP4.types.vmhd, MP4.VMHD), MP4.DINF, MP4.stbl(track));
+        }
+      }
+    }, {
+      key: "moof",
+      value: function moof(sn, baseMediaDecodeTime, track) {
+        return MP4.box(MP4.types.moof, MP4.mfhd(sn), MP4.traf(track, baseMediaDecodeTime));
+      }
+      /**
+       * @param tracks... (optional) {array} the tracks associated with this movie
+       */
+    }, {
+      key: "moov",
+      value: function moov(tracks, duration, timescale) {
+        var i = tracks.length,
+          boxes = [];
+        while (i--) {
+          boxes[i] = MP4.trak(tracks[i]);
+        }
+        return MP4.box.apply(null, [MP4.types.moov, MP4.mvhd(timescale, duration)].concat(boxes).concat(MP4.mvex(tracks)));
+      }
+    }, {
+      key: "mvex",
+      value: function mvex(tracks) {
+        var i = tracks.length,
+          boxes = [];
+        while (i--) {
+          boxes[i] = MP4.trex(tracks[i]);
+        }
+        return MP4.box.apply(null, [MP4.types.mvex].concat(boxes));
+      }
+    }, {
+      key: "mvhd",
+      value: function mvhd(timescale, duration) {
+        var bytes = new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        0x00, 0x00, 0x00, 0x01,
+        // creation_time
+        0x00, 0x00, 0x00, 0x02,
+        // modification_time
+        timescale >> 24 & 0xFF, timescale >> 16 & 0xFF, timescale >> 8 & 0xFF, timescale & 0xFF,
+        // timescale
+        duration >>> 24 & 0xFF, duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF,
+        // duration
+        0x00, 0x01, 0x00, 0x00,
+        // 1.0 rate
+        0x01, 0x00,
+        // 1.0 volume
+        0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
+        // transformation: unity matrix
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // pre_defined
+        0xff, 0xff, 0xff, 0xff // next_track_ID
+        ]);
+        return MP4.box(MP4.types.mvhd, bytes);
+      }
+    }, {
+      key: "sdtp",
+      value: function sdtp(track) {
+        var samples = track.samples || [],
+          bytes = new Uint8Array(4 + samples.length),
+          flags,
+          i;
+        // leave the full box header (4 bytes) all zero
+        // write the sample table
+        for (i = 0; i < samples.length; i++) {
+          flags = samples[i].flags;
+          bytes[i + 4] = flags.dependsOn << 4 | flags.isDependedOn << 2 | flags.hasRedundancy;
+        }
+        return MP4.box(MP4.types.sdtp, bytes);
+      }
+    }, {
+      key: "stbl",
+      value: function stbl(track) {
+        return MP4.box(MP4.types.stbl, MP4.stsd(track), MP4.box(MP4.types.stts, MP4.STTS), MP4.box(MP4.types.stsc, MP4.STSC), MP4.box(MP4.types.stsz, MP4.STSZ), MP4.box(MP4.types.stco, MP4.STCO));
+      }
+    }, {
+      key: "avc1",
+      value: function avc1(track) {
+        var sps = [],
+          pps = [],
+          i,
+          data,
+          len;
+        // assemble the SPSs
+
+        for (i = 0; i < track.sps.length; i++) {
+          data = track.sps[i];
+          len = data.byteLength;
+          sps.push(len >>> 8 & 0xFF);
+          sps.push(len & 0xFF);
+          sps = sps.concat(Array.prototype.slice.call(data)); // SPS
+        }
+
+        // assemble the PPSs
+        for (i = 0; i < track.pps.length; i++) {
+          data = track.pps[i];
+          len = data.byteLength;
+          pps.push(len >>> 8 & 0xFF);
+          pps.push(len & 0xFF);
+          pps = pps.concat(Array.prototype.slice.call(data));
+        }
+        var avcc = MP4.box(MP4.types.avcC, new Uint8Array([0x01,
+          // version
+          sps[3],
+          // profile
+          sps[4],
+          // profile compat
+          sps[5],
+          // level
+          0xfc | 3,
+          // lengthSizeMinusOne, hard-coded to 4 bytes
+          0xE0 | track.sps.length // 3bit reserved (111) + numOfSequenceParameterSets
+          ].concat(sps).concat([track.pps.length // numOfPictureParameterSets
+          ]).concat(pps))),
+          // "PPS"
+          width = track.width,
+          height = track.height;
+        // console.log('avcc:' + Hex.hexDump(avcc));
+        return MP4.box(MP4.types.avc1, new Uint8Array([0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x01,
+        // data_reference_index
+        0x00, 0x00,
+        // pre_defined
+        0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // pre_defined
+        width >> 8 & 0xFF, width & 0xff,
+        // width
+        height >> 8 & 0xFF, height & 0xff,
+        // height
+        0x00, 0x48, 0x00, 0x00,
+        // horizresolution
+        0x00, 0x48, 0x00, 0x00,
+        // vertresolution
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x01,
+        // frame_count
+        0x12, 0x62, 0x69, 0x6E, 0x65,
+        // binelpro.ru
+        0x6C, 0x70, 0x72, 0x6F, 0x2E, 0x72, 0x75, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // compressorname
+        0x00, 0x18,
+        // depth = 24
+        0x11, 0x11]),
+        // pre_defined = -1
+        avcc, MP4.box(MP4.types.btrt, new Uint8Array([0x00, 0x1c, 0x9c, 0x80,
+        // bufferSizeDB
+        0x00, 0x2d, 0xc6, 0xc0,
+        // maxBitrate
+        0x00, 0x2d, 0xc6, 0xc0])) // avgBitrate
+        );
+      }
+    }, {
+      key: "hev1",
+      value: function hev1(track) {
+        var vps = [],
+          sps = [],
+          pps = [],
+          data,
+          len;
+
+        // assemble the VPSs
+        for (var i = 0; i < (((_track$vps = track.vps) === null || _track$vps === void 0 ? void 0 : _track$vps.length) || 0); i++) {
+          var _track$vps;
+          data = track.vps[i];
+          len = data.byteLength;
+          vps.push(len >>> 8 & 0xFF, len & 0xFF);
+          vps = vps.concat(Array.prototype.slice.call(data));
+        }
+
+        // assemble the SPSs
+        for (var _i = 0; _i < (((_track$sps = track.sps) === null || _track$sps === void 0 ? void 0 : _track$sps.length) || 0); _i++) {
+          var _track$sps;
+          data = track.sps[_i];
+          len = data.byteLength;
+          sps.push(len >>> 8 & 0xFF, len & 0xFF);
+          sps = sps.concat(Array.prototype.slice.call(data));
+        }
+
+        // assemble the PPSs
+        for (var _i2 = 0; _i2 < (((_track$pps = track.pps) === null || _track$pps === void 0 ? void 0 : _track$pps.length) || 0); _i2++) {
+          var _track$pps;
+          data = track.pps[_i2];
+          len = data.byteLength;
+          pps.push(len >>> 8 & 0xFF, len & 0xFF);
+          pps = pps.concat(Array.prototype.slice.call(data));
+        }
+        var _track$hvcC = track.hvcC,
+          profile_space = _track$hvcC.profile_space,
+          tier_flag = _track$hvcC.tier_flag,
+          profile_idc = _track$hvcC.profile_idc,
+          profile_compatibility_flags = _track$hvcC.profile_compatibility_flags,
+          constraint_indicator_flags = _track$hvcC.constraint_indicator_flags,
+          level_idc = _track$hvcC.level_idc,
+          chroma_format_idc = _track$hvcC.chroma_format_idc;
+        var hvcc = MP4.box(MP4.types.hvcC, new Uint8Array([0x01,
+        // configurationVersion
+        profile_space << 6 | tier_flag << 5 | profile_idc, profile_compatibility_flags >> 24 & 0xFF, profile_compatibility_flags >> 16 & 0xFF, profile_compatibility_flags >> 8 & 0xFF, profile_compatibility_flags & 0xFF].concat(_toConsumableArray(constraint_indicator_flags), [level_idc, 0xF0, 0x00,
+        // min_spatial_segmentation_idc = 0
+        0xFC | 0,
+        // parallelismType = 0
+        0xFC | chroma_format_idc,
+        // chromaFormat (from SPS)
+        0xF8 | 0,
+        // bitDepthLumaMinus8 = 0 (8-bit)
+        0xF8 | 0,
+        // bitDepthChromaMinus8 = 0
+        0x00, 0x00,
+        // avgFrameRate = 0
+        0x03,
+        // constantFrameRate = 0, numTemporalLayers = 0, lengthSizeMinusOne = 3 (AKA 4)
+        0x03,
+        // numOfArrays
+
+        0x20,
+        // array_completeness + NAL_unit_type (32 = VPS)
+        0x00, 0x01], _toConsumableArray(vps), [0x21,
+        // NAL_unit_type (33 = SPS)
+        0x00, 0x01], _toConsumableArray(sps), [0x22,
+        // NAL_unit_type (34 = PPS)
+        0x00, 0x01], _toConsumableArray(pps))));
+        var width = track.width;
+        var height = track.height;
+        return MP4.box(MP4.types.hev1, new Uint8Array([0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x01,
+        // data_reference_index
+        0x00, 0x00,
+        // pre_defined
+        0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // pre_defined
+        width >> 8 & 0xFF, width & 0xff, height >> 8 & 0xFF, height & 0xff, 0x00, 0x48, 0x00, 0x00,
+        // horizresolution
+        0x00, 0x48, 0x00, 0x00,
+        // vertresolution
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x01,
+        // frame_count
+        0x12, 0x62, 0x69, 0x6E, 0x65,
+        // 'binelpro.ru'
+        0x6C, 0x70, 0x72, 0x6F, 0x2E, 0x72, 0x75, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // compressorname padding
+        0x00, 0x18,
+        // depth = 24
+        0x11, 0x11 // pre_defined = -1
+        ]), hvcc, MP4.box(MP4.types.btrt, new Uint8Array([0x00, 0x1c, 0x9c, 0x80,
+        // bufferSizeDB
+        0x00, 0x2d, 0xc6, 0xc0,
+        // maxBitrate
+        0x00, 0x2d, 0xc6, 0xc0 // avgBitrate
+        ])));
+      }
+    }, {
+      key: "esds",
+      value: function esds(track) {
+        var configlen = track.config.byteLength;
+        var data = new Uint8Array(26 + configlen + 3);
+        data.set([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+
+        0x03,
+        // descriptor_type
+        0x17 + configlen,
+        // length
+        0x00, 0x01,
+        // es_id
+        0x00,
+        // stream_priority
+
+        0x04,
+        // descriptor_type
+        0x0f + configlen,
+        // length
+        0x40,
+        // codec : mpeg4_audio
+        0x15,
+        // stream_type
+        0x00, 0x00, 0x00,
+        // buffer_size
+        0x00, 0x00, 0x00, 0x00,
+        // maxBitrate
+        0x00, 0x00, 0x00, 0x00,
+        // avgBitrate
+
+        0x05,
+        // descriptor_type
+        configlen]);
+        data.set(track.config, 26);
+        data.set([0x06, 0x01, 0x02], 26 + configlen);
+        // return new Uint8Array([
+        //     0x00, // version 0
+        //     0x00, 0x00, 0x00, // flags
+        //
+        //     0x03, // descriptor_type
+        //     0x17+configlen, // length
+        //     0x00, 0x01, //es_id
+        //     0x00, // stream_priority
+        //
+        //     0x04, // descriptor_type
+        //     0x0f+configlen, // length
+        //     0x40, //codec : mpeg4_audio
+        //     0x15, // stream_type
+        //     0x00, 0x00, 0x00, // buffer_size
+        //     0x00, 0x00, 0x00, 0x00, // maxBitrate
+        //     0x00, 0x00, 0x00, 0x00, // avgBitrate
+        //
+        //     0x05 // descriptor_type
+        // ].concat([configlen]).concat(track.config).concat([0x06, 0x01, 0x02])); // GASpecificConfig)); // length + audio config descriptor
+        return data;
+      }
+    }, {
+      key: "mp4a",
+      value: function mp4a(track) {
+        var audiosamplerate = track.audiosamplerate;
+        return MP4.box(MP4.types.mp4a, new Uint8Array([0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x01,
+        // data_reference_index
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, track.channelCount,
+        // channelcount
+        0x00, 0x10,
+        // sampleSize:16bits
+        0x00, 0x00,
+        // pre_defined
+        0x00, 0x00,
+        // reserved2
+        audiosamplerate >> 8 & 0xFF, audiosamplerate & 0xff,
+        //
+        0x00, 0x00]), MP4.box(MP4.types.esds, MP4.esds(track)));
+      }
+    }, {
+      key: "stsd",
+      value: function stsd(track) {
+        if (track.type === 'audio') {
+          return MP4.box(MP4.types.stsd, MP4.STSD, MP4.mp4a(track));
+        } else {
+          if (track.codec.startsWith('hvc1')) {
+            return MP4.box(MP4.types.stsd, MP4.STSD, MP4.hev1(track));
+          }
+          return MP4.box(MP4.types.stsd, MP4.STSD, MP4.avc1(track));
+        }
+      }
+    }, {
+      key: "tkhd",
+      value: function tkhd(track) {
+        var id = track.id,
+          duration = track.duration,
+          width = track.width,
+          height = track.height,
+          volume = track.volume;
+        return MP4.box(MP4.types.tkhd, new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x07,
+        // flags
+        0x00, 0x00, 0x00, 0x00,
+        // creation_time
+        0x00, 0x00, 0x00, 0x00,
+        // modification_time
+        id >> 24 & 0xFF, id >> 16 & 0xFF, id >> 8 & 0xFF, id & 0xFF,
+        // track_ID
+        0x00, 0x00, 0x00, 0x00,
+        // reserved
+        duration >>> 24 & 0xFF, duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF,
+        // duration
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // reserved
+        0x00, 0x00,
+        // layer
+        0x00, 0x00,
+        // alternate_group
+        volume >> 0 & 0xff, volume % 1 * 10 >> 0 & 0xff,
+        // track volume // FIXME
+        0x00, 0x00,
+        // reserved
+        0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
+        // transformation: unity matrix
+        width >> 8 & 0xFF, width & 0xFF, 0x00, 0x00,
+        // width
+        height >> 8 & 0xFF, height & 0xFF, 0x00, 0x00 // height
+        ]));
+      }
+    }, {
+      key: "traf",
+      value: function traf(track, baseMediaDecodeTime) {
+        var sampleDependencyTable = MP4.sdtp(track),
+          id = track.id;
+        return MP4.box(MP4.types.traf, MP4.box(MP4.types.tfhd, new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        id >> 24, id >> 16 & 0XFF, id >> 8 & 0XFF, id & 0xFF // track_ID
+        ])), MP4.box(MP4.types.tfdt, new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        baseMediaDecodeTime >> 24, baseMediaDecodeTime >> 16 & 0XFF, baseMediaDecodeTime >> 8 & 0XFF, baseMediaDecodeTime & 0xFF // baseMediaDecodeTime
+        ])), MP4.trun(track, sampleDependencyTable.length + 16 +
+        // tfhd
+        16 +
+        // tfdt
+        8 +
+        // traf header
+        16 +
+        // mfhd
+        8 +
+        // moof header
+        8),
+        // mdat header
+        sampleDependencyTable);
+      }
+
+      /**
+       * Generate a track box.
+       * @param track {object} a track definition
+       * @return {Uint8Array} the track box
+       */
+    }, {
+      key: "trak",
+      value: function trak(track) {
+        track.duration = track.duration || 0xffffffff;
+        return MP4.box(MP4.types.trak, MP4.tkhd(track), MP4.mdia(track));
+      }
+    }, {
+      key: "trex",
+      value: function trex(track) {
+        var id = track.id;
+        return MP4.box(MP4.types.trex, new Uint8Array([0x00,
+        // version 0
+        0x00, 0x00, 0x00,
+        // flags
+        id >> 24, id >> 16 & 0XFF, id >> 8 & 0XFF, id & 0xFF,
+        // track_ID
+        0x00, 0x00, 0x00, 0x01,
+        // default_sample_description_index
+        0x00, 0x00, 0x00, 0x00,
+        // default_sample_duration
+        0x00, 0x00, 0x00, 0x00,
+        // default_sample_size
+        0x00, 0x01, 0x00, 0x01 // default_sample_flags
+        ]));
+      }
+    }, {
+      key: "trun",
+      value: function trun(track, offset) {
+        var samples = track.samples || [],
+          len = samples.length,
+          arraylen = 12 + 16 * len,
+          array = new Uint8Array(arraylen),
+          i,
+          sample,
+          duration,
+          size,
+          flags,
+          cts;
+        offset += 8 + arraylen;
+        array.set([0x00,
+        // version 0
+        0x00, 0x0f, 0x01,
+        // flags
+        len >>> 24 & 0xFF, len >>> 16 & 0xFF, len >>> 8 & 0xFF, len & 0xFF,
+        // sample_count
+        offset >>> 24 & 0xFF, offset >>> 16 & 0xFF, offset >>> 8 & 0xFF, offset & 0xFF // data_offset
+        ], 0);
+        for (i = 0; i < len; i++) {
+          sample = samples[i];
+          duration = sample.duration;
+          size = sample.size;
+          flags = sample.flags;
+          cts = sample.cts;
+          array.set([duration >>> 24 & 0xFF, duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF,
+          // sample_duration
+          size >>> 24 & 0xFF, size >>> 16 & 0xFF, size >>> 8 & 0xFF, size & 0xFF,
+          // sample_size
+          flags.isLeading << 2 | flags.dependsOn, flags.isDependedOn << 6 | flags.hasRedundancy << 4 | flags.paddingValue << 1 | flags.isNonSync, flags.degradPrio & 0xF0 << 8, flags.degradPrio & 0x0F,
+          // sample_flags
+          cts >>> 24 & 0xFF, cts >>> 16 & 0xFF, cts >>> 8 & 0xFF, cts & 0xFF // sample_composition_time_offset
+          ], 12 + 16 * i);
+        }
+        return MP4.box(MP4.types.trun, array);
+      }
+    }, {
+      key: "initSegment",
+      value: function initSegment(tracks, duration, timescale) {
+        if (!MP4.types) {
+          MP4.init();
+        }
+        var movie = MP4.moov(tracks, duration, timescale),
+          result;
+        result = new Uint8Array(MP4.FTYP.byteLength + movie.byteLength);
+        result.set(MP4.FTYP);
+        result.set(movie, MP4.FTYP.byteLength);
+        return result;
+      }
+    }]);
+    return MP4;
+  }();
+
+  var AACParser = /*#__PURE__*/function () {
+    function AACParser() {
+      _classCallCheck(this, AACParser);
+    }
+    _createClass(AACParser, null, [{
+      key: "samplingRateMap",
+      get: function get() {
+        return [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
+      }
+    }, {
+      key: "getHeaderLength",
+      value: function getHeaderLength(data) {
+        return data[1] & 0x01 ? 7 : 9; // without CRC 7 and with CRC 9 Refs: https://wiki.multimedia.cx/index.php?title=ADTS
+      }
+    }, {
+      key: "getFrameLength",
+      value: function getFrameLength(data) {
+        return (data[3] & 0x03) << 11 | data[4] << 3 | (data[5] & 0xE0) >>> 5; // 13 bits length ref: https://wiki.multimedia.cx/index.php?title=ADTS
+      }
+    }, {
+      key: "isAACPattern",
+      value: function isAACPattern(data) {
+        return data[0] === 0xff && (data[1] & 0xf0) === 0xf0 && (data[1] & 0x06) === 0x00;
+      }
+    }, {
+      key: "extractAAC",
+      value: function extractAAC(buffer) {
+        var i = 0,
+          length = buffer.byteLength,
+          slices = [],
+          headerLength,
+          frameLength;
+        if (!AACParser.isAACPattern(buffer)) {
+          error('Invalid ADTS audio format');
+          return {
+            valid: false
+          };
+        }
+        headerLength = AACParser.getHeaderLength(buffer);
+        var header = buffer.subarray(0, headerLength);
+        while (i < length) {
+          frameLength = AACParser.getFrameLength(buffer);
+          slices.push(buffer.subarray(headerLength, frameLength));
+          buffer = buffer.slice(frameLength);
+          i += frameLength;
+        }
+        return {
+          valid: true,
+          header: header,
+          slices: slices
+        };
+      }
+    }]);
+    return AACParser;
+  }();
+
+  var track_id = 1;
+  var BaseRemuxer = /*#__PURE__*/function (_Event) {
+    _inherits(BaseRemuxer, _Event);
+    var _super = _createSuper(BaseRemuxer);
+    function BaseRemuxer() {
+      _classCallCheck(this, BaseRemuxer);
+      return _super.apply(this, arguments);
+    }
+    _createClass(BaseRemuxer, [{
+      key: "flush",
+      value: function flush() {
+        this.mp4track.len = 0;
+        this.mp4track.samples = [];
+      }
+    }, {
+      key: "isReady",
+      value: function isReady() {
+        if (!this.readyToDecode || !this.samples.length) return null;
+        return true;
+      }
+    }], [{
+      key: "getTrackID",
+      value: function getTrackID() {
+        return track_id++;
+      }
+    }]);
+    return BaseRemuxer;
+  }(Event);
+
+  var AACRemuxer = /*#__PURE__*/function (_BaseRemuxer) {
+    _inherits(AACRemuxer, _BaseRemuxer);
+    var _super = _createSuper(AACRemuxer);
+    function AACRemuxer(timescale, duration, frameDuration) {
+      var _this;
+      _classCallCheck(this, AACRemuxer);
+      _this = _super.call(this, 'AACRemuxer');
+      _this.frameDuration = frameDuration;
+      _this.readyToDecode = false;
+      _this.header = null;
+      _this.nextDts = 0;
+      _this.dts = 0;
+      _this.mp4track = {
+        id: BaseRemuxer.getTrackID(),
+        type: 'audio',
+        channelCount: 0,
+        len: 0,
+        fragmented: true,
+        timescale: timescale,
+        duration: duration,
+        samples: [],
+        config: '',
+        codec: ''
       };
-    },
-    await: function (value) {
-      return new AwaitValue(value);
+      _this.samples = [];
+      return _this;
     }
-  };
-}();
-
-
-
-
-
-var classCallCheck = function (instance, Constructor) {
-  if (!(instance instanceof Constructor)) {
-    throw new TypeError("Cannot call a class as a function");
-  }
-};
-
-var createClass = function () {
-  function defineProperties(target, props) {
-    for (var i = 0; i < props.length; i++) {
-      var descriptor = props[i];
-      descriptor.enumerable = descriptor.enumerable || false;
-      descriptor.configurable = true;
-      if ("value" in descriptor) descriptor.writable = true;
-      Object.defineProperty(target, descriptor.key, descriptor);
-    }
-  }
-
-  return function (Constructor, protoProps, staticProps) {
-    if (protoProps) defineProperties(Constructor.prototype, protoProps);
-    if (staticProps) defineProperties(Constructor, staticProps);
-    return Constructor;
-  };
-}();
-
-
-
-
-
-var defineProperty = function (obj, key, value) {
-  if (key in obj) {
-    Object.defineProperty(obj, key, {
-      value: value,
-      enumerable: true,
-      configurable: true,
-      writable: true
-    });
-  } else {
-    obj[key] = value;
-  }
-
-  return obj;
-};
-
-
-
-var inherits = function (subClass, superClass) {
-  if (typeof superClass !== "function" && superClass !== null) {
-    throw new TypeError("Super expression must either be null or a function, not " + typeof superClass);
-  }
-
-  subClass.prototype = Object.create(superClass && superClass.prototype, {
-    constructor: {
-      value: subClass,
-      enumerable: false,
-      writable: true,
-      configurable: true
-    }
-  });
-  if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass;
-};
-
-
-
-
-
-
-
-
-
-
-
-var possibleConstructorReturn = function (self, call) {
-  if (!self) {
-    throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-  }
-
-  return call && (typeof call === "object" || typeof call === "function") ? call : self;
-};
-
-var NALU = function () {
-    createClass(NALU, null, [{
-        key: 'type',
-        value: function type(nalu) {
-            if (nalu.ntype in NALU.TYPES) {
-                return NALU.TYPES[nalu.ntype];
-            } else {
-                return 'UNKNOWN';
+    _createClass(AACRemuxer, [{
+      key: "resetTrack",
+      value: function resetTrack() {
+        this.readyToDecode = false;
+        this.header = null;
+        this.mp4track.codec = '';
+        this.mp4track.channelCount = '';
+        this.mp4track.config = '';
+        this.mp4track.timescale = this.timescale;
+        this.nextDts = 0;
+        this.dts = 0;
+      }
+    }, {
+      key: "feed",
+      value: function feed(data, duration) {
+        var _AACParser$extractAAC = AACParser.extractAAC(data),
+          valid = _AACParser$extractAAC.valid,
+          header = _AACParser$extractAAC.header,
+          slices = _AACParser$extractAAC.slices;
+        if (!this.header) this.header = header;
+        if (valid && slices.length > 0) {
+          this.remux(this.getAudioFrames(slices, duration));
+          return true;
+        } else {
+          error('Failed to extract audio data from:', data);
+          this.dispatch('outOfData');
+          return false;
+        }
+      }
+    }, {
+      key: "getAudioFrames",
+      value: function getAudioFrames(aacFrames, duration) {
+        var frames = [],
+          fd = 0,
+          tt = 0;
+        var _iterator = _createForOfIteratorHelper(aacFrames),
+          _step;
+        try {
+          for (_iterator.s(); !(_step = _iterator.n()).done;) {
+            var units = _step.value;
+            frames.push({
+              units: units
+            });
+          }
+        } catch (err) {
+          _iterator.e(err);
+        } finally {
+          _iterator.f();
+        }
+        fd = duration ? duration / frames.length | 0 : this.frameDuration;
+        tt = duration ? duration - fd * frames.length : 0;
+        frames.map(function (frame) {
+          frame.duration = fd;
+          if (tt > 0) {
+            frame.duration++;
+            tt--;
+          }
+        });
+        return frames;
+      }
+    }, {
+      key: "remux",
+      value: function remux(frames) {
+        if (frames.length > 0) {
+          for (var i = 0; i < frames.length; i++) {
+            var frame = frames[i];
+            var payload = frame.units;
+            var size = payload.byteLength;
+            this.samples.push({
+              units: payload,
+              size: size,
+              duration: frame.duration
+            });
+            this.mp4track.len += size;
+            if (!this.readyToDecode) {
+              this.setAACConfig();
             }
+          }
         }
+      }
     }, {
-        key: 'NDR',
-        get: function get$$1() {
-            return 1;
+      key: "getPayload",
+      value: function getPayload() {
+        if (!this.isReady()) {
+          return null;
         }
-    }, {
-        key: 'IDR',
-        get: function get$$1() {
-            return 5;
+        var payload = new Uint8Array(this.mp4track.len);
+        var offset = 0;
+        var samples = this.mp4track.samples;
+        var mp4Sample, duration;
+        this.dts = this.nextDts;
+        while (this.samples.length) {
+          var sample = this.samples.shift();
+            sample.units;
+          duration = sample.duration;
+          if (duration <= 0) {
+            log("remuxer: invalid sample duration at DTS: ".concat(this.nextDts, " :").concat(duration));
+            this.mp4track.len -= sample.size;
+            continue;
+          }
+          this.nextDts += duration;
+          mp4Sample = {
+            size: sample.size,
+            duration: duration,
+            cts: 0,
+            flags: {
+              isLeading: 0,
+              isDependedOn: 0,
+              hasRedundancy: 0,
+              degradPrio: 0,
+              dependsOn: 1
+            }
+          };
+          payload.set(sample.units, offset);
+          offset += sample.size;
+          samples.push(mp4Sample);
         }
+        if (!samples.length) return null;
+        return new Uint8Array(payload.buffer, 0, this.mp4track.len);
+      }
     }, {
-        key: 'SEI',
-        get: function get$$1() {
-            return 6;
-        }
-    }, {
-        key: 'SPS',
-        get: function get$$1() {
-            return 7;
-        }
-    }, {
-        key: 'PPS',
-        get: function get$$1() {
-            return 8;
-        }
-    }, {
-        key: 'AUD',
-        get: function get$$1() {
-            return 9;
-        }
-    }, {
-        key: 'TYPES',
-        get: function get$$1() {
-            var _ref;
+      key: "setAACConfig",
+      value: function setAACConfig() {
+        var objectType,
+          sampleIndex,
+          channelCount,
+          config = new Uint8Array(2);
+        if (!this.header) return;
+        objectType = ((this.header[2] & 0xC0) >>> 6) + 1;
+        sampleIndex = (this.header[2] & 0x3C) >>> 2;
+        channelCount = (this.header[2] & 0x01) << 2;
+        channelCount |= (this.header[3] & 0xC0) >>> 6;
 
-            return _ref = {}, babelHelpers.defineProperty(_ref, NALU.IDR, 'IDR'), babelHelpers.defineProperty(_ref, NALU.SEI, 'SEI'), babelHelpers.defineProperty(_ref, NALU.SPS, 'SPS'), babelHelpers.defineProperty(_ref, NALU.PPS, 'PPS'), babelHelpers.defineProperty(_ref, NALU.NDR, 'NDR'), babelHelpers.defineProperty(_ref, NALU.AUD, 'AUD'), _ref;
-        }
+        /* refer to http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Audio_Specific_Config */
+        config[0] = objectType << 3;
+        config[0] |= (sampleIndex & 0x0E) >> 1;
+        config[1] |= (sampleIndex & 0x01) << 7;
+        config[1] |= channelCount << 3;
+        this.mp4track.codec = 'mp4a.40.' + objectType;
+        this.mp4track.channelCount = channelCount;
+        this.mp4track.config = config;
+        this.readyToDecode = true;
+      }
     }]);
+    return AACRemuxer;
+  }(BaseRemuxer);
 
-    function NALU(data) {
-        classCallCheck(this, NALU);
+  /**
+   * Parser for exponential Golomb codes, a variable-bitwidth number encoding scheme used by h264.
+  */
 
-        this.payload = data;
-        this.nri = (this.payload[0] & 0x60) >> 5;
-        this.ntype = this.payload[0] & 0x1f;
-    }
-
-    createClass(NALU, [{
-        key: 'toString',
-        value: function toString() {
-            return NALU.type(this) + ': NRI: ' + this.getNri();
-        }
-    }, {
-        key: 'getNri',
-        value: function getNri() {
-            return this.nri >> 6;
-        }
-    }, {
-        key: 'type',
-        value: function type() {
-            return this.ntype;
-        }
-    }, {
-        key: 'isKeyframe',
-        value: function isKeyframe() {
-            return this.ntype == NALU.IDR;
-        }
-    }, {
-        key: 'getSize',
-        value: function getSize() {
-            return 4 + this.payload.byteLength;
-        }
-    }, {
-        key: 'getData',
-        value: function getData() {
-            var result = new Uint8Array(this.getSize());
-            var view = new DataView(result.buffer);
-            view.setUint32(0, this.getSize() - 4);
-
-            result.set(this.payload, 4);
-            return result;
-        }
-    }]);
-    return NALU;
-}();
-
-/**
- * Parser for exponential Golomb codes, a variable-bitwidth number encoding scheme used by h264.
-*/
-
-var ExpGolomb = function () {
+  var ExpGolomb = /*#__PURE__*/function () {
     function ExpGolomb(data) {
-        classCallCheck(this, ExpGolomb);
-
+      _classCallCheck(this, ExpGolomb);
+      this.data = data;
+      this.index = 0;
+      this.bitLength = data.byteLength * 8;
+    }
+    _createClass(ExpGolomb, [{
+      key: "setData",
+      value: function setData(data) {
         this.data = data;
         this.index = 0;
         this.bitLength = data.byteLength * 8;
-    }
-
-    createClass(ExpGolomb, [{
-        key: "skipBits",
-        value: function skipBits(size) {
-            // console.log(`  skip bits: size=${size}, ${this.index}.`);
-            if (this.bitsAvailable < size) {
-                //throw new Error('no bytes available');
-                return false;
-            }
+      }
+    }, {
+      key: "bitsAvailable",
+      get: function get() {
+        return this.bitLength - this.index;
+      }
+    }, {
+      key: "skipBits",
+      value: function skipBits(size) {
+        // console.log(`  skip bits: size=${size}, ${this.index}.`);
+        if (this.bitsAvailable < size) {
+          //throw new Error('no bytes available');
+          return false;
+        }
+        this.index += size;
+      }
+    }, {
+      key: "readBits",
+      value: function readBits(size) {
+        var moveIndex = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+        // console.log(`  read bits: size=${size}, ${this.index}.`);
+        var result = this.getBits(size, this.index, moveIndex);
+        // console.log(`    read bits: result=${result}`);
+        return result;
+      }
+    }, {
+      key: "getBits",
+      value: function getBits(size, offsetBits) {
+        var moveIndex = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
+        if (this.bitsAvailable < size) {
+          //throw new Error('no bytes available');
+          return 0;
+        }
+        var offset = offsetBits % 8;
+        var _byte = this.data[offsetBits / 8 | 0] & 0xff >>> offset;
+        var bits = 8 - offset;
+        if (bits >= size) {
+          if (moveIndex) {
             this.index += size;
+          }
+          return _byte >> bits - size;
+        } else {
+          if (moveIndex) {
+            this.index += bits;
+          }
+          var nextSize = size - bits;
+          return _byte << nextSize | this.getBits(nextSize, offsetBits + bits, moveIndex);
         }
+      }
     }, {
-        key: "readBits",
-        value: function readBits(size) {
-            var moveIndex = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
-
-            // console.log(`  read bits: size=${size}, ${this.index}.`);
-            var result = this.getBits(size, this.index, moveIndex);
-            // console.log(`    read bits: result=${result}`);
-            return result;
-        }
-    }, {
-        key: "getBits",
-        value: function getBits(size, offsetBits) {
-            var moveIndex = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
-
-            if (this.bitsAvailable < size) {
-                //throw new Error('no bytes available');
-                return 0;
-            }
-            var offset = offsetBits % 8;
-            var byte = this.data[offsetBits / 8 | 0] & 0xff >>> offset;
-            var bits = 8 - offset;
-            if (bits >= size) {
-                if (moveIndex) {
-                    this.index += size;
-                }
-                return byte >> bits - size;
-            } else {
-                if (moveIndex) {
-                    this.index += bits;
-                }
-                var nextSize = size - bits;
-                return byte << nextSize | this.getBits(nextSize, offsetBits + bits, moveIndex);
-            }
-        }
-    }, {
-        key: "skipLZ",
-        value: function skipLZ() {
-            var leadingZeroCount = void 0;
-            for (leadingZeroCount = 0; leadingZeroCount < this.bitLength - this.index; ++leadingZeroCount) {
-                if (this.getBits(1, this.index + leadingZeroCount, false) !== 0) {
-                    // console.log(`  skip LZ  : size=${leadingZeroCount}, ${this.index}.`);
-                    this.index += leadingZeroCount;
-                    return leadingZeroCount;
-                }
-            }
+      key: "skipLZ",
+      value: function skipLZ() {
+        var leadingZeroCount;
+        for (leadingZeroCount = 0; leadingZeroCount < this.bitLength - this.index; ++leadingZeroCount) {
+          if (this.getBits(1, this.index + leadingZeroCount, false) !== 0) {
+            // console.log(`  skip LZ  : size=${leadingZeroCount}, ${this.index}.`);
+            this.index += leadingZeroCount;
             return leadingZeroCount;
+          }
         }
+        return leadingZeroCount;
+      }
     }, {
-        key: "skipUEG",
-        value: function skipUEG() {
-            this.skipBits(1 + this.skipLZ());
-        }
+      key: "skipUEG",
+      value: function skipUEG() {
+        this.skipBits(1 + this.skipLZ());
+      }
     }, {
-        key: "skipEG",
-        value: function skipEG() {
-            this.skipBits(1 + this.skipLZ());
-        }
+      key: "skipEG",
+      value: function skipEG() {
+        this.skipBits(1 + this.skipLZ());
+      }
     }, {
-        key: "readUEG",
-        value: function readUEG() {
-            var prefix = this.skipLZ();
-            return this.readBits(prefix + 1) - 1;
-        }
+      key: "readUEG",
+      value: function readUEG() {
+        var prefix = this.skipLZ();
+        return this.readBits(prefix + 1) - 1;
+      }
     }, {
-        key: "readEG",
-        value: function readEG() {
-            var value = this.readUEG();
-            if (0x01 & value) {
-                // the number is odd if the low order bit is set
-                return 1 + value >>> 1; // add 1 to make it even, and divide by 2
-            } else {
-                return -1 * (value >>> 1); // divide by two then make it negative
-            }
+      key: "readEG",
+      value: function readEG() {
+        var value = this.readUEG();
+        if (0x01 & value) {
+          // the number is odd if the low order bit is set
+          return 1 + value >>> 1; // add 1 to make it even, and divide by 2
+        } else {
+          return -1 * (value >>> 1); // divide by two then make it negative
         }
+      }
     }, {
-        key: "readBoolean",
-        value: function readBoolean() {
-            return this.readBits(1) === 1;
-        }
+      key: "readBoolean",
+      value: function readBoolean() {
+        return this.readBits(1) === 1;
+      }
     }, {
-        key: "readUByte",
-        value: function readUByte() {
-            var numberOfBytes = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1;
-
-            return this.readBits(numberOfBytes * 8);
-        }
+      key: "readUByte",
+      value: function readUByte() {
+        var numberOfBytes = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1;
+        return this.readBits(numberOfBytes * 8);
+      }
     }, {
-        key: "readUShort",
-        value: function readUShort() {
-            return this.readBits(16);
-        }
+      key: "readUShort",
+      value: function readUShort() {
+        return this.readBits(16);
+      }
     }, {
-        key: "readUInt",
-        value: function readUInt() {
-            return this.readBits(32);
-        }
-    }, {
-        key: "bitsAvailable",
-        get: function get$$1() {
-            return this.bitLength - this.index;
-        }
+      key: "readUInt",
+      value: function readUInt() {
+        return this.readBits(32);
+      }
     }]);
     return ExpGolomb;
-}();
+  }();
 
-var H264Parser = function () {
-    createClass(H264Parser, null, [{
-        key: 'extractNALu',
-        value: function extractNALu(buffer) {
-            var i = 0,
-                length = buffer.byteLength,
-                value = void 0,
-                state = 0,
-                result = [],
-                lastIndex = void 0;
+  // spec https://www.itu.int/rec/T-REC-H.264/
 
-            while (i < length) {
-                value = buffer[i++];
-                // finding 3 or 4-byte start codes (00 00 01 OR 00 00 00 01)
-                switch (state) {
-                    case 0:
-                        if (value === 0) {
-                            state = 1;
-                        }
-                        break;
-                    case 1:
-                        if (value === 0) {
-                            state = 2;
-                        } else {
-                            state = 0;
-                        }
-                        break;
-                    case 2:
-                    case 3:
-                        if (value === 0) {
-                            state = 3;
-                        } else if (value === 1 && i < length) {
-                            if (lastIndex) {
-                                result.push(buffer.subarray(lastIndex, i - state - 1));
-                            }
-                            lastIndex = i;
-                            state = 0;
-                        } else {
-                            state = 0;
-                        }
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            if (lastIndex) {
-                result.push(buffer.subarray(lastIndex, length));
-            }
-            return result;
-        }
-
-        /**
-        * Advance the ExpGolomb decoder past a scaling list. The scaling
-        * list is optionally transmitted as part of a sequence parameter
-        * set and is not relevant to transmuxing.
-        * @param decoder {ExpGolomb} exp golomb decoder
-        * @param count {number} the number of entries in this scaling list
-        * @see Recommendation ITU-T H.264, Section 7.3.2.1.1.1
-        */
-
-    }, {
-        key: 'skipScalingList',
-        value: function skipScalingList(decoder, count) {
-            var lastScale = 8,
-                nextScale = 8,
-                deltaScale = void 0;
-            for (var j = 0; j < count; j++) {
-                if (nextScale !== 0) {
-                    deltaScale = decoder.readEG();
-                    nextScale = (lastScale + deltaScale + 256) % 256;
-                }
-                lastScale = nextScale === 0 ? lastScale : nextScale;
-            }
-        }
-
-        /**
-         * Read a sequence parameter set and return some interesting video
-         * properties. A sequence parameter set is the H264 metadata that
-         * describes the properties of upcoming video frames.
-         * @param data {Uint8Array} the bytes of a sequence parameter set
-         * @return {object} an object with configuration parsed from the
-         * sequence parameter set, including the dimensions of the
-         * associated video frames.
-         */
-
-    }, {
-        key: 'readSPS',
-        value: function readSPS(data) {
-            var decoder = new ExpGolomb(data);
-            var frameCropLeftOffset = 0,
-                frameCropRightOffset = 0,
-                frameCropTopOffset = 0,
-                frameCropBottomOffset = 0,
-                sarScale = 1,
-                profileIdc = void 0,
-                profileCompat = void 0,
-                levelIdc = void 0,
-                numRefFramesInPicOrderCntCycle = void 0,
-                picWidthInMbsMinus1 = void 0,
-                picHeightInMapUnitsMinus1 = void 0,
-                frameMbsOnlyFlag = void 0,
-                scalingListCount = void 0;
-            decoder.readUByte();
-            profileIdc = decoder.readUByte(); // profile_idc
-            profileCompat = decoder.readBits(5); // constraint_set[0-4]_flag, u(5)
-            decoder.skipBits(3); // reserved_zero_3bits u(3),
-            levelIdc = decoder.readUByte(); // level_idc u(8)
-            decoder.skipUEG(); // seq_parameter_set_id
-            // some profiles have more optional data we don't need
-            if (profileIdc === 100 || profileIdc === 110 || profileIdc === 122 || profileIdc === 244 || profileIdc === 44 || profileIdc === 83 || profileIdc === 86 || profileIdc === 118 || profileIdc === 128) {
-                var chromaFormatIdc = decoder.readUEG();
-                if (chromaFormatIdc === 3) {
-                    decoder.skipBits(1); // separate_colour_plane_flag
-                }
-                decoder.skipUEG(); // bit_depth_luma_minus8
-                decoder.skipUEG(); // bit_depth_chroma_minus8
-                decoder.skipBits(1); // qpprime_y_zero_transform_bypass_flag
-                if (decoder.readBoolean()) {
-                    // seq_scaling_matrix_present_flag
-                    scalingListCount = chromaFormatIdc !== 3 ? 8 : 12;
-                    for (var i = 0; i < scalingListCount; ++i) {
-                        if (decoder.readBoolean()) {
-                            // seq_scaling_list_present_flag[ i ]
-                            if (i < 6) {
-                                H264Parser.skipScalingList(decoder, 16);
-                            } else {
-                                H264Parser.skipScalingList(decoder, 64);
-                            }
-                        }
-                    }
-                }
-            }
-            decoder.skipUEG(); // log2_max_frame_num_minus4
-            var picOrderCntType = decoder.readUEG();
-            if (picOrderCntType === 0) {
-                decoder.readUEG(); // log2_max_pic_order_cnt_lsb_minus4
-            } else if (picOrderCntType === 1) {
-                decoder.skipBits(1); // delta_pic_order_always_zero_flag
-                decoder.skipEG(); // offset_for_non_ref_pic
-                decoder.skipEG(); // offset_for_top_to_bottom_field
-                numRefFramesInPicOrderCntCycle = decoder.readUEG();
-                for (var _i = 0; _i < numRefFramesInPicOrderCntCycle; ++_i) {
-                    decoder.skipEG(); // offset_for_ref_frame[ i ]
-                }
-            }
-            decoder.skipUEG(); // max_num_ref_frames
-            decoder.skipBits(1); // gaps_in_frame_num_value_allowed_flag
-            picWidthInMbsMinus1 = decoder.readUEG();
-            picHeightInMapUnitsMinus1 = decoder.readUEG();
-            frameMbsOnlyFlag = decoder.readBits(1);
-            if (frameMbsOnlyFlag === 0) {
-                decoder.skipBits(1); // mb_adaptive_frame_field_flag
-            }
-            decoder.skipBits(1); // direct_8x8_inference_flag
-            if (decoder.readBoolean()) {
-                // frame_cropping_flag
-                frameCropLeftOffset = decoder.readUEG();
-                frameCropRightOffset = decoder.readUEG();
-                frameCropTopOffset = decoder.readUEG();
-                frameCropBottomOffset = decoder.readUEG();
-            }
-            if (decoder.readBoolean()) {
-                // vui_parameters_present_flag
-                if (decoder.readBoolean()) {
-                    // aspect_ratio_info_present_flag
-                    var sarRatio = void 0;
-                    var aspectRatioIdc = decoder.readUByte();
-                    switch (aspectRatioIdc) {
-                        case 1:
-                            sarRatio = [1, 1];break;
-                        case 2:
-                            sarRatio = [12, 11];break;
-                        case 3:
-                            sarRatio = [10, 11];break;
-                        case 4:
-                            sarRatio = [16, 11];break;
-                        case 5:
-                            sarRatio = [40, 33];break;
-                        case 6:
-                            sarRatio = [24, 11];break;
-                        case 7:
-                            sarRatio = [20, 11];break;
-                        case 8:
-                            sarRatio = [32, 11];break;
-                        case 9:
-                            sarRatio = [80, 33];break;
-                        case 10:
-                            sarRatio = [18, 11];break;
-                        case 11:
-                            sarRatio = [15, 11];break;
-                        case 12:
-                            sarRatio = [64, 33];break;
-                        case 13:
-                            sarRatio = [160, 99];break;
-                        case 14:
-                            sarRatio = [4, 3];break;
-                        case 15:
-                            sarRatio = [3, 2];break;
-                        case 16:
-                            sarRatio = [2, 1];break;
-                        case 255:
-                            {
-                                sarRatio = [decoder.readUByte() << 8 | decoder.readUByte(), decoder.readUByte() << 8 | decoder.readUByte()];
-                                break;
-                            }
-                    }
-                    if (sarRatio) {
-                        sarScale = sarRatio[0] / sarRatio[1];
-                    }
-                }
-                if (decoder.readBoolean()) {
-                    decoder.skipBits(1);
-                }
-
-                if (decoder.readBoolean()) {
-                    decoder.skipBits(4);
-                    if (decoder.readBoolean()) {
-                        decoder.skipBits(24);
-                    }
-                }
-                if (decoder.readBoolean()) {
-                    decoder.skipUEG();
-                    decoder.skipUEG();
-                }
-                if (decoder.readBoolean()) {
-                    var unitsInTick = decoder.readUInt();
-                    var timeScale = decoder.readUInt();
-                    var fixedFrameRate = decoder.readBoolean();
-                    
-                }
-            }
-            return {
-                width: Math.ceil(((picWidthInMbsMinus1 + 1) * 16 - frameCropLeftOffset * 2 - frameCropRightOffset * 2) * sarScale),
-                height: (2 - frameMbsOnlyFlag) * (picHeightInMapUnitsMinus1 + 1) * 16 - (frameMbsOnlyFlag ? 2 : 4) * (frameCropTopOffset + frameCropBottomOffset)
-            };
-        }
-    }]);
-
-    function H264Parser(remuxer) {
-        classCallCheck(this, H264Parser);
-
-        this.remuxer = remuxer;
-        this.track = remuxer.mp4track;
+  var H264Parser = /*#__PURE__*/function () {
+    function H264Parser() {
+      _classCallCheck(this, H264Parser);
     }
+    _createClass(H264Parser, null, [{
+      key: "extractNALu",
+      value: function extractNALu(buffer) {
+        var i = 0,
+          length = buffer.byteLength,
+          result = [],
+          lastIndex = 0,
+          zeroCount = 0;
+        while (i < length) {
+          var value = buffer[i++];
+          if (value === 0) {
+            zeroCount++;
+          } else if (value === 1 && zeroCount >= 2) {
+            var startCodeLength = zeroCount + 1;
+            if (lastIndex !== i - startCodeLength) {
+              result.push(buffer.subarray(lastIndex, i - startCodeLength));
+            }
+            lastIndex = i;
+            zeroCount = 0;
+          } else {
+            zeroCount = 0;
+          }
+        }
 
-    createClass(H264Parser, [{
-        key: 'parseSPS',
-        value: function parseSPS(sps) {
-            var config = H264Parser.readSPS(new Uint8Array(sps));
+        // Remaining data after last start code
+        var left = null;
+        if (lastIndex < length) {
+          left = buffer.subarray(lastIndex, length);
+        }
+        return [result, left];
+      }
 
-            this.track.width = config.width;
-            this.track.height = config.height;
-            this.track.sps = [new Uint8Array(sps)];
-            this.track.codec = 'avc1.';
+      /**
+       * Advance the ExpGolomb decoder past a scaling list. The scaling
+       * list is optionally transmitted as part of a sequence parameter
+       * set and is not relevant to transmuxing.
+       * @param decoder {ExpGolomb} exp golomb decoder
+       * @param count {number} the number of entries in this scaling list
+       * @see Recommendation ITU-T H.264, Section 7.3.2.1.1.1
+       */
+    }, {
+      key: "skipScalingList",
+      value: function skipScalingList(decoder, count) {
+        var lastScale = 8,
+          nextScale = 8,
+          deltaScale;
+        for (var j = 0; j < count; j++) {
+          if (nextScale !== 0) {
+            deltaScale = decoder.readEG();
+            nextScale = (lastScale + deltaScale + 256) % 256;
+          }
+          lastScale = nextScale === 0 ? lastScale : nextScale;
+        }
+      }
 
-            var codecarray = new DataView(sps.buffer, sps.byteOffset + 1, 4);
-            for (var i = 0; i < 3; ++i) {
-                var h = codecarray.getUint8(i).toString(16);
-                if (h.length < 2) {
-                    h = '0' + h;
+      /**
+       * Read a sequence parameter set and return some interesting video
+       * properties. A sequence parameter set is the H264 metadata that
+       * describes the properties of upcoming video frames.
+       * @param data {Uint8Array} the bytes of a sequence parameter set
+       * @return {object} an object with configuration parsed from the
+       * sequence parameter set, including the dimensions of the
+       * associated video frames.
+       */
+    }, {
+      key: "readSPS",
+      value: function readSPS(data) {
+        var decoder = new ExpGolomb(data);
+        var frameCropLeftOffset = 0,
+          frameCropRightOffset = 0,
+          frameCropTopOffset = 0,
+          frameCropBottomOffset = 0,
+          sarScale = 1,
+          profileIdc,
+          numRefFramesInPicOrderCntCycle,
+          picWidthInMbsMinus1,
+          picHeightInMapUnitsMinus1,
+          frameMbsOnlyFlag,
+          scalingListCount,
+          fps = 0;
+        decoder.readUByte(); // skip NAL header
+
+        // rewrite NAL
+        var rbsp = [],
+          hdr_bytes = 1,
+          nal_bytes = data.byteLength;
+        for (var i = hdr_bytes; i < nal_bytes; i++) {
+          if (i + 2 < nal_bytes && decoder.readBits(24, false) === 0x000003) {
+            rbsp.push(decoder.readBits(8));
+            rbsp.push(decoder.readBits(8));
+            i += 2;
+
+            // emulation_prevention_three_byte
+            decoder.readBits(8);
+          } else {
+            rbsp.push(decoder.readBits(8));
+          }
+        }
+        decoder.setData(new Uint8Array(rbsp));
+        // end of rewrite data
+
+        profileIdc = decoder.readUByte(); // profile_idc
+        decoder.readBits(5); // constraint_set[0-4]_flag, u(5)
+        decoder.skipBits(3); // reserved_zero_3bits u(3),
+        decoder.readUByte(); // level_idc u(8)
+        decoder.skipUEG(); // seq_parameter_set_id
+        // some profiles have more optional data we don't need
+        if (profileIdc === 100 || profileIdc === 110 || profileIdc === 122 || profileIdc === 244 || profileIdc === 44 || profileIdc === 83 || profileIdc === 86 || profileIdc === 118 || profileIdc === 128) {
+          var chromaFormatIdc = decoder.readUEG();
+          if (chromaFormatIdc === 3) {
+            decoder.skipBits(1); // separate_colour_plane_flag
+          }
+          decoder.skipUEG(); // bit_depth_luma_minus8
+          decoder.skipUEG(); // bit_depth_chroma_minus8
+          decoder.skipBits(1); // qpprime_y_zero_transform_bypass_flag
+          if (decoder.readBoolean()) {
+            // seq_scaling_matrix_present_flag
+            scalingListCount = chromaFormatIdc !== 3 ? 8 : 12;
+            for (var _i = 0; _i < scalingListCount; ++_i) {
+              if (decoder.readBoolean()) {
+                // seq_scaling_list_present_flag[ i ]
+                if (_i < 6) {
+                  H264Parser.skipScalingList(decoder, 16);
+                } else {
+                  H264Parser.skipScalingList(decoder, 64);
                 }
-                this.track.codec += h;
+              }
             }
+          }
         }
-    }, {
-        key: 'parsePPS',
-        value: function parsePPS(pps) {
-            this.track.pps = [new Uint8Array(pps)];
+        decoder.skipUEG(); // log2_max_frame_num_minus4
+        var picOrderCntType = decoder.readUEG();
+        if (picOrderCntType === 0) {
+          decoder.readUEG(); // log2_max_pic_order_cnt_lsb_minus4
+        } else if (picOrderCntType === 1) {
+          decoder.skipBits(1); // delta_pic_order_always_zero_flag
+          decoder.skipEG(); // offset_for_non_ref_pic
+          decoder.skipEG(); // offset_for_top_to_bottom_field
+          numRefFramesInPicOrderCntCycle = decoder.readUEG();
+          for (var _i2 = 0; _i2 < numRefFramesInPicOrderCntCycle; ++_i2) {
+            decoder.skipEG(); // offset_for_ref_frame[ i ]
+          }
         }
-    }, {
-        key: 'parseNAL',
-        value: function parseNAL(unit) {
-            if (!unit) return false;
-
-            var push = false;
-            switch (unit.type()) {
-                case NALU.NDR:
-                    push = true;
-                    break;
-                case NALU.IDR:
-                    push = true;
-                    break;
-                case NALU.PPS:
-                    if (!this.track.pps) {
-                        this.parsePPS(unit.getData().subarray(4));
-                        if (!this.remuxer.readyToDecode && this.track.pps && this.track.sps) {
-                            this.remuxer.readyToDecode = true;
-                        }
-                    }
-                    push = true;
-                    break;
-                case NALU.SPS:
-                    if (!this.track.sps) {
-                        this.parseSPS(unit.getData().subarray(4));
-                        if (!this.remuxer.readyToDecode && this.track.pps && this.track.sps) {
-                            this.remuxer.readyToDecode = true;
-                        }
-                    }
-                    push = true;
-                    break;
-                case NALU.AUD:
-                    log('AUD - ignoing and disable HD mode for live channel');
-                    if (this.remuxer.isHDAvail) {
-                        this.remuxer.isHDAvail = false;
-                    }
-                    break;
-                case NALU.SEI:
-                    log('SEI - ignoing');
-                    break;
-                default:
+        decoder.skipUEG(); // max_num_ref_frames
+        decoder.skipBits(1); // gaps_in_frame_num_value_allowed_flag
+        picWidthInMbsMinus1 = decoder.readUEG();
+        picHeightInMapUnitsMinus1 = decoder.readUEG();
+        frameMbsOnlyFlag = decoder.readBits(1);
+        if (frameMbsOnlyFlag === 0) {
+          decoder.skipBits(1); // mb_adaptive_frame_field_flag
+        }
+        decoder.skipBits(1); // direct_8x8_inference_flag
+        if (decoder.readBoolean()) {
+          // frame_cropping_flag
+          frameCropLeftOffset = decoder.readUEG();
+          frameCropRightOffset = decoder.readUEG();
+          frameCropTopOffset = decoder.readUEG();
+          frameCropBottomOffset = decoder.readUEG();
+        }
+        if (decoder.readBoolean()) {
+          // vui_parameters_present_flag
+          if (decoder.readBoolean()) {
+            // aspect_ratio_info_present_flag
+            var sarRatio;
+            var aspectRatioIdc = decoder.readUByte();
+            switch (aspectRatioIdc) {
+              case 1:
+                sarRatio = [1, 1];
+                break;
+              case 2:
+                sarRatio = [12, 11];
+                break;
+              case 3:
+                sarRatio = [10, 11];
+                break;
+              case 4:
+                sarRatio = [16, 11];
+                break;
+              case 5:
+                sarRatio = [40, 33];
+                break;
+              case 6:
+                sarRatio = [24, 11];
+                break;
+              case 7:
+                sarRatio = [20, 11];
+                break;
+              case 8:
+                sarRatio = [32, 11];
+                break;
+              case 9:
+                sarRatio = [80, 33];
+                break;
+              case 10:
+                sarRatio = [18, 11];
+                break;
+              case 11:
+                sarRatio = [15, 11];
+                break;
+              case 12:
+                sarRatio = [64, 33];
+                break;
+              case 13:
+                sarRatio = [160, 99];
+                break;
+              case 14:
+                sarRatio = [4, 3];
+                break;
+              case 15:
+                sarRatio = [3, 2];
+                break;
+              case 16:
+                sarRatio = [2, 1];
+                break;
+              case 255:
+                {
+                  sarRatio = [decoder.readUByte() << 8 | decoder.readUByte(), decoder.readUByte() << 8 | decoder.readUByte()];
+                  break;
+                }
             }
-            return push;
+            if (sarRatio && sarRatio[0] > 0 && sarRatio[1] > 0) {
+              sarScale = sarRatio[0] / sarRatio[1];
+            }
+          }
+          if (decoder.readBoolean()) {
+            decoder.skipBits(1);
+          }
+          if (decoder.readBoolean()) {
+            decoder.skipBits(4);
+            if (decoder.readBoolean()) {
+              decoder.skipBits(24);
+            }
+          }
+          if (decoder.readBoolean()) {
+            decoder.skipUEG();
+            decoder.skipUEG();
+          }
+          if (decoder.readBoolean()) {
+            var unitsInTick = decoder.readUInt();
+            var timeScale = decoder.readUInt();
+            var fixedFrameRate = decoder.readBoolean();
+            var frameDuration = timeScale / (2 * unitsInTick);
+            if (fixedFrameRate) {
+              fps = frameDuration;
+            }
+          }
         }
+        return {
+          fps: fps > 0 ? fps : undefined,
+          width: Math.ceil(((picWidthInMbsMinus1 + 1) * 16 - frameCropLeftOffset * 2 - frameCropRightOffset * 2) * sarScale),
+          height: (2 - frameMbsOnlyFlag) * (picHeightInMapUnitsMinus1 + 1) * 16 - (frameMbsOnlyFlag ? 2 : 4) * (frameCropTopOffset + frameCropBottomOffset)
+        };
+      }
     }]);
     return H264Parser;
-}();
-
-var aacHeader = void 0;
-var AACParser = function () {
-    createClass(AACParser, null, [{
-        key: 'getHeaderLength',
-        value: function getHeaderLength(data) {
-            return data[1] & 0x01 ? 7 : 9; // without CRC 7 and with CRC 9 Refs: https://wiki.multimedia.cx/index.php?title=ADTS
-        }
-    }, {
-        key: 'getFrameLength',
-        value: function getFrameLength(data) {
-            return (data[3] & 0x03) << 11 | data[4] << 3 | (data[5] & 0xE0) >>> 5; // 13 bits length ref: https://wiki.multimedia.cx/index.php?title=ADTS
-        }
-    }, {
-        key: 'isAACPattern',
-        value: function isAACPattern(data) {
-            return data[0] === 0xff && (data[1] & 0xf0) === 0xf0 && (data[1] & 0x06) === 0x00;
-        }
-    }, {
-        key: 'extractAAC',
-        value: function extractAAC(buffer) {
-            var i = 0,
-                length = buffer.byteLength,
-                result = [],
-                headerLength = void 0,
-                frameLength = void 0;
-
-            if (!AACParser.isAACPattern(buffer)) {
-                error('Invalid ADTS audio format');
-                return result;
-            }
-            headerLength = AACParser.getHeaderLength(buffer);
-            if (!aacHeader) {
-                aacHeader = buffer.subarray(0, headerLength);
-            }
-
-            while (i < length) {
-                frameLength = AACParser.getFrameLength(buffer);
-                result.push(buffer.subarray(headerLength, frameLength));
-                buffer = buffer.slice(frameLength);
-                i += frameLength;
-            }
-            return result;
-        }
-    }, {
-        key: 'samplingRateMap',
-        get: function get$$1() {
-            return [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
-        }
-    }, {
-        key: 'getAACHeaderData',
-        get: function get$$1() {
-            return aacHeader;
-        }
-    }]);
-
-    function AACParser(remuxer) {
-        classCallCheck(this, AACParser);
-
-        this.remuxer = remuxer;
-        this.track = remuxer.mp4track;
+  }();
+  var NALU264 = /*#__PURE__*/function () {
+    function NALU264(data) {
+      _classCallCheck(this, NALU264);
+      this.payload = data;
+      this.nri = (this.payload[0] & 0x60) >> 5; // nal_ref_idc
+      this.nalUnitType = this.payload[0] & 0x1f;
+      this._sliceType = null;
+      this._isFirstSlice = false;
     }
-
-    createClass(AACParser, [{
-        key: 'setAACConfig',
-        value: function setAACConfig() {
-            var objectType = void 0,
-                sampleIndex = void 0,
-                channelCount = void 0,
-                config = new Uint8Array(2),
-                headerData = AACParser.getAACHeaderData;
-
-            if (!headerData) return;
-
-            objectType = ((headerData[2] & 0xC0) >>> 6) + 1;
-            sampleIndex = (headerData[2] & 0x3C) >>> 2;
-            channelCount = (headerData[2] & 0x01) << 2;
-            channelCount |= (headerData[3] & 0xC0) >>> 6;
-
-            /* refer to http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Audio_Specific_Config */
-            config[0] = objectType << 3;
-            config[0] |= (sampleIndex & 0x0E) >> 1;
-            config[1] |= (sampleIndex & 0x01) << 7;
-            config[1] |= channelCount << 3;
-
-            this.track.codec = 'mp4a.40.' + objectType;
-            this.track.channelCount = channelCount;
-            this.track.config = config;
-            this.remuxer.readyToDecode = true;
+    _createClass(NALU264, [{
+      key: "toString",
+      value: function toString() {
+        return "".concat(NALU264.TYPES[this.type()] || 'UNKNOWN', ": NRI: ").concat(this.getNri());
+      }
+    }, {
+      key: "getNri",
+      value: function getNri() {
+        return this.nri;
+      }
+    }, {
+      key: "type",
+      value: function type() {
+        return this.nalUnitType;
+      }
+    }, {
+      key: "isKeyframe",
+      get: function get() {
+        return this.nalUnitType === NALU264.IDR;
+      }
+    }, {
+      key: "isVCL",
+      get: function get() {
+        return this.nalUnitType == NALU264.IDR || this.nalUnitType == NALU264.NDR;
+      }
+    }, {
+      key: "parseHeader",
+      value: function parseHeader() {
+        var decoder = new ExpGolomb(this.getPayload());
+        // skip NALu type
+        decoder.readUByte();
+        this._isFirstSlice = decoder.readUEG() === 0;
+        this._sliceType = decoder.readUEG();
+      }
+    }, {
+      key: "isFirstSlice",
+      get: function get() {
+        if (!this._isFirstSlice) {
+          this.parseHeader();
         }
+        return this._isFirstSlice;
+      }
+    }, {
+      key: "sliceType",
+      get: function get() {
+        if (!this._sliceType) {
+          this.parseHeader();
+        }
+        return this._sliceType;
+      }
+    }, {
+      key: "getPayload",
+      value: function getPayload() {
+        return this.payload;
+      }
+    }, {
+      key: "getPayloadSize",
+      value: function getPayloadSize() {
+        return this.payload.byteLength;
+      }
+    }, {
+      key: "getSize",
+      value: function getSize() {
+        return 4 + this.getPayloadSize();
+      }
+    }, {
+      key: "getData",
+      value: function getData() {
+        var result = new Uint8Array(this.getSize());
+        var view = new DataView(result.buffer);
+        view.setUint32(0, this.getSize() - 4);
+        result.set(this.getPayload(), 4);
+        return result;
+      }
+    }], [{
+      key: "NDR",
+      get: function get() {
+        return 1;
+      }
+    }, {
+      key: "IDR",
+      get: function get() {
+        return 5;
+      }
+    }, {
+      key: "SEI",
+      get: function get() {
+        return 6;
+      }
+    }, {
+      key: "SPS",
+      get: function get() {
+        return 7;
+      }
+    }, {
+      key: "PPS",
+      get: function get() {
+        return 8;
+      }
+    }, {
+      key: "AUD",
+      get: function get() {
+        return 9;
+      }
+    }, {
+      key: "TYPES",
+      get: function get() {
+        var _ref;
+        return _ref = {}, _defineProperty(_ref, NALU264.IDR, 'IDR'), _defineProperty(_ref, NALU264.SEI, 'SEI'), _defineProperty(_ref, NALU264.SPS, 'SPS'), _defineProperty(_ref, NALU264.PPS, 'PPS'), _defineProperty(_ref, NALU264.NDR, 'NDR'), _defineProperty(_ref, NALU264.AUD, 'AUD'), _ref;
+      }
     }]);
-    return AACParser;
-}();
+    return NALU264;
+  }();
 
-var Event = function () {
-    function Event(type) {
-        classCallCheck(this, Event);
-
-        this.listener = {};
-        this.type = type | '';
-    }
-
-    createClass(Event, [{
-        key: 'on',
-        value: function on(event, fn) {
-            if (!this.listener[event]) {
-                this.listener[event] = [];
-            }
-            this.listener[event].push(fn);
-            return true;
-        }
-    }, {
-        key: 'off',
-        value: function off(event, fn) {
-            if (this.listener[event]) {
-                var index = this.listener[event].indexOf(fn);
-                if (index > -1) {
-                    this.listener[event].splice(index, 1);
-                }
-                return true;
-            }
-            return false;
-        }
-    }, {
-        key: 'offAll',
-        value: function offAll() {
-            this.listener = {};
-        }
-    }, {
-        key: 'dispatch',
-        value: function dispatch(event, data) {
-            if (this.listener[event]) {
-                this.listener[event].map(function (each) {
-                    each.apply(null, [data]);
-                });
-                return true;
-            }
-            return false;
-        }
-    }]);
-    return Event;
-}();
-
-/**
- * Generate MP4 Box
- * taken from: https://github.com/dailymotion/hls.js
- */
-
-var MP4 = function () {
-    function MP4() {
-        classCallCheck(this, MP4);
-    }
-
-    createClass(MP4, null, [{
-        key: 'init',
-        value: function init() {
-            MP4.types = {
-                avc1: [], // codingname
-                avcC: [],
-                btrt: [],
-                dinf: [],
-                dref: [],
-                esds: [],
-                ftyp: [],
-                hdlr: [],
-                mdat: [],
-                mdhd: [],
-                mdia: [],
-                mfhd: [],
-                minf: [],
-                moof: [],
-                moov: [],
-                mp4a: [],
-                mvex: [],
-                mvhd: [],
-                sdtp: [],
-                stbl: [],
-                stco: [],
-                stsc: [],
-                stsd: [],
-                stsz: [],
-                stts: [],
-                tfdt: [],
-                tfhd: [],
-                traf: [],
-                trak: [],
-                trun: [],
-                trex: [],
-                tkhd: [],
-                vmhd: [],
-                smhd: []
-            };
-
-            var i;
-            for (i in MP4.types) {
-                if (MP4.types.hasOwnProperty(i)) {
-                    MP4.types[i] = [i.charCodeAt(0), i.charCodeAt(1), i.charCodeAt(2), i.charCodeAt(3)];
-                }
-            }
-
-            var videoHdlr = new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, 0x00, 0x00, // pre_defined
-            0x76, 0x69, 0x64, 0x65, // handler_type: 'vide'
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x56, 0x69, 0x64, 0x65, 0x6f, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x72, 0x00]);
-
-            var audioHdlr = new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, 0x00, 0x00, // pre_defined
-            0x73, 0x6f, 0x75, 0x6e, // handler_type: 'soun'
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x53, 0x6f, 0x75, 0x6e, 0x64, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x72, 0x00]);
-
-            MP4.HDLR_TYPES = {
-                video: videoHdlr,
-                audio: audioHdlr
-            };
-
-            var dref = new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, 0x00, 0x01, // entry_count
-            0x00, 0x00, 0x00, 0x0c, // entry_size
-            0x75, 0x72, 0x6c, 0x20, // 'url' type
-            0x00, // version 0
-            0x00, 0x00, 0x01]);
-
-            var stco = new Uint8Array([0x00, // version
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, 0x00, 0x00]);
-
-            MP4.STTS = MP4.STSC = MP4.STCO = stco;
-
-            MP4.STSZ = new Uint8Array([0x00, // version
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, 0x00, 0x00, // sample_size
-            0x00, 0x00, 0x00, 0x00]);
-            MP4.VMHD = new Uint8Array([0x00, // version
-            0x00, 0x00, 0x01, // flags
-            0x00, 0x00, // graphicsmode
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-            MP4.SMHD = new Uint8Array([0x00, // version
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, // balance
-            0x00, 0x00]);
-
-            MP4.STSD = new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, 0x00, 0x01]); // entry_count
-
-            var majorBrand = new Uint8Array([105, 115, 111, 109]); // isom
-            var avc1Brand = new Uint8Array([97, 118, 99, 49]); // avc1
-            var minorVersion = new Uint8Array([0, 0, 0, 1]);
-
-            MP4.FTYP = MP4.box(MP4.types.ftyp, majorBrand, minorVersion, majorBrand, avc1Brand);
-            MP4.DINF = MP4.box(MP4.types.dinf, MP4.box(MP4.types.dref, dref));
-        }
-    }, {
-        key: 'box',
-        value: function box(type) {
-            for (var _len = arguments.length, payload = Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
-                payload[_key - 1] = arguments[_key];
-            }
-
-            var size = 8,
-                i = payload.length,
-                len = i,
-                result;
-            // calculate the total size we need to allocate
-            while (i--) {
-                size += payload[i].byteLength;
-            }
-            result = new Uint8Array(size);
-            result[0] = size >> 24 & 0xff;
-            result[1] = size >> 16 & 0xff;
-            result[2] = size >> 8 & 0xff;
-            result[3] = size & 0xff;
-            result.set(type, 4);
-            // copy the payload into the result
-            for (i = 0, size = 8; i < len; ++i) {
-                // copy payload[i] array @ offset size
-                result.set(payload[i], size);
-                size += payload[i].byteLength;
-            }
-            return result;
-        }
-    }, {
-        key: 'hdlr',
-        value: function hdlr(type) {
-            return MP4.box(MP4.types.hdlr, MP4.HDLR_TYPES[type]);
-        }
-    }, {
-        key: 'mdat',
-        value: function mdat(data) {
-            return MP4.box(MP4.types.mdat, data);
-        }
-    }, {
-        key: 'mdhd',
-        value: function mdhd(timescale, duration) {
-            return MP4.box(MP4.types.mdhd, new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, 0x00, 0x02, // creation_time
-            0x00, 0x00, 0x00, 0x03, // modification_time
-            timescale >> 24 & 0xFF, timescale >> 16 & 0xFF, timescale >> 8 & 0xFF, timescale & 0xFF, // timescale
-            duration >> 24, duration >> 16 & 0xFF, duration >> 8 & 0xFF, duration & 0xFF, // duration
-            0x55, 0xc4, // 'und' language (undetermined)
-            0x00, 0x00]));
-        }
-    }, {
-        key: 'mdia',
-        value: function mdia(track) {
-            return MP4.box(MP4.types.mdia, MP4.mdhd(track.timescale, track.duration), MP4.hdlr(track.type), MP4.minf(track));
-        }
-    }, {
-        key: 'mfhd',
-        value: function mfhd(sequenceNumber) {
-            return MP4.box(MP4.types.mfhd, new Uint8Array([0x00, 0x00, 0x00, 0x00, // flags
-            sequenceNumber >> 24, sequenceNumber >> 16 & 0xFF, sequenceNumber >> 8 & 0xFF, sequenceNumber & 0xFF]) // sequence_number
-            );
-        }
-    }, {
-        key: 'minf',
-        value: function minf(track) {
-            if (track.type === 'audio') {
-                return MP4.box(MP4.types.minf, MP4.box(MP4.types.smhd, MP4.SMHD), MP4.DINF, MP4.stbl(track));
-            } else {
-                return MP4.box(MP4.types.minf, MP4.box(MP4.types.vmhd, MP4.VMHD), MP4.DINF, MP4.stbl(track));
-            }
-        }
-    }, {
-        key: 'moof',
-        value: function moof(sn, baseMediaDecodeTime, track) {
-            return MP4.box(MP4.types.moof, MP4.mfhd(sn), MP4.traf(track, baseMediaDecodeTime));
-        }
-        /**
-         * @param tracks... (optional) {array} the tracks associated with this movie
-         */
-
-    }, {
-        key: 'moov',
-        value: function moov(tracks, duration, timescale) {
-            var i = tracks.length,
-                boxes = [];
-
-            while (i--) {
-                boxes[i] = MP4.trak(tracks[i]);
-            }
-
-            return MP4.box.apply(null, [MP4.types.moov, MP4.mvhd(timescale, duration)].concat(boxes).concat(MP4.mvex(tracks)));
-        }
-    }, {
-        key: 'mvex',
-        value: function mvex(tracks) {
-            var i = tracks.length,
-                boxes = [];
-
-            while (i--) {
-                boxes[i] = MP4.trex(tracks[i]);
-            }
-            return MP4.box.apply(null, [MP4.types.mvex].concat(boxes));
-        }
-    }, {
-        key: 'mvhd',
-        value: function mvhd(timescale, duration) {
-            var bytes = new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            0x00, 0x00, 0x00, 0x01, // creation_time
-            0x00, 0x00, 0x00, 0x02, // modification_time
-            timescale >> 24 & 0xFF, timescale >> 16 & 0xFF, timescale >> 8 & 0xFF, timescale & 0xFF, // timescale
-            duration >> 24 & 0xFF, duration >> 16 & 0xFF, duration >> 8 & 0xFF, duration & 0xFF, // duration
-            0x00, 0x01, 0x00, 0x00, // 1.0 rate
-            0x01, 0x00, // 1.0 volume
-            0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, // transformation: unity matrix
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // pre_defined
-            0xff, 0xff, 0xff, 0xff]);
-            return MP4.box(MP4.types.mvhd, bytes);
-        }
-    }, {
-        key: 'sdtp',
-        value: function sdtp(track) {
-            var samples = track.samples || [],
-                bytes = new Uint8Array(4 + samples.length),
-                flags,
-                i;
-            // leave the full box header (4 bytes) all zero
-            // write the sample table
-            for (i = 0; i < samples.length; i++) {
-                flags = samples[i].flags;
-                bytes[i + 4] = flags.dependsOn << 4 | flags.isDependedOn << 2 | flags.hasRedundancy;
-            }
-
-            return MP4.box(MP4.types.sdtp, bytes);
-        }
-    }, {
-        key: 'stbl',
-        value: function stbl(track) {
-            return MP4.box(MP4.types.stbl, MP4.stsd(track), MP4.box(MP4.types.stts, MP4.STTS), MP4.box(MP4.types.stsc, MP4.STSC), MP4.box(MP4.types.stsz, MP4.STSZ), MP4.box(MP4.types.stco, MP4.STCO));
-        }
-    }, {
-        key: 'avc1',
-        value: function avc1(track) {
-            var sps = [],
-                pps = [],
-                i,
-                data,
-                len;
-            // assemble the SPSs
-
-            for (i = 0; i < track.sps.length; i++) {
-                data = track.sps[i];
-                len = data.byteLength;
-                sps.push(len >>> 8 & 0xFF);
-                sps.push(len & 0xFF);
-                sps = sps.concat(Array.prototype.slice.call(data)); // SPS
-            }
-
-            // assemble the PPSs
-            for (i = 0; i < track.pps.length; i++) {
-                data = track.pps[i];
-                len = data.byteLength;
-                pps.push(len >>> 8 & 0xFF);
-                pps.push(len & 0xFF);
-                pps = pps.concat(Array.prototype.slice.call(data));
-            }
-
-            var avcc = MP4.box(MP4.types.avcC, new Uint8Array([0x01, // version
-            sps[3], // profile
-            sps[4], // profile compat
-            sps[5], // level
-            0xfc | 3, // lengthSizeMinusOne, hard-coded to 4 bytes
-            0xE0 | track.sps.length].concat(sps).concat([track.pps.length] // numOfPictureParameterSets
-            ).concat(pps))),
-                // "PPS"
-            width = track.width,
-                height = track.height;
-            // console.log('avcc:' + Hex.hexDump(avcc));
-            return MP4.box(MP4.types.avc1, new Uint8Array([0x00, 0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, // reserved
-            0x00, 0x01, // data_reference_index
-            0x00, 0x00, // pre_defined
-            0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // pre_defined
-            width >> 8 & 0xFF, width & 0xff, // width
-            height >> 8 & 0xFF, height & 0xff, // height
-            0x00, 0x48, 0x00, 0x00, // horizresolution
-            0x00, 0x48, 0x00, 0x00, // vertresolution
-            0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, 0x01, // frame_count
-            0x12, 0x62, 0x69, 0x6E, 0x65, // binelpro.ru
-            0x6C, 0x70, 0x72, 0x6F, 0x2E, 0x72, 0x75, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // compressorname
-            0x00, 0x18, // depth = 24
-            0x11, 0x11]), // pre_defined = -1
-            avcc, MP4.box(MP4.types.btrt, new Uint8Array([0x00, 0x1c, 0x9c, 0x80, // bufferSizeDB
-            0x00, 0x2d, 0xc6, 0xc0, // maxBitrate
-            0x00, 0x2d, 0xc6, 0xc0])) // avgBitrate
-            );
-        }
-    }, {
-        key: 'esds',
-        value: function esds(track) {
-            var configlen = track.config.byteLength;
-            var data = new Uint8Array(26 + configlen + 3);
-            data.set([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-
-            0x03, // descriptor_type
-            0x17 + configlen, // length
-            0x00, 0x01, // es_id
-            0x00, // stream_priority
-
-            0x04, // descriptor_type
-            0x0f + configlen, // length
-            0x40, // codec : mpeg4_audio
-            0x15, // stream_type
-            0x00, 0x00, 0x00, // buffer_size
-            0x00, 0x00, 0x00, 0x00, // maxBitrate
-            0x00, 0x00, 0x00, 0x00, // avgBitrate
-
-            0x05, // descriptor_type
-            configlen]);
-            data.set(track.config, 26);
-            data.set([0x06, 0x01, 0x02], 26 + configlen);
-            // return new Uint8Array([
-            //     0x00, // version 0
-            //     0x00, 0x00, 0x00, // flags
-            //
-            //     0x03, // descriptor_type
-            //     0x17+configlen, // length
-            //     0x00, 0x01, //es_id
-            //     0x00, // stream_priority
-            //
-            //     0x04, // descriptor_type
-            //     0x0f+configlen, // length
-            //     0x40, //codec : mpeg4_audio
-            //     0x15, // stream_type
-            //     0x00, 0x00, 0x00, // buffer_size
-            //     0x00, 0x00, 0x00, 0x00, // maxBitrate
-            //     0x00, 0x00, 0x00, 0x00, // avgBitrate
-            //
-            //     0x05 // descriptor_type
-            // ].concat([configlen]).concat(track.config).concat([0x06, 0x01, 0x02])); // GASpecificConfig)); // length + audio config descriptor
-            return data;
-        }
-    }, {
-        key: 'mp4a',
-        value: function mp4a(track) {
-            var audiosamplerate = track.audiosamplerate;
-            return MP4.box(MP4.types.mp4a, new Uint8Array([0x00, 0x00, 0x00, // reserved
-            0x00, 0x00, 0x00, // reserved
-            0x00, 0x01, // data_reference_index
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, track.channelCount, // channelcount
-            0x00, 0x10, // sampleSize:16bits
-            0x00, 0x00, // pre_defined
-            0x00, 0x00, // reserved2
-            audiosamplerate >> 8 & 0xFF, audiosamplerate & 0xff, //
-            0x00, 0x00]), MP4.box(MP4.types.esds, MP4.esds(track)));
-        }
-    }, {
-        key: 'stsd',
-        value: function stsd(track) {
-            if (track.type === 'audio') {
-                return MP4.box(MP4.types.stsd, MP4.STSD, MP4.mp4a(track));
-            } else {
-                return MP4.box(MP4.types.stsd, MP4.STSD, MP4.avc1(track));
-            }
-        }
-    }, {
-        key: 'tkhd',
-        value: function tkhd(track) {
-            var id = track.id,
-                duration = track.duration,
-                width = track.width,
-                height = track.height,
-                volume = track.volume;
-            return MP4.box(MP4.types.tkhd, new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x07, // flags
-            0x00, 0x00, 0x00, 0x00, // creation_time
-            0x00, 0x00, 0x00, 0x00, // modification_time
-            id >> 24 & 0xFF, id >> 16 & 0xFF, id >> 8 & 0xFF, id & 0xFF, // track_ID
-            0x00, 0x00, 0x00, 0x00, // reserved
-            duration >> 24, duration >> 16 & 0xFF, duration >> 8 & 0xFF, duration & 0xFF, // duration
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // reserved
-            0x00, 0x00, // layer
-            0x00, 0x00, // alternate_group
-            volume >> 0 & 0xff, volume % 1 * 10 >> 0 & 0xff, // track volume // FIXME
-            0x00, 0x00, // reserved
-            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, // transformation: unity matrix
-            width >> 8 & 0xFF, width & 0xFF, 0x00, 0x00, // width
-            height >> 8 & 0xFF, height & 0xFF, 0x00, 0x00]) // height
-            );
-        }
-    }, {
-        key: 'traf',
-        value: function traf(track, baseMediaDecodeTime) {
-            var sampleDependencyTable = MP4.sdtp(track),
-                id = track.id;
-            return MP4.box(MP4.types.traf, MP4.box(MP4.types.tfhd, new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            id >> 24, id >> 16 & 0XFF, id >> 8 & 0XFF, id & 0xFF]) // track_ID
-            ), MP4.box(MP4.types.tfdt, new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            baseMediaDecodeTime >> 24, baseMediaDecodeTime >> 16 & 0XFF, baseMediaDecodeTime >> 8 & 0XFF, baseMediaDecodeTime & 0xFF]) // baseMediaDecodeTime
-            ), MP4.trun(track, sampleDependencyTable.length + 16 + // tfhd
-            16 + // tfdt
-            8 + // traf header
-            16 + // mfhd
-            8 + // moof header
-            8), // mdat header
-            sampleDependencyTable);
-        }
-
-        /**
-         * Generate a track box.
-         * @param track {object} a track definition
-         * @return {Uint8Array} the track box
-         */
-
-    }, {
-        key: 'trak',
-        value: function trak(track) {
-            track.duration = track.duration || 0xffffffff;
-            return MP4.box(MP4.types.trak, MP4.tkhd(track), MP4.mdia(track));
-        }
-    }, {
-        key: 'trex',
-        value: function trex(track) {
-            var id = track.id;
-            return MP4.box(MP4.types.trex, new Uint8Array([0x00, // version 0
-            0x00, 0x00, 0x00, // flags
-            id >> 24, id >> 16 & 0XFF, id >> 8 & 0XFF, id & 0xFF, // track_ID
-            0x00, 0x00, 0x00, 0x01, // default_sample_description_index
-            0x00, 0x00, 0x00, 0x00, // default_sample_duration
-            0x00, 0x00, 0x00, 0x00, // default_sample_size
-            0x00, 0x01, 0x00, 0x01]) // default_sample_flags
-            );
-        }
-    }, {
-        key: 'trun',
-        value: function trun(track, offset) {
-            var samples = track.samples || [],
-                len = samples.length,
-                arraylen = 12 + 16 * len,
-                array = new Uint8Array(arraylen),
-                i,
-                sample,
-                duration,
-                size,
-                flags,
-                cts;
-            offset += 8 + arraylen;
-            array.set([0x00, // version 0
-            0x00, 0x0f, 0x01, // flags
-            len >>> 24 & 0xFF, len >>> 16 & 0xFF, len >>> 8 & 0xFF, len & 0xFF, // sample_count
-            offset >>> 24 & 0xFF, offset >>> 16 & 0xFF, offset >>> 8 & 0xFF, offset & 0xFF], 0);
-            for (i = 0; i < len; i++) {
-                sample = samples[i];
-                duration = sample.duration;
-                size = sample.size;
-                flags = sample.flags;
-                cts = sample.cts;
-                array.set([duration >>> 24 & 0xFF, duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, // sample_duration
-                size >>> 24 & 0xFF, size >>> 16 & 0xFF, size >>> 8 & 0xFF, size & 0xFF, // sample_size
-                flags.isLeading << 2 | flags.dependsOn, flags.isDependedOn << 6 | flags.hasRedundancy << 4 | flags.paddingValue << 1 | flags.isNonSync, flags.degradPrio & 0xF0 << 8, flags.degradPrio & 0x0F, // sample_flags
-                cts >>> 24 & 0xFF, cts >>> 16 & 0xFF, cts >>> 8 & 0xFF, cts & 0xFF], 12 + 16 * i);
-            }
-            return MP4.box(MP4.types.trun, array);
-        }
-    }, {
-        key: 'initSegment',
-        value: function initSegment(tracks, duration, timescale) {
-            if (!MP4.types) {
-                MP4.init();
-            }
-            var movie = MP4.moov(tracks, duration, timescale),
-                result;
-            result = new Uint8Array(MP4.FTYP.byteLength + movie.byteLength);
-            result.set(MP4.FTYP);
-            result.set(movie, MP4.FTYP.byteLength);
-            return result;
-        }
-    }]);
-    return MP4;
-}();
-
-var track_id = 1;
-var BaseRemuxer = function () {
-    createClass(BaseRemuxer, null, [{
-        key: 'getTrackID',
-        value: function getTrackID() {
-            return track_id++;
-        }
-    }]);
-
-    function BaseRemuxer() {
-        classCallCheck(this, BaseRemuxer);
-
-        this.seq = 1;
-    }
-
-    createClass(BaseRemuxer, [{
-        key: 'flush',
-        value: function flush() {
-            this.seq++;
-            this.mp4track.len = 0;
-            this.mp4track.samples = [];
-        }
-    }, {
-        key: 'isReady',
-        value: function isReady() {
-            if (!this.readyToDecode || !this.samples.length) return null;
-            return true;
-        }
-    }]);
-    return BaseRemuxer;
-}();
-
-var AACRemuxer = function (_BaseRemuxer) {
-    inherits(AACRemuxer, _BaseRemuxer);
-
-    function AACRemuxer() {
-        classCallCheck(this, AACRemuxer);
-
-        var _this = possibleConstructorReturn(this, (AACRemuxer.__proto__ || Object.getPrototypeOf(AACRemuxer)).call(this));
-
-        _this.readyToDecode = false;
-        _this.nextDts = 0;
-        _this.dts = 0;
-        _this.timescale = 1000;
-
-        _this.mp4track = {
-            id: BaseRemuxer.getTrackID(),
-            type: 'audio',
-            channelCount: 0,
-            len: 0,
-            fragmented: true,
-            timescale: _this.timescale,
-            duration: _this.timescale,
-            samples: [],
-            config: '',
-            codec: ''
-        };
-
-        _this.samples = [];
-        _this.aac = new AACParser(_this);
-        return _this;
-    }
-
-    createClass(AACRemuxer, [{
-        key: 'resetTrack',
-        value: function resetTrack() {
-            this.readyToDecode = false;
-            this.mp4track.codec = '';
-            this.mp4track.channelCount = '';
-            this.mp4track.config = '';
-            this.mp4track.timescale = this.timescale;
-        }
-    }, {
-        key: 'remux',
-        value: function remux(samples) {
-            var config = void 0,
-                sample = void 0,
-                size = void 0,
-                payload = void 0;
-            var _iteratorNormalCompletion = true;
-            var _didIteratorError = false;
-            var _iteratorError = undefined;
-
-            try {
-                for (var _iterator = samples[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                    var _sample = _step.value;
-
-                    payload = _sample.units;
-                    size = payload.byteLength;
-                    this.samples.push({
-                        units: payload,
-                        size: size,
-                        duration: _sample.duration
-                    });
-                    this.mp4track.len += size;
-                    if (!this.readyToDecode) {
-                        this.aac.setAACConfig();
-                    }
-                }
-            } catch (err) {
-                _didIteratorError = true;
-                _iteratorError = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion && _iterator.return) {
-                        _iterator.return();
-                    }
-                } finally {
-                    if (_didIteratorError) {
-                        throw _iteratorError;
-                    }
-                }
-            }
-        }
-    }, {
-        key: 'getPayload',
-        value: function getPayload() {
-            if (!this.isReady()) {
-                return null;
-            }
-
-            var payload = new Uint8Array(this.mp4track.len);
-            var offset = 0;
-            var samples = this.mp4track.samples;
-            var mp4Sample = void 0,
-                duration = void 0;
-
-            this.dts = this.nextDts;
-
-            while (this.samples.length) {
-                var sample = this.samples.shift();
-
-                duration = sample.duration;
-
-                if (duration <= 0) {
-                    log('remuxer: invalid sample duration at DTS: ' + this.nextDts + ' :' + duration);
-                    this.mp4track.len -= sample.size;
-                    continue;
-                }
-
-                this.nextDts += duration;
-                mp4Sample = {
-                    size: sample.size,
-                    duration: duration,
-                    cts: 0,
-                    flags: {
-                        isLeading: 0,
-                        isDependedOn: 0,
-                        hasRedundancy: 0,
-                        degradPrio: 0,
-                        dependsOn: 1
-                    }
-                };
-
-                payload.set(sample.units, offset);
-                offset += sample.size;
-                samples.push(mp4Sample);
-            }
-
-            if (!samples.length) return null;
-
-            return new Uint8Array(payload.buffer, 0, this.mp4track.len);
-        }
-    }]);
-    return AACRemuxer;
-}(BaseRemuxer);
-
-var H264Remuxer = function (_BaseRemuxer) {
-    inherits(H264Remuxer, _BaseRemuxer);
-
-    function H264Remuxer() {
-        classCallCheck(this, H264Remuxer);
-
-        var _this = possibleConstructorReturn(this, (H264Remuxer.__proto__ || Object.getPrototypeOf(H264Remuxer)).call(this));
-
-        _this.readyToDecode = false;
-        _this.nextDts = 0;
-        _this.dts = 0;
-        _this.timescale = 1000;
-
-        _this.mp4track = {
-            id: BaseRemuxer.getTrackID(),
-            type: 'video',
-            len: 0,
-            fragmented: true,
-            sps: '',
-            pps: '',
-            width: 0,
-            height: 0,
-            timescale: _this.timescale,
-            duration: _this.timescale,
-            samples: []
-        };
-
-        _this.samples = [];
-        _this.h264 = new H264Parser(_this);
-        return _this;
-    }
-
-    createClass(H264Remuxer, [{
-        key: 'resetTrack',
-        value: function resetTrack() {
-            this.readyToDecode = false;
-            this.mp4track.sps = '';
-            this.mp4track.pps = '';
-        }
-    }, {
-        key: 'remux',
-        value: function remux(samples) {
-            var sample = void 0,
-                units = void 0,
-                unit = void 0,
-                size = void 0,
-                keyFrame = void 0;
-            var _iteratorNormalCompletion = true;
-            var _didIteratorError = false;
-            var _iteratorError = undefined;
-
-            try {
-                for (var _iterator = samples[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                    sample = _step.value;
-
-                    units = [];
-                    size = 0;
-                    keyFrame = false;
-                    var _iteratorNormalCompletion2 = true;
-                    var _didIteratorError2 = false;
-                    var _iteratorError2 = undefined;
-
-                    try {
-                        for (var _iterator2 = sample.units[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
-                            unit = _step2.value;
-
-                            if (this.h264.parseNAL(unit)) {
-                                units.push(unit);
-                                size += unit.getSize();
-                                if (!keyFrame) {
-                                    keyFrame = unit.isKeyframe();
-                                }
-                            }
-                        }
-                    } catch (err) {
-                        _didIteratorError2 = true;
-                        _iteratorError2 = err;
-                    } finally {
-                        try {
-                            if (!_iteratorNormalCompletion2 && _iterator2.return) {
-                                _iterator2.return();
-                            }
-                        } finally {
-                            if (_didIteratorError2) {
-                                throw _iteratorError2;
-                            }
-                        }
-                    }
-
-                    if (units.length > 0 && this.readyToDecode) {
-                        this.mp4track.len += size;
-                        this.samples.push({
-                            units: units,
-                            size: size,
-                            keyFrame: keyFrame,
-                            duration: sample.duration
-                        });
-                    }
-                }
-            } catch (err) {
-                _didIteratorError = true;
-                _iteratorError = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion && _iterator.return) {
-                        _iterator.return();
-                    }
-                } finally {
-                    if (_didIteratorError) {
-                        throw _iteratorError;
-                    }
-                }
-            }
-        }
-    }, {
-        key: 'getPayload',
-        value: function getPayload() {
-            if (!this.isReady()) {
-                return null;
-            }
-
-            var payload = new Uint8Array(this.mp4track.len);
-            var offset = 0;
-            var samples = this.mp4track.samples;
-            var mp4Sample = void 0,
-                duration = void 0;
-
-            this.dts = this.nextDts;
-
-            while (this.samples.length) {
-                var sample = this.samples.shift(),
-                    units = sample.units;
-
-                duration = sample.duration;
-
-                if (duration <= 0) {
-                    log('remuxer: invalid sample duration at DTS: ' + this.nextDts + ' :' + duration);
-                    this.mp4track.len -= sample.size;
-                    continue;
-                }
-
-                this.nextDts += duration;
-                mp4Sample = {
-                    size: sample.size,
-                    duration: duration,
-                    cts: 0,
-                    flags: {
-                        isLeading: 0,
-                        isDependedOn: 0,
-                        hasRedundancy: 0,
-                        degradPrio: 0,
-                        isNonSync: sample.keyFrame ? 0 : 1,
-                        dependsOn: sample.keyFrame ? 2 : 1
-                    }
-                };
-
-                var _iteratorNormalCompletion3 = true;
-                var _didIteratorError3 = false;
-                var _iteratorError3 = undefined;
-
-                try {
-                    for (var _iterator3 = units[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
-                        var unit = _step3.value;
-
-                        payload.set(unit.getData(), offset);
-                        offset += unit.getSize();
-                    }
-                } catch (err) {
-                    _didIteratorError3 = true;
-                    _iteratorError3 = err;
-                } finally {
-                    try {
-                        if (!_iteratorNormalCompletion3 && _iterator3.return) {
-                            _iterator3.return();
-                        }
-                    } finally {
-                        if (_didIteratorError3) {
-                            throw _iteratorError3;
-                        }
-                    }
-                }
-
-                samples.push(mp4Sample);
-            }
-
-            if (!samples.length) return null;
-
-            return new Uint8Array(payload.buffer, 0, this.mp4track.len);
-        }
-    }]);
-    return H264Remuxer;
-}(BaseRemuxer);
-
-function appendByteArray(buffer1, buffer2) {
+  function appendByteArray(buffer1, buffer2) {
     var tmp = new Uint8Array((buffer1.byteLength | 0) + (buffer2.byteLength | 0));
     tmp.set(buffer1, 0);
     tmp.set(buffer2, buffer1.byteLength | 0);
     return tmp;
-}
-
-function secToTime(sec) {
-    var seconds = void 0,
-        hours = void 0,
-        minutes = void 0,
-        result = '';
-
+  }
+  function secToTime(sec) {
+    var seconds,
+      hours,
+      minutes,
+      result = '';
     seconds = Math.floor(sec);
     hours = parseInt(seconds / 3600, 10) % 24;
     minutes = parseInt(seconds / 60, 10) % 60;
     seconds = seconds < 0 ? 0 : seconds % 60;
-
     if (hours > 0) {
-        result += (hours < 10 ? '0' + hours : hours) + ':';
+      result += (hours < 10 ? '0' + hours : hours) + ':';
     }
     result += (minutes < 10 ? '0' + minutes : minutes) + ':' + (seconds < 10 ? '0' + seconds : seconds);
     return result;
-}
+  }
 
-var RemuxController = function (_Event) {
-    inherits(RemuxController, _Event);
-
-    function RemuxController(streaming) {
-        classCallCheck(this, RemuxController);
-
-        var _this = possibleConstructorReturn(this, (RemuxController.__proto__ || Object.getPrototypeOf(RemuxController)).call(this, 'remuxer'));
-
-        _this.initialized = false;
-        _this.trackTypes = [];
-        _this.tracks = {};
-        _this.mediaDuration = streaming ? Infinity : 1000;
-        return _this;
+  var H264Remuxer = /*#__PURE__*/function (_BaseRemuxer) {
+    _inherits(H264Remuxer, _BaseRemuxer);
+    var _super = _createSuper(H264Remuxer);
+    function H264Remuxer(timescale, duration, frameDuration) {
+      var _this;
+      _classCallCheck(this, H264Remuxer);
+      _this = _super.call(this, 'H264Remuxer');
+      _this.frameDuration = frameDuration;
+      _this.readyToDecode = false;
+      _this.nextDts = 0;
+      _this.dts = 0;
+      _this.mp4track = {
+        id: BaseRemuxer.getTrackID(),
+        type: 'video',
+        len: 0,
+        fragmented: true,
+        sps: '',
+        pps: '',
+        fps: 30,
+        width: 0,
+        height: 0,
+        timescale: timescale,
+        duration: duration,
+        samples: []
+      };
+      _this.samples = [];
+      _this.remainingData = new Uint8Array();
+      _this.kfCounter = 0;
+      _this.pendingUnits = {};
+      return _this;
     }
-
-    createClass(RemuxController, [{
-        key: 'addTrack',
-        value: function addTrack(type) {
-            if (type === 'video' || type === 'both') {
-                this.tracks.video = new H264Remuxer();
-                this.trackTypes.push('video');
-            }
-            if (type === 'audio' || type === 'both') {
-                this.tracks.audio = new AACRemuxer();
-                this.trackTypes.push('audio');
-            }
-        }
+    _createClass(H264Remuxer, [{
+      key: "resetTrack",
+      value: function resetTrack() {
+        this.readyToDecode = false;
+        this.mp4track.sps = '';
+        this.mp4track.pps = '';
+        this.nextDts = 0;
+        this.dts = 0;
+        this.remainingData = new Uint8Array();
+        this.kfCounter = 0;
+        this.pendingUnits = {};
+      }
     }, {
-        key: 'reset',
-        value: function reset() {
-            var _iteratorNormalCompletion = true;
-            var _didIteratorError = false;
-            var _iteratorError = undefined;
+      key: "feed",
+      value: function feed(data, duration, compositionTimeOffset) {
+        var slices = [];
+        var left;
+        data = appendByteArray(this.remainingData, data);
+        var _H264Parser$extractNA = H264Parser.extractNALu(data);
+        var _H264Parser$extractNA2 = _slicedToArray(_H264Parser$extractNA, 2);
+        slices = _H264Parser$extractNA2[0];
+        left = _H264Parser$extractNA2[1];
+        this.remainingData = left || new Uint8Array();
+        if (slices.length > 0) {
+          this.remux(this.getVideoFrames(slices, duration, compositionTimeOffset));
+          return true;
+        } else {
+          error('Failed to extract any NAL units from video data:', left);
+          this.dispatch('outOfData');
+          return false;
+        }
+      }
+    }, {
+      key: "getVideoFrames",
+      value: function getVideoFrames(nalus, duration, compositionTimeOffset) {
+        var _this2 = this;
+        var units = [],
+          frames = [],
+          fd = 0,
+          // frame duration
+          tt = 0,
+          // time ticks (remainder adjustment counter)
+          keyFrame = false,
+          vcl = false; // Video Coding Layer data (i.e., a "real" frame)
+        if (this.pendingUnits.units) {
+          units = this.pendingUnits.units;
+          vcl = this.pendingUnits.vcl;
+          keyFrame = this.pendingUnits.keyFrame;
+          this.pendingUnits = {};
+        }
+        var _iterator = _createForOfIteratorHelper(nalus),
+          _step;
+        try {
+          for (_iterator.s(); !(_step = _iterator.n()).done;) {
+            var nalu = _step.value;
+            var unit = new NALU264(nalu);
 
+            // frame boundary detection
+            if (units.length && vcl && (unit.isFirstSlice || !unit.isVCL)) {
+              frames.push({
+                units: units,
+                keyFrame: keyFrame
+              });
+              units = [];
+              keyFrame = false;
+              vcl = false;
+            }
+            units.push(unit);
+            keyFrame = keyFrame || unit.isKeyframe;
+            vcl = vcl || unit.isVCL;
+          }
+        } catch (err) {
+          _iterator.e(err);
+        } finally {
+          _iterator.f();
+        }
+        if (units.length) {
+          // lets keep indecisive nalus as pending in case of fixed fps
+          if (!duration) {
+            this.pendingUnits = {
+              units: units,
+              keyFrame: keyFrame,
+              vcl: vcl
+            };
+          } else if (vcl) {
+            frames.push({
+              units: units,
+              keyFrame: keyFrame
+            });
+          } else {
+            var last = frames.length - 1;
+            if (last >= 0) {
+              frames[last].units = frames[last].units.concat(units);
+            }
+          }
+        }
+        fd = duration ? duration / frames.length | 0 : this.frameDuration;
+        tt = duration ? duration - fd * frames.length : 0;
+        frames.map(function (frame) {
+          frame.duration = fd;
+          frame.compositionTimeOffset = compositionTimeOffset;
+          if (tt > 0) {
+            frame.duration++;
+            tt--;
+          }
+          _this2.kfCounter++;
+          if (frame.keyFrame) {
+            _this2.dispatch('keyframePosition', _this2.kfCounter * fd / 1000);
+          }
+        });
+        log("jmuxer: No. of H264 frames of the last chunk: ".concat(frames.length));
+        return frames;
+      }
+    }, {
+      key: "remux",
+      value: function remux(frames) {
+        var _iterator2 = _createForOfIteratorHelper(frames),
+          _step2;
+        try {
+          for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
+            var frame = _step2.value;
+            var units = [];
+            var size = 0;
+            var _iterator3 = _createForOfIteratorHelper(frame.units),
+              _step3;
             try {
-                for (var _iterator = this.trackTypes[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                    var type = _step.value;
-
-                    this.tracks[type].resetTrack();
+              for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
+                var unit = _step3.value;
+                if (this.parseNAL(unit)) {
+                  units.push(unit);
+                  size += unit.getSize();
                 }
+              }
             } catch (err) {
-                _didIteratorError = true;
-                _iteratorError = err;
+              _iterator3.e(err);
             } finally {
-                try {
-                    if (!_iteratorNormalCompletion && _iterator.return) {
-                        _iterator.return();
-                    }
-                } finally {
-                    if (_didIteratorError) {
-                        throw _iteratorError;
-                    }
-                }
+              _iterator3.f();
             }
-
-            this.initialized = false;
-        }
-    }, {
-        key: 'destroy',
-        value: function destroy() {
-            this.tracks = {};
-            this.offAll();
-        }
-    }, {
-        key: 'flush',
-        value: function flush() {
-            if (!this.initialized) {
-                if (this.isReady()) {
-                    this.dispatch('ready');
-                    var _iteratorNormalCompletion2 = true;
-                    var _didIteratorError2 = false;
-                    var _iteratorError2 = undefined;
-
-                    try {
-                        for (var _iterator2 = this.trackTypes[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
-                            var type = _step2.value;
-
-                            var track = this.tracks[type];
-                            var data = {
-                                type: type,
-                                payload: MP4.initSegment([track.mp4track], this.mediaDuration, track.mp4track.timescale)
-                            };
-                            this.dispatch('buffer', data);
-                        }
-                    } catch (err) {
-                        _didIteratorError2 = true;
-                        _iteratorError2 = err;
-                    } finally {
-                        try {
-                            if (!_iteratorNormalCompletion2 && _iterator2.return) {
-                                _iterator2.return();
-                            }
-                        } finally {
-                            if (_didIteratorError2) {
-                                throw _iteratorError2;
-                            }
-                        }
-                    }
-
-                    log('Initial segment generated.');
-                    this.initialized = true;
-                }
-            } else {
-                var _iteratorNormalCompletion3 = true;
-                var _didIteratorError3 = false;
-                var _iteratorError3 = undefined;
-
-                try {
-                    for (var _iterator3 = this.trackTypes[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
-                        var _type = _step3.value;
-
-                        var _track = this.tracks[_type];
-                        var pay = _track.getPayload();
-                        if (pay && pay.byteLength) {
-                            var moof = MP4.moof(_track.seq, _track.dts, _track.mp4track);
-                            var mdat = MP4.mdat(pay);
-                            var payload = appendByteArray(moof, mdat);
-                            var _data = {
-                                type: _type,
-                                payload: payload,
-                                dts: _track.dts
-                            };
-                            this.dispatch('buffer', _data);
-                            var duration = secToTime(_track.dts / 1000);
-                            log('put segment (' + _type + '): ' + _track.seq + ' dts: ' + _track.dts + ' samples: ' + _track.mp4track.samples.length + ' second: ' + duration);
-                            _track.flush();
-                        }
-                    }
-                } catch (err) {
-                    _didIteratorError3 = true;
-                    _iteratorError3 = err;
-                } finally {
-                    try {
-                        if (!_iteratorNormalCompletion3 && _iterator3.return) {
-                            _iterator3.return();
-                        }
-                    } finally {
-                        if (_didIteratorError3) {
-                            throw _iteratorError3;
-                        }
-                    }
-                }
+            if (units.length > 0 && this.readyToDecode) {
+              this.mp4track.len += size;
+              this.samples.push({
+                units: units,
+                size: size,
+                keyFrame: frame.keyFrame,
+                duration: frame.duration,
+                compositionTimeOffset: frame.compositionTimeOffset
+              });
             }
+          }
+        } catch (err) {
+          _iterator2.e(err);
+        } finally {
+          _iterator2.f();
         }
+      }
     }, {
-        key: 'isReady',
-        value: function isReady() {
-            var _iteratorNormalCompletion4 = true;
-            var _didIteratorError4 = false;
-            var _iteratorError4 = undefined;
+      key: "getPayload",
+      value: function getPayload() {
+        if (!this.isReady()) {
+          return null;
+        }
+        var payload = new Uint8Array(this.mp4track.len);
+        var offset = 0;
+        var samples = this.mp4track.samples;
+        var mp4Sample, duration;
+        this.dts = this.nextDts;
+        while (this.samples.length) {
+          var sample = this.samples.shift(),
+            units = sample.units;
+          duration = sample.duration;
+          if (duration <= 0) {
+            log("remuxer: invalid sample duration at DTS: ".concat(this.nextDts, " :").concat(duration));
+            this.mp4track.len -= sample.size;
+            continue;
+          }
+          this.nextDts += duration;
+          mp4Sample = {
+            size: sample.size,
+            duration: duration,
+            cts: sample.compositionTimeOffset || 0,
+            flags: {
+              isLeading: 0,
+              isDependedOn: 0,
+              hasRedundancy: 0,
+              degradPrio: 0,
+              isNonSync: sample.keyFrame ? 0 : 1,
+              dependsOn: sample.keyFrame ? 2 : 1
+            }
+          };
+          var _iterator4 = _createForOfIteratorHelper(units),
+            _step4;
+          try {
+            for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
+              var unit = _step4.value;
+              payload.set(unit.getData(), offset);
+              offset += unit.getSize();
+            }
+          } catch (err) {
+            _iterator4.e(err);
+          } finally {
+            _iterator4.f();
+          }
+          samples.push(mp4Sample);
+        }
+        if (!samples.length) return null;
+        return new Uint8Array(payload.buffer, 0, this.mp4track.len);
+      }
+    }, {
+      key: "parseSPS",
+      value: function parseSPS(sps) {
+        var config = H264Parser.readSPS(new Uint8Array(sps));
+        this.mp4track.fps = config.fps || this.mp4track.fps;
+        this.mp4track.width = config.width;
+        this.mp4track.height = config.height;
+        this.mp4track.sps = [new Uint8Array(sps)];
+        this.mp4track.codec = 'avc1.';
+        var codecarray = new DataView(sps.buffer, sps.byteOffset + 1, 4);
+        for (var i = 0; i < 3; ++i) {
+          var h = codecarray.getUint8(i).toString(16);
+          if (h.length < 2) {
+            h = '0' + h;
+          }
+          this.mp4track.codec += h;
+        }
+      }
+    }, {
+      key: "parsePPS",
+      value: function parsePPS(pps) {
+        this.mp4track.pps = [new Uint8Array(pps)];
+      }
+    }, {
+      key: "parseNAL",
+      value: function parseNAL(unit) {
+        if (!unit) return false;
+        if (unit.isVCL) {
+          return true;
+        }
+        var push = false;
+        switch (unit.type()) {
+          case NALU264.PPS:
+            if (!this.mp4track.pps) {
+              this.parsePPS(unit.getPayload());
+            }
+            push = true;
+            break;
+          case NALU264.SPS:
+            if (!this.mp4track.sps) {
+              this.parseSPS(unit.getPayload());
+            }
+            push = true;
+            break;
+          case NALU264.AUD:
+            log('AUD - ignoing');
+            break;
+          case NALU264.SEI:
+            log('SEI - ignoing');
+            break;
+        }
+        if (!this.readyToDecode && this.mp4track.pps && this.mp4track.sps) {
+          this.readyToDecode = true;
+        }
+        return push;
+      }
+    }]);
+    return H264Remuxer;
+  }(BaseRemuxer);
 
+  // spec https://www.itu.int/rec/T-REC-H.265/
+
+  var H265Parser = /*#__PURE__*/function () {
+    function H265Parser() {
+      _classCallCheck(this, H265Parser);
+    }
+    _createClass(H265Parser, null, [{
+      key: "extractNALu",
+      value: function extractNALu(buffer) {
+        var i = 0,
+          length = buffer.byteLength,
+          result = [],
+          lastIndex = 0,
+          zeroCount = 0;
+        while (i < length) {
+          var value = buffer[i++];
+          if (value === 0) {
+            zeroCount++;
+          } else if (value === 1 && zeroCount >= 2) {
+            var startCodeLength = zeroCount + 1;
+            if (lastIndex !== i - startCodeLength) {
+              result.push(buffer.subarray(lastIndex, i - startCodeLength));
+            }
+            lastIndex = i;
+            zeroCount = 0;
+          } else {
+            zeroCount = 0;
+          }
+        }
+
+        // Remaining data after last start code
+        var left = null;
+        if (lastIndex < length) {
+          left = buffer.subarray(lastIndex, length);
+        }
+        return [result, left];
+      }
+    }, {
+      key: "removeEmulationPreventionBytes",
+      value: function removeEmulationPreventionBytes(nal) {
+        var rbsp = [];
+        var zeroCount = 0;
+        for (var i = 0; i < nal.length; i++) {
+          var value = nal[i];
+          if (zeroCount === 2 && value === 0x03) {
+            // Skip this emulation prevention byte
+            zeroCount = 0;
+            continue;
+          }
+          rbsp.push(value);
+          if (value === 0x00) {
+            zeroCount++;
+          } else {
+            zeroCount = 0;
+          }
+        }
+        return new Uint8Array(rbsp);
+      }
+
+      /**
+       * Read a sequence parameter set and return some interesting video
+       * properties. A sequence parameter set is the H265 metadata that
+       * describes the properties of upcoming video frames.
+       * @param data {Uint8Array} the bytes of a sequence parameter set
+       * @return {object} an object with configuration parsed from the
+       * sequence parameter set, including the dimensions of the
+       * associated video frames.
+       */
+    }, {
+      key: "readSPS",
+      value: function readSPS(data) {
+        var decoder = new ExpGolomb(data);
+
+        // Skip NALU header (2 bytes for HEVC)
+        decoder.readUByte();
+        decoder.readUByte();
+        decoder.readBits(4); // sps_video_parameter_set_id
+        decoder.readBits(3); // sps_max_sub_layers_minus1
+        decoder.readBits(1); // sps_temporal_id_nesting_flag
+
+        // --- profile_tier_level() ---
+        var profile_space = decoder.readBits(2);
+        var tier_flag = decoder.readBits(1);
+        var profile_idc = decoder.readBits(5);
+        var profile_compatibility_flags = decoder.readUInt(); // 32 bits
+        var constraint_indicator_flags = new Uint8Array(6);
+        for (var i = 0; i < 6; i++) {
+          constraint_indicator_flags[i] = decoder.readUByte();
+        }
+        var level_idc = decoder.readUByte();
+        decoder.readUEG(); // seq_parameter_set_id
+
+        var chroma_format_idc = decoder.readUEG();
+        if (chroma_format_idc === 3) {
+          decoder.readBits(1); // separate_colour_plane_flag
+        }
+        var pic_width_in_luma_samples = decoder.readUEG();
+        var pic_height_in_luma_samples = decoder.readUEG();
+
+        // Cropping
+        var conformance_window_flag = decoder.readBoolean();
+        var conf_win_left_offset = 0,
+          conf_win_right_offset = 0,
+          conf_win_top_offset = 0,
+          conf_win_bottom_offset = 0;
+        if (conformance_window_flag) {
+          conf_win_left_offset = decoder.readUEG();
+          conf_win_right_offset = decoder.readUEG();
+          conf_win_top_offset = decoder.readUEG();
+          conf_win_bottom_offset = decoder.readUEG();
+        }
+        var fps = null;
+        var vui_parameters_present_flag = decoder.readBoolean();
+        if (vui_parameters_present_flag) {
+          var aspect_ratio_info_present_flag = decoder.readBoolean();
+          if (aspect_ratio_info_present_flag) {
+            var aspect_ratio_idc = decoder.readUByte();
+            if (aspect_ratio_idc === 255) {
+              // Extended_SAR
+              decoder.readUShort(); // sar_width
+              decoder.readUShort(); // sar_height
+            }
+          }
+          var overscan_info_present_flag = decoder.readBoolean();
+          if (overscan_info_present_flag) {
+            decoder.readBoolean(); // overscan_appropriate_flag
+          }
+          var video_signal_type_present_flag = decoder.readBoolean();
+          if (video_signal_type_present_flag) {
+            decoder.readBits(3); // video_format
+            decoder.readBoolean(); // video_full_range_flag
+            var colour_description_present_flag = decoder.readBoolean();
+            if (colour_description_present_flag) {
+              decoder.readUByte(); // colour_primaries
+              decoder.readUByte(); // transfer_characteristics
+              decoder.readUByte(); // matrix_coeffs
+            }
+          }
+          var chroma_loc_info_present_flag = decoder.readBoolean();
+          if (chroma_loc_info_present_flag) {
+            decoder.readUEG(); // chroma_sample_loc_type_top_field
+            decoder.readUEG(); // chroma_sample_loc_type_bottom_field
+          }
+          decoder.readBoolean(); // neutral_chroma_indication_flag
+          decoder.readBoolean(); // field_seq_flag
+          decoder.readBoolean(); // frame_field_info_present_flag
+
+          // Timing info
+          var timing_info_present_flag = decoder.readBoolean();
+          if (timing_info_present_flag) {
+            var num_units_in_tick = decoder.readUInt();
+            var time_scale = decoder.readUInt();
+            decoder.readBoolean(); // poc_proportional_to_timing_flag
+            if (num_units_in_tick) {
+              fps = time_scale / (2 * num_units_in_tick);
+            }
+          }
+        }
+
+        // Final width/height
+        var sub_width_c = chroma_format_idc === 1 || chroma_format_idc === 2 ? 2 : 1;
+        var sub_height_c = chroma_format_idc === 1 ? 2 : 1;
+        var width = pic_width_in_luma_samples - sub_width_c * (conf_win_right_offset + conf_win_left_offset);
+        var height = pic_height_in_luma_samples - sub_height_c * (conf_win_top_offset + conf_win_bottom_offset);
+        return {
+          width: width,
+          height: height,
+          profile_space: profile_space,
+          tier_flag: tier_flag,
+          profile_idc: profile_idc,
+          profile_compatibility_flags: profile_compatibility_flags,
+          constraint_indicator_flags: constraint_indicator_flags,
+          level_idc: level_idc,
+          chroma_format_idc: chroma_format_idc,
+          fps: fps
+        };
+      }
+    }]);
+    return H265Parser;
+  }();
+  var NALU265 = /*#__PURE__*/function () {
+    function NALU265(data) {
+      _classCallCheck(this, NALU265);
+      this.payload = data;
+      this.nalUnitType = (data[0] & 126) >> 1;
+      this.nuhLayerId = (data[0] & 1) << 5 | (data[1] & 248) >> 3;
+      this.nuhTemporalIdPlus1 = data[1] & 7;
+      this._isFirstSlice = null;
+      this._sliceType = null;
+    }
+    _createClass(NALU265, [{
+      key: "toString",
+      value: function toString() {
+        return "".concat(NALU265.TYPES[this.type()] || 'UNKNOWN (' + this.type() + ')', ": Layer: ").concat(this.nuhLayerId, ", Temporal Id: ").concat(this.nuhTemporalIdPlus1);
+      }
+    }, {
+      key: "type",
+      value: function type() {
+        return this.nalUnitType;
+      }
+    }, {
+      key: "isKeyframe",
+      get: function get() {
+        return [NALU265.IDR_W_RADL, NALU265.IDR_N_LP, NALU265.CRA].includes(this.nalUnitType);
+      }
+    }, {
+      key: "isVCL",
+      get: function get() {
+        return this.nalUnitType <= 31;
+      }
+    }, {
+      key: "parseHeader",
+      value: function parseHeader() {
+        var decoder = new ExpGolomb(this.getPayload());
+        // skip NALu type
+        decoder.readUByte();
+        decoder.readUByte();
+
+        // first_slice_segment_in_pic_flag
+        this._isFirstSlice = decoder.readBoolean();
+
+        // if NALU is not IDR/CRA/other IRAP, next comes no_output_of_prior_pics_flag
+        if (this.isKeyframe) {
+          decoder.readBits(1); // no_output_of_prior_pics_flag
+        }
+
+        // slice_pic_parameter_set_id
+        decoder.readUEG();
+
+        // slice_type (only for some NALU types, but useful for debugging)
+        this._sliceType = decoder.readUEG();
+      }
+    }, {
+      key: "isFirstSlice",
+      get: function get() {
+        if (!this._isFirstSlice) {
+          this.parseHeader();
+        }
+        return this._isFirstSlice;
+      }
+    }, {
+      key: "sliceType",
+      get: function get() {
+        if (!this._sliceType) {
+          this.parseHeader();
+        }
+        return this._sliceType;
+      }
+    }, {
+      key: "getPayload",
+      value: function getPayload() {
+        return this.payload;
+      }
+    }, {
+      key: "getPayloadSize",
+      value: function getPayloadSize() {
+        return this.payload.byteLength;
+      }
+    }, {
+      key: "getSize",
+      value: function getSize() {
+        return 4 + this.getPayloadSize();
+      }
+    }, {
+      key: "getData",
+      value: function getData() {
+        var result = new Uint8Array(this.getSize());
+        var view = new DataView(result.buffer);
+        view.setUint32(0, this.getSize() - 4);
+        result.set(this.getPayload(), 4);
+        return result;
+      }
+    }], [{
+      key: "TRAIL_N",
+      get: function get() {
+        return 0;
+      }
+    }, {
+      key: "TRAIL_R",
+      get: function get() {
+        return 1;
+      }
+    }, {
+      key: "IDR_W_RADL",
+      get: function get() {
+        return 19;
+      }
+    }, {
+      key: "IDR_N_LP",
+      get: function get() {
+        return 20;
+      }
+    }, {
+      key: "CRA",
+      get: function get() {
+        return 21;
+      }
+    }, {
+      key: "VPS",
+      get: function get() {
+        return 32;
+      }
+    }, {
+      key: "SPS",
+      get: function get() {
+        return 33;
+      }
+    }, {
+      key: "PPS",
+      get: function get() {
+        return 34;
+      }
+    }, {
+      key: "AUD",
+      get: function get() {
+        return 35;
+      }
+    }, {
+      key: "SEI",
+      get: function get() {
+        return 39;
+      }
+    }, {
+      key: "SEI2",
+      get: function get() {
+        return 40;
+      }
+    }, {
+      key: "TYPES",
+      get: function get() {
+        var _ref;
+        return _ref = {}, _defineProperty(_ref, NALU265.TRAIL_N, 'TRAIL_N'), _defineProperty(_ref, NALU265.TRAIL_R, 'TRAIL_R'), _defineProperty(_ref, NALU265.IDR_W_RADL, 'IDR'), _defineProperty(_ref, NALU265.IDR_N_LP, 'IDR2'), _defineProperty(_ref, NALU265.CRA, 'CRA'), _defineProperty(_ref, NALU265.VPS, 'VPS'), _defineProperty(_ref, NALU265.SPS, 'SPS'), _defineProperty(_ref, NALU265.PPS, 'PPS'), _defineProperty(_ref, NALU265.AUD, 'AUD'), _defineProperty(_ref, NALU265.SEI, 'SEI'), _defineProperty(_ref, NALU265.SEI2, 'SEI2'), _ref;
+      }
+    }]);
+    return NALU265;
+  }();
+
+  var H265Remuxer = /*#__PURE__*/function (_BaseRemuxer) {
+    _inherits(H265Remuxer, _BaseRemuxer);
+    var _super = _createSuper(H265Remuxer);
+    function H265Remuxer(timescale, duration, frameDuration) {
+      var _this;
+      _classCallCheck(this, H265Remuxer);
+      _this = _super.call(this, 'H264Remuxer');
+      _this.frameDuration = frameDuration;
+      _this.readyToDecode = false;
+      _this.nextDts = 0;
+      _this.dts = 0;
+      _this.mp4track = {
+        id: BaseRemuxer.getTrackID(),
+        type: 'video',
+        len: 0,
+        fragmented: true,
+        vps: '',
+        sps: '',
+        pps: '',
+        hvcC: {},
+        fps: 30,
+        width: 0,
+        height: 0,
+        timescale: timescale,
+        duration: duration,
+        samples: []
+      };
+      _this.samples = [];
+      _this.remainingData = new Uint8Array();
+      _this.kfCounter = 0;
+      _this.pendingUnits = {};
+      return _this;
+    }
+    _createClass(H265Remuxer, [{
+      key: "resetTrack",
+      value: function resetTrack() {
+        this.readyToDecode = false;
+        this.mp4track.vps = '';
+        this.mp4track.sps = '';
+        this.mp4track.pps = '';
+        this.mp4track.hvcC = {};
+        this.nextDts = 0;
+        this.dts = 0;
+        this.remainingData = new Uint8Array();
+        this.kfCounter = 0;
+        this.pendingUnits = {};
+      }
+    }, {
+      key: "feed",
+      value: function feed(data, duration, compositionTimeOffset) {
+        var slices = [];
+        var left;
+        data = appendByteArray(this.remainingData, data);
+        var _H265Parser$extractNA = H265Parser.extractNALu(data);
+        var _H265Parser$extractNA2 = _slicedToArray(_H265Parser$extractNA, 2);
+        slices = _H265Parser$extractNA2[0];
+        left = _H265Parser$extractNA2[1];
+        this.remainingData = left || new Uint8Array();
+        if (slices.length > 0) {
+          this.remux(this.getVideoFrames(slices, duration, compositionTimeOffset));
+          return true;
+        } else {
+          error('Failed to extract any NAL units from video data:', left);
+          this.dispatch('outOfData');
+          return false;
+        }
+      }
+    }, {
+      key: "getVideoFrames",
+      value: function getVideoFrames(nalus, duration, compositionTimeOffset) {
+        var _this2 = this;
+        var units = [],
+          frames = [],
+          fd = 0,
+          tt = 0,
+          keyFrame = false,
+          vcl = false;
+        if (this.pendingUnits.units) {
+          units = this.pendingUnits.units;
+          vcl = this.pendingUnits.vcl;
+          keyFrame = this.pendingUnits.keyFrame;
+          this.pendingUnits = {};
+        }
+        var _iterator = _createForOfIteratorHelper(nalus),
+          _step;
+        try {
+          for (_iterator.s(); !(_step = _iterator.n()).done;) {
+            var nalu = _step.value;
+            var unit = new NALU265(nalu);
+
+            // frame boundary detection
+            if (units.length && vcl && (unit.isFirstSlice || !unit.isVCL)) {
+              frames.push({
+                units: units,
+                keyFrame: keyFrame
+              });
+              units = [];
+              keyFrame = false;
+              vcl = false;
+            }
+            units.push(unit);
+            keyFrame = keyFrame || unit.isKeyframe;
+            vcl = vcl || unit.isVCL;
+          }
+        } catch (err) {
+          _iterator.e(err);
+        } finally {
+          _iterator.f();
+        }
+        if (units.length) {
+          if (!duration) {
+            this.pendingUnits = {
+              units: units,
+              keyFrame: keyFrame,
+              vcl: vcl
+            };
+          } else if (vcl) {
+            frames.push({
+              units: units,
+              keyFrame: keyFrame
+            });
+          } else {
+            var last = frames.length - 1;
+            if (last >= 0) {
+              frames[last].units = frames[last].units.concat(units);
+            }
+          }
+        }
+        fd = duration ? duration / frames.length | 0 : this.frameDuration;
+        tt = duration ? duration - fd * frames.length : 0;
+        frames.map(function (frame) {
+          frame.duration = fd;
+          frame.compositionTimeOffset = compositionTimeOffset;
+          if (tt > 0) {
+            frame.duration++;
+            tt--;
+          }
+          _this2.kfCounter++;
+          if (frame.keyFrame) {
+            _this2.dispatch('keyframePosition', _this2.kfCounter * fd / 1000);
+          }
+        });
+        log("jmuxer: No. of H265 frames of the last chunk: ".concat(frames.length));
+        return frames;
+      }
+    }, {
+      key: "remux",
+      value: function remux(frames) {
+        var _iterator2 = _createForOfIteratorHelper(frames),
+          _step2;
+        try {
+          for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
+            var frame = _step2.value;
+            var units = [];
+            var size = 0;
+            var _iterator3 = _createForOfIteratorHelper(frame.units),
+              _step3;
             try {
-                for (var _iterator4 = this.trackTypes[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
-                    var type = _step4.value;
-
-                    if (!this.tracks[type].readyToDecode || !this.tracks[type].samples.length) return false;
+              for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
+                var unit = _step3.value;
+                if (this.parseNAL(unit)) {
+                  units.push(unit);
+                  size += unit.getSize();
                 }
+              }
             } catch (err) {
-                _didIteratorError4 = true;
-                _iteratorError4 = err;
+              _iterator3.e(err);
             } finally {
-                try {
-                    if (!_iteratorNormalCompletion4 && _iterator4.return) {
-                        _iterator4.return();
-                    }
-                } finally {
-                    if (_didIteratorError4) {
-                        throw _iteratorError4;
-                    }
-                }
+              _iterator3.f();
             }
-
-            return true;
+            if (units.length > 0 && this.readyToDecode) {
+              this.mp4track.len += size;
+              this.samples.push({
+                units: units,
+                size: size,
+                keyFrame: frame.keyFrame,
+                duration: frame.duration,
+                compositionTimeOffset: frame.compositionTimeOffset
+              });
+            }
+          }
+        } catch (err) {
+          _iterator2.e(err);
+        } finally {
+          _iterator2.f();
         }
+      }
     }, {
-        key: 'remux',
-        value: function remux(data) {
-            var _iteratorNormalCompletion5 = true;
-            var _didIteratorError5 = false;
-            var _iteratorError5 = undefined;
-
-            try {
-                for (var _iterator5 = this.trackTypes[Symbol.iterator](), _step5; !(_iteratorNormalCompletion5 = (_step5 = _iterator5.next()).done); _iteratorNormalCompletion5 = true) {
-                    var type = _step5.value;
-
-                    var samples = data[type];
-                    if (type === 'audio' && this.tracks.video && !this.tracks.video.readyToDecode) continue; /* if video is present, don't add audio until video get ready */
-                    if (samples.length > 0) {
-                        this.tracks[type].remux(samples);
-                    }
-                }
-            } catch (err) {
-                _didIteratorError5 = true;
-                _iteratorError5 = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion5 && _iterator5.return) {
-                        _iterator5.return();
-                    }
-                } finally {
-                    if (_didIteratorError5) {
-                        throw _iteratorError5;
-                    }
-                }
-            }
-
-            this.flush();
+      key: "getPayload",
+      value: function getPayload() {
+        if (!this.isReady()) {
+          return null;
         }
+        var payload = new Uint8Array(this.mp4track.len);
+        var offset = 0;
+        var samples = this.mp4track.samples;
+        var mp4Sample, duration;
+        this.dts = this.nextDts;
+        while (this.samples.length) {
+          var sample = this.samples.shift(),
+            units = sample.units;
+          duration = sample.duration;
+          if (duration <= 0) {
+            log("remuxer: invalid sample duration at DTS: ".concat(this.nextDts, " :").concat(duration));
+            this.mp4track.len -= sample.size;
+            continue;
+          }
+          this.nextDts += duration;
+          mp4Sample = {
+            size: sample.size,
+            duration: duration,
+            cts: sample.compositionTimeOffset || 0,
+            flags: {
+              isLeading: 0,
+              isDependedOn: 0,
+              hasRedundancy: 0,
+              degradPrio: 0,
+              isNonSync: sample.keyFrame ? 0 : 1,
+              dependsOn: sample.keyFrame ? 2 : 1
+            }
+          };
+          var _iterator4 = _createForOfIteratorHelper(units),
+            _step4;
+          try {
+            for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
+              var unit = _step4.value;
+              payload.set(unit.getData(), offset);
+              offset += unit.getSize();
+            }
+          } catch (err) {
+            _iterator4.e(err);
+          } finally {
+            _iterator4.f();
+          }
+          samples.push(mp4Sample);
+        }
+        if (!samples.length) return null;
+        return new Uint8Array(payload.buffer, 0, this.mp4track.len);
+      }
+    }, {
+      key: "parseSPS",
+      value: function parseSPS(sps) {
+        this.mp4track.sps = [new Uint8Array(sps)];
+        sps = H265Parser.removeEmulationPreventionBytes(sps);
+        var config = H265Parser.readSPS(new Uint8Array(sps));
+        this.mp4track.fps = config.fps || this.mp4track.fps;
+        this.mp4track.width = config.width;
+        this.mp4track.height = config.height;
+        this.mp4track.codec = "hvc1.".concat(config.profile_idc, ".").concat(config.profile_compatibility_flags.toString(16)) + ".L".concat(config.level_idc).concat(config.tier_flag ? 'H' : 'L') + ".".concat(config.constraint_indicator_flags.map(function (b) {
+          return b.toString(16);
+        }).join('.').toUpperCase());
+        this.mp4track.hvcC = {
+          profile_space: config.profile_space,
+          tier_flag: config.tier_flag,
+          profile_idc: config.profile_idc,
+          profile_compatibility_flags: config.profile_compatibility_flags,
+          constraint_indicator_flags: config.constraint_indicator_flags,
+          level_idc: config.level_idc,
+          chroma_format_idc: config.chroma_format_idc
+        };
+      }
+    }, {
+      key: "parsePPS",
+      value: function parsePPS(pps) {
+        this.mp4track.pps = [pps];
+      }
+    }, {
+      key: "parseVPS",
+      value: function parseVPS(vps) {
+        this.mp4track.vps = [vps];
+      }
+    }, {
+      key: "parseNAL",
+      value: function parseNAL(unit) {
+        if (!unit) return false;
+        if (unit.isVCL) {
+          return true;
+        }
+        var push = false;
+        switch (unit.type()) {
+          case NALU265.VPS:
+            if (!this.mp4track.vps) {
+              this.parseVPS(unit.getPayload());
+            }
+            push = true;
+            break;
+          case NALU265.SPS:
+            if (!this.mp4track.sps) {
+              this.parseSPS(unit.getPayload());
+            }
+            push = true;
+            break;
+          case NALU265.PPS:
+            if (!this.mp4track.pps) {
+              this.parsePPS(unit.getPayload());
+            }
+            push = true;
+            break;
+          case NALU265.AUD:
+            log('AUD - ignoing');
+            break;
+          case NALU265.SEI:
+          case NALU265.SEI2:
+            log('SEI - ignoing');
+            break;
+        }
+        if (!this.readyToDecode && this.mp4track.vps && this.mp4track.sps && this.mp4track.pps) {
+          this.readyToDecode = true;
+        }
+        return push;
+      }
+    }]);
+    return H265Remuxer;
+  }(BaseRemuxer);
+
+  var RemuxController = /*#__PURE__*/function (_Event) {
+    _inherits(RemuxController, _Event);
+    var _super = _createSuper(RemuxController);
+    function RemuxController(env, live, videoCodec, frameDuration) {
+      var _this;
+      _classCallCheck(this, RemuxController);
+      _this = _super.call(this, 'remuxer');
+      _this.videoCodec = videoCodec;
+      _this.frameDuration = frameDuration;
+      _this.initialized = false;
+      _this.tracks = {};
+      _this.seq = 1;
+      _this.env = env;
+      _this.timescale = 1000;
+      _this.mediaDuration = live ? 0xffffffff : 0;
+      return _this;
+    }
+    _createClass(RemuxController, [{
+      key: "addTrack",
+      value: function addTrack(type) {
+        var _this2 = this;
+        if (type === 'video' || type === 'both') {
+          if (this.videoCodec == 'H265') {
+            this.tracks.video = new H265Remuxer(this.timescale, this.mediaDuration, this.frameDuration);
+          } else {
+            this.tracks.video = new H264Remuxer(this.timescale, this.mediaDuration, this.frameDuration);
+          }
+          this.tracks.video.on('outOfData', function () {
+            _this2.dispatch('missingVideoFrames');
+          });
+          this.tracks.video.on('keyframePosition', function (time) {
+            _this2.dispatch('keyframePosition', time);
+          });
+        }
+        if (type === 'audio' || type === 'both') {
+          var aacRemuxer = new AACRemuxer(this.timescale, this.mediaDuration, this.frameDuration);
+          this.tracks.audio = aacRemuxer;
+          this.tracks.video.on('outOfData', function () {
+            _this2.dispatch('missingAudioFrames');
+          });
+        }
+      }
+    }, {
+      key: "reset",
+      value: function reset() {
+        for (var type in this.tracks) {
+          this.tracks[type].resetTrack();
+        }
+        this.initialized = false;
+      }
+    }, {
+      key: "destroy",
+      value: function destroy() {
+        this.tracks = {};
+        this.offAll();
+      }
+    }, {
+      key: "flush",
+      value: function flush() {
+        if (!this.initialized) {
+          if (!this.isReady()) return;
+          this.dispatch('ready');
+          this.initSegment();
+          this.initialized = true;
+        }
+        for (var type in this.tracks) {
+          var track = this.tracks[type];
+          var pay = track.getPayload();
+          if (pay && pay.byteLength) {
+            var moof = MP4.moof(this.seq, track.dts, track.mp4track);
+            var mdat = MP4.mdat(pay);
+            var payload = appendByteArray(moof, mdat);
+            var data = {
+              type: type,
+              payload: payload,
+              dts: track.dts
+            };
+            if (type === 'video') {
+              data.fps = track.mp4track.fps;
+            }
+            this.dispatch('buffer', data);
+            var duration = secToTime(track.dts / this.timescale);
+            log("put segment (".concat(type, "): dts: ").concat(track.dts, " frames: ").concat(track.mp4track.samples.length, " second: ").concat(duration));
+            track.flush();
+            this.seq++;
+          }
+        }
+      }
+    }, {
+      key: "initSegment",
+      value: function initSegment() {
+        var tracks = [];
+        for (var type in this.tracks) {
+          var track = this.tracks[type];
+          if (this.env == 'browser') {
+            var data = {
+              type: type,
+              payload: MP4.initSegment([track.mp4track], this.mediaDuration, this.timescale)
+            };
+            this.dispatch('buffer', data);
+          } else {
+            tracks.push(track.mp4track);
+          }
+        }
+        if (this.env == 'node') {
+          var _data = {
+            type: 'all',
+            payload: MP4.initSegment(tracks, this.mediaDuration, this.timescale)
+          };
+          this.dispatch('buffer', _data);
+        }
+        log('Initial segment generated.');
+      }
+    }, {
+      key: "isReady",
+      value: function isReady() {
+        for (var type in this.tracks) {
+          if (!this.tracks[type].readyToDecode || !this.tracks[type].samples.length) return false;
+        }
+        return true;
+      }
+    }, {
+      key: "feed",
+      value: function feed(data) {
+        var remux = false;
+        if (data.video && this.tracks.video) {
+          remux |= this.tracks.video.feed(data.video, data.duration, data.compositionTimeOffset);
+        }
+        if (data.audio && this.tracks.audio) {
+          remux |= this.tracks.audio.feed(data.audio, data.duration);
+        }
+        if (!remux) {
+          error('Input object must have video and/or audio property. Make sure it is a valid typed array');
+          return;
+        }
+        this.flush();
+      }
     }]);
     return RemuxController;
-}(Event);
+  }(Event);
 
-var BufferController = function (_Event) {
-    inherits(BufferController, _Event);
-
+  var BufferController = /*#__PURE__*/function (_Event) {
+    _inherits(BufferController, _Event);
+    var _super = _createSuper(BufferController);
     function BufferController(sourceBuffer, type) {
-        classCallCheck(this, BufferController);
-
-        var _this = possibleConstructorReturn(this, (BufferController.__proto__ || Object.getPrototypeOf(BufferController)).call(this, 'buffer'));
-
-        _this.type = type;
-        _this.queue = new Uint8Array();
-
+      var _this;
+      _classCallCheck(this, BufferController);
+      _this = _super.call(this, 'buffer');
+      _this.type = type;
+      _this.queue = new Uint8Array();
+      _this.cleaning = false;
+      _this.pendingCleaning = 0;
+      _this.cleanOffset = 30;
+      _this.cleanRanges = [];
+      _this.sourceBuffer = sourceBuffer;
+      _this.sourceBuffer.addEventListener('updateend', function () {
+        if (_this.pendingCleaning > 0) {
+          _this.initCleanup(_this.pendingCleaning);
+          _this.pendingCleaning = 0;
+        }
         _this.cleaning = false;
-        _this.pendingCleaning = 0;
-        _this.cleanOffset = 2;
-        _this.cleanRanges = [];
-
-        _this.sourceBuffer = sourceBuffer;
-        _this.sourceBuffer.addEventListener('updateend', function () {
-            if (_this.pendingCleaning > 0) {
-                _this.initCleanup(_this.pendingCleaning);
-                _this.pendingCleaning = 0;
-            }
-            _this.cleaning = false;
-            if (_this.cleanRanges.length) {
-                _this.doCleanup();
-                return;
-            }
+        if (_this.cleanRanges.length) {
+          _this.doCleanup();
+          return;
+        }
+      });
+      _this.sourceBuffer.addEventListener('error', function () {
+        _this.dispatch('error', {
+          type: _this.type,
+          name: 'buffer',
+          error: 'buffer error'
         });
-
-        _this.sourceBuffer.addEventListener('error', function () {
-            _this.dispatch('error', { type: _this.type, name: 'buffer', error: 'buffer error' });
-        });
-        return _this;
+      });
+      return _this;
     }
-
-    createClass(BufferController, [{
-        key: 'destroy',
-        value: function destroy() {
-            this.queue = null;
-            this.sourceBuffer = null;
-            this.offAll();
-        }
+    _createClass(BufferController, [{
+      key: "destroy",
+      value: function destroy() {
+        this.queue = null;
+        this.sourceBuffer = null;
+        this.offAll();
+      }
     }, {
-        key: 'doCleanup',
-        value: function doCleanup() {
-            if (!this.cleanRanges.length) {
-                this.cleaning = false;
-                return;
-            }
-            var range = this.cleanRanges.shift();
-            log(this.type + ' remove range [' + range[0] + ' - ' + range[1] + ')');
-            this.cleaning = true;
-            this.sourceBuffer.remove(range[0], range[1]);
+      key: "doCleanup",
+      value: function doCleanup() {
+        if (!this.cleanRanges.length) {
+          this.cleaning = false;
+          return;
         }
+        var range = this.cleanRanges.shift();
+        log("".concat(this.type, " remove range [").concat(range[0], " - ").concat(range[1], ")"));
+        this.cleaning = true;
+        this.sourceBuffer.remove(range[0], range[1]);
+      }
     }, {
-        key: 'initCleanup',
-        value: function initCleanup(currentTime) {
-            try {
-                if (this.sourceBuffer.updating) {
-                    this.pendingCleaning = currentTime;
-                    return;
+      key: "initCleanup",
+      value: function initCleanup(cleanMaxLimit) {
+        try {
+          if (this.sourceBuffer.updating) {
+            this.pendingCleaning = cleanMaxLimit;
+            return;
+          }
+          if (this.sourceBuffer.buffered && this.sourceBuffer.buffered.length && !this.cleaning) {
+            for (var i = 0; i < this.sourceBuffer.buffered.length; ++i) {
+              var start = this.sourceBuffer.buffered.start(i);
+              var end = this.sourceBuffer.buffered.end(i);
+              if (cleanMaxLimit - start > this.cleanOffset) {
+                end = cleanMaxLimit - this.cleanOffset;
+                if (start < end) {
+                  this.cleanRanges.push([start, end]);
                 }
-                if (this.sourceBuffer.buffered && this.sourceBuffer.buffered.length && !this.cleaning) {
-                    for (var i = 0; i < this.sourceBuffer.buffered.length; ++i) {
-                        var start = this.sourceBuffer.buffered.start(i);
-                        var end = this.sourceBuffer.buffered.end(i);
-
-                        if (currentTime - start > this.cleanOffset) {
-                            end = currentTime - this.cleanOffset;
-                            if (start < end) {
-                                this.cleanRanges.push([start, end]);
-                            }
-                        }
-                    }
-                    this.doCleanup();
-                }
-            } catch (e) {
-                error('Error occured in initCleanup of ' + this.type + ' buffer -  ' + e.name + ': ' + e.message);
+              }
             }
+            this.doCleanup();
+          }
+        } catch (e) {
+          error("Error occured while cleaning ".concat(this.type, " buffer - ").concat(e.name, ": ").concat(e.message));
         }
+      }
     }, {
-        key: 'doAppend',
-        value: function doAppend() {
-            if (!this.queue.length) return;
-
-            if (this.sourceBuffer.updating) {
-                return;
-            }
-
-            try {
-                this.sourceBuffer.appendBuffer(this.queue);
-                this.queue = new Uint8Array();
-            } catch (e) {
-                if (e.name === 'QuotaExceededError') {
-                    log(this.type + ' buffer quota full');
-                    this.dispatch('error', { type: this.type, name: 'QuotaExceeded', error: 'buffer error' });
-                    return;
-                }
-                error('Error occured while appending ' + this.type + ' buffer -  ' + e.name + ': ' + e.message);
-                this.dispatch('error', { type: this.type, name: 'unexpectedError', error: 'buffer error' });
-            }
+      key: "doAppend",
+      value: function doAppend() {
+        if (!this.queue.length) return;
+        if (!this.sourceBuffer || this.sourceBuffer.updating) return;
+        try {
+          this.sourceBuffer.appendBuffer(this.queue);
+          this.queue = new Uint8Array();
+        } catch (e) {
+          var name = 'unexpectedError';
+          if (e.name === 'QuotaExceededError') {
+            log("".concat(this.type, " buffer quota full"));
+            name = 'QuotaExceeded';
+          } else {
+            error("Error occured while appending ".concat(this.type, " buffer - ").concat(e.name, ": ").concat(e.message));
+            name = 'InvalidStateError';
+          }
+          this.dispatch('error', {
+            type: this.type,
+            name: name,
+            error: 'buffer error'
+          });
         }
+      }
     }, {
-        key: 'feed',
-        value: function feed(data) {
-            this.queue = appendByteArray(this.queue, data);
-        }
+      key: "feed",
+      value: function feed(data) {
+        this.queue = appendByteArray(this.queue, data);
+      }
     }]);
     return BufferController;
-}(Event);
+  }(Event);
 
-window.MediaSource = window.MediaSource || window.WebKitMediaSource;
+  var JMuxer = /*#__PURE__*/function (_Event) {
+    _inherits(JMuxer, _Event);
+    var _super = _createSuper(JMuxer);
+    function JMuxer(options) {
+      var _this;
+      _classCallCheck(this, JMuxer);
+      _this = _super.call(this, 'jmuxer');
+      _this.isReset = false;
+      var defaults = {
+        node: '',
+        mode: 'both',
+        // both, audio, video
+        videoCodec: 'H264',
+        // H264, H265
+        flushingTime: 500,
+        maxDelay: 500,
+        clearBuffer: true,
+        fps: 30,
+        readFpsFromTrack: false,
+        // set true to fetch fps value from NALu
+        debug: false,
+        onReady: function onReady() {},
+        // function called when MSE is ready to accept frames
+        onData: function onData() {},
+        // function called when data is ready to be sent
+        onError: function onError() {},
+        // function called when jmuxer encounters any buffer related errors
+        onUnsupportedCodec: function onUnsupportedCodec() {},
+        // function called when a codec is not supported by the browser
+        onMissingVideoFrames: function onMissingVideoFrames() {},
+        // function called when jmuxer encounters any missing video frames
+        onMissingAudioFrames: function onMissingAudioFrames() {},
+        // function called when jmuxer encounters any missing audio frames
+        onKeyframePosition: function onKeyframePosition() {},
+        // function called when a keyframe is detected thus the provided time is seekable
+        onLoggerLog: console.log,
+        onLoggerErr: console.error
+      };
+      _this.options = Object.assign({}, defaults, options);
+      _this.env = (typeof process === "undefined" ? "undefined" : _typeof(process)) === 'object' && typeof window === 'undefined' ? 'node' : 'browser';
+      if (_this.options.debug) {
+        setLogger(_this.options.onLoggerLog, _this.options.onLoggerErr);
+      }
+      if (!_this.options.fps) {
+        _this.options.fps = 30;
+      }
+      _this.frameDuration = 1000 / _this.options.fps | 0;
+      _this.remuxController = new RemuxController(_this.env, options.live, _this.options.videoCodec, _this.frameDuration);
+      _this.remuxController.addTrack(_this.options.mode);
+      _this.initData();
 
-var JMuxmer = function (_Event) {
-    inherits(JMuxmer, _Event);
-    createClass(JMuxmer, null, [{
-        key: 'isSupported',
-        value: function isSupported(codec) {
-            return window.MediaSource && window.MediaSource.isTypeSupported(codec);
+      /* events callback */
+      _this.remuxController.on('buffer', _this.onBuffer.bind(_assertThisInitialized(_this)));
+      if (_this.env == 'browser') {
+        _this.remuxController.on('ready', _this.createBuffer.bind(_assertThisInitialized(_this)));
+        _this.initBrowser();
+      }
+      _this.remuxController.on('missingVideoFrames', function () {
+        if (typeof _this.options.onMissingVideoFrames === 'function') {
+          _this.options.onMissingVideoFrames.call(null);
         }
-    }]);
-
-    function JMuxmer(options) {
-        classCallCheck(this, JMuxmer);
-
-        var _this = possibleConstructorReturn(this, (JMuxmer.__proto__ || Object.getPrototypeOf(JMuxmer)).call(this, 'jmuxer'));
-
-        window.MediaSource = window.MediaSource || window.WebKitMediaSource;
-
-        var defaults$$1 = {
-            node: '',
-            mode: 'both', // both, audio, video
-            flushingTime: 1500,
-            clearBuffer: true,
-            cleanOffset: 2, // when clearing buffers, go back this many seconds
-            onReady: null, // function called when MSE is ready to accept frames
-            fps: 30,
-            debug: false
-        };
-        _this.options = Object.assign({}, defaults$$1, options);
-
-        if (_this.options.debug) {
-            setLogger();
+      });
+      _this.remuxController.on('missingAudioFrames', function () {
+        if (typeof _this.options.onMissingAudioFrames === 'function') {
+          _this.options.onMissingAudioFrames.call(null);
         }
-
-        if (typeof _this.options.node === 'string' && _this.options.node == '') {
-            error('no video element were found to render, provide a valid video element');
-        }
-
-        if (!_this.options.fps) {
-            _this.options.fps = 30;
-        }
-        _this.frameDuration = 1000 / _this.options.fps | 0;
-
-        _this.node = typeof _this.options.node === 'string' ? document.getElementById(_this.options.node) : _this.options.node;
-
-        _this.sourceBuffers = {};
-        _this.isMSESupported = !!window.MediaSource;
-
-        if (!_this.isMSESupported) {
-            throw 'Oops! Browser does not support media source extension.';
-        }
-
-        _this.setupMSE();
-        _this.remuxController = new RemuxController(_this.options.clearBuffer);
-        _this.remuxController.addTrack(_this.options.mode);
-
-        _this.mseReady = false;
-        _this.lastCleaningTime = Date.now();
-
-        /* events callback */
-        _this.remuxController.on('buffer', _this.onBuffer.bind(_this));
-        _this.remuxController.on('ready', _this.createBuffer.bind(_this));
-        _this.startInterval();
-        return _this;
+      });
+      if (_this.clearBuffer) {
+        // this is used to know when keyframes are,
+        // to essentially know which specific times are seekable
+        _this.remuxController.on('keyframePosition', function (time) {
+          _this.kfPosition.push(time);
+        });
+      }
+      if (typeof _this.options.onKeyframePosition === 'function') {
+        _this.remuxController.on('keyframePosition', function (time) {
+          _this.options.onKeyframePosition.call(null, time);
+        });
+      }
+      return _this;
     }
-
-    createClass(JMuxmer, [{
-        key: 'setupMSE',
-        value: function setupMSE() {
-            this.mediaSource = new MediaSource();
-            this.node.src = URL.createObjectURL(this.mediaSource);
-            this.mediaSource.addEventListener('sourceopen', this.onMSEOpen.bind(this));
-            this.mediaSource.addEventListener('sourceclose', this.onMSEClose.bind(this));
-            this.mediaSource.addEventListener('webkitsourceopen', this.onMSEOpen.bind(this));
-            this.mediaSource.addEventListener('webkitsourceclose', this.onMSEClose.bind(this));
-        }
+    _createClass(JMuxer, [{
+      key: "initData",
+      value: function initData() {
+        this.lastCleaningTime = Date.now();
+        this.kfPosition = [];
+        this.pendingUnits = {};
+        this.remainingData = new Uint8Array();
+        this.startInterval();
+      }
     }, {
-        key: 'feed',
-        value: function feed(data) {
-            var remux = false,
-                nalus = void 0,
-                aacFrames = void 0,
-                duration = void 0,
-                chunks = {
-                video: [],
-                audio: []
-            };
-
-            if (!data) return;
-
-            duration = data.duration ? parseInt(data.duration) : 0;
-
-            if (data.video) {
-                nalus = H264Parser.extractNALu(data.video);
-                if (nalus.length > 0) {
-                    chunks.video = this.getVideoFrames(nalus, duration);
-                    remux = true;
-                }
-            }
-            if (data.audio) {
-                aacFrames = AACParser.extractAAC(data.audio);
-                if (aacFrames.length > 0) {
-                    chunks.audio = this.getAudioFrames(aacFrames, duration);
-                    remux = true;
-                }
-            }
-            if (!remux) {
-                error('No video element found to feed. Input object must have audio and/or video property');
-                return;
-            }
-            this.remuxController.remux(chunks);
+      key: "initBrowser",
+      value: function initBrowser() {
+        if (typeof this.options.node === 'string' && this.options.node == '') {
+          error('no video element were found to render, provide a valid video element');
         }
+        this.node = typeof this.options.node === 'string' ? document.getElementById(this.options.node) : this.options.node;
+        this.mseReady = false;
+        this.setupMSE();
+      }
     }, {
-        key: 'getVideoFrames',
-        value: function getVideoFrames(nalus, duration) {
-            var nalu = void 0,
-                units = [],
-                samples = [],
-                naluObj = void 0,
-                sampleDuration = void 0,
-                adjustDuration = 0;
-
-            var _iteratorNormalCompletion = true;
-            var _didIteratorError = false;
-            var _iteratorError = undefined;
-
-            try {
-                for (var _iterator = nalus[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                    nalu = _step.value;
-
-                    naluObj = new NALU(nalu);
-                    units.push(naluObj);
-                    if (naluObj.type() === NALU.IDR || naluObj.type() === NALU.NDR) {
-                        samples.push({ units: units });
-                        units = [];
-                    }
-                }
-            } catch (err) {
-                _didIteratorError = true;
-                _iteratorError = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion && _iterator.return) {
-                        _iterator.return();
-                    }
-                } finally {
-                    if (_didIteratorError) {
-                        throw _iteratorError;
-                    }
-                }
-            }
-
-            if (duration) {
-                sampleDuration = duration / samples.length | 0;
-                adjustDuration = duration - sampleDuration * samples.length;
-            } else {
-                sampleDuration = this.frameDuration;
-            }
-            samples.map(function (sample) {
-                sample.duration = adjustDuration > 0 ? sampleDuration + 1 : sampleDuration;
-                if (adjustDuration !== 0) {
-                    adjustDuration--;
-                }
-            });
-            return samples;
-        }
+      key: "createStream",
+      value: function createStream() {
+        var feed = this.feed.bind(this);
+        var destroy = this.destroy.bind(this);
+        this.stream = new stream.Duplex({
+          writableObjectMode: true,
+          read: function read(size) {},
+          write: function write(data, encoding, callback) {
+            feed(data);
+            callback();
+          },
+          "final": function final(callback) {
+            destroy();
+            callback();
+          }
+        });
+        return this.stream;
+      }
     }, {
-        key: 'getAudioFrames',
-        value: function getAudioFrames(aacFrames, duration) {
-            var samples = [],
-                units = void 0,
-                sampleDuration = void 0,
-                adjustDuration = 0;
+      key: "setupMSE",
+      value: function setupMSE() {
+        window.MediaSource = window.MediaSource || window.WebKitMediaSource || window.ManagedMediaSource;
+        if (!window.MediaSource) {
+          throw 'Oops! Browser does not support Media Source Extension or Managed Media Source (IOS 17+).';
+        }
+        this.isMSESupported = !!window.MediaSource;
+        this.mediaSource = new window.MediaSource();
+        this.url = URL.createObjectURL(this.mediaSource);
+        if (window.MediaSource === window.ManagedMediaSource) {
+          try {
+            this.node.removeAttribute('src');
+            // ManagedMediaSource will not open without disableRemotePlayback set to false or source alternatives
+            this.node.disableRemotePlayback = true;
+            var source = document.createElement('source');
+            source.type = 'video/mp4';
+            source.src = this.url;
+            this.node.appendChild(source);
+            this.node.load();
+          } catch (error) {
+            this.node.src = this.url;
+          }
+        } else {
+          this.node.src = this.url;
+        }
+        this.mseEnded = false;
+        this.mediaSource.addEventListener('sourceopen', this.onMSEOpen.bind(this));
+        this.mediaSource.addEventListener('sourceclose', this.onMSEClose.bind(this));
+        this.mediaSource.addEventListener('webkitsourceopen', this.onMSEOpen.bind(this));
+        this.mediaSource.addEventListener('webkitsourceclose', this.onMSEClose.bind(this));
+      }
+    }, {
+      key: "endMSE",
+      value: function endMSE() {
+        if (!this.mseEnded) {
+          try {
+            this.mseEnded = true;
+            this.mediaSource.endOfStream();
+          } catch (e) {
+            error('mediasource is not available to end');
+          }
+        }
+      }
+    }, {
+      key: "feed",
+      value: function feed(data) {
+        if (!data || !this.remuxController) return;
+        data.duration = data.duration ? parseInt(data.duration) : 0;
+        this.remuxController.feed(data);
+      }
+    }, {
+      key: "destroy",
+      value: function destroy() {
+        this.stopInterval();
+        if (this.stream) {
+          this.remuxController.flush();
+          this.stream.push(null);
+          this.stream = null;
+        }
+        if (this.remuxController) {
+          this.remuxController.destroy();
+          this.remuxController = null;
+        }
+        if (this.bufferControllers) {
+          for (var type in this.bufferControllers) {
+            this.bufferControllers[type].destroy();
+          }
+          this.bufferControllers = null;
+          this.endMSE();
+        }
+        this.node = false;
+        this.mseReady = false;
+        this.videoStarted = false;
+        this.mediaSource = null;
+      }
+    }, {
+      key: "reset",
+      value: function reset() {
+        this.stopInterval();
+        this.isReset = true;
+        this.node.pause();
+        if (this.remuxController) {
+          this.remuxController.reset();
+        }
+        if (this.bufferControllers) {
+          for (var type in this.bufferControllers) {
+            this.bufferControllers[type].destroy();
+          }
+          this.bufferControllers = null;
+          this.endMSE();
+        }
+        this.initData();
+        if (this.env == 'browser') {
+          this.initBrowser();
+        }
+        log('JMuxer was reset');
+      }
+    }, {
+      key: "createBuffer",
+      value: function createBuffer() {
+        if (!this.mseReady || !this.remuxController || !this.remuxController.isReady() || this.bufferControllers) return;
+        this.bufferControllers = {};
+        for (var type in this.remuxController.tracks) {
+          var track = this.remuxController.tracks[type];
+          if (!JMuxer.isSupported("".concat(type, "/mp4; codecs=\"").concat(track.mp4track.codec, "\""))) {
+            error("Browser does not support codec: ".concat(type, "/mp4; codecs=\"").concat(track.mp4track.codec, "\""));
+            if (typeof this.options.onUnsupportedCodec === 'function') {
+              this.options.onUnsupportedCodec.call(null, track.mp4track.codec);
+            }
+            return false;
+          }
+          var sb = this.mediaSource.addSourceBuffer("".concat(type, "/mp4; codecs=\"").concat(track.mp4track.codec, "\""));
+          this.bufferControllers[type] = new BufferController(sb, type);
+          this.bufferControllers[type].on('error', this.onBufferError.bind(this));
+        }
+      }
+    }, {
+      key: "startInterval",
+      value: function startInterval() {
+        var _this2 = this;
+        this.interval = setInterval(function () {
+          if (_this2.options.flushingTime) {
+            _this2.applyAndClearBuffer();
+          } else if (_this2.bufferControllers) {
+            _this2.cancelDelay();
+          }
+        }, this.options.flushingTime || 1000);
+      }
+    }, {
+      key: "stopInterval",
+      value: function stopInterval() {
+        if (this.interval) {
+          clearInterval(this.interval);
+        }
+      }
+    }, {
+      key: "cancelDelay",
+      value: function cancelDelay() {
+        if (this.node.buffered && this.node.buffered.length > 0 && !this.node.seeking) {
+          var end = this.node.buffered.end(0);
+          if (end - this.node.currentTime > this.options.maxDelay / 1000) {
+            log('delay');
+            if (this.node.paused) this.node.play()["catch"](error);
+            this.node.currentTime = end - 0.001;
+          }
+        }
+      }
+    }, {
+      key: "releaseBuffer",
+      value: function releaseBuffer() {
+        for (var type in this.bufferControllers) {
+          this.bufferControllers[type].doAppend();
+        }
+      }
+    }, {
+      key: "applyAndClearBuffer",
+      value: function applyAndClearBuffer() {
+        if (this.bufferControllers) {
+          this.releaseBuffer();
+          this.clearBuffer();
+        }
+      }
+    }, {
+      key: "getSafeClearOffsetOfBuffer",
+      value: function getSafeClearOffsetOfBuffer(offset) {
+        var maxLimit = this.options.mode === 'audio' && offset || 0,
+          adjacentOffset;
+        for (var i = 0; i < this.kfPosition.length; i++) {
+          if (this.kfPosition[i] >= offset) {
+            break;
+          }
+          adjacentOffset = this.kfPosition[i];
+        }
+        if (adjacentOffset) {
+          this.kfPosition = this.kfPosition.filter(function (kfDelimiter) {
+            if (kfDelimiter < adjacentOffset) {
+              maxLimit = kfDelimiter;
+            }
+            return kfDelimiter >= adjacentOffset;
+          });
+        }
+        return maxLimit;
+      }
+    }, {
+      key: "clearBuffer",
+      value: function clearBuffer() {
+        if (this.options.clearBuffer && Date.now() - this.lastCleaningTime > 10000) {
+          for (var type in this.bufferControllers) {
+            var cleanMaxLimit = this.getSafeClearOffsetOfBuffer(this.node.currentTime);
+            this.bufferControllers[type].initCleanup(cleanMaxLimit);
+          }
+          this.lastCleaningTime = Date.now();
+        }
+      }
+    }, {
+      key: "onBuffer",
+      value: function onBuffer(data) {
+        if (this.options.readFpsFromTrack && typeof data.fps !== 'undefined' && this.options.fps != data.fps) {
+          this.options.fps = data.fps;
+          this.frameDuration = Math.ceil(1000 / data.fps);
+          log("JMuxer changed FPS to ".concat(data.fps, " from track data"));
+        }
+        if (this.env == 'browser') {
+          if (this.bufferControllers && this.bufferControllers[data.type]) {
+            this.bufferControllers[data.type].feed(data.payload);
+          }
+        } else if (this.stream) {
+          this.stream.push(data.payload);
+        }
+        if (this.options.onData) {
+          this.options.onData(data.payload);
+        }
+        if (this.options.flushingTime === 0) {
+          this.applyAndClearBuffer();
+        }
+      }
 
-            var _iteratorNormalCompletion2 = true;
-            var _didIteratorError2 = false;
-            var _iteratorError2 = undefined;
-
-            try {
-                for (var _iterator2 = aacFrames[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
-                    units = _step2.value;
-
-                    samples.push({ units: units });
-                }
-            } catch (err) {
-                _didIteratorError2 = true;
-                _iteratorError2 = err;
-            } finally {
-                try {
-                    if (!_iteratorNormalCompletion2 && _iterator2.return) {
-                        _iterator2.return();
-                    }
-                } finally {
-                    if (_didIteratorError2) {
-                        throw _iteratorError2;
-                    }
-                }
-            }
-
-            if (duration) {
-                sampleDuration = duration / samples.length | 0;
-                adjustDuration = duration - sampleDuration * samples.length;
-            } else {
-                sampleDuration = this.frameDuration;
-            }
-            samples.map(function (sample) {
-                sample.duration = adjustDuration > 0 ? sampleDuration + 1 : sampleDuration;
-                if (adjustDuration !== 0) {
-                    adjustDuration--;
-                }
-            });
-            return samples;
-        }
+      /* Events on MSE */
     }, {
-        key: 'destroy',
-        value: function destroy() {
-            this.stopInterval();
-            if (this.mediaSource) {
-                try {
-                    this.mediaSource.endOfStream();
-                } catch (e) {
-                    error('mediasource is not available to end');
-                }
-            }
-            if (this.remuxController) {
-                this.remuxController.destroy();
-                this.remuxController = null;
-            }
-            this.mseReady = false;
-            this.videoStarted = false;
+      key: "onMSEOpen",
+      value: function onMSEOpen() {
+        this.mseReady = true;
+        URL.revokeObjectURL(this.url);
+        // this.createBuffer();
+        if (typeof this.options.onReady === 'function') {
+          this.options.onReady.call(null, this.isReset);
         }
+      }
     }, {
-        key: 'createBuffer',
-        value: function createBuffer() {
-            if (!this.mseReady || !this.remuxController || !this.remuxController.isReady() || this.bufferControllers) return;
-            this.bufferControllers = {};
-            for (var type in this.remuxController.tracks) {
-                var track = this.remuxController.tracks[type];
-                if (!JMuxmer.isSupported(type + '/mp4; codecs="' + track.mp4track.codec + '"')) {
-                    error('Browser does not support codec');
-                    return false;
-                }
-                var sb = this.mediaSource.addSourceBuffer(type + '/mp4; codecs="' + track.mp4track.codec + '"');
-                this.bufferControllers[type] = new BufferController(sb, type);
-                this.bufferControllers[type].cleanOffset = this.options.cleanOffset;
-                this.sourceBuffers[type] = sb;
-                this.bufferControllers[type].on('error', this.onBufferError.bind(this));
-            }
-        }
+      key: "onMSEClose",
+      value: function onMSEClose() {
+        this.mseReady = false;
+        this.videoStarted = false;
+      }
     }, {
-        key: 'startInterval',
-        value: function startInterval() {
-            var _this2 = this;
-
-            this.interval = setInterval(function () {
-                if (_this2.bufferControllers) {
-                    _this2.releaseBuffer();
-                    _this2.clearBuffer();
-                }
-            }, this.options.flushingTime);
+      key: "onBufferError",
+      value: function onBufferError(data) {
+        if (data.name == 'QuotaExceeded') {
+          log("JMuxer cleaning ".concat(data.type, " buffer due to QuotaExceeded error"));
+          this.bufferControllers[data.type].initCleanup(this.node.currentTime);
+          return;
+        } else if (data.name == 'InvalidStateError') {
+          log('JMuxer is reseting due to InvalidStateError');
+          this.reset();
+        } else {
+          this.endMSE();
         }
-    }, {
-        key: 'stopInterval',
-        value: function stopInterval() {
-            if (this.interval) {
-                clearInterval(this.interval);
-            }
+        if (typeof this.options.onError === 'function') {
+          this.options.onError.call(null, data);
         }
-    }, {
-        key: 'releaseBuffer',
-        value: function releaseBuffer() {
-            for (var type in this.bufferControllers) {
-                this.bufferControllers[type].doAppend();
-            }
-        }
-    }, {
-        key: 'clearBuffer',
-        value: function clearBuffer() {
-            if (this.options.clearBuffer && Date.now() - this.lastCleaningTime > 10000) {
-                for (var type in this.bufferControllers) {
-                    this.bufferControllers[type].initCleanup(this.node.currentTime);
-                }
-                this.lastCleaningTime = Date.now();
-            }
-        }
-    }, {
-        key: 'onBuffer',
-        value: function onBuffer(data) {
-
-            if (this.bufferControllers && this.bufferControllers[data.type]) {
-                this.bufferControllers[data.type].feed(data.payload);
-            }
-        }
-
-        /* Events on MSE */
-
-    }, {
-        key: 'onMSEOpen',
-        value: function onMSEOpen() {
-            this.mseReady = true;
-            if (typeof this.options.onReady === "function") {
-                this.options.onReady();
-                this.options.onReady = null;
-            }
-            this.createBuffer();
-        }
-    }, {
-        key: 'onMSEClose',
-        value: function onMSEClose() {
-            this.mseReady = false;
-            this.videoStarted = false;
-        }
-    }, {
-        key: 'onBufferError',
-        value: function onBufferError(data) {
-            if (data.name == 'QuotaExceeded') {
-                this.bufferControllers[data.type].initCleanup(this.node.currentTime);
-                return;
-            }
-
-            if (this.mediaSource.sourceBuffers.length > 0 && this.sourceBuffers[data.type]) {
-                this.mediaSource.removeSourceBuffer(this.sourceBuffers[data.type]);
-            }
-            if (this.mediaSource.sourceBuffers.length == 0) {
-                try {
-                    this.mediaSource.endOfStream();
-                } catch (e) {
-                    error('mediasource is not available to end');
-                }
-            }
-        }
+      }
+    }], [{
+      key: "isSupported",
+      value: function isSupported(codec) {
+        return window.MediaSource && window.MediaSource.isTypeSupported(codec);
+      }
     }]);
-    return JMuxmer;
-}(Event);
+    return JMuxer;
+  }(Event);
 
-return JMuxmer;
+  return JMuxer;
 
-}());
+}));
