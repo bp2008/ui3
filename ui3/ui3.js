@@ -240,6 +240,7 @@ var pnacl_player_supported = false; // pNaCl H.264 player
 var mse_mp4_h264_supported = false; // HTML5 H.264 player
 var mse_mp4_aac_supported = false;
 var webcodecs_h264_player_supported = false; // WebCodecs h264 player
+var webcodecs_h265_player_supported = false; // WebCodecs h265 player
 var vibrate_supported = false;
 var web_audio_autoplay_disabled = false;
 var cookies_accessible = false;
@@ -283,6 +284,7 @@ function DoUIFeatureDetection()
 			mse_mp4_aac_supported = streaming_supported && (mse_support & 2) > 0; // Not yet used
 			var webcodecs_support = detectWebCodecsVideoDecoderSupport();
 			webcodecs_h264_player_supported = streaming_supported && webcodecs_support.h264;
+			webcodecs_h265_player_supported = streaming_supported && webcodecs_support.h265;
 			any_h264_playback_supported = streaming_supported && (h264_js_player_supported || mse_mp4_h264_supported || pnacl_player_supported || webcodecs_h264_player_supported);
 
 			detectAudioSupport();
@@ -341,6 +343,22 @@ function DoUIFeatureDetection()
 							ul.append('<li>WebCodecs: H.264 Codec</li>');
 					}
 					ul_root.append($('<li>The WebCodecs H.264 Player requires these unsupported features:</li>').append(ul));
+				}
+				if (!webcodecs_h265_player_supported)
+				{
+					var ul = $('<ul></ul>');
+					if (!streaming_supported)
+						ul.append('<li>Data Streaming</li>');
+					if (webcodecs_support.videoFrame && !webcodecs_support.decoder && !isSecureContext)
+						ul.append('<li>WebCodecs: VideoDecoder requires secure context (HTTPS).</li>');
+					else
+					{
+						if (!webcodecs_support.decoder)
+							ul.append('<li>WebCodecs: Video Decoder</li>');
+						else if (!webcodecs_support.h265)
+							ul.append('<li>WebCodecs: H.265 Codec</li>');
+					}
+					ul_root.append($('<li>The WebCodecs H.265 Player requires these unsupported features:</li>').append(ul));
 				}
 				if (!any_h264_playback_supported)
 					ul_root.append($('<li>No H.264 Player is available.</li>'));
@@ -403,6 +421,8 @@ function DoUIFeatureDetection()
 					$videoPlayers.append("<li>H.264 via JavaScript</li>");
 				if (webcodecs_h264_player_supported)
 					$videoPlayers.append("<li>H.264 via WebCodecs</li>");
+				if (webcodecs_h265_player_supported)
+					$videoPlayers.append("<li>H.265 via WebCodecs</li>");
 				$('#videoPlayersSupported').append($videoPlayers);
 			});
 			return;
@@ -554,9 +574,11 @@ function detectMSESupport()
 	catch (ex) { }
 	return 0;
 }
+var H264_STD_CODEC_STRING = "avc1.640029";
+var H265_STD_CODEC_STRING = "hvc1.1.6.L123.00";
 function detectWebCodecsVideoDecoderSupport()
 {
-	var result = { videoFrame: false, decoder: false, h264: false };
+	var result = { videoFrame: false, decoder: false, h264: false, h265: false };
 	try
 	{
 		var videoDecoder = null;
@@ -566,22 +588,35 @@ function detectWebCodecsVideoDecoderSupport()
 		{
 			try
 			{
-				var videoDecoder = new VideoDecoder({ output: function (frame) { }, error: function (error) { } });
+				videoDecoder = new VideoDecoder({ output: function (frame) { }, error: function (error) { } });
 				result.decoder = true;
-				try
-				{
-					videoDecoder.configure({ codec: "avc1.640029" });
-					result.h264 = true;
-				}
-				catch (ex) { }
-				finally { videoDecoder.reset(); }
+				result.h264 = isWebCodecsConfigSupported(videoDecoder, { codec: H264_STD_CODEC_STRING });
+				result.h265 = isWebCodecsConfigSupported(videoDecoder, { codec: H265_STD_CODEC_STRING });
 			}
 			catch (ex) { }
-			finally { videoDecoder.close(); }
+			finally { if (videoDecoder) videoDecoder.close(); }
 		}
 	}
 	catch (ex) { }
 	return result;
+}
+function isWebCodecsConfigSupported(videoDecoder, config)
+{
+	try
+	{
+		videoDecoder.configure(config);
+		return true;
+	}
+	catch (ex) { }
+	finally
+	{
+		try
+		{
+			videoDecoder.reset();
+		}
+		catch (ex) { }
+	}
+	return false;
 }
 function detectAudioSupport()
 {
@@ -17542,6 +17577,13 @@ function VideoPlayerController()
 	}
 	this.Playback_PlayPause = function ()
 	{
+		if (playerModule == null)
+		{
+			console.error("Playback_PlayPause called before playerModule initialized.");
+			// Using the pause hotkey quickly during UI3 loading can trigger this.
+			// If I was being nice, I would queue the play/pause to be handled after initialization, but that is hard, and this is easy. Sorry.
+			return;
+		}
 		if (playerModule.Playback_IsPaused())
 			self.Playback_Play();
 		else
@@ -19431,8 +19473,8 @@ function FetchH264VideoModule()
 	{
 		playbackPaused = true;
 		playbackControls.setPlayPauseButtonState(playbackPaused);
-		if (h264_player.GetRenderedFrameCount() > 0)
-			StopStreaming();
+		//if (h264_player.GetRenderedFrameCount() > 0) // Commented out 2025-11-12 because I'm adding more things that automate a pause when there are no frames rendered.
+		StopStreaming();
 		BI_CustomEvent.Invoke("Playback_Pause", loading);
 	}
 	this.Playback_Play = function ()
@@ -20046,6 +20088,11 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.AcceptFrame = function (frame)
 	{
+		if (frame.codec === BI_CODEC_H265)
+		{
+			DecodingCantProceed("The JavaScript video player can not decode H.265 streams.");
+			return;
+		}
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			acceptedFrameCount++;
@@ -20591,6 +20638,11 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.AcceptFrame = function (frame)
 	{
+		if (frame.codec === BI_CODEC_H265)
+		{
+			DecodingCantProceed("The PNaCl video player can not decode H.265 streams.");
+			return;
+		}
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			frameMetadataCache.Add(frame);
@@ -20681,6 +20733,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var renderScheduler = null;
 	var lastFrameWarning = performance.now() - 60000;
 	var nonKeyframeDropper = new NonKeyframeDropper();
+	var configuredCodec = null;
 
 	var frameDecoded = function (nativeFrame)
 	{
@@ -20771,25 +20824,66 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			toaster.Warning("Error decoding video frame(s)", 3000);
 		}
 	}
-	var RecoverVideoDecoder = function ()
+	/**
+	 * Ensures that the video decoder is prepared to decode the current video codec.
+	 * @returns {Boolean} True if the video decoder is ready to decode the frame's codec, false if an unsupported codec was requested.
+	 */
+	var RecoverVideoDecoder = function (frame)
 	{
 		if (!videoDecoder || videoDecoder.state === "closed")
 		{
 			videoDecoder = new VideoDecoder({ output: frameDecoded, error: decoderError });
 			videoDecoder.reset();
+			configuredCodec = null;
 			nonKeyframeDropper.Reset();
-			ConfigureVideoDecoder();
 		}
+		return ConfigureVideoDecoder(frame);
 	}
-	var ConfigureVideoDecoder = function ()
+	var ConfigureVideoDecoder = function (frame)
 	{
-		videoDecoder.configure({ codec: "avc1.640029", optimizeForLatency: true });
+		if (frame)
+		{
+			var desiredCodec;
+			if (frame.codec === BI_CODEC_H264)
+			{
+				if (!webcodecs_h264_player_supported)
+				{
+					DecodingCantProceed("The WebCodecs video player can not play H.264 on this system.");
+					return false;
+				}
+				desiredCodec = H264_STD_CODEC_STRING;
+			}
+			else if (frame.codec === BI_CODEC_H265)
+			{
+				if (!webcodecs_h265_player_supported)
+				{
+					DecodingCantProceed("The WebCodecs video player can not play H.265 on this system.");
+					return false;
+				}
+				desiredCodec = H265_STD_CODEC_STRING;
+			}
+			else
+			{
+				DecodingCantProceed("The WebCodecs video player was delivered a frame with an unsupported codec: " + frame.codec);
+				return false;
+			}
+			if (videoDecoder.state === "configured" && configuredCodec !== desiredCodec)
+			{
+				// Video decoder needs reset so we can change codecs.
+				videoDecoder.reset();
+				configuredCodec = null;
+			}
+			if (videoDecoder.state !== "configured")
+			{
+				videoDecoder.configure({ codec: desiredCodec, optimizeForLatency: true });
+				configuredCodec = desiredCodec;
+			}
+			return true;
+		}
 	}
 	var Initialize = function ()
 	{
 		renderScheduler = new RenderScheduler(renderFrame, dropFrame);
-
-		RecoverVideoDecoder();
 
 		$("#webcodec_player_canvas").remove();
 		$canvas = $('<canvas id="webcodec_player_canvas" class="videoCanvas" width="100%" height="100%"></canvas>');
@@ -20800,7 +20894,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.Dispose = function ()
 	{
-		if (videoDecoder.state === "configured")
+		if (videoDecoder && videoDecoder.state === "configured")
 			videoDecoder.close();
 	}
 	this.IsLoaded = function ()
@@ -20830,10 +20924,10 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	/** Clears the state of the video player, making it ready to accept a new stream. */
 	this.Flush = function ()
 	{
-		if (videoDecoder.state === "configured")
+		if (videoDecoder && videoDecoder.state === "configured")
 		{
 			videoDecoder.reset();
-			ConfigureVideoDecoder();
+			configuredCodec = null;
 		}
 		renderScheduler.Reset(averageRenderTime);
 		nonKeyframeDropper.Reset();
@@ -20864,6 +20958,8 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	 */
 	this.AcceptFrame = function (frame)
 	{
+		if (!RecoverVideoDecoder(frame))
+			return;
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			acceptedFrameCount++;
@@ -20876,14 +20972,13 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			}
 			netDelayCalc.Frame(frame.time, lastFrameReceivedAt);
 			var chunkArgs = {
-				type: frame.isKeyframe() ? "key" : "delta",
+				type: frame.keyframe ? "key" : "delta",
 				timestamp: frame.time * 1000,
 				duration: 0,
 				data: frame.frameData.buffer
 			};
 			frameCache[chunkArgs.timestamp] = frame;
 			var chunk = new EncodedVideoChunk(chunkArgs);
-			RecoverVideoDecoder();
 			try
 			{
 				videoDecoder.decode(chunk);
@@ -21323,6 +21418,11 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	}
 	this.AcceptFrame = function (frame)
 	{
+		if (frame.codec === BI_CODEC_H265)
+		{
+			DecodingCantProceed("The HTML5 video player can not decode H.265 streams.");
+			return;
+		}
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			if (!jmuxer)
@@ -21330,6 +21430,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 				jmuxer = new JMuxer({
 					node: 'html5MseVideoEle',
 					mode: 'video',
+					//videoCodec: frame.codec,
 					flushingTime: 1,
 					clearBuffer: true,
 					cleanOffset: 600, // This is an extension of the original jmuxer.
@@ -21798,7 +21899,7 @@ function NonKeyframeDropper()
 	{
 		if (hasSeenKeyframe)
 			return true;
-		else if (frame.isKeyframe())
+		else if (frame.keyframe)
 		{
 			hasSeenKeyframe = true;
 			return true;
@@ -28551,6 +28652,11 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 	{
 		if (!exportCompleteCb)
 			return;
+		if (frame.codec === BI_CODEC_H265)
+		{
+			DecodingCantProceed("The AVI exporter can not process H.265 streams.");
+			return;
+		}
 		if (!aviEncoder)
 		{
 			toaster.Error("Streaming protocol error: Stream metadata was not received by ClipExportStreamer before the first frame!");
@@ -28558,7 +28664,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 		}
 		if (frame.isVideo)
 		{
-			aviEncoder.AddVideoFrame(frame.frameData, frame.isKeyframe());
+			aviEncoder.AddVideoFrame(frame.frameData, frame.keyframe);
 			totalVideoFrames++;
 			totalExportedTimeMs = frame.time;
 			if (firstFrameTimeUTC === 0)
@@ -28575,7 +28681,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 			}
 		}
 		else if (frame.isAudio)
-			aviEncoder.AddAudioFrame(frame.frameData, frame.isKeyframe());
+			aviEncoder.AddAudioFrame(frame.frameData, frame.keyframe);
 	}
 	var acceptStatusBlock = function (status)
 	{
@@ -28658,7 +28764,7 @@ function ClipExportStreamer(path, startTimeMs, durationMs, useTranscodeMethod, i
 	{
 		var recordArg = useTranscodeMethod ? "" : "&record=1";
 		var audioArg = "&audio=" + (includeAudio ? "1" : "0");
-		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + recordArg + audioArg + "&speed=100&stream=0&extend=2&time=" + startTimeMs;
+		var videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + recordArg + audioArg + "&codec=H.264&speed=100&stream=0&extend=2&time=" + startTimeMs;
 		safeFetch.OpenStream(videoUrl, headerCallback, acceptFrame, acceptStatusBlock, streamInfoCallback, StreamEnded, {});
 	}
 	if (recordingOffsetWorkaround)
@@ -32978,7 +33084,7 @@ function FetchVideoH264Streamer(url, headerCallback, frameCallback, statusBlockC
 
 							bitRateCalc_Video.AddDataPoint(currentVideoFrame.size);
 
-							CallFrameCallback(new BIVideoFrame(buf, currentVideoFrame), availableStreams);
+							CallFrameCallback(new BIVideoFrame(buf, currentVideoFrame, bitmapHeader), availableStreams);
 
 							state = 2;
 						}
@@ -33106,7 +33212,9 @@ function WAVEFORMATEX(buf)
 	else
 		this.valid = false;
 }
-function BIVideoFrame(buf, metadata)
+var BI_CODEC_H264 = "H264";
+var BI_CODEC_H265 = "H265";
+function BIVideoFrame(buf, metadata, bitmapHeader)
 {
 	var self = this;
 	this.meta = $.extend({}, metadata);
@@ -33120,49 +33228,15 @@ function BIVideoFrame(buf, metadata)
 	this.utc = metadata.utc;
 	/** Size in bytes of the frame data. */
 	this.size = metadata.size;
-	var cachedIsKeyframe = 0;
-	this.isKeyframe = function ()
-	{
-		if (cachedIsKeyframe === 1)
-			return true;
-		else if (cachedIsKeyframe === -1)
-			return false;
-		if (self.frameData && self.frameData.length > 0)
-		{
-			// The NALU type is the last 5 bits of the first byte after a start code.
-			// This method will look in the first 1000 bytes to find a "VCL NALU" (types 1-5) and assume the 
-			// first found indicates the frame type.
-			var end = Math.min(self.frameData.length, 1001) - 1;
-			var zeroBytes = 0;
-			for (var i = 0; i < end; i++)
-			{
-				if (self.frameData[i] === 0)
-					zeroBytes++;
-				else
-				{
-					if (zeroBytes >= 2 && self.frameData[i] === 1)
-					{
-						// Identified a start code.  Check the NALU type.
-						var NALU_Type = self.frameData[i + 1] & 31; // 31 is 0b00011111
-						if (NALU_Type == 5) // This is a slice of a keyframe.
-						{
-							cachedIsKeyframe = 1;
-							return true;
-						}
-						else if (0 < NALU_Type && NALU_Type < 5) // This is another frame type
-						{
-							cachedIsKeyframe = -1;
-							return false;
-						}
-					}
-					zeroBytes = 0;
-				}
-			}
-		}
-		return false;
-	}
+	if (!bitmapHeader)
+		throw new Error("Video stream received video frame before bitmap header.");
+	/** "H264"|"H265"|"Unknown" */
+	this.codec = bitmapHeader.biCompression;
 	/** True if this is a keyframe */
-	this.keyframe = this.meta.keyframe = self.isKeyframe();
+	this.keyframe = this.meta.keyframe = IdentifyVideoKeyframe(buf, iEquals(this.codec, BI_CODEC_H265));
+
+	//if (developerMode)
+		console.log(`BIVideoFrame: codec=${this.codec}, keyframe=${this.keyframe}`);
 }
 function BIAudioFrame(buf, formatHeader)
 {
@@ -33170,10 +33244,61 @@ function BIAudioFrame(buf, formatHeader)
 	this.isAudio = true;
 	this.frameData = buf;
 	this.format = formatHeader;
-	this.isKeyframe = function ()
+	this.keyframe = !!(formatHeader && formatHeader.wFormatTag === 7);
+}
+function IdentifyVideoKeyframe(buf, codecH265)
+{
+	var foundKeyframe = false;
+	if (buf && buf.length > 0)
 	{
-		return self.format.wFormatTag === 7;
+		// The NALU type is the last 5 bits of the first byte after a start code.
+		// This method will look in the first 1000 bytes to find a "VCL NALU" (types 1-5) and assume the 
+		// first found indicates the frame type.
+		var end = buf.length;// Math.min(buf.length, 1001) - 1;
+		var zeroBytes = 0;
+		for (var i = 0; i < end; i++)
+		{
+			if (buf[i] === 0)
+				zeroBytes++;
+			else
+			{
+				if ((zeroBytes === 2 || zeroBytes === 3) && buf[i] === 1 && buf.length > (i + 1))
+				{
+					// Identified a start code.  Check the NALU type.
+					if (codecH265)
+					{
+						var NALU_Type = (buf[i + 1] >> 1) & 63; // 63 is 0b00111111
+						//if (developerMode)
+						//	console.log("NALU Type: " + NALU_Type);
+						if (NALU_Type >= 19 && NALU_Type <= 21)
+						{
+							foundKeyframe = true; // IDR or CRA picture
+							break;
+						}
+						else if (NALU_Type >= 1 && NALU_Type <= 9)
+						{
+							break; // Other frame type
+						}
+					}
+					else // H.264
+					{
+						var NALU_Type = buf[i + 1] & 31; // 31 is 0b00011111
+						if (NALU_Type == 5) // This is a slice of a keyframe.
+						{
+							foundKeyframe = true;
+							break;
+						}
+						else if (0 < NALU_Type && NALU_Type < 5)
+						{
+							break; // Other frame type
+						}
+					}
+				}
+				zeroBytes = 0;
+			}
+		}
 	}
+	return foundKeyframe;
 }
 ///////////////////////////////////////////////////////////////
 // GhettoStream ///////////////////////////////////////////////
@@ -37477,6 +37602,15 @@ function UI3Stopwatch()
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+function DecodingCantProceed(message)
+{
+	try
+	{
+		videoPlayer.Playback_Pause();
+	}
+	catch (ex) { console.error("Error trying to pause video because decoding can't proceed.", ex); }
+	toaster.Error(message);
+}
 function SysNameToAppName(sysName)
 {
 	sysName = sysName ? sysName.trim() : "";
