@@ -16913,7 +16913,21 @@ function VideoPlayerController()
 			return playerModule.GetPlayerObject();
 		return null;
 	}
-
+	/**
+	 * Gets an object like { h264: true, h265: false } depending on the current choice of H.264/H.265 video player and system compatibility.
+	 */
+	this.GetSupportedCodecs = function ()
+	{
+		var supported = { h264: false, h265: false };
+		var h264PlayerModule = moduleHolder["h264"];
+		if (h264PlayerModule && typeof h264PlayerModule.GetSupportedCodecs === "function")
+		{
+			var module_supported = h264PlayerModule.GetSupportedCodecs();
+			supported.h264 = !!module_supported.h264;
+			supported.h265 = !!module_supported.h265;
+		}
+		return supported;
+	}
 	this.Initialize = function ()
 	{
 		if (isInitialized)
@@ -19073,6 +19087,20 @@ function FetchH264VideoModule()
 	{
 		return h264_player;
 	}
+	/**
+	 * Gets an object like { h264: true, h265: false } depending on the current choice of H.264/H.265 video player and system compatibility.
+	 */
+	this.GetSupportedCodecs = function ()
+	{
+		var supported = { h264: false, h265: false };
+		if (h264_player && typeof h264_player.GetSupportedCodecs === "function")
+		{
+			var module_supported = h264_player.GetSupportedCodecs();
+			supported.h264 = !!module_supported.h264;
+			supported.h265 = !!module_supported.h265;
+		}
+		return supported;
+	}
 	var StopStreaming = function ()
 	{
 		clearTimeout(failureRecoveryTimeout);
@@ -19405,6 +19433,16 @@ function FetchH264VideoModule()
 					var loadingImg = videoPlayer.Loading().image;
 					if (loadingImg.uniqueId == loading.uniqueId)
 						loadingImg.msec = frame.meta.rawtime;
+				}
+				if (frame.codec === BI_CODEC_H264 && !self.GetSupportedCodecs().h264)
+				{
+					DecodingCantProceed("The " + self.GetPlayerName() + " video player on this system can not decode H.264 streams.", 10000);
+					return;
+				}
+				else if (frame.codec === BI_CODEC_H265 && !self.GetSupportedCodecs().h265)
+				{
+					DecodingCantProceed("The " + self.GetPlayerName() + " video player on this system can not decode H.265 streams.", 10000);
+					return;
 				}
 				h264_player.AcceptFrame(frame);
 			}
@@ -20127,11 +20165,6 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.AcceptFrame = function (frame)
 	{
-		if (frame.codec === BI_CODEC_H265)
-		{
-			DecodingCantProceed("The JavaScript video player can not decode H.265 streams.");
-			return;
-		}
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			acceptedFrameCount++;
@@ -20198,6 +20231,13 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			nerdStats.UpdateStat("Renderer", display.contextName);
 		else
 			nerdStats.UpdateStat("Renderer", "Unknown");
+	}
+	/**
+	 * Gets an object like { h264: true, h265: false } depending on the current choice of H.264/H.265 video player and system compatibility.
+	 */
+	this.GetSupportedCodecs = function ()
+	{
+		return { h264: h264_js_player_supported };
 	}
 
 	Initialize();
@@ -20677,11 +20717,6 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	}
 	this.AcceptFrame = function (frame)
 	{
-		if (frame.codec === BI_CODEC_H265)
-		{
-			DecodingCantProceed("The PNaCl video player can not decode H.265 streams.");
-			return;
-		}
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			frameMetadataCache.Add(frame);
@@ -20731,6 +20766,13 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		else if (currentH264Player === H264PlayerOptions.NaCl_HWVA_No)
 			return 0;
 		return -1;
+	}
+	/**
+	 * Gets an object like { h264: true, h265: false } depending on the current choice of H.264/H.265 video player and system compatibility.
+	 */
+	this.GetSupportedCodecs = function ()
+	{
+		return { h264: pnacl_player_supported };
 	}
 
 	Initialize();
@@ -20884,23 +20926,9 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		{
 			var desiredCodec;
 			if (frame.codec === BI_CODEC_H264)
-			{
-				if (!webcodecs_h264_player_supported)
-				{
-					DecodingCantProceed("The WebCodecs video player can not play H.264 on this system.");
-					return false;
-				}
 				desiredCodec = H264_STD_CODEC_STRING;
-			}
 			else if (frame.codec === BI_CODEC_H265)
-			{
-				if (!webcodecs_h265_player_supported)
-				{
-					DecodingCantProceed("The WebCodecs video player can not play H.265 on this system.");
-					return false;
-				}
 				desiredCodec = H265_STD_CODEC_STRING;
-			}
 			else
 			{
 				DecodingCantProceed("The WebCodecs video player was delivered a frame with an unsupported codec: " + frame.codec);
@@ -21072,6 +21100,13 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	this.IsUsingHardwareAcceleration = function ()
 	{
 		return -1;
+	}
+	/**
+	 * Gets an object like { h264: true, h265: false } depending on the current choice of H.264/H.265 video player and system compatibility.
+	 */
+	this.GetSupportedCodecs = function ()
+	{
+		return { h264: webcodecs_h264_player_supported, h265: webcodecs_h265_player_supported };
 	}
 
 	Initialize();
@@ -21457,11 +21492,6 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	}
 	this.AcceptFrame = function (frame)
 	{
-		if (frame.codec === BI_CODEC_H265)
-		{
-			//	DecodingCantProceed("The HTML5 video player can not decode H.265 streams.");
-			//	return;
-		}
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
 			if (!jmuxer)
@@ -21669,6 +21699,13 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	this.UpdateNerdStats = function ()
 	{
 		nerdStats.UpdateStat("Renderer", isRenderingToCanvas ? "<canvas>" : "Native HTML5 <video>");
+	}
+	/**
+	 * Gets an object like { h264: true, h265: false } depending on the current choice of H.264/H.265 video player and system compatibility.
+	 */
+	this.GetSupportedCodecs = function ()
+	{
+		return { h264: mse_mp4_h264_supported, h265: mse_mp4_h265_supported };
 	}
 
 	Initialize();
@@ -24453,12 +24490,24 @@ function StreamingProfile()
 				sb.Append("&frc=").Append(self.fullRangeColor - 1);
 
 			if (self.vcodecPref === "h264")
-				sb.Append("&codec=H.264");
+				sb.Append("&codec=H.264&vc=" + CodecFlags.h264);
 			else if (self.vcodecPref === "h265")
-				sb.Append("&codec=H.265");
+				sb.Append("&codec=H.265&vc=" + CodecFlags.h265);
+
+			var supportedCodecs = videoPlayer.GetSupportedCodecs();
+			if (supportedCodecs.h264 && supportedCodecs.h265)
+				sb.Append("&codec-support=H.264,H.265&vcs=" + (CodecFlags.h264 | CodecFlags.h265));
+			else if (supportedCodecs.h264)
+				sb.Append("&codec-support=H.264&vcs=" + (CodecFlags.h264));
+			else if (supportedCodecs.h265)
+				sb.Append("&codec-support=H.265&vcs=" + (CodecFlags.h265));
 		}
 		return sb.ToString();
 	}
+	var CodecFlags = {
+		h264: b0000_0001,
+		h265: b0000_0010
+	};
 	this.GetTooltipText = function ()
 	{
 		var sb = new StringBuilder('\n');
