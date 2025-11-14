@@ -5584,7 +5584,7 @@ function StatusAreaApi()
 		if (genericQualityHelper)
 		{
 			var p = genericQualityHelper.GetCurrentProfile();
-			if (p.vcodec === "h264")
+			if (p.vcodec === "h264") // Means H.264 or H.265.
 			{
 				var overridesAllowed = sessionManager.DoesStreamAllowOverrides(p.stream);
 				if (p.limitBitrate === 0 || (p.limitBitrate === 2 && !overridesAllowed))
@@ -24180,7 +24180,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		AddEditorField("Profile Name", "name", { max: 21 });
 		AddEditorField("Abbreviation (0-4 characters)", "abbr", { max: 4 });
 		AddEditorField("Abbreviation Color", "aClr", { type: "color" });
-		AddEditorField("Video Codec", "vcodec", { type: "select", options: ["jpeg", "h264"], onChange: ReRender });
+		AddEditorField("Video Codec", "vcodec", { type: "select", options: [{ value: "jpeg", name: "JPEG" }, { value: "h264", name: "H.264 or H.265" }], onChange: ReRender });
 		if (!p.IsCompatible())
 			AddEditorField("UI3 can't play this codec in your current web browser. This profile will not be available.", "vcodec", { type: "errorCommentText" });
 		AddEditorField("Base Server Profile", "stream", { type: "select", options: [GetServerProfileString(0), GetServerProfileString(1), GetServerProfileString(2)], onChange: ReRender });
@@ -24190,7 +24190,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		AddEditorField("Max Frame Width", "w", { min: 1, max: 99999 });
 		AddEditorField("Max Frame Height", "h", { min: 1, max: 99999 });
 		AddEditorField("Quality [0-100]", "q", { min: 0, max: 100 });
-		if (p.vcodec === "h264")
+		if (p.vcodec === "h264") // Means H.264 or H.265
 		{
 			AddEditorField("Frame Rate [0-60]", "fps", { min: 0, max: 60 });
 			AddEditorField("Limit Bit Rate", "limitBitrate", { type: "select", options: ["inherit", "No Limit", "Yes Limit"] });
@@ -24202,6 +24202,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			AddEditorField("Zero-Frame Latency", "zfl", { type: "select", options: ["inherit", "No", "Yes"] });
 			AddEditorField("Full Range Color", "fullRangeColor", { type: "select", options: ["inherit", "No", "Yes"] });
 			AddEditorField("Direct-to-wire", "directToWire", { type: "select", options: ["inherit", "No", "Yes"] });
+			AddEditorField("Preferred Codec", "vcodecPref", { type: "select", options: [{ value: "inherit", name: "inherit" }, { value: "h264", name: "H.264" }, { value: "h265", name: "H.265" }], hint: "Blue Iris will use your preferred codec when transcoding, but may supply a different codec Direct-to-wire is in use.\n\nPlease note, H.265 is more resource-intensive to encode, so H.264 is recommended." });
 		}
 		var $deleteBtn = $('<input type="button" value="Delete This Profile" />');
 		$deleteBtn.on('click', DeleteClicked);
@@ -24327,6 +24328,7 @@ function StreamingProfile()
 	this.pro = -1; // Profile ["inherit", "default", "baseline", "main", "extended", "high", "high 10"]
 	this.directToWire = 0; // 0: inherit. 1: disable. 2: enable
 	this.fullRangeColor = 0; // 0: inherit. 1: disable. 2: enable
+	this.vcodecPref = null; // Preferred video codec to use if transcoding is required. ["inherit", "h264", "h265"] - null/undefined is equivalent to "inherit"
 
 	this.GetNameText = function ()
 	{
@@ -24449,6 +24451,11 @@ function StreamingProfile()
 
 			if (self.fullRangeColor > 0)
 				sb.Append("&frc=").Append(self.fullRangeColor - 1);
+
+			if (self.vcodecPref === "h264")
+				sb.Append("&codec=H.264");
+			else if (self.vcodecPref === "h265")
+				sb.Append("&codec=H.265");
 		}
 		return sb.ToString();
 	}
@@ -35640,7 +35647,17 @@ function UIFormFieldInternal(o)
 
 		sb.Append('<select>');
 		for (var i = 0; i < o.options.length; i++)
-			sb.Append(GetHtmlOptionElementMarkup(o.options[i], o.options[i], o.value));
+		{
+			var option = o.options[i];
+			if (typeof option === "string")
+			{
+				sb.Append(GetHtmlOptionElementMarkup(option, option, o.value));
+			}
+			else if (typeof option.value === "string" && typeof option.name === "string")
+			{
+				sb.Append(GetHtmlOptionElementMarkup(option.value, option.name, o.value));
+			}
+		}
 		sb.Append('</select>');
 		var $input = $(sb.ToString());
 		if (o.disabled)
