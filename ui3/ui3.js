@@ -1439,6 +1439,28 @@ var defaultSettings =
 			, category: "Video Player (Advanced)"
 		}
 		, {
+			key: "ui3_html5_enable_max_delay_limit"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Enable Max Delay Limit'
+			, preconditionFunc: Precondition_ui3_html5_delay_compensation
+			, onChange: OnChange_ui3_html5_enable_max_delay_limit
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_html5_max_delay_ms"
+			, value: 4000
+			, minValue: 0
+			, maxValue: 4000
+			, step: 50
+			, inputType: "range"
+			, unitLabel: " ms"
+			, options: [HTML5DelayCompensationOptions.None, HTML5DelayCompensationOptions.Weak, HTML5DelayCompensationOptions.Normal, HTML5DelayCompensationOptions.Strong]
+			, label: 'HTML5 Video Max Delay <div class="settingDesc">If player delay grows beyond this amount, the player will skip to the end of the video buffer to try to eliminate the delay. This will cause a jarring stutter every 1 second if set below your HTML5 player\'s minimum buffer size, which varies by system and by video stream (typically higher when using Direct-to-wire). This setting is a more aggressive form of the HTML5 Delay Compensator.</div>'
+			, preconditionFunc: Precondition_HTML5MaxDelayEnabled
+			, category: "Video Player (Advanced)"
+		}
+		, {
 			key: "ui3_download_snapshot_method"
 			, value: "Server"
 			, inputType: "select"
@@ -19755,7 +19777,7 @@ function FetchH264VideoModule()
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
 			nerdStats.UpdateStat("Audio Buffer", audioBufferSize, audioBufferSize.toFixed(0) + "ms", true);
-			nerdStats.UpdateStat("Frames since key", frame.framesSinceKey, frame.framesSinceKey, true);
+			nerdStats.UpdateStat("Frames since key", frame.framesSinceKey || 0, frame.framesSinceKey || 0, true);
 			nerdStats.UpdateStat("Frame Size", frame.size, formatBytes(frame.size, 2), true, (frame.keyframe ? "#FF0000" : undefined));
 			nerdStats.UpdateStat("Inter-Frame Time", interFrame, interFrame.toFixed() + "ms", true);
 			if (!h264_player.isMsePlayer)
@@ -21448,7 +21470,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 					node: 'html5MseVideoEle',
 					mode: 'video',
 					videoCodec: frame.codec,
-					maxDelay: 0,
+					maxDelay: GetHTML5MaxDelayMilliseconds(),
 					flushingTime: 0,
 					clearBuffer: true,
 					onReady: onMSEReady,
@@ -21467,6 +21489,11 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			{
 				earlyFrames.enqueue(frame);
 				return;
+			}
+
+			if (jmuxer && jmuxer.options)
+			{
+				jmuxer.options.maxDelay = GetHTML5MaxDelayMilliseconds();
 			}
 
 			disableRenderingStateChangesUntilNextFrame = false;
@@ -21651,10 +21678,10 @@ function HTML5DelayCompensationHelper(player)
 	var self = this;
 	var averager = new TimedAverage(3000, 10);
 	var nextPlaybackRateChangeAllowedAt = 0;
-	var aggressionLevel = 3;
-	var minSpeed = 1;
-	var maxSpeed = 1;
-	var tolerance = 1;
+	var aggressionLevel = 0;
+	var minSpeed = 1; // Minimum playback speed to use when trying to increase player delay.
+	var maxSpeed = 1; // Maximum playback speed to use when trying to decrease player delay.
+	var tolerance = 1; // Fractional tolerance around the target delay. If the delay is within this tolerance, no playback speed adjustment is made.
 	var lastSetRate = 0;
 	var setPlaybackRate = function (rate)
 	{
@@ -21760,6 +21787,19 @@ function HTML5DelayCompensationHelper(player)
 	}
 	UpdateAggressionLevel();
 	setPlaybackRate(1);
+}
+function HTML5MaxDelayEnabled()
+{
+	return settings.ui3_html5_enable_max_delay_limit === "1";
+}
+function GetHTML5MaxDelayMilliseconds()
+{
+	if (!HTML5MaxDelayEnabled())
+		return 200000;
+	var value = parseInt(settings.ui3_html5_max_delay_ms);
+	if (isNaN(value))
+		value = 4000;
+	return Clamp(value, 0, 4000);
 }
 /**
  * Tries to detect when HTML5 autoplay is being prevented without the courtesy of a "NotAllowedError".
@@ -35330,6 +35370,14 @@ function Precondition_ui3_html5_delay_compensation()
 {
 	return (mse_mp4_h264_supported && currentH264Player === H264PlayerOptions.HTML5);
 }
+function OnChange_ui3_html5_enable_max_delay_limit()
+{
+	uiSettingsPanel.Refresh();
+}
+function Precondition_HTML5MaxDelayEnabled()
+{
+	return Precondition_ui3_html5_delay_compensation() && settings.ui3_html5_enable_max_delay_limit === "1";
+}
 function Precondition_ui3_h264_net_delay_threshold()
 {
 	return any_h264_playback_supported;
@@ -36134,7 +36182,8 @@ function UIHelpTool()
 	var UI3_HTML5_Delay_Compensation_Help = function ()
 	{
 		$('<div class="UIHelp">'
-			+ 'HTML5 video was not designed for low-latency playback, so brief stream interruptions build up to a noticeable delay. UI3 is built with an experimental delay compensator which can speed up or slow down the video player to keep video delay at a consistent level. This delay compensator is configurable via the HTML5 Video Delay Compensation option.'
+			+ 'HTML5 video was not designed for low-latency playback, so brief stream interruptions build up to a noticeable delay. UI3 is built with an experimental delay compensator which can speed up or slow down the video player to keep video delay at a consistent level.<br><br>'
+			+ 'This delay compensator is configurable via the <b>HTML5 Video Delay Compensation</b> option.  This feature can introduce minor stuttering in some cases, so you can disable it by setting it to <b>None</b>.'
 			+ '</div>').modalDialog({ title: 'HTML5 Video Delay Compensation', closeOnOverlayClick: true });
 	}
 	var UI3_Edge_Fetch_Bug_Help = function ()
