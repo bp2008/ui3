@@ -238,6 +238,7 @@ var browser_is_ios = false;
 var browser_is_android = false;
 var pnacl_player_supported = false; // pNaCl H.264 player
 var mse_mp4_h264_supported = false; // HTML5 H.264 player
+var mse_mp4_h265_supported = false; // HTML5 H.265 player
 var mse_mp4_aac_supported = false;
 var webcodecs_h264_player_supported = false; // WebCodecs h264 player
 var webcodecs_h265_player_supported = false; // WebCodecs h265 player
@@ -282,6 +283,7 @@ function DoUIFeatureDetection()
 			var mse_support = detectMSESupport();
 			mse_mp4_h264_supported = streaming_supported && (mse_support & 1) > 0;
 			mse_mp4_aac_supported = streaming_supported && (mse_support & 2) > 0; // Not yet used
+			mse_mp4_h265_supported = streaming_supported && (mse_support & 4) > 0;
 			var webcodecs_support = detectWebCodecsVideoDecoderSupport();
 			webcodecs_h264_player_supported = streaming_supported && webcodecs_support.h264;
 			webcodecs_h265_player_supported = streaming_supported && webcodecs_support.h265;
@@ -327,6 +329,15 @@ function DoUIFeatureDetection()
 					if (!((mse_support & 1) > 0))
 						ul.append('<li>Media Source Extensions, H.264 codec, MP4 format</li>');
 					ul_root.append($('<li>The HTML5 H.264 Player requires these unsupported features:</li>').append(ul));
+				}
+				if (!mse_mp4_h265_supported)
+				{
+					var ul = $('<ul></ul>');
+					if (!streaming_supported)
+						ul.append('<li>Data Streaming</li>');
+					if (!((mse_support & 4) > 0))
+						ul.append('<li>Media Source Extensions, H.265 codec, MP4 format</li>');
+					ul_root.append($('<li>The HTML5 H.265 Player requires these unsupported features:</li>').append(ul));
 				}
 				if (!webcodecs_h264_player_supported)
 				{
@@ -415,6 +426,8 @@ function DoUIFeatureDetection()
 				$videoPlayers.append("<li>Jpeg</li>");
 				if (mse_mp4_h264_supported)
 					$videoPlayers.append("<li>H.264 via HTML5</li>");
+				if (mse_mp4_h265_supported)
+					$videoPlayers.append("<li>H.265 via HTML5</li>");
 				if (pnacl_player_supported)
 					$videoPlayers.append("<li>H.264 via NaCl</li>");
 				if (h264_js_player_supported)
@@ -561,21 +574,25 @@ function detectIfPnaclSupported()
 	catch (ex) { }
 	return false;
 }
+var H264_STD_CODEC_STRING = "avc1.640029";
+var H265_STD_CODEC_STRING = "hvc1.1.6.L120.90"; // Another example found online: "hvc1.1.6.L123.00"
 function detectMSESupport()
 {
+	var flags = 0;
 	try
 	{
 		if (window.MediaSource)
 		{
 			if (MediaSource.isTypeSupported("video/mp4; codecs=\"avc1.640033\""))
-				return 1;
+				flags += 1;
+			// flag 2 is reserved for AAC audio.
+			if (MediaSource.isTypeSupported("video/mp4; codecs=\"" + H265_STD_CODEC_STRING + "\""))
+				flags += 4;
 		}
 	}
 	catch (ex) { }
-	return 0;
+	return flags;
 }
-var H264_STD_CODEC_STRING = "avc1.640029";
-var H265_STD_CODEC_STRING = "hvc1.1.6.L123.00";
 function detectWebCodecsVideoDecoderSupport()
 {
 	var result = { videoFrame: false, decoder: false, h264: false, h265: false };
@@ -1243,7 +1260,7 @@ var defaultSettings =
 			, value: GetDefaultH264PlayerOption()
 			, inputType: "select"
 			, options: GetH264PlayerOptions()
-			, label: 'H.264 Player <a href="javascript:UIHelp.LearnMore(\'H.264 Player Options\')">(learn more)</a>'
+			, label: 'H.264 / H.265 Player <div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Video Player Options\')">(learn more)</a></div>'
 			, onChange: OnChange_ui3_h264_choice
 			, preconditionFunc: Precondition_ui3_h264_choice
 			, category: "Video Player"
@@ -1270,7 +1287,7 @@ var defaultSettings =
 			, inputType: "number"
 			, minValue: -1
 			, maxValue: 100000
-			, label: 'Maximum H.264 Kbps<div class="settingDesc">(disabled if less than 10)</div>'
+			, label: 'Maximum Video Kbps<div class="settingDesc">(disabled if less than 10)</div>'
 			, hint: "Useful for slow connections. Audio streams are not affected by this setting. Limit 100000 Kbps."
 			, onChange: OnChange_ui3_streamingProfileBitRateMax
 			, preconditionFunc: Precondition_ui3_streamingProfileBitRateMax
@@ -21420,8 +21437,8 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	{
 		if (frame.codec === BI_CODEC_H265)
 		{
-			DecodingCantProceed("The HTML5 video player can not decode H.265 streams.");
-			return;
+			//	DecodingCantProceed("The HTML5 video player can not decode H.265 streams.");
+			//	return;
 		}
 		if (nonKeyframeDropper.shouldAccept(frame))
 		{
@@ -21430,12 +21447,20 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 				jmuxer = new JMuxer({
 					node: 'html5MseVideoEle',
 					mode: 'video',
-					//videoCodec: frame.codec,
-					flushingTime: 1,
+					videoCodec: frame.codec,
+					maxDelay: 0,
+					flushingTime: 0,
 					clearBuffer: true,
-					cleanOffset: 600, // This is an extension of the original jmuxer.
 					onReady: onMSEReady,
-					debug: jmuxerDeveloperMode
+					debug: jmuxerDeveloperMode,
+					onError: function (message)
+					{
+						playerErrorHandler(message);
+					},
+					onUnsupportedCodec: function (codec)
+					{
+						playerErrorHandler("The HTML5 video player was delivered a frame with an unsupported codec: " + codec);
+					},
 				});
 			}
 			if (!mseReady)
@@ -33236,7 +33261,7 @@ function BIVideoFrame(buf, metadata, bitmapHeader)
 	this.keyframe = this.meta.keyframe = IdentifyVideoKeyframe(buf, iEquals(this.codec, BI_CODEC_H265));
 
 	//if (developerMode)
-		console.log(`BIVideoFrame: codec=${this.codec}, keyframe=${this.keyframe}`);
+	//console.log("  UI3", `BIVideoFrame: codec=${this.codec}, keyframe=${this.keyframe}`);
 }
 function BIAudioFrame(buf, formatHeader)
 {
@@ -33269,7 +33294,7 @@ function IdentifyVideoKeyframe(buf, codecH265)
 					{
 						var NALU_Type = (buf[i + 1] >> 1) & 63; // 63 is 0b00111111
 						//if (developerMode)
-						//	console.log("NALU Type: " + NALU_Type);
+						//console.log("  UI3", "NALU Type: " + NALU_Type, "at offset " + (i + 1));
 						if (NALU_Type >= 19 && NALU_Type <= 21)
 						{
 							foundKeyframe = true; // IDR or CRA picture
@@ -33283,6 +33308,7 @@ function IdentifyVideoKeyframe(buf, codecH265)
 					else // H.264
 					{
 						var NALU_Type = buf[i + 1] & 31; // 31 is 0b00011111
+						//console.log("  UI3", "NALU Type: " + NALU_Type, "at offset " + (i + 1));
 						if (NALU_Type == 5) // This is a slice of a keyframe.
 						{
 							foundKeyframe = true;
@@ -35121,7 +35147,20 @@ function GenerateH264RequirementString()
 }
 function GenerateCurrentH264PlayerComment()
 {
-	return '<div class="currentH264PlayerComment">Current H.264 player: ' + currentH264Player + '</div>';
+	var codecSupport = "";
+	if (currentH264Player === H264PlayerOptions.HTML5)
+		codecSupport = GetVideoCodecCheckmarks(false, mse_mp4_h264_supported, mse_mp4_h265_supported);
+	else if (currentH264Player === H264PlayerOptions.JavaScript)
+		codecSupport = GetVideoCodecCheckmarks(false, h264_js_player_supported, false)
+	else if (currentH264Player === H264PlayerOptions.WebCodecs)
+		codecSupport = GetVideoCodecCheckmarks(false, webcodecs_h264_player_supported, webcodecs_h265_player_supported);
+	else if (currentH264Player === H264PlayerOptions.NaCl_HWVA_Auto
+		|| currentH264Player === H264PlayerOptions.NaCl_HWVA_No
+		|| currentH264Player === H264PlayerOptions.NaCl_HWVA_Yes)
+		codecSupport = GetVideoCodecCheckmarks(false, pnacl_player_supported, false);
+	else
+		codecSupport = "Unknown Codec Support";
+	return '<div class="currentH264PlayerComment">Current player: ' + currentH264Player + '<br>' + codecSupport + '</div>';
 }
 function OnChange_ui3_audio_codec()
 {
@@ -35978,8 +36017,8 @@ function UIHelpTool()
 			case "Export Types":
 				UI3_Export_Types_Help();
 				break;
-			case "H.264 Player Options":
-				UI3_H264_Player_Options_Help();
+			case "Video Player Options":
+				UI3_Video_Player_Options_Help();
 				break;
 			case "HTML5 Video Delay Compensation":
 				UI3_HTML5_Delay_Compensation_Help();
@@ -36069,19 +36108,19 @@ function UIHelpTool()
 			+ '"Slow Transcode" mode is used when "Native" mode is not possible.  This mode transcodes the source video to H.264 in real-time using your Streaming 0 profile.  The export will take about as many seconds as the size of the exported section.'
 			+ '</div>').modalDialog({ title: 'Export Types', closeOnOverlayClick: true });
 	}
-	var UI3_H264_Player_Options_Help = function ()
+	var UI3_Video_Player_Options_Help = function ()
 	{
 		$('<div class="UIHelp">'
-			+ 'UI3 has several H.264 player options. Not all options are available in all browsers.'
+			+ 'UI3 has several video player options. Not all options are available in all browsers.'
 			+ '<br><br><b>Automatic</b> <span style="color:#66FF66;">(Preferred)</span><br><br>'
-			+ '&nbsp; &nbsp; When "Automatic" is selected, UI3 will choose which player to load.  It is recommended to stay on "Automatic" unless it causes problems.'
-			+ '<br><br><b>WebCodecs</b> - ' + (webcodecs_h264_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
-			+ '&nbsp; &nbsp; The WebCodecs player directly accesses the browser\'s built-in video codecs to efficiently decode video with the lowest possible latency.  WebCodecs is available in Chromium-based browsers since late 2021, and is only avalable on pages loaded via HTTPS.'
-			+ '<br><br><b>JavaScript</b> - ' + (h264_js_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
+			+ '&nbsp; &nbsp; When "Automatic" is selected, UI3 will choose which player to load based on known compatibility information.  It is recommended to stay on "Automatic" unless it causes problems.'
+			+ '<br><br><b>WebCodecs</b> - ' + GetVideoCodecCheckmarks(true, webcodecs_h264_player_supported, webcodecs_h265_player_supported) + '<br><br>'
+			+ '&nbsp; &nbsp; The WebCodecs player directly accesses the browser\'s built-in video codecs to efficiently decode video with the lowest possible latency.  WebCodecs is available in Chromium-based browsers since late 2021, and is only available on pages loaded via HTTPS.'
+			+ '<br><br><b>JavaScript</b> - ' + GetVideoCodecCheckmarks(true, h264_js_player_supported, false) + '<br><br>'
 			+ '&nbsp; &nbsp; The JavaScript player is the most robust and compatible player option, but also the slowest.'
-			+ '<br><br><b>HTML5</b> - ' + (mse_mp4_h264_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
+			+ '<br><br><b>HTML5</b> - ' + GetVideoCodecCheckmarks(true, mse_mp4_h264_supported, mse_mp4_h265_supported) + '<br><br>'
 			+ '&nbsp; &nbsp; The HTML5 player works by converting each frame into a fragmented MP4 which is played using Media Source Extensions.  This is usually the fastest option, but has compatibility problems with some browsers.'
-			+ '<br><br><b>NaCl</b> - ' + (pnacl_player_supported ? '<span style="color:#66FF66;">Available</span>' : '<span style="color:#FF3333;">Not Available</span>') + '<br><br>'
+			+ '<br><br><b>NaCl</b> - ' + GetVideoCodecCheckmarks(true, pnacl_player_supported, false) + '<br><br>'
 			+ '&nbsp; &nbsp; The NaCl player is faster than the JavaScript player. It is not quite as fast as the HTML5 player, and takes longer to load when you open UI3, but may be more stable. This player is only available in ChromeOS and in the Chrome browser on a desktop OS (such as Windows or Mac).  It uses Google\'s "NaCl" or "Native Client" technology, which was expected to be removed from Chrome in 2018 but remained available by entering <b>chrome://flags</b> in the address bar and enabling <b>Native Client</b>.'
 			+ (pnacl_player_supported ? ('<br><br>The NaCl player has 3 modes available, each with different behavior regarding Hardware Accelerated Video Decoding.<br>'
 				+ '<ul>'
@@ -36090,7 +36129,7 @@ function UIHelpTool()
 				+ '<li><b>' + H264PlayerOptions.NaCl_HWVA_Yes + '</b><br>The player will use hardware decoding only, and may fail if hardware acceleration is unavailable.</li>'
 				+ '</ul>'
 			) : '')
-			+ '</div>').modalDialog({ title: 'H.264 Player Options', closeOnOverlayClick: true });
+			+ '</div>').modalDialog({ title: 'Video Player Options', closeOnOverlayClick: true });
 	}
 	var UI3_HTML5_Delay_Compensation_Help = function ()
 	{
@@ -37602,6 +37641,35 @@ function UI3Stopwatch()
 ///////////////////////////////////////////////////////////////
 // Misc ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
+function GetVideoCodecCheckmarks(greenColorOk, h264, h265)
+{
+	if (!h264 && !h265)
+		return '<span style="color:#FF3333;">Not Available</span>';
+	var sb = new StringBuilder();
+	AppendCheckboxWithText(sb, greenColorOk, h264, 'H.264');
+	AppendCheckboxWithText(sb, greenColorOk, h265, 'H.265');
+	return sb.ToString();
+}
+function AppendCheckboxWithText(sb, greenColorOk, statusOk, text)
+{
+	if (statusOk)
+	{
+		sb.Append('&#9989; ');
+		if (greenColorOk)
+			sb.Append('<span style="color:#66FF66;">');
+		sb.Append(text);
+		if (greenColorOk)
+			sb.Append('</span>');
+	}
+	else
+	{
+		sb.Append('&#10060; ');
+		sb.Append('<span style="color:#FF3333;">');
+		sb.Append(text);
+		sb.Append('</span>');
+	}
+	sb.Append(' &nbsp; ')
+}
 function DecodingCantProceed(message)
 {
 	try
