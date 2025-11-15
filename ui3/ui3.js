@@ -5327,7 +5327,7 @@ function StatusAreaApi()
 			},
 			textDisplayValue: function ()
 			{
-				if (this.textValue)
+				if (typeof this.textValue === "string" && this.textValue)
 				{
 					if (this.textOnly)
 						return this.textValue;
