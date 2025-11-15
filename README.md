@@ -28,7 +28,7 @@ H.265 support requires UI3-306 or newer and Blue Iris 5.9.9.99 from 2025-11-13 o
 This is a compatibility matrix of systems I've tested H.265 on, along with the results.
 
 |                Environment               |   HTML5 Player  | WebCodecs Player | JavaScript Player |
-|:----------------------------------------:|:---------------:|:----------------:|:-----------------:|
+|:-----------------------------------------|:----------------|:-----------------|:------------------|
 | Chrome Win11 Nvidia GPU                  | ✅works         | ✅works         | Not supported     |
 | Chrome Win10 Intel iGPU                  | ✅works         | ✅works          | Not supported     |
 | Firefox Win11 Nvidia GPU                 | ✅works         | ❌decoder errors | Not supported     |
