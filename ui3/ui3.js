@@ -21547,7 +21547,8 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 				lastFrameDuration = frame.time - lastFrame.time;
 				jmuxer.feed({
 					video: lastFrame.frameData,
-					duration: lastFrameDuration
+					duration: lastFrameDuration,
+					isLastVideoFrameComplete: true
 				});
 				if (finishedFrameCount === 0 && !earlyFrameRenderCalled && currentStreamBitmapInfo)
 				{
@@ -21633,7 +21634,8 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			{
 				jmuxer.feed({
 					video: lastFrame.frameData,
-					duration: lastFrameDuration
+					duration: lastFrameDuration,
+					isLastVideoFrameComplete: true
 				});
 				fedFrameCount++;
 				if (fedFrameCount === 1 && currentStreamBitmapInfo)
@@ -21641,7 +21643,8 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 					// Hack to force the single frame to get rendered.
 					jmuxer.feed({
 						video: lastFrame.frameData,
-						duration: lastFrameDuration
+						duration: lastFrameDuration,
+						isLastVideoFrameComplete: true
 					});
 					var startMeta = $.extend({}, lastFrame.meta);
 					startMeta.width = currentStreamBitmapInfo.biWidth;

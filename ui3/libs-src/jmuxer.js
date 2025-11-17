@@ -4,30 +4,6 @@
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.JMuxer = factory(global.stream));
 })(this, (function (stream) { 'use strict';
 
-/** Added by bp2008 */
-function reverseBits(n)
-{
-    var result = 0;
-    for (var i = 0; i < 32; i++)
-    {
-        // Shift result left to make room
-        result <<= 1;
-        // Add the least significant bit of n
-        result |= (n & 1);
-        // Shift n right to process the next bit
-        n >>>= 1;
-    }
-    // Ensure result is treated as unsigned 32-bit
-    return result >>> 0;
-}
-/** Added by bp2008 */
-function removeTrailingDotZero(input)
-{
-  // Use regex to strip all trailing ".0" sequences
-  return input.replace(/(?:\.0)+$/, '');
-}
-
-
   function _arrayLikeToArray(r, a) {
     (null == a || a > r.length) && (a = r.length);
     for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e];
@@ -1479,7 +1455,7 @@ function removeTrailingDotZero(input)
         // Remaining data after last start code
         var left = null;
         if (lastIndex < length) {
-          result.push(buffer.subarray(lastIndex, length));
+          left = buffer.subarray(lastIndex, length);
         }
         return [result, left];
       }
@@ -1852,6 +1828,23 @@ function removeTrailingDotZero(input)
     result += (minutes < 10 ? '0' + minutes : minutes) + ':' + (seconds < 10 ? '0' + seconds : seconds);
     return result;
   }
+  function reverseBits(n) {
+    var result = 0;
+    for (var i = 0; i < 32; i++) {
+      // Shift result left to make room
+      result <<= 1;
+      // Add the least significant bit of n
+      result |= n & 1;
+      // Shift n right to process the next bit
+      n >>>= 1;
+    }
+    // Ensure result is treated as unsigned 32-bit
+    return result >>> 0;
+  }
+  function removeTrailingDotZero(input) {
+    // Use regex to strip all trailing ".0" sequences
+    return input.replace(/(?:\.0)+$/, '');
+  }
 
   var H264Remuxer = /*#__PURE__*/function (_BaseRemuxer) {
     _inherits(H264Remuxer, _BaseRemuxer);
@@ -1899,6 +1892,7 @@ function removeTrailingDotZero(input)
     }, {
       key: "feed",
       value: function feed(data, duration, compositionTimeOffset) {
+        var isLastFrameComplete = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : false;
         var slices = [];
         var left;
         data = appendByteArray(this.remainingData, data);
@@ -1906,12 +1900,21 @@ function removeTrailingDotZero(input)
         var _H264Parser$extractNA2 = _slicedToArray(_H264Parser$extractNA, 2);
         slices = _H264Parser$extractNA2[0];
         left = _H264Parser$extractNA2[1];
-        this.remainingData = left || new Uint8Array();
+        if (left) {
+          if (isLastFrameComplete) {
+            slices.push(left);
+            this.remainingData = new Uint8Array();
+          } else {
+            this.remainingData = left;
+          }
+        } else {
+          this.remainingData = new Uint8Array();
+        }
         if (slices.length > 0) {
           this.remux(this.getVideoFrames(slices, duration, compositionTimeOffset));
           return true;
         } else {
-          error('Failed to extract any NAL units from video data:', left);
+          log('Failed to extract any NAL units from video data:', left);
           this.dispatch('outOfData');
           return false;
         }
@@ -1940,6 +1943,7 @@ function removeTrailingDotZero(input)
           for (_iterator.s(); !(_step = _iterator.n()).done;) {
             var nalu = _step.value;
             var unit = new NALU264(nalu);
+            if (!this.parseNAL(unit)) continue;
 
             // frame boundary detection
             if (units.length && vcl && (unit.isFirstSlice || !unit.isVCL)) {
@@ -2005,27 +2009,13 @@ function removeTrailingDotZero(input)
         try {
           for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
             var frame = _step2.value;
-            var units = [];
-            var size = 0;
-            var _iterator3 = _createForOfIteratorHelper(frame.units),
-              _step3;
-            try {
-              for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
-                var unit = _step3.value;
-                if (this.parseNAL(unit)) {
-                  units.push(unit);
-                  size += unit.getSize();
-                }
-              }
-            } catch (err) {
-              _iterator3.e(err);
-            } finally {
-              _iterator3.f();
-            }
-            if (units.length > 0 && this.readyToDecode) {
+            var size = frame.units.reduce(function (acc, cur) {
+              return acc + cur.getSize();
+            }, 0);
+            if (frame.units.length > 0 && this.readyToDecode) {
               this.mp4track.len += size;
               this.samples.push({
-                units: units,
+                units: frame.units,
                 size: size,
                 keyFrame: frame.keyFrame,
                 duration: frame.duration,
@@ -2073,18 +2063,18 @@ function removeTrailingDotZero(input)
               dependsOn: sample.keyFrame ? 2 : 1
             }
           };
-          var _iterator4 = _createForOfIteratorHelper(units),
-            _step4;
+          var _iterator3 = _createForOfIteratorHelper(units),
+            _step3;
           try {
-            for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
-              var unit = _step4.value;
+            for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
+              var unit = _step3.value;
               payload.set(unit.getData(), offset);
               offset += unit.getSize();
             }
           } catch (err) {
-            _iterator4.e(err);
+            _iterator3.e(err);
           } finally {
-            _iterator4.f();
+            _iterator3.f();
           }
           samples.push(mp4Sample);
         }
@@ -2184,7 +2174,7 @@ function removeTrailingDotZero(input)
         // Remaining data after last start code
         var left = null;
         if (lastIndex < length) {
-          result.push(buffer.subarray(lastIndex, length));
+          left = buffer.subarray(lastIndex, length);
         }
         return [result, left];
       }
@@ -2538,6 +2528,7 @@ function removeTrailingDotZero(input)
     }, {
       key: "feed",
       value: function feed(data, duration, compositionTimeOffset) {
+        var isLastFrameComplete = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : false;
         var slices = [];
         var left;
         data = appendByteArray(this.remainingData, data);
@@ -2545,12 +2536,21 @@ function removeTrailingDotZero(input)
         var _H265Parser$extractNA2 = _slicedToArray(_H265Parser$extractNA, 2);
         slices = _H265Parser$extractNA2[0];
         left = _H265Parser$extractNA2[1];
-        this.remainingData = left || new Uint8Array();
+        if (left) {
+          if (isLastFrameComplete) {
+            slices.push(left);
+            this.remainingData = new Uint8Array();
+          } else {
+            this.remainingData = left;
+          }
+        } else {
+          this.remainingData = new Uint8Array();
+        }
         if (slices.length > 0) {
           this.remux(this.getVideoFrames(slices, duration, compositionTimeOffset));
           return true;
         } else {
-          error('Failed to extract any NAL units from video data:', left);
+          log('Failed to extract any NAL units from video data:', left);
           this.dispatch('outOfData');
           return false;
         }
@@ -2577,6 +2577,7 @@ function removeTrailingDotZero(input)
           for (_iterator.s(); !(_step = _iterator.n()).done;) {
             var nalu = _step.value;
             var unit = new NALU265(nalu);
+            if (!this.parseNAL(unit)) continue;
 
             // frame boundary detection
             if (units.length && vcl && (unit.isFirstSlice || !unit.isVCL)) {
@@ -2641,27 +2642,13 @@ function removeTrailingDotZero(input)
         try {
           for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
             var frame = _step2.value;
-            var units = [];
-            var size = 0;
-            var _iterator3 = _createForOfIteratorHelper(frame.units),
-              _step3;
-            try {
-              for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
-                var unit = _step3.value;
-                if (this.parseNAL(unit)) {
-                  units.push(unit);
-                  size += unit.getSize();
-                }
-              }
-            } catch (err) {
-              _iterator3.e(err);
-            } finally {
-              _iterator3.f();
-            }
-            if (units.length > 0 && this.readyToDecode) {
+            var size = frame.units.reduce(function (acc, cur) {
+              return acc + cur.getSize();
+            }, 0);
+            if (frame.units.length > 0 && this.readyToDecode) {
               this.mp4track.len += size;
               this.samples.push({
-                units: units,
+                units: frame.units,
                 size: size,
                 keyFrame: frame.keyFrame,
                 duration: frame.duration,
@@ -2709,18 +2696,18 @@ function removeTrailingDotZero(input)
               dependsOn: sample.keyFrame ? 2 : 1
             }
           };
-          var _iterator4 = _createForOfIteratorHelper(units),
-            _step4;
+          var _iterator3 = _createForOfIteratorHelper(units),
+            _step3;
           try {
-            for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
-              var unit = _step4.value;
+            for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
+              var unit = _step3.value;
               payload.set(unit.getData(), offset);
               offset += unit.getSize();
             }
           } catch (err) {
-            _iterator4.e(err);
+            _iterator3.e(err);
           } finally {
-            _iterator4.f();
+            _iterator3.f();
           }
           samples.push(mp4Sample);
         }
@@ -2736,13 +2723,10 @@ function removeTrailingDotZero(input)
         this.mp4track.fps = config.fps || this.mp4track.fps;
         this.mp4track.width = config.width;
         this.mp4track.height = config.height;
-        this.mp4track.codec =
-            "hvc1"
-            + "." + (config.profile_space ? String.fromCharCode(64 + config.profile_space) : '') // Map [0,1,2,3] to ['','A','B','C']
-            + config.profile_idc
-            + "." + reverseBits(config.profile_compatibility_flags).toString(16)
-            + "." + (config.tier_flag ? 'H' : 'L') + config.level_idc
-            + "." + removeTrailingDotZero(config.constraint_indicator_flags.map(function (b) { return b.toString(16); }).join('.').toUpperCase());
+        this.mp4track.codec = 'hvc1' + '.' + (config.profile_space ? String.fromCharCode(64 + config.profile_space) : '') // Map [0,1,2,3] to ['','A','B','C']
+        + config.profile_idc + '.' + reverseBits(config.profile_compatibility_flags).toString(16) + '.' + (config.tier_flag ? 'H' : 'L') + config.level_idc + '.' + removeTrailingDotZero(config.constraint_indicator_flags.map(function (b) {
+          return b.toString(16);
+        }).join('.').toUpperCase());
         this.mp4track.hvcC = {
           profile_space: config.profile_space,
           tier_flag: config.tier_flag,
@@ -2933,7 +2917,7 @@ function removeTrailingDotZero(input)
       value: function feed(data) {
         var remux = false;
         if (data.video && this.tracks.video) {
-          remux |= this.tracks.video.feed(data.video, data.duration, data.compositionTimeOffset);
+          remux |= this.tracks.video.feed(data.video, data.duration, data.compositionTimeOffset, data.isLastVideoFrameComplete);
         }
         if (data.audio && this.tracks.audio) {
           remux |= this.tracks.audio.feed(data.audio, data.duration);
