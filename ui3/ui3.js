@@ -4278,6 +4278,9 @@ $(function ()
 
 	ui3_loading_ended = true;
 	BI_CustomEvent.Invoke("UI_Loading_End");
+
+	if (startupOpenStatsForNerds && parseInt(startupOpenStatsForNerds))
+		nerdStats.Open(parseInt(startupOpenStatsForNerds));
 });
 function OnChange_ui3_dynamicGroupLayout()
 {
@@ -4343,6 +4346,7 @@ var skipLoadingFirstVideoStream = false;
 var skipLoadingAllVideoStreams = false;
 var startupTimelineMs = null;
 var startupPaused = false;
+var startupOpenStatsForNerds = false;
 var startupClipFilterSearch = null;
 var startupClipFilterBeginDate = null;
 var startupClipFilterEndDate = null;
@@ -4475,6 +4479,9 @@ function HandlePreLoadUrlParameters()
 	var pauseParam = UrlParameters.Get("pause");
 	if (pauseParam === "1" || maximize.toLowerCase() === "true")
 		startupPaused = true;
+
+	// Parameter "nerd"
+	startupOpenStatsForNerds = UrlParameters.Get("nerd", "n");
 }
 function ParseTimelineStartStr(str)
 {
@@ -5578,7 +5585,7 @@ function StatusAreaApi()
 			}
 		}
 	});
-
+	/** Returns Mbps */
 	function estimateMaxBitRate()
 	{
 		if (genericQualityHelper)
@@ -5587,7 +5594,7 @@ function StatusAreaApi()
 			if (p.vcodec === "h264") // Means H.264 or H.265.
 			{
 				var overridesAllowed = sessionManager.DoesStreamAllowOverrides(p.stream);
-				if (p.limitBitrate === 0 || (p.limitBitrate === 2 && !overridesAllowed))
+				if (!overridesAllowed)
 				{
 					var serversideStream = sessionManager.GetServersideStream(p.stream);
 					if (serversideStream && serversideStream.control === "CBR")
@@ -5595,10 +5602,10 @@ function StatusAreaApi()
 					else
 						return 24.0;
 				}
-				else if (p.limitBitrate === 1)
-					return 24.0;
-				else if (p.limitBitrate === 2)
+				else if (IsKbpsValid(p.kbps))
 					return p.kbps / 1000;
+				else
+					return 24.0;
 			}
 		}
 		return 50.0;
@@ -5639,7 +5646,7 @@ function StatusAreaApi()
 			},
 			color: function ()
 			{
-				return this.percent > 1 ? "#CCAA00" : undefined;
+				return this.percent > 1.1 ? "#CCAA00" : undefined;
 			}
 		}
 	});
@@ -24124,7 +24131,7 @@ function StreamingProfileUI()
 	{
 		var newProfileNumber = 0;
 		var newProfile = new StreamingProfile();
-		newProfile.name = name;
+		newProfile.rc = "inherit";
 		var validName = false;
 		while (!validName)
 		{
@@ -24180,6 +24187,12 @@ function getMaxGOP()
 		settings.ui3_maxGOP = 1000;
 	return Clamp(parseInt(settings.ui3_maxGOP), 300, 99999);
 }
+var ui3_streaming_quality_default = 50;
+var ui3_bitrate_default_kbps = 2000;
+function IsKbpsValid(kbps)
+{
+	return kbps && kbps >= 10;
+}
 function StreamingProfileEditor(srcProfile, profileEditedCallback)
 {
 	var self = this;
@@ -24220,29 +24233,42 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		AddEditorField("Profile Name", "name", { max: 21 });
 		AddEditorField("Abbreviation (0-4 characters)", "abbr", { max: 4 });
 		AddEditorField("Abbreviation Color", "aClr", { type: "color" });
-		AddEditorField("Video Codec", "vcodec", { type: "select", options: [{ value: "jpeg", name: "JPEG" }, { value: "h264", name: "H.264 or H.265" }], onChange: ReRender });
+		AddEditorField("Video Codec Family", "vcodec", { type: "select", options: [{ value: "jpeg", name: "JPEG" }, { value: "h264", name: "H.264 or H.265" }], onChange: ReRender });
 		if (!p.IsCompatible())
 			AddEditorField("UI3 can't play this codec in your current web browser. This profile will not be available.", "vcodec", { type: "errorCommentText" });
 		AddEditorField("Base Server Profile", "stream", { type: "select", options: [GetServerProfileString(0), GetServerProfileString(1), GetServerProfileString(2)], onChange: ReRender });
 		if (p.vcodec !== "jpeg" && !sessionManager.DoesStreamAllowOverrides(p.stream))
-			AddEditorField(GetStreamOverrideWarningSymbolMarkup() + " The chosen Base Server Profile does not allow most encoding parameters to be overridden.  This profile may not operate as expected.  To allow this profile to function fully, choose a different Base Server Profile, or configure the \"Streaming " + p.stream + "\" profile in Blue Iris web server settings to allow UI3 overrides.", "stream", { type: "errorCommentHtml" });
-		AddEditorField("Each profile inherits encoding parameters from one of the server's streaming profiles. You may override individual parameters below.", "stream", { type: "comment" });
-		AddEditorField("Max Frame Width", "w", { min: 1, max: 99999 });
-		AddEditorField("Max Frame Height", "h", { min: 1, max: 99999 });
-		AddEditorField("Quality [0-100]", "q", { min: 0, max: 100 });
+			AddEditorField(GetStreamOverrideWarningSymbolMarkup() + " The chosen Base Server Profile does not allow most encoding parameters to be overridden.  This profile may not operate as expected.  To allow this profile to function fully, choose a different Base Server Profile, or configure the \"Streaming " + p.stream + "\" profile in Blue Iris web server settings to allow UI3 overrides.", "uicomment", { type: "errorCommentHtml" });
+		AddEditorField("Each profile inherits encoding parameters from one of the server's streaming profiles. You may override individual parameters below.", "uicomment", { type: "comment" });
+
+		if (p.vcodec === "h264") // Means H.264 or H.265
+			AddEditorField("Rate Control", "rc", { type: "select", options: [{ value: "inherit", name: "inherit" }, { value: "vbr", name: "Variable Bit Rate" }, { value: "cbr", name: "Constant Bit Rate" }], hint: "CBR = Constant Bit Rate. VBR = Variable Bit Rate (favors a specific quality).", onChange: ReRender });
+
+		if (p.vcodec === "jpeg" || (p.vcodec === "h264" && p.rc === "vbr"))
+			AddEditorField("Quality [0-100]", "q", { min: 0, max: 100 });
+		if (p.vcodec === "h264")
+		{
+			if (p.rc === "vbr")
+				AddEditorField("Max Bit Rate (Kbps) [10-100000]", "kbps", { min: 10, max: 100000 });
+			else if (p.rc === "cbr")
+				AddEditorField("Bit Rate (Kbps) [10-100000]", "kbps", { min: 10, max: 100000 });
+		}
+		AddEditorField("Stream Limits (blank for no limit)", "uicomment", { type: "comment" });
+		AddEditorField("Max Frame Width (pixels)", "w", { min: 1, max: 99999 });
+		AddEditorField("Max Frame Height (pixels)", "h", { min: 1, max: 99999 });
 		if (p.vcodec === "h264") // Means H.264 or H.265
 		{
-			AddEditorField("Frame Rate [0-60]", "fps", { min: 0, max: 60 });
-			AddEditorField("Limit Bit Rate", "limitBitrate", { type: "select", options: ["inherit", "No Limit", "Yes Limit"] });
-			AddEditorField("Max Bit Rate (Kbps) [10-100000]", "kbps", { min: 10, max: 100000 });
-			var maxGop = getMaxGOP();
-			AddEditorField("Keyframe Interval [1-" + maxGop + "]", "gop", { min: 1, max: maxGop, hint: 'Advanced users may change the Keyframe Interval max limit. Use the developer console to set "settings.ui3_maxGOP = N" where N is between 300 and 99999, then reload UI3. Higher keyframe values may make video streams freeze.' });
+			AddEditorField("Max Frame Rate (0-60 FPS)", "fps", { min: 0, max: 60 });
+
+			AddEditorField("Advanced Encoder Settings:", "uicomment", { type: "comment" });
+			AddEditorField("Preferred Codec", "vcodecPref", { type: "select", options: [{ value: "inherit", name: "inherit" }, { value: "h264", name: "H.264" }, { value: "h265", name: "H.265" }], hint: "Blue Iris will use your preferred codec when transcoding, but may supply a different codec Direct-to-wire is in use.\n\nPlease note, H.265 is more resource-intensive to encode, so H.264 is recommended." });
 			AddEditorField("Preset", "pre", { type: "select", options: ["inherit", "ultrafast", "superfast", "veryfast"] });
 			AddEditorField("Profile", "pro", { type: "select", options: ["inherit", "default", "baseline", "main", "extended", "high", "high 10"] });
 			AddEditorField("Zero-Frame Latency", "zfl", { type: "select", options: ["inherit", "No", "Yes"] });
 			AddEditorField("Full Range Color", "fullRangeColor", { type: "select", options: ["inherit", "No", "Yes"] });
 			AddEditorField("Direct-to-wire", "directToWire", { type: "select", options: ["inherit", "No", "Yes"] });
-			AddEditorField("Preferred Codec", "vcodecPref", { type: "select", options: [{ value: "inherit", name: "inherit" }, { value: "h264", name: "H.264" }, { value: "h265", name: "H.265" }], hint: "Blue Iris will use your preferred codec when transcoding, but may supply a different codec Direct-to-wire is in use.\n\nPlease note, H.265 is more resource-intensive to encode, so H.264 is recommended." });
+			var maxGop = getMaxGOP();
+			AddEditorField("Keyframe Interval [1-" + maxGop + "]", "gop", { min: 1, max: maxGop, hint: 'Advanced users may change the Keyframe Interval max limit. Use the developer console to set "settings.ui3_maxGOP = N" where N is between 300 and 99999, then reload UI3. Higher keyframe values may make video streams freeze.' });
 		}
 		var $deleteBtn = $('<input type="button" value="Delete This Profile" />');
 		$deleteBtn.on('click', DeleteClicked);
@@ -24269,6 +24295,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		}
 		p.name = p.name.trim();
 		if (srcProfile.name !== p.name)
+		{
 			for (var i = 0; i < genericQualityHelper.profiles.length; i++)
 			{
 				if (genericQualityHelper.profiles[i].name === p.name)
@@ -24277,6 +24304,30 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 					return;
 				}
 			}
+		}
+		if (p.vcodec === "h264")
+		{
+			if (p.rc === "vbr")
+			{
+				if (p.q < 0)
+				{
+					p.q = ui3_streaming_quality_default;
+					ReRender();
+					SimpleDialog.Text("A Quality value was not entered, so a default value (" + p.q + ") was assigned.");
+					return;
+				}
+			}
+			if (p.rc === "vbr" || p.rc === "cbr")
+			{
+				if (!IsKbpsValid(p.kbps))
+				{
+					p.kbps = ui3_bitrate_default_kbps;
+					ReRender();
+					SimpleDialog.Text("A Bit Rate value was not entered, so a default value (" + p.kbps + ") was assigned.");
+					return;
+				}
+			}
+		}
 		for (var i = 0; i < genericQualityHelper.profiles.length; i++)
 		{
 			if (genericQualityHelper.profiles[i].name === srcProfile.name)
@@ -24356,13 +24407,14 @@ function StreamingProfile()
 	// All the remaining options are "optional".  Values of -1 mean to inherit the argument from the server-side stream.
 	this.w = -1;
 	this.h = -1;
-	this.q = -1;
+	this.q = 50;
 	// Above values apply to H.264 and JPEG.
 	// Below values apply only to H.264.
-	this.limitBitrate = 0; // 0: Inherit, 1: No, 2: Yes
-	this.kbps = -1; // Only if limitBitrate === 2
+	this.rc = "vbr"; // Rate Control Method ["vbr", "cbr"]
+	this.limitBitrate = 2; // Deprecated; remains here for backwards compatibility with older UI3 releases that may load saved profiles.
+	this.kbps = -1;
 	this.fps = -1;
-	this.gop = -1;
+	this.gop = 1000;
 	this.zfl = -1;
 	this.pre = -1; // Preset ["inherit", "ultrafast", "superfast", "veryfast"]
 	this.pro = -1; // Profile ["inherit", "default", "baseline", "main", "extended", "high", "high 10"]
@@ -24447,29 +24499,38 @@ function StreamingProfile()
 		var sb = new StringBuilder();
 		sb.Append("&stream=").Append(self.stream);
 
-		if (self.q >= 0)
-			sb.Append("&q=").Append(self.q);
-
 		var sizeToRequest = imageRenderer.GetSizeToRequest(loading, self);
 		sb.Append("&w=").Append(sizeToRequest.w);
 		sb.Append("&h=").Append(sizeToRequest.h);
 
 		if (self.vcodec === "h264")
 		{
-			var kbps = -1; // -1: inherit, 0: no limit, 10-100000: limit
-			if (self.limitBitrate === 1)
-				kbps = 0; // Sentinel value instructing Blue Iris to use no limit
-			else if (self.limitBitrate === 2)
-				kbps = Clamp(self.kbps, 10, 100000);
-			var max = settings.ui3_streamingProfileBitRateMax;
-			if (max)
+			if (self.rc === "vbr")
 			{
-				max = Clamp(parseInt(max), -1, 100000);
-				if (max >= 10 && (max < kbps || kbps === -1 || kbps === 0))
-					kbps = max;
+				var q = self.q;
+				if (q < 0)
+					q = ui3_streaming_quality_default;
+				q = Clamp(q, 0, 100);
+				sb.Append("&q=").Append(q);
 			}
-			if (kbps === 0 || kbps >= 10)
-				sb.Append("&kbps=").Append(kbps);
+
+			if (self.rc === "vbr" || self.rc === "cbr")
+			{
+				// kbps=0 used to be a sentinel value instructing Blue Iris to use no bit rate limit. It was removed in BI 6 beta and they wouldn't restore it for backwards compatibility.
+				var kbps = self.kbps;
+				if (!IsKbpsValid(kbps))
+					kbps = ui3_bitrate_default_kbps;
+				kbps = Clamp(kbps, 10, 100000);
+				var max = settings.ui3_streamingProfileBitRateMax;
+				if (max)
+				{
+					max = Clamp(parseInt(max), -1, 100000);
+					if (IsKbpsValid(max) && max < kbps)
+						kbps = max;
+				}
+				if (IsKbpsValid(kbps))
+					sb.Append("&kbps=").Append(kbps);
+			}
 
 			if (self.fps >= 0)
 				sb.Append("&fps=").Append(self.fps);
@@ -24491,19 +24552,31 @@ function StreamingProfile()
 
 			if (self.fullRangeColor > 0)
 				sb.Append("&frc=").Append(self.fullRangeColor - 1);
-
-			if (self.vcodecPref === "h264")
-				sb.Append("&codec=H.264&vc=" + CodecFlags.h264);
-			else if (self.vcodecPref === "h265")
-				sb.Append("&codec=H.265&vc=" + CodecFlags.h265);
-
+				
 			var supportedCodecs = videoPlayer.GetSupportedCodecs();
+
+			if (self.vcodecPref === "h264" && supportedCodecs.h264)
+				sb.Append("&vc=" + CodecFlags.h264);
+			else if (self.vcodecPref === "h265" && supportedCodecs.h265)
+				sb.Append("&vc=" + CodecFlags.h265);
+
 			if (supportedCodecs.h264 && supportedCodecs.h265)
-				sb.Append("&codec-support=H.264,H.265&vcs=" + (CodecFlags.h264 | CodecFlags.h265));
+				sb.Append("&vcs=" + (CodecFlags.h264 | CodecFlags.h265));
 			else if (supportedCodecs.h264)
-				sb.Append("&codec-support=H.264&vcs=" + (CodecFlags.h264));
+				sb.Append("&vcs=" + (CodecFlags.h264));
 			else if (supportedCodecs.h265)
-				sb.Append("&codec-support=H.265&vcs=" + (CodecFlags.h265));
+				sb.Append("&vcs=" + (CodecFlags.h265));
+
+			// Rate control (0=VBR, 1=CBR)
+			if (self.rc === "vbr")
+				sb.Append("&rc=0");
+			else if (self.rc === "cbr")
+				sb.Append("&rc=1");
+		}
+		else
+		{
+			if (self.q >= 0)
+				sb.Append("&q=").Append(self.q);
 		}
 		return sb.ToString();
 	}
@@ -24515,7 +24588,15 @@ function StreamingProfile()
 	{
 		var sb = new StringBuilder('\n');
 
-		sb.Append(self.vcodec + ' ');
+		if (self.vcodec === "h264")
+		{
+			if (self.vcodecPref && self.vcodecPref !== "inherit")
+				sb.Append(self.vcodecPref + ' ');
+			else
+				sb.Append('h.264 or h.265 ');
+		}
+		else
+			sb.Append(self.vcodec + ' ');
 
 		if (self.w > 0 && self.h > 0)
 			sb.Append(self.w + 'x' + self.h + ' ');
@@ -24527,13 +24608,18 @@ function StreamingProfile()
 		if (self.fps >= 0)
 			sb.Append('@' + self.fps + 'fps ');
 
-		if (self.q > -1)
-			sb.Append('q' + self.q + ' ');
-
-		if (self.limitBitrate === 1)
-			sb.Append('no bitrate limit ');
-		else if (self.limitBitrate === 2 && self.kbps > -1)
-			sb.Append('<' + Clamp(self.kbps, 10, 100000) + ' Kbps ');
+		if (self.rc === "vbr")
+		{
+			if (self.q > -1)
+				sb.Append('q' + self.q + ' ');
+			if (IsKbpsValid(self.kbps))
+				sb.Append('<' + Clamp(self.kbps, 10, 100000) + ' Kbps ');
+		}
+		else if (self.rc === "cbr")
+		{
+			if (IsKbpsValid(self.kbps))
+				sb.Append(Clamp(self.kbps, 10, 100000) + ' Kbps ');
+		}
 
 		sb.AppendLine().AppendLine();
 
@@ -24646,7 +24732,7 @@ function GenericQualityHelper()
 			// Find one near 1400 Kbps
 			if (!best) best = self.FindBestProfile("h264", function (p)
 			{
-				if (p.limitBitrate === 2 && p.kbps > 0)
+				if (IsKbpsValid(p.kbps))
 					return Math.abs(p.kbps - 1400);
 				return -1;
 			});
@@ -24766,7 +24852,7 @@ function GenericQualityHelper()
 			if (playerId == "h264")
 			{
 				var bitRateMbps;
-				if (profile.kbps)
+				if (IsKbpsValid(profile.kbps))
 					bitRateMbps = profile.kbps / 1000;
 				else
 				{
@@ -24821,7 +24907,6 @@ function GenericQualityHelper()
 		p.w = 7680;
 		p.h = 4320;
 		p.q = 50;
-		p.limitBitrate = 2;
 		p.kbps = 16384;
 		p.gop = 1000;
 		return p;
@@ -24835,7 +24920,6 @@ function GenericQualityHelper()
 		p.w = 7680;
 		p.h = 4320;
 		p.q = 20;
-		p.limitBitrate = 2;
 		p.kbps = 5000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -24851,7 +24935,6 @@ function GenericQualityHelper()
 		p.w = 3840;
 		p.h = 2160;
 		p.q = 20;
-		p.limitBitrate = 2;
 		p.kbps = 3000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -24867,7 +24950,6 @@ function GenericQualityHelper()
 		p.w = 1920;
 		p.h = 1080;
 		p.q = 20;
-		p.limitBitrate = 2;
 		p.kbps = 1000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -24887,7 +24969,6 @@ function GenericQualityHelper()
 			p.w = 3840;
 			p.h = 2160;
 			p.q = 50;
-			p.limitBitrate = 2;
 			p.kbps = 8192;
 			profiles.push(p);
 		}
@@ -24899,7 +24980,6 @@ function GenericQualityHelper()
 			p.w = 2560;
 			p.h = 1440;
 			p.q = 40;
-			p.limitBitrate = 2;
 			p.kbps = 4096;
 			profiles.push(p);
 		}
@@ -24911,7 +24991,6 @@ function GenericQualityHelper()
 			p.w = 1920;
 			p.h = 1080;
 			p.q = 35;
-			p.limitBitrate = 2;
 			p.kbps = 2048;
 			profiles.push(p);
 		}
@@ -24923,7 +25002,6 @@ function GenericQualityHelper()
 			p.w = 1280;
 			p.h = 720;
 			p.q = 35;
-			p.limitBitrate = 2;
 			p.kbps = 1024;
 			profiles.push(p);
 		}
@@ -24935,7 +25013,6 @@ function GenericQualityHelper()
 			p.w = 856;
 			p.h = 480;
 			p.q = 30;
-			p.limitBitrate = 2;
 			p.kbps = 456;
 			profiles.push(p);
 		}
@@ -24947,7 +25024,6 @@ function GenericQualityHelper()
 			p.w = 640;
 			p.h = 360;
 			p.q = 30;
-			p.limitBitrate = 2;
 			p.kbps = 256;
 			profiles.push(p);
 		}
@@ -24959,7 +25035,6 @@ function GenericQualityHelper()
 			p.w = 427;
 			p.h = 240;
 			p.q = 30;
-			p.limitBitrate = 2;
 			p.kbps = 114;
 			profiles.push(p);
 		}
@@ -24971,7 +25046,6 @@ function GenericQualityHelper()
 			p.w = 256;
 			p.h = 144;
 			p.q = 30;
-			p.limitBitrate = 2;
 			p.kbps = 41;
 			profiles.push(p);
 		}
@@ -31037,6 +31111,7 @@ function GetCleanUrlSearchParams()
 	search.delete("timeout");
 	search.delete("to");
 	search.delete("pause");
+	search.delete("nerd");
 	return search;
 }
 function UpdateCurrentURL()
@@ -31084,6 +31159,9 @@ function UpdateCurrentURL()
 	}
 
 	search.set(cli.isGroup ? "group" : "cam", cli.id);
+
+	if (nerdStats.IsOpen())
+		search.set("nerd", nerdStats.GetNumpadPosition());
 
 	search = search.toString();
 	if (search.length)
@@ -33373,6 +33451,8 @@ function BIAudioFrame(buf, formatHeader)
 function IdentifyVideoKeyframe(buf, codecH265)
 {
 	var foundKeyframe = false;
+	var foundNonKeyframe = false;
+	var allNaluTypes = [];
 	if (buf && buf.length > 0)
 	{
 		// The NALU type is the last 5 bits of the first byte after a start code.
@@ -33392,30 +33472,30 @@ function IdentifyVideoKeyframe(buf, codecH265)
 					if (codecH265)
 					{
 						var NALU_Type = (buf[i + 1] >> 1) & 63; // 63 is 0b00111111
+						allNaluTypes.push(NALU_Type);
 						//if (developerMode)
 						//console.log("  UI3", "NALU Type: " + NALU_Type, "at offset " + (i + 1));
 						if (NALU_Type >= 19 && NALU_Type <= 21)
 						{
 							foundKeyframe = true; // IDR or CRA picture
-							break;
 						}
-						else if (NALU_Type >= 1 && NALU_Type <= 9)
+						else if (NALU_Type >= 1 && NALU_Type <= 9) // Optimization disabled 2025-11-18 on the notion that it might be incorrect, causing keyframes to not be detected in some rare cases.
 						{
-							break; // Other frame type
+							foundNonKeyframe = true; // Other frame type
 						}
 					}
 					else // H.264
 					{
 						var NALU_Type = buf[i + 1] & 31; // 31 is 0b00011111
+						allNaluTypes.push(NALU_Type);
 						//console.log("  UI3", "NALU Type: " + NALU_Type, "at offset " + (i + 1));
 						if (NALU_Type == 5) // This is a slice of a keyframe.
 						{
 							foundKeyframe = true;
-							break;
 						}
-						else if (0 < NALU_Type && NALU_Type < 5)
+						else if (0 < NALU_Type && NALU_Type < 5) // Optimization disabled 2025-11-18 on the notion that it might be incorrect, causing keyframes to not be detected in some rare cases.
 						{
-							break; // Other frame type
+							foundNonKeyframe = true; // Other frame type
 						}
 					}
 				}
@@ -33423,6 +33503,8 @@ function IdentifyVideoKeyframe(buf, codecH265)
 			}
 		}
 	}
+	if (foundKeyframe && foundNonKeyframe)
+		toaster.Warning("/video/ Protocol Warning: Received a " + (codecH265 ? "H.265" : "H.264") + " frame containing NAL units not expected to co-exist: [" + allNaluTypes.join(',') + "]", 10000);
 	return foundKeyframe;
 }
 ///////////////////////////////////////////////////////////////
@@ -33579,7 +33661,8 @@ function UI3NerdStats()
 	var dialog = null;
 	var $root;
 	var didRepositionAfterFirstDraw = false;
-	var openedAt = 0;
+	var openedAtTime = 0;
+	var openedAtPosition = 0; // Relative position of the stats for nerds panel when it was last opened.  Value is a numpad number indicating a relative position (5 = center, 7 = top left, etc.).
 	var isInitialized = false;
 	var isUpdating = false;
 	var hideOnEndUpdate = {};
@@ -33615,7 +33698,7 @@ function UI3NerdStats()
 		{ name: "Audio Bit Rate", handler: CreateAudioVisualizer },
 		{ name: "Audio Buffer", handler: CreateAudioVisualizer }
 	];
-	this.Open = function ()
+	this.Open = function (openAtPosition)
 	{
 		if (dialog)
 			dialog.close();
@@ -33625,8 +33708,13 @@ function UI3NerdStats()
 		objSizes.statsName = 105;
 		objSizes.statsValue = objSizes.statsRow - objSizes.statsName - 15;
 		objSizes.statsGraphValue = objSizes.statsValue - 68;
+		objSizes.panelHeightEstimate = 334; // For centering purposes
 		didRepositionAfterFirstDraw = false;
-		openedAt = performance.now();
+		openedAtTime = performance.now();
+		openedAtPosition = parseInt(openAtPosition);
+		if (!openedAtPosition)
+			openedAtPosition = 5;
+
 		isInitialized = false;
 		$root = $('<div class="statsForNerds" style="width: ' + objSizes.panel + 'px;">Video playback must start before stats are available.</div>');
 		dialog = $root.dialog(
@@ -33636,8 +33724,10 @@ function UI3NerdStats()
 				{
 					dialog = null;
 					statsRows = [];
+					UpdateCurrentURL();
 				}
 			});
+		UpdateCurrentURL();
 	}
 	var Initialize = function ()
 	{
@@ -33666,6 +33756,10 @@ function UI3NerdStats()
 	this.IsOpen = function ()
 	{
 		return dialog != null;
+	}
+	this.GetNumpadPosition = function ()
+	{
+		return openedAtPosition;
 	}
 	/**
 	 * Creates a row for the specified statistic if it does not already exist.
@@ -33710,9 +33804,44 @@ function UI3NerdStats()
 			}
 		if (hidSome)
 			dialog.contentChanged(false, true);
-		if (!didRepositionAfterFirstDraw && performance.now() - openedAt < 500)
+		if (!didRepositionAfterFirstDraw && performance.now() - openedAtTime < 500)
 		{
-			dialog.contentChanged(true, true);
+			if (openedAtPosition === 5)
+			{
+				dialog.contentChanged(true, true);
+			}
+			else
+			{
+				var x = 0;
+				var y = 0;
+				switch (openedAtPosition)
+				{
+					case 3:
+					case 6:
+					case 9:
+						x = $(window).width();
+						break;
+					case 2:
+					case 8:
+						x = ($(window).width() / 2) - ($(dialog.$dialog).outerWidth(true) / 2);
+						break;
+				}
+				switch (openedAtPosition)
+				{
+					case 1:
+					case 2:
+					case 3:
+						y = $(window).height();
+						break;
+					case 4:
+					case 6:
+						y = ($(window).height() / 2) - ($(dialog.$dialog).outerHeight(true) / 2);
+						break;
+				}
+				dialog.$dialog.css("left", x + "px");
+				dialog.$dialog.css("top", y + "px");
+				dialog.contentChanged(false, true);
+			}
 			didRepositionAfterFirstDraw = true;
 		}
 	}
