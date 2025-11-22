@@ -5828,6 +5828,11 @@ a[role="button"].showPasswordButton
 	padding: 3px;
 }
 
+	.streamingProfileEditorPanelContent .crf_labels
+	{
+		text-align: center;
+	}
+
 .profileList
 {
 	list-style: none;
