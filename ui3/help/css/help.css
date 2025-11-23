@@ -2,15 +2,50 @@
 {
 	margin-bottom: 0px;
 }
+
 .baseContainer
 {
 	padding: 8px;
 }
+
 p.padded-info
 {
 	padding: 15px;
 }
+
 .tab-pane
 {
 	margin-bottom: 144px;
 }
+
+#encoder-quality-table-container
+{
+	margin-bottom: 1em;
+}
+
+table.encoder-quality
+{
+	border-collapse: collapse;
+	border: 2px solid #000;
+}
+
+	table.encoder-quality th
+	{
+		padding: 2px 6px;
+		border: 1px solid #000000;
+		text-align: center;
+		font-weight: bold;
+		vertical-align: bottom;
+		position: sticky;
+		top: 0px;
+		background-color: #444444;
+		color: #DDDDDD;
+		font-size: 1.1em;
+	}
+
+	table.encoder-quality td
+	{
+		padding: 2px 4px;
+		border: 1px solid #000000;
+		text-align: center;
+	}

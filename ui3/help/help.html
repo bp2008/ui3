@@ -72,6 +72,7 @@
 								<li><a data-toggle="pill" href="#storageinfo" id="nav-storageinfo">Storage Info</a></li>
 								<li><a data-toggle="pill" href="#tips" id="nav-tips">Tips</a></li>
 								<li><a data-toggle="pill" href="#extensions" id="nav-extensions">UI Extensions</a></li>
+								<li><a data-toggle="pill" href="#encoder-quality" id="nav-encoder-quality">Encoder Quality %</a></li>
 								<!--li role="separator" class="divider"></li>
 								<li class="dropdown-header">Nav header</li>
 								<li><a href="#">Separated link</a></li>
@@ -863,6 +864,15 @@
 							</div>
 						</div>
 					</div><!--/.tab-pane -->
+					<div class="tab-pane" id="encoder-quality" role="tabpanel" aria-labelledby="nav-encoder-quality">
+						<h1>Video Encoder Quality and H.264 / H.265 QP Relationships</h1>
+						<p>In H.264 and H.265 video encoding, <b>QP</b> stands for <b>Quantization Parameter</b>. It is a setting that controls the trade-off between video quality and file size. A lower <b>QP</b> value results in less compression, higher quality, and larger file sizes, while a higher <b>QP</b> value results in more compression, lower quality, and smaller file sizes. The <b>QP</b> value typically ranges from 0 to 51.</p>
+						<p>Blue Iris does not expose this directly, instead offering a more intuitive Quality Percentage scale of 0 to 100% where higher percentage is higher quality.</p>
+						<p>The following table can be used to map equivalent Quality % values between Blue Iris 5 and 6, and also prints the H.264 and H.265 QP values that are used at each Quality %.</p>
+						<div id="encoder-quality-table-container"></div>
+						<p style="font-style: italic;">* In Blue Iris 5, Quality % was mapped linearly to H.264 QP 51-1.  In Blue Iris 6, this range was reduced to QP 48-16, which represents a more sensible range of QP values.  H.264 QP below about 18 offers little improvement to image quality.</p>
+						<p style="font-style: italic;">** Exact QP values in the table above may differ from Blue Iris's real implementation due to rounding errors or other minor calculation differences.</p>
+					</div><!--/.tab-pane -->
 				</div><!--/.tab-content -->
 			</div><!--/.baseContainer -->
 		</div><!--/.row -->
@@ -876,7 +886,7 @@
 			(window.jQuery ? '' : '<script src="js/jquery-1.12.4.min.js?v=' + bi_version + local_bi_session_arg + '"><\/script>')
 			+ '<script src="js/bootstrap.min.js?v=' + bi_version + local_bi_session_arg + '"><\/script>'
 			+ '<script src="js/jquery.stickytabs.js?v=' + bi_version + local_bi_session_arg + '"><\/script>'
-			+ '<script src="js/help.js?v=' + bi_version + local_bi_session_arg + '"><\/script>');
+			+ '<script src="js/help.js?r=2&v=' + bi_version + local_bi_session_arg + '"><\/script>');
 	</script>
 </body>
 </html>
