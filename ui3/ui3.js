@@ -24249,13 +24249,13 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		{
 			var onQualityChange = function (e, key, $input)
 			{
-				if (has_bi6_quality_scale && p.vcodec === "h264")
+				if (p.vcodec === "h264")
 				{
 					p.q = MapBi6QualityToBi5Quality(p.q6);
-					var $crfLabel = findNextElement($input, '.crf_labels');
-					if ($crfLabel)
+					var $qpLabel = findNextElement($input, '.qp_labels');
+					if ($qpLabel)
 					{
-						$crfLabel.text("(H.264 CRF: " + MapBi6QualityToH264CRF(p.q6) + ") (H.265 CRF: " + MapBi6QualityToH265CRF(p.q6) + ")");
+						$qpLabel.text("H.264 QP " + MapBi6QualityToH264QP(p.q6) + " -- H.265 QP " + MapBi6QualityToH265QP(p.q6) + "");
 					}
 				}
 				else
@@ -24264,9 +24264,9 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 				}
 			};
 			AddEditorField("Quality [0-100]", "q6", { min: 0, max: 100, onChange: onQualityChange });
-			if (has_bi6_quality_scale && p.vcodec === "h264")
+			if (p.vcodec === "h264")
 			{
-				AddEditorField('<div class="crf_labels">...</span>', "uicomment", { type: "commentHtml" });
+				AddEditorField('<a class="qp_labels" role="button" onclick="javascript:UIHelp.LearnMore(\'QP\')">...</a>', "uicomment", { type: "commentHtml" });
 				onQualityChange(null, "q6", $content.find('input').first());
 			}
 		}
@@ -24544,7 +24544,18 @@ function StreamingProfile()
 				if (q < 0)
 					q = ui3_streaming_quality_default;
 				q = Clamp(q, 0, 100);
-				sb.Append("&q=").Append(q);
+				if (has_bi6_quality_scale)
+					sb.Append("&q=").Append(q);
+				else
+				{
+					// This UI3 is loaded from a legacy BI server.
+					sb.Append("&q=").Append(MapBi6QualityToBi5Quality(q));
+				}
+			}
+			else if (self.rc === "cbr")
+			{
+				if (!has_bi6_quality_scale)
+					sb.Append("&q=").Append(ui3_streaming_quality_default); // CBR mode in BI 6 does not use a quality parameter.
 			}
 
 			if (self.rc === "vbr" || self.rc === "cbr")
@@ -24940,7 +24951,7 @@ function GenericQualityHelper()
 		p.w = 7680;
 		p.h = 4320;
 		p.q = 50;
-		p.q6 = 68;
+		p.q6 = MapBi5QualityToBi6Quality(p.q);
 		p.kbps = 16384;
 		p.gop = 1000;
 		return p;
@@ -24954,7 +24965,7 @@ function GenericQualityHelper()
 		p.w = 7680;
 		p.h = 4320;
 		p.q = 20;
-		p.q6 = 21;
+		p.q6 = MapBi5QualityToBi6Quality(p.q);
 		p.kbps = 5000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -24970,7 +24981,7 @@ function GenericQualityHelper()
 		p.w = 3840;
 		p.h = 2160;
 		p.q = 20;
-		p.q6 = 21;
+		p.q6 = MapBi5QualityToBi6Quality(p.q);
 		p.kbps = 3000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -24986,18 +24997,22 @@ function GenericQualityHelper()
 		p.w = 1920;
 		p.h = 1080;
 		p.q = 20;
-		p.q6 = 21;
+		p.q6 = MapBi5QualityToBi6Quality(p.q);
 		p.kbps = 1000;
 		p.gop = 1000;
 		p.pre = 2;
 		p.zfl = 2;
 		return p;
 	}
-	this.GenerateDefaultProfiles = function ()
+	this.GenerateDefaultProfiles = function (include8KProfiles)
 	{
 		var profiles = new Array();
+		if (include8KProfiles)
+			profiles.push(Create_4320p_VBR());
 		profiles.push(Create_2160p_VBR());
 		profiles.push(Create_1080p_VBR());
+		if (include8KProfiles)
+			profiles.push(Create_4320p());
 		{
 			var p = new StreamingProfile();
 			p.name = "2160p^";
@@ -25006,7 +25021,7 @@ function GenericQualityHelper()
 			p.w = 3840;
 			p.h = 2160;
 			p.q = 50;
-			p.q6 = 68;
+			p.q6 = MapBi5QualityToBi6Quality(p.q);
 			p.kbps = 8192;
 			profiles.push(p);
 		}
@@ -25018,7 +25033,7 @@ function GenericQualityHelper()
 			p.w = 2560;
 			p.h = 1440;
 			p.q = 40;
-			p.q6 = 53;
+			p.q6 = MapBi5QualityToBi6Quality(p.q);
 			p.kbps = 4096;
 			profiles.push(p);
 		}
@@ -25030,7 +25045,7 @@ function GenericQualityHelper()
 			p.w = 1920;
 			p.h = 1080;
 			p.q = 35;
-			p.q6 = 45;
+			p.q6 = MapBi5QualityToBi6Quality(p.q);
 			p.kbps = 2048;
 			profiles.push(p);
 		}
@@ -25042,7 +25057,7 @@ function GenericQualityHelper()
 			p.w = 1280;
 			p.h = 720;
 			p.q = 35;
-			p.q6 = 45;
+			p.q6 = MapBi5QualityToBi6Quality(p.q);
 			p.kbps = 1024;
 			profiles.push(p);
 		}
@@ -25054,7 +25069,7 @@ function GenericQualityHelper()
 			p.w = 856;
 			p.h = 480;
 			p.q = 30;
-			p.q6 = 37;
+			p.q6 = MapBi5QualityToBi6Quality(p.q);
 			p.kbps = 456;
 			profiles.push(p);
 		}
@@ -25066,7 +25081,7 @@ function GenericQualityHelper()
 			p.w = 640;
 			p.h = 360;
 			p.q = 30;
-			p.q6 = 37;
+			p.q6 = MapBi5QualityToBi6Quality(p.q);
 			p.kbps = 256;
 			profiles.push(p);
 		}
@@ -25078,7 +25093,7 @@ function GenericQualityHelper()
 			p.w = 427;
 			p.h = 240;
 			p.q = 30;
-			p.q6 = 37;
+			p.q6 = MapBi5QualityToBi6Quality(p.q);
 			p.kbps = 114;
 			profiles.push(p);
 		}
@@ -25090,7 +25105,7 @@ function GenericQualityHelper()
 			p.w = 256;
 			p.h = 144;
 			p.q = 30;
-			p.q6 = 37;
+			p.q6 = MapBi5QualityToBi6Quality(p.q);
 			p.kbps = 41;
 			profiles.push(p);
 		}
@@ -25148,6 +25163,11 @@ function GenericQualityHelper()
 			};
 			for (var i = 0; i < profileData.length; i++)
 			{
+				if (!profileData[i])
+					profileData.splice(i, 1); // Delete any null profiles
+			}
+			for (var i = 0; i < profileData.length; i++)
+			{
 				if (profileData[i].dv && profileData[i].dv >= 2)
 					continue;
 				profileData[i].dv = 2;
@@ -25177,16 +25197,17 @@ function GenericQualityHelper()
 			// v3 -> v4 (change preset and ZFL settings for default VBR profiles)
 			for (var i = 0; i < profileData.length; i++)
 			{
-				if (profileData[i].dv && profileData[i].dv >= 4)
+				var p = profileData[i];
+				if (p.dv && p.dv >= 4)
 					continue;
-				profileData[i].dv = 4;
+				p.dv = 4;
 				upgradeMade = true;
-				if (profileData[i].name === "2160p VBR^" || profileData[i].name === "1080p VBR^")
+				if (p.name === "2160p VBR^" || p.name === "1080p VBR^")
 				{
-					if (profileData[i].pre === 3)
-						profileData[i].pre = 2;
-					if (profileData[i].zfl <= 0)
-						profileData[i].zfl = 2;
+					if (p.pre === 3)
+						p.pre = 2;
+					if (p.zfl <= 0)
+						p.zfl = 2;
 				}
 			}
 		}
@@ -25194,22 +25215,51 @@ function GenericQualityHelper()
 			// v4 -> v5 (change abbreviations and colors of default VBR profiles)
 			for (var i = 0; i < profileData.length; i++)
 			{
-				if (profileData[i].dv && profileData[i].dv >= 5)
+				var p = profileData[i];
+				if (p.dv && p.dv >= 5)
 					continue;
-				profileData[i].dv = 5;
+				p.dv = 5;
 				upgradeMade = true;
-				if (profileData[i].name === "2160p VBR^")
+				if (p.name === "2160p VBR^")
 				{
-					if (profileData[i].abbr === "V8")
-						profileData[i].abbr = "V4";
-					if (profileData[i].aClr === "#00FF00")
-						profileData[i].aClr = "#008248";
+					if (p.abbr === "V8")
+						p.abbr = "V4";
+					if (p.aClr === "#00FF00")
+						p.aClr = "#008248";
 				}
-				else if (profileData[i].name === "1080p VBR^")
+				else if (p.name === "1080p VBR^")
 				{
-					if (profileData[i].aClr === "#00CC88")
-						profileData[i].aClr = "#004882";
+					if (p.aClr === "#00CC88")
+						p.aClr = "#004882";
 				}
+				console.log("Upgraded profile \"" + p.name + "\" to data version 5.");
+			}
+		}
+		{
+			// Assign new q6 properties for BI 6 transition.
+			// Blue Iris 6 requires higher Quality % for the same visual quality as BI 5 due to changes in the QP mapping.
+      // This change does not require a "dv" data version update.
+			var affected = 0;
+			for (var i = 0; i < profileData.length; i++)
+			{
+				var p = profileData[i];
+				if (typeof p.q6 === "number")
+					continue;
+				upgradeMade = true;
+				if (p.vcodec === "jpeg")
+					p.q6 = p.q;
+				else
+					p.q6 = MapBi5QualityToBi6Quality(p.q);
+				if (p.q6 > 100)
+					p.q6 = 100;
+				else if (p.q6 < 0)
+					p.q6 = ui3_streaming_quality_default;
+				affected++;
+				console.log('Streaming profile "' + p.name + '" quality setting migrated from ' + p.q + ' to ' + p.q6 + ' for Blue Iris 6.');
+			}
+			if (affected > 0 && !localStorageDummy)
+			{
+				toaster.Info("Migrated quality settings in " + affected + "/" + profileData.length + " Streaming Quality profiles to the new scale used by Blue Iris 6.", 10000);
 			}
 		}
 		// Every time
@@ -25253,10 +25303,9 @@ function GenericQualityHelper()
 			self.profiles = defaultProfiles;
 		if (settings.ui3_didAdd8kProfiles === "1")
 		{
-			if (!hasProfileWithName("4320p VBR^"))
-				self.profiles.push(Create_4320p_VBR());
-			if (!hasProfileWithName("4320p^"))
-				self.profiles.push(Create_4320p());
+			settings.ui3_didAdd8kProfiles = "0";
+			BI_CustomEvent.AddListener("CameraListLoaded", onCameraListLoaded);
+			self.add8KProfilesIfNeeded();
 		}
 		self.SaveProfiles();
 	}
@@ -25275,6 +25324,7 @@ function GenericQualityHelper()
 		}
 		catch (ex)
 		{
+			toaster.Error(ex);
 			alert("Your streaming profiles could not be loaded, and will be restored to defaults.");
 		}
 	}
@@ -25320,9 +25370,10 @@ function GenericQualityHelper()
 		}
 		return false;
 	}
-	var onCameraListLoaded = function ()
+	this.add8KProfilesIfNeeded = function ()
 	{
-		BI_CustomEvent.RemoveListener("CameraListLoaded", onCameraListLoaded);
+		if (!cameraListLoader)
+			return;
 		var cams = cameraListLoader.GetAllStreamObjects();
 		for (var i = 0; i < cams.length; i++)
 		{
@@ -25376,6 +25427,11 @@ function GenericQualityHelper()
 				break;
 			}
 		}
+	}
+	var onCameraListLoaded = function ()
+	{
+		BI_CustomEvent.RemoveListener("CameraListLoaded", onCameraListLoaded);
+		self.add8KProfilesIfNeeded();
 	};
 	if (settings.ui3_didAdd8kProfiles !== "1")
 		BI_CustomEvent.AddListener("CameraListLoaded", onCameraListLoaded);
@@ -25390,6 +25446,8 @@ function GenericQualityHelper()
 ///////////////////////////////////////////////////////////////
 function MapBi6QualityToBi5Quality(bi6Quality)
 {
+	if (bi6Quality < 0 || bi6Quality > 100)
+		return bi6Quality;
 	for (var i = bi6Quality; i <= 100; i++)
 	{
 		var q = bi6_to_bi5_quality_map[i.toString()];
@@ -25397,19 +25455,30 @@ function MapBi6QualityToBi5Quality(bi6Quality)
 			return q;
 	}
 }
-function MapBi6QualityToH264CRF(bi6Quality)
+function MapBi5QualityToBi6Quality(bi5Quality)
 {
-	return bi6_to_h264_CRF_map[bi6Quality];
+	if (bi5Quality < 0 || bi5Quality > 100)
+		return bi5Quality;
+	for (var i = bi5Quality; i <= 100; i++)
+	{
+		var q = bi5_to_bi6_quality_map[i.toString()];
+		if (typeof q !== "undefined")
+			return q;
+	}
 }
-function MapBi6QualityToH265CRF(bi6Quality)
+function MapBi6QualityToH264QP(bi6Quality)
 {
-	return bi6_to_h265_CRF_map[bi6Quality];
+	return bi6_to_h264_QP_map[bi6Quality];
 }
-// These maps are computed by a google docs spreadsheet.
+function MapBi6QualityToH265QP(bi6Quality)
+{
+	return bi6_to_h265_QP_map[bi6Quality];
+}
+// These maps are computed by a google docs spreadsheet. A copy is also placed in help.js.
 var bi6_to_bi5_quality_map = { '0': 6, '2': 7, '3': 8, '5': 9, '6': 10, '8': 11, '9': 12, '11': 13, '12': 14, '14': 15, '16': 16, '17': 17, '19': 18, '20': 19, '22': 20, '23': 21, '25': 22, '27': 23, '28': 24, '30': 25, '31': 26, '33': 27, '34': 28, '36': 29, '37': 30, '39': 31, '41': 32, '42': 33, '44': 34, '45': 35, '47': 36, '48': 37, '50': 38, '52': 39, '53': 40, '55': 41, '56': 42, '58': 43, '59': 44, '61': 45, '62': 46, '64': 47, '66': 48, '67': 49, '69': 50, '70': 51, '72': 52, '73': 53, '75': 54, '77': 55, '78': 56, '80': 57, '81': 58, '83': 59, '84': 60, '86': 61, '87': 62, '89': 63, '91': 64, '92': 65, '94': 66, '95': 67, '97': 68, '98': 69, '100': 70 };
-var bi6_to_h264_CRF_map = { '0': 48, '1': 48, '2': 47, '3': 47, '4': 47, '5': 46, '6': 46, '7': 46, '8': 45, '9': 45, '10': 45, '11': 44, '12': 44, '13': 44, '14': 44, '15': 43, '16': 43, '17': 43, '18': 42, '19': 42, '20': 42, '21': 41, '22': 41, '23': 41, '24': 40, '25': 40, '26': 40, '27': 39, '28': 39, '29': 39, '30': 38, '31': 38, '32': 38, '33': 37, '34': 37, '35': 37, '36': 36, '37': 36, '38': 36, '39': 36, '40': 35, '41': 35, '42': 35, '43': 34, '44': 34, '45': 34, '46': 33, '47': 33, '48': 33, '49': 32, '50': 32, '51': 32, '52': 31, '53': 31, '54': 31, '55': 30, '56': 30, '57': 30, '58': 29, '59': 29, '60': 29, '61': 28, '62': 28, '63': 28, '64': 28, '65': 27, '66': 27, '67': 27, '68': 26, '69': 26, '70': 26, '71': 25, '72': 25, '73': 25, '74': 24, '75': 24, '76': 24, '77': 23, '78': 23, '79': 23, '80': 22, '81': 22, '82': 22, '83': 21, '84': 21, '85': 21, '86': 20, '87': 20, '88': 20, '89': 20, '90': 19, '91': 19, '92': 19, '93': 18, '94': 18, '95': 18, '96': 17, '97': 17, '98': 17, '99': 16, '100': 16 };
-var bi6_to_h265_CRF_map = { '0': 51, '1': 51, '2': 50, '3': 50, '4': 50, '5': 49, '6': 49, '7': 49, '8': 48, '9': 48, '10': 48, '11': 47, '12': 47, '13': 47, '14': 47, '15': 46, '16': 46, '17': 46, '18': 45, '19': 45, '20': 45, '21': 44, '22': 44, '23': 44, '24': 43, '25': 43, '26': 43, '27': 42, '28': 42, '29': 42, '30': 41, '31': 41, '32': 41, '33': 40, '34': 40, '35': 40, '36': 39, '37': 39, '38': 39, '39': 39, '40': 38, '41': 38, '42': 38, '43': 37, '44': 37, '45': 37, '46': 36, '47': 36, '48': 36, '49': 35, '50': 35, '51': 35, '52': 34, '53': 34, '54': 34, '55': 33, '56': 33, '57': 33, '58': 32, '59': 32, '60': 32, '61': 31, '62': 31, '63': 31, '64': 31, '65': 30, '66': 30, '67': 30, '68': 29, '69': 29, '70': 29, '71': 28, '72': 28, '73': 28, '74': 27, '75': 27, '76': 27, '77': 26, '78': 26, '79': 26, '80': 25, '81': 25, '82': 25, '83': 24, '84': 24, '85': 24, '86': 23, '87': 23, '88': 23, '89': 23, '90': 22, '91': 22, '92': 22, '93': 21, '94': 21, '95': 21, '96': 20, '97': 20, '98': 20, '99': 19, '100': 19 };
-
+var bi6_to_h264_QP_map = { '0': 48, '1': 48, '2': 47, '3': 47, '4': 47, '5': 46, '6': 46, '7': 46, '8': 45, '9': 45, '10': 45, '11': 44, '12': 44, '13': 44, '14': 44, '15': 43, '16': 43, '17': 43, '18': 42, '19': 42, '20': 42, '21': 41, '22': 41, '23': 41, '24': 40, '25': 40, '26': 40, '27': 39, '28': 39, '29': 39, '30': 38, '31': 38, '32': 38, '33': 37, '34': 37, '35': 37, '36': 36, '37': 36, '38': 36, '39': 36, '40': 35, '41': 35, '42': 35, '43': 34, '44': 34, '45': 34, '46': 33, '47': 33, '48': 33, '49': 32, '50': 32, '51': 32, '52': 31, '53': 31, '54': 31, '55': 30, '56': 30, '57': 30, '58': 29, '59': 29, '60': 29, '61': 28, '62': 28, '63': 28, '64': 28, '65': 27, '66': 27, '67': 27, '68': 26, '69': 26, '70': 26, '71': 25, '72': 25, '73': 25, '74': 24, '75': 24, '76': 24, '77': 23, '78': 23, '79': 23, '80': 22, '81': 22, '82': 22, '83': 21, '84': 21, '85': 21, '86': 20, '87': 20, '88': 20, '89': 20, '90': 19, '91': 19, '92': 19, '93': 18, '94': 18, '95': 18, '96': 17, '97': 17, '98': 17, '99': 16, '100': 16 };
+var bi6_to_h265_QP_map = { '0': 51, '1': 51, '2': 50, '3': 50, '4': 50, '5': 49, '6': 49, '7': 49, '8': 48, '9': 48, '10': 48, '11': 47, '12': 47, '13': 47, '14': 47, '15': 46, '16': 46, '17': 46, '18': 45, '19': 45, '20': 45, '21': 44, '22': 44, '23': 44, '24': 43, '25': 43, '26': 43, '27': 42, '28': 42, '29': 42, '30': 41, '31': 41, '32': 41, '33': 40, '34': 40, '35': 40, '36': 39, '37': 39, '38': 39, '39': 39, '40': 38, '41': 38, '42': 38, '43': 37, '44': 37, '45': 37, '46': 36, '47': 36, '48': 36, '49': 35, '50': 35, '51': 35, '52': 34, '53': 34, '54': 34, '55': 33, '56': 33, '57': 33, '58': 32, '59': 32, '60': 32, '61': 31, '62': 31, '63': 31, '64': 31, '65': 30, '66': 30, '67': 30, '68': 29, '69': 29, '70': 29, '71': 28, '72': 28, '73': 28, '74': 27, '75': 27, '76': 27, '77': 26, '78': 26, '79': 26, '80': 25, '81': 25, '82': 25, '83': 24, '84': 24, '85': 24, '86': 23, '87': 23, '88': 23, '89': 23, '90': 22, '91': 22, '92': 22, '93': 21, '94': 21, '95': 21, '96': 20, '97': 20, '98': 20, '99': 19, '100': 19 };
+var bi5_to_bi6_quality_map = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 2, '8': 3, '9': 5, '10': 6, '11': 8, '12': 9, '13': 11, '14': 12, '15': 14, '16': 16, '17': 17, '18': 19, '19': 20, '20': 22, '21': 23, '22': 25, '23': 27, '24': 28, '25': 30, '26': 31, '27': 33, '28': 34, '29': 36, '30': 37, '31': 39, '32': 41, '33': 42, '34': 44, '35': 45, '36': 47, '37': 48, '38': 50, '39': 52, '40': 53, '41': 55, '42': 56, '43': 58, '44': 59, '45': 61, '46': 62, '47': 64, '48': 66, '49': 67, '50': 69, '51': 70, '52': 72, '53': 73, '54': 75, '55': 77, '56': 78, '57': 80, '58': 81, '59': 83, '60': 84, '61': 86, '62': 87, '63': 89, '64': 91, '65': 92, '66': 94, '67': 95, '68': 97, '69': 98, '70': 100, '71': 100, '72': 100, '73': 100, '74': 100, '75': 100, '76': 100, '77': 100, '78': 100, '79': 100, '80': 100, '81': 100, '82': 100, '83': 100, '84': 100, '85': 100, '86': 100, '87': 100, '88': 100, '89': 100, '90': 100, '91': 100, '92': 100, '93': 100, '94': 100, '95': 100, '96': 100, '97': 100, '98': 100, '99': 100, '100': 100 };
 ///////////////////////////////////////////////////////////////
 // Group Layout Dialog ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -36364,6 +36433,11 @@ function UIHelpTool()
 			case "Camera List Totals":
 				UI3_Camera_List_Totals();
 				break;
+			case "QP":
+				UI3_QP_Topic();
+				break;
+			default:
+				toaster.Warning('Unknown help topic: "' + topic + '".', 10000);
 		}
 	}
 	var Context_Menu_Trigger = function ()
@@ -36548,6 +36622,14 @@ function UIHelpTool()
 			+ "<li>Sub stream resolutions are often slightly upscaled by Blue Iris to match the aspect ratio of the main stream; UI3 only knows the upscaled size, therefore may slightly overestimate the Megapixels Per Second.</li>"
 			+ "</ul>"
 			+ '</div>').modalDialog({ title: 'Camera List Totals', closeOnOverlayClick: true });
+	}
+	var UI3_QP_Topic = function ()
+	{
+		$('<div class="UIHelp">'
+			+ '<p>In H.264 and H.265 video encoding, <b>QP</b> stands for <b>Quantization Parameter</b>. It is a setting that controls the trade-off between video quality and file size. A lower <b>QP</b> value results in less compression, higher quality, and larger file sizes, while a higher <b>QP</b> value results in more compression, lower quality, and smaller file sizes. The <b>QP</b> value typically ranges from 0 to 51.</p>'
+			+ '<p>Blue Iris does not expose this directly, instead offering a more intuitive Quality Percentage scale of 0 to 100% where higher percentage is higher quality.</p>'
+			+ '<p><a href="ui3/help/help.html' + currentServer.GetLocalSessionArg("?") + '#encoder-quality" target="_blank">Click here to see the "Quality %" to "QP" scale used by Blue Iris.</a></p>'
+			+ '</div>').modalDialog({ title: 'Video Encoder QP', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -39791,4 +39873,20 @@ function ParseFileName(fileName)
 			type = fileName.substr(extensionIdx + 1);
 	}
 	return { name: fileNameNoExt, extension: extension, type: type };
+}
+/**
+ * Creates a Map from an array using a key selector function.
+ * @param {Array} arr - The input array.
+ * @param {Function} keyFn - Function that takes an element and returns its key.
+ * @returns {Map} A Map where keys are derived from keyFn and values are the array elements.
+ */
+function arrayToMap(arr, keyFn)
+{
+	var map = new FasterObjectMap();
+	for (var i = 0; i < arr.length; i++)
+	{
+		var item = arr[i];
+		map[keyFn(item)] = item;
+	}
+	return map;
 }

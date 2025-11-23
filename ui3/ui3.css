@@ -5828,9 +5828,10 @@ a[role="button"].showPasswordButton
 	padding: 3px;
 }
 
-	.streamingProfileEditorPanelContent .crf_labels
+	.streamingProfileEditorPanelContent .qp_labels
 	{
 		text-align: center;
+		display: block;
 	}
 
 .profileList
