@@ -321,6 +321,7 @@
 					{
 						var categories = [];
 						categories.push(this.newLocalStorageCategory("ui3_settings", "UI3 Settings"));
+						categories.push(this.newLocalStorageCategory("ui3_streamingProfileArray", "UI3 Streaming Quality Profiles"));
 						categories.push(this.newLocalStorageCategory("camlist_thumbs_ui3", "Saved Thumbnails for UI3's Full Camera List", { download: "jpg" }));
 						categories.push(this.newLocalStorageCategory("ui2_settings", "Old UI2 Settings"));
 						categories.push(this.newLocalStorageCategory("camlist_thumbs_ui2", "Old Saved Thumbnails for UI2's Full Camera List", { download: "jpg" }));
@@ -772,6 +773,8 @@
 		{
 			if (!key)
 				return "other";
+			if (key === "ui3_streamingProfileArray")
+				return "ui3_streamingProfileArray";
 			if (key.indexOf("ui3_camlistthumb_") === 0)
 				return "camlist_thumbs_ui3";
 			if (key.indexOf("ui2_camlistthumb_") === 0)
