@@ -49,3 +49,9 @@ table.encoder-quality
 		border: 1px solid #000000;
 		text-align: center;
 	}
+
+		table.encoder-quality td.not-applicable
+		{
+			color: rgba(0,0,0,0.68);
+			background-color: rgba(0,0,0,0.1);
+		}

@@ -24290,11 +24290,11 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			{
 				if (p.vcodec === "h264")
 				{
-					p.q = MapBi6QualityToBi5Quality(p.q6);
+					p.q = quality_qp_map.bi6_to_bi5_quality(p.q6);
 					var $qpLabel = findNextElement($input, '.qp_labels');
 					if ($qpLabel)
 					{
-						$qpLabel.text("H.264 QP " + MapBi6QualityToH264QP(p.q6) + " -- H.265 QP " + MapBi6QualityToH265QP(p.q6) + "");
+						$qpLabel.text("H.264 QP " + quality_qp_map.bi6_q_to_h264_qp(p.q6) + " -- H.265 QP " + quality_qp_map.bi6_q_to_h265_qp(p.q6) + "");
 					}
 				}
 				else
@@ -24469,7 +24469,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 function StreamingProfile()
 {
 	var self = this;
-	this.dv = 5; // default version
+	this.dv = 6; // default version
 	this.name = "Unnamed Streaming Profile";
 	this.abbr = "";
 	this.aClr = "#004882";
@@ -24479,7 +24479,7 @@ function StreamingProfile()
 	this.w = -1;
 	this.h = -1;
 	this.q = 50; // Blue Iris 5 Quality % (deprecated, maintained for backwards compatibility)
-	this.q6 = 68; // Blue Iris 6 Quality %.  68-70% is equivalent to 50% in BI5.
+	this.q6 = quality_qp_map.bi5_to_bi6_quality(this.q); // Blue Iris 6 Quality %.  69-71% is equivalent to 50%-51% in BI5.
 	// Above values apply to H.264 and JPEG.
 	// Below values apply only to H.264.
 	this.rc = "vbr"; // Rate Control Method ["vbr", "cbr"]
@@ -24588,7 +24588,7 @@ function StreamingProfile()
 				else
 				{
 					// This UI3 is loaded from a legacy BI server.
-					sb.Append("&q=").Append(MapBi6QualityToBi5Quality(q));
+					sb.Append("&q=").Append(quality_qp_map.bi6_to_bi5_quality(q));
 				}
 			}
 			else if (self.rc === "cbr")
@@ -24990,7 +24990,7 @@ function GenericQualityHelper()
 		p.w = 7680;
 		p.h = 4320;
 		p.q = 50;
-		p.q6 = MapBi5QualityToBi6Quality(p.q);
+		p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 		p.kbps = 16384;
 		p.gop = 1000;
 		return p;
@@ -25004,7 +25004,7 @@ function GenericQualityHelper()
 		p.w = 7680;
 		p.h = 4320;
 		p.q = 20;
-		p.q6 = MapBi5QualityToBi6Quality(p.q);
+		p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 		p.kbps = 5000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -25020,7 +25020,7 @@ function GenericQualityHelper()
 		p.w = 3840;
 		p.h = 2160;
 		p.q = 20;
-		p.q6 = MapBi5QualityToBi6Quality(p.q);
+		p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 		p.kbps = 3000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -25036,7 +25036,7 @@ function GenericQualityHelper()
 		p.w = 1920;
 		p.h = 1080;
 		p.q = 20;
-		p.q6 = MapBi5QualityToBi6Quality(p.q);
+		p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 		p.kbps = 1000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -25060,7 +25060,7 @@ function GenericQualityHelper()
 			p.w = 3840;
 			p.h = 2160;
 			p.q = 50;
-			p.q6 = MapBi5QualityToBi6Quality(p.q);
+			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 			p.kbps = 8192;
 			profiles.push(p);
 		}
@@ -25072,7 +25072,7 @@ function GenericQualityHelper()
 			p.w = 2560;
 			p.h = 1440;
 			p.q = 40;
-			p.q6 = MapBi5QualityToBi6Quality(p.q);
+			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 			p.kbps = 4096;
 			profiles.push(p);
 		}
@@ -25084,7 +25084,7 @@ function GenericQualityHelper()
 			p.w = 1920;
 			p.h = 1080;
 			p.q = 35;
-			p.q6 = MapBi5QualityToBi6Quality(p.q);
+			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 			p.kbps = 2048;
 			profiles.push(p);
 		}
@@ -25096,7 +25096,7 @@ function GenericQualityHelper()
 			p.w = 1280;
 			p.h = 720;
 			p.q = 35;
-			p.q6 = MapBi5QualityToBi6Quality(p.q);
+			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 			p.kbps = 1024;
 			profiles.push(p);
 		}
@@ -25108,7 +25108,7 @@ function GenericQualityHelper()
 			p.w = 856;
 			p.h = 480;
 			p.q = 30;
-			p.q6 = MapBi5QualityToBi6Quality(p.q);
+			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 			p.kbps = 456;
 			profiles.push(p);
 		}
@@ -25120,7 +25120,7 @@ function GenericQualityHelper()
 			p.w = 640;
 			p.h = 360;
 			p.q = 30;
-			p.q6 = MapBi5QualityToBi6Quality(p.q);
+			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 			p.kbps = 256;
 			profiles.push(p);
 		}
@@ -25132,7 +25132,7 @@ function GenericQualityHelper()
 			p.w = 427;
 			p.h = 240;
 			p.q = 30;
-			p.q6 = MapBi5QualityToBi6Quality(p.q);
+			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 			p.kbps = 114;
 			profiles.push(p);
 		}
@@ -25144,7 +25144,7 @@ function GenericQualityHelper()
 			p.w = 256;
 			p.h = 144;
 			p.q = 30;
-			p.q6 = MapBi5QualityToBi6Quality(p.q);
+			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 			p.kbps = 41;
 			profiles.push(p);
 		}
@@ -25282,19 +25282,27 @@ function GenericQualityHelper()
 			for (var i = 0; i < profileData.length; i++)
 			{
 				var p = profileData[i];
-				if (typeof p.q6 === "number")
+				if (p.dv && p.dv >= 6)
 					continue;
+				p.dv = 6;
+				var originalQ = p.q;
 				upgradeMade = true;
 				if (p.vcodec === "jpeg")
 					p.q6 = p.q;
 				else
-					p.q6 = MapBi5QualityToBi6Quality(p.q);
+					p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
 				if (p.q6 > 100)
 					p.q6 = 100;
 				else if (p.q6 < 0)
 					p.q6 = ui3_streaming_quality_default;
+				if (p.vcodec !== "jpeg")
+				{
+					// Reverse the BI6 to BI5 quality mapping. This may cause 1 to be subtracted from `q` without affecting H.264 QP.
+					// This is necessary to prevent unnecessary change detection in the streaming profile editor GUI.
+					p.q = quality_qp_map.bi6_to_bi5_quality(p.q6);
+				}
 				affected++;
-				console.log('Streaming profile "' + p.name + '" quality setting migrated from ' + p.q + ' to ' + p.q6 + ' for Blue Iris 6.');
+				console.log('Streaming profile "' + p.name + '" quality setting migrated from q=' + originalQ + ' to q=' + p.q + ', q6=' + p.q6 + ' for Blue Iris 6 compatibility.');
 			}
 			if (affected > 0 && !localStorageDummy)
 			{
@@ -25483,41 +25491,90 @@ function GenericQualityHelper()
 ///////////////////////////////////////////////////////////////
 // Streaming Quality Maps /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function MapBi6QualityToBi5Quality(bi6Quality)
+var quality_qp_map = new (function ()
 {
-	if (bi6Quality < 0 || bi6Quality > 100)
-		return bi6Quality;
-	for (var i = bi6Quality; i <= 100; i++)
+	var self = this;
+
+	var bi5_h264_min_qp = 1;
+	var bi5_h264_max_qp = 51;
+	var bi6_h264_min_qp = 16;
+	var bi6_h264_max_qp = 48;
+	var bi6_h265_min_qp = 19;
+	var bi6_h265_max_qp = 51;
+
+	var bi5_h264_qp_range = bi5_h264_max_qp - bi5_h264_min_qp;
+	var bi6_h264_qp_range = bi6_h264_max_qp - bi6_h264_min_qp;
+	var bi6_h265_qp_range = bi6_h265_max_qp - bi6_h265_min_qp;
+
+	function bi_qualities_from_h264_qp(qp, qp_min, qp_range)
 	{
-		var q = bi6_to_bi5_quality_map[i.toString()];
-		if (typeof q !== "undefined")
-			return q;
+		var k = (qp_range + qp_min) - qp;
+		if (k < 0 || k > qp_range) return [];
+		var q_low = Math.ceil((100 * k) / qp_range);
+		var q_high = Math.ceil((100 * (k + 1)) / qp_range) - 1;
+		var qualities = [];
+		for (var q = q_low; q <= q_high && q <= 100; q++)
+		{
+			qualities.push(q);
+		}
+		return qualities;
 	}
-}
-function MapBi5QualityToBi6Quality(bi5Quality)
-{
-	if (bi5Quality < 0 || bi5Quality > 100)
-		return bi5Quality;
-	for (var i = bi5Quality; i <= 100; i++)
+
+	// --- public API ---
+	this.bi5_q_to_h264_qp = function (q)
 	{
-		var q = bi5_to_bi6_quality_map[i.toString()];
-		if (typeof q !== "undefined")
-			return q;
-	}
-}
-function MapBi6QualityToH264QP(bi6Quality)
-{
-	return bi6_to_h264_QP_map[bi6Quality];
-}
-function MapBi6QualityToH265QP(bi6Quality)
-{
-	return bi6_to_h265_QP_map[bi6Quality];
-}
-// These maps are computed by a google docs spreadsheet. A copy is also placed in help.js.
-var bi6_to_bi5_quality_map = { '0': 7, '4': 8, '4': 9, '7': 10, '7': 11, '10': 12, '10': 13, '13': 14, '13': 15, '16': 16, '16': 17, '19': 18, '19': 19, '22': 20, '22': 21, '25': 22, '25': 23, '29': 24, '29': 25, '32': 26, '32': 27, '35': 28, '35': 29, '38': 30, '38': 31, '41': 32, '41': 33, '44': 34, '44': 35, '47': 36, '47': 37, '50': 38, '50': 39, '54': 40, '54': 41, '57': 42, '57': 43, '60': 44, '60': 45, '63': 46, '63': 47, '66': 48, '66': 49, '69': 50, '69': 51, '72': 52, '72': 53, '75': 54, '75': 55, '79': 56, '79': 57, '82': 58, '82': 59, '85': 60, '85': 61, '88': 62, '88': 63, '91': 64, '91': 65, '94': 66, '94': 67, '97': 68, '97': 69, '100': 70 };
-var bi6_to_h264_QP_map = { '0': 48, '1': 48, '2': 48, '3': 48, '4': 47, '5': 47, '6': 47, '7': 46, '8': 46, '9': 46, '10': 45, '11': 45, '12': 45, '13': 44, '14': 44, '15': 44, '16': 43, '17': 43, '18': 43, '19': 42, '20': 42, '21': 42, '22': 41, '23': 41, '24': 41, '25': 40, '26': 40, '27': 40, '28': 40, '29': 39, '30': 39, '31': 39, '32': 38, '33': 38, '34': 38, '35': 37, '36': 37, '37': 37, '38': 36, '39': 36, '40': 36, '41': 35, '42': 35, '43': 35, '44': 34, '45': 34, '46': 34, '47': 33, '48': 33, '49': 33, '50': 32, '51': 32, '52': 32, '53': 32, '54': 31, '55': 31, '56': 31, '57': 30, '58': 30, '59': 30, '60': 29, '61': 29, '62': 29, '63': 28, '64': 28, '65': 28, '66': 27, '67': 27, '68': 27, '69': 26, '70': 26, '71': 26, '72': 25, '73': 25, '74': 25, '75': 24, '76': 24, '77': 24, '78': 24, '79': 23, '80': 23, '81': 23, '82': 22, '83': 22, '84': 22, '85': 21, '86': 21, '87': 21, '88': 20, '89': 20, '90': 20, '91': 19, '92': 19, '93': 19, '94': 18, '95': 18, '96': 18, '97': 17, '98': 17, '99': 17, '100': 16 };
-var bi6_to_h265_QP_map = { '0': 51, '1': 51, '2': 51, '3': 51, '4': 50, '5': 50, '6': 50, '7': 49, '8': 49, '9': 49, '10': 48, '11': 48, '12': 48, '13': 47, '14': 47, '15': 47, '16': 46, '17': 46, '18': 46, '19': 45, '20': 45, '21': 45, '22': 44, '23': 44, '24': 44, '25': 43, '26': 43, '27': 43, '28': 43, '29': 42, '30': 42, '31': 42, '32': 41, '33': 41, '34': 41, '35': 40, '36': 40, '37': 40, '38': 39, '39': 39, '40': 39, '41': 38, '42': 38, '43': 38, '44': 37, '45': 37, '46': 37, '47': 36, '48': 36, '49': 36, '50': 35, '51': 35, '52': 35, '53': 35, '54': 34, '55': 34, '56': 34, '57': 33, '58': 33, '59': 33, '60': 32, '61': 32, '62': 32, '63': 31, '64': 31, '65': 31, '66': 30, '67': 30, '68': 30, '69': 29, '70': 29, '71': 29, '72': 28, '73': 28, '74': 28, '75': 27, '76': 27, '77': 27, '78': 27, '79': 26, '80': 26, '81': 26, '82': 25, '83': 25, '84': 25, '85': 24, '86': 24, '87': 24, '88': 23, '89': 23, '90': 23, '91': 22, '92': 22, '93': 22, '94': 21, '95': 21, '96': 21, '97': 20, '98': 20, '99': 20, '100': 19 };
-var bi5_to_bi6_quality_map = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 4, '9': 4, '10': 7, '11': 7, '12': 10, '13': 10, '14': 13, '15': 13, '16': 16, '17': 16, '18': 19, '19': 19, '20': 22, '21': 22, '22': 25, '23': 25, '24': 29, '25': 29, '26': 32, '27': 32, '28': 35, '29': 35, '30': 38, '31': 38, '32': 41, '33': 41, '34': 44, '35': 44, '36': 47, '37': 47, '38': 50, '39': 50, '40': 54, '41': 54, '42': 57, '43': 57, '44': 60, '45': 60, '46': 63, '47': 63, '48': 66, '49': 66, '50': 69, '51': 69, '52': 72, '53': 72, '54': 75, '55': 75, '56': 79, '57': 79, '58': 82, '59': 82, '60': 85, '61': 85, '62': 88, '63': 88, '64': 91, '65': 91, '66': 94, '67': 94, '68': 97, '69': 97, '70': 100, '71': 100, '72': 100, '73': 100, '74': 100, '75': 100, '76': 100, '77': 100, '78': 100, '79': 100, '80': 100, '81': 100, '82': 100, '83': 100, '84': 100, '85': 100, '86': 100, '87': 100, '88': 100, '89': 100, '90': 100, '91': 100, '92': 100, '93': 100, '94': 100, '95': 100, '96': 100, '97': 100, '98': 100, '99': 100, '100': 100 };
+		return bi5_h264_max_qp - Math.floor((q * bi5_h264_qp_range) / 100);
+	};
+	this.bi6_q_to_h264_qp = function (q)
+	{
+		return bi6_h264_max_qp - Math.floor((q * bi6_h264_qp_range) / 100);
+	};
+	this.bi6_q_to_h265_qp = function (q)
+	{
+		return bi6_h265_max_qp - Math.floor((q * bi6_h265_qp_range) / 100);
+	};
+
+	this.bi5_to_bi6_qualities = function (q)
+	{
+		var qp = self.bi5_q_to_h264_qp(q);
+		return bi_qualities_from_h264_qp(qp, bi6_h264_min_qp, bi6_h264_qp_range);
+	};
+	this.bi5_to_bi6_quality = function (q)
+	{
+		var qualities = self.bi5_to_bi6_qualities(q);
+		if (qualities.length)
+			return qualities[~~((qualities.length - 1) / 2)]; // ~~ means cast to int
+		// This convenience function should map out of range values to 0 or 100 to ensure we do not return an invalid value.
+		if (q < 50)
+			return 0;
+		else
+			return 100;
+	};
+	this.h264_qp_to_bi6_qualities = function (qp)
+	{
+		return bi_qualities_from_h264_qp(qp, bi6_h264_min_qp, bi6_h264_qp_range);
+	};
+	this.bi6_to_bi5_qualities = function (q)
+	{
+		var qp = self.bi6_q_to_h264_qp(q);
+		return bi_qualities_from_h264_qp(qp, bi5_h264_min_qp, bi5_h264_qp_range);
+	};
+	this.bi6_to_bi5_quality = function (q)
+	{
+		var qualities = self.bi6_to_bi5_qualities(q);
+		if (qualities.length)
+			return qualities[~~((qualities.length - 1) / 2)]; // ~~ means cast to int
+		// This convenience function should map out of range values to 0 or 100 to ensure we do not return an invalid value.
+		if (q < 50)
+			return 0;
+		else
+			return 100;
+	};
+	this.h264_qp_to_bi5_qualities = function (qp)
+	{
+		return bi_qualities_from_h264_qp(qp, bi5_h264_min_qp, bi5_h264_qp_range);
+	};
+})();
 ///////////////////////////////////////////////////////////////
 // Group Layout Dialog ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
