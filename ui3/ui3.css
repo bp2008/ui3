@@ -300,6 +300,11 @@ a[role="button"]
 	text-decoration: underline;
 }
 
+a.no-underline
+{
+	text-decoration: none;
+}
+
 body
 {
 	margin: 0px;

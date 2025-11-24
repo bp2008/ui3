@@ -1203,6 +1203,10 @@ var defaultSettings =
 			, value: "{}"
 		}
 		, {
+			key: "ui3_splitCodecStats"
+			, value: "1"
+		}
+		, {
 			key: "ui3_timeout"
 			, value: 10
 			, inputType: "number"
@@ -18968,6 +18972,7 @@ function FetchH264VideoModule()
 	var canRequestAudio = false;
 	var streamHasAudio = 0; // -1: no audio, 0: unknown, 1: audio
 	var lastFrameMetadata = { width: 0, height: 0, pos: 0, timestamp: 0, rawtime: 0, utc: Date.now(), expectedInterframe: 100, size: 0 };
+	var lastFormatData = null;
 	var framesSinceLastKeyframe = 0;
 	var audioCodec = "";
 	var currentStreamBitmapInfo = null;
@@ -19507,6 +19512,7 @@ function FetchH264VideoModule()
 	}
 	var streamInfoCallback = function (bitmapInfoHeader, waveFormatEx)
 	{
+		lastFormatData = null;
 		currentStreamBitmapInfo = bitmapInfoHeader;
 		if (typeof h264_player.streamInfoCallback === "function")
 			h264_player.streamInfoCallback(bitmapInfoHeader, waveFormatEx);
@@ -19665,6 +19671,9 @@ function FetchH264VideoModule()
 		lastFrameMetadata.keyframe = frame.keyframe;
 		lastFrameMetadata.framesSinceKey = framesSinceLastKeyframe;
 
+		if (frame.formatData)
+			lastFormatData = frame.formatData;
+
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
 
 		videoPlayer.ImageRendered({ id: loading.uniqueId, w: frame.width, h: frame.height, loadingTime: frame.actualInterframe, utc: frame.utc, isFirstFrame: lastStreamBeganAt === lastFrameAt });
@@ -19772,13 +19781,24 @@ function FetchH264VideoModule()
 		if (nerdStats.IsOpen())
 		{
 			var loaded = videoPlayer.Loaded().image;
-			var codecs = "";
+			var vcodec = "";
 			if (currentStreamBitmapInfo)
-				codecs = currentStreamBitmapInfo.biCompression;
-			if (!codecs)
-				codecs = "unknown video";
+				vcodec = currentStreamBitmapInfo.biCompression;
+			if (!vcodec)
+				vcodec = "unknown video";
+			if (settings.ui3_splitCodecStats === "1")
+			{
+				if (lastFormatData)
+				{
+					if (lastFormatData.codecDetails)
+						vcodec += " " + lastFormatData.codecDetails;
+					if (typeof lastFormatData.QP !== "undefined")
+						vcodec += " QP " + lastFormatData.QP;
+				}
+			}
+			var acodec = "";
 			if (streamHasAudio == 1 && audioCodec)
-				codecs += ", " + audioCodec;
+				acodec += audioCodec;
 			var interFrame = frame.expectedInterframe;
 			var interFrameError = Math.abs(frame.expectedInterframe - frame.actualInterframe);
 			if (h264_player.isMsePlayer)
@@ -19818,7 +19838,22 @@ function FetchH264VideoModule()
 			nerdStats.UpdateStat("Stream Timestamp", frame.timestamp + "ms");
 			if (playerName)
 				nerdStats.UpdateStat("Video Player", playerName);
-			nerdStats.UpdateStat("Codecs", codecs);
+			if (settings.ui3_splitCodecStats === "1")
+			{
+				nerdStats.UpdateStat("Video Codec", vcodec);
+				if (!acodec)
+					acodec = "no audio";
+				acodec += ' <a class="no-underline" href="javascript: SetCodecStatsExpansion(0)">[ - ]</a>';
+				nerdStats.UpdateStat("Audio Codec", null, acodec);
+			}
+			else
+			{
+				var codecs = vcodec;
+				if (acodec)
+					codecs += ", " + acodec;
+				codecs += ' <a class="no-underline" href="javascript: SetCodecStatsExpansion(1)">[ + ]</a>';
+				nerdStats.UpdateStat("Codecs", null, codecs);
+			}
 			nerdStats.UpdateStat("Video Bit Rate", bitRate_Video, formatBitsPerSecond(bitRate_Video, 1), true);
 			nerdStats.UpdateStat("Audio Bit Rate", bitRate_Audio, formatBitsPerSecond(bitRate_Audio, 1), true);
 			nerdStats.UpdateStat("Audio Buffer", audioBufferSize, audioBufferSize.toFixed(0) + "ms", true);
@@ -19952,6 +19987,10 @@ function FetchH264VideoModule()
 	}
 	Initialize();
 	postInitialize();
+}
+function SetCodecStatsExpansion(expand)
+{
+	settings.ui3_splitCodecStats = expand ? "1" : "0";
 }
 ///////////////////////////////////////////////////////////////
 // openh264_player ////////////////////////////////////////////
@@ -25238,7 +25277,7 @@ function GenericQualityHelper()
 		{
 			// Assign new q6 properties for BI 6 transition.
 			// Blue Iris 6 requires higher Quality % for the same visual quality as BI 5 due to changes in the QP mapping.
-      // This change does not require a "dv" data version update.
+			// This change does not require a "dv" data version update.
 			var affected = 0;
 			for (var i = 0; i < profileData.length; i++)
 			{
@@ -25475,10 +25514,10 @@ function MapBi6QualityToH265QP(bi6Quality)
 	return bi6_to_h265_QP_map[bi6Quality];
 }
 // These maps are computed by a google docs spreadsheet. A copy is also placed in help.js.
-var bi6_to_bi5_quality_map = { '0': 6, '2': 7, '3': 8, '5': 9, '6': 10, '8': 11, '9': 12, '11': 13, '12': 14, '14': 15, '16': 16, '17': 17, '19': 18, '20': 19, '22': 20, '23': 21, '25': 22, '27': 23, '28': 24, '30': 25, '31': 26, '33': 27, '34': 28, '36': 29, '37': 30, '39': 31, '41': 32, '42': 33, '44': 34, '45': 35, '47': 36, '48': 37, '50': 38, '52': 39, '53': 40, '55': 41, '56': 42, '58': 43, '59': 44, '61': 45, '62': 46, '64': 47, '66': 48, '67': 49, '69': 50, '70': 51, '72': 52, '73': 53, '75': 54, '77': 55, '78': 56, '80': 57, '81': 58, '83': 59, '84': 60, '86': 61, '87': 62, '89': 63, '91': 64, '92': 65, '94': 66, '95': 67, '97': 68, '98': 69, '100': 70 };
-var bi6_to_h264_QP_map = { '0': 48, '1': 48, '2': 47, '3': 47, '4': 47, '5': 46, '6': 46, '7': 46, '8': 45, '9': 45, '10': 45, '11': 44, '12': 44, '13': 44, '14': 44, '15': 43, '16': 43, '17': 43, '18': 42, '19': 42, '20': 42, '21': 41, '22': 41, '23': 41, '24': 40, '25': 40, '26': 40, '27': 39, '28': 39, '29': 39, '30': 38, '31': 38, '32': 38, '33': 37, '34': 37, '35': 37, '36': 36, '37': 36, '38': 36, '39': 36, '40': 35, '41': 35, '42': 35, '43': 34, '44': 34, '45': 34, '46': 33, '47': 33, '48': 33, '49': 32, '50': 32, '51': 32, '52': 31, '53': 31, '54': 31, '55': 30, '56': 30, '57': 30, '58': 29, '59': 29, '60': 29, '61': 28, '62': 28, '63': 28, '64': 28, '65': 27, '66': 27, '67': 27, '68': 26, '69': 26, '70': 26, '71': 25, '72': 25, '73': 25, '74': 24, '75': 24, '76': 24, '77': 23, '78': 23, '79': 23, '80': 22, '81': 22, '82': 22, '83': 21, '84': 21, '85': 21, '86': 20, '87': 20, '88': 20, '89': 20, '90': 19, '91': 19, '92': 19, '93': 18, '94': 18, '95': 18, '96': 17, '97': 17, '98': 17, '99': 16, '100': 16 };
-var bi6_to_h265_QP_map = { '0': 51, '1': 51, '2': 50, '3': 50, '4': 50, '5': 49, '6': 49, '7': 49, '8': 48, '9': 48, '10': 48, '11': 47, '12': 47, '13': 47, '14': 47, '15': 46, '16': 46, '17': 46, '18': 45, '19': 45, '20': 45, '21': 44, '22': 44, '23': 44, '24': 43, '25': 43, '26': 43, '27': 42, '28': 42, '29': 42, '30': 41, '31': 41, '32': 41, '33': 40, '34': 40, '35': 40, '36': 39, '37': 39, '38': 39, '39': 39, '40': 38, '41': 38, '42': 38, '43': 37, '44': 37, '45': 37, '46': 36, '47': 36, '48': 36, '49': 35, '50': 35, '51': 35, '52': 34, '53': 34, '54': 34, '55': 33, '56': 33, '57': 33, '58': 32, '59': 32, '60': 32, '61': 31, '62': 31, '63': 31, '64': 31, '65': 30, '66': 30, '67': 30, '68': 29, '69': 29, '70': 29, '71': 28, '72': 28, '73': 28, '74': 27, '75': 27, '76': 27, '77': 26, '78': 26, '79': 26, '80': 25, '81': 25, '82': 25, '83': 24, '84': 24, '85': 24, '86': 23, '87': 23, '88': 23, '89': 23, '90': 22, '91': 22, '92': 22, '93': 21, '94': 21, '95': 21, '96': 20, '97': 20, '98': 20, '99': 19, '100': 19 };
-var bi5_to_bi6_quality_map = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 2, '8': 3, '9': 5, '10': 6, '11': 8, '12': 9, '13': 11, '14': 12, '15': 14, '16': 16, '17': 17, '18': 19, '19': 20, '20': 22, '21': 23, '22': 25, '23': 27, '24': 28, '25': 30, '26': 31, '27': 33, '28': 34, '29': 36, '30': 37, '31': 39, '32': 41, '33': 42, '34': 44, '35': 45, '36': 47, '37': 48, '38': 50, '39': 52, '40': 53, '41': 55, '42': 56, '43': 58, '44': 59, '45': 61, '46': 62, '47': 64, '48': 66, '49': 67, '50': 69, '51': 70, '52': 72, '53': 73, '54': 75, '55': 77, '56': 78, '57': 80, '58': 81, '59': 83, '60': 84, '61': 86, '62': 87, '63': 89, '64': 91, '65': 92, '66': 94, '67': 95, '68': 97, '69': 98, '70': 100, '71': 100, '72': 100, '73': 100, '74': 100, '75': 100, '76': 100, '77': 100, '78': 100, '79': 100, '80': 100, '81': 100, '82': 100, '83': 100, '84': 100, '85': 100, '86': 100, '87': 100, '88': 100, '89': 100, '90': 100, '91': 100, '92': 100, '93': 100, '94': 100, '95': 100, '96': 100, '97': 100, '98': 100, '99': 100, '100': 100 };
+var bi6_to_bi5_quality_map = { '0': 7, '4': 8, '4': 9, '7': 10, '7': 11, '10': 12, '10': 13, '13': 14, '13': 15, '16': 16, '16': 17, '19': 18, '19': 19, '22': 20, '22': 21, '25': 22, '25': 23, '29': 24, '29': 25, '32': 26, '32': 27, '35': 28, '35': 29, '38': 30, '38': 31, '41': 32, '41': 33, '44': 34, '44': 35, '47': 36, '47': 37, '50': 38, '50': 39, '54': 40, '54': 41, '57': 42, '57': 43, '60': 44, '60': 45, '63': 46, '63': 47, '66': 48, '66': 49, '69': 50, '69': 51, '72': 52, '72': 53, '75': 54, '75': 55, '79': 56, '79': 57, '82': 58, '82': 59, '85': 60, '85': 61, '88': 62, '88': 63, '91': 64, '91': 65, '94': 66, '94': 67, '97': 68, '97': 69, '100': 70 };
+var bi6_to_h264_QP_map = { '0': 48, '1': 48, '2': 48, '3': 48, '4': 47, '5': 47, '6': 47, '7': 46, '8': 46, '9': 46, '10': 45, '11': 45, '12': 45, '13': 44, '14': 44, '15': 44, '16': 43, '17': 43, '18': 43, '19': 42, '20': 42, '21': 42, '22': 41, '23': 41, '24': 41, '25': 40, '26': 40, '27': 40, '28': 40, '29': 39, '30': 39, '31': 39, '32': 38, '33': 38, '34': 38, '35': 37, '36': 37, '37': 37, '38': 36, '39': 36, '40': 36, '41': 35, '42': 35, '43': 35, '44': 34, '45': 34, '46': 34, '47': 33, '48': 33, '49': 33, '50': 32, '51': 32, '52': 32, '53': 32, '54': 31, '55': 31, '56': 31, '57': 30, '58': 30, '59': 30, '60': 29, '61': 29, '62': 29, '63': 28, '64': 28, '65': 28, '66': 27, '67': 27, '68': 27, '69': 26, '70': 26, '71': 26, '72': 25, '73': 25, '74': 25, '75': 24, '76': 24, '77': 24, '78': 24, '79': 23, '80': 23, '81': 23, '82': 22, '83': 22, '84': 22, '85': 21, '86': 21, '87': 21, '88': 20, '89': 20, '90': 20, '91': 19, '92': 19, '93': 19, '94': 18, '95': 18, '96': 18, '97': 17, '98': 17, '99': 17, '100': 16 };
+var bi6_to_h265_QP_map = { '0': 51, '1': 51, '2': 51, '3': 51, '4': 50, '5': 50, '6': 50, '7': 49, '8': 49, '9': 49, '10': 48, '11': 48, '12': 48, '13': 47, '14': 47, '15': 47, '16': 46, '17': 46, '18': 46, '19': 45, '20': 45, '21': 45, '22': 44, '23': 44, '24': 44, '25': 43, '26': 43, '27': 43, '28': 43, '29': 42, '30': 42, '31': 42, '32': 41, '33': 41, '34': 41, '35': 40, '36': 40, '37': 40, '38': 39, '39': 39, '40': 39, '41': 38, '42': 38, '43': 38, '44': 37, '45': 37, '46': 37, '47': 36, '48': 36, '49': 36, '50': 35, '51': 35, '52': 35, '53': 35, '54': 34, '55': 34, '56': 34, '57': 33, '58': 33, '59': 33, '60': 32, '61': 32, '62': 32, '63': 31, '64': 31, '65': 31, '66': 30, '67': 30, '68': 30, '69': 29, '70': 29, '71': 29, '72': 28, '73': 28, '74': 28, '75': 27, '76': 27, '77': 27, '78': 27, '79': 26, '80': 26, '81': 26, '82': 25, '83': 25, '84': 25, '85': 24, '86': 24, '87': 24, '88': 23, '89': 23, '90': 23, '91': 22, '92': 22, '93': 22, '94': 21, '95': 21, '96': 21, '97': 20, '98': 20, '99': 20, '100': 19 };
+var bi5_to_bi6_quality_map = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 4, '9': 4, '10': 7, '11': 7, '12': 10, '13': 10, '14': 13, '15': 13, '16': 16, '17': 16, '18': 19, '19': 19, '20': 22, '21': 22, '22': 25, '23': 25, '24': 29, '25': 29, '26': 32, '27': 32, '28': 35, '29': 35, '30': 38, '31': 38, '32': 41, '33': 41, '34': 44, '35': 44, '36': 47, '37': 47, '38': 50, '39': 50, '40': 54, '41': 54, '42': 57, '43': 57, '44': 60, '45': 60, '46': 63, '47': 63, '48': 66, '49': 66, '50': 69, '51': 69, '52': 72, '53': 72, '54': 75, '55': 75, '56': 79, '57': 79, '58': 82, '59': 82, '60': 85, '61': 85, '62': 88, '63': 88, '64': 91, '65': 91, '66': 94, '67': 94, '68': 97, '69': 97, '70': 100, '71': 100, '72': 100, '73': 100, '74': 100, '75': 100, '76': 100, '77': 100, '78': 100, '79': 100, '80': 100, '81': 100, '82': 100, '83': 100, '84': 100, '85': 100, '86': 100, '87': 100, '88': 100, '89': 100, '90': 100, '91': 100, '92': 100, '93': 100, '94': 100, '95': 100, '96': 100, '97': 100, '98': 100, '99': 100, '100': 100 };
 ///////////////////////////////////////////////////////////////
 // Group Layout Dialog ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
@@ -33576,9 +33615,12 @@ function BIVideoFrame(buf, metadata, bitmapHeader)
 		throw new Error("Video stream received video frame before bitmap header.");
 	/** "H264"|"H265"|"Unknown" */
 	this.codec = bitmapHeader.biCompression;
+	this.isH264 = iEquals(this.codec, BI_CODEC_H264);
+	this.isH265 = iEquals(this.codec, BI_CODEC_H265);
 	/** True if this is a keyframe */
-	this.keyframe = this.meta.keyframe = IdentifyVideoKeyframe(buf, iEquals(this.codec, BI_CODEC_H265));
+	this.keyframe = this.meta.keyframe = IdentifyVideoKeyframe(buf, this.isH265);
 
+	AddVideoFrameFormatData(this);
 	//if (developerMode)
 	//console.log("  UI3", `BIVideoFrame: codec=${this.codec}, keyframe=${this.keyframe}`);
 }
@@ -33648,6 +33690,51 @@ function IdentifyVideoKeyframe(buf, codecH265)
 	if (foundKeyframe && foundNonKeyframe)
 		toaster.Warning("/video/ Protocol Warning: Received a " + (codecH265 ? "H.265" : "H.264") + " frame containing NAL units not expected to co-exist: [" + allNaluTypes.join(',') + "]", 10000);
 	return foundKeyframe;
+}
+function AddVideoFrameFormatData(frame)
+{
+	if (frame.isH264)
+	{
+		try
+		{
+			var nalUnits = UI3_VideoParser.parseNALUnits(frame.frameData, frame.isH265);
+			for (var i = 0; i < nalUnits.length; i++)
+			{
+				if (nalUnits[i].type === 7) // SPS
+				{
+					if (!frame.meta.formatData)
+						frame.meta.formatData = {};
+
+					var sps = nalUnits[i].sps;
+					//console.log("SPS", sps);
+					//console.log(nalUnits[i].sps.summary);
+
+					var profileName = sps.profileName;
+					if (profileName.indexOf(sps.chroma) === -1)
+						profileName += " (" + sps.chroma + ")";
+					frame.meta.formatData.codecDetails = profileName + " L" + sps.levelName
+						// + (sps.constraint_set_flags === 0 ? "" : (" [" + sps.constraints + "]"))
+						;
+					frame.meta.formatData.chroma = sps.chroma;
+				}
+				else if (nalUnits[i].type === 8) // PPS
+				{
+					if (!frame.meta.formatData)
+						frame.meta.formatData = {};
+
+					var pps = nalUnits[i].pps;
+					//console.log("PPS", pps);
+
+					frame.meta.formatData.QP = pps.pic_init_qp_minus26 + 26;
+					//console.log("QP", frame.meta.formatData.QP);
+				}
+			}
+		}
+		catch (ex)
+		{
+			console.error("Error parsing NAL units:", ex);
+		}
+	}
 }
 ///////////////////////////////////////////////////////////////
 // GhettoStream ///////////////////////////////////////////////
@@ -33820,6 +33907,8 @@ function UI3NerdStats()
 			, "Video Player"
 			, "Renderer"
 			, "Codecs"
+			, "Video Codec"
+			, "Audio Codec"
 			, "Video Bit Rate"
 			, "Audio Bit Rate"
 			, "Audio Buffer"
