@@ -200,6 +200,11 @@ var quality_qp_map = new (function ()
 		var qualities = self.bi5_to_bi6_qualities(q);
 		if (qualities.length)
 			return qualities[~~((qualities.length - 1) / 2)]; // ~~ means cast to int
+		// This convenience function should map out of range values to 0 or 100 to ensure we do not return an invalid value.
+		if (q < 50)
+			return 0;
+		else
+			return 100;
 	};
 	this.h264_qp_to_bi6_qualities = function (qp)
 	{
@@ -215,60 +220,17 @@ var quality_qp_map = new (function ()
 		var qualities = self.bi6_to_bi5_qualities(q);
 		if (qualities.length)
 			return qualities[~~((qualities.length - 1) / 2)]; // ~~ means cast to int
+		// This convenience function should map out of range values to 0 or 100 to ensure we do not return an invalid value.
+		if (q < 50)
+			return 0;
+		else
+			return 100;
 	};
 	this.h264_qp_to_bi5_qualities = function (qp)
 	{
 		return bi_qualities_from_h264_qp(qp, bi5_h264_min_qp, bi5_h264_qp_range);
 	};
 })();
-var runTests = false;
-if (runTests)
-{
-	function BruteForceH264QPToBI6QualityMap(qp)
-	{
-		let arr = [];
-		for (var i = 0; i <= 100; i++)
-		{
-			var calcQp = quality_qp_map.bi6_q_to_h264_qp(i);
-			if (calcQp === qp)
-			{
-				arr.push(i);
-			}
-		}
-		return arr;
-	}
-	function BruteForceH264QPToBI5QualityMap(qp)
-	{
-		let arr = [];
-		for (var i = 0; i <= 100; i++)
-		{
-			var calcQp = quality_qp_map.bi5_q_to_h264_qp(i);
-			if (calcQp === qp)
-			{
-				arr.push(i);
-			}
-		}
-		return arr;
-	}
-	for (var qp = 0; qp <= 51; qp++)
-	{
-		var jsonBruteForce = JSON.stringify(BruteForceH264QPToBI5QualityMap(qp));
-		var jsonLiteComputed = JSON.stringify(quality_qp_map.h264_qp_to_bi5_qualities(qp));
-		if (jsonBruteForce !== jsonLiteComputed)
-		{
-			console.log("Mismatch for BI5 H.264 QP " + qp + ": brute-force=" + jsonBruteForce + ", computed=" + jsonLiteComputed);
-		}
-	}
-	for (var qp = 0; qp <= 51; qp++)
-	{
-		var jsonBruteForce = JSON.stringify(BruteForceH264QPToBI6QualityMap(qp));
-		var jsonLiteComputed = JSON.stringify(quality_qp_map.h264_qp_to_bi6_qualities(qp));
-		if (jsonBruteForce !== jsonLiteComputed)
-		{
-			console.log("Mismatch for BI6 H.264 QP " + qp + ": brute-force=" + jsonBruteForce + ", computed=" + jsonLiteComputed);
-		}
-	}
-}
 
 String.prototype.padLeft = function (len, c)
 {
