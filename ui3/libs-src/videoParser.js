@@ -202,7 +202,7 @@ var UI3_VideoParser = new (function ()
 				const nalData = buffer.slice(nalStart, end);
 				if (nalData.length > 0)
 				{
-					const type = getNalType(nalData[0]);
+					const type = getNalType(nalData[0], isH265);
 					const unit = {
 						type,
 						type_name: self.getNalTypeName(type, isH265),
@@ -226,8 +226,10 @@ var UI3_VideoParser = new (function ()
 				offset += 4;
 				if (length <= 0 || offset + length > buffer.length) break;
 				const nalData = buffer.slice(offset, offset + length);
+				const type = getNalType(nalData[0], isH265);
 				units.push({
-					type: getNalType(nalData[0], isH265),
+					type,
+					type_name: self.getNalTypeName(type, isH265),
 					data: nalData
 				});
 				offset += length;
@@ -239,6 +241,10 @@ var UI3_VideoParser = new (function ()
 			const unit = units[i];
 			if (isH265)
 			{
+				if (unit.type === 33)
+					unit.sps = UI3_H265Parser.parseSPS(unit.data);
+				//else if (unit.type === 34)
+				//	unit.pps = UI3_H265Parser.parsePPS(unit.data);
 			}
 			else
 			{
@@ -681,4 +687,954 @@ var UI3_H264Parser = new (function ()
 		}
 		return pps;
 	}
+})();
+
+/**
+ * H.265/HEVC SPS and PPS parser
+ */
+var UI3_H265Parser = new (function ()
+{
+	/**
+	 * Parse SPS NAL Unit from H.265 stream
+	 * @param {Uint8Array} nalUnit - Raw SPS NAL unit payload (without start code)
+	 * @returns {Object} Parsed SPS fields
+	 */
+	this.parseSPS = function (nalUnit)
+	{
+		const br = new UI3BitReader(nalUnit);
+		br.skipBits(16); // Skip NALU header (2 bytes for H.265)
+		const sps = { h265: true };
+		try
+		{
+			// profile_tier_level parsing (simplified)
+			sps.sps_video_parameter_set_id = br.readBits(4);
+			sps.sps_max_sub_layers_minus1 = br.readBits(3);
+			sps.sps_temporal_id_nesting_flag = br.readBit();
+
+			// profile_tier_level
+			sps.profile_tier_level = parseProfileTierLevel(br, sps.sps_max_sub_layers_minus1);
+			//sps.profile_space = br.readBits(2);
+			//sps.tier_flag = br.readBits(1);
+			//sps.profile_idc = br.readBits(5);
+
+			//sps.profile_compatibility_flags = br.readBits(32);
+			//sps.constraint_indicator_flags = new Uint8Array(6);
+			//for (let i = 0; i < 6; i++)
+			//	sps.constraint_indicator_flags[i] = br.readUByte();
+
+			//sps.level_idc = br.readBits(1);
+
+			sps.sps_seq_parameter_set_id = br.readUE();
+			sps.chroma_format_idc = br.readUE();
+			if (sps.chroma_format_idc === 3)
+			{
+				sps.separate_colour_plane_flag = br.readBit();
+			}
+			sps.pic_width_in_luma_samples = br.readUE();
+			sps.pic_height_in_luma_samples = br.readUE();
+
+			sps.conformance_window_flag = br.readBit();
+			if (sps.conformance_window_flag)
+			{
+				sps.conf_win_left_offset = br.readUE();
+				sps.conf_win_right_offset = br.readUE();
+				sps.conf_win_top_offset = br.readUE();
+				sps.conf_win_bottom_offset = br.readUE();
+			}
+
+			sps.bit_depth_luma_minus8 = br.readUE();
+			sps.bit_depth_chroma_minus8 = br.readUE();
+
+
+
+			sps.log2_max_pic_order_cnt_lsb_minus4 = br.readUE();
+
+			sps.sps_sub_layer_ordering_info_present_flag = br.readBit();
+			const orderingCount = sps.sps_sub_layer_ordering_info_present_flag ? (sps.sps_max_sub_layers_minus1 + 1) : 1;
+			sps.sub_layer_ordering = [];
+			for (let i = 0; i < orderingCount; i++)
+			{
+				sps.sub_layer_ordering[i] = {
+					sps_max_dec_pic_buffering_minus1: br.readUE(),
+					sps_max_num_reorder_pics: br.readUE(),
+					sps_max_latency_increase_plus1: br.readUE()
+				};
+			}
+
+			sps.log2_min_luma_coding_block_size_minus3 = br.readUE();
+			sps.log2_diff_max_min_luma_coding_block_size = br.readUE();
+			sps.log2_min_transform_block_size_minus2 = br.readUE();
+			sps.log2_diff_max_min_transform_block_size = br.readUE();
+			sps.max_transform_hierarchy_depth_inter = br.readUE();
+			sps.max_transform_hierarchy_depth_intra = br.readUE();
+
+			sps.scaling_list_enabled_flag = br.readBit();
+			if (sps.scaling_list_enabled_flag)
+			{
+				sps.sps_scaling_list_data_present_flag = br.readBit();
+				if (sps.sps_scaling_list_data_present_flag)
+				{
+					sps.scaling_list_data = parseScalingListData(br);
+				}
+			}
+
+			sps.amp_enabled_flag = br.readBit();
+			sps.sample_adaptive_offset_enabled_flag = br.readBit();
+
+			sps.pcm_enabled_flag = br.readBit();
+			if (sps.pcm_enabled_flag)
+			{
+				sps.pcm_sample_bit_depth_luma_minus1 = br.readBits(4);
+				sps.pcm_sample_bit_depth_chroma_minus1 = br.readBits(4);
+				sps.log2_min_pcm_luma_coding_block_size_minus3 = br.readUE();
+				sps.log2_diff_max_min_pcm_luma_coding_block_size = br.readUE();
+				sps.pcm_loop_filter_disabled_flag = br.readBit();
+			}
+
+			sps.num_short_term_ref_pic_sets = br.readUE();
+			sps.st_ref_pic_sets = parseShortTermRefPicSets(br, sps.num_short_term_ref_pic_sets, sps.log2_max_pic_order_cnt_lsb_minus4);
+
+			sps.long_term_ref_pics_present_flag = br.readBit();
+			if (sps.long_term_ref_pics_present_flag)
+			{
+				sps.num_long_term_ref_pics_sps = br.readUE();
+				sps.lt_ref_pic = [];
+				for (let i = 0; i < sps.num_long_term_ref_pics_sps; i++)
+				{
+					sps.lt_ref_pic.push({
+						lt_ref_pic_poc_lsb_sps: br.readBits(sps.log2_max_pic_order_cnt_lsb_minus4 + 4),
+						used_by_curr_pic_lt_sps_flag: br.readBit()
+					});
+				}
+			}
+
+			sps.sps_temporal_mvp_enabled_flag = br.readBit();
+			sps.strong_intra_smoothing_enabled_flag = br.readBit();
+
+			// VUI
+			sps.vui_parameters_present_flag = br.readBit();
+			if (sps.vui_parameters_present_flag)
+			{
+				sps.vui = parseVuiParameters(br, sps);
+			}
+
+			// Derived width/height after conformance window cropping
+			let width = sps.pic_width_in_luma_samples;
+			let height = sps.pic_height_in_luma_samples;
+			if (sps.conformance_window_flag)
+			{
+				const cf = sps.chroma_format_idc;
+				const subWidthC = (cf === 1 || cf === 2) ? 2 : 1;
+				const subHeightC = (cf === 1) ? 2 : 1;
+				const cropUnitX = subWidthC;
+				const cropUnitY = subHeightC;
+				width -= (sps.conf_win_left_offset + sps.conf_win_right_offset) * cropUnitX;
+				height -= (sps.conf_win_top_offset + sps.conf_win_bottom_offset) * cropUnitY;
+			}
+			sps.width = width;
+			sps.height = height;
+
+			// rbsp_stop_one_bit + trailing_bits are typically outside this parser’s scope;
+			// ensure your bitreader consumes emulation prevention bytes and RBSP boundaries correctly elsewhere.
+
+		}
+		catch (e)
+		{
+			console.warn("Error parsing H.265 SPS:", e);
+		}
+		if (sps.profile_tier_level)
+			sps.description = describePTL(sps.profile_tier_level);
+		return sps;
+	};
+
+	// --- helpers for nested syntax structures ---
+	function parseProfileTierLevel(br, maxSubLayersMinus1)
+	{
+		const ptl = {};
+		ptl.general_profile_space = br.readBits(2);
+		ptl.general_tier_flag = br.readBit();
+		ptl.general_profile_idc = br.readBits(5);
+		ptl.general_profile_compatibility_flags = br.readBits(32);
+		ptl.general_progressive_source_flag = br.readBit();
+		ptl.general_interlaced_source_flag = br.readBit();
+		ptl.general_non_packed_constraint_flag = br.readBit();
+		ptl.general_frame_only_constraint_flag = br.readBit();
+		// general_reserved_zero_44bits
+		ptl.general_reserved_zero_44bits_hi = br.readBits(16);
+		ptl.general_reserved_zero_44bits_lo = br.readBits(28);
+		ptl.general_level_idc = br.readBits(8);
+
+		ptl.sub_layer_profile_present_flag = [];
+		ptl.sub_layer_level_present_flag = [];
+		for (let i = 0; i < maxSubLayersMinus1; i++)
+		{
+			ptl.sub_layer_profile_present_flag[i] = br.readBit();
+			ptl.sub_layer_level_present_flag[i] = br.readBit();
+		}
+		if (maxSubLayersMinus1 > 0)
+		{
+			for (let i = maxSubLayersMinus1; i < 8; i++)
+			{
+				br.readBits(2); // reserved_zero_2bits
+			}
+		}
+
+		ptl.sub_layers = [];
+		for (let i = 0; i < maxSubLayersMinus1; i++)
+		{
+			const sl = {};
+			if (ptl.sub_layer_profile_present_flag[i])
+			{
+				sl.sub_layer_profile_space = br.readBits(2);
+				sl.sub_layer_tier_flag = br.readBit();
+				sl.sub_layer_profile_idc = br.readBits(5);
+				sl.sub_layer_profile_compatibility_flags = br.readBits(32);
+				sl.sub_layer_progressive_source_flag = br.readBit();
+				sl.sub_layer_interlaced_source_flag = br.readBit();
+				sl.sub_layer_non_packed_constraint_flag = br.readBit();
+				sl.sub_layer_frame_only_constraint_flag = br.readBit();
+				// sub_layer_reserved_zero_44bits
+				sl.sub_layer_reserved_zero_44bits_hi = br.readBits(16);
+				sl.sub_layer_reserved_zero_44bits_lo = br.readBits(28);
+			}
+			if (ptl.sub_layer_level_present_flag[i])
+			{
+				sl.sub_layer_level_idc = br.readBits(8);
+			}
+			ptl.sub_layers[i] = sl;
+		}
+		return ptl;
+	}
+
+	function parseScalingListData(br,)
+	{
+		const data = { scaling_list: [] };
+		for (let sizeId = 0; sizeId < 4; sizeId++)
+		{
+			const matrixNum = sizeId === 3 ? 2 : 6;
+			data.scaling_list[sizeId] = [];
+			for (let matrixId = 0; matrixId < matrixNum; matrixId++)
+			{
+				const scaling_list_pred_mode_flag = br.readBit();
+				const entry = { scaling_list_pred_mode_flag };
+				if (!scaling_list_pred_mode_flag)
+				{
+					entry.scaling_list_pred_matrix_id_delta = br.readUE();
+				} else
+				{
+					const coefNum = Math.min(64, 1 << (4 + (sizeId << 1)));
+					let nextCoef = 8;
+					if (sizeId > 1)
+					{
+						entry.scaling_list_dc_coef_minus8 = br.readSE();
+						nextCoef = entry.scaling_list_dc_coef_minus8 + 8;
+					}
+					entry.scaling_list = [];
+					for (let i = 0; i < coefNum; i++)
+					{
+						const delta = br.readSE();
+						nextCoef = (nextCoef + delta + 256) & 255;
+						entry.scaling_list[i] = nextCoef;
+					}
+				}
+				data.scaling_list[sizeId][matrixId] = entry;
+			}
+		}
+		return data;
+	}
+
+	function parseShortTermRefPicSets(br, numRps, log2MaxPicOrderCntLsbMinus4)
+	{
+		const rps = [];
+		let prevRps = null;
+		for (let i = 0; i < numRps; i++)
+		{
+			const r = {};
+			const inter_ref_pic_set_prediction_flag = i !== 0 ? br.readBit() : 0;
+			r.inter_ref_pic_set_prediction_flag = inter_ref_pic_set_prediction_flag;
+
+			if (inter_ref_pic_set_prediction_flag)
+			{
+				const delta_idx_minus1 = (i === 0) ? 0 : br.readUE();
+				r.delta_idx_minus1 = delta_idx_minus1;
+				r.delta_rps_sign = br.readBit();
+				r.abs_delta_rps_minus1 = br.readUE();
+
+				const refRps = rps[i - 1 - delta_idx_minus1];
+				const RefNum = (refRps.num_negative_pics || 0) + (refRps.num_positive_pics || 0);
+				r.used_by_curr_pic_flag = [];
+				r.use_delta_flag = [];
+
+				let totalNeg = 0;
+				let totalPos = 0;
+				for (let j = 0; j <= RefNum; j++)
+				{
+					const used = br.readBit();
+					r.used_by_curr_pic_flag.push(used);
+					const useDeltaFlag = used ? 1 : br.readBit();
+					r.use_delta_flag.push(useDeltaFlag);
+				}
+				// Derivation of NumNegativePics/NumPositivePics and delta_poc_s0/1 is complex; store flags only
+			} else
+			{
+				r.num_negative_pics = br.readUE();
+				r.num_positive_pics = br.readUE();
+				r.delta_poc_s0_minus1 = [];
+				r.used_by_curr_pic_s0_flag = [];
+				for (let j = 0; j < r.num_negative_pics; j++)
+				{
+					r.delta_poc_s0_minus1[j] = br.readUE();
+					r.used_by_curr_pic_s0_flag[j] = br.readBit();
+				}
+				r.delta_poc_s1_minus1 = [];
+				r.used_by_curr_pic_s1_flag = [];
+				for (let j = 0; j < r.num_positive_pics; j++)
+				{
+					r.delta_poc_s1_minus1[j] = br.readUE();
+					r.used_by_curr_pic_s1_flag[j] = br.readBit();
+				}
+			}
+			rps.push(r);
+			prevRps = r;
+		}
+		return rps;
+	}
+
+	function parseVuiParameters(br, sps)
+	{
+		const vui = {};
+		vui.aspect_ratio_info_present_flag = br.readBit();
+		if (vui.aspect_ratio_info_present_flag)
+		{
+			vui.aspect_ratio_idc = br.readBits(8);
+			if (vui.aspect_ratio_idc === 255)
+			{
+				vui.sar_width = br.readBits(16);
+				vui.sar_height = br.readBits(16);
+			}
+		}
+		vui.overscan_info_present_flag = br.readBit();
+		if (vui.overscan_info_present_flag)
+		{
+			vui.overscan_appropriate_flag = br.readBit();
+		}
+		vui.video_signal_type_present_flag = br.readBit();
+		if (vui.video_signal_type_present_flag)
+		{
+			vui.video_format = br.readBits(3);
+			vui.video_full_range_flag = br.readBit();
+			vui.colour_description_present_flag = br.readBit();
+			if (vui.colour_description_present_flag)
+			{
+				vui.colour_primaries = br.readBits(8);
+				vui.transfer_characteristics = br.readBits(8);
+				vui.matrix_coeffs = br.readBits(8);
+			}
+		}
+		vui.chroma_loc_info_present_flag = br.readBit();
+		if (vui.chroma_loc_info_present_flag)
+		{
+			vui.chroma_sample_loc_type_top_field = br.readUE();
+			vui.chroma_sample_loc_type_bottom_field = br.readUE();
+		}
+		vui.neutral_chroma_indication_flag = br.readBit();
+		vui.field_seq_flag = br.readBit();
+		vui.frame_field_info_present_flag = br.readBit();
+
+		vui.default_display_window_flag = br.readBit();
+		if (vui.default_display_window_flag)
+		{
+			vui.def_disp_win_left_offset = br.readUE();
+			vui.def_disp_win_right_offset = br.readUE();
+			vui.def_disp_win_top_offset = br.readUE();
+			vui.def_disp_win_bottom_offset = br.readUE();
+		}
+
+		vui.vui_timing_info_present_flag = br.readBit();
+		if (vui.vui_timing_info_present_flag)
+		{
+			vui.vui_num_units_in_tick = br.readBits(32);
+			vui.vui_time_scale = br.readBits(32);
+			vui.vui_poc_proportional_to_timing_flag = br.readBit();
+			if (vui.vui_poc_proportional_to_timing_flag)
+			{
+				vui.vui_num_ticks_poc_diff_one_minus1 = br.readUE();
+			}
+			vui.vui_hrd_parameters_present_flag = br.readBit();
+			if (vui.vui_hrd_parameters_present_flag)
+			{
+				// hrd_parameters() is extensive; many decoders skip full detail.
+				// Parse the presence flags minimally to consume the bitstream.
+				const cpbCntMinus1 = [];
+				const bitRateScale = br.readBits(4);
+				const cpbSizeScale = br.readBits(4);
+				const initialCpbRemovalDelayLengthMinus1 = br.readBits(5);
+				const auCpbRemovalDelayLengthMinus1 = br.readBits(5);
+				const dpbOutputDelayLengthMinus1 = br.readBits(5);
+				const subPicHrdParamsPresentFlag = br.readBit();
+				let tickDivisorMinus2 = 0;
+				let duCpbRemovalDelayLengthMinus1 = 0;
+				let dpbOutputDelayDuLengthMinus1 = 0;
+				if (subPicHrdParamsPresentFlag)
+				{
+					tickDivisorMinus2 = br.readBits(8);
+					const duCpbRemovalDelayIncrementLengthMinus1 = br.readBits(5);
+					const subPicCpbParamsInPicTimingSeiFlag = br.readBit();
+					duCpbRemovalDelayLengthMinus1 = br.readBits(5);
+					dpbOutputDelayDuLengthMinus1 = br.readBits(5);
+				}
+				const fixedPicRateGeneralFlag = [];
+				const fixedPicRateWithinCvsFlag = [];
+				const lowDelayHrdFlag = [];
+				const elementalDurationInTcMinus1 = [];
+				for (let i = 0; i <= sps.sps_max_sub_layers_minus1; i++)
+				{
+					fixedPicRateGeneralFlag[i] = br.readBit();
+					let fixedRate = false;
+					if (!fixedPicRateGeneralFlag[i])
+					{
+						fixedPicRateWithinCvsFlag[i] = br.readBit();
+						fixedRate = fixedPicRateWithinCvsFlag[i];
+					} else
+					{
+						fixedRate = true;
+					}
+					if (fixedRate)
+					{
+						elementalDurationInTcMinus1[i] = br.readUE();
+					} else
+					{
+						lowDelayHrdFlag[i] = br.readBit();
+					}
+					cpbCntMinus1[i] = br.readUE();
+					const nalHrdParametersPresentFlag = br.readBit();
+					const vclHrdParametersPresentFlag = br.readBit();
+					for (const presentFlag of [nalHrdParametersPresentFlag, vclHrdParametersPresentFlag])
+					{
+						if (presentFlag)
+						{
+							for (let j = 0; j <= cpbCntMinus1[i]; j++)
+							{
+								br.readUE(); // bit_rate_value_minus1
+								br.readUE(); // cpb_size_value_minus1
+								if (subPicHrdParamsPresentFlag)
+								{
+									br.readUE(); // cpb_size_du_value_minus1
+									br.readUE(); // bit_rate_du_value_minus1
+								}
+								br.readBit(); // cbr_flag
+							}
+						}
+					}
+				}
+				vui.hrd = {
+					bitRateScale, cpbSizeScale,
+					initialCpbRemovalDelayLengthMinus1,
+					auCpbRemovalDelayLengthMinus1,
+					dpbOutputDelayLengthMinus1,
+					subPicHrdParamsPresentFlag,
+					tickDivisorMinus2,
+					duCpbRemovalDelayLengthMinus1,
+					dpbOutputDelayDuLengthMinus1
+				};
+			}
+		}
+
+		vui.bitstream_restriction_flag = br.readBit();
+		if (vui.bitstream_restriction_flag)
+		{
+			vui.tiles_fixed_structure_flag = br.readBit();
+			vui.motion_vectors_over_pic_boundaries_flag = br.readBit();
+			vui.restricted_ref_pic_lists_flag = br.readBit();
+			vui.min_spatial_segmentation_idc = br.readUE();
+			vui.max_bytes_per_pic_denom = br.readUE();
+			vui.max_bits_per_min_cu_denom = br.readUE();
+			vui.log2_max_mv_length_horizontal = br.readUE();
+			vui.log2_max_mv_length_vertical = br.readUE();
+		}
+		return vui;
+	}
+
+	function describePTL(ptl)
+	{
+		const profiles = {
+			1: "Main",
+			2: "Main 10",
+			3: "Main Still Picture",
+			4: "Range Extensions",
+			5: "High Throughput 4:4:4",
+			6: "Multiview Main",
+			7: "Scalable Main",
+			8: "3D Main",
+			9: "Screen-Extended Main",
+			10: "Screen-Extended Main 10",
+			11: "Screen-Extended 4:4:4"
+		};
+		const profile = profiles[ptl.general_profile_idc] || `Profile ${ptl.general_profile_idc}`;
+		const tier = ptl.general_tier_flag ? "High" : ""; // ptl.general_tier_flag ? "High" : "Main";
+		const level = (ptl.general_level_idc / 30).toFixed(1);
+
+		return profile + " L" + level + " " + (tier ? (tier + " Tier") : "");
+	}
+
+	//// HEVC (H.265) Picture Parameter Set (PPS) parser (ISO/IEC 23008-2 / ITU-T H.265)
+	//// Spec-compliant skeleton with full fields, conditionals, tiles, deblocking,
+	//// scaling list parsing, PPS extensions, and RBSP trailing bits.
+	///**
+	// * Parse PPS NAL Unit from H.265 stream
+	// * @param {Uint8Array} nalUnit - Raw PPS NAL unit payload (without start code)
+	// * @returns {Object} Parsed PPS fields
+	// */
+	//this.parsePPS = function (nalUnit)
+	//{
+	//	const br = new UI3BitReader(nalUnit);
+	//	const pps = { h265: true };
+
+	//	try
+	//	{
+	//		// 1) Parse NALU header and verify PPS type (34 in HEVC for PPS NAL units).
+	//		const nalu = parseH265NALUHeader(br);
+	//		pps.nalu = nalu;
+	//		// Optional: validate nal_unit_type if you only feed PPS NALs here
+	//		// if (nalu.nal_unit_type !== 34) { throw new Error('Not a PPS NALU'); }
+
+	//		// 2) PPS syntax (as per standard sequence)
+	//		pps.pps_pic_parameter_set_id = br.readUE();
+	//		pps.pps_seq_parameter_set_id = br.readUE();
+	//		pps.dependent_slice_segments_enabled_flag = br.readBit();
+	//		pps.output_flag_present_flag = br.readBit();
+	//		pps.num_extra_slice_header_bits = br.readBits(3);
+	//		pps.sign_data_hiding_enabled_flag = br.readBit();
+	//		pps.cabac_init_present_flag = br.readBit();
+	//		pps.num_ref_idx_l0_default_active_minus1 = br.readUE();
+	//		pps.num_ref_idx_l1_default_active_minus1 = br.readUE();
+	//		pps.init_qp_minus26 = br.readSE();
+	//		pps.constrained_intra_pred_flag = br.readBit();
+	//		pps.transform_skip_enabled_flag = br.readBit();
+	//		pps.cu_qp_delta_enabled_flag = br.readBit();
+
+	//		if (pps.cu_qp_delta_enabled_flag)
+	//		{
+	//			pps.diff_cu_qp_delta_depth = br.readUE();
+	//		}
+
+	//		pps.pps_cb_qp_offset = br.readSE();
+	//		pps.pps_cr_qp_offset = br.readSE();
+	//		pps.pps_slice_chroma_qp_offsets_present_flag = br.readBit();
+	//		pps.weighted_pred_flag = br.readBit();
+	//		pps.weighted_bipred_flag = br.readBit();
+	//		pps.transquant_bypass_enabled_flag = br.readBit();
+	//		pps.tiles_enabled_flag = br.readBit();
+	//		pps.entropy_coding_sync_enabled_flag = br.readBit();
+
+	//		// Tiles block
+	//		if (pps.tiles_enabled_flag)
+	//		{
+	//			pps.num_tile_columns_minus1 = br.readUE();
+	//			pps.num_tile_rows_minus1 = br.readUE();
+	//			pps.uniform_spacing_flag = br.readBit();
+
+	//			const numCols = (pps.num_tile_columns_minus1 || 0) + 1;
+	//			const numRows = (pps.num_tile_rows_minus1 || 0) + 1;
+
+	//			if (!pps.uniform_spacing_flag)
+	//			{
+	//				pps.column_width_minus1 = [];
+	//				pps.row_height_minus1 = [];
+	//				for (let i = 0; i < numCols - 1; i++)
+	//				{
+	//					pps.column_width_minus1[i] = br.readUE();
+	//				}
+	//				for (let j = 0; j < numRows - 1; j++)
+	//				{
+	//					pps.row_height_minus1[j] = br.readUE();
+	//				}
+	//			}
+
+	//			pps.loop_filter_across_tiles_enabled_flag = br.readBit();
+	//		}
+
+	//		pps.pps_loop_filter_across_slices_enabled_flag = br.readBit();
+
+	//		// Deblocking filter control
+	//		pps.deblocking_filter_control_present_flag = br.readBit();
+	//		if (pps.deblocking_filter_control_present_flag)
+	//		{
+	//			pps.deblocking_filter_override_enabled_flag = br.readBit();
+	//			pps.pps_deblocking_filter_disabled_flag = br.readBit();
+	//			if (!pps.pps_deblocking_filter_disabled_flag)
+	//			{
+	//				pps.pps_beta_offset_div2 = br.readSE();
+	//				pps.pps_tc_offset_div2 = br.readSE();
+	//			}
+	//		}
+
+	//		// Scaling lists
+	//		pps.pps_scaling_list_data_present_flag = br.readBit();
+	//		if (pps.pps_scaling_list_data_present_flag)
+	//		{
+	//			pps.scaling_list_data = readScalingListData(br);
+	//		}
+
+	//		// Other slice/header-related fields
+	//		pps.lists_modification_present_flag = br.readBit();
+	//		pps.log2_parallel_merge_level_minus2 = br.readUE();
+	//		pps.slice_segment_header_extension_present_flag = br.readBit();
+
+	//		// PPS extension flags and payload
+	//		pps.pps_extension_present_flag = br.readBit();
+	//		if (pps.pps_extension_present_flag)
+	//		{
+	//			readPpsExtensions(br, pps);
+	//		}
+
+	//		// 3) RBSP trailing bits (consume stop-one-bit and alignment zeros)
+	//		readRbspTrailingBits(br);
+
+	//	} catch (e)
+	//	{
+	//		console.warn('Error parsing H.265 PPS:', e);
+	//		pps.error = String(e && e.message ? e.message : e);
+	//	}
+
+	//	return pps;
+	//}
+	//function parseH265NALUHeader(br)
+	//{
+	//	// HEVC NALU header:
+	//	// forbidden_zero_bit: 1 bit
+	//	// nal_unit_type: 6 bits
+	//	// nuh_layer_id: 6 bits
+	//	// nuh_temporal_id_plus1: 3 bits
+	//	const forbidden_zero_bit = br.readBit();
+	//	const nal_unit_type = br.readBits(6);
+	//	const nuh_layer_id = br.readBits(6);
+	//	const nuh_temporal_id_plus1 = br.readBits(3);
+
+	//	return {
+	//		forbidden_zero_bit,
+	//		nal_unit_type,
+	//		nuh_layer_id,
+	//		nuh_temporal_id_plus1
+	//	};
+	//}
+
+	//// Helper: RBSP trailing bits (stop bit + alignment zero bits).
+	//function readRbspTrailingBits(br)
+	//{
+	//	// rbsp_stop_one_bit (shall be '1')
+	//	const stopBit = br.readBit();
+	//	// then zero bits until the next byte boundary
+	//	// If your reader tracks bit position, this can be a no-op, but we consume zero bits explicitly.
+	//	while (br.bitsUntilByteAligned && br.bitsUntilByteAligned() !== 0)
+	//	{
+	//		const pad = br.readBit();
+	//		// Spec says these must be zero. We don't hard-fail but you may choose to assert here.
+	//	}
+	//	return { stopBit };
+	//}
+
+	//// Helper: "more_rbsp_data" check.
+	//// If your bitreader exposes this, use it. Otherwise, conservatively read until stop_one_bit encountered.
+	//// Here we implement a pragmatic approach: we peek until next '1' stop bit at the end of rbsp.
+	//function moreRbspData(br)
+	//{
+	//	// If your UI3BitReader can tell remaining bits excluding trailing, prefer that.
+	//	// As a safe fallback, we use remaining bits > 8 to indicate more data; tweak as needed.
+	//	return typeof br.bitsRemaining === 'function'
+	//		? br.bitsRemaining() > 8
+	//		: true; // fallback if unknown; caller should guard with known lengths in container contexts
+	//}
+
+	//// PPS range/multilayer/3D/extension parsing (payload is syntax-dependent and often not used).
+	//// We expose flags and consume extension bits conservatively to avoid desync.
+	//function readPpsExtensions(br, pps)
+	//{
+	//	// Spec: if (pps_extension_present_flag) {
+	//	//   pps_range_extension_flag
+	//	//   pps_multilayer_extension_flag
+	//	//   pps_3d_extension_flag
+	//	//   pps_extension_5bits
+	//	//   if (pps_range_extension_flag) { pps_range_extension() }
+	//	//   if (pps_multilayer_extension_flag) { pps_multilayer_extension() }
+	//	//   if (pps_3d_extension_flag) { pps_3d_extension() }
+	//	//   if (pps_extension_5bits) {
+	//	//     while (more_rbsp_data()) { pps_extension_data_flag; }
+	//	//   }
+	//	// }
+	//	pps.pps_range_extension_flag = br.readBit();
+	//	pps.pps_multilayer_extension_flag = br.readBit();
+	//	pps.pps_3d_extension_flag = br.readBit();
+	//	pps.pps_extension_5bits = br.readBits(5);
+
+	//	// Range extension syntax (if needed): placeholder
+	//	if (pps.pps_range_extension_flag)
+	//	{
+	//		// Implement per H.265 Range Extensions if targets require it.
+	//		pps.range_extension = { /* parse fields as per RExt */ };
+	//	}
+
+	//	// Multilayer extension syntax: placeholder
+	//	if (pps.pps_multilayer_extension_flag)
+	//	{
+	//		pps.multilayer_extension = { /* parse multilayer PPS extension */ };
+	//	}
+
+	//	// 3D extension syntax: placeholder
+	//	if (pps.pps_3d_extension_flag)
+	//	{
+	//		pps.three_d_extension = { /* parse 3D PPS extension */ };
+	//	}
+
+	//	// Vendor/proprietary or future extension area: consume remaining flags until trailing bits.
+	//	if (pps.pps_extension_5bits)
+	//	{
+	//		pps.extension_data = [];
+	//		while (moreRbspData(br))
+	//		{
+	//			// Per spec this is a sequence of flags; commonly just padding or reserved
+	//			const flag = br.readBit();
+	//			pps.extension_data.push(flag);
+	//			// Break safety to avoid infinite loops in pathological streams
+	//			if (pps.extension_data.length > 1024) break;
+	//		}
+	//	}
+	//}
+
+	//// Scaling list syntax (pps_scaling_list_data_present_flag).
+	//// This is full spec-compatible parsing for PPS scaling lists.
+	//function readScalingListData(br)
+	//{
+	//	// HEVC scaling lists cover sizes [4x4, 8x8, 16x16, 32x32] and matrix counts per size.
+	//	// sizeId 0..3 => 4x4, 8x8, 16x16, 32x32
+	//	// matrixId count per size: (sizeId === 3 ? 2 : 6)
+	//	// For each matrix: scaling_list_pred_mode_flag
+	//	// if pred_mode == 0: scaling_list_pred_matrix_id_delta
+	//	// else: parse coeffs with delta, possibly scaling_list_dc_coef for sizeId >= 2
+	//	const scalingList = { lists: [] };
+
+	//	for (let sizeId = 0; sizeId <= 3; sizeId++)
+	//	{
+	//		const numMatrices = (sizeId === 3) ? 2 : 6;
+	//		scalingList.lists[sizeId] = [];
+	//		for (let matrixId = 0; matrixId < numMatrices; matrixId++)
+	//		{
+	//			const scaling_list_pred_mode_flag = br.readBit();
+	//			const entry = { sizeId, matrixId, scaling_list_pred_mode_flag };
+
+	//			if (scaling_list_pred_mode_flag === 0)
+	//			{
+	//				// Predicted from another matrix
+	//				entry.scaling_list_pred_matrix_id_delta = br.readUE();
+	//			} else
+	//			{
+	//				// Explicit coefficients
+	//				const coefNum = Math.min(64, 1 << (4 + (sizeId << 1))); // per spec
+	//				let nextCoef = 8; // default per spec
+	//				if (sizeId >= 2)
+	//				{
+	//					entry.scaling_list_dc_coef_minus8 = br.readSE();
+	//					nextCoef = entry.scaling_list_dc_coef_minus8 + 8;
+	//				}
+	//				entry.scaling_list = [];
+
+	//				for (let i = 0; i < coefNum; i++)
+	//				{
+	//					const scaling_list_delta_coef = br.readSE();
+	//					nextCoef = (nextCoef + scaling_list_delta_coef + 256) % 256; // wrap
+	//					entry.scaling_list.push(nextCoef);
+	//				}
+	//			}
+	//			scalingList.lists[sizeId][matrixId] = entry;
+	//		}
+	//	}
+
+	//	return scalingList;
+	//}
+
+	///**
+	// * Extract QP from an HEVC slice NAL. Returns { qp } only if a non-dependent slice
+	// * header contains slice_qp_delta; otherwise returns null.
+	// * 
+	// * This method is AI-generated and doesn't deliver the correct QP value currently, possibly due to inadequate SPS and PPS parsing by other functions in this object.  This stuff is incredibly overcomplicated.
+	// *
+	// * @param {Uint8Array} nal - Raw NAL unit bytes (Annex B unit payload, without start code).
+	// * @param {Object} sps - Minimal SPS context (see doc).
+	// * @param {Object} pps - Minimal PPS context (see doc).
+	// * @returns {{qp:number}|null}
+	// */
+	//this.parseQPFromNAL = function (nal, sps, pps)
+	//{
+	//	if (!(nal instanceof Uint8Array))
+	//		throw new Error("nal must be Uint8Array");
+	//	if (!sps || !pps)
+	//		throw new Error("SPS and PPS contexts are required");
+
+	//	// Parse NAL header (HEVC: first 2 bytes; nal_unit_type is 6 bits)
+	//	if (nal.length < 2)
+	//		return null;
+	//	const nalUnitType = (nal[0] >>> 1) & 0x3F; // 0..63
+	//	const nuhLayerId = ((nal[0] & 0x01) << 5) | ((nal[1] >>> 3) & 0x1F);
+	//	const nuhTemporalIdPlus1 = nal[1] & 0x07;
+	//	// Only VCL slices 0..31 can carry slice headers with QP
+	//	if (nalUnitType > 31)
+	//		return null;
+
+	//	const br = new UI3BitReader(nal);
+	//	br.skipBits(16); // Skip NALU header (2 bytes for H.265)
+
+	//	// HEVC 7.3.6 slice_segment_header parsing up to slice_qp_delta
+	//	// first_slice_segment_in_pic_flag
+	//	const first_slice_segment_in_pic_flag = br.readBits(1) === 1;
+
+	//	// For not-first slices: slice_segment_address is ue(v)
+	//	if (!first_slice_segment_in_pic_flag)
+	//	{
+	//		br.readUE(); // slice_segment_address
+	//	}
+
+	//	// IRAP picture types are 16..23; for those, no_output_of_prior_pics_flag present
+	//	const isIRAP = nalUnitType >= 16 && nalUnitType <= 23;
+	//	if (isIRAP && pps.output_flag_present_flag)
+	//	{
+	//		br.readBits(1); // no_output_of_prior_pics_flag
+	//	}
+
+	//	// num_extra_slice_header_bits
+	//	const numExtra = pps.num_extra_slice_header_bits >>> 0;
+	//	for (let i = 0; i < numExtra; i++)
+	//	{
+	//		br.readBits(1); // slice_reserved_flag[ i ]
+	//	}
+
+	//	// dependent_slice_segments_enabled_flag path:
+	//	const dependent_slice_segment_flag = pps.dependent_slice_segments_enabled_flag
+	//		? br.readBits(1) === 1
+	//		: false;
+
+	//	// slice_type (ue(v)) present for both dependent/non-dependent
+	//	const slice_type = br.readUE(); // 0=P, 1=B, 2=I
+
+	//	// If dependent slice, slice_qp_delta is NOT present => return null
+	//	if (dependent_slice_segment_flag)
+	//	{
+	//		return null;
+	//	}
+
+	//	// pic_output_flag if output_flag_present_flag
+	//	if (pps.output_flag_present_flag)
+	//	{
+	//		br.readBits(1); // pic_output_flag
+	//	}
+
+	//	// Redundant picture count for I-slices only (rare, typically 0) — not signalled in HEVC
+	//	// HEVC does not have H.264-style redundant_pic_cnt for slices, so nothing here.
+
+	//	// POC LSB for non-IDR (per spec: for non-IRAP? In HEVC, slice_pic_order_cnt_lsb is present
+	//	// for all non-IDR-TFD? To keep spec-compliant, gate by SPS field and IRAP rules.)
+	//	// Conservative approach: only read if sps.log2_max_pic_order_cnt_lsb_minus4 is defined
+	//	// and nalUnitType is not IDR_W_RADL/IDR_N_LP (19/20). For simplicity, skip unless caller requests.
+	//	// If you need strict parsing, set sps.read_poc_lsb = true and provide log2 value.
+	//	if (sps.read_poc_lsb)
+	//	{
+	//		const bits = (sps.log2_max_pic_order_cnt_lsb_minus4 + 4) >>> 0;
+	//		br.readBits(bits);
+	//	}
+
+	//	// Short-term and long-term refs presence depends on SPS/flags.
+	//	// We conservatively allow caller to skip these by default. If enabled, we parse the structures
+	//	// to correctly position the reader.
+	//	if (sps.parse_strp_in_slice_header)
+	//	{
+	//		parseShortTermRefs(br, sps);
+	//	}
+	//	//if (sps.long_term_ref_pics_present_flag && sps.parse_ltrp_in_slice_header)
+	//	if (sps.long_term_ref_pics_present_flag && pps.slice_segment_header_extension_present_flag)
+	//	{
+	//		parseLongTermRefs(br, sps);
+	//	}
+
+	//	// temporal MVP flag
+	//	if (sps.sps_temporal_mvp_enabled_flag)
+	//	{
+	//		br.readBits(1); // slice_temporal_mvp_enabled_flag
+	//	}
+
+	//	// slice_qp_delta is reached after (optional) cabac_init_idc and chroma qp offsets
+	//	// The branch conditions ahead:
+	//	// - pps.cabac_init_present_flag => slice_cb_qp_offset fields follow later, but
+	//	//   cabac_init_idc precedes slice_qp_delta.
+	//	if (pps.cabac_init_present_flag)
+	//	{
+	//		br.readUE(); // cabac_init_idc
+	//	}
+
+	//	// Now the target:
+	//	const slice_qp_delta = br.readSE(); // signed Exp-Golomb
+
+	//	//// Chroma QP offsets (don’t affect QP parsing, but keep reader correct if enabled)
+	//	//if (pps.pps_slice_chroma_qp_offsets_present_flag)
+	//	//{
+	//	//	br.readSE(); // slice_cb_qp_offset
+	//	//	br.readSE(); // slice_cr_qp_offset
+	//	//}
+
+	//	//// Deblocking filter override and flags
+	//	//if (pps.deblocking_filter_override_enabled_flag)
+	//	//{
+	//	//	const deblocking_filter_override_flag = br.readBits(1) === 1;
+	//	//	if (deblocking_filter_override_flag)
+	//	//	{
+	//	//		const slice_deblocking_filter_disabled_flag = pps.pps_deblocking_filter_disabled_flag
+	//	//			? br.readBits(1) === 1
+	//	//			: false;
+	//	//		if (!slice_deblocking_filter_disabled_flag)
+	//	//		{
+	//	//			br.readSE(); // slice_beta_offset_div2
+	//	//			br.readSE(); // slice_tc_offset_div2
+	//	//		}
+	//	//	}
+	//	//}
+
+	//	//// Loop filter across slices flag
+	//	//br.readBits(1); // slice_loop_filter_across_slices_flag (signalled if PPS enabled globally)
+	//	//// Note: If PPS disables loop filter across slices globally, spec may omit this flag.
+	//	//// If you need strict gating, add pps.pps_loop_filter_across_slices_enabled_flag guard.
+
+	//	// Compute final QP
+	//	const qp = 26 + (pps.pps_init_qp_minus26 | 0) + slice_qp_delta;
+	//	return { qp };
+	//}
+
+	///* Optional detailed ref parsing when enabled via SPS flags */
+	//function parseShortTermRefs(br, sps)
+	//{
+	//	// short-term refs in slice: num_ref_idx_active_override_flag and lists
+	//	// Minimal compliance: read flags and counts without building lists
+	//	const num_ref_idx_active_override_flag = br.readBits(1) === 1;
+	//	if (num_ref_idx_active_override_flag)
+	//	{
+	//		br.readUE(); // num_ref_idx_l0_active_minus1
+	//		br.readUE(); // num_ref_idx_l1_active_minus1 (for B-slices; harmless if present)
+	//	}
+	//}
+
+	//function parseLongTermRefs(br, sps)
+	//{
+	//	// Minimal placeholder: in full spec you parse lt_cnt and signalled POC/msb flags
+	//	// We provide a conservative reader to keep bit alignment if enabled.
+	//	const num_long_term_sps = br.readUE();
+	//	const num_long_term_pics = br.readUE();
+	//	const total = num_long_term_sps + num_long_term_pics;
+	//	for (let i = 0; i < total; i++)
+	//	{
+	//		const bits = (sps.log2_max_pic_order_cnt_lsb_minus4 + 4) >>> 0;
+	//		br.readBits(bits);      // lt_poc_lsb
+	//		br.readBits(1);         // used_by_curr_pic_lt_flag
+	//		br.readBits(1);         // delta_poc_msb_present_flag
+	//		// If delta_poc_msb_present_flag, parse SE delta; spec uses ue/se depending on path.
+	//		// For robustness, assume ue here; change to SE if your stream requires.
+	//		// br.readUE(); // delta_poc_msb_cycle_lt[i]
+	//	}
+	//}
 })();

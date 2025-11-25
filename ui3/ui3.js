@@ -33751,9 +33751,9 @@ function IdentifyVideoKeyframe(buf, codecH265)
 }
 function AddVideoFrameFormatData(frame)
 {
-	if (frame.isH264)
+	try
 	{
-		try
+		if (frame.isH264)
 		{
 			var nalUnits = UI3_VideoParser.parseNALUnits(frame.frameData, frame.isH265);
 			for (var i = 0; i < nalUnits.length; i++)
@@ -33788,10 +33788,52 @@ function AddVideoFrameFormatData(frame)
 				}
 			}
 		}
-		catch (ex)
+		else if (frame.isH265)
 		{
-			console.error("Error parsing NAL units:", ex);
+			var nalUnits = UI3_VideoParser.parseNALUnits(frame.frameData, frame.isH265);
+			for (var i = 0; i < nalUnits.length; i++)
+			{
+				if (nalUnits[i].type === 33) // SPS
+				{
+					if (!frame.meta.formatData)
+						frame.meta.formatData = {};
+
+					var sps = nalUnits[i].sps;
+					console.log("SPS", sps);
+					//console.log(nalUnits[i].sps.summary);
+
+					frame.meta.formatData.codecDetails = sps.description;
+				}
+				//else if (nalUnits[i].type === 34) // PPS
+				//{
+				//	if (!frame.meta.formatData)
+				//		frame.meta.formatData = {};
+
+				//	var pps = nalUnits[i].pps;
+				//	console.log("PPS", pps);
+
+				//	frame.meta.formatData.QP = pps.init_qp_minus26 + 26;
+				//	console.log("PPS QP", frame.meta.formatData.QP);
+				//}
+				//else
+				//{
+				//	try
+				//	{
+				//		var result = UI3_H265Parser.parseQPFromNAL(nalUnits[i].data, last_h265_stuff.sps, last_h265_stuff.pps);
+				//		if (result)
+				//			console.log("QP", result.qp);
+				//	}
+				//	catch (ex)
+				//	{
+				//		console.error("Error parsing QP from NAL unit:", ex);
+				//	}
+				//}
+			}
 		}
+	}
+	catch (ex)
+	{
+		console.error("Error parsing NAL units:", ex);
 	}
 }
 ///////////////////////////////////////////////////////////////
