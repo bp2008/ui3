@@ -24228,6 +24228,10 @@ function getMaxGOP()
 }
 var ui3_streaming_quality_default = 50;
 var ui3_bitrate_default_kbps = 2000;
+/**
+ * 24000 Kbps bit rate to assign to streams if the profile does not define a valid bit rate.
+ */
+var ui3_bitrate_fallback_kbps = 24000;
 var has_bi6_quality_scale = compareVersions(bi_version, "5.9.9.99") >= 0;
 function IsKbpsValid(kbps)
 {
@@ -24599,7 +24603,7 @@ function StreamingProfile()
 				// kbps=0 used to be a sentinel value instructing Blue Iris to use no bit rate limit. It was removed in BI 6 beta and they wouldn't restore it for backwards compatibility.
 				var kbps = self.kbps;
 				if (!IsKbpsValid(kbps))
-					kbps = ui3_bitrate_default_kbps;
+					kbps = ui3_bitrate_fallback_kbps;
 				kbps = Clamp(kbps, 10, 100000);
 				var max = settings.ui3_streamingProfileBitRateMax;
 				if (max)
@@ -24608,8 +24612,9 @@ function StreamingProfile()
 					if (IsKbpsValid(max) && max < kbps)
 						kbps = max;
 				}
-				if (IsKbpsValid(kbps))
-					sb.Append("&kbps=").Append(kbps);
+				if (!IsKbpsValid(kbps)) // Redundant validity check for safety in case of errors implementing other bit rate manipulations.
+					kbps = ui3_bitrate_default_kbps;
+				sb.Append("&kbps=").Append(kbps);
 			}
 
 			if (self.fps >= 0)
