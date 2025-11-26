@@ -24290,16 +24290,11 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			{
 				if (p.vcodec === "h264")
 				{
-					p.q = quality_qp_map.bi6_to_bi5_quality(p.q6);
 					var $qpLabel = findNextElement($input, '.qp_labels');
 					if ($qpLabel)
 					{
 						$qpLabel.text("H.264 QP " + quality_qp_map.bi6_q_to_h264_qp(p.q6) + " -- H.265 QP " + quality_qp_map.bi6_q_to_h265_qp(p.q6) + "");
 					}
-				}
-				else
-				{
-					p.q = p.q6;
 				}
 			};
 			AddEditorField("Quality [0-100]", "q6", { min: 0, max: 100, onChange: onQualityChange });
@@ -24469,7 +24464,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 function StreamingProfile()
 {
 	var self = this;
-	this.dv = 6; // default version
+	this.dv = 7; // default version
 	this.name = "Unnamed Streaming Profile";
 	this.abbr = "";
 	this.aClr = "#004882";
@@ -24478,8 +24473,10 @@ function StreamingProfile()
 	// All the remaining options are "optional".  Values of -1 mean to inherit the argument from the server-side stream.
 	this.w = -1;
 	this.h = -1;
-	this.q = 50; // Blue Iris 5 Quality % (deprecated, maintained for backwards compatibility)
-	this.q6 = quality_qp_map.bi5_to_bi6_quality(this.q); // Blue Iris 6 Quality %.  69-71% is equivalent to 50%-51% in BI5.
+	this.q6 = quality_qp_map.bi5_to_bi6_quality(50); // Blue Iris 6 Quality %.  For H.264, 69-71% in BI6 is equivalent to 50%-51% in BI5.
+	// The `q` parameter is Blue Iris 5 Quality % (deprecated, maintained for backwards compatibility).
+	// When assigning `q6`, `q` should always be assigned a new computed value to ensure correct functioning.
+	this.q = quality_qp_map.bi6_to_bi5_quality(this.q6);
 	// Above values apply to H.264 and JPEG.
 	// Below values apply only to H.264.
 	this.rc = "vbr"; // Rate Control Method ["vbr", "cbr"]
@@ -24727,6 +24724,34 @@ function StreamingProfile()
 		else
 			return null;
 	}
+	/**
+	 * Assigns the given Blue Iris 5 quality percentage to this profile by computing the equivalent BI6 quality and assigning it to `q6`, then computing the standard BI5 equivalent quality (which may slightly differ from the input) and assigning it to `q`.
+	 * @param {Number} q Blue Iris 5 quality percentage (0-100).
+	 */
+	this.SetQualityBI5 = function (q)
+	{
+		if (q < 0)
+		{
+			// Negative quality (specifically -1) means no quality parameter was provided and we should inherit from the server.
+			// UI3-307 and later still allow -1 particularly for JPEG profiles and H.264 profiles that have never been saved as VBR.
+			self.q6 = -1;
+			self.q = -1;
+		}
+		else
+		{
+			if (self.vcodec === "h264")
+			{
+				self.q6 = quality_qp_map.bi5_to_bi6_quality(q);
+				// All assignments to q6 must also set q for backwards compatibility.
+				// Note that `self.q` might not equal `q`, but the actual H.264 QP value will be the same.
+				self.q = quality_qp_map.bi6_to_bi5_quality(self.q6);
+			}
+			else
+			{
+				self.q6 = self.q = q;
+			}
+		}
+	}
 }
 function SetDynamicNativeSize(loading, w, h)
 {
@@ -24755,7 +24780,7 @@ function JpegSnapshotArgs(loadingImg)
 	p.aClr = "#000000";
 	p.w = 7680;
 	p.h = 7680;
-	p.q6 = Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100);
+	p.SetQualityBI5(Clamp(parseInt(settings.ui3_download_snapshot_server_quality), 0, 100));
 
 	return "&decode=1" + p.GetUrlArgs(loadingImg);
 }
@@ -24989,8 +25014,7 @@ function GenericQualityHelper()
 		p.aClr = "#8F29AE";
 		p.w = 7680;
 		p.h = 4320;
-		p.q = 50;
-		p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+		p.SetQualityBI5(50);
 		p.kbps = 16384;
 		p.gop = 1000;
 		return p;
@@ -25003,8 +25027,7 @@ function GenericQualityHelper()
 		p.aClr = "#8F29AE";
 		p.w = 7680;
 		p.h = 4320;
-		p.q = 20;
-		p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+		p.SetQualityBI5(20);
 		p.kbps = 5000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -25019,8 +25042,7 @@ function GenericQualityHelper()
 		p.aClr = "#008248";
 		p.w = 3840;
 		p.h = 2160;
-		p.q = 20;
-		p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+		p.SetQualityBI5(20);
 		p.kbps = 3000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -25035,8 +25057,7 @@ function GenericQualityHelper()
 		p.aClr = "#004882";
 		p.w = 1920;
 		p.h = 1080;
-		p.q = 20;
-		p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+		p.SetQualityBI5(20);
 		p.kbps = 1000;
 		p.gop = 1000;
 		p.pre = 2;
@@ -25059,8 +25080,7 @@ function GenericQualityHelper()
 			p.aClr = "#008248";
 			p.w = 3840;
 			p.h = 2160;
-			p.q = 50;
-			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+			p.SetQualityBI5(50);
 			p.kbps = 8192;
 			profiles.push(p);
 		}
@@ -25071,8 +25091,7 @@ function GenericQualityHelper()
 			p.aClr = "#0048A2";
 			p.w = 2560;
 			p.h = 1440;
-			p.q = 40;
-			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+			p.SetQualityBI5(40);
 			p.kbps = 4096;
 			profiles.push(p);
 		}
@@ -25083,8 +25102,7 @@ function GenericQualityHelper()
 			p.aClr = "#004882";
 			p.w = 1920;
 			p.h = 1080;
-			p.q = 35;
-			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+			p.SetQualityBI5(35);
 			p.kbps = 2048;
 			profiles.push(p);
 		}
@@ -25095,8 +25113,7 @@ function GenericQualityHelper()
 			p.aClr = "#003862";
 			p.w = 1280;
 			p.h = 720;
-			p.q = 35;
-			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+			p.SetQualityBI5(35);
 			p.kbps = 1024;
 			profiles.push(p);
 		}
@@ -25107,8 +25124,7 @@ function GenericQualityHelper()
 			p.aClr = "#884400";
 			p.w = 856;
 			p.h = 480;
-			p.q = 30;
-			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+			p.SetQualityBI5(30);
 			p.kbps = 456;
 			profiles.push(p);
 		}
@@ -25119,8 +25135,7 @@ function GenericQualityHelper()
 			p.aClr = "#883000";
 			p.w = 640;
 			p.h = 360;
-			p.q = 30;
-			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+			p.SetQualityBI5(30);
 			p.kbps = 256;
 			profiles.push(p);
 		}
@@ -25131,8 +25146,7 @@ function GenericQualityHelper()
 			p.aClr = "#882000";
 			p.w = 427;
 			p.h = 240;
-			p.q = 30;
-			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+			p.SetQualityBI5(30);
 			p.kbps = 114;
 			profiles.push(p);
 		}
@@ -25143,8 +25157,7 @@ function GenericQualityHelper()
 			p.aClr = "#880000";
 			p.w = 256;
 			p.h = 144;
-			p.q = 30;
-			p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
+			p.SetQualityBI5(30);
 			p.kbps = 41;
 			profiles.push(p);
 		}
@@ -25156,8 +25169,7 @@ function GenericQualityHelper()
 			p.aClr = "#004882";
 			p.w = 99999;
 			p.h = 99999;
-			p.q = 85;
-			p.q6 = 85;
+			p.SetQualityBI5(85);
 			profiles.push(p);
 		}
 		{
@@ -25168,8 +25180,7 @@ function GenericQualityHelper()
 			p.aClr = "#884400";
 			p.w = 640;
 			p.h = 640;
-			p.q = 50;
-			p.q6 = 50;
+			p.SetQualityBI5(50);
 			profiles.push(p);
 		}
 		{
@@ -25180,8 +25191,7 @@ function GenericQualityHelper()
 			p.aClr = "#880000";
 			p.w = 320;
 			p.h = 320;
-			p.q = 20;
-			p.q6 = 20;
+			p.SetQualityBI5(20);
 			profiles.push(p);
 		}
 		return profiles;
@@ -25275,32 +25285,23 @@ function GenericQualityHelper()
 			}
 		}
 		{
+			// v5 -> v6 -> v7
 			// Assign new q6 properties for BI 6 transition.
 			// Blue Iris 6 requires higher Quality % for the same visual quality as BI 5 due to changes in the QP mapping.
 			// This change does not require a "dv" data version update.
+			// UI3-307 implemented a quality mapping with no data version update.
+			// UI3-308 fixed a minor bug in the original mapping and assigned dv=6 to track the upgrade.
+			// UI3-309 fixed a related minor bug occurring in default 1080p and 720p profiles only if dv=6 migration was not performed.  Assigned dv=7 to track the upgrade.
 			var affected = 0;
 			for (var i = 0; i < profileData.length; i++)
 			{
 				var p = profileData[i];
-				if (p.dv && p.dv >= 6)
+				if (p.dv && p.dv >= 7)
 					continue;
-				p.dv = 6;
+				p.dv = 7;
 				var originalQ = p.q;
 				upgradeMade = true;
-				if (p.vcodec === "jpeg")
-					p.q6 = p.q;
-				else
-					p.q6 = quality_qp_map.bi5_to_bi6_quality(p.q);
-				if (p.q6 > 100)
-					p.q6 = 100;
-				else if (p.q6 < 0)
-					p.q6 = ui3_streaming_quality_default;
-				if (p.vcodec !== "jpeg")
-				{
-					// Reverse the BI6 to BI5 quality mapping. This may cause 1 to be subtracted from `q` without affecting H.264 QP.
-					// This is necessary to prevent unnecessary change detection in the streaming profile editor GUI.
-					p.q = quality_qp_map.bi6_to_bi5_quality(p.q6);
-				}
+				p.SetQualityBI5(originalQ);
 				affected++;
 				console.log('Streaming profile "' + p.name + '" quality setting migrated from q=' + originalQ + ' to q=' + p.q + ', q6=' + p.q6 + ' for Blue Iris 6 compatibility.');
 			}
@@ -25362,9 +25363,9 @@ function GenericQualityHelper()
 		{
 			self.profiles = new Array();
 			var profileData = JSON.parse(settings.ui3_streamingProfileArray);
-			var upgradeMade = upgradeDefaultProfileData(profileData);
 			for (var i = 0; i < profileData.length; i++)
 				self.profiles.push($.extend(new StreamingProfile(), profileData[i]));
+			var upgradeMade = upgradeDefaultProfileData(self.profiles);
 			self.SetStreamingQualityDropdownBoxItems();
 			if (upgradeMade)
 				self.SaveProfiles();
@@ -25380,6 +25381,30 @@ function GenericQualityHelper()
 	{
 		try
 		{
+			// Assign legacy Quality properties for backwards compatibility.
+			try
+			{
+				for (var i = 0; i < self.profiles.length; i++)
+				{
+					var p = self.profiles[i];
+					try
+					{
+						if (p.vcodec === "h264")
+							p.q = quality_qp_map.bi6_to_bi5_quality(p.q6);
+						else
+							p.q = p.q6;
+					}
+					catch (ex)
+					{
+						toaster.Error("Error with Quality setting of Streaming Quality profile \"" + p.name + "\": " + ex.message);
+					}
+				}
+			}
+			catch (ex)
+			{
+				toaster.Error("Error assigning legacy Quality properties for backwards compatibility: " + ex.message);
+			}
+
 			settings.ui3_streamingProfileArray = JSON.stringify(self.profiles);
 
 			if (isInSavingProfilesFunc)
@@ -25545,7 +25570,7 @@ var quality_qp_map = new (function ()
 		var qualities = self.bi5_to_bi6_qualities(q);
 		if (qualities.length)
 			return qualities[~~((qualities.length - 1) / 2)]; // ~~ means cast to int
-		// This convenience function should map out of range values to 0 or 100 to ensure we do not return an invalid value.
+		// If we didn't return a value already, then the output quality is out of range.  Return a usable value.
 		if (q < 50)
 			return 0;
 		else
@@ -25565,11 +25590,11 @@ var quality_qp_map = new (function ()
 		var qualities = self.bi6_to_bi5_qualities(q);
 		if (qualities.length)
 			return qualities[~~((qualities.length - 1) / 2)]; // ~~ means cast to int
-		// This convenience function should map out of range values to 0 or 100 to ensure we do not return an invalid value.
+		// If we didn't return a value already, then the output quality is out of range.  Return a usable value.
 		if (q < 50)
 			return 0;
 		else
-			return 100;
+			return 70; // 100% in BI5 is H.264 QP 1, which is insanely high.  70% in BI5 is H.264 QP 16, which is much more reasonable.
 	};
 	this.h264_qp_to_bi5_qualities = function (qp)
 	{
