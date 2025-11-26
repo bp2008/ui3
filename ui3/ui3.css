@@ -3867,6 +3867,7 @@ body + div
 	box-sizing: border-box;
 	max-height: 100vh;
 	overflow-y: auto;
+	z-index: 10000050; /* Must be higher than the .playbackSettings container for Streaming Quality context menu to work properly. */
 }
 
 	.b-m-mpanel a

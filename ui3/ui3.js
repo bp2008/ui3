@@ -11194,19 +11194,18 @@ function PlaybackControls()
 			if (!p.IsCompatible())
 				continue;
 			var $item = $('<div class="playbackSettingsLine alignRight"></div>');
-			var name = $item.get(0).qualityName = p.name;
+			$item.attr('name', p.name);
 			$item.append(p.GetNameEle());
 			var tooltip = p.GetTooltipText();
 			if (tooltip)
 				$item.attr('title', tooltip);
-			if (name === currentProfile.name)
+			if (p.name === currentProfile.name)
 				$selectedItem = $item.addClass("selected");
-			$item.click(function ()
+			$item.click(function (e)
 			{
-				genericQualityHelper.QualityChoiceChanged(this.qualityName);
-				self.SetQualityHint();
-				CloseSettings();
+				OnClickStreamingQualityProfileItem($(e.currentTarget).attr('name'));
 			});
+			StreamingQualityItemContextMenu.AttachContextMenu($item, OnClickStreamingQualityProfileItem, OnEditStreamingQualityProfileItem);
 			$playbackSettings.append($item);
 		}
 
@@ -11221,6 +11220,16 @@ function PlaybackControls()
 			if (idealScrollTop > 0)
 				$playbackSettings.scrollTop(idealScrollTop);
 		}
+	}
+	var OnClickStreamingQualityProfileItem = function (name)
+	{
+		genericQualityHelper.QualityChoiceChanged(name);
+		self.SetQualityHint();
+		CloseSettings();
+	}
+	var OnEditStreamingQualityProfileItem = function (name)
+	{
+		new StreamingProfileEditor(genericQualityHelper.GetProfileWithName(name), function () { });
 	}
 	var CloseSettings = function ()
 	{
@@ -24336,9 +24345,11 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		$deleteBtn.on('click', DeleteClicked);
 		var $cancelBtn = $('<input type="button" style="float:right; margin-right: 10px;" value="Cancel" />');
 		$cancelBtn.on('click', CloseDialog);
+		var $applyBtn = $('<input type="button" style="float:right; margin-right: 10px;" value="Apply" />');
+		$applyBtn.on('click', SaveAndStayOpen);
 		var $saveBtn = $('<input type="button" style="float:right;" value="Save" />');
 		$saveBtn.on('click', SaveAndClose);
-		$content.append($('<div class="dialogOption_item_info"></div>').append($deleteBtn).append($saveBtn).append($cancelBtn));
+		$content.append($('<div class="dialogOption_item_info"></div>').append($deleteBtn).append($saveBtn).append($applyBtn).append($cancelBtn));
 	}
 	var findNextElement = function ($element, selector)
 	{
@@ -24356,12 +24367,12 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			str += " (" + desc + ")";
 		return str;
 	}
-	var SaveAndClose = function ()
+	var SaveAndStayOpen = function ()
 	{
 		if (isNullOrWhitespace(p.name))
 		{
 			SimpleDialog.Text("A profile must have at least one printable character in its name.");
-			return;
+			return false;
 		}
 		p.name = p.name.trim();
 		if (srcProfile.name !== p.name)
@@ -24371,7 +24382,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 				if (genericQualityHelper.profiles[i].name === p.name)
 				{
 					SimpleDialog.Text("A profile with the name '" + p.name + "' already exists.");
-					return;
+					return false;
 				}
 			}
 		}
@@ -24384,7 +24395,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 					p.q6 = ui3_streaming_quality_default;
 					ReRender();
 					SimpleDialog.Text("A Quality value was not entered, so a default value (" + p.q6 + ") was assigned.");
-					return;
+					return false;
 				}
 			}
 			if (p.rc === "vbr" || p.rc === "cbr")
@@ -24394,7 +24405,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 					p.kbps = ui3_bitrate_default_kbps;
 					ReRender();
 					SimpleDialog.Text("A Bit Rate value was not entered, so a default value (" + p.kbps + ") was assigned.");
-					return;
+					return false;
 				}
 			}
 		}
@@ -24416,12 +24427,18 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 				genericQualityHelper.SaveProfiles();
 				if (typeof profileEditedCallback === "function")
 					profileEditedCallback(p.name);
-				CloseDialog();
 				toaster.Success("Saved Profile " + p.GetNameEle().html(), 1500);
+				srcProfile = p.Clone();
 				return true;
 			}
 		}
 		SimpleDialog.Text("Unable to locate original profile to replace it. Name: '" + srcProfile.name + "'")
+	}
+	var SaveAndClose = function ()
+	{
+		if (!SaveAndStayOpen())
+			return;
+		CloseDialog();
 	}
 	var DialogClosing = function ()
 	{
@@ -26459,6 +26476,58 @@ function OpenAlertListButtonContextMenu()
 	};
 	$("#open_alerts_btn").contextmenu(menuOptions);
 }
+///////////////////////////////////////////////////////////////
+// Streaming Quality Item Context Menu ////////////////////////
+///////////////////////////////////////////////////////////////
+var StreamingQualityItemContextMenu = new (function ()
+{
+	var lastClickedProfileName = null;
+	var onSelect = function () { };
+	var onEdit = function () { };
+	var onTriggerStreamingQualityProfileContextMenu = function (e)
+	{
+		var $ele = $(e.currentTarget);
+		lastClickedProfileName = $ele.attr('name');
+		var html = $ele.html();
+		$("#contextMenuStreamingQualityProfileName1").html(html);
+		$("#contextMenuStreamingQualityProfileName2").html(html);
+		return true;
+	}
+	var onContextMenuAction = function ()
+	{
+		switch (this.data.alias)
+		{
+			case "select":
+				onSelect(lastClickedProfileName);
+				break;
+			case "edit":
+				onEdit(lastClickedProfileName);
+				break;
+			default:
+				toaster.Error(this.data.alias + " is not implemented!");
+				break;
+		}
+	}
+	var contextMenuArgs = null;
+	this.AttachContextMenu = function ($ele, onSelectArg, onEditArg)
+	{
+		if (!contextMenuArgs)
+		{
+			contextMenuArgs = {
+				alias: "cmroot_streamingQualityItem", width: 200, items:
+					[
+						{ text: 'Select <span id="contextMenuStreamingQualityProfileName1">Profile Name</span>', icon: "#svg_x5F_OK", alias: "select", action: onContextMenuAction }
+						, { text: 'Edit <span id="contextMenuStreamingQualityProfileName2">Profile Name</span>', icon: "#svg_mio_edit", iconClass: "noflip", alias: "edit", action: onContextMenuAction }
+					]
+				, onContextMenu: onTriggerStreamingQualityProfileContextMenu
+				, clickType: GetPreferredContextMenuTrigger()
+			}
+		}
+		onSelect = onSelectArg;
+		onEdit = onEditArg;
+		$ele.contextmenu(contextMenuArgs);
+	}
+})();
 ///////////////////////////////////////////////////////////////
 // Clip list Context Menu /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
