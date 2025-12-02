@@ -29880,7 +29880,7 @@ function ServerControl()
 	var AddChangelogButton = function ($sysconfig)
 	{
 		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
-		$row.append(GetDialogOptionLabel('<a href="https://blueirissoftware.com/changelog.pdf" target="_blank">View Blue Iris changelog <svg class="icon noflip"><use xlink:href="#svg_mio_launch"></use></svg></a>'));
+		$row.append(GetDialogOptionLabel('<a href="https://blueirissoftware.com/changelog6.pdf" target="_blank">View Blue Iris changelog <svg class="icon noflip"><use xlink:href="#svg_mio_launch"></use></svg></a>'));
 		$sysconfig.append($row);
 	}
 }
