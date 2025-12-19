@@ -6675,3 +6675,9 @@ ul.extraSpacing li
 {
 	color: #FF5F00;
 }
+
+#lanConnectionDetected,
+#wanConnectionDetected
+{
+	display: none;
+}

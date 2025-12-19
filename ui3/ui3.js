@@ -934,6 +934,10 @@ var defaultSettings =
 			, value: "1080p VBR^"
 		}
 		, {
+			key: "ui3_streamingQuality_lan" // Initialized upon first use by copying from ui3_streamingQuality.
+			, value: ""
+		}
+		, {
 			key: "ui3_playback_reverse"
 			, value: "0"
 		}
@@ -4354,6 +4358,7 @@ var startupOpenStatsForNerds = false;
 var startupClipFilterSearch = null;
 var startupClipFilterBeginDate = null;
 var startupClipFilterEndDate = null;
+var startupStreamingQuality = null;
 function HandlePreLoadUrlParameters()
 {
 	// Parameter "developerMode"
@@ -4466,7 +4471,7 @@ function HandlePreLoadUrlParameters()
 	// Parameter "streamingprofile"
 	var streamingprofile = UrlParameters.Get("streamingprofile", "p");
 	if (streamingprofile !== '')
-		settings.ui3_streamingQuality = streamingprofile;
+		startupStreamingQuality = streamingprofile;
 
 	// Parameter "timeout"
 	var timeoutParam = UrlParameters.Get("timeout", "to");
@@ -15754,6 +15759,26 @@ function SessionManager()
 
 		HandleUpdatedPermissions();
 
+		if (startupStreamingQuality)
+		{
+			SetSettingsStreamingQualityProfileName(startupStreamingQuality);
+			genericQualityHelper.QualityChoiceChanged(startupStreamingQuality);
+			startupStreamingQuality = null;
+		}
+		if (MinBiVersion("6.0.1.1"))
+		{
+			if (response.data.lan)
+			{
+				$("#lanConnectionDetected").show();
+				$("#wanConnectionDetected").hide();
+			}
+			else
+			{
+				$("#lanConnectionDetected").hide();
+				$("#wanConnectionDetected").show();
+			}
+		}
+
 		statusLoader.LoadStatus();
 		cameraListLoader.LoadCameraList();
 		if (isRecoveringFromInvalidSession)
@@ -15972,7 +15997,7 @@ function SessionManager()
 	}
 	this.IsInvalidSession = function (response)
 	{
-		if (compareVersions(bi_version, "5.8.1.1") >= 0)
+		if (MinBiVersion("5.8.1.1"))
 		{
 			return response
 				&& response.result === "fail"
@@ -16136,7 +16161,7 @@ function SessionManager()
 			if (m)
 				o.res = parseInt(m[1]);
 
-			if (compareVersions(bi_version, "5.7.5.3") >= 0)
+			if (MinBiVersion("5.7.5.3"))
 				o.overrides = str.indexOf("*") > -1;
 			else
 				o.overrides = true;
@@ -20561,7 +20586,7 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			$err.append($automatic);
 			if (webcodecs_h264_player_supported)
 			{
-				var $disablePnaclButton3 = $('<input type="button" value="WebCodecs (new)" />');
+				var $disablePnaclButton3 = $('<input type="button" value="WebCodecs (fast)" />');
 				$disablePnaclButton3.css('margin-top', '10px').css('padding', '6px').css('display', 'block');
 				$disablePnaclButton3.on('click', function ()
 				{
@@ -24241,7 +24266,7 @@ var ui3_bitrate_default_kbps = 2000;
  * 24000 Kbps bit rate to assign to streams if the profile does not define a valid bit rate.
  */
 var ui3_bitrate_fallback_kbps = 24000;
-var has_bi6_quality_scale = compareVersions(bi_version, "5.9.9.99") >= 0;
+var has_bi6_quality_scale = MinBiVersion("5.9.9.99");
 function IsKbpsValid(kbps)
 {
 	return kbps && kbps >= 10;
@@ -24414,7 +24439,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 			if (genericQualityHelper.profiles[i].name === srcProfile.name)
 			{
 				genericQualityHelper.profiles[i] = p;
-				if (settings.ui3_streamingQuality === srcProfile.name)
+				if (GetSettingsStreamingQualityProfileName() === srcProfile.name)
 				{
 					// Current profile is changing
 					genericQualityHelper.QualityChoiceChanged(p.name);
@@ -24820,8 +24845,9 @@ function GenericQualityHelper()
 	{
 		if (!self.profiles || self.profiles.length === 0)
 			self.RestoreDefaultProfiles();
+		var profileName = GetSettingsStreamingQualityProfileName();
 		for (var i = 0; i < self.profiles.length; i++)
-			if (self.profiles[i].name === settings.ui3_streamingQuality)
+			if (self.profiles[i].name === profileName)
 			{
 				if (!self.profiles[i].IsCompatible())
 					continue;
@@ -24833,17 +24859,18 @@ function GenericQualityHelper()
 	{
 		if (!self.profiles || self.profiles.length === 0)
 			self.RestoreDefaultProfiles();
+		var profileName = GetSettingsStreamingQualityProfileName();
 		for (var i = 0; i < self.profiles.length; i++)
-			if (self.profiles[i].name === settings.ui3_streamingQuality)
+			if (self.profiles[i].name === profileName)
 			{
 				if (!self.profiles[i].IsCompatible())
 				{
-					toaster.Warning('Streaming Profile "' + settings.ui3_streamingQuality + '\" is not compatible with this browser instance.');
+					toaster.Warning('Streaming Profile "' + profileName + '\" is not compatible with this browser instance.');
 					continue;
 				}
 				return i;
 			}
-		toaster.Warning('Streaming Profile "' + settings.ui3_streamingQuality + '" was not found.');
+		toaster.Warning('Streaming Profile "' + profileName + '" was not found.');
 		return -1;
 	}
 	this.GetAnyCompatibleProfile = function (didRestoreDefaults)
@@ -24924,7 +24951,7 @@ function GenericQualityHelper()
 		for (var i = 0; i < self.profiles.length; i++)
 			if (self.profiles[i].name === name)
 			{
-				settings.ui3_streamingQuality = name;
+				SetSettingsStreamingQualityProfileName(name);
 				dropdownBoxes.setLabelText("streamingQuality", self.profiles[i].GetNameEle().html(), true);
 				if (videoPlayer)
 					videoPlayer.SelectedQualityChanged();
@@ -25434,8 +25461,9 @@ function GenericQualityHelper()
 			try
 			{
 				isInSavingProfilesFunc = true;
+				var profileName = GetSettingsStreamingQualityProfileName();
 				for (var i = 0; i < self.profiles.length; i++)
-					if (self.profiles[i].name === settings.ui3_streamingQuality)
+					if (self.profiles[i].name === profileName)
 					{
 						if (!self.profiles[i].IsCompatible())
 							continue;
@@ -25533,7 +25561,28 @@ function GenericQualityHelper()
 	self.LoadProfiles();
 	if (!self.profiles || self.profiles.length === 0)
 		this.RestoreDefaultProfiles();
-	self.QualityChoiceChanged(settings.ui3_streamingQuality);
+	self.QualityChoiceChanged(GetSettingsStreamingQualityProfileName());
+}
+function GetSettingsStreamingQualityProfileNameKey()
+{
+	if (sessionManager)
+	{
+		var loginResponse = sessionManager.GetLastResponse();
+		if (loginResponse && loginResponse.data && loginResponse.data.lan)
+			return "ui3_streamingQuality_lan";
+	}
+	return "ui3_streamingQuality";
+}
+function GetSettingsStreamingQualityProfileName()
+{
+	var key = GetSettingsStreamingQualityProfileNameKey();
+	if (key === "ui3_streamingQuality_lan" && !settings[key] && settings.ui3_streamingQuality)
+		settings[key] = settings.ui3_streamingQuality; // Initialize the LAN Streaming Quality setting by copying from legacy/WAN setting.
+	return settings[key];
+}
+function SetSettingsStreamingQualityProfileName(value)
+{
+	settings[GetSettingsStreamingQualityProfileNameKey()] = value;
 }
 ///////////////////////////////////////////////////////////////
 // Streaming Quality Maps /////////////////////////////////////
@@ -40080,6 +40129,14 @@ function compareVersions(version1, version2)
 		if (num2 > num1) return -1;
 	}
 	return 0;
+}
+/**
+ * Returns true if the current Blue Iris version is greater than or equal to the specified minimum version.
+ * @param {String} version Minimum Blue Iris version.
+ */
+function MinBiVersion(version)
+{
+	return compareVersions(bi_version, version) >= 0;
 }
 function getDateFromDateArgument(dateArgument)
 {

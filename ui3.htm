@@ -128,7 +128,7 @@
 		function isUrlPathBad(b) { const c = /^[A-Za-z0-9=_-]+$/; try { const a = (new URL(b)).pathname.slice(1); return 20 < a.length && c.test(a) } catch (a) { return !1 } };
 	</script>
 	<script type="text/javascript">
-		var ui_version = "309";
+		var ui_version = "310";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -570,7 +570,7 @@
 				<img class="about_icon" src="applet/logos/overlay96.png" alt="Blue Iris" loading="lazy">
 			</picture>
 		</div>
-		<div class="section">UI3 is a web interface for <a target="_blank" href="http://blueirissoftware.com/">Blue Iris</a></div>
+		<div class="section">UI3 is a web interface for <a target="_blank" href="http://blueirissoftware.com/">Blue Iris</a>.</div>
 		<div id="optionalFeaturesNotSupported" class="section">
 			Some optional features are not supported in this browser:<br />
 		</div>
@@ -588,6 +588,12 @@
 		</div>
 		<div style="margin:10px 0px 20px 0px;">
 			Other browsers, including mobile versions of those listed above, may or may not provide full functionality.
+		</div>
+		<div id="lanConnectionDetected" class="section" title="Blue Iris thinks your client IP is local.">
+			Blue Iris believes you are connected via a local network.
+		</div>
+		<div id="wanConnectionDetected" class="section" title="Blue Iris thinks your client IP is not local.">
+			Blue Iris believes you are connected via the internet.
 		</div>
 		<hr />
 		<div style="margin-top:20px;">
