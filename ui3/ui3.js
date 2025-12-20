@@ -2865,6 +2865,31 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_hotkey_close_preview_animation"
+			, value: "0|0|0|27" // 27: escape
+			, hotkey: true
+			, label: "Close Clip Preview Animation"
+			, hint: "Closes the current clip preview animation"
+			, actionDown: BI_Hotkey_CloseClipPreviewAnimation
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_preview_animation_up"
+			, value: "" // unset
+			, hotkey: true
+			, label: "Clip Preview Animation: Navigate Up"
+			, actionDown: BI_Hotkey_ClipPreviewAnimationUp
+			, category: "Hotkeys"
+		}
+		, {
+			key: "ui3_hotkey_preview_animation_down"
+			, value: "" // unset
+			, hotkey: true
+			, label: "Clip Preview Animation: Navigate Down"
+			, actionDown: BI_Hotkey_ClipPreviewAnimationDown
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_hotkey_digitalZoomIn"
 			, value: "0|0|1|187" // 187: =
 			, hotkey: true
@@ -13294,24 +13319,7 @@ function ClipLoader(clipsBodySelector)
 
 					if (getMouseoverClipThumbnails())
 					{
-						var thumbPath = GetThumbnailPath(clipData.recId, settings.ui3_hires_jpeg_popups === "1");
-						if (thumbEle.getAttribute("src") == thumbPath)
-							thumbPath = thumbEle;
-						var aspectRatio = thumbEle.naturalWidth / thumbEle.naturalHeight;
-						var renderH = 240;
-						var renderW = renderH * aspectRatio;
-						if (clipData.hasHighResJpeg && settings.ui3_hires_jpeg_popups === "1")
-						{
-							var clipRes = new ClipRes(clipData.res);
-							if (clipRes.valid)
-							{
-								renderW = clipRes.width;
-								renderH = clipRes.height;
-							}
-						}
-						bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, renderW, renderH);
-						if (!clipData.isSnapshot)
-							clipThumbnailVideoPreview.Start($clip, clipData, camName);
+						self.ShowBigClipThumb($clip);
 					}
 				});
 				$clip.on("mouseleave touchend touchcancel", function (e)
@@ -13335,11 +13343,48 @@ function ClipLoader(clipsBodySelector)
 		}
 		return $clip;
 	}
+	this.ShowBigClipThumb = function ($clip)
+	{
+		var clipId = GetClipIdFromClip($clip);
+		var clipData = self.GetClipFromId(clipId);
+		if (!clipData)
+		{
+			toaster.Error('Could not find clip data for clip ID "' + clipId + '"');
+			return;
+		}
+		var thumbEle = $("#t" + clipData.recId).get(0);
+		if (!thumbEle)
+		{
+			toaster.Error('Could not find thumbnail element for clip ID "' + clipId + '"');
+			return;
+		}
+		var camName = cameraListLoader.GetCameraName(clipData.camera);
+		var thumbPath = GetThumbnailPath(clipData.recId, settings.ui3_hires_jpeg_popups === "1");
+		if (thumbEle.getAttribute("src") == thumbPath)
+			thumbPath = thumbEle;
+		var aspectRatio = thumbEle.naturalWidth / thumbEle.naturalHeight;
+		var renderH = 240;
+		var renderW = renderH * aspectRatio;
+		if (clipData.hasHighResJpeg && settings.ui3_hires_jpeg_popups === "1")
+		{
+			var clipRes = new ClipRes(clipData.res);
+			if (clipRes.valid)
+			{
+				renderW = clipRes.width;
+				renderH = clipRes.height;
+			}
+		}
+		var timeStr = GetTimeStr(clipData.displayDate);
+		bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, renderW, renderH);
+		if (!clipData.isSnapshot)
+			clipThumbnailVideoPreview.Start($clip, clipData, camName);
+	}
 	this.HideBigClipThumb = function ()
 	{
 		bigThumbHelper.Hide();
 		clipThumbnailVideoPreview.Stop();
 	}
+	BindEventsPassive(document, "click", self.HideBigClipThumb);
 	this.ScrollToClipObj = function ($clip)
 	{
 		var offset = ($clipsbody.height() / 2) - ($clip.height() / 2);
@@ -13349,6 +13394,58 @@ function ClipLoader(clipsBodySelector)
 	{
 		var offset = ($clipsbody.height() / 2) - (clipHeight / 2);
 		$clipsbody.scrollTop(yPos - offset);
+	}
+	this.ClipPreviewNavigate = function (offset)
+	{
+		self.HideBigClipThumb();
+		var lastStartedClipId = clipThumbnailVideoPreview.GetLastStartedClipId();
+		var $clip = null;
+		if (lastStartedClipId)
+			$clip = $("#c" + lastStartedClipId);
+		if (!$clip || !$clip.length)
+			$clip = self.GetCurrentClipEle();
+		if (!$clip || !$clip.length)
+		{
+			$clip = self.GetTopmostVisibleClipEle();
+			offset = 0; // This is the start of a sequence, so begin with the topmost visible clip tile.
+		}
+		if (!$clip || !$clip.length)
+		{
+			toaster.Error("Could not decide on a clip to start the preview animation.");
+			return;
+		}
+		offset = Clamp(offset, -100, 100);
+		while (offset < 0 && $clip)
+		{
+			var $next = self.GetClipAboveClip($clip);
+			if (!$next)
+				break;
+			$clip = $next;
+			offset++;
+		}
+		while (offset > 0 && $clip)
+		{
+			var $next = self.GetClipBelowClip($clip);
+			if (!$next)
+				break;
+			$clip = $next;
+			offset--;
+		}
+		if (!$clip || !$clip.length)
+		{
+			toaster.Error("Failed to navigate to the desired clip to start the preview animation.");
+			return;
+		}
+		self.ScrollToClipObj($clip);
+		self.UnselectAllClips();
+		var recId = GetClipIdFromClip($clip);
+		selectedClips.push(recId);
+		selectedClipsMap[recId] = true;
+		$clip.addClass("selected");
+		setTimeout(function ()
+		{
+			self.ShowBigClipThumb($clip);
+		}, 0);
 	}
 	var ClipClicked = function (e)
 	{
@@ -14122,6 +14219,17 @@ function ClipLoader(clipsBodySelector)
 		}
 		return null;
 	}
+	this.GetTopmostVisibleClipEle = function ()
+	{
+		var $clips = $clipsbody.find(".cliptile");
+		$clips = $clips.filter(function ()
+		{
+			var topY = $(this).position().top;
+			var botY = topY + getClipTileHeight();
+			return topY <= 0 && botY > 0;
+		});
+		return $clips.first();
+	}
 	this.ClipLikelyHasGaps = function (clipData)
 	{
 		var diff = Math.abs(clipData.clipCoverMs - clipData.msec);
@@ -14385,10 +14493,12 @@ function ClipThumbnailVideoPreview_BruteForce()
 	var clipPreviewStartTimeout = null;
 	var queuedPreview = null;
 	var lastItemId = null;
+	var lastStartCalledItemId = null;
 	var averageFrameLoadTime = null;
 
 	this.Start = function ($clip, clipData, camName, frameNum, loopNum)
 	{
+		lastStartCalledItemId = clipData.recId;
 		var duration = clipData.isClip ? clipData.msec : clipData.roughLengthMs;
 		if (settings.ui3_clipPreviewEnabled !== "1" || duration < 500)
 			return;
@@ -14410,6 +14520,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 					averageFrameLoadTime = new RollingAverage(self.GetClipPreviewNumFrames());
 					self.Start(queuedPreview.clip, queuedPreview.clipData, queuedPreview.camName);
 				}
+				queuedPreview = null;
 			}, 500);
 		}
 
@@ -14493,6 +14604,10 @@ function ClipThumbnailVideoPreview_BruteForce()
 		clipPreviewNumFrames = Clamp(clipPreviewNumFrames, 2, 100);
 		return clipPreviewNumFrames;
 	}
+	this.GetLastStartedClipId = function ()
+	{
+		return lastStartCalledItemId;
+	}
 	var ClearTimeouts = function ()
 	{
 		if (thumbVideoTimeout != null)
@@ -14505,6 +14620,7 @@ function ClipThumbnailVideoPreview_BruteForce()
 			clearTimeout(clipPreviewStartTimeout);
 			clipPreviewStartTimeout = null;
 		}
+		queuedPreview = null;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -31837,6 +31953,24 @@ function BI_Hotkey_CloseCamera()
 			clearTimeout(suppress_Hotkey_CloseClip);
 			suppress_Hotkey_CloseClip = setTimeout(function () { suppress_Hotkey_CloseClip = null; }, 0);
 		}
+	}
+}
+function BI_Hotkey_CloseClipPreviewAnimation()
+{
+	clipLoader.HideBigClipThumb();
+}
+function BI_Hotkey_ClipPreviewAnimationUp()
+{
+	if (currentPrimaryTab === "clips")
+	{
+		clipLoader.ClipPreviewNavigate(-1);
+	}
+}
+function BI_Hotkey_ClipPreviewAnimationDown()
+{
+	if (currentPrimaryTab === "clips")
+	{
+		clipLoader.ClipPreviewNavigate(1);
 	}
 }
 function BI_Hotkey_DigitalZoomIn()
