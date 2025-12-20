@@ -1898,6 +1898,14 @@ var defaultSettings =
 			, category: "Clips / Alerts"
 		}
 		, {
+			key: "ui3_clipPreview_navigation_buttons_enabled"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: "Clip Preview Animation Navigation Buttons"
+			, onChange: OnChange_ui3_clipPreview_navigation_buttons_enabled
+			, category: "Clips / Alerts"
+		}
+		, {
 			key: "ui3_hires_jpeg_popups"
 			, value: "0"
 			, inputType: "checkbox"
@@ -4281,6 +4289,7 @@ $(function ()
 	OnChange_ui3_sideBarPosition();
 	OnChange_ui3_browserZoomEnabled();
 	OnChange_ui3_showClipListFilterSearch();
+	OnChange_ui3_clipPreview_navigation_buttons_enabled();
 
 	// This makes it impossible to text-select or drag certain UI elements.
 	makeUnselectable($("#layouttop, #layoutleft, #layoutdivider, #layoutbody"));
@@ -31962,16 +31971,19 @@ function BI_Hotkey_CloseClipPreviewAnimation()
 function BI_Hotkey_ClipPreviewAnimationUp()
 {
 	if (currentPrimaryTab === "clips")
-	{
 		clipLoader.ClipPreviewNavigate(-1);
-	}
 }
 function BI_Hotkey_ClipPreviewAnimationDown()
 {
 	if (currentPrimaryTab === "clips")
-	{
 		clipLoader.ClipPreviewNavigate(1);
-	}
+}
+function OnChange_ui3_clipPreview_navigation_buttons_enabled()
+{
+	if (settings.ui3_clipPreview_navigation_buttons_enabled === "1")
+		$("#clipPreviewAnimationNavigationButtons").show();
+	else
+		$("#clipPreviewAnimationNavigationButtons").hide();
 }
 function BI_Hotkey_DigitalZoomIn()
 {

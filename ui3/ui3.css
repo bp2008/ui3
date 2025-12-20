@@ -3507,6 +3507,53 @@ div.invisibleLabel
 	display: block;
 	text-align: center;
 }
+
+#clipPreviewAnimationNavigationButtons
+{
+	display: flex;
+	justify-content: center;
+	max-width: 256px;
+}
+
+	#clipPreviewAnimationNavigationButtons button
+	{
+		font-size: 0px;
+		padding: 5px;
+	}
+
+	#clipPreviewAnimationNavigationButtons .icon
+	{
+		width: 32px;
+		height: 32px;
+	}
+
+.sizeMedium #clipPreviewAnimationNavigationButtons
+{
+	width: 196px;
+}
+
+	.sizeMedium #clipPreviewAnimationNavigationButtons .icon
+	{
+		width: 24px;
+		height: 24px;
+	}
+
+.sizeSmall #clipPreviewAnimationNavigationButtons
+{
+	width: 146px;
+}
+
+	.sizeSmall #clipPreviewAnimationNavigationButtons button
+	{
+		padding: 4px;
+	}
+
+	.sizeSmall #clipPreviewAnimationNavigationButtons .icon
+	{
+		width: 16px;
+		height: 16px;
+	}
+
 /* Timeline */
 #layoutbottomTimeline
 {

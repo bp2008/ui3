@@ -128,7 +128,7 @@
 		function isUrlPathBad(b) { const c = /^[A-Za-z0-9=_-]+$/; try { const a = (new URL(b)).pathname.slice(1); return 20 < a.length && c.test(a) } catch (a) { return !1 } };
 	</script>
 	<script type="text/javascript">
-		var ui_version = "310";
+		var ui_version = "311";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -443,6 +443,14 @@
 							<input type="search" value="" placeholder="search" id="clipFilterSearch" class="selectable" autocomplete="search" data-lpignore="true">
 						</div>
 					</div>
+				</div>
+				<div id="clipPreviewAnimationNavigationButtons" style="display:none">
+					<button class="simpleTextButton btnTransparent" title="Clip Preview Animation: Navigate Up" onclick="BI_Hotkey_ClipPreviewAnimationUp()">
+						<svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalUp"></use></svg>
+					</button>
+					<button class="simpleTextButton btnTransparent" title="Clip Preview Animation: Navigate Down" onclick="BI_Hotkey_ClipPreviewAnimationDown()">
+						<svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalDown"></use></svg>
+					</button>
 				</div>
 				<div class="clipListTopDateWrapper">
 					<div id="clipListTopDate" class="datetile" style="position:relative;margin-bottom:0px" title="Click to scroll to the top" onclick="clipLoader.ScrollToTop()">...</div>
