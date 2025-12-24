@@ -13453,7 +13453,7 @@ function ClipLoader(clipsBodySelector)
 		if (lastStartedClipId)
 			$clip = $("#c" + lastStartedClipId);
 		if (!$clip || !$clip.length)
-			$clip = self.GetCurrentClipEle();
+			$clip = $(self.GetCurrentClipEle());
 		if (!$clip || !$clip.length)
 		{
 			$clip = self.GetTopmostVisibleClipEle();
