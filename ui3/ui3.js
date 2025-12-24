@@ -2892,7 +2892,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_hotkey_preview_animation_up"
-			, value: "" // unset
+			, value: "0|0|0|109" // subtract
 			, hotkey: true
 			, label: "Clip Preview Animation: Navigate Up"
 			, actionDown: BI_Hotkey_ClipPreviewAnimationUp
@@ -2900,7 +2900,7 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_hotkey_preview_animation_down"
-			, value: "" // unset
+			, value: "0|0|0|107" // add
 			, hotkey: true
 			, label: "Clip Preview Animation: Navigate Down"
 			, actionDown: BI_Hotkey_ClipPreviewAnimationDown
