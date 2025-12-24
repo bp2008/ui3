@@ -2897,6 +2897,7 @@ var defaultSettings =
 			, label: "Clip Preview Animation: Navigate Up"
 			, actionDown: BI_Hotkey_ClipPreviewAnimationUp
 			, category: "Hotkeys"
+			, Generation: 2
 		}
 		, {
 			key: "ui3_hotkey_preview_animation_down"
@@ -2905,6 +2906,7 @@ var defaultSettings =
 			, label: "Clip Preview Animation: Navigate Down"
 			, actionDown: BI_Hotkey_ClipPreviewAnimationDown
 			, category: "Hotkeys"
+			, Generation: 2
 		}
 		, {
 			key: "ui3_hotkey_digitalZoomIn"
