@@ -2855,6 +2855,24 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_hotkey_open_selected_clip"
+			, value: "0|0|0|13" // 13: enter
+			, hotkey: true
+			, label: "Open Selected Clip"
+			, hint: "Opens the first clip currently selected in the clip list."
+			, actionDown: BI_Hotkey_OpenSelectedClip
+			, category: "Hotkeys"
+		}
+		, { // The order of "close" hotkeys is important, because they suppress each other when one has an effect.
+			key: "ui3_hotkey_close_preview_animation"
+			, value: "0|0|0|27" // 27: escape
+			, hotkey: true
+			, label: "Close Clip Preview Animation"
+			, hint: "Closes the current clip preview animation"
+			, actionDown: BI_Hotkey_CloseClipPreviewAnimation
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_hotkey_close_clip"
 			, value: "0|0|0|27" // 27: escape
 			, hotkey: true
@@ -2870,15 +2888,6 @@ var defaultSettings =
 			, label: "Close Camera"
 			, hint: "Closes the current live camera and returns to the group view."
 			, actionDown: BI_Hotkey_CloseCamera
-			, category: "Hotkeys"
-		}
-		, {
-			key: "ui3_hotkey_close_preview_animation"
-			, value: "0|0|0|27" // 27: escape
-			, hotkey: true
-			, label: "Close Clip Preview Animation"
-			, hint: "Closes the current clip preview animation"
-			, actionDown: BI_Hotkey_CloseClipPreviewAnimation
 			, category: "Hotkeys"
 		}
 		, {
@@ -7022,7 +7031,7 @@ function PtzButtons()
 				imgW = imgData.w;
 				imgH = imgData.h;
 			}
-			bigThumbHelper.Show($ele, $ele.parent(), self.GetPresetDescription(ele.presetnum), imgUrl, imgW, imgH);
+			bigThumbHelper.Show($ele, $ele.parent(), self.GetPresetDescription(ele.presetnum), imgUrl, imgW, imgH, undefined, undefined, undefined, undefined);
 		});
 		$ele.on("mouseleave touchend touchcancel", function (e)
 		{
@@ -12290,9 +12299,11 @@ function BigThumbHelper()
 	var self = this;
 	var $thumb, $desc, $img, img, $canvas, canvas;
 	var isShowing = false;
+	var isShowingForRecId = undefined;
 	var initialized = false;
 	var imgCompleteCallback;
 	var imgCompleteUserContext;
+	var showTickFlag = null;
 	var Initialize = function ()
 	{
 		if (initialized)
@@ -12332,11 +12343,12 @@ function BigThumbHelper()
 				imgCompleteCallback($img, imgCompleteUserContext, false);
 		}
 	}
-	this.Show = function ($vAlign, $hAlign, descriptionText, imgSrc, imgW, imgH, imgComplete, userContext, noClear)
+	this.Show = function ($vAlign, $hAlign, descriptionText, imgSrc, imgW, imgH, imgComplete, userContext, noClear, recId)
 	{
 		Initialize();
 
 		isShowing = true;
+		isShowingForRecId = recId;
 
 		// These callbacks are handled really clumsily such that they won't be called correctly if Show() is called again before the callback from the previous Show().
 		imgCompleteCallback = null;
@@ -12425,18 +12437,36 @@ function BigThumbHelper()
 		else
 			$thumb.css("width", "");
 		$thumb.show();
+
+		clearTimeout(showTickFlag);
+		showTickFlag = setTimeout(function () { showTickFlag = null; }, 0);
 	}
-	this.Hide = function ()
+	/**
+	 * Hides the big thumbnail tooltip if it is currently showing.
+	 * @param {String} recId Optional recId of a recording.  If provided, the thumbnail will only be hidden if it matches this recording ID.
+	 */
+	this.Hide = function (recId)
 	{
 		if (isShowing)
 		{
-			isShowing = false;
-			$thumb.hide();
+			if (!recId || recId === isShowingForRecId)
+			{
+				isShowingForRecId = undefined;
+				isShowing = false;
+				clearTimeout(showTickFlag);
+				$thumb.hide();
+				return true;
+			}
 		}
+		return false;
 	}
 	this.IsShowing = function ()
 	{
 		return isShowing;
+	}
+	this.DidShowDuringThisTick = function ()
+	{
+		return !!showTickFlag;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -13269,9 +13299,9 @@ function ClipLoader(clipsBodySelector)
 		clipVisibilityMap[clipData.recId] = false;
 		if (!selectedClipsMap[clipData.recId]) // We need clip elements to stick around if they're selected, for the sake of multi-select.
 			$("#c" + clipData.recId).remove();
-		self.HideBigClipThumb();
+		self.HideBigClipThumb(clipData.recId);
 	}
-	var ClipTileCreateFromId = function (recId)
+	this.ClipTileCreateFromId = function (recId)
 	{
 		var $clip = $("#c" + recId);
 		if ($clip.length == 0)
@@ -13334,7 +13364,8 @@ function ClipLoader(clipsBodySelector)
 				$clip.on("mouseleave touchend touchcancel", function (e)
 				{
 					touchEvents.Gate(e);
-					self.HideBigClipThumb();
+					var recId = GetClipIdFromClip($(e.currentTarget));
+					self.HideBigClipThumb(recId);
 				});
 
 				clipListContextMenu.AttachContextMenu($clip);
@@ -13384,16 +13415,26 @@ function ClipLoader(clipsBodySelector)
 			}
 		}
 		var timeStr = GetTimeStr(clipData.displayDate);
-		bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, renderW, renderH);
+		bigThumbHelper.Show($clip, $clip, camName + " " + timeStr, thumbPath, renderW, renderH, undefined, undefined, undefined, clipData.recId);
 		if (!clipData.isSnapshot)
 			clipThumbnailVideoPreview.Start($clip, clipData, camName);
 	}
-	this.HideBigClipThumb = function ()
+	/**
+	 * Hides the big thumbnail tooltip and stops the current clip preview animation.
+	 * @param {String} recId If provided, the tooltip must match this recId in order to be closed.
+	 * @returns {Boolean} true if the thumbnail tooltip was closed, false if it was not closed by this function call (it may have already been closed before calling).
+	 */
+	this.HideBigClipThumb = function (recId)
 	{
-		bigThumbHelper.Hide();
-		clipThumbnailVideoPreview.Stop();
+		var didClose = bigThumbHelper.Hide(recId);
+		clipThumbnailVideoPreview.Stop(recId);
+		return didClose;
 	}
-	BindEventsPassive(document, "click", self.HideBigClipThumb);
+	BindEventsPassive(document, "click", function ()
+	{
+		if (!bigThumbHelper.DidShowDuringThisTick()) // I'm unsure if this is check is necessary.
+			self.HideBigClipThumb(undefined);
+	});
 	this.ScrollToClipObj = function ($clip)
 	{
 		var offset = ($clipsbody.height() / 2) - ($clip.height() / 2);
@@ -13406,7 +13447,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.ClipPreviewNavigate = function (offset)
 	{
-		self.HideBigClipThumb();
+		self.HideBigClipThumb(undefined);
 		var lastStartedClipId = clipThumbnailVideoPreview.GetLastStartedClipId();
 		var $clip = null;
 		if (lastStartedClipId)
@@ -13479,7 +13520,7 @@ function ClipLoader(clipsBodySelector)
 					{
 						if (CheckSelectionLimit())
 							return;
-						ClipTileCreateFromId(range[i]);
+						self.ClipTileCreateFromId(range[i]);
 						$("#c" + range[i]).addClass("selected");
 						selectedClips.push(range[i]);
 						selectedClipsMap[range[i]] = true;
@@ -13517,7 +13558,7 @@ function ClipLoader(clipsBodySelector)
 		}
 		else
 		{
-			self.HideBigClipThumb();
+			self.HideBigClipThumb(undefined);
 			self.OpenClip(this, recId, true);
 		}
 	}
@@ -14261,14 +14302,14 @@ function ClipLoader(clipsBodySelector)
 	{
 		var clipIdx = GetClipIndexFromClipId(GetClipIdFromClip($clip));
 		if (clipIdx != -1 && clipIdx + 1 < loadedClipIds.length)
-			return ClipTileCreateFromId(loadedClipIds[clipIdx + 1]);
+			return self.ClipTileCreateFromId(loadedClipIds[clipIdx + 1]);
 		return null;
 	}
 	this.GetClipAboveClip = function ($clip)
 	{
 		var clipIdx = GetClipIndexFromClipId(GetClipIdFromClip($clip));
 		if (clipIdx > 0 && clipIdx - 1 < loadedClipIds.length)
-			return ClipTileCreateFromId(loadedClipIds[clipIdx - 1]);
+			return self.ClipTileCreateFromId(loadedClipIds[clipIdx - 1]);
 		return null;
 	}
 	var GetClipIndexFromClipId = function (recId)
@@ -14502,12 +14543,12 @@ function ClipThumbnailVideoPreview_BruteForce()
 	var clipPreviewStartTimeout = null;
 	var queuedPreview = null;
 	var lastItemId = null;
-	var lastStartCalledItemId = null;
+	var lastStartCalledRecId = null;
 	var averageFrameLoadTime = null;
 
 	this.Start = function ($clip, clipData, camName, frameNum, loopNum)
 	{
-		lastStartCalledItemId = clipData.recId;
+		lastStartCalledRecId = clipData.recId;
 		var duration = clipData.isClip ? clipData.msec : clipData.roughLengthMs;
 		if (settings.ui3_clipPreviewEnabled !== "1" || duration < 500)
 			return;
@@ -14596,14 +14637,17 @@ function ClipThumbnailVideoPreview_BruteForce()
 
 				self.Start($clip, clipData, camName, frameNum, loopNum);
 			}
-		}, null, true);
+		}, null, true, clipData.recId);
 	}
-	this.Stop = function ()
+	this.Stop = function (recId)
 	{
-		ClearTimeouts();
-		clipThumbPlaybackActive = false;
-		bigThumbHelper.Hide();
-		averageFrameLoadTime = new RollingAverage(self.GetClipPreviewNumFrames());
+		if (!recId || lastStartCalledRecId === recId)
+		{
+			ClearTimeouts();
+			clipThumbPlaybackActive = false;
+			bigThumbHelper.Hide(lastStartCalledRecId);
+			averageFrameLoadTime = new RollingAverage(self.GetClipPreviewNumFrames());
+		}
 	}
 	this.GetClipPreviewNumFrames = function ()
 	{
@@ -14615,20 +14659,14 @@ function ClipThumbnailVideoPreview_BruteForce()
 	}
 	this.GetLastStartedClipId = function ()
 	{
-		return lastStartCalledItemId;
+		return lastStartCalledRecId;
 	}
 	var ClearTimeouts = function ()
 	{
-		if (thumbVideoTimeout != null)
-		{
-			clearTimeout(thumbVideoTimeout);
-			thumbVideoTimeout = null;
-		}
-		if (clipPreviewStartTimeout != null)
-		{
-			clearTimeout(clipPreviewStartTimeout);
-			clipPreviewStartTimeout = null;
-		}
+		clearTimeout(thumbVideoTimeout);
+		thumbVideoTimeout = null;
+		clearTimeout(clipPreviewStartTimeout);
+		clipPreviewStartTimeout = null;
 		queuedPreview = null;
 	}
 }
@@ -17859,6 +17897,32 @@ function VideoPlayerController()
 			}
 			self.Playback_Pause();
 		}
+	}
+	this.Playback_FirstSelectedClip = function ()
+	{
+		if (currentPrimaryTab === "clips")
+		{
+			var selectedClips = clipLoader.GetAllSelected();
+			if (selectedClips.length > 0)
+			{
+				var recId = selectedClips[0];
+				var img = videoPlayer.Loading().image;
+				if (!img.isLive && !img.isTimeline() && img.uniqueId === recId)
+				{
+					if (videoPlayer.Playback_IsPaused())
+						videoPlayer.Playback_Play();
+					else
+						console.log("Playback_FirstSelectedClip had no effect because the selected clip is already playing.");
+					return;
+				}
+				var $clip = clipLoader.ClipTileCreateFromId(recId);
+				Playback_ClipObj($clip);
+			}
+			else
+				console.log("Playback_FirstSelectedClip has no effect when a clip is not selected.");
+		}
+		else
+			console.log("Playback_FirstSelectedClip has no effect while not on the Clips tab.");
 	}
 	var Playback_ClipObj = function ($clip)
 	{
@@ -31930,9 +31994,13 @@ function BI_Hotkey_PlaybackSlower()
 	if (!videoPlayer.Loading().image.isLive)
 		playbackControls.ChangePlaySpeed(-1);
 }
+function BI_Hotkey_OpenSelectedClip()
+{
+	videoPlayer.Playback_FirstSelectedClip();
+}
 function BI_Hotkey_CloseClip()
 {
-	if (suppress_Hotkey_CloseClip)
+	if (suppress_Hotkey_CloseThings)
 		return;
 	if (videoPlayer.Loading().image.isTimeline())
 	{
@@ -31943,30 +32011,33 @@ function BI_Hotkey_CloseClip()
 	{
 		clipLoader.CloseCurrentClip();
 		// Prevent this same hotkey event from closing the current camera, too.
-		clearTimeout(suppress_Hotkey_CloseCamera);
-		suppress_Hotkey_CloseCamera = setTimeout(function () { suppress_Hotkey_CloseCamera = null; }, 0);
+		BI_Suppress_Close_Hotkeys_For_Next_Tick();
 	}
 }
-var suppress_Hotkey_CloseClip = null;
-var suppress_Hotkey_CloseCamera = null;
+var suppress_Hotkey_CloseThings = null;
+function BI_Suppress_Close_Hotkeys_For_Next_Tick()
+{
+	clearTimeout(suppress_Hotkey_CloseThings);
+	suppress_Hotkey_CloseThings = setTimeout(function () { suppress_Hotkey_CloseThings = null; }, 0);
+}
 function BI_Hotkey_CloseCamera()
 {
-	if (suppress_Hotkey_CloseCamera)
+	if (suppress_Hotkey_CloseThings)
 		return;
 	var loading = videoPlayer.Loading();
 	if ((loading.image.isLive || videoPlayer.Loading().image.isTimeline()) && !cameraListLoader.CameraIsGroupOrCycle(videoPlayer.Loading().cam))
 	{
 		videoPlayer.ImgClick_Camera(loading.cam);
 		if (videoPlayer.Loading().image.isTimeline())
-		{
-			clearTimeout(suppress_Hotkey_CloseClip);
-			suppress_Hotkey_CloseClip = setTimeout(function () { suppress_Hotkey_CloseClip = null; }, 0);
-		}
+			BI_Suppress_Close_Hotkeys_For_Next_Tick();
 	}
 }
 function BI_Hotkey_CloseClipPreviewAnimation()
 {
-	clipLoader.HideBigClipThumb();
+	if (suppress_Hotkey_CloseThings)
+		return;
+	if (clipLoader.HideBigClipThumb(undefined))
+		BI_Suppress_Close_Hotkeys_For_Next_Tick();
 }
 function BI_Hotkey_ClipPreviewAnimationUp()
 {
