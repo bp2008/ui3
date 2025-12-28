@@ -7965,7 +7965,23 @@ function RelativePTZ()
 	this.toggle3dPositioning = function ()
 	{
 		enabled3dPositioning = !enabled3dPositioning;
+		if (!enabled3dPositioning)
+		{
+			if (pos3dDragging)
+			{
+				pos3dDragging = false;
+				hideRelPtzBox();
+			}
+		}
 		self.setToggleButtonState();
+	}
+	this.is3dPositioningEnabled = function ()
+	{
+		return enabled3dPositioning;
+	}
+	this.is3dPositioningDragging = function ()
+	{
+		return pos3dDragging;
 	}
 	this.setToggleButtonState = function (forceTurnedOn)
 	{
@@ -22852,23 +22868,38 @@ function ImageRenderer()
 		if (e.pointerType === "touch" && settings.ui3_allow_touch_swipe_gestures !== "1")
 			return false;
 		// If the video player is zoomed in at all, the input events are used for video panning so we need to disable swipe actions.
-		if (!self.zoomHandler.IsZoomedInMoreThanFit()) 
+		if (self.zoomHandler.IsZoomedInMoreThanFit())
+			return;
+		if (relativePTZ.is3dPositioningDragging())
+			return;
+		var startPointEvent = {
+			type: e.type,
+			mouseX: e.mouseX - e.deltaX,
+			mouseY: e.mouseY - e.deltaY
+		};
+		var suppress = MouseInPlaybackControls(startPointEvent); // Sets mouseCoordFixer state to wrong position
+		if (MouseInPlaybackControls(e)) // Sets mouseCoordFixer state to correct position; do not suppress this call after setting wrong state.
+			suppress = true;
+		if (suppress)
+			return;
+		if (e.direction === HammerConstants.DIRECTION_LEFT)
 		{
-			if (e.direction === HammerConstants.DIRECTION_LEFT)
-			{
-				if (settings.ui3_touch_gestures_reverse === "1")
-					BI_Hotkey_PreviousCamera();
-				else
-					BI_Hotkey_NextCamera();
-			}
-			else if (e.direction === HammerConstants.DIRECTION_RIGHT)
-			{
-				if (settings.ui3_touch_gestures_reverse === "1")
-					BI_Hotkey_NextCamera();
-				else
-					BI_Hotkey_PreviousCamera();
-			}
+			if (settings.ui3_touch_gestures_reverse === "1")
+				BI_Hotkey_PreviousCamera();
+			else
+				BI_Hotkey_NextCamera();
 		}
+		else if (e.direction === HammerConstants.DIRECTION_RIGHT)
+		{
+			if (settings.ui3_touch_gestures_reverse === "1")
+				BI_Hotkey_NextCamera();
+			else
+				BI_Hotkey_PreviousCamera();
+		}
+	}
+	function MouseInPlaybackControls(e)
+	{
+		return playbackControls.MouseInSettingsPanel(e) || playbackControls.MouseInPlaybackControls(e);
 	}
 	var HammerConstants = {
 		DIRECTION_NONE: 1,
