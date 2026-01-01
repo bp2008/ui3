@@ -5890,7 +5890,7 @@ a[role="button"].showPasswordButton
 .profileList
 {
 	list-style: none;
-	margin: 0px;
+	margin: 0px 44px 0px 0px;
 	padding: 0px;
 }
 
@@ -5938,6 +5938,26 @@ a[role="button"].showPasswordButton
 		float: right;
 		opacity: 0.7;
 	}
+
+		.profileListItem .profileCodec.jpeg
+		{
+			color: #00AAFF;
+		}
+
+		.profileListItem .profileCodec.h264
+		{
+			color: #00FF00;
+		}
+
+		.profileListItem .profileCodec.h265
+		{
+			color: #FFFF00;
+		}
+
+		.profileListItem .profileCodec.h26x
+		{
+			color: #00FF00;
+		}
 /* Group Layout UI */
 .groupLayoutUiPanel
 {

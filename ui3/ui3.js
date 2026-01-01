@@ -24408,7 +24408,18 @@ function StreamingProfileUI()
 			var $p = $('<li class="profileListItem"></li>');
 			$p.attr('name', p.name);
 			$p.append(p.GetNameEle({ warningIconIsButton: false }));
-			$p.append($('<div class="profileCodec"></div>').text("(" + p.vcodec + ")"))
+			var vcodec = p.vcodec;
+			var codecClass = p.vcodec;
+			if (vcodec === "h264")
+			{
+				codecClass = vcodec = p.vcodecPref;
+				if (!vcodec || vcodec === "inherit")
+				{
+					vcodec = "h264/h265";
+					codecClass = "h26x";
+				}
+			}
+			$p.append($('<div class="profileCodec"></div>').addClass(codecClass).text("(" + vcodec + ")"))
 			$p.attr('title', p.GetTooltipText());
 			$p.on('click', ProfileClicked);
 			if (!p.IsCompatible())
@@ -35139,7 +35150,7 @@ function DragAndDropHelper($list, onItemMoved)
 			$drag.show();
 			$blank.remove();
 			$ghost.remove();
-			if (!moved)
+			if (success && !moved)
 				TimedClick($drag);
 			$drag = $blank = $ghost = null;
 		}
