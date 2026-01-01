@@ -26777,6 +26777,7 @@ var StreamingQualityItemContextMenu = new (function ()
 	}
 	var onContextMenuAction = function ()
 	{
+		playbackControls.Hide();
 		switch (this.data.alias)
 		{
 			case "select":
