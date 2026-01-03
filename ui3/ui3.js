@@ -28435,8 +28435,12 @@ function ClipProperties()
 
 			$camprop.append(GetInfo("Date", GetDateStr(clipData.displayDate)));
 			if (clipData.isClip)
+			{
 				$camprop.append(GetInfo("Real Time", clipData.roughLength).attr("title", "Real Time: Length of real time this clip covers.\nMay be significantly longer than Play Time if created from multiple alerts."));
-			$camprop.append(GetInfo("Play Time", msToTime(clipData.msec, true), true));
+				$camprop.append(GetInfo("Play Time", msToTime(clipData.msec, true), true));
+			}
+			else if (clipData.rawData && clipData.rawData.msec)
+				$camprop.append(GetInfo("Alert Duration", clipData.roughLength));
 			if (clipData.isClip)
 				$camprop.append(GetInfo("Size", clipData.fileSize));
 			else
