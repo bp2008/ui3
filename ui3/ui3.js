@@ -7500,10 +7500,7 @@ function PtzButtons()
 				var loading = videoPlayer.Loading();
 				var ptzAvailable = loading.image.ptz && loading.image.isLive;
 				if (!ptzAvailable)
-				{
 					ptzCmd = null; // This will cause any previously-active command to be stopped.
-					this.oneTimeActionQueue.clear();
-				}
 				if (this.pageExiting)
 					ptzCmd = null;
 				if (this.oneTimeActionQueue.getLength())
@@ -7523,7 +7520,7 @@ function PtzButtons()
 						this.unsafe_currentPtzCmd = null;
 						this.unsafe_currentPtzCamId = "";
 					}
-					else if (ptzAvailable)
+					else
 					{
 						var ota = this.oneTimeActionQueue.dequeue();
 						if (ota)
