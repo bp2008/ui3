@@ -1890,6 +1890,24 @@ var defaultSettings =
 			, category: "Status Area"
 		}
 		, {
+			key: "ui3_openARecording"
+			, value: "No"
+			, inputType: "select"
+			, options: ["No", "First", "Last"]
+			, label: 'Automatically Open a Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_clip_navigation_direction"
+			, value: "Oldest First"
+			, inputType: "select"
+			, options: ["Newest First", // "next clip" is older, further down the clip list.
+				"Oldest First"] // "next clip" is newer, further up the clip list.
+			, label: 'Clip Review Order/Direction'
+			, hint: 'Choose "Oldest First" if you prefer to review clips from oldest to newest.  Affects autoplay direction and Next/Previous button logic.  May affect other aspects of clip navigation in the future.'
+			, category: "Clips / Alerts"
+		}
+		, {
 			key: "ui3_clipPreviewEnabled"
 			, value: "1"
 			, inputType: "checkbox"
@@ -2070,24 +2088,6 @@ var defaultSettings =
 			, label: 'Prefer sub stream at forward speed: '
 			, onChange: OnChange_ui3_forward_speed_substream_threshold
 			, keywords: "sub stream substream main stream mainstream"
-			, category: "Clips / Alerts"
-		}
-		, {
-			key: "ui3_openARecording"
-			, value: "No"
-			, inputType: "select"
-			, options: ["No", "First", "Last"]
-			, label: 'Automatically Open a Recording<div class="settingDesc">when loading Alerts or Clips tab</div>'
-			, category: "Clips / Alerts"
-		}
-		, {
-			key: "ui3_clip_navigation_direction"
-			, value: "Oldest First"
-			, inputType: "select"
-			, options: ["Newest First", // "next clip" is older, further down the clip list.
-				"Oldest First"] // "next clip" is newer, further up the clip list.
-			, label: 'Clip Review Order/Direction'
-			, hint: 'Choose "Oldest First" if you prefer to review clips from oldest to newest.  Affects autoplay direction and Next/Previous button logic.  May affect other aspects of clip navigation in the future.'
 			, category: "Clips / Alerts"
 		}
 		, {
