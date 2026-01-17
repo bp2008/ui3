@@ -22869,14 +22869,14 @@ function ImageRenderer()
 			return;
 		if (relativePTZ.is3dPositioningDragging())
 			return;
+		// Create fake event objects with alreadyMouseCoordFixed set, otherwise mouseCoordFixer will cause issues.
 		var startPointEvent = {
 			type: e.type,
-			mouseX: e.mouseX - e.deltaX,
-			mouseY: e.mouseY - e.deltaY
+			mouseX: e.center.x - e.deltaX,
+			mouseY: e.center.y - e.deltaY,
+			alreadyMouseCoordFixed: true
 		};
-		var suppress = MouseInPlaybackControls(startPointEvent); // Sets mouseCoordFixer state to wrong position
-		if (MouseInPlaybackControls(e)) // Sets mouseCoordFixer state to correct position; do not suppress this call after setting wrong state.
-			suppress = true;
+		var suppress = MouseInPlaybackControls(startPointEvent);
 		if (suppress)
 			return;
 		if (e.direction === HammerConstants.DIRECTION_LEFT)
