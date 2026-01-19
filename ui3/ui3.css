@@ -6838,3 +6838,18 @@ ul.extraSpacing li
 	border-radius: 4px;
 }
 
+
+.motionWallTileVideo video
+{
+	display: block;
+}
+
+.motionWallTileImg,
+.motionWallTileVideo video
+{
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+

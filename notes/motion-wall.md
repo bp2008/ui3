@@ -70,9 +70,23 @@ New class that manages:
 ## Technical Details
 
 ### Camera Stream URLs
-Each visible tile uses substream URLs:
-- Format: `image/<camera_short_name>?time=<timestamp>&w=<width>&h=<height>`
-- Or H264: similar URL pattern via existing stream API
+Motion Wall supports multiple stream types:
+
+**H.264 (HLS)**:
+- URL: `h264/<camera_short_name>/temp.m3u8?session=...`
+- Uses HTML5 video element with autoplay
+- Native browser HLS support or fallback to MJPEG on error
+- Lower CPU usage, better quality
+
+**MJPEG**:
+- URL: `image/<camera_short_name>?time=<timestamp>&session=...`
+- Uses img element with 200ms refresh interval
+- Fallback when H.264 is not available or configured
+
+**Stream Type Setting**:
+- Auto (default): Use H.264 if `any_h264_playback_supported` is true
+- H.264 Only: Always try H.264, fallback to MJPEG on error
+- MJPEG Only: Always use MJPEG refresh method
 
 ### Grid Positioning
 Uses CSS Grid or absolute positioning based on rects array:

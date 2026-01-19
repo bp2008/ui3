@@ -631,6 +631,15 @@
 	<div id="motionWallSettingsDialog" style="display: none;">
 		<div style="margin-bottom:15px;font-weight:bold;">Motion Wall Settings</div>
 		<div class="section">
+			<label for="motionWallStreamType">Stream Type:</label>
+			<select id="motionWallStreamType" style="margin-left:10px;background-color:#2a2a2a;color:#ccc;border:1px solid #555;padding:5px;border-radius:3px;">
+				<option value="auto">Auto (H.264 if available)</option>
+				<option value="h264">H.264 Only</option>
+				<option value="mjpeg">MJPEG Only</option>
+			</select>
+			<div style="margin-top:5px;font-size:0.9em;color:#888;">Choose stream format for camera tiles</div>
+		</div>
+		<div class="section" style="margin-top:15px;">
 			<label for="motionWallLingerInput">Linger Time (seconds):</label>
 			<input type="number" id="motionWallLingerInput" min="0" max="120" value="10" style="width:80px;margin-left:10px;" />
 			<div style="margin-top:5px;font-size:0.9em;color:#888;">Time to keep showing camera after motion ends</div>

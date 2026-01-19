@@ -96,13 +96,25 @@ Motion Wall is a new view mode for UI3 that displays only cameras currently dete
 ## Implementation Notes
 
 ### Stream Type
-Currently uses JPEG substream with 200ms refresh interval. This provides:
-- Good motion visibility
-- Lower bandwidth than full stream
-- Compatible with all cameras
-- Simple implementation
+Motion Wall supports both H.264 and MJPEG streams:
 
-Future enhancement could add H.264 support for tiles.
+**H.264 (HLS) - Preferred**:
+- Uses HTML5 video elements with HLS streams (h264/camId/temp.m3u8)
+- Native browser video playback
+- Lower CPU usage, better quality
+- Automatically enabled when `any_h264_playback_supported` is true
+- Falls back to MJPEG on error
+
+**MJPEG - Fallback**:
+- Uses img elements with 200ms refresh interval
+- Compatible with all setups
+- Higher CPU usage due to refresh loop
+- Used when H.264 is unavailable or disabled
+
+**Settings Control**:
+- Auto (default): Use H.264 if supported, otherwise MJPEG
+- H.264 Only: Force H.264 (with MJPEG fallback on error)
+- MJPEG Only: Always use MJPEG method
 
 ### Motion Detection
 Current implementation uses a polling approach. For production, should integrate with:
@@ -128,9 +140,9 @@ Uses UI3's existing settings infrastructure:
 ## Known Limitations
 
 1. **Motion Detection**: Simplified polling approach rather than real-time BI status integration
-2. **Stream Type**: JPEG only (no H.264 option for tiles)
-3. **Dynamic Layout**: No support for group dynamic layout changes while active
-4. **Motion Indicator**: No visual motion indicator overlay on tiles (could be added)
+2. **Dynamic Layout**: No support for group dynamic layout changes while active
+3. **Motion Indicator**: No visual motion indicator overlay on tiles (could be added)
+4. **HLS Compatibility**: H.264 streams use HLS which requires browser support (most modern browsers)
 
 ## Testing Status
 
@@ -147,13 +159,13 @@ Manual testing recommended before release.
 ## Future Enhancements
 
 1. Integrate with real-time BI motion status updates
-2. Add H.264 stream option for tiles
-3. Add motion indicator overlay on tiles
-4. Add tile fade-in/fade-out animations
-5. Add fullscreen mode for Motion Wall view
-6. Add motion sound alerts per-camera
-7. Add motion history timeline for each camera
-8. Add "maximize on motion" option for specific cameras
+2. Add motion indicator overlay on tiles
+3. Add tile fade-in/fade-out animations
+4. Add fullscreen mode for Motion Wall view
+5. Add motion sound alerts per-camera
+6. Add motion history timeline for each camera
+7. Add "maximize on motion" option for specific cameras
+8. Add WebRTC support for ultra-low latency
 
 ## Compatibility
 

@@ -40353,7 +40353,8 @@ function MotionWallManager()
 	var cameraStates = {}; // Map of cameraId -> { isVisible, lastMotionTs, hideTimerId, isPinned, playerElement }
 	var mwSettings = {
 		lingerSeconds: 10,
-		excludeGroups: []
+		excludeGroups: [],
+		streamType: "auto" // "auto", "h264", "mjpeg"
 	};
 	var $container = $("#motionWallContainer");
 	var $toggleBtn = $("#motion_wall_btn");
@@ -40385,6 +40386,10 @@ function MotionWallManager()
 					mwSettings.excludeGroups = [];
 				}
 			}
+
+			var streamTypeStr = settings.getItem("ui3_motionwall_streamType");
+			if (streamTypeStr)
+				mwSettings.streamType = streamTypeStr;
 		}
 		catch (e)
 		{
@@ -40399,6 +40404,7 @@ function MotionWallManager()
 		{
 			settings.setItem("ui3_motionwall_lingerSeconds", mwSettings.lingerSeconds.toString());
 			settings.setItem("ui3_motionwall_excludeGroups", JSON.stringify(mwSettings.excludeGroups));
+			settings.setItem("ui3_motionwall_streamType", mwSettings.streamType);
 		}
 		catch (e)
 		{
@@ -40649,12 +40655,69 @@ function MotionWallManager()
 
 		$tile.show();
 
-		// Start streaming - create an img element for JPEG stream
 		var cam = cameraListLoader.GetCameraWithId(camId);
 		if (!cam)
 			return;
 
 		var $videoContainer = $tile.find('.motionWallTileVideo');
+
+		// Determine stream type
+		var useH264 = false;
+		if (mwSettings.streamType === "h264")
+			useH264 = true;
+		else if (mwSettings.streamType === "auto")
+			useH264 = any_h264_playback_supported; // Use H.264 if available
+
+		if (useH264)
+		{
+			// Create HTML5 video element for H.264 stream
+			var $video = $('<video class="motionWallTileVideo" autoplay muted playsinline></video>');
+			$video.css({
+				width: '100%',
+				height: '100%',
+				objectFit: 'contain',
+				backgroundColor: '#000'
+			});
+
+			// Build H.264 stream URL - use temp.m3u8 for HLS
+			var h264Url = currentServer.remoteBaseURL + "h264/" + camId + "/temp.m3u8" + currentServer.GetAPISessionArg("?", true);
+
+			// Set video source
+			$video.attr('src', h264Url);
+
+			// Handle errors - fallback to MJPEG if H.264 fails
+			$video.on('error', function ()
+			{
+				console.warn("H.264 stream failed for " + camId + ", falling back to MJPEG");
+				showCameraMJPEG(camId, state, $tile, $videoContainer);
+			});
+
+			state.playerElement = $video[0];
+			$videoContainer.empty().append($video);
+
+			// Attempt to play
+			try
+			{
+				$video[0].play().catch(function (e)
+				{
+					console.warn("Video play failed for " + camId + ":", e);
+				});
+			}
+			catch (e)
+			{
+				console.warn("Video play exception for " + camId + ":", e);
+			}
+		}
+		else
+		{
+			// Use MJPEG
+			showCameraMJPEG(camId, state, $tile, $videoContainer);
+		}
+	};
+
+	// Helper function to show camera with MJPEG
+	var showCameraMJPEG = function (camId, state, $tile, $videoContainer)
+	{
 		var $img = $('<img class="motionWallTileImg" />');
 		$img.css({
 			width: '100%',
@@ -40662,10 +40725,10 @@ function MotionWallManager()
 			objectFit: 'contain'
 		});
 
-		// Build substream URL
+		// Build MJPEG stream URL
 		var streamUrl = currentServer.remoteBaseURL + "image/" + camId + "?time=" + Date.now() + currentServer.GetAPISessionArg("&");
 
-		// Add refresh mechanism
+		// Add refresh mechanism for JPEG
 		var refreshInterval = setInterval(function ()
 		{
 			if (!state.isVisible)
@@ -40674,7 +40737,7 @@ function MotionWallManager()
 				return;
 			}
 			$img.attr('src', currentServer.remoteBaseURL + "image/" + camId + "?time=" + Date.now() + currentServer.GetAPISessionArg("&"));
-		}, 200); // Refresh every 200ms for decent motion display
+		}, 200); // Refresh every 200ms
 
 		$img.attr('src', streamUrl);
 		state.refreshInterval = refreshInterval;
@@ -40954,6 +41017,7 @@ function MotionWallManager()
 		$settingsDialog = $("#motionWallSettingsDialog");
 
 		// Populate settings
+		$("#motionWallStreamType").val(mwSettings.streamType);
 		$("#motionWallLingerInput").val(mwSettings.lingerSeconds);
 
 		// Build excluded groups list
@@ -40996,6 +41060,9 @@ function MotionWallManager()
 
 	this.SaveSettings = function ()
 	{
+		// Read stream type
+		mwSettings.streamType = $("#motionWallStreamType").val();
+
 		// Read linger time
 		var lingerVal = parseInt($("#motionWallLingerInput").val());
 		if (!isNaN(lingerVal))
