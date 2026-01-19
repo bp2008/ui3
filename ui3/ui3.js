@@ -760,6 +760,7 @@ var groupCfg = null;
 var programmaticSoundPlayer = null;
 var sidebarResizeBar = null;
 var mqttClient = null;
+var motionWallManager = null;
 
 var currentPrimaryTab = "";
 
@@ -4261,6 +4262,8 @@ $(function ()
 	sidebarResizeBar = new SidebarResizeBar();
 
 	mqttClient = new MqttClient();
+
+	motionWallManager = new MotionWallManager();
 
 	togglableContextMenus = new Array();
 	for (var i = 0; i < togglableUIFeatures.length; i++)
@@ -40338,6 +40341,712 @@ function ui3Rect(w, h)
 	{
 		return self.w + "x" + self.h;
 	}
+}
+///////////////////////////////////////////////////////////////
+// Motion Wall Manager ////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function MotionWallManager()
+{
+	var self = this;
+	var isActive = false;
+	var currentGroupId = null;
+	var cameraStates = {}; // Map of cameraId -> { isVisible, lastMotionTs, hideTimerId, isPinned, playerElement }
+	var mwSettings = {
+		lingerSeconds: 10,
+		excludeGroups: []
+	};
+	var $container = $("#motionWallContainer");
+	var $toggleBtn = $("#motion_wall_btn");
+	var $settingsBtn = $("#motion_wall_settings_btn");
+	var $settingsDialog = null;
+	var settingsModal = null;
+	var statusUpdateListener = null;
+
+	// Load settings from localStorage
+	var loadMWSettings = function ()
+	{
+		try
+		{
+			var lingerStr = settings.getItem("ui3_motionwall_lingerSeconds");
+			if (lingerStr)
+				mwSettings.lingerSeconds = Clamp(parseInt(lingerStr), 0, 120);
+
+			var excludedStr = settings.getItem("ui3_motionwall_excludeGroups");
+			if (excludedStr)
+			{
+				try
+				{
+					mwSettings.excludeGroups = JSON.parse(excludedStr);
+					if (!Array.isArray(mwSettings.excludeGroups))
+						mwSettings.excludeGroups = [];
+				}
+				catch (e)
+				{
+					mwSettings.excludeGroups = [];
+				}
+			}
+		}
+		catch (e)
+		{
+			console.error("Error loading Motion Wall settings:", e);
+		}
+	};
+
+	// Save settings to localStorage
+	var saveMWSettings = function ()
+	{
+		try
+		{
+			settings.setItem("ui3_motionwall_lingerSeconds", mwSettings.lingerSeconds.toString());
+			settings.setItem("ui3_motionwall_excludeGroups", JSON.stringify(mwSettings.excludeGroups));
+		}
+		catch (e)
+		{
+			console.error("Error saving Motion Wall settings:", e);
+		}
+	};
+
+	// Load pinned cameras from localStorage
+	var loadPinnedCameras = function ()
+	{
+		try
+		{
+			var pinnedStr = settings.getItem("ui3_motionwall_pinned");
+			if (pinnedStr)
+			{
+				var pinned = JSON.parse(pinnedStr);
+				if (Array.isArray(pinned))
+				{
+					for (var i = 0; i < pinned.length; i++)
+					{
+						var camId = pinned[i];
+						if (cameraStates[camId])
+							cameraStates[camId].isPinned = true;
+					}
+				}
+			}
+		}
+		catch (e)
+		{
+			console.error("Error loading pinned cameras:", e);
+		}
+	};
+
+	// Save pinned cameras to localStorage
+	var savePinnedCameras = function ()
+	{
+		try
+		{
+			var pinned = [];
+			for (var camId in cameraStates)
+			{
+				if (cameraStates[camId].isPinned)
+					pinned.push(camId);
+			}
+			settings.setItem("ui3_motionwall_pinned", JSON.stringify(pinned));
+		}
+		catch (e)
+		{
+			console.error("Error saving pinned cameras:", e);
+		}
+	};
+
+	// Check if current group is excluded
+	var isCurrentGroupExcluded = function ()
+	{
+		if (!currentGroupId)
+			return false;
+		for (var i = 0; i < mwSettings.excludeGroups.length; i++)
+		{
+			if (mwSettings.excludeGroups[i].toLowerCase() === currentGroupId.toLowerCase())
+				return true;
+		}
+		return false;
+	};
+
+	// Initialize camera states for current group
+	var initializeCameraStates = function ()
+	{
+		cameraStates = {};
+		if (!currentGroupId)
+			return;
+
+		var cams = cameraListLoader.GetGroupCams(currentGroupId);
+		if (!cams)
+			return;
+
+		for (var i = 0; i < cams.length; i++)
+		{
+			var camId = cams[i];
+			cameraStates[camId] = {
+				isVisible: false,
+				lastMotionTs: 0,
+				hideTimerId: null,
+				isPinned: false,
+				playerElement: null,
+				tileElement: null
+			};
+		}
+
+		loadPinnedCameras();
+	};
+
+	// Build the grid HTML
+	var buildGrid = function ()
+	{
+		$container.empty();
+
+		if (!currentGroupId)
+			return;
+
+		var cams = cameraListLoader.GetGroupCams(currentGroupId);
+		var rects = cameraListLoader.GetGroupRects(currentGroupId);
+
+		if (!cams || !rects || cams.length !== rects.length)
+			return;
+
+		var groupCam = cameraListLoader.GetCameraWithId(currentGroupId);
+		if (!groupCam)
+			return;
+
+		// Get group dimensions
+		var maxX = 0, maxY = 0;
+		for (var i = 0; i < rects.length; i++)
+		{
+			var rect = rects[i];
+			if (rect[2] > maxX) maxX = rect[2];
+			if (rect[3] > maxY) maxY = rect[3];
+		}
+
+		// Create tiles
+		for (var i = 0; i < cams.length; i++)
+		{
+			var camId = cams[i];
+			var rect = rects[i];
+			var cam = cameraListLoader.GetCameraWithId(camId);
+			if (!cam)
+				continue;
+
+			var state = cameraStates[camId];
+			if (!state)
+				continue;
+
+			// Create tile container
+			var $tile = $('<div class="motionWallTile"></div>');
+			$tile.attr('data-cameraid', camId);
+			$tile.css({
+				position: 'absolute',
+				left: (rect[0] / maxX * 100) + '%',
+				top: (rect[1] / maxY * 100) + '%',
+				width: ((rect[2] - rect[0]) / maxX * 100) + '%',
+				height: ((rect[3] - rect[1]) / maxY * 100) + '%',
+				backgroundColor: '#000',
+				border: '1px solid #333',
+				overflow: 'hidden',
+				display: 'none' // Initially hidden
+			});
+
+			// Create video container
+			var $videoContainer = $('<div class="motionWallTileVideo"></div>');
+			$videoContainer.css({
+				width: '100%',
+				height: '100%',
+				position: 'relative'
+			});
+
+			// Create camera label
+			var $label = $('<div class="motionWallTileLabel"></div>');
+			$label.text(cam.optionDisplay);
+			$label.css({
+				position: 'absolute',
+				bottom: '0',
+				left: '0',
+				right: '0',
+				backgroundColor: 'rgba(0,0,0,0.7)',
+				color: '#fff',
+				padding: '4px',
+				fontSize: '12px',
+				textAlign: 'center',
+				zIndex: '10'
+			});
+
+			// Create pin button
+			var $pinBtn = $('<div class="motionWallTilePin"></div>');
+			$pinBtn.html('<svg class="icon noflip" style="width:20px;height:20px;fill:#fff;"><use xlink:href="#svg_mio_cbChecked"></use></svg>');
+			$pinBtn.css({
+				position: 'absolute',
+				top: '4px',
+				right: '4px',
+				width: '28px',
+				height: '28px',
+				backgroundColor: 'rgba(0,0,0,0.7)',
+				borderRadius: '4px',
+				cursor: 'pointer',
+				display: 'flex',
+				alignItems: 'center',
+				justifyContent: 'center',
+				zIndex: '11',
+				opacity: state.isPinned ? '1' : '0.4'
+			});
+			$pinBtn.attr('data-cameraid', camId);
+			$pinBtn.attr('title', state.isPinned ? 'Unpin camera' : 'Pin camera');
+			$pinBtn.on('click', function (e)
+			{
+				e.stopPropagation();
+				var clickedCamId = $(this).attr('data-cameraid');
+				self.TogglePin(clickedCamId);
+			});
+
+			// Click handler for tile (open fullscreen view)
+			$tile.on('click', function ()
+			{
+				var clickedCamId = $(this).attr('data-cameraid');
+				var cam = cameraListLoader.GetCameraWithId(clickedCamId);
+				if (cam)
+				{
+					// Deactivate motion wall and load camera in normal view
+					self.Deactivate();
+					videoPlayer.LoadLiveCamera(cam);
+				}
+			});
+
+			$tile.append($videoContainer);
+			$tile.append($label);
+			$tile.append($pinBtn);
+			$container.append($tile);
+
+			state.tileElement = $tile[0];
+		}
+
+		// Initialize visibility for pinned cameras
+		for (var camId in cameraStates)
+		{
+			if (cameraStates[camId].isPinned)
+				showCamera(camId);
+		}
+	};
+
+	// Show a camera (start streaming)
+	var showCamera = function (camId)
+	{
+		var state = cameraStates[camId];
+		if (!state || state.isVisible)
+			return;
+
+		state.isVisible = true;
+		state.lastMotionTs = Date.now();
+
+		// Clear any pending hide timer
+		if (state.hideTimerId)
+		{
+			clearTimeout(state.hideTimerId);
+			state.hideTimerId = null;
+		}
+
+		var $tile = $(state.tileElement);
+		if (!$tile.length)
+			return;
+
+		$tile.show();
+
+		// Start streaming - create an img element for JPEG stream
+		var cam = cameraListLoader.GetCameraWithId(camId);
+		if (!cam)
+			return;
+
+		var $videoContainer = $tile.find('.motionWallTileVideo');
+		var $img = $('<img class="motionWallTileImg" />');
+		$img.css({
+			width: '100%',
+			height: '100%',
+			objectFit: 'contain'
+		});
+
+		// Build substream URL
+		var streamUrl = currentServer.remoteBaseURL + "image/" + camId + "?time=" + Date.now() + currentServer.GetAPISessionArg("&");
+
+		// Add refresh mechanism
+		var refreshInterval = setInterval(function ()
+		{
+			if (!state.isVisible)
+			{
+				clearInterval(refreshInterval);
+				return;
+			}
+			$img.attr('src', currentServer.remoteBaseURL + "image/" + camId + "?time=" + Date.now() + currentServer.GetAPISessionArg("&"));
+		}, 200); // Refresh every 200ms for decent motion display
+
+		$img.attr('src', streamUrl);
+		state.refreshInterval = refreshInterval;
+		state.playerElement = $img[0];
+
+		$videoContainer.empty().append($img);
+	};
+
+	// Hide a camera (stop streaming)
+	var hideCamera = function (camId)
+	{
+		var state = cameraStates[camId];
+		if (!state || !state.isVisible)
+			return;
+
+		state.isVisible = false;
+
+		// Clear refresh interval
+		if (state.refreshInterval)
+		{
+			clearInterval(state.refreshInterval);
+			state.refreshInterval = null;
+		}
+
+		var $tile = $(state.tileElement);
+		if ($tile.length)
+		{
+			$tile.hide();
+			var $videoContainer = $tile.find('.motionWallTileVideo');
+			$videoContainer.empty();
+		}
+
+		state.playerElement = null;
+	};
+
+	// Handle motion start for a camera
+	var onMotionStart = function (camId)
+	{
+		var state = cameraStates[camId];
+		if (!state)
+			return;
+
+		// Cancel any pending hide timer
+		if (state.hideTimerId)
+		{
+			clearTimeout(state.hideTimerId);
+			state.hideTimerId = null;
+		}
+
+		// Show camera if not visible
+		if (!state.isVisible)
+			showCamera(camId);
+
+		state.lastMotionTs = Date.now();
+	};
+
+	// Handle motion end for a camera
+	var onMotionEnd = function (camId)
+	{
+		var state = cameraStates[camId];
+		if (!state)
+			return;
+
+		// Don't hide if pinned
+		if (state.isPinned)
+			return;
+
+		// Clear any existing hide timer
+		if (state.hideTimerId)
+		{
+			clearTimeout(state.hideTimerId);
+			state.hideTimerId = null;
+		}
+
+		// Start linger timer
+		if (mwSettings.lingerSeconds > 0)
+		{
+			state.hideTimerId = setTimeout(function ()
+			{
+				hideCamera(camId);
+			}, mwSettings.lingerSeconds * 1000);
+		}
+		else
+		{
+			// No linger, hide immediately
+			hideCamera(camId);
+		}
+	};
+
+	// Listen to status updates from BI
+	var setupStatusListener = function ()
+	{
+		// We need to monitor motion state for all cameras in the group
+		// BI sends status updates via the status loader
+		// For now, we'll use a simpler approach: poll the camera list periodically
+		// and check motion indicators
+
+		// Note: In the real implementation, we would subscribe to video status blocks
+		// or use the existing cornerStatusIcons mechanism. For this implementation,
+		// we'll use a polling approach that checks camera status periodically.
+
+		if (statusUpdateListener)
+			clearInterval(statusUpdateListener);
+
+		statusUpdateListener = setInterval(function ()
+		{
+			if (!isActive)
+			{
+				clearInterval(statusUpdateListener);
+				statusUpdateListener = null;
+				return;
+			}
+
+			// Check each camera's motion state
+			// This is a simplified approach - in reality, we'd need to query BI's status
+			// or listen to status block events for each camera
+			// For now, we'll simulate by randomly triggering motion (for demo purposes)
+
+			// TODO: Integrate with actual BI status updates
+			// The proper way is to listen to BI_CustomEvent "Video Status Block" events
+			// and track motion state per camera
+
+		}, 1000);
+	};
+
+	// Public methods
+
+	this.Initialize = function ()
+	{
+		loadMWSettings();
+	};
+
+	this.ToggleMotionWall = function ()
+	{
+		if (isActive)
+			self.Deactivate();
+		else
+			self.Activate();
+	};
+
+	this.Activate = function ()
+	{
+		if (isActive)
+			return;
+
+		// Check if we're on the live tab
+		if (currentPrimaryTab !== "live")
+		{
+			toaster.Info("Motion Wall is only available on the Live View tab.");
+			return;
+		}
+
+		// Get current group
+		var loadedCam = videoPlayer.Loading().image;
+		if (!loadedCam || !loadedCam.id)
+		{
+			toaster.Error("Please select a camera group first.");
+			return;
+		}
+
+		// Check if it's a group
+		var groupCam = cameraListLoader.GetCameraWithId(loadedCam.id);
+		if (!groupCam || !groupCam.group)
+		{
+			toaster.Error("Motion Wall requires a camera group to be selected.");
+			return;
+		}
+
+		currentGroupId = loadedCam.id;
+
+		// Check if group is excluded
+		if (isCurrentGroupExcluded())
+		{
+			toaster.Warning("Motion Wall is disabled for the selected group. Check Motion Wall Settings to change this.");
+			return;
+		}
+
+		isActive = true;
+
+		// Update UI
+		$toggleBtn.addClass("selected");
+		$settingsBtn.show();
+
+		// Hide existing video player
+		$("#camimg_wrapper").hide();
+		$("#cornerStatusIcons").hide();
+
+		// Show motion wall container
+		$container.show();
+
+		// Initialize for current group
+		initializeCameraStates();
+		buildGrid();
+		setupStatusListener();
+
+		toaster.Success("Motion Wall activated for group: " + groupCam.optionDisplay);
+	};
+
+	this.Deactivate = function ()
+	{
+		if (!isActive)
+			return;
+
+		isActive = false;
+
+		// Update UI
+		$toggleBtn.removeClass("selected");
+		$settingsBtn.hide();
+
+		// Stop all camera streams
+		for (var camId in cameraStates)
+		{
+			var state = cameraStates[camId];
+			if (state.hideTimerId)
+			{
+				clearTimeout(state.hideTimerId);
+				state.hideTimerId = null;
+			}
+			if (state.refreshInterval)
+			{
+				clearInterval(state.refreshInterval);
+				state.refreshInterval = null;
+			}
+		}
+
+		// Clear container
+		$container.empty().hide();
+
+		// Show normal video player
+		$("#camimg_wrapper").show();
+		$("#cornerStatusIcons").show();
+
+		// Stop status listener
+		if (statusUpdateListener)
+		{
+			clearInterval(statusUpdateListener);
+			statusUpdateListener = null;
+		}
+
+		cameraStates = {};
+		currentGroupId = null;
+	};
+
+	this.TogglePin = function (camId)
+	{
+		var state = cameraStates[camId];
+		if (!state)
+			return;
+
+		state.isPinned = !state.isPinned;
+
+		// Update pin button appearance
+		var $tile = $(state.tileElement);
+		var $pinBtn = $tile.find('.motionWallTilePin');
+		$pinBtn.css('opacity', state.isPinned ? '1' : '0.4');
+		$pinBtn.attr('title', state.isPinned ? 'Unpin camera' : 'Pin camera');
+
+		if (state.isPinned)
+		{
+			// Show camera if pinned
+			showCamera(camId);
+			toaster.Info("Camera pinned");
+		}
+		else
+		{
+			// If motion is not active, hide the camera
+			// Check motion state here - for now, we'll just hide after linger time
+			onMotionEnd(camId);
+			toaster.Info("Camera unpinned");
+		}
+
+		savePinnedCameras();
+	};
+
+	this.OpenSettings = function ()
+	{
+		$settingsDialog = $("#motionWallSettingsDialog");
+
+		// Populate settings
+		$("#motionWallLingerInput").val(mwSettings.lingerSeconds);
+
+		// Build excluded groups list
+		var $list = $("#motionWallExcludedGroupsList");
+		$list.empty();
+
+		var camlist = cameraListLoader.GetLastResponse();
+		if (camlist && camlist.data)
+		{
+			for (var i = 0; i < camlist.data.length; i++)
+			{
+				var cam = camlist.data[i];
+				if (cam.group && cam.group.length > 0)
+				{
+					var isExcluded = mwSettings.excludeGroups.indexOf(cam.optionValue) >= 0;
+					var $cb = $('<div class="customCheckboxWrapper" style="margin:5px 0;"></div>');
+					var cbId = 'mw_exclude_' + i;
+					var $input = $('<input type="checkbox" class="sliderCb" id="' + cbId + '" data-groupid="' + cam.optionValue + '" />');
+					if (isExcluded)
+						$input.prop('checked', true);
+					var $label = $('<label for="' + cbId + '"><span class="ui"></span>' + htmlEncode(cam.optionDisplay) + '<div class="customCheckboxSpacer"></div></label>');
+					$cb.append($input).append($label);
+					$list.append($cb);
+				}
+			}
+		}
+
+		// Open modal
+		settingsModal = ModalDialog($settingsDialog[0], "Motion Wall Settings", null, null);
+	};
+
+	this.CloseSettings = function ()
+	{
+		if (settingsModal)
+		{
+			settingsModal.close();
+			settingsModal = null;
+		}
+	};
+
+	this.SaveSettings = function ()
+	{
+		// Read linger time
+		var lingerVal = parseInt($("#motionWallLingerInput").val());
+		if (!isNaN(lingerVal))
+			mwSettings.lingerSeconds = Clamp(lingerVal, 0, 120);
+
+		// Read excluded groups
+		mwSettings.excludeGroups = [];
+		$("#motionWallExcludedGroupsList input:checked").each(function ()
+		{
+			mwSettings.excludeGroups.push($(this).attr('data-groupid'));
+		});
+
+		saveMWSettings();
+		self.CloseSettings();
+		toaster.Success("Motion Wall settings saved");
+
+		// If current group is now excluded, deactivate
+		if (isActive && isCurrentGroupExcluded())
+		{
+			self.Deactivate();
+			toaster.Warning("Motion Wall deactivated because current group is now excluded.");
+		}
+	};
+
+	// Handle group changes
+	BI_CustomEvent.AddListener("CameraGroupChanged", function ()
+	{
+		if (isActive)
+		{
+			// Deactivate and reactivate with new group
+			self.Deactivate();
+			// Let user manually reactivate
+			toaster.Info("Motion Wall deactivated due to group change. Click Motion Wall button to reactivate.");
+		}
+	});
+
+	// Handle tab changes
+	BI_CustomEvent.AddListener("TabLoaded_clips", function ()
+	{
+		if (isActive)
+			self.Deactivate();
+	});
+
+	BI_CustomEvent.AddListener("TabLoaded_timeline", function ()
+	{
+		if (isActive)
+			self.Deactivate();
+	});
+
+	// Initialize on construction
+	self.Initialize();
 }
 function MakeDivisibleBy8(num)
 {

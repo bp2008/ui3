@@ -264,6 +264,8 @@
 		<div class="topbar_tab" name="clips" id="topbar_tab_clips"><span class="topbar_tab_label">Clips</span></div>
 		<div class="topbar_tab" name="timeline" id="topbar_tab_timeline"><span class="topbar_tab_label">Time&#8203;line</span></div>
 		<a id="topbar_gap"></a>
+		<div id="motion_wall_btn" class="topbar_icon icon" onclick="motionWallManager.ToggleMotionWall()" title="Motion Wall - Show cameras with motion"><svg class="icon noflip"><use xlink:href="#svg_mio_apps"></use></svg></div>
+		<div id="motion_wall_settings_btn" class="topbar_icon icon" onclick="motionWallManager.OpenSettings()" title="Motion Wall Settings" style="display:none;"><svg class="icon"><use xlink:href="#svg_x5F_Settings"></use></svg></div>
 		<div id="open_all_clips_btn" class="topbar_icon icon" onclick="clipLoader.LoadView('all')" title="Open All Clips"><svg class="icon noflip"><use xlink:href="#svg_mio_storage"></use></svg></div>
 		<div id="open_alerts_btn" class="topbar_icon icon" onclick="clipLoader.LoadView('alerts')" title="Open Alerts"><svg class="icon"><use xlink:href="#svg_x5F_Alert1"></use></svg><div class="notificationCounter" title="new alerts"></div></div>
 		<div id="open_alerts_canceled_btn" class="topbar_icon icon" onclick="clipLoader.LoadView('cancelled')" title="Open Cancelled Alerts"><svg class="icon"><use xlink:href="#svg_x5F_HoldProfile"></use></svg></div>
@@ -479,6 +481,7 @@
 		<div id="camimg_playIcon"><svg class="icon"><use xlink:href="#svg_x5F_Play"></use></svg></div>
 		<div id="camimg_pauseIcon"><svg class="icon"><use xlink:href="#svg_x5F_Pause"></use></svg></div>
 		<div id="cornerStatusIcons"></div>
+		<div id="motionWallContainer" style="display:none;"></div>
 		<div id="playbackHeader" style="display: none;">
 			<div id="closeClipLeft" title="Close clip"><svg class="icon noflip stroke"><use xlink:href="#svg_stroke_closeBtn"></use></svg></div>
 			<div id="clipNameHeading"></div>
@@ -623,6 +626,23 @@
 		<div class="calendarWrapper">
 			<div class="calendarTitle">End Date</div>
 			<div id="datePicker2Container" class="calendarContainer"></div>
+		</div>
+	</div>
+	<div id="motionWallSettingsDialog" style="display: none;">
+		<div style="margin-bottom:15px;font-weight:bold;">Motion Wall Settings</div>
+		<div class="section">
+			<label for="motionWallLingerInput">Linger Time (seconds):</label>
+			<input type="number" id="motionWallLingerInput" min="0" max="120" value="10" style="width:80px;margin-left:10px;" />
+			<div style="margin-top:5px;font-size:0.9em;color:#888;">Time to keep showing camera after motion ends</div>
+		</div>
+		<div class="section" style="margin-top:20px;">
+			<label>Excluded Groups:</label>
+			<div id="motionWallExcludedGroupsList" style="margin-top:10px;max-height:200px;overflow-y:auto;"></div>
+			<div style="margin-top:5px;font-size:0.9em;color:#888;">Motion Wall will not activate for excluded groups</div>
+		</div>
+		<div class="section" style="margin-top:20px;">
+			<input type="button" value="Save" onclick="motionWallManager.SaveSettings()" class="simpleTextButton btnGreen" />
+			<input type="button" value="Cancel" onclick="motionWallManager.CloseSettings()" class="simpleTextButton btnRed" style="margin-left:10px;" />
 		</div>
 	</div>
 	<script>

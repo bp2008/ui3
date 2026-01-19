@@ -6748,3 +6748,93 @@ ul.extraSpacing li
 {
 	display: none;
 }
+
+/* ============================================ */
+/* Motion Wall Styles                          */
+/* ============================================ */
+
+#motionWallContainer
+{
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: #000;
+	z-index: 1;
+}
+
+.motionWallTile
+{
+	cursor: pointer;
+	transition: border-color 0.2s;
+}
+
+.motionWallTile:hover
+{
+	border-color: var(--main-highlight-color) !important;
+}
+
+.motionWallTileVideo
+{
+	/* Video container */
+}
+
+.motionWallTileImg
+{
+	/* Image element for JPEG stream */
+}
+
+.motionWallTileLabel
+{
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.motionWallTilePin:hover
+{
+	background-color: rgba(0,0,0,0.9) !important;
+	opacity: 1 !important;
+}
+
+#motion_wall_btn.selected
+{
+	background-color: var(--main-highlight-color);
+}
+
+#motion_wall_settings_btn
+{
+	margin-left: -4px;
+}
+
+/* Motion Wall Settings Dialog */
+#motionWallSettingsDialog .section
+{
+	padding: 10px;
+}
+
+#motionWallLingerInput
+{
+	background-color: #2a2a2a;
+	color: var(--text-color);
+	border: 1px solid #555;
+	padding: 5px;
+	border-radius: 3px;
+}
+
+#motionWallLingerInput:focus
+{
+	outline: none;
+	border-color: var(--main-highlight-color);
+}
+
+#motionWallExcludedGroupsList
+{
+	background-color: #1a1a1a;
+	padding: 10px;
+	border: 1px solid #333;
+	border-radius: 4px;
+}
+
