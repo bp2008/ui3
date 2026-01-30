@@ -15478,8 +15478,10 @@ function StatusLoader()
 				return;
 			loadStatusInternal({ profileNum: -1 });
 		},
-		function ()
+		function (e)
 		{
+			if (touchEvents.Gate(e))
+				return;
 			if (!lastResponse || $scheduleLockBtn.hasClass("disabled"))
 				return;
 			if (parseInt(lastResponse.data.lock) !== 0)
@@ -18143,8 +18145,10 @@ function VideoPlayerController()
 	{
 		return settings.ui3_prioritizeTriggered === "1";
 	}
-	this.PrioritizeTriggeredClick = function ()
+	this.PrioritizeTriggeredClick = function (e)
 	{
+		if (touchEvents.Gate(e))
+			return;
 		toaster.Info("Long press to toggle Auto-Maximize.");
 	}
 	this.PrioritizeTriggeredToggle = function ()
