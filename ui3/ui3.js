@@ -13878,11 +13878,11 @@ function ClipLoader(clipsBodySelector)
 		ToggleFlag(clipData, BIDBFLAG.PROTECTED, BIDBFLAG.PROTECTED, function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
-				self.HideClipProtect(clipData);
-			else
 				self.ShowClipProtect(clipData);
+			else
+				self.HideClipProtect(clipData);
 			if (onSuccess)
-				onSuccess(clipData);
+				onSuccess(clipData, flagIsSet);
 		}, onFailure);
 	}
 	this.ToggleClipFlag = function (clipData, onSuccess, onFailure)
@@ -13890,11 +13890,11 @@ function ClipLoader(clipsBodySelector)
 		ToggleFlag(clipData, BIDBFLAG.FLAGGED, BIDBFLAG.FLAGGED, function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
-				self.HideClipFlag(clipData);
-			else
 				self.ShowClipFlag(clipData);
+			else
+				self.HideClipFlag(clipData);
 			if (onSuccess)
-				onSuccess(clipData);
+				onSuccess(clipData, flagIsSet);
 		}, onFailure);
 	}
 	this.ToggleAlertAiConfirmed = function (clipData, onSuccess, onFailure)
@@ -13907,11 +13907,11 @@ function ClipLoader(clipsBodySelector)
 		ToggleFlag(clipData, flag, UI3_BINARY_OR(BIDBFLAG.ALERT_CANCELLED, BIDBFLAG.AI_CONFIRMED), function (clipData, flagIsSet)
 		{
 			if (flagIsSet)
-				self.HideAiConfirmed(clipData);
-			else
 				self.ShowAiConfirmed(clipData);
+			else
+				self.HideAiConfirmed(clipData);
 			if (onSuccess)
-				onSuccess(clipData);
+				onSuccess(clipData, flagIsSet);
 		}, onFailure);
 	}
 	var ToggleFlag = function (clipData, flag, mask, onSuccess, onFailure)
@@ -13923,8 +13923,18 @@ function ClipLoader(clipsBodySelector)
 			// Success setting flag state
 			clipData.flags = SetFlags(clipData.flags, newFlags, mask);
 			if (onSuccess)
-				onSuccess(clipData, flagIsSet);
+				onSuccess(clipData, !flagIsSet);
 		}, onFailure);
+	}
+	this.ToggleFlagOnCurrentlyOpenClip = function (flag, onSuccess, onFailure)
+	{
+		var cli = videoPlayer.Loading().image;
+		var clipData = self.GetClipFromId(cli.uniqueId);
+		if (typeof onSuccess !== "function")
+			onSuccess = function (clipData, flagIsSet) { console.log("Flag " + DecodeClipFlags(flag) + " was set to " + flagIsSet + "."); };
+		if (typeof onFailure !== "function")
+			onFailure = function () { console.log("Failed to toggle flag " + DecodeClipFlags(flag) + "."); };
+		ToggleFlag(clipData, flag, flag, onSuccess, onFailure);
 	}
 	/**
 	 * @param {Number} flags The original number where each bit is a different flag.

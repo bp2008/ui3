@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "33";
+		var login_version = "34";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -451,6 +451,8 @@
 			var page = UrlParameters.Get("page");
 			if (page.match(/timeout\.htm/i))
 				page = page.replace(/timeout\.htm.*/i, 'ui3.htm');
+			if (!page)
+				page = location.search; // Retain query string when redirecting with no "page" parameter.
 			if (page.indexOf(appPath) !== 0)
 				page = appPath + page.replace(/^\/+/g, '');
 			page = page.replace(/[&?]session=[^&?#%]+/gi, '');
