@@ -183,7 +183,7 @@
 		var cssLinks = '<link href="ui3/libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
 			+ '<link href="ui3/ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />';
 		//if (override_css_time)
-		cssLinks += '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + "-" + override_css_time + local_bi_session_arg + '" rel="stylesheet" />';
+		cssLinks += '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + "-" + encodeURIComponent(override_css_time) + local_bi_session_arg + '" rel="stylesheet" />';
 		document.write(cssLinks);
 	</script>
 </head>
@@ -677,7 +677,7 @@
 		var jsLinks = '<script onerror="criticalScriptLoadError(event)" src="ui3/libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'
 			+ '<script onerror="criticalScriptLoadError(event)" src="ui3/ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>';
 		//if (override_js_time)
-		jsLinks += '<script src="ui3/ui3-local-overrides.js?v=' + combined_version + "-" + override_js_time + local_bi_session_arg + '"><\/script>';
+		jsLinks += '<script src="ui3/ui3-local-overrides.js?v=' + combined_version + "-" + encodeURIComponent(override_js_time) + local_bi_session_arg + '"><\/script>';
 		document.write(jsLinks);
 
 		if (!(window.CSS && window.CSS.supports && window.CSS.supports('--fake-var', 0)))
