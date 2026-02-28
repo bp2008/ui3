@@ -128,7 +128,7 @@
 		function isUrlPathBad(b) { const c = /^[A-Za-z0-9=_-]+$/; try { const a = (new URL(b)).pathname.slice(1); return 20 < a.length && c.test(a) } catch (a) { return !1 } };
 	</script>
 	<script type="text/javascript">
-		var ui_version = "317";
+		var ui_version = "318";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -182,8 +182,8 @@
 		document.getElementById("ui3launcher2").href = 'applet/logos/launcher-icon256_ios.webp?v=' + combined_version;
 		var cssLinks = '<link href="ui3/libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />'
 			+ '<link href="ui3/ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />';
-		//if (override_css_time)
-		cssLinks += '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + "-" + encodeURIComponent(override_css_time) + local_bi_session_arg + '" rel="stylesheet" />';
+		if (override_css_time != "none")
+			cssLinks += '<link href="ui3/ui3-local-overrides.css?v=' + combined_version + "-" + encodeURIComponent(override_css_time) + local_bi_session_arg + '" rel="stylesheet" />';
 		document.write(cssLinks);
 	</script>
 </head>
@@ -676,8 +676,8 @@
 
 		var jsLinks = '<script onerror="criticalScriptLoadError(event)" src="ui3/libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>'
 			+ '<script onerror="criticalScriptLoadError(event)" src="ui3/ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>';
-		//if (override_js_time)
-		jsLinks += '<script src="ui3/ui3-local-overrides.js?v=' + combined_version + "-" + encodeURIComponent(override_js_time) + local_bi_session_arg + '"><\/script>';
+		if (override_js_time != "none")
+			jsLinks += '<script src="ui3/ui3-local-overrides.js?v=' + combined_version + "-" + encodeURIComponent(override_js_time) + local_bi_session_arg + '"><\/script>';
 		document.write(jsLinks);
 
 		if (!(window.CSS && window.CSS.supports && window.CSS.supports('--fake-var', 0)))
