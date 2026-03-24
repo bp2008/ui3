@@ -7394,16 +7394,18 @@ function PtzButtons()
 			mergedState: function ()
 			{
 				// Merge the hotkeyState, guiButtonState, joystickState
+				console.log("mergedState computed");
 				var state = CreateBIPtzState();
 				var jsExp = settings.ui3_experimental_joystick_api === "1";
 				for (var key in state)
 				{
 					if (Object.prototype.hasOwnProperty.call(state, key))
 					{
+						var jsState = this.joystickState[key]; // If we don't read this when jsExp is true, reactivity is broken when jsExp switches back to false.
 						if (jsExp)
 							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key]);
 						else
-							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key], this.joystickState[key]);
+							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key], jsState);
 					}
 				}
 				return state;
