@@ -1568,6 +1568,15 @@ var defaultSettings =
 			, category: "Video Player (Advanced)"
 		}
 		, {
+			key: "ui3_preventSleep"
+			, value: "1"
+			, inputType: "checkbox"
+			, label: 'Prevent screen from sleeping<div class="settingDesc">while video is playing <a href="javascript:UIHelp.LearnMore(\'Prevent Sleep\')">(learn more)</a></div>'
+			, hint: 'With this enabled, a "wake lock" will keep your monitors awake while UI3 is playing video.'
+			, onChange: OnChange_ui3_preventSleep
+			, category: "Video Player (Advanced)"
+		}
+		, {
 			key: "ui3_playback_skipDeadAir"
 			, value: 0
 			, inputType: "threeState"
@@ -21970,10 +21979,15 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	{
 		if (!isActivated)
 			return;
-		if (disableRenderingStateChangesUntilNextFrame)
-			return;
-		if (typeof enable === "undefined")
-			enable = imageRenderer.zoomHandler.IsZoomedInMoreThanFit();
+		if (settings.ui3_preventSleep === "0")
+			enable = true; // Disabling sleep prevention requires canvas rendering to always be used.
+		else
+		{
+			if (disableRenderingStateChangesUntilNextFrame)
+				return;
+			if (typeof enable === "undefined")
+				enable = imageRenderer.zoomHandler.IsZoomedInMoreThanFit();
+		}
 		if (isRenderingToCanvas !== enable)
 		{
 			if (enable)
@@ -23643,6 +23657,11 @@ function KeepScreenAlive()
 	}
 	this.enable = function (force)
 	{
+		if (settings.ui3_preventSleep === "0")
+		{
+			self.disable();
+			return;
+		}
 		if (!enabled || force)
 		{
 			noSleep.enable();
@@ -36444,6 +36463,16 @@ function OnChange_ui3_prioritizeTriggered()
 {
 	videoPlayer.PrioritizeTriggeredWasToggled();
 }
+function OnChange_ui3_preventSleep()
+{
+	var player = videoPlayer.GetPlayerObject();
+	if (player && player.isMsePlayer)
+		player.setCanvasRenderingState();
+	if (settings.ui3_preventSleep === "1" && !videoPlayer.Playback_IsPaused())
+		keepScreenAlive.enable();
+	else
+		keepScreenAlive.disable();
+}
 function OnChange_ui3_playback_skipDeadAir()
 {
 	videoPlayer.RefreshVideoStream();
@@ -37052,6 +37081,9 @@ function UIHelpTool()
 			case "QP":
 				UI3_QP_Topic();
 				break;
+			case "Prevent Sleep":
+				UI3_Prevent_Sleep_Help();
+				break;
 			default:
 				toaster.Warning('Unknown help topic: "' + topic + '".', 10000);
 		}
@@ -37246,6 +37278,13 @@ function UIHelpTool()
 			+ '<p>Blue Iris does not expose this directly, instead offering a more intuitive Quality Percentage scale of 0 to 100% where higher percentage is higher quality.</p>'
 			+ '<p><a href="ui3/help/help.html' + currentServer.GetLocalSessionArg("?") + '#encoder-quality" target="_blank">Click here to see the "Quality %" to "QP" scale used by Blue Iris.</a></p>'
 			+ '</div>').modalDialog({ title: 'Video Encoder QP', closeOnOverlayClick: true });
+	}
+	var UI3_Prevent_Sleep_Help = function ()
+	{
+		$('<div class="UIHelp">'
+			+ '<p>By default, UI3 tries to prevent screens from sleeping whenever a video is playing in UI3.  You can disable this function if you wish to allow the screen to sleep while UI3 is visible on-screen.</p>'
+			+ '<p>Note that disabling sleep while using the HTML5 video player will cause the video to be rendered to a &lt;canvas&gt; which slightly reduces efficiency and eliminates the HTML5 player\'s slight video quality advantage over other players.  This is necessary avoid having the browser keep the screen awake.</p>'
+			+ '</div>').modalDialog({ title: 'Prevent Sleep', closeOnOverlayClick: true });
 	}
 }
 ///////////////////////////////////////////////////////////////
