@@ -249,6 +249,7 @@ var fetch_streams_cant_close_bug = false;
 var flac_supported = false;
 var speech_synthesis_supported = false;
 var gamepad_api_supported = false;
+var requestVideoFrameCallback_supported = false;
 function DoUIFeatureDetection()
 {
 	try
@@ -299,6 +300,7 @@ function DoUIFeatureDetection()
 			flac_supported = isFlacSupported();
 			speech_synthesis_supported = isSpeechSupported();
 			gamepad_api_supported = typeof navigator.getGamepads === "function";
+			requestVideoFrameCallback_supported = isRequestVideoFrameCallbackSupported();
 
 			$(function ()
 			{
@@ -685,6 +687,17 @@ function isSpeechSupported()
 	try
 	{
 		return !!speechSynthesis;
+	}
+	catch (ex)
+	{
+		return false;
+	}
+}
+function isRequestVideoFrameCallbackSupported()
+{
+	try
+	{
+		return ("requestVideoFrameCallback" in HTMLVideoElement.prototype);
 	}
 	catch (ex)
 	{
@@ -21538,13 +21551,17 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 		var h = player.videoHeight;
 		if (w === 0 && h === 0)
 			return;
-		if (isActivated && acceptedFrameCount > 0 && isRenderingToCanvas)
-			videoModulesShared.RenderVideoFrame(player);
+		var shouldRenderToCanvas = isActivated && acceptedFrameCount > 0 && isRenderingToCanvas;
 		while (!frameMetadataQueue.IsEmpty())
 		{
 			var meta = frameMetadataQueue.Get();
 			if (meta.time > currentTime)
 				break;
+			if (shouldRenderToCanvas)
+			{
+				videoModulesShared.RenderVideoFrame(player);
+				shouldRenderToCanvas = false;
+			}
 			frameMetadataQueue.Remove();
 			meta.width = w;
 			meta.height = h;
@@ -21662,7 +21679,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			else
 				console.log("HTML5 video suspended");
 		});
-		HTML5BetterFrameTiming(player, onTimeUpdate);
+		HTML5BetterFrameTiming2(player, finishFramesToTime);
 		self.setCanvasRenderingState(false);
 
 		isLoaded = true;
@@ -22219,7 +22236,7 @@ function BadAutoplayPreventionDetector()
 			return player.play();
 	};
 }
-function HTML5BetterFrameTiming(video, callback)
+function HTML5BetterFrameTiming2(video, callback)
 {
 	var lastTime = null;
 	function timeCheck()
@@ -22230,7 +22247,7 @@ function HTML5BetterFrameTiming(video, callback)
 			lastTime = time;
 			try
 			{
-				callback(time);
+				callback(time * 1000);
 			}
 			catch (ex)
 			{
@@ -22240,6 +22257,24 @@ function HTML5BetterFrameTiming(video, callback)
 		requestAnimationFrame(timeCheck);
 	}
 	timeCheck();
+
+	function onFrameCallback(now, metadata)
+	{
+		//console.log("onFrameCallback at ", now, metadata);
+		video.requestVideoFrameCallback(onFrameCallback);
+		callback(metadata.mediaTime * 1000);
+	}
+	if (requestVideoFrameCallback_supported)
+	{
+		try
+		{
+			video.requestVideoFrameCallback(onFrameCallback);
+		}
+		catch (ex)
+		{
+			toaster.Error(ex);
+		}
+	}
 }
 var HTML5VideoBreakDetector = new (function ()
 {
