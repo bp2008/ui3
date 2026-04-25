@@ -7,74 +7,147 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>Timeout - %%SYSNAME%% UI3</title>
 	<style type="text/css">
+		html, body
+		{
+			margin: 0;
+			padding: 0;
+			height: 100%;
+		}
+
 		body
 		{
 			background-color: #000000;
 			color: #999999;
 			font-family: Arial, sans-serif;
+			min-height: 100vh;
+			min-height: 100dvh;
+			max-height: 100vh;
+			max-height: 100dvh;
+			overflow: hidden;
+			display: flex;
+			flex-direction: column;
+			box-sizing: border-box;
+			padding: clamp(8px, 2.5vmin, 20px);
+			gap: clamp(8px, 2vmin, 18px);
+		}
+
+		.header
+		{
+			display: flex;
+			align-items: flex-start;
+			gap: clamp(8px, 2vmin, 15px);
+			flex-shrink: 1;
+			min-height: 0;
+			text-overflow: ellipsis;
 		}
 
 		#blueIrisIcon
 		{
-			float: left;
-			margin: 0px 15px 10px 0px;
-			width: 64px;
-			height: 64px;
+			width: clamp(40px, 11vmin, 72px);
+			height: clamp(40px, 11vmin, 72px);
+			flex-shrink: 0;
 		}
 
-		a
+		.header-text
 		{
+			flex: 1;
+			min-width: 0;
+			overflow-y: auto;
+			height: 100%;
+		}
+
+		h2
+		{
+			font-size: clamp(0.95em, 3.2vmin, 1.5em);
+			margin: 0 0 0.35em 0;
+			line-height: 1.2;
+		}
+
+		p
+		{
+			font-size: clamp(0.8em, 2.4vmin, 1em);
+			margin: 0.35em 0;
+			line-height: 1.3;
+		}
+
+		.reconnect-container
+		{
+			flex: 1 1 0;
+			display: flex;
+			min-height: clamp(80px, 25vmin, 160px);
+		}
+
+		#reconnect
+		{
+			flex: 1;
 			color: #9999ff;
 			border: 1px solid #9999ff;
-			border-radius: 3px;
-			padding: 10px;
+			border-radius: 8px;
 			background-color: rgba(255,255,255,0.0);
+			text-decoration: none;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: clamp(1em, 4.5vmin, 1.75em);
+			font-weight: bold;
+			padding: clamp(10px, 2vmin, 20px);
+			text-align: center;
+			-webkit-tap-highlight-color: rgba(255,255,255,0.2);
+			transition: background-color 0.15s, color 0.15s;
 		}
 
-			a:visited
+			#reconnect:visited
 			{
 				color: #9999ff;
 			}
 
-			a:hover
+			#reconnect:hover
 			{
 				color: #bbbbff;
 				background-color: rgba(255,255,255,0.1);
 			}
 
-		svg
+			#reconnect:active
+			{
+				color: #ddddff;
+				background-color: rgba(255,255,255,0.2);
+			}
+
+		#reconnect svg
 		{
 			fill: currentColor;
-			width: 24px;
-			height: 24px;
-			vertical-align: middle;
-			margin-right: 10px;
+			width: clamp(22px, 6vmin, 44px);
+			height: clamp(22px, 6vmin, 44px);
+			margin-right: clamp(8px, 1.5vmin, 14px);
+			flex-shrink: 0;
 		}
 	</style>
 </head>
 <body>
-	<div>
-		<p><img id="blueIrisIcon" src="applet/logos/launcher-icon256_ios.webp" alt="Blue Iris" /></p>
-		<div id="idleTimeout">
-			<h2>%%SYSNAME%% - Web Interface Timeout</h2>
-			<p>You have been idle too long, and were redirected here to save resources.</p>
-			<p>The idle timeout can be adjusted in "UI Settings" under UI3's Main Menu.</p>
+	<div class="header">
+		<img id="blueIrisIcon" src="applet/logos/launcher-icon256_ios.webp" alt="Blue Iris" />
+		<div class="header-text">
+			<div id="idleTimeout">
+				<h2>%%SYSNAME%% - Web Interface Timeout</h2>
+				<p>You have been idle too long, and were redirected here to save resources.</p>
+				<p>The idle timeout can be adjusted in "UI Settings" under UI3's Main Menu.</p>
+			</div>
+			<div id="serverSessionLimit" style="display: none;">
+				<h2>%%SYSNAME%% - Session Limit Reached</h2>
+				<p>Your session has reached the time limit configured for your user account in Blue Iris Settings &gt; Users.</p>
+			</div>
+			<div id="serverDailyLimit" style="display: none;">
+				<h2>%%SYSNAME%% - Daily Limit Reached</h2>
+				<p>Your user account has reached the daily time limit configured in Blue Iris Settings &gt; Users.</p>
+			</div>
 		</div>
-		<div id="serverSessionLimit" style="display: none;">
-			<h2>%%SYSNAME%% - Session Limit Reached</h2>
-			<p>Your session has reached the time limit configured for your user account in Blue Iris Settings &gt; Users.</p>
-		</div>
-		<div id="serverDailyLimit" style="display: none;">
-			<h2>%%SYSNAME%% - Daily Limit Reached</h2>
-			<p>Your user account has reached the daily time limit configured in Blue Iris Settings &gt; Users.</p>
-		</div>
-		<p style="margin-top: 24px;">
-			<a id="reconnect" href="/">
-				<svg id="svg_mio_Refresh" viewBox="4 4 16 16">
-					<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
-				</svg>Click here to reconnect
-			</a>
-		</p>
+	</div>
+	<div class="reconnect-container">
+		<a id="reconnect" href="/">
+			<svg id="svg_mio_Refresh" viewBox="4 4 16 16">
+				<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+			</svg>Click here to reconnect
+		</a>
 	</div>
 	<script type="text/javascript">
 		var local_bi_session = "%%SESSION%%";
