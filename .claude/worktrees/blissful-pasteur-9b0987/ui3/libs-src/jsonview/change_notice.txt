@@ -1,3 +1,0 @@
-CHANGE NOTICE
-
-The script of this library has been significantly modified by the UI2/UI3 projects.

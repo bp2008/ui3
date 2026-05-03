@@ -6,6 +6,7 @@
 *.user
 *.userosscache
 *.sln.docstates
+.claude/
 /ui3.sln
 ui3-local-overrides.js
 ui3-local-overrides.css
