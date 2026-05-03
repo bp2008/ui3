@@ -1,0 +1,14 @@
+﻿.clipIconWrapper					1
+#exportOffsetStart					1
+#exportOffsetEnd					2
+.clipDesc							10
+#statusArea							50
+#layouttop							100
+#datePickerDialog					100
+#bigThumb							9999
+#loadingmsgwrapper					99999			(defined in html style attribute)
+.inputRequiredToPlay				500000
+#toast-container					999999			(defined in toastr css)
+.dropdown_list						9999999
+.playbackSettings					9999999
+.profileListItem.ghost				999999999

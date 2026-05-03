@@ -1,0 +1,113 @@
+.sliderCb[type="checkbox"]:not(:checked),
+.sliderCb[type="checkbox"]:checked
+{
+	position: absolute;
+	left: -9999px;
+}
+
+	.sliderCb[type="checkbox"]:not(:checked) + label,
+	.sliderCb[type="checkbox"]:checked + label
+	{
+		position: relative;
+		padding-right: 80px;
+		cursor: pointer;
+	}
+
+		.sliderCb[type="checkbox"]:not(:checked) + label:before,
+		.sliderCb[type="checkbox"]:checked + label:before,
+		.sliderCb[type="checkbox"]:not(:checked) + label:after,
+		.sliderCb[type="checkbox"]:checked + label:after
+		{
+			content: '';
+			position: absolute;
+		}
+
+		.sliderCb[type="checkbox"]:not(:checked) + label:before,
+		.sliderCb[type="checkbox"]:checked + label:before
+		{
+			right: 10px;
+			top: 6px;
+			width: 65px;
+			height: 30px;
+			background: #2B2D30;
+			box-shadow: 0 0 1px rgba(255,255,255,0.75);
+			border-radius: 15px;
+			transition: background-color .2s;
+		}
+
+		.sliderCb[type="checkbox"]:not(:checked) + label:after,
+		.sliderCb[type="checkbox"]:checked + label:after
+		{
+			width: 20px;
+			height: 20px;
+			transition: all .2s;
+			border-radius: 50%;
+			background: #a9b2bc;
+			top: 11px;
+			right: 50px;
+		}
+
+		/* on checked */
+		.sliderCb[type="checkbox"]:checked + label:before
+		{
+			background: #3C3F43;
+		}
+
+		.sliderCb[type="checkbox"]:checked + label:after
+		{
+			background: #6ea8dd;
+			top: 11px;
+			right: 15px;
+		}
+
+		.sliderCb[type="checkbox"]:checked + label .ui,
+		.sliderCb[type="checkbox"]:not(:checked) + label .ui:before,
+		.sliderCb[type="checkbox"]:checked + label .ui:after
+		{
+			position: absolute;
+			right: 16px;
+			width: 65px;
+			border-radius: 15px;
+			font-size: 14px;
+			font-weight: bold;
+			line-height: 22px;
+			transition: all .2s;
+		}
+
+		.sliderCb[type="checkbox"]:not(:checked) + label .ui:before
+		{
+			content: "no";
+			right: -22px;
+			top: 9px;
+			color: #A9A9A9;
+		}
+
+		.sliderCb[type="checkbox"]:checked + label .ui:after
+		{
+			right: -18px;
+			top: -4px;
+			content: "yes";
+			color: #6ea8dd;
+		}
+
+.sliderCb[type="checkbox"]:focus + label:before
+{
+	border: 1px dashed #777;
+	margin-top: -1px;
+}
+
+.sliderCb[type="checkbox"]:disabled + label:before
+{
+	background-color: #4a4c4e;
+}
+
+.sliderCb[type="checkbox"]:disabled + label:after
+{
+	background-color: #7a7c7e;
+}
+
+.sliderCb[type="checkbox"]:disabled + label .ui:before,
+.sliderCb[type="checkbox"]:disabled + label .ui:after
+{
+	color: #7a7c7e;
+}

@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="72">
+	<path d="M0 0v22h60V0Zm6 6h48v10H6Z" class="svg_topbar" />
+	<path d="M0 42v12h6V42ZM22 42v12h6V42ZM0 36h6v-6h6v-6H0ZM16 24v6h6v6h6V24ZM28 60h-6v6h-6v6h12zM12 72v-6H6v-6H0v12z" class="svg_sidebar" />
+</svg>

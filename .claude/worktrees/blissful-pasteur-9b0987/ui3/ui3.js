@@ -1,4 +1,4 @@
-﻿/* eslint eqeqeq: 0, no-extra-parens: 0, semi: 0, no-redeclare: 0, no-empty: 0, valid-jsdoc: 0 */
+/* eslint eqeqeq: 0, no-extra-parens: 0, semi: 0, no-redeclare: 0, no-empty: 0, valid-jsdoc: 0 */
 /// <reference path="ui3-local-overrides.js" />
 /// <reference path="libs-src/jquery-1.12.4.js" />
 /// <reference path="libs-ui3.js" />
@@ -9593,39 +9593,6 @@ function ClipTimeline()
 						ctx.fillRect(x, y, w, h);
 						bet.stop();
 					}
-					// Draw export selection if in timeline export mode
-					var exportRange = exportControls ? exportControls.GetTimelineExportRange() : null;
-					if (exportRange)
-					{
-						var erStartX = (exportRange.startUtc - left) / zoomFactor;
-						var erEndX = (exportRange.endUtc - left) / zoomFactor;
-						var erLeft = Math.min(erStartX, erEndX);
-						var erRight = Math.max(erStartX, erEndX);
-
-						// Highlight selected span
-						var fillLeft = Math.max(0, erLeft);
-						var fillRight = Math.min(canvas.width, erRight);
-						if (fillRight > fillLeft)
-						{
-							ctx.fillStyle = "rgba(255,200,50,0.18)";
-							ctx.fillRect(fillLeft, 0, fillRight - fillLeft, canvas.height);
-						}
-
-						// Start marker (green)
-						if (erStartX >= 0 && erStartX <= canvas.width)
-						{
-							ctx.fillStyle = "rgba(80,255,80,1)";
-							ctx.fillRect(Math.round(erStartX) - dpr, 0, 2 * dpr, canvas.height);
-						}
-
-						// End marker (red)
-						if (erEndX >= 0 && erEndX <= canvas.width)
-						{
-							ctx.fillStyle = "rgba(255,80,80,1)";
-							ctx.fillRect(Math.round(erEndX) - dpr, 0, 2 * dpr, canvas.height);
-						}
-					}
-
 					var perfEnd = performance.now();
 
 					// Decide whether to render curved corners next time.
@@ -10139,46 +10106,6 @@ function ClipTimeline()
 		// The [timeline] field will contain a reference to the component, set by the component after its creation.
 		new Vue({ el: "#layoutbottomTimeline" });
 
-		function onTimelineContextMenuAction(action)
-		{
-			switch (this.data.alias)
-			{
-				case "convertexport":
-				case "set_start_frame":
-				case "set_end_frame":
-					if (videoPlayer.Loading().image.isTimeline())
-					{
-						exportControls.Enable(videoPlayer.Loading().cam.optionValue);
-						if (this.data.alias === "set_start_frame")
-							exportControls.SetTimelineExportStartMs(videoPlayer.lastFrameUtc);
-						else if (this.data.alias === "set_end_frame")
-							exportControls.SetTimelineExportEndMs(videoPlayer.lastFrameUtc);
-					}
-					break;
-				default:
-					toaster.Error(this.data.alias + " is not implemented!");
-					break;
-			}
-		}
-		function onShowTimelineContextMenu(menu)
-		{
-			var disable_items = [];
-			var enable_items = ["submenu_timeline_skipDeadAir", "timeline_skipDeadAir_nopreference", "timeline_skipDeadAir_off", "timeline_skipDeadAir_on", "boringTimelineMode"];
-			if (!videoPlayer.Loading().image.isTimeline())
-			{
-				disable_items.push("convertexport");
-				disable_items.push("set_start_frame");
-				disable_items.push("set_end_frame");
-			}
-			else
-			{
-				enable_items.push("convertexport");
-				enable_items.push("set_start_frame");
-				enable_items.push("set_end_frame");
-			}
-			menu.applyrule({ name: "disable_items", disable: true, items: disable_items });
-			menu.applyrule({ name: "enable_items", disable: false, items: enable_items });
-		}
 		var optionTimeline =
 		{
 			alias: "cmroot_timeline", width: 200, items:
@@ -10200,16 +10127,12 @@ function ClipTimeline()
 								videoPlayer.RefreshVideoStream();
 								break;
 						}
-					})
-					, {
+					}),
+					{
 						text: '<span id="timeline_starfield_menuitem">Starfield Background</span>', iconClass: "noflip", icon: "#svg_mio_cbUnchecked", alias: "boringTimelineMode",
 						tooltip: 'The starfield background adds a little visual flair outside the timeline boundaries and when zoomed out a long way.',
 						action: function () { settings.ui3_timeline_starfield = settings.ui3_timeline_starfield === "1" ? "0" : "1"; }
 					}
-					, { type: "splitLine" }
-					, { text: 'Convert/export', icon: "#svg_mio_launch", iconClass: "noflip", alias: "convertexport", action: onTimelineContextMenuAction }
-					, { text: "Set start frame", icon: "#svg_mio_download", iconClass: "noflip rotate90 setStartFrame", alias: "set_start_frame", action: onTimelineContextMenuAction }
-					, { text: "Set end frame", icon: "#svg_mio_download", iconClass: "noflip rotate270 setEndFrame", alias: "set_end_frame", action: onTimelineContextMenuAction }
 				]
 			, onContextMenu: function ()
 			{
@@ -10219,7 +10142,6 @@ function ClipTimeline()
 				ThreeStateMenuItem.Refresh("timeline_skipDeadAir", parseInt(settings.ui3_playback_skipDeadAir));
 				return true;
 			}
-			, onShow: onShowTimelineContextMenu
 			, clickType: GetPreferredContextMenuTrigger()
 		};
 		$("#layoutbottomTimeline").contextmenu(optionTimeline);
@@ -12066,11 +11988,6 @@ function ExportControls()
 	var controlsEnabled = false;
 	var clipStatsLoaded = false;
 
-	// Timeline export mode state (set when exporting from a camera/group instead of a clip)
-	var timelineCamPath = null;
-	var timelineStartUtc = 0;
-	var timelineEndUtc = 0;
-
 	var Initialize = function ()
 	{
 		$exportOffsetWrapper.hide();
@@ -12080,7 +11997,7 @@ function ExportControls()
 	}
 	this.resized = function ()
 	{
-		if (!controlsEnabled || timelineCamPath)
+		if (!controlsEnabled)
 			return;
 
 		exportOffsetStart.resized();
@@ -12090,8 +12007,6 @@ function ExportControls()
 	}
 	this.IsDragging = function ()
 	{
-		if (timelineCamPath)
-			return false;
 		return exportOffsetStart.IsDragging() || exportOffsetEnd.IsDragging();
 	}
 	this.IsEnabled = function ()
@@ -12100,82 +12015,55 @@ function ExportControls()
 	}
 	this.mouseMove = function (e)
 	{
-		if (timelineCamPath)
-			return false;
 		var r1 = exportOffsetStart.mouseMove(e);
 		var r2 = exportOffsetEnd.mouseMove(e);
 		return r1 || r2;
 	}
 	this.mouseUp = function (e)
 	{
-		if (timelineCamPath)
-			return false;
 		var r1 = exportOffsetStart.mouseUp(e);
 		var r2 = exportOffsetEnd.mouseUp(e);
 		return r1 || r2;
 	}
-	this.Enable = function (recIdOrGroupOrCameraName)
+	this.Enable = function (recId)
 	{
 		if (controlsEnabled)
 			return;
 		controlsEnabled = true;
 
-		var cam = cameraListLoader.GetCameraWithId(recIdOrGroupOrCameraName);
-		if (cam)
+		if (currentPrimaryTab !== "clips")
+			$("#topbar_tab_clips").click();
+
+		clipData = clipLoader.GetClipFromId(recId);
+
+		if (!videoPlayer.Playback_IsPaused())
+			videoPlayer.Playback_Pause();
+
+		clipExportPanel.Open([clipData.recId], function (exportOptions)
 		{
-			timelineCamPath = cam.optionValue;
+			self.Disable();
+		});
 
-			// Default range: 5 minutes ending at the current timeline position
-			var currentTime = clipTimeline.getCurrentTime();
-			timelineEndUtc = currentTime;
-			timelineStartUtc = Math.max(1, currentTime - 30000);
-
-			if (!videoPlayer.Playback_IsPaused())
-				videoPlayer.Playback_Pause();
-
-			clipExportPanel.OpenForTimeline(timelineCamPath, timelineStartUtc, timelineEndUtc, function ()
-			{
-				self.Disable();
-			});
-
-			clipTimeline.redrawCanvas();
-		}
+		if (clipData.isClip)
+			ClipStatsLoaded();
 		else
 		{
-			if (currentPrimaryTab !== "clips")
-				$("#topbar_tab_clips").click();
-
-			clipData = clipLoader.GetClipFromId(recIdOrGroupOrCameraName);
-
-			if (!videoPlayer.Playback_IsPaused())
-				videoPlayer.Playback_Pause();
-
-			clipExportPanel.Open([clipData.recId], function (exportOptions)
+			// We've probably already loaded the clip duration for this alert because that happens when starting to stream it.
+			if (clipData.hasLoadedClipStats)
+				ClipStatsLoaded(); // We have
+			else // We have not, so our clip duration and size values need updated.
 			{
-				self.Disable();
-			});
-
-			if (clipData.isClip)
-				ClipStatsLoaded();
-			else
-			{
-				// We've probably already loaded the clip duration for this alert because that happens when starting to stream it.
-				if (clipData.hasLoadedClipStats)
-					ClipStatsLoaded(); // We have
-				else // We have not, so our clip duration and size values need updated.
+				clipExportPanel.UpdateRangeSelection(exportOffsetStart.getPosition(), exportOffsetEnd.getPosition());
+				// call global resized
+				resized();
+				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
 				{
-					clipExportPanel.UpdateRangeSelection(exportOffsetStart.getPosition(), exportOffsetEnd.getPosition());
-					// call global resized
-					resized();
-					clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
-					{
-						// This success callback can be called more than once. clipStatsLoaded will tell.
-						if (clipStatsLoaded || !controlsEnabled)
-							return;
-						clipLoader.ApplyMissingStatsToClipData(stats, clipData);
-						ClipStatsLoaded();
-					});
-				}
+					// This success callback can be called more than once. clipStatsLoaded will tell.
+					if (clipStatsLoaded || !controlsEnabled)
+						return;
+					clipLoader.ApplyMissingStatsToClipData(stats, clipData);
+					ClipStatsLoaded();
+				});
 			}
 		}
 	}
@@ -12232,25 +12120,6 @@ function ExportControls()
 	{
 		exportOffsetEnd.setPosition(percent);
 	}
-	this.SetTimelineExportStartMs = function (ms)
-	{
-		timelineStartUtc = ms;
-		clipExportPanel.UpdateTimelineRange(timelineStartUtc, timelineEndUtc);
-		clipTimeline.redrawCanvas();
-	}
-	this.SetTimelineExportEndMs = function (ms)
-	{
-		timelineEndUtc = ms;
-		clipExportPanel.UpdateTimelineRange(timelineStartUtc, timelineEndUtc);
-		clipTimeline.redrawCanvas();
-	}
-	/** Returns { startUtc, endUtc } when in timeline export mode, otherwise null. */
-	this.GetTimelineExportRange = function ()
-	{
-		if (controlsEnabled && timelineCamPath)
-			return { startUtc: timelineStartUtc, endUtc: timelineEndUtc };
-		return null;
-	}
 	this.Disable = function ()
 	{
 		if (!controlsEnabled)
@@ -12259,15 +12128,11 @@ function ExportControls()
 		clipStatsLoaded = false;
 
 		clipData = null;
-		timelineCamPath = null;
 
 		$exportOffsetWrapper.hide();
 
 		if (clipExportPanel.IsOpen())
 			clipExportPanel.Close();
-
-		if (clipTimeline)
-			clipTimeline.redrawCanvas();
 
 		// call global resized
 		resized();
@@ -12276,15 +12141,7 @@ function ExportControls()
 	{
 		if (!controlsEnabled)
 			return;
-		if (timelineCamPath)
-		{
-			if (!videoPlayer.Loading().image.isTimeline())
-			{
-				toaster.Info("The timeline export operation was canceled because timeline playback mode was exited!", 10000);
-				self.Disable();
-			}
-		}
-		else if (clipData.recId !== videoPlayer.Loading().image.uniqueId)
+		if (clipData.recId !== videoPlayer.Loading().image.uniqueId)
 		{
 			toaster.Info("The clip export operation was canceled because the clip was closed!", 10000);
 			self.Disable();
@@ -14037,69 +13894,6 @@ function ClipLoader(clipsBodySelector)
 			, function (jqXHR, textStatus, errorThrown)
 			{
 				console.log("export command failed:", jqXHR.ErrorMessageHtml);
-				failCallback(jqXHR.ErrorMessageHtml);
-			});
-	}
-	/**
-	 * Queues a timeline (continuous recording) export via the Blue Iris JSON API
-	 * using absolute UTC timestamps for the start and end of the desired segment.
-	 * @param {String} camPath Camera short name (optionValue).
-	 * @param {Object} exportOptions Export options including startTimeMs (absolute UTC ms) and endTimeMs (absolute UTC ms).
-	 * @param {Function} onSuccess Optional callback upon success.
-	 * @param {Function} onFailure Optional callback upon failure.
-	 */
-	this.QueueTimelineExportViaAPI = function (camPath, exportOptions, onSuccess, onFailure)
-	{
-		var durationMs = exportOptions.endTimeMs - exportOptions.startTimeMs;
-		if (durationMs <= 0)
-		{
-			toaster.Error("Timeline export range is invalid: end time must be after start time.");
-			return;
-		}
-
-		var args = {
-			cmd: "export",
-			path: camPath,
-			startms: Math.floor(exportOptions.startTimeMs),
-			msec: Math.floor(durationMs),
-			format: exportOptions.format,
-			profile: exportOptions.profile,
-			substream: exportOptions.substream,
-			audio: exportOptions.audio,
-			reencode: exportOptions.reencode,
-			overlay: exportOptions.overlay
-		};
-		if (exportOptions.timelapse && exportOptions.timelapseMultiplier && exportOptions.timelapseFps)
-			args.timelapse = exportOptions.timelapseMultiplier + "@" + exportOptions.timelapseFps;
-
-		var failCallback = function (msg)
-		{
-			toaster.Error("Export command failed: " + msg, 15000);
-			if (typeof onFailure === "function")
-				onFailure(msg);
-		};
-
-		ExecJSON(args, function (response)
-		{
-			if (response.result === "success")
-			{
-				if (typeof onSuccess === "function")
-				{
-					onSuccess(response.data);
-				}
-			}
-			else
-			{
-				console.log("timeline export command failed:", response);
-				if (response.result === "fail" && response.status)
-					failCallback(response.status);
-				else
-					failCallback("No reason was given for the failure.");
-			}
-		}
-			, function (jqXHR, textStatus, errorThrown)
-			{
-				console.log("timeline export command failed:", jqXHR.ErrorMessageHtml);
 				failCallback(jqXHR.ErrorMessageHtml);
 			});
 	}
@@ -28871,7 +28665,7 @@ function ClipExportPanel()
 
 	var exportOptions;
 
-	var state = { recIdArray: [], fileSizeBytes: 0, onPanelClosing: null, timelineMode: false, camPath: null };
+	var state = { recIdArray: [], fileSizeBytes: 0, onPanelClosing: null };
 	var isOpen = false;
 	var isModalMode = false;
 	var $modalDialog = null;
@@ -28897,8 +28691,6 @@ function ClipExportPanel()
 		state.recIdArray = recIdArray;
 		state.onPanelClosing = onPanelClosing;
 		state.fileSizeBytes = 0;
-		state.timelineMode = false;
-		state.camPath = null;
 
 		isOpen = true;
 
@@ -28914,9 +28706,6 @@ function ClipExportPanel()
 			timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps)
 		};
 
-		$content.removeClass("clipExportPanelDialog");
-		$content.addClass("clipExportPanel");
-
 		ReRender();
 
 		$("#layoutleftRecordings").hide();
@@ -28924,42 +28713,35 @@ function ClipExportPanel()
 	}
 
 	/**
-	 * Opens the panel in timeline mode for exporting a time range from a camera or group.
-	 * @param {String} camPath Camera short name / optionValue.
-	 * @param {Number} startUtc Start time as absolute UTC milliseconds.
-	 * @param {Number} endUtc End time as absolute UTC milliseconds.
-	 * @param {Function} onPanelClosing Callback when the panel closes.
+	 * Opens the panel in a modal dialog instead of the sidebar.
+	 * Use this in the Timeline view where #layoutleftExportScrollable is too small.
+	 * @param {Array} recIdArray Array of recId.
+	 * @param {Function} onPanelClosing Callback function which is called when the panel closes.
 	 */
-	this.OpenForTimeline = function (camPath, startUtc, endUtc, onPanelClosing)
+	this.OpenForTimeline = function (recIdArray, onPanelClosing)
 	{
-		state.recIdArray = [];
-		state.camPath = camPath;
-		state.timelineMode = true;
+		state.recIdArray = recIdArray;
 		state.onPanelClosing = onPanelClosing;
 		state.fileSizeBytes = 0;
-
 		isOpen = true;
+		isModalMode = true;
 
 		exportOptions = {
-			format: 1, // MP4 is always required for timeline export
+			format: parseInt(settings.ui3_clip_export_format),
 			profile: parseInt(settings.ui3_clip_export_profile),
 			substream: settings.ui3_clip_export_substream === "1",
 			audio: settings.ui3_clip_export_withAudio === "1",
-			reencode: true, // re-encode is always required for timeline export
+			reencode: settings.ui3_clip_export_reencode === "1",
 			overlay: settings.ui3_clip_export_overlay === "1",
 			timelapse: settings.ui3_clip_export_timelapse === "1",
 			timelapseMultiplier: parseFloat(settings.ui3_clip_export_timelapseMultiplier),
-			timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps),
-			startTimeMs: startUtc,
-			endTimeMs: endUtc
+			timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps)
 		};
 
-		isModalMode = true;
-		$content.addClass("clipExportPanelDialog");
-		$content.removeClass("clipExportPanel");
 		ReRender();
-		$modalDialog = $content.dialog({
-			title: "Export timeline segment",
+
+		$modalDialog = $content.modalDialog({
+			title: "Convert/Export " + state.recIdArray.length + " clip" + (state.recIdArray.length === 1 ? '' : 's'),
 			onClosing: function ()
 			{
 				isOpen = false;
@@ -28979,8 +28761,7 @@ function ClipExportPanel()
 	{
 		if (isModalMode)
 		{
-			if ($modalDialog)
-				$modalDialog.close();
+			if ($modalDialog) $modalDialog.close();
 			return;
 		}
 		$("#layoutleftRecordings").show();
@@ -28994,8 +28775,7 @@ function ClipExportPanel()
 	{
 		if (isModalMode)
 		{
-			if ($modalDialog)
-				$modalDialog.close();
+			if ($modalDialog) $modalDialog.close();
 			return;
 		}
 		$("#layoutleftExport").hide();
@@ -29009,22 +28789,6 @@ function ClipExportPanel()
 		return isOpen;
 	}
 
-	/**
-	 * Updates the displayed time range when in timeline export mode.
-	 * Called by ExportControls when the user sets new start/end markers.
-	 * @param {Number} startUtc Start time as absolute UTC milliseconds.
-	 * @param {Number} endUtc End time as absolute UTC milliseconds.
-	 */
-	this.UpdateTimelineRange = function (startUtc, endUtc)
-	{
-		if (!isOpen || !state.timelineMode)
-			return;
-		exportOptions.startTimeMs = startUtc;
-		exportOptions.endTimeMs = endUtc;
-		if ($status)
-			$status.text(msToTime(Math.abs(endUtc - startUtc)));
-	}
-
 	var ReRender = function ()
 	{
 		$content.empty();
@@ -29034,31 +28798,21 @@ function ClipExportPanel()
 			+ '</svg></div></div>');
 		$closeBtn.on('click', self.Close);
 		$content.append($closeBtn);
+		var headingStart = '<span class="hideInSizeSmall">Convert/export</span><span class="showInSizeSmall">Export</span>';
+		$content.append('<div class="leftBarHeading">' + headingStart + ' ' + state.recIdArray.length + ' clip' + (state.recIdArray.length === 1 ? '' : 's') + '</div>');
 
-		if (state.timelineMode)
+		$status = null;
+		if (state.recIdArray.length === 1)
 		{
-			$content.append('<div class="leftBarHeading">Export timeline segment</div>');
-			$status = $('<div class="dialogOption_item clipprop_item_info"></div>');
+			$status = $('<div class="dialogOption_item clipprop_item_info"></div>')
 			$content.append($status);
-			$status.text("Duration: " + msToTime(Math.abs(exportOptions.endTimeMs - exportOptions.startTimeMs)));
-		}
-		else
-		{
-			var headingStart = '<span class="hideInSizeSmall">Convert/export</span><span class="showInSizeSmall">Export</span>';
-			$content.append('<div class="leftBarHeading">' + headingStart + ' ' + state.recIdArray.length + ' clip' + (state.recIdArray.length === 1 ? '' : 's') + '</div>');
-			$status = null;
-			if (state.recIdArray.length === 1)
-			{
-				$status = $('<div class="dialogOption_item clipprop_item_info"></div>')
-				$content.append($status);
-			}
 		}
 
 		var AddEditorField = MakeAddEditorFieldFn("Convert/export", $content, exportOptions, { compact: true });
 
 		var formatOptions = ["AVI", "MP4 (H.264, H.265, MPEG4 only)", "Windows Media"];
 
-		if (!state.timelineMode && state.recIdArray.length === 1)
+		if (state.recIdArray.length === 1)
 		{
 			// There is only one clip, so we can expose UI3 AVI format if the browser supports it.
 			var clipData = clipLoader.GetClipFromId(state.recIdArray[0]);
@@ -29088,27 +28842,14 @@ function ClipExportPanel()
 				exportOptions.format = 0;
 		}
 
-		if (state.timelineMode)
-		{
-			limitedFormatOptions = true;
-			exportOptions.reencode = true;
-			var $formatRow = $('<div class="profileEditorRow"></div>');
-			$formatRow.append($('<div class="dialogOption_item dialogOption_item_ddl compact disabled"></div>')
-				.html('<div class="dialogOption_label">Output format</div><select disabled><option selected>MP4</option></select>'));
-			$content.append($formatRow);
-		}
-		else
-		{
-			AddEditorField("Output format", "format", { type: "select", options: formatOptions, onChange: ReRender });
-		}
+		AddEditorField("Output format", "format", { type: "select", options: formatOptions, onChange: ReRender });
 		if (exportOptions.format != classic_ui3_idx)
 			AddEditorField("Encoder profile", "profile", { type: "select", options: ["export 0", "export 1", "export 2", "export 3"] });
 		AddEditorField("Use sub stream if available", "substream", { type: "boolean", onChange: ReRender });
 		AddEditorField("Include audio track", "audio", { type: "boolean", onChange: ReRender });
 		if (exportOptions.format != classic_ui3_idx)
 		{
-			if (!state.timelineMode)
-				AddEditorField("Re-encode video to H.264", "reencode", { type: "boolean", onChange: ReRender });
+			AddEditorField("Re-encode video to H.264", "reencode", { type: "boolean", onChange: ReRender });
 			AddEditorField("Add the camera's current text and graphic overlay", "overlay", { type: "boolean", disabled: !exportOptions.reencode });
 			AddEditorField("Time-lapse", "timelapse", { type: "boolean", onChange: ReRender, disabled: !exportOptions.reencode || exportOptions.audio });
 			if (exportOptions.timelapse)
@@ -29140,26 +28881,6 @@ function ClipExportPanel()
 		settings.ui3_clip_export_timelapse = exportOptions.timelapse ? "1" : "0";
 		settings.ui3_clip_export_timelapseMultiplier = exportOptions.timelapseMultiplier;
 		settings.ui3_clip_export_timelapseFps = exportOptions.timelapseFps;
-
-		// Timeline mode: export a time range from a camera using absolute UTC timestamps
-		if (state.timelineMode)
-		{
-			var durationMs = exportOptions.endTimeMs - exportOptions.startTimeMs;
-			if (durationMs < 0)
-			{
-				// Swap if end is before start
-				var tmp = exportOptions.startTimeMs;
-				exportOptions.startTimeMs = exportOptions.endTimeMs;
-				exportOptions.endTimeMs = tmp;
-				durationMs = -durationMs;
-			}
-			if (durationMs === 0)
-				exportOptions.endTimeMs = exportOptions.startTimeMs + 10000;
-
-			self.Close();
-			clipLoader.QueueTimelineExportViaAPI(state.camPath, exportOptions, exportAPIStatusDialog.show);
-			return;
-		}
 
 		// Validate start and end times
 		if (state.recIdArray.length === 1)
@@ -32592,7 +32313,6 @@ function BI_Hotkeys()
 		if (!charCode
 			|| $("body").children(".dialog_overlay").length !== 0
 			|| $("body").children(".dialog_wrapper").children(".streamingProfileEditorPanel").length !== 0
-			|| $("body").children(".dialog_wrapper").children(".clipExportPanel").length !== 0
 			|| $("#clipFilterSearch").is(':focus'))
 			return;
 		if (e.ctrlKey)

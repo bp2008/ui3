@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>SVG Icon Test</title>
+	<script src="libs-src/jquery-1.12.4.min.js"></script>
+	<script>
+		if (typeof $ === "undefined")
+			document.write('<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"><\/script>');
+	</script>
+	<style type="text/css">
+		body
+		{
+			font-size: 0px;
+			font-family: Consolas, monospace;
+		}
+
+		.icon
+		{
+			fill: currentColor;
+			width: 100%;
+			height: 100%;
+		}
+
+			.icon:hover
+			{
+				color: #FF9999;
+			}
+
+			.icon:active
+			{
+				color: #FF0000;
+			}
+
+		.iconInverse
+		{
+			transform: scaleY(-1);
+		}
+
+		.stroke
+		{
+			stroke: currentColor;
+		}
+
+		.iconBox
+		{
+			display: inline-block;
+			border: 1px solid black;
+			margin: 5px;
+			padding: 5px;
+			cursor: pointer;
+		}
+
+			.iconBox:hover
+			{
+				background-color: rgba(0,0,0,0.05);
+			}
+
+		.svgWrapper
+		{
+			vertical-align: middle;
+			display: inline-block;
+			border: 1px solid black;
+			padding: 5px;
+			width: 32px;
+			height: 32px;
+		}
+
+		.label
+		{
+			display: inline-block;
+			vertical-align: middle;
+			padding-left: 5px;
+			font-size: 16px;
+		}
+
+		label
+		{
+			font-size: 16px;
+		}
+
+		#svgLargeContainer
+		{
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			position: relative;
+		}
+
+		#copied
+		{
+			font-size: 16px;
+			color: #009900;
+			font-weight: bold;
+			background-color: #FFFFFF;
+			height: 20px;
+			opacity: 0;
+		}
+
+		#svgName
+		{
+			display: flex;
+			align-items: center;
+			font-size: 16px;
+			padding: 2px 4px;
+			margin-bottom: 20px;
+			background-color: rgba(255,200,0,0.15);
+			border: 1px dotted rgba(255,200,0,0.75);
+		}
+
+		#svgViewBox
+		{
+			font-size: 16px;
+			padding: 2px 4px;
+			margin-bottom: 20px;
+		}
+
+			#svgViewBox span
+			{
+				background-color: rgba(255,200,0,0.15);
+			}
+
+		#svgLargeContainer.enabled #svgName,
+		#svgLargeContainer.enabled #svgViewBox
+		{
+			cursor: pointer;
+		}
+
+			#svgLargeContainer.enabled #svgName:hover,
+			#svgLargeContainer.enabled #svgViewBox:hover
+			{
+				background-color: rgba(255,200,0,0.25);
+			}
+
+		#svgLarge
+		{
+			padding: 0px;
+			border: 1px solid #000000;
+			width: 500px;
+			height: 500px;
+		}
+
+			#svgLarge svg
+			{
+				background-color: rgba(0,0,0,0.5);
+				width: 100%;
+				height: 100%;
+			}
+
+		.copyBtn
+		{
+			width: 16px;
+			height: 16px;
+			margin-left: 10px;
+		}
+
+		#svgLayoutTable
+		{
+			display: none;
+			border-collapse: collapse;
+		}
+
+		#svgLargeContainer .copyBtn
+		{
+			display: none;
+		}
+
+		#svgLargeContainer.enabled .copyBtn
+		{
+			display: inline;
+		}
+
+		#svgLargeContainer.enabled #svgLarge,
+		#svgLargeContainer.enabled #svgLayoutTable
+		{
+			display: block;
+		}
+
+		#svgLayoutTable td
+		{
+			padding: 0px;
+			border: none;
+		}
+
+			#svgLayoutTable td input
+			{
+				margin: 0px;
+			}
+
+			#svgLayoutTable td.min-x
+			{
+				padding-bottom: 2px;
+			}
+
+			#svgLayoutTable td.width
+			{
+				padding-top: 2px;
+			}
+
+			#svgLayoutTable td.min-y
+			{
+				padding-right: 2px;
+			}
+
+			#svgLayoutTable td.min-x,
+			#svgLayoutTable td.width
+			{
+				width: 500px;
+			}
+
+			#svgLayoutTable td.min-y,
+			#svgLayoutTable td.height
+			{
+				position: relative;
+				height: 500px;
+			}
+
+		#rangeMinX, #rangeWidth
+		{
+			width: 500px;
+		}
+
+		#rangeMinY, #rangeHeight
+		{
+			position: absolute;
+			width: 500px;
+			top: 0px;
+		}
+
+		#rangeMinY
+		{
+			left: 0px;
+			transform: rotate(90deg);
+			transform-origin: left top;
+		}
+
+		#rangeHeight
+		{
+			left: 18px;
+			transform: rotate(90deg);
+			transform-origin: left top;
+		}
+
+		#svgOptimizeContainer
+		{
+			position: absolute;
+			display: none;
+			opacity: 0;
+		}
+
+		#svgLayoutTable td.centerCell
+		{
+			text-align: center;
+			padding: 4px 0px;
+		}
+	</style>
+	<script type="text/javascript">
+		$(function ()
+		{
+			try
+			{
+				if (localStorage.ui3_svgtest_padding === "1")
+					$("#cb_svgPadding").attr("checked", "checked");
+			}
+			catch (ex) { }
+
+			$("#svgContainer").load("icons.svg?r=" + Date.now(), function ()
+			{
+				var $root = $("#root");
+				$("symbol,g").each(function (idx, ele)
+				{
+					var $icon = $(ele);
+					var icon_id = $icon.attr("id");
+					var doInverse = icon_id.indexOf('svg_x5F_') == 0;
+					var doStroke = icon_id.indexOf('svg_stroke_') == 0;
+					var $btn = $('<div class="iconBox" tabindex="0" role="button">'
+						+ '<div class="svgWrapper"><svg class="icon' + (doInverse ? ' iconInverse' : '') + (doStroke ? ' stroke' : '') + '"><use xlink:href="#' + icon_id + '"></use></svg></div>'
+						+ ' <div class="label">' + icon_id + '</div> '
+						+ '</div>');
+					$btn.on('click keydown', function (e)
+					{
+						if (typeof e.keyCode === "undefined" || e.keyCode === 13 || e.keyCode === 32)
+						{
+							$("#svgNameDiv").text(icon_id);
+							$("#svgLarge").html($btn.find('svg').parent().html());
+							$("#svgLargeContainer").addClass("enabled");
+							ComputeScaledViewBox();
+							window.scrollTo(0, $(document).height());
+							$("#svgName").attr("title", "click to copy svg name");
+							$("#svgName").focus();
+						}
+					});
+					$root.append($btn);
+				});
+				$("#svgName").on('click keydown', copySvgName);
+				$("#svgViewBox").on('click keydown', copyViewBox);
+				setPaddingState();
+			});
+		});
+		function copySvgName(e)
+		{
+			if (typeof e.keyCode === "undefined" || e.keyCode === 13 || e.keyCode === 32)
+			{
+				if ($("#svgLargeContainer").hasClass("enabled"))
+					CopyToClipboard($("#svgNameDiv").text());
+			}
+		}
+		function copyViewBox(e)
+		{
+			if (typeof e.keyCode === "undefined" || e.keyCode === 13 || e.keyCode === 32)
+			{
+				CopyToClipboard(getSelected$Svg().get(0).getAttribute('viewBox'));
+			}
+		}
+		function setPaddingState()
+		{
+			var showPadding = $("#cb_svgPadding").is(":checked");
+			try
+			{
+				localStorage.ui3_svgtest_padding = showPadding ? "1" : "0";
+			}
+			catch (ex) { }
+			$(".svgWrapper").css("padding", showPadding ? "5px" : "0px");
+			$(".svgWrapper").css("margin", !showPadding ? "5px" : "0px");
+		}
+		function CopyToClipboard(text)
+		{
+			try
+			{
+				var data = [new ClipboardItem({ "text/plain": new Blob([text.trim()], { type: "text/plain" }) })];
+				navigator.clipboard.write(data).then(function ()
+				{
+					$("#copied").stop(true, true);
+					$("#copied").css("opacity", "1");
+					$("#copied").fadeOut(1000, function ()
+					{
+						$("#copied").css("opacity", "0");
+						$("#copied").show();
+					});
+				}, function ()
+				{
+					alert("Unable to copy text to clipboard.");
+				});
+			}
+			catch (ex)
+			{
+				alert("Unable to copy text to clipboard.");
+			}
+		}
+		$(document).on('input', '#rangeMinX, #rangeMinY, #rangeWidth, #rangeHeight', function ()
+		{
+			var $svg = getSelected$Svg();
+			if (!$svg)
+				return;
+			var viewBox = $svg.get(0).getAttribute('viewBox').split(' ').map(Number);
+			switch (this.id)
+			{
+				case 'rangeMinX':
+					viewBox[0] = this.value;
+					break;
+				case 'rangeMinY':
+					viewBox[1] = this.value;
+					break;
+				case 'rangeWidth':
+					viewBox[2] = this.value;
+					if ($("#cbSquare").is(":checked"))
+					{
+						viewBox[3] = this.value;
+						$("#rangeHeight").val(viewBox[3]);
+					}
+					break;
+				case 'rangeHeight':
+					viewBox[3] = this.value;
+					if ($("#cbSquare").is(":checked"))
+					{
+						viewBox[2] = this.value;
+						$("#rangeWidth").val(viewBox[3]);
+					}
+					break;
+			}
+			$svg.get(0).setAttribute('viewBox', viewBox.join(' '));
+			ComputeScaledViewBox();
+		});
+		function ComputeScaledViewBox()
+		{
+			var $svg = getSelected$Svg();
+			if (!$svg)
+				return;
+
+			var viewBox = $svg.get(0).getAttribute('viewBox').split(' ').map(Number);
+			if ($("#cbSquare").is(":checked"))
+			{
+				console.log("Squaring " + viewBox.join(' '));
+				var x = viewBox[0];
+				var y = viewBox[1];
+				var w = viewBox[2];
+				var h = viewBox[3];
+				if (w > h)
+				{
+					// Need to make it taller
+					var diff = w - h;
+					h = w;
+					y -= diff / 2;
+					viewBox[1] = y;
+					viewBox[3] = h;
+					$("#rangeMinY").val(y);
+					$("#rangeHeight").val(h);
+				}
+				else if (h > w)
+				{
+					var diff = h - w;
+					w = h;
+					x -= diff / 2;
+					viewBox[0] = x;
+					viewBox[2] = w;
+					$("#rangeWidth").val(w);
+					$("#rangeMinX").val(y);
+				}
+				console.log("Squared " + viewBox.join(' '));
+			}
+			var newViewBoxStr = viewBox.join(' ');
+			$svg.get(0).setAttribute('viewBox', newViewBoxStr);
+			$("#svgViewBox span").text(newViewBoxStr);
+
+			var w = viewBox[2];
+			var h = viewBox[3];
+			var scale = Math.max(w, h) / 500;
+			w = w / scale;
+			h = h / scale;
+			$("#svgLarge svg").css("width", w + "px");
+			$("#svgLarge svg").css("height", h + "px");
+		}
+		function getSelected$Svg()
+		{
+			var icon_id = $("#svgNameDiv").text();
+			if (!icon_id)
+				return null;
+			var $svg = $("#svgContainer svg symbol#" + icon_id);
+			if (!$svg.length)
+				return null;
+			return $svg;
+		}
+		function optimizeViewBox()
+		{
+			console.log("Optimizing viewBox");
+			var $svg = getSelected$Svg();
+			if (!$svg)
+				return;
+			const svgInput = '<svg xmlns="http://www.w3.org/2000/svg">' + $svg.html() + '</svg>';
+			const parser = new DOMParser();
+			const svgDoc = parser.parseFromString(svgInput, 'image/svg+xml').documentElement;
+
+			if (svgDoc.tagName.toLowerCase() !== 'svg')
+			{
+				alert('Please enter a valid SVG content.');
+				return;
+			}
+
+			// Ensure SVG is in the DOM to get the correct bounding box
+			const svgContainer = document.getElementById('svgOptimizeContainer');
+			$(svgContainer).show();
+			svgContainer.innerHTML = '';
+			svgContainer.appendChild(svgDoc);
+
+			// Calculate the bounding box
+			const bbox = svgDoc.getBBox();
+			$(svgContainer).hide();
+			const optimizedViewBox = `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`;
+			$svg.get(0).setAttribute('viewBox', optimizedViewBox);
+			ComputeScaledViewBox();
+		}
+		function cbSquareInput()
+		{
+			ComputeScaledViewBox();
+		}
+	</script>
+</head>
+<body>
+	<div><label><input type="checkbox" id="cb_svgPadding" onclick="setPaddingState()" />Padding</label></div>
+	<div id="root">
+	</div>
+	<div id="svgContainer" style="display:none"></div>
+	<div id="svgLargeContainer">
+		<div id="copied">Copied!</div>
+		<div id="svgName" tabindex="0" role="button">
+			<div id="svgNameDiv">
+				Click an SVG to preview it here:
+			</div>
+			<svg class="copyBtn" version="1.1" viewBox="1 1 22 22"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" /></svg>
+		</div>
+		<div id="svgViewBox">viewBox="<span></span>" <svg class="copyBtn" version="1.1" viewBox="1 1 22 22"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" /></svg></div>
+		<table id="svgLayoutTable">
+			<tbody>
+				<tr>
+					<td></td>
+					<td class="centerCell"><input type="button" value="Compute optimal viewBox" onclick="optimizeViewBox()" /></td>
+					<td></td>
+				</tr>
+				<tr>
+					<td></td>
+					<td class="centerCell"><label><input type="checkbox" id="cbSquare" onclick="cbSquareInput()" /> force square viewBox</label></td>
+					<td></td>
+				</tr>
+				<tr>
+					<td></td>
+					<td class="min-x">
+						<input type="range" id="rangeMinX" min="0" max="1000" value="0">
+					</td>
+					<td></td>
+				</tr>
+				<tr>
+					<td class="min-y"><input type="range" id="rangeMinY" min="0" max="1000" value="0"></td>
+					<td><div id="svgLarge"></div></td>
+					<td class="height"><input type="range" id="rangeHeight" min="0" max="1000" value="1000"></td>
+				</tr>
+				<tr>
+					<td></td>
+					<td class="width"><input type="range" id="rangeWidth" min="0" max="1000" value="1000"></td>
+					<td></td>
+				</tr>
+			</tbody>
+		</table>
+		<div id="svgOptimizeContainer"></div>
+	</div>
+</body>
+</html>

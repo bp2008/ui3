@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="187"
+   height="187"
+   viewBox="0 0 49.477083 49.477083"
+   version="1.1"
+   id="svg8"
+   inkscape:version="0.92.0 r15299"
+   sodipodi:docname="sentry_logo_src.svg">
+  <title
+     id="title11620">Sentry Logo traced by bp2008</title>
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="11.313708"
+     inkscape:cx="94.359385"
+     inkscape:cy="104.58294"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     showgrid="true"
+     units="px"
+     inkscape:window-width="3840"
+     inkscape:window-height="2107"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1">
+    <inkscape:grid
+       type="xygrid"
+       id="grid10116" />
+  </sodipodi:namedview>
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title>Sentry Logo traced by bp2008</dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-247.5229)"
+     style="display:inline" />
+  <g
+     inkscape:groupmode="layer"
+     id="layer4"
+     inkscape:label="Manual"
+     transform="translate(0,43.127083)"
+     style="display:inline">
+    <path
+       style="fill:#000000;fill-opacity:1;stroke-width:2.87692308"
+       d="M 93.5,0 C 41.861376,1.1045694e-6 1.1045695e-6,41.861376 0,93.5 1.1045695e-6,145.13862 41.861376,187 93.5,187 145.13862,187 187,145.13862 187,93.5 187,41.861376 145.13862,1.1045695e-6 93.5,0 Z M 95,23 160,60 V 70 L 95,33 30,70 V 60 Z m 0,37 51,29.000001 v -22 L 155,72 v 54 L 95,160 35,126 V 72 l 9,-5 v 10 l 67,38 -16,9 -51,-29 v 26 l 51,29 51,-29 V 108 L 79,70 Z"
+       transform="matrix(0.26458333,0,0,0.26458333,0,-43.127083)"
+       id="path11593"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="ssssscccccccccccccccccccccccccc" />
+  </g>
+</svg>

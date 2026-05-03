@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="187"
+   height="187"
+   viewBox="0 0 49.477082 49.477085"
+   version="1.1"
+   id="svg11628"
+   inkscape:version="0.92.0 r15299"
+   sodipodi:docname="sentry_human_src.svg">
+  <title
+     id="title12260">Sentry Human traced by bp2008</title>
+  <defs
+     id="defs11622" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="5.6"
+     inkscape:cx="102.15664"
+     inkscape:cy="32.526922"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer7"
+     showgrid="true"
+     units="px"
+     inkscape:window-width="3840"
+     inkscape:window-height="2107"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1">
+    <inkscape:grid
+       type="xygrid"
+       id="grid11663" />
+  </sodipodi:namedview>
+  <metadata
+     id="metadata11625">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title>Sentry Human traced by bp2008</dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:groupmode="layer"
+     id="layer7"
+     inkscape:label="Trace">
+    <path
+       style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.01081085"
+       d="M 93.5 0 A 93.50001 93.50001 0 0 0 0 93.5 A 93.50001 93.50001 0 0 0 93.5 187 A 93.50001 93.50001 0 0 0 187 93.5 A 93.50001 93.50001 0 0 0 93.5 0 z M 131.5 15.5 A 24 24 0 0 1 155.5 39.5 A 24 24 0 0 1 131.5 63.5 A 24 24 0 0 1 107.5 39.5 A 24 24 0 0 1 131.5 15.5 z M 131.5 24.275391 A 15.224299 15.224299 0 0 0 116.27539 39.5 A 15.224299 15.224299 0 0 0 131.5 54.724609 A 15.224299 15.224299 0 0 0 146.72461 39.5 A 15.224299 15.224299 0 0 0 131.5 24.275391 z M 108.01953 64.957031 A 4.0003997 4.0003997 0 0 1 111.99805 69.462891 L 111.99805 89.003906 L 147.00391 89.003906 A 4.0003997 4.0003997 0 1 1 147.00391 96.998047 L 107.99609 96.998047 A 4.0003997 4.0003997 0 0 1 104.00391 92.996094 L 104.00391 80.367188 L 74.1875 117.49805 L 114.5 117.49805 A 4.0003997 4.0003997 0 0 1 117.67383 123.93359 L 95.802734 152.43555 A 4.0003997 4.0003997 0 1 1 89.460938 147.56445 L 106.38867 125.5 L 67.765625 125.5 L 39.552734 160.63672 A 4.0003997 4.0003997 0 1 1 33.314453 155.63281 L 99.662109 73 L 51.001953 73 A 4.0009833 4.0009833 0 1 1 51.001953 64.998047 L 107.44336 64.998047 A 4.0003997 4.0003997 0 0 1 107.87891 64.960938 A 4.0003997 4.0003997 0 0 1 108.01953 64.957031 z "
+       transform="scale(0.26458333)"
+       id="path11665" />
+  </g>
+</svg>
