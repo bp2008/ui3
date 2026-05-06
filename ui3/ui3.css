@@ -401,8 +401,7 @@ body, #layouttop, #layoutleft, #layoutbody, #layoutbottom, .unselectable
 		display: none;
 	}
 
-.clipExportPanel,
-.clipExportPanelDialog
+.clipExportPanel
 {
 	width: 256px;
 }
@@ -5769,8 +5768,7 @@ a[role="button"].showPasswordButton
 	padding-right: 29px;
 }
 
-.clipExportPanel select,
-.clipExportPanelDialog select
+.clipExportPanel select
 {
 	height: unset;
 	float: none;
@@ -6039,8 +6037,7 @@ div::-webkit-scrollbar-corner
 	background-color: var(--main-highlight-color);
 }
 /* Export Panel */
-.clipExportPanel,
-.clipExportPanelDialog
+.clipExportPanel
 {
 	box-sizing: border-box;
 	padding: 3px;
@@ -6048,10 +6045,7 @@ div::-webkit-scrollbar-corner
 
 	.clipExportPanel,
 	.clipExportPanel .dialogOption_label,
-	.clipExportPanel .customCheckboxWrapper label,
-	.clipExportPanelDialog,
-	.clipExportPanelDialog .dialogOption_label,
-	.clipExportPanelDialog .customCheckboxWrapper label
+	.clipExportPanel .customCheckboxWrapper label
 	{
 		font-size: 16px;
 	}
@@ -6071,8 +6065,7 @@ div::-webkit-scrollbar-corner
 	font-size: 12px;
 }
 
-.clipExportPanel select,
-.clipExportPanelDialog select
+.clipExportPanel select
 {
 	font-size: 16px;
 	height: auto;
@@ -6131,12 +6124,6 @@ div::-webkit-scrollbar-corner
 		stroke: currentColor;
 		pointer-events: none;
 	}
-
-.clipExportPanelDialog .panel_close,
-.clipExportPanelDialog .leftBarHeading
-{
-	display: none;
-}
 
 .sizeSmall .hideInSizeSmall
 {

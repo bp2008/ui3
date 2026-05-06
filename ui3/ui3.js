@@ -12059,7 +12059,7 @@ function ExportControls()
 	var exportOffsetStart;
 	var exportOffsetEnd;
 
-	var clipData = null;
+	var lastExportUniqueId = null;
 	var fileDuration = 2;
 	var fileSizeBytes = 2;
 
@@ -12120,66 +12120,73 @@ function ExportControls()
 			return;
 		controlsEnabled = true;
 
-		var cam = cameraListLoader.GetCameraWithId(recIdOrGroupOrCameraName);
-		if (cam)
+		lastExportUniqueId = recIdOrGroupOrCameraName;
+		if (videoPlayer.Loading().image.isTimeline())
+			enableOnTimelineTab(recIdOrGroupOrCameraName);
+		else
+			enableOnClipsTab(recIdOrGroupOrCameraName);
+	}
+	var enableOnTimelineTab = function (groupOrCameraId)
+	{
+		if (currentPrimaryTab !== "timeline")
 		{
-			timelineCamPath = cam.optionValue;
-
-			// Default range: 5 minutes ending at the current timeline position
-			var currentTime = clipTimeline.getCurrentTime();
-			timelineEndUtc = currentTime;
-			timelineStartUtc = Math.max(1, currentTime - 30000);
-
-			if (!videoPlayer.Playback_IsPaused())
-				videoPlayer.Playback_Pause();
-
-			clipExportPanel.OpenForTimeline(timelineCamPath, timelineStartUtc, timelineEndUtc, function ()
-			{
-				self.Disable();
-			});
-
-			clipTimeline.redrawCanvas();
+			toaster.Error("Error: Not on timeline tab.  On tab: " + currentPrimaryTab);
+			return;
 		}
+		var cam = cameraListLoader.GetCameraWithId(groupOrCameraId);
+		timelineCamPath = cam.optionValue;
+
+		// Default range: 5 minutes ending at the current timeline position
+		var currentTime = clipTimeline.getCurrentTime();
+		timelineEndUtc = currentTime;
+		timelineStartUtc = Math.max(1, currentTime - 30000);
+
+		if (!videoPlayer.Playback_IsPaused())
+			videoPlayer.Playback_Pause();
+
+		clipExportPanel.OpenForTimeline(timelineCamPath, timelineStartUtc, timelineEndUtc, function ()
+		{
+			self.Disable();
+		});
+
+		clipTimeline.redrawCanvas();
+	}
+	var enableOnClipsTab = function (recId)
+	{
+		var clipData = clipLoader.GetClipFromId(recId);
+
+		if (!videoPlayer.Playback_IsPaused())
+			videoPlayer.Playback_Pause();
+
+		clipExportPanel.Open([clipData.recId], function (exportOptions)
+		{
+			self.Disable();
+		});
+
+		if (clipData.isClip)
+			ClipStatsLoaded(clipData);
 		else
 		{
-			if (currentPrimaryTab !== "clips")
-				$("#topbar_tab_clips").click();
-
-			clipData = clipLoader.GetClipFromId(recIdOrGroupOrCameraName);
-
-			if (!videoPlayer.Playback_IsPaused())
-				videoPlayer.Playback_Pause();
-
-			clipExportPanel.Open([clipData.recId], function (exportOptions)
+			// We've probably already loaded the clip duration for this alert because that happens when starting to stream it.
+			if (clipData.hasLoadedClipStats)
+				ClipStatsLoaded(clipData); // We have
+			else // We have not, so our clip duration and size values need updated.
 			{
-				self.Disable();
-			});
-
-			if (clipData.isClip)
-				ClipStatsLoaded();
-			else
-			{
-				// We've probably already loaded the clip duration for this alert because that happens when starting to stream it.
-				if (clipData.hasLoadedClipStats)
-					ClipStatsLoaded(); // We have
-				else // We have not, so our clip duration and size values need updated.
+				clipExportPanel.UpdateRangeSelection(exportOffsetStart.getPosition(), exportOffsetEnd.getPosition());
+				// call global resized
+				resized();
+				clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
 				{
-					clipExportPanel.UpdateRangeSelection(exportOffsetStart.getPosition(), exportOffsetEnd.getPosition());
-					// call global resized
-					resized();
-					clipStatsLoader.LoadClipStats("@" + clipData.clipId, function (stats)
-					{
-						// This success callback can be called more than once. clipStatsLoaded will tell.
-						if (clipStatsLoaded || !controlsEnabled)
-							return;
-						clipLoader.ApplyMissingStatsToClipData(stats, clipData);
-						ClipStatsLoaded();
-					});
-				}
+					// This success callback can be called more than once. clipStatsLoaded will tell.
+					if (clipStatsLoaded || !controlsEnabled)
+						return;
+					clipLoader.ApplyMissingStatsToClipData(stats, clipData);
+					ClipStatsLoaded(clipData);
+				});
 			}
 		}
 	}
-	var ClipStatsLoaded = function ()
+	var ClipStatsLoaded = function (clipData)
 	{
 		if (!controlsEnabled)
 			return;
@@ -12258,7 +12265,7 @@ function ExportControls()
 		controlsEnabled = false;
 		clipStatsLoaded = false;
 
-		clipData = null;
+		lastExportUniqueId = null;
 		timelineCamPath = null;
 
 		$exportOffsetWrapper.hide();
@@ -12284,7 +12291,7 @@ function ExportControls()
 				self.Disable();
 			}
 		}
-		else if (clipData.recId !== videoPlayer.Loading().image.uniqueId)
+		else if (lastExportUniqueId !== videoPlayer.Loading().image.uniqueId)
 		{
 			toaster.Info("The clip export operation was canceled because the clip was closed!", 10000);
 			self.Disable();
@@ -28882,9 +28889,41 @@ function ClipExportPanel()
 	var classic_ui3_idx = -1;
 	var limitedFormatOptions = false;
 
-	function Initialize()
+	function InternalOpen()
 	{
-		$root.append($content);
+		isOpen = true;
+		if (currentPrimaryTab === "timeline")
+		{
+			isModalMode = true;
+			ReRender();
+			var title;
+			if (state.timelineMode)
+				title = "Export timeline segment";
+			else
+				title = "Convert/export " + state.recIdArray.length + ' clip' + (state.recIdArray.length === 1 ? '' : 's');
+			$modalDialog = $content.dialog({
+				title: title,
+				onClosing: function ()
+				{
+					isOpen = false;
+					isModalMode = false;
+					$modalDialog = null;
+					if (typeof state.onPanelClosing === "function")
+						state.onPanelClosing(exportOptions);
+					return false;
+				}
+			});
+		}
+		else
+		{
+			$root.append($content);
+			$content.show();
+
+			ReRender();
+
+			$("#layoutleftRecordings").hide();
+			$("#layoutleftExport").show();
+		}
 	}
 
 	/**
@@ -28900,8 +28939,6 @@ function ClipExportPanel()
 		state.timelineMode = false;
 		state.camPath = null;
 
-		isOpen = true;
-
 		exportOptions = {
 			format: parseInt(settings.ui3_clip_export_format),
 			profile: parseInt(settings.ui3_clip_export_profile),
@@ -28914,13 +28951,7 @@ function ClipExportPanel()
 			timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps)
 		};
 
-		$content.removeClass("clipExportPanelDialog");
-		$content.addClass("clipExportPanel");
-
-		ReRender();
-
-		$("#layoutleftRecordings").hide();
-		$("#layoutleftExport").show();
+		InternalOpen();
 	}
 
 	/**
@@ -28938,8 +28969,6 @@ function ClipExportPanel()
 		state.onPanelClosing = onPanelClosing;
 		state.fileSizeBytes = 0;
 
-		isOpen = true;
-
 		exportOptions = {
 			format: 1, // MP4 is always required for timeline export
 			profile: parseInt(settings.ui3_clip_export_profile),
@@ -28954,22 +28983,7 @@ function ClipExportPanel()
 			endTimeMs: endUtc
 		};
 
-		isModalMode = true;
-		$content.addClass("clipExportPanelDialog");
-		$content.removeClass("clipExportPanel");
-		ReRender();
-		$modalDialog = $content.dialog({
-			title: "Export timeline segment",
-			onClosing: function ()
-			{
-				isOpen = false;
-				isModalMode = false;
-				$modalDialog = null;
-				if (typeof state.onPanelClosing === "function")
-					state.onPanelClosing(exportOptions);
-				return false;
-			}
-		});
+		InternalOpen();
 	}
 
 	/**
@@ -29028,22 +29042,22 @@ function ClipExportPanel()
 	var ReRender = function ()
 	{
 		$content.empty();
-		var $closeBtn = $('<div class="panel_close" title="Cancel export">'
-			+ '<div class="panel_close_icon"><svg viewbox="0 0 12 12">'
-			+ '<path stroke-width="1.4" d="M 1,1 L 11,11 M 1,11 L 11,1" />'
-			+ '</svg></div></div>');
-		$closeBtn.on('click', self.Close);
-		$content.append($closeBtn);
 
-		if (state.timelineMode)
+		if (isModalMode)
 		{
-			$content.append('<div class="leftBarHeading">Export timeline segment</div>');
 			$status = $('<div class="dialogOption_item clipprop_item_info"></div>');
 			$content.append($status);
-			$status.text("Duration: " + msToTime(Math.abs(exportOptions.endTimeMs - exportOptions.startTimeMs)));
+			if (state.timelineMode)
+				$status.text("Duration: " + msToTime(Math.abs(exportOptions.endTimeMs - exportOptions.startTimeMs)));
 		}
 		else
 		{
+			var $closeBtn = $('<div class="panel_close" title="Cancel export">'
+				+ '<div class="panel_close_icon"><svg viewbox="0 0 12 12">'
+				+ '<path stroke-width="1.4" d="M 1,1 L 11,11 M 1,11 L 11,1" />'
+				+ '</svg></div></div>');
+			$closeBtn.on('click', self.Close);
+			$content.append($closeBtn);
 			var headingStart = '<span class="hideInSizeSmall">Convert/export</span><span class="showInSizeSmall">Export</span>';
 			$content.append('<div class="leftBarHeading">' + headingStart + ' ' + state.recIdArray.length + ' clip' + (state.recIdArray.length === 1 ? '' : 's') + '</div>');
 			$status = null;
@@ -29242,8 +29256,6 @@ function ClipExportPanel()
 			$status.text(msToTime(durationMs) + ' (' + formatBytes2(estimatedSize, 1) + ')');
 		}
 	}
-
-	Initialize();
 }
 ///////////////////////////////////////////////////////////////
 // Export API Status Dialog ///////////////////////////////////
