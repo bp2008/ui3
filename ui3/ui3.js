@@ -10615,6 +10615,23 @@ function TimelineRasterIcon(src, onLoad)
 				ctx.drawImage(img, x, y, w, h);
 		}
 	}
+	/**
+	 * Draws the image scaled to fill the destination rectangle while preserving aspect ratio (centered).
+	 */
+	this.drawFitted = function (ctx, destX, destY, destW, destH, maxW, maxH)
+	{
+		if (loadedOk && destW > 0 && destH > 0)
+		{
+			var scale = Math.min(destW / myW, destH / myH);
+			if (maxW && maxH)
+				scale = Math.min(destW / myW, destH / myH, maxW / myW, maxH / myH);
+			var drawW = myW * scale;
+			var drawH = myH * scale;
+			var drawX = destX + (destW - drawW) / 2;
+			var drawY = destY + (destH - drawH) / 2;
+			ctx.drawImage(img, drawX, drawY, drawW, drawH);
+		}
+	}
 }
 ///////////////////////////////////////////////////////////////
 // Zebra Date Picker //////////////////////////////////////////
@@ -18707,6 +18724,10 @@ var videoModulesShared = new (function VideoModulesShared()
 	var backbuffer_canvas = null;
 	var $camimg_wrapper = $("#camimg_wrapper");
 	var $camimg_store = $("#camimg_store");
+	var loadingImgSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAtBAMAAADLg/GBAAAAGFBMVEUAAAD///+OkI3X2tc7PTqqrKl4e3hRU1A46y+PAAAArklEQVQ4y"
+		+ "+2QQQ6CMBBFP6hx26HC2kYOIJjqVozpmsYjcAES7p84NTUuGpC4MCz6unt96aSDSGThiGT05tcQU6GlFh1dsKGcX8wr2bOyYZhmtwz1/QRVKg5lORxZURiu9jgAaFAj5bDAVrBSYZhcOR"
+		+ "qIsMOaQ8HSqZFQ98106EdzpPxoNp/R4We0qdxnfJgWhpC8zhsi8uuxbj0+ZGV9+JUOszgbjVk8ZItI5J88AcoNE7r4rDR3AAAAAElFTkSuQmCC";
+	var loadingRasterIcon = null;
 
 	this.GetCanvas = function ()
 	{
@@ -18733,6 +18754,8 @@ var videoModulesShared = new (function VideoModulesShared()
 		backbuffer_canvas = $backbuffer_canvas.get(0);
 		$camimg_store.append($canvas);
 		$camimg_store.append($backbuffer_canvas);
+
+		loadingRasterIcon = new TimelineRasterIcon(loadingImgSrc);
 	}
 	this.ClearFrontCanvas = function ()
 	{
@@ -18782,7 +18805,7 @@ var videoModulesShared = new (function VideoModulesShared()
 			var rect = rects[i];
 			backbuffer_context2d.strokeRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
 		}
-		backbuffer_context2d.drawImage(CANVAS
+		drawImageSafe(backbuffer_context2d, CANVAS
 			, 0, 0, CANVAS.width, CANVAS.height
 			, thumbBounds[0], thumbBounds[1], thumbW, thumbH);
 
@@ -18810,7 +18833,7 @@ var videoModulesShared = new (function VideoModulesShared()
 
 		var backbuffer_context2d = backbuffer_canvas.getContext("2d");
 
-		backbuffer_context2d.drawImage(CANVAS
+		drawImageSafe(backbuffer_context2d, CANVAS
 			, thumbBounds[0], thumbBounds[1], thumbBounds[2] - thumbBounds[0], thumbBounds[3] - thumbBounds[1]
 			, 0, 0, backbuffer_canvas.width, backbuffer_canvas.height);
 
@@ -18828,6 +18851,25 @@ var videoModulesShared = new (function VideoModulesShared()
 	this.RenderVideoFrame = function (video)
 	{
 		CopyVideoFrameToCanvas(video, canvas);
+	}
+	/**
+	 * Wraps the 9-argument drawImage call with a try/catch. On failure (e.g. iOS
+	 * InvalidStateError when the source canvas is in an invalid state), draws the
+	 * loadingRasterIcon fitted into the destination rectangle instead.
+	 */
+	function drawImageSafe(ctx, src, sx, sy, sw, sh, dx, dy, dw, dh)
+	{
+		try
+		{
+			ctx.drawImage(src, sx, sy, sw, sh, dx, dy, dw, dh);
+		}
+		catch (e)
+		{
+			console.log("Error rendering canvas, falling back to 'Loading...' image");
+			console.error(e);
+			if (loadingRasterIcon)
+				loadingRasterIcon.drawFitted(ctx, dx, dy, dw, dh, 320, 180);
+		}
 	}
 
 	Initialize();
