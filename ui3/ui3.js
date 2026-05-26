@@ -2785,6 +2785,15 @@ var defaultSettings =
 			, category: "Hotkeys"
 		}
 		, {
+			key: "ui3_hotkey_toggleFlag"
+			, value: ""
+			, hotkey: true
+			, label: "Toggle Flag"
+			, hint: "Toggles the flagged status of the current clip or alert."
+			, actionDown: BI_Hotkey_ToggleFlag
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_hotkey_toggleReverse"
 			, value: "0|0|0|8" // 8: backspace
 			, hotkey: true
@@ -32434,6 +32443,10 @@ function BI_Hotkey_PlayPause()
 function BI_Hotkey_Delete()
 {
 	clipLoader.DeleteCurrentClip();
+}
+function BI_Hotkey_ToggleFlag()
+{
+	clipLoader.FlagCurrentClip();
 }
 function BI_Hotkey_ToggleReverse()
 {
