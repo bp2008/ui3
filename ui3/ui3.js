@@ -922,6 +922,11 @@ function GetStatusAreaBarOptions()
 	}
 	return arr;
 }
+var Mp4OpenOptions = {
+	AlwaysAsk: "Always Ask",
+	OpenInUI3: "Open in UI3",
+	OpenInBrowser: "Open in Browser Tab"
+};
 var settings = null;
 var settingsCategoryList = ["General Settings", "Video Player", "Video Player (Advanced)", "Timeline", "UI Status Sounds", "Top Bar", "Side Bar", "Status Area", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "PTZ", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
@@ -2046,6 +2051,15 @@ var defaultSettings =
 			, inputType: "checkbox"
 			, label: 'Preserve Original File Names<div class="settingDesc">when downloading clips</div>'
 			, hint: 'Does not affect clip "exports"'
+			, category: "Clips / Alerts"
+		}
+		, {
+			key: "ui3_mp4_open_action"
+			, value: Mp4OpenOptions.AlwaysAsk
+			, inputType: "select"
+			, options: [Mp4OpenOptions.AlwaysAsk, Mp4OpenOptions.OpenInUI3, Mp4OpenOptions.OpenInBrowser]
+			, label: 'MP4 Clip Open Action'
+			, hint: 'Controls what happens when an MP4 clip is opened in the clip list.'
 			, category: "Clips / Alerts"
 		}
 		, {
@@ -14622,7 +14636,7 @@ function ClipLoader(clipsBodySelector)
 	}
 	this.GetClipFileTypeInfo = function (clipData)
 	{
-		var info = { isBVR: false, isH264: false };
+		var info = { isBVR: false, isH264: false, isMP4: false };
 		if (clipData)
 		{
 			if (clipData.rawClipData.filetype)
@@ -14632,6 +14646,7 @@ function ClipLoader(clipsBodySelector)
 					fileTypeParts[i] = fileTypeParts[i].toLowerCase();
 				info.isBVR = fileTypeParts.indexOf("bvr") > -1;
 				info.isH264 = fileTypeParts.indexOf("h264") > -1;
+				info.isMP4 = fileTypeParts.indexOf("mp4") > -1;
 			}
 			else
 			{
@@ -14720,6 +14735,74 @@ function OpenClipFromStats(stats)
 	{
 		videoPlayer.LoadHomeGroup();
 	}
+}
+function GetMp4ClipBrowserUrl(clipData)
+{
+	return currentServer.remoteBaseURL + "clips/" + clipData.path + currentServer.GetAPISessionArg("?");
+}
+function OpenClipInNewTab(clipData)
+{
+	var url = GetMp4ClipBrowserUrl(clipData);
+	var w = window.open(url, "_blank");
+	if (!w)
+		toaster.Warning("Your browser blocked opening the clip in a new tab.  Please allow pop-ups for this site.");
+}
+var mp4OpenChoiceDialog = null;
+function ShowMp4OpenChoiceDialog(clipData)
+{
+	if (mp4OpenChoiceDialog)
+	{
+		try { mp4OpenChoiceDialog.close(); } catch (ex) { }
+		mp4OpenChoiceDialog = null;
+	}
+	var $root = $('<div style="padding: 10px; max-width: 420px;"></div>');
+	$root.append($('<div style="padding-bottom: 10px;"></div>').text(
+		"How would you like to open this MP4 clip?"));
+	$root.append($('<div style="padding-bottom: 10px; font-size: 0.9em; opacity: 0.85;"></div>').text(
+		"Opening in a new browser tab may provide smoother playback by letting the browser play the MP4 file directly."));
+
+	var $btnRow = $('<div style="text-align: center; padding: 10px 0;"></div>');
+	var $btnUi3 = $('<input type="button" value="' + Mp4OpenOptions.OpenInUI3 + '" style="margin-right: 15px;" />');
+	var $btnNewTab = $('<input type="button" value="' + Mp4OpenOptions.OpenInBrowser + '" />');
+	$btnRow.append($btnUi3).append($btnNewTab);
+	$root.append($btnRow);
+
+	var $remember = $('<label style="display: block; text-align: center; padding-top: 6px; cursor: pointer;"></label>');
+	var $remCheck = $('<input type="checkbox" style="margin-right: 6px; vertical-align: middle;" />');
+	$remember.append($remCheck);
+	$remember.append("<span>Don't ask again</span>");
+	$root.append($remember);
+	$root.append('<div style="padding-top 6px; font-size: 0.9em; opacity: 0.85; text-align: center;">(to ask again, go to settings)</div>');
+
+	var chose = false;
+	var doChoice = function (choice)
+	{
+		if ($remCheck.is(":checked"))
+			settings.ui3_mp4_open_action = choice;
+		var dlg = mp4OpenChoiceDialog;
+		mp4OpenChoiceDialog = null;
+		chose = true;
+		if (dlg)
+		{
+			try { dlg.close(); } catch (ex) { }
+		}
+		if (choice === Mp4OpenOptions.OpenInBrowser)
+			OpenClipInNewTab(clipData);
+		else
+			videoPlayer.LoadClip(clipData, true);
+	};
+	$btnUi3.click(function () { doChoice(Mp4OpenOptions.OpenInUI3); });
+	$btnNewTab.click(function () { doChoice(Mp4OpenOptions.OpenInBrowser); });
+
+	mp4OpenChoiceDialog = $root.modalDialog({
+		title: "Open MP4 Clip",
+		closeOnOverlayClick: true,
+		onClosing: function ()
+		{
+			if (!chose)
+				videoPlayer.LoadClip(clipData, true);
+		}
+	});
 }
 function DbViewIsAlerts(dbView)
 {
@@ -17983,13 +18066,28 @@ function VideoPlayerController()
 
 		mediaSessionController.setMediaMetadata(CleanUpGroupName(clc.optionDisplay));
 	}
-	this.LoadClip = function (clipData)
+	this.LoadClip = function (clipData, bypassMp4Check)
 	{
 		var fileTypeInfo = clipLoader.GetClipFileTypeInfo(clipData);
 		if (NumberHasFlags(clipData.flags, BIDBFLAG.RECORDING) && !fileTypeInfo.isBVR)
 		{
 			toaster.Info("Unable to open this " + (clipData.isClip ? "clip" : "alert") + " because the clip is still recording and the file type is not bvr.");
 			return;
+		}
+		if (!bypassMp4Check && fileTypeInfo.isMP4)
+		{
+			if (settings.ui3_mp4_open_action === Mp4OpenOptions.OpenInBrowser)
+			{
+				OpenClipInNewTab(clipData);
+				return;
+			}
+			else if (settings.ui3_mp4_open_action !== Mp4OpenOptions.OpenInUI3)
+			{
+				// "Always Ask" (or any unknown value): show the dialog.
+				ShowMp4OpenChoiceDialog(clipData);
+				return;
+			}
+			// "Open in UI3" falls through to normal playback.
 		}
 
 		var cam = cameraListLoader.GetCameraWithId(clipData.camera);
