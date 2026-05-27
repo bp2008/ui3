@@ -9,7 +9,9 @@ var $DialogDefaults = { theme: "light" };
 (function ($)
 {
 	var idAutoIncrement = 0;
-	var zIndexAutoIncrement = 1000;
+	var zIndexAutoIncrementStart = 1000;
+	var zIndexAutoIncrement = zIndexAutoIncrementStart;
+	var openDialogs = [];
 	$.fn.dialog = function (options)
 	{
 		return new Dialog(this, options);
@@ -55,6 +57,7 @@ var $DialogDefaults = { theme: "light" };
 			if (isOpen)
 				return;
 			isOpen = true;
+			openDialogs.push(self);
 			var opacity = parseFloat(self.settings.overlayOpacity);
 
 			if (opacity > 0)
@@ -150,6 +153,12 @@ var $DialogDefaults = { theme: "light" };
 					return false;
 
 			isOpen = false;
+			var idx = openDialogs.indexOf(self);
+			if (idx !== -1)
+				openDialogs.splice(idx, 1);
+
+			if (openDialogs.length === 0)
+				zIndexAutoIncrement = zIndexAutoIncrementStart;
 
 			$(window).unbind(".dialog" + myId);
 			$(document).off('mousemove.dialog' + myId
@@ -237,6 +246,7 @@ var $DialogDefaults = { theme: "light" };
 		};
 		var dragStart = function (e)
 		{
+			focusSelf();
 			mouseCoordFixer.fix(e);
 			mouseMem.down = true;
 			var pos = self.$dialog.position();
@@ -358,6 +368,32 @@ var $DialogDefaults = { theme: "light" };
 
 		open();
 	}
+	window.dialogLibraryGetTopmost = function ()
+	{
+		if (openDialogs.length === 0)
+			return null;
+		var topmost = openDialogs[0];
+		var topmostZ = parseInt(topmost.$dialog.css("z-index"), 10) || 0;
+		for (var i = 1; i < openDialogs.length; i++)
+		{
+			var z = parseInt(openDialogs[i].$dialog.css("z-index"), 10) || 0;
+			if (z > topmostZ)
+			{
+				topmostZ = z;
+				topmost = openDialogs[i];
+			}
+		}
+		return topmost;
+	};
+	window.dialogLibraryCloseTopmost = function ()
+	{
+		var dlg = dialogLibraryGetTopmost();
+		if (dlg)
+		{
+			dlg.close();
+			return true;
+		}
+	};
 }(jQuery));
 var SimpleDialog = new function ()
 {

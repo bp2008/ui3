@@ -2908,7 +2908,18 @@ var defaultSettings =
 			, actionDown: BI_Hotkey_OpenSelectedClip
 			, category: "Hotkeys"
 		}
-		, { // The order of "close" hotkeys is important, because they suppress each other when one has an effect.
+		// The order of "close" hotkeys is important, because they suppress each other when one has an effect.  The first defined is first to be called.
+		, {
+			key: "ui3_hotkey_close_top_dialog"
+			, value: "0|0|0|27" // 27: escape
+			, hotkey: true
+			, label: "Close Topmost Dialog"
+			, hint: "Closes the topmost dialog window."
+			, actionDown: BI_Hotkey_CloseTopmostDialog
+			, allowInDialogs: true
+			, category: "Hotkeys"
+		}
+		, {
 			key: "ui3_hotkey_close_preview_animation"
 			, value: "0|0|0|27" // 27: escape
 			, hotkey: true
@@ -32617,8 +32628,6 @@ function BI_Hotkey_OpenSelectedClip()
 }
 function BI_Hotkey_CloseClip()
 {
-	if (suppress_Hotkey_CloseThings)
-		return;
 	if (videoPlayer.Loading().image.isTimeline())
 	{
 		if (cameraListLoader.CameraIsGroupOrCycle(videoPlayer.Loading().cam))
@@ -32628,33 +32637,28 @@ function BI_Hotkey_CloseClip()
 	{
 		clipLoader.CloseCurrentClip();
 		// Prevent this same hotkey event from closing the current camera, too.
-		BI_Suppress_Close_Hotkeys_For_Next_Tick();
+		BI_Suppress_Hotkey_Propagation_For_Next_Tick();
 	}
-}
-var suppress_Hotkey_CloseThings = null;
-function BI_Suppress_Close_Hotkeys_For_Next_Tick()
-{
-	clearTimeout(suppress_Hotkey_CloseThings);
-	suppress_Hotkey_CloseThings = setTimeout(function () { suppress_Hotkey_CloseThings = null; }, 0);
 }
 function BI_Hotkey_CloseCamera()
 {
-	if (suppress_Hotkey_CloseThings)
-		return;
 	var loading = videoPlayer.Loading();
 	if ((loading.image.isLive || videoPlayer.Loading().image.isTimeline()) && !cameraListLoader.CameraIsGroupOrCycle(videoPlayer.Loading().cam))
 	{
 		videoPlayer.ImgClick_Camera(loading.cam);
 		if (videoPlayer.Loading().image.isTimeline())
-			BI_Suppress_Close_Hotkeys_For_Next_Tick();
+			BI_Suppress_Hotkey_Propagation_For_Next_Tick();
 	}
+}
+function BI_Hotkey_CloseTopmostDialog()
+{
+	if (dialogLibraryCloseTopmost())
+		BI_Suppress_Hotkey_Propagation_For_Next_Tick();
 }
 function BI_Hotkey_CloseClipPreviewAnimation()
 {
-	if (suppress_Hotkey_CloseThings)
-		return;
 	if (clipLoader.HideBigClipThumb(undefined))
-		BI_Suppress_Close_Hotkeys_For_Next_Tick();
+		BI_Suppress_Hotkey_Propagation_For_Next_Tick();
 }
 function BI_Hotkey_ClipPreviewAnimationUp()
 {
@@ -32743,6 +32747,12 @@ function BI_Hotkey_PtzPreset(presetNum)
 	if (loading.image.ptz && loading.image.isLive)
 		ptzButtons.vue().enqueuePtzAction(loading.image.id, 100 + parseInt(presetNum));
 }
+var suppress_Hotkey_Propagation = null;
+function BI_Suppress_Hotkey_Propagation_For_Next_Tick()
+{
+	clearTimeout(suppress_Hotkey_Propagation);
+	suppress_Hotkey_Propagation = setTimeout(function () { suppress_Hotkey_Propagation = null; }, 0);
+}
 function BI_Hotkeys()
 {
 	var self = this;
@@ -32754,12 +32764,12 @@ function BI_Hotkeys()
 		var charCode = e.which;
 		if (charCode === 116 || (e.ctrlKey && charCode === 82)) // F5 or (ctrl+R)
 			UpdateCurrentURL();
-		if (!charCode
-			|| $("body").children(".dialog_overlay").length !== 0
+		if (!charCode)
+			return;
+		var isInDialog = $("body").children(".dialog_overlay").length !== 0
 			|| $("body").children(".dialog_wrapper").children(".streamingProfileEditorPanel").length !== 0
 			|| $("body").children(".dialog_wrapper").children(".clipExportPanel").length !== 0
-			|| $("#clipFilterSearch").is(':focus'))
-			return;
+			|| $("#clipFilterSearch").is(':focus');
 		if (e.ctrlKey)
 			relativePTZ.setToggleButtonState(true);
 		var hotkeysBeingRepeated = currentlyDownKeys[charCode];
@@ -32767,7 +32777,11 @@ function BI_Hotkeys()
 		{
 			for (var i = 0; i < hotkeysBeingRepeated.length; i++)
 			{
+				if (suppress_Hotkey_Propagation)
+					break;
 				var s = hotkeysBeingRepeated[i];
+				if (isInDialog && !s.allowInDialogs)
+					continue;
 				if (s.allowRepeatKey)
 				{
 					var val = settings.getItem(s.key);
@@ -32793,9 +32807,13 @@ function BI_Hotkeys()
 		var retVal = true;
 		for (var i = 0; i < defaultSettings.length; i++)
 		{
+			if (suppress_Hotkey_Propagation)
+				break;
 			var s = defaultSettings[i];
 			if (s.hotkey)
 			{
+				if (isInDialog && !s.allowInDialogs)
+					continue;
 				if (typeof s.actionDown == "function")
 				{
 					var val = settings.getItem(s.key);
