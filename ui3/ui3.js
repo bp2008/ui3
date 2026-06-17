@@ -10197,21 +10197,13 @@ function ClipTimeline()
 		function onShowTimelineContextMenu(menu)
 		{
 			var disable_items = [];
-			var enable_items = ["submenu_timeline_skipDeadAir", "timeline_skipDeadAir_nopreference", "timeline_skipDeadAir_off", "timeline_skipDeadAir_on", "boringTimelineMode"];
 			if (!videoPlayer.Loading().image.isTimeline())
 			{
 				disable_items.push("convertexport");
 				disable_items.push("set_start_frame");
 				disable_items.push("set_end_frame");
 			}
-			else
-			{
-				enable_items.push("convertexport");
-				enable_items.push("set_start_frame");
-				enable_items.push("set_end_frame");
-			}
-			menu.applyrule({ name: "disable_items", disable: true, items: disable_items });
-			menu.applyrule({ name: "enable_items", disable: false, items: enable_items });
+			menu.applyrule({ disable: true, items: disable_items });
 		}
 		var optionTimeline =
 		{
@@ -26550,9 +26542,16 @@ function GroupLayoutDialog()
 function CanvasContextMenu()
 {
 	var self = this;
-	var lastLiveContextMenuSelectedCamera = null;
+	var lastContextMenuSelectedCamera = null;
 	var lastRecordContextMenuSelectedClip = null;
-	var lastTimelineContextMenuSelectedCamera = null;
+	this.GetSelectedCamera = function ()
+	{
+		return lastContextMenuSelectedCamera;
+	}
+	this.GetSelectedClip = function ()
+	{
+		return lastRecordContextMenuSelectedClip;
+	}
 
 	var onShowLiveContextMenu = function (menu)
 	{
@@ -26563,27 +26562,16 @@ function CanvasContextMenu()
 			$("#submenu_trigger_groupSettings").closest('.b-m-item,.b-m-ifocus').hide();
 
 		var itemsToDisable = ["cameraname"];
-		if (lastLiveContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
+		if (lastContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 		{
 			itemsToDisable = itemsToDisable.concat(["trigger", "record", "snapshot", "maximize", "restart", "properties"]);
-			menu.applyrule(
-				{
-					name: "disable_camera_buttons",
-					disable: true,
-					items: itemsToDisable
-				});
 		}
 		else
 		{
-			if (lastLiveContextMenuSelectedCamera.isFakeGroup)
+			if (lastContextMenuSelectedCamera.isFakeGroup)
 				itemsToDisable.push("maximize");
-			menu.applyrule(
-				{
-					name: "disable_cameraname",
-					disable: true,
-					items: itemsToDisable
-				});
 		}
+		menu.applyrule({ disable: true, items: itemsToDisable });
 	}
 	var onTriggerLiveContextMenu = function (e)
 	{
@@ -26608,7 +26596,7 @@ function CanvasContextMenu()
 		var camData = videoPlayer.GetCameraUnderMousePointer(e);
 		if (camData == null)
 			camData = homeGroupObj = videoPlayer.GetCurrentHomeGroupObj();
-		lastLiveContextMenuSelectedCamera = camData;
+		lastContextMenuSelectedCamera = camData;
 		if (camData != null)
 		{
 			LoadDynamicManualRecordingButtonState(camData);
@@ -26628,40 +26616,40 @@ function CanvasContextMenu()
 		switch (this.data.alias)
 		{
 			case "maximize":
-				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 					toaster.Warning("Function is unavailable.");
 				else
-					videoPlayer.ImgClick_Camera(lastLiveContextMenuSelectedCamera);
+					videoPlayer.ImgClick_Camera(lastContextMenuSelectedCamera);
 				break;
 			case "trigger":
-				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 					toaster.Warning("You cannot trigger cameras that are part of an auto-cycle.");
 				else
-					TriggerCamera(lastLiveContextMenuSelectedCamera.optionValue);
+					TriggerCamera(lastContextMenuSelectedCamera.optionValue);
 				break;
 			case "record":
-				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 					toaster.Warning("You cannot toggle recording of cameras that are part of an auto-cycle.");
 				else
-					ManualRecordCamera(lastLiveContextMenuSelectedCamera.optionValue, $("#manRecBtnLabel").attr("start"));
+					ManualRecordCamera(lastContextMenuSelectedCamera.optionValue, $("#manRecBtnLabel").attr("start"));
 				break;
 			case "snapshot":
-				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 					toaster.Warning("You cannot save a snapshot of cameras that are part of an auto-cycle.");
 				else
-					SaveSnapshotInBlueIris(lastLiveContextMenuSelectedCamera.optionValue);
+					SaveSnapshotInBlueIris(lastContextMenuSelectedCamera.optionValue);
 				break;
 			case "restart":
-				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 					toaster.Warning("You cannot restart cameras that are part of an auto-cycle.");
 				else
-					ResetCamera(lastLiveContextMenuSelectedCamera.optionValue);
+					ResetCamera(lastContextMenuSelectedCamera.optionValue);
 				break;
 			case "properties":
-				if (!cameraListLoader.CameraIsAlone(lastLiveContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 					toaster.Warning("You cannot view properties of cameras that are part of an auto-cycle.");
 				else
-					new CameraProperties(lastLiveContextMenuSelectedCamera.optionValue);
+					new CameraProperties(lastContextMenuSelectedCamera.optionValue);
 				break;
 			case "opennewtab":
 				window.open(videoPlayer.GetLastSnapshotUrl());
@@ -26715,28 +26703,16 @@ function CanvasContextMenu()
 		, onShow: onShowLiveContextMenu
 		, clickType: GetPreferredContextMenuTrigger()
 	};
+	BI_CustomEvent.Invoke("BeforeRegisterCanvasContextMenuLive", optionLive);
 	$("#layoutbody").contextmenu(optionLive);
 
 	var onShowRecordContextMenu = function (menu)
 	{
 		var disable_items = ["clipname"];
-		var enable_items = ["opennewtab", "saveas", "copyimageaddress", "convertexport", "set_start_frame", "set_end_frame"
-			, "submenu_motionoverlays"
-			, "motionoverlays_nopreference"
-			, "motionoverlays_off"
-			, "motionoverlays_on"
-			, "submenu_textoverlays"
-			, "textoverlays_nopreference"
-			, "textoverlays_off"
-			, "textoverlays_on"
-			, "closeclip", "statsfornerds", "properties"];
 		var clipData = lastRecordContextMenuSelectedClip;
-		if (sessionManager.HasPermission_DownloadClip(clipData))
-			enable_items.push("downloadclip");
-		else
+		if (!sessionManager.HasPermission_DownloadClip(clipData))
 			disable_items.push("downloadclip");
-		menu.applyrule({ name: "disable_items", disable: true, items: disable_items });
-		menu.applyrule({ name: "enable_items", disable: false, items: enable_items });
+		menu.applyrule({ disable: true, items: disable_items });
 	}
 	var onTriggerRecordContextMenu = function (e)
 	{
@@ -26748,6 +26724,7 @@ function CanvasContextMenu()
 		videoOverlayHelper.HideTemporaryIcons();
 
 		var clipData = lastRecordContextMenuSelectedClip = clipLoader.GetClipFromId(videoPlayer.Loading().image.uniqueId);
+		lastContextMenuSelectedCamera = videoPlayer.Loading().camera;
 
 		var downloadButton = $("#cmroot_recordview_downloadbutton_findme").closest(".b-m-item");
 		if (downloadButton.parent().attr("id") == "cmroot_recordview_downloadlink")
@@ -26903,6 +26880,7 @@ function CanvasContextMenu()
 		, onShow: onShowRecordContextMenu
 		, clickType: GetPreferredContextMenuTrigger()
 	};
+	BI_CustomEvent.Invoke("BeforeRegisterCanvasContextMenuRecord", optionRecord);
 	$("#layoutbody").contextmenu(optionRecord);
 
 	var onShowTimelineContextMenu = function (menu)
@@ -26915,27 +26893,16 @@ function CanvasContextMenu()
 			$("#submenu_trigger_timelineGroupSettings").text('Solo-Camera Settings');
 
 		var itemsToDisable = ["cameraname"];
-		if (lastTimelineContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastTimelineContextMenuSelectedCamera))
+		if (lastContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 		{
 			itemsToDisable = itemsToDisable.concat(["maximize", "properties"]);
-			menu.applyrule(
-				{
-					name: "disable_camera_buttons",
-					disable: true,
-					items: itemsToDisable
-				});
 		}
 		else
 		{
-			if (lastTimelineContextMenuSelectedCamera.isFakeGroup)
+			if (lastContextMenuSelectedCamera.isFakeGroup)
 				itemsToDisable.push("maximize");
-			menu.applyrule(
-				{
-					name: "disable_cameraname",
-					disable: true,
-					items: itemsToDisable
-				});
 		}
+		menu.applyrule({ disable: true, items: itemsToDisable });
 	}
 	var onTriggerTimelineContextMenu = function (e)
 	{
@@ -26960,7 +26927,7 @@ function CanvasContextMenu()
 		var camData = videoPlayer.GetCameraUnderMousePointer(e);
 		if (camData == null)
 			camData = homeGroupObj = videoPlayer.GetCurrentHomeGroupObj();
-		lastTimelineContextMenuSelectedCamera = camData;
+		lastContextMenuSelectedCamera = camData;
 		if (camData != null)
 		{
 			LoadDynamicManualRecordingButtonState(camData);
@@ -26983,16 +26950,16 @@ function CanvasContextMenu()
 		switch (this.data.alias)
 		{
 			case "maximize":
-				if (!cameraListLoader.CameraIsAlone(lastTimelineContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 					toaster.Warning("Function is unavailable.");
 				else
-					videoPlayer.ImgClick_Camera(lastTimelineContextMenuSelectedCamera);
+					videoPlayer.ImgClick_Camera(lastContextMenuSelectedCamera);
 				break;
 			case "properties":
-				if (!cameraListLoader.CameraIsAlone(lastTimelineContextMenuSelectedCamera))
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 					toaster.Warning("You cannot view properties of cameras that are part of an auto-cycle.");
 				else
-					new CameraProperties(lastTimelineContextMenuSelectedCamera.optionValue);
+					new CameraProperties(lastContextMenuSelectedCamera.optionValue);
 				break;
 			case "opennewtab":
 				window.open(videoPlayer.GetLastSnapshotUrl());
@@ -27072,6 +27039,7 @@ function CanvasContextMenu()
 		, onShow: onShowTimelineContextMenu
 		, clickType: GetPreferredContextMenuTrigger()
 	};
+	BI_CustomEvent.Invoke("BeforeRegisterCanvasContextMenuTimeline", optionTimeline);
 	$("#layoutbody").contextmenu(optionTimeline);
 }
 function OpenGroupSettings()
@@ -27265,17 +27233,17 @@ function ClipListContextMenu()
 
 	var onShowMenu = function (menu)
 	{
-		var itemsToEnable = ["flag", "protect", "larger_thumbnails", "mouseover_thumbnails", "convertexport"];
 		var itemsToDisable = [];
 
-		if (addDeleteItem)
-			itemsToEnable.push("delete");
-		var singleClipItems = itemsToEnable;
+		if (!addDeleteItem)
+			itemsToDisable.push("delete");
+
 		if (allSelectedClipIDs.length > 1)
-			singleClipItems = itemsToDisable;
-		singleClipItems.push("properties");
-		singleClipItems.push("copyurl");
-		singleClipItems.push("editmemo");
+		{
+			itemsToDisable.push("properties");
+			itemsToDisable.push("copyurl");
+			itemsToDisable.push("editmemo");
+		}
 
 		var hasClipsSelected = false;
 		var clipData;
@@ -27288,17 +27256,14 @@ function ClipListContextMenu()
 				break;
 			}
 		}
-		if (!hasClipsSelected)
-			itemsToEnable.push("aiconfirm");
+		if (hasClipsSelected)
+			itemsToDisable.push("aiconfirm");
 
-		if (allSelectedClipIDs.length !== 1 || sessionManager.HasPermission_DownloadClip(clipData))
-			itemsToEnable.push("download");
-		else
+		if (allSelectedClipIDs.length === 1 && !sessionManager.HasPermission_DownloadClip(clipData))
 			itemsToDisable.push("download");
 
 
-		menu.applyrule({ name: "disable_items", disable: true, items: itemsToDisable });
-		menu.applyrule({ name: "enable_items", disable: false, items: itemsToEnable });
+		menu.applyrule({ disable: true, items: itemsToDisable });
 
 	}
 	var onTriggerContextMenu = function (e)
@@ -27560,19 +27525,13 @@ function ContextMenu_EnableDisableItem(selector, uniqueSettingsId, itemName, onT
 	var onShowContextMenu = function (menu)
 	{
 		var itemsToDisable = [];
-		var itemsToEnable = [];
 		if (shouldDisableToggler && shouldDisableToggler())
 			itemsToDisable.push("toggle");
-		else
-			itemsToEnable.push("toggle");
 		if (extraMenuButtons)
 			for (var i = 0; i < extraMenuButtons.length; i++)
 				if (extraMenuButtons[i].shouldDisable && extraMenuButtons[i].shouldDisable())
 					itemsToDisable.push(uniqueSettingsId + '_extra_alias_' + i);
-				else
-					itemsToEnable.push(uniqueSettingsId + '_extra_alias_' + i);
-		menu.applyrule({ name: "enable_items_" + uniqueSettingsId, disable: false, items: itemsToEnable });
-		menu.applyrule({ name: "disable_items_" + uniqueSettingsId, disable: true, items: itemsToDisable });
+		menu.applyrule({ disable: true, items: itemsToDisable });
 	};
 	var onTriggerContextMenu = function (e)
 	{

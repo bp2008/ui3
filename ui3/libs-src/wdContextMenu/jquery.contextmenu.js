@@ -16,7 +16,6 @@
 	$.fn.contextmenu = function (option)
 	{
 		option = $.extend({ alias: "cmroot", width: 150, clickType: "long" }, option);
-		var ruleName = null;
 		var target = null;
 		var groups = {};
 		var mitems = {};
@@ -84,7 +83,7 @@
 			return this;
 		};
 		//add new items
-		var addItems = function (gidx, items)
+		function addItems(gidx, items)
 		{
 			var tmp = null;
 			for (var i = 0; i < items.length; i++)
@@ -103,7 +102,7 @@
 					{
 						//group 
 						buildGroup.apply(gTemplet.clone()[0], [items[i]]);
-						arguments.callee(items[i].alias, items[i].items);
+						addItems(items[i].alias, items[i].items);
 						items[i].type = "arrow";
 						tmp = buildItem.apply(iTemplet.clone()[0], [items[i]]);
 					}
@@ -195,13 +194,10 @@
 		};
 		function applyRule(rule)
 		{
-			if (ruleName && ruleName == rule.name)
-				return false;
 			for (var i in mitems)
 				disable(i, !rule.disable);
 			for (var i = 0; i < rule.items.length; i++)
 				disable(rule.items[i], rule.disable);
-			ruleName = rule.name;
 		};
 		function disable(alias, disabled)
 		{
@@ -238,6 +234,7 @@
 			root = buildGroup.apply(gTemplet.clone()[0], [option]);
 			root.applyrule = applyRule;
 			root.showMenu = showMenu;
+			root.options = option;
 			addItems(option.alias, option.items);
 		}
 		else
