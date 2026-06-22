@@ -18725,6 +18725,11 @@ function BICameraData()
 	{
 		return typeof self.timelineStart === "number";
 	}
+	/** Returns true if this video source is compatible with dynamic layout, and dynamic layout is enabled.  Always false if it is a clip. */
+	this.isDynamicLayoutCompatibleAndEnabled = function ()
+	{
+		return (self.isLive || self.isTimeline()) && cameraListLoader.isDynamicLayoutEnabled(self.id);
+	}
 	/** If [isTimeline], then sets [timelineStart] = videoPlayer.lastFrameUtc. Returns a reference to this instance. */
 	this.UpdateTimelineStart = function ()
 	{
@@ -20272,7 +20277,7 @@ function FetchH264VideoModule()
 	/** Handler for "afterResized" custom event. The video viewport may have resized, or layout may have just been re-done. */
 	function AfterResized()
 	{
-		if (isCurrentlyActive && loading.isLive && cameraListLoader.isDynamicLayoutEnabled(loading.id) && !groupCfg.GetLockedResolution(loading))
+		if (isCurrentlyActive && loading.isDynamicLayoutCompatibleAndEnabled() && !groupCfg.GetLockedResolution(loading))
 		{
 			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile(), true);
 			if (!sizeToRequest.Equals(lastRequestedSize))
@@ -20282,7 +20287,7 @@ function FetchH264VideoModule()
 	/** Should only be called via [AfterResized2Debounced] when it has been confirmed that the ideal resolution of the video frame has changed. */
 	function AfterResized2()
 	{
-		if (isCurrentlyActive && loading.isLive && cameraListLoader.isDynamicLayoutEnabled(loading.id) && !groupCfg.GetLockedResolution(loading))
+		if (isCurrentlyActive && loading.isDynamicLayoutCompatibleAndEnabled() && !groupCfg.GetLockedResolution(loading))
 		{
 			var sizeToRequest = imageRenderer.GetSizeToRequest(loading, genericQualityHelper.GetCurrentProfile(), true);
 			if (!sizeToRequest.Equals(lastRequestedSize))
@@ -22897,7 +22902,7 @@ function ImageRenderer()
 			ciLoading = videoPlayer.Loading().image;
 
 		var x;
-		var isDynamicResolutionSource = ciLoading.isLive && cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
+		var isDynamicResolutionSource = ciLoading.isDynamicLayoutCompatibleAndEnabled();
 		if (isDynamicResolutionSource)
 		{
 			var lockedResolution = groupCfg.GetLockedResolution(ciLoading);
@@ -22941,7 +22946,7 @@ function ImageRenderer()
 		if (!streamingProfile.isHQSnapshot && !doNotRemember)
 			SetDynamicNativeSize(ciLoading, x.w, x.h);
 
-		var isDynamicResolutionSource = ciLoading.isLive && cameraListLoader.isDynamicLayoutEnabled(ciLoading.id);
+		var isDynamicResolutionSource = ciLoading.isDynamicLayoutCompatibleAndEnabled();
 		if (streamingProfile.vcodec == "jpeg" && !streamingProfile.isHQSnapshot)
 		{
 			// We can limit this request size if the zoom factor is less than 1
@@ -23012,7 +23017,7 @@ function ImageRenderer()
 		var imgForSizing = videoPlayer.Loaded().image;
 		var widthForSizing;
 		var heightForSizing;
-		var resizableSource = imgForSizing.isLive && cameraListLoader.isDynamicLayoutEnabled(imgForSizing.id);
+		var resizableSource = imgForSizing.isDynamicLayoutCompatibleAndEnabled();
 		if (resizableSource)
 		{
 			widthForSizing = imgForSizing.dynamicNativeW;
