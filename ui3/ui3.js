@@ -9775,7 +9775,8 @@ function ClipTimeline()
 					if (!jumpArg)
 						jumpArg = "";
 					var loadingImg = videoPlayer.Loading().image;
-					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(loadingImg);
+					var subStreamArg = (!jumpArg && settings.ui3_seek_with_substream === "1") ? "&decode=-1" : "";
+					var qualityArgs = genericQualityHelper.getSeekPreviewQualityArgs(loadingImg) + subStreamArg;
 					var groupArgs = groupCfg.GetUrlArgs(loadingImg);
 					var overlayArgs = clipOverlayCfg.GetUrlArgs("*ui3_timeline_pseudocam");
 					var seekImgUrl = currentServer.remoteBaseURL + "time/" + loadingImg.path + '?jpeg&speed=0&pos=' + Math.floor(requestMs) + jumpArg + currentServer.GetAPISessionArg("&", true) + '&opaque=' + ui3InstanceId + qualityArgs + groupArgs + overlayArgs;
