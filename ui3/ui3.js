@@ -2322,6 +2322,14 @@ var defaultSettings =
 			, category: "Event-Triggered Icons"
 		}
 		, {
+			key: "ui3_camera_overlay_icon_recording"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: '<svg class="icon clipicon" style="fill: rgba(255,0,0,1)"><use xlink:href="#svg_x5F_Stoplight"></use></svg> on Camera Recording'
+			, onChange: OnChange_ui3_camera_overlay_icons
+			, category: "Event-Triggered Icons"
+		}
+		, {
 			key: "ui3_camera_overlay_icon_webcasting_disabled"
 			, value: "1"
 			, inputType: "checkbox"
@@ -23718,6 +23726,11 @@ function GetCameraOverlayIcons(cameraId)
 		{
 			icons.push({ id: "generic_trigger", svg: "#svg_x5F_Alert1" });
 		}
+		if (settings.ui3_camera_overlay_icon_recording === "1"
+			&& cam.isRecording)
+		{
+			icons.push({ id: "camera_recording", svg: "#svg_x5F_Stoplight", color: "rgba(255,0,0,1)" });
+		}
 		if (settings.ui3_camera_overlay_icon_paused === "1"
 			&& cam.isPaused)
 		{
@@ -23742,6 +23755,7 @@ function AnyCameraOverlayIconsEnabled()
 	return AnyCameraTriggerOverlayIconsEnabled()
 		|| settings.ui3_camera_overlay_icon_webcasting_disabled === "1"
 		|| settings.ui3_camera_overlay_icon_paused === "1"
+		|| settings.ui3_camera_overlay_icon_recording === "1"
 		|| settings.ui3_camera_overlay_icon_new_alerts === "1"
 		|| ui3CamSettings.any(function (cs) { return cs.get("overlay_icon_new_alerts") === "1" && cameraListLoader.GetCameraWithId(cs.getCamId()); });
 }
@@ -23755,6 +23769,7 @@ function AnyTimeSensitiveCameraStatusEffectsEnabled()
 {
 	var isH264 = videoPlayer.CurrentPlayerModuleName() === 'h264';
 	return AnyCameraTriggerOverlayIconsEnabled()
+		|| settings.ui3_camera_overlay_icon_recording === "1"
 		|| (!isH264 && settings.ui3_sound_motion && settings.ui3_sound_motion !== "None")
 		|| (!isH264 && settings.ui3_sound_trigger && settings.ui3_sound_trigger !== "None")
 		|| (settings.ui3_sound_alert && settings.ui3_sound_alert !== "None");
