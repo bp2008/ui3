@@ -2867,8 +2867,8 @@ div.invisibleLabel
 
 .cameraOverlayIcon
 {
-	width: 16px;
-	height: 16px;
+	width: calc(16px * var(--overlayIconScale, 1));
+	height: calc(16px * var(--overlayIconScale, 1));
 	display: inline-block;
 	filter: drop-shadow(0px 0px 2px rgba(0,0,0,0.7));
 }
@@ -2892,8 +2892,8 @@ div.invisibleLabel
 
 	.cameraOverlayIcon
 	{
-		width: 24px;
-		height: 24px;
+		width: calc(24px * var(--overlayIconScale, 1));
+		height: calc(24px * var(--overlayIconScale, 1));
 	}
 }
 
@@ -2901,8 +2901,8 @@ div.invisibleLabel
 {
 	.cameraOverlayIcon
 	{
-		width: 30px;
-		height: 30px;
+		width: calc(30px * var(--overlayIconScale, 1));
+		height: calc(30px * var(--overlayIconScale, 1));
 	}
 }
 
@@ -2910,8 +2910,8 @@ div.invisibleLabel
 {
 	.cameraOverlayIcon
 	{
-		width: 30px;
-		height: 30px;
+		width: calc(30px * var(--overlayIconScale, 1));
+		height: calc(30px * var(--overlayIconScale, 1));
 	}
 }
 /* Clips */

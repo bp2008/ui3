@@ -2356,6 +2356,20 @@ var defaultSettings =
 			, category: "Event-Triggered Icons"
 		}
 		, {
+			key: "ui3_overlay_icon_size"
+			, value: 0.5
+			, minValue: 0.1
+			, maxValue: 2
+			, step: 0.1
+			, inputType: "range"
+			, unitLabel: "x"
+			, label: 'Icon Size'
+			, changeOnStep: true
+			, hint: 'While adjusting this slider, all enabled icons are shown briefly so you can preview their size.'
+			, onChange: OnChange_ui3_overlay_icon_size
+			, category: "Event-Triggered Icons"
+		}
+		, {
 			key: "ui3_icons_extraVisibility"
 			, value: "0"
 			, inputType: "checkbox"
@@ -23549,6 +23563,23 @@ function OnChange_ui3_camera_overlay_icons()
 	cameraNameLabels.show();
 	cameraListLoader.LoadCameraList();
 }
+var overlayIconForceShowActive = false;
+var overlayIconForceShowTimeout = null;
+function OverlayIconsForceShowActive()
+{
+	return overlayIconForceShowActive;
+}
+function OnChange_ui3_overlay_icon_size()
+{
+	overlayIconForceShowActive = true;
+	cameraNameLabels.show();
+	clearTimeout(overlayIconForceShowTimeout);
+	overlayIconForceShowTimeout = setTimeout(function ()
+	{
+		overlayIconForceShowActive = false;
+		cameraNameLabels.show();
+	}, 1500);
+}
 function CameraNameLabels()
 {
 	var self = this;
@@ -23678,7 +23709,11 @@ function CameraNameLabels()
 						if (show_names && !offsetCamHeight && !offsetNegativeLabelHeight)
 							iconYOffset = (fontSizePt * 1.333333);
 
+						var iconScale = parseFloat(settings.ui3_overlay_icon_size);
+						if (isNaN(iconScale) || iconScale <= 0)
+							iconScale = 1;
 						sb.Append('<div class="cameraOverlayIcons' + (settings.ui3_icons_extraVisibility === "1" ? " extraVisibility" : "") + '" style="');
+						sb.Append("--overlayIconScale:" + iconScale + ";");
 						sb.Append("width:" + adjW + "px;");
 						sb.Append("left:" + (adjX + imgPos.left) + "px;");
 						sb.Append("top:" + (adjY + imgPos.top + iconYOffset) + "px;");
@@ -23711,39 +23746,40 @@ function GetCameraOverlayIcons(cameraId)
 	if (cam)
 	{
 		var ts = cam.triggerSource;
+		var forceShow = OverlayIconsForceShowActive();
 		if (settings.ui3_camera_overlay_icon_motion_trigger === "1"
-			&& NumberHasFlags(ts, TRIGGER_SOURCE_MOTION))
+			&& (forceShow || NumberHasFlags(ts, TRIGGER_SOURCE_MOTION)))
 		{
 			icons.push({ id: "motion_trigger", svg: "#svg_mio_run", iconclass: "noflip" });
 		}
 		if (settings.ui3_camera_overlay_icon_audio_trigger === "1"
-			&& NumberHasFlags(ts, TRIGGER_SOURCE_AUDIO))
+			&& (forceShow || NumberHasFlags(ts, TRIGGER_SOURCE_AUDIO)))
 		{
 			icons.push({ id: "audio_trigger", svg: "#svg_mio_volumeUp", iconclass: "noflip" });
 		}
 		if (settings.ui3_camera_overlay_icon_generic_trigger === "1"
-			&& (NumberHasFlags(ts, TRIGGER_SOURCE_ONVIF) || NumberHasFlags(ts, TRIGGER_SOURCE_EXTERNAL) || NumberHasFlags(ts, TRIGGER_SOURCE_DIO) || NumberHasFlags(ts, TRIGGER_SOURCE_GROUP)))
+			&& (forceShow || NumberHasFlags(ts, TRIGGER_SOURCE_ONVIF) || NumberHasFlags(ts, TRIGGER_SOURCE_EXTERNAL) || NumberHasFlags(ts, TRIGGER_SOURCE_DIO) || NumberHasFlags(ts, TRIGGER_SOURCE_GROUP)))
 		{
 			icons.push({ id: "generic_trigger", svg: "#svg_x5F_Alert1" });
 		}
 		if (settings.ui3_camera_overlay_icon_recording === "1"
-			&& cam.isRecording)
+			&& (forceShow || cam.isRecording))
 		{
 			icons.push({ id: "camera_recording", svg: "#svg_x5F_Stoplight", color: "rgba(255,0,0,1)" });
 		}
 		if (settings.ui3_camera_overlay_icon_paused === "1"
-			&& cam.isPaused)
+			&& (forceShow || cam.isPaused))
 		{
 			icons.push({ id: "camera_paused", svg: "#svg_x5F_Pause", color: "rgba(255,128,64,1)" });
 		}
 		if ((settings.ui3_camera_overlay_icon_new_alerts === "1"
 			|| ui3CamSettings.get(cameraId, "overlay_icon_new_alerts") === "1")
-			&& cam.newalerts > 0)
+			&& (forceShow || cam.newalerts > 0))
 		{
 			icons.push({ id: "camera_paused", svg: "#svg_x5F_Alert2", color: "rgba(255,255,0,1)" });
 		}
 		if (settings.ui3_camera_overlay_icon_webcasting_disabled === "1"
-			&& !cam.webcast)
+			&& (forceShow || !cam.webcast))
 		{
 			icons.push({ id: "webcasting_disabled", svg: "#svg_x5F_HoldProfile" });
 		}
