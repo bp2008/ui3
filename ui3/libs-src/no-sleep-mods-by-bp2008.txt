@@ -1,4 +1,9 @@
-﻿2025-08-25
+﻿2026-06-28
+
+I am minifying the nosleep release with closure-compiler now, and forcing ECMASCRIPT5 language output, to be compatible with older browsers like IE.  It helps with the closure compiler if I prettify the input first, that way the warning it gives is sensible. https://prettier.io/
+
+
+2025-08-25
 
 I determined https://github.com/sgilroy/no-sleep/ to be the best fork of no-sleep.
 I downloaded it, modified it:

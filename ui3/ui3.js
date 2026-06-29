@@ -329,7 +329,7 @@ function DoUIFeatureDetection()
 					if (!streaming_supported)
 						ul.append('<li>Data Streaming</li>');
 					if (!((mse_support & 1) > 0))
-						ul.append('<li>Media Source Extensions, H.264 codec, MP4 format</li>');
+						ul.append('<li>Media Source Extensions: H.264 codec, MP4 format</li>');
 					ul_root.append($('<li>The HTML5 H.264 Player requires these unsupported features:</li>').append(ul));
 				}
 				if (!mse_mp4_h265_supported)
@@ -338,7 +338,7 @@ function DoUIFeatureDetection()
 					if (!streaming_supported)
 						ul.append('<li>Data Streaming</li>');
 					if (!((mse_support & 4) > 0))
-						ul.append('<li>Media Source Extensions, H.265 codec, MP4 format</li>');
+						ul.append('<li>Media Source Extensions: H.265 codec, MP4 format</li>');
 					ul_root.append($('<li>The HTML5 H.265 Player requires these unsupported features:</li>').append(ul));
 				}
 				if (!webcodecs_h264_player_supported)
