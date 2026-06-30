@@ -25160,7 +25160,7 @@ function StreamingProfileEditor(srcProfile, profileEditedCallback)
 		{
 			if (genericQualityHelper.profiles[i].name === srcProfile.name)
 			{
-				genericQualityHelper.profiles[i] = p;
+				genericQualityHelper.profiles[i] = p.Clone();
 				if (GetSettingsStreamingQualityProfileName() === srcProfile.name)
 				{
 					// Current profile is changing
