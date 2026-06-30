@@ -12,7 +12,7 @@
 	<link rel="manifest" id="ui3manifest">
 	<title>Blue Iris Login</title>
 	<script type="text/javascript">
-		var login_version = "34";
+		var login_version = "35";
 		var bi_version = "%%VERSION%%";
 		var combined_version = login_version + "-" + bi_version;
 		var appPath = "/" + "%%VIRTDIR%%".replace(/^\/+|\/+$/g, '');
@@ -256,7 +256,9 @@
 			return location.origin + location.pathname + s + location.hash;
 		}
 
-		NavRemoveUrlParams("session");
+		var urlUser = UrlParameters.Get("user");
+		var urlPw = UrlParameters.Get("pw");
+		NavRemoveUrlParams("session", "user", "pw");
 
 		$(function ()
 		{
@@ -334,6 +336,10 @@
 				$("#cbLoginAutomatically").removeAttr('checked');
 				SetPersistedValue("bi_username", "");
 				SetPersistedValue("bi_password", "");
+				if (urlUser)
+					$("#txtUn").val(urlUser);
+				if (urlPw)
+					$("#txtPw").val(urlPw);
 			}
 
 			var sessionType = "";
