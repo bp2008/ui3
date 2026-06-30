@@ -4786,6 +4786,13 @@ div.warningSymbol.button
 	max-width: 350px;
 }
 
+	#loginDialog input[type="text"],
+	#loginDialog input[type="password"]
+	{
+		width: 170px;
+		box-sizing: border-box;
+	}
+
 .browserIcon
 {
 	display: inline-block;
@@ -5725,47 +5732,86 @@ div.warningSymbol.button
 }
 
 	.dialogOptionPanel .textBasedInput input[type="text"],
-	.dialogOptionPanel .textBasedInput input[type="color"],
-	.dialogOptionPanel .textBasedInput input[type="password"]
+	.dialogOptionPanel .textBasedInput input[type="color"]
 	{
 		box-sizing: border-box;
-		height: 28px;
+		height: 100%;
 	}
 
-	.dialogOptionPanel .textBasedInput input[type="text"],
-	.dialogOptionPanel .textBasedInput input[type="password"]
+	.dialogOptionPanel .textBasedInput input[type="text"]
 	{
 		width: 100% !important;
 	}
 
-a[role="button"].showPasswordButton
+/* Password field with a "view" (show/hide) button.
+   The visible border is on the .pwFieldWrap wrapper, not the <input>, so the
+   actual <input> can be narrower than the box. This keeps icons that
+   password-manager browser extensions inject at the input's right edge from
+   overlapping our view button. */
+.pwFieldWrap
 {
-	position: relative;
-	margin-left: -27px;
-	top: -1px;
-	text-decoration: none;
-	width: 26px;
-	height: 26px;
-	line-height: 26px;
-	display: inline-block;
-	text-align: center;
-	opacity: 0.5;
+	display: inline-flex;
+	align-items: stretch;
+	box-sizing: border-box;
+	background: #3b3b3b; /* fallback for browsers without the Field system color */
+	background: Field; /* matches native dark-mode input background (see color-scheme meta tag) */
+	border: 1px solid var(--button-color);
+	border-radius: 3px;
+	width: 170px;
 }
 
-	a[role="button"].showPasswordButton.showingPassword
+	.pwFieldWrap .pwInput
 	{
-		opacity: 1;
-		background-color: rgba(255,255,0,0.5);
+		flex: 1 1 auto;
+		min-width: 0;
+		border: 0;
 	}
 
-	a[role="button"].showPasswordButton:hover
-	{
-		background-color: rgba(0,0,0,0.1);
-	}
-
-.passwordInput
+a[role="button"].pwToggleBtn
 {
-	padding-right: 29px;
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	cursor: pointer;
+	color: var(--text-color);
+	text-decoration: none;
+}
+
+	a[role="button"].pwToggleBtn:hover,
+	a[role="button"].pwToggleBtn:focus
+	{
+		color: var(--text-hover-color);
+		background-color: var(--uicontrol-hover-bg-color);
+		outline: none;
+	}
+
+	a[role="button"].pwToggleBtn.showingPassword
+	{
+		color: var(--text-active-color);
+	}
+
+.pwToggleBtn .pwIcon
+{
+	width: 20px;
+	height: 20px;
+	fill: currentColor;
+}
+
+.pwToggleBtn .pwIconHide
+{
+	display: none;
+}
+
+.pwToggleBtn.showingPassword .pwIconShow
+{
+	display: none;
+}
+
+.pwToggleBtn.showingPassword .pwIconHide
+{
+	display: inline-block;
 }
 
 .clipExportPanel select

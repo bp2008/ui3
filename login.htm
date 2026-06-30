@@ -180,14 +180,28 @@
 	</style>
 </head>
 <body>
+	<svg xmlns="http://www.w3.org/2000/svg" style="display: none" aria-hidden="true" focusable="false">
+		<symbol id="svg_mio_visibility" viewBox="0 -960 960 960">
+			<path d="M607.5-372.5Q660-425 660-500t-52.5-127.5Q555-680 480-680t-127.5 52.5Q300-575 300-500t52.5 127.5Q405-320 480-320t127.5-52.5Zm-204-51Q372-455 372-500t31.5-76.5Q435-608 480-608t76.5 31.5Q588-545 588-500t-31.5 76.5Q525-392 480-392t-76.5-31.5ZM214-281.5Q94-363 40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200q-146 0-266-81.5ZM480-500Zm207.5 160.5Q782-399 832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280q113 0 207.5-59.5Z"/>
+		</symbol>
+		<symbol id="svg_mio_visibility_off" viewBox="0 -960 960 960">
+			<path d="m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Zm128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Zm20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Zm319 93Zm-151 75Z"/>
+		</symbol>
+	</svg>
 	<div id="loginLoading">
 		<h1>%%SYSNAME%%</h1>
 		<div>Loading login page...</div>
 	</div>
 	<div id="login">
 		<h1>%%SYSNAME%%</h1>
-		<input id="txtUn" type="text" class="text" placeholder="Username" autocapitalize="off" autocorrect="off" />
-		<input id="txtPw" type="password" class="text" placeholder="Password" onkeypress="return pwKeypress(this, event);" autocapitalize="off" autocorrect="off" />
+		<input id="txtUn" type="text" class="ltext" placeholder="Username" autocapitalize="off" autocorrect="off" />
+		<div class="pwFieldWrap">
+			<input id="txtPw" type="password" class="pwInput" placeholder="Password" onkeypress="return pwKeypress(this, event);" autocapitalize="off" autocorrect="off" />
+			<a role="button" class="pwToggleBtn" tabindex="0" title="Show password" onclick="togglePwVisibility(this);" onkeydown="return pwToggleKeydown(this, event);">
+				<svg class="pwIcon pwIconShow"><use xlink:href="#svg_mio_visibility"></use></svg>
+				<svg class="pwIcon pwIconHide"><use xlink:href="#svg_mio_visibility_off"></use></svg>
+			</a>
+		</div>
 		<div class="checkboxWrapper">
 			<input id="cbLoginAutomatically" type="checkbox" class="checkbox" onchange="cbLoginAutomaticallyClicked();" /><label for="cbLoginAutomatically" id="lblLoginAutomatically"><span class="ui"></span>Log in automatically:</label>
 		</div>
@@ -507,6 +521,35 @@
 		{
 			if (localStorageEnabled)
 				return localStorage.setItem(key, value);
+		}
+		function togglePwVisibility(btn)
+		{
+			var $btn = $(btn);
+			var $input = $btn.closest('.pwFieldWrap').find('.pwInput');
+			if ($input.attr('type') === 'password')
+			{
+				$input.attr('type', 'text');
+				$btn.addClass('showingPassword').attr('title', 'Hide password');
+			}
+			else
+			{
+				$input.attr('type', 'password');
+				$btn.removeClass('showingPassword').attr('title', 'Show password');
+			}
+		}
+		function pwToggleKeydown(btn, e)
+		{
+			var keycode;
+			if (window.event) keycode = window.event.keyCode;
+			else if (typeof e !== "undefined" && e) keycode = e.which;
+			else return true;
+
+			if (keycode === 13 || keycode === 32) // Enter or Space
+			{
+				togglePwVisibility(btn);
+				return false;
+			}
+			return true;
 		}
 		function pwKeypress(ele, e)
 		{

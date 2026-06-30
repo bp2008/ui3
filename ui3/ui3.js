@@ -16538,7 +16538,7 @@ function SessionManager()
 		{
 			settings.bi_rememberMe = "1";
 			settings.bi_username = Base64.encode($('#loginDialog input[type="text"][varname="user"]').val());
-			settings.bi_password = Base64.encode($('#loginDialog input[type="password"][varname="pass"]').val());
+			settings.bi_password = Base64.encode($('#loginDialog input.pwInput').val());
 		}
 		else
 		{
@@ -16550,7 +16550,7 @@ function SessionManager()
 	this.DoAdministratorDialogLogin = function ()
 	{
 		self.AdminLoginRememberMeChanged();
-		LogInWithCredentials($('#loginDialog input[type="text"][varname="user"]').val(), $('#loginDialog input[type="password"][varname="pass"]').val(),
+		LogInWithCredentials($('#loginDialog input[type="text"][varname="user"]').val(), $('#loginDialog input.pwInput').val(),
 			function (response, errorMessage)
 			{
 				// The login failed
@@ -37245,8 +37245,9 @@ function UIFormFieldInternal(o)
 	}
 	else if (o.inputType === "text" || o.inputType === "color" || o.inputType === "password")
 	{
-		var $inputWrapper = $('<div class="textBasedInput"></div>');
-		var $input = $('<input type="' + o.inputType + '" data-lpignore="true" autocomplete="off" />');
+		var isPassword = o.inputType === "password";
+		var $inputWrapper = $('<div class="textBasedInput' + (isPassword ? ' pwFieldWrap' : '') + '"></div>');
+		var $input = $('<input type="' + o.inputType + '"' + (isPassword ? ' class="pwInput"' : '') + ' data-lpignore="true" autocomplete="off" />');
 		if (o.maxValue)
 			$input.attr('maxlength', o.maxValue);
 		$input.val(o.value);
@@ -37255,27 +37256,8 @@ function UIFormFieldInternal(o)
 		else
 			$input.on('change', function (e) { return o.onChange(e, o.tag, $input); });
 		$inputWrapper.append($input);
-		if (o.inputType === "password")
-		{
-			$input.addClass('passwordInput');
-			var $showPasswordBtn = $('<a role="button" class="showPasswordButton" title="Show Password">&#x1F441;&#xFE0F;</a>');
-			$showPasswordBtn.on('click', function ()
-			{
-				if ($input.attr('type') === "password")
-				{
-					$input.attr('type', 'text');
-					$showPasswordBtn.attr('title', 'Hide Password');
-					$showPasswordBtn.addClass('showingPassword');
-				}
-				else
-				{
-					$input.attr('type', 'password');
-					$showPasswordBtn.attr('title', 'Show Password');
-					$showPasswordBtn.removeClass('showingPassword');
-				}
-			});
-			$inputWrapper.append($showPasswordBtn);
-		}
+		if (isPassword)
+			$inputWrapper.append(GetPasswordToggleButtonHtml());
 		var $label = $(GetDialogOptionLabel(o.label));
 		return $('<div class="dialogOption_item dialogOption_item_info' + disabledClass + compactClass + '"></div>').append($inputWrapper).append($label);
 	}
@@ -37421,6 +37403,46 @@ function UIFormFieldInternal(o)
 	{
 		console.error("Invalid arguments sent to UIFormField", args);
 		return $('<div class="dialogOption_item dialogOption_item_info">Invalid arguments sent to UIFormField.</div>');
+	}
+}
+/**
+ * Returns HTML markup for a password-visibility "view" toggle button (eye icon).
+ * Pair it with an input that has the "pwInput" class inside a "pwFieldWrap" container.
+ * Wire it up with UI3_TogglePw via inline onclick/onkeydown attributes (already included).
+ */
+function GetPasswordToggleButtonHtml()
+{
+	return '<a role="button" class="pwToggleBtn" tabindex="0" title="Show password" onclick="UI3_TogglePw(this, event)" onkeydown="UI3_TogglePw(this, event)">'
+		+ '<svg class="icon noflip pwIcon pwIconShow"><use xlink:href="#svg_mio_visibility"></use></svg>'
+		+ '<svg class="icon noflip pwIcon pwIconHide"><use xlink:href="#svg_mio_visibility_off"></use></svg>'
+		+ '</a>';
+}
+/**
+ * Toggles a password input between "password" and "text" type when its "view" button is clicked
+ * (or activated with Enter/Space). The button must be inside a "pwFieldWrap" container alongside
+ * the "pwInput" input.
+ * @param {Element} btn The toggle button element (this).
+ * @param {Event} e The triggering click or keydown event.
+ */
+function UI3_TogglePw(btn, e)
+{
+	if (e && e.type === "keydown")
+	{
+		if (e.which !== 13 && e.which !== 32) // Enter or Space
+			return;
+		e.preventDefault();
+	}
+	var $btn = $(btn);
+	var $input = $btn.closest('.pwFieldWrap').find('.pwInput');
+	if ($input.attr('type') === "password")
+	{
+		$input.attr('type', 'text');
+		$btn.addClass('showingPassword').attr('title', 'Hide password');
+	}
+	else
+	{
+		$input.attr('type', 'password');
+		$btn.removeClass('showingPassword').attr('title', 'Show password');
 	}
 }
 var ThreeStateOptions = ["No preference", "Force OFF", "Force ON"];
