@@ -6063,6 +6063,153 @@ div::-webkit-scrollbar-corner
 	scrollbar-3dlight-color: #2A8FCF;
 	scrollbar-darkshadow-color: #2A8FCF;
 }*/
+/* Blue Iris News and Updates dialog */
+.biUpdatesDialog
+{
+	width: 620px;
+	max-width: 100%;
+	box-sizing: border-box;
+	padding: 10px;
+	font-size: 15px;
+}
+
+	.biUpdatesDialog .biUpdLoading
+	{
+		text-align: center;
+		padding: 20px;
+	}
+
+.biUpdSection
+{
+	border: 1px solid var(--dialog-border-color);
+	border-radius: 3px;
+	min-width: 0;
+	margin: 0px 0px 10px 0px;
+	padding: 4px 10px 10px 10px;
+}
+
+	.biUpdSection legend
+	{
+		padding: 0px 4px;
+	}
+
+.biUpdNews
+{
+	white-space: pre-wrap;
+	max-height: 120px;
+	overflow-y: auto;
+}
+
+.biUpdOption
+{
+	display: flex;
+	align-items: center;
+	margin: 8px 0px 4px 0px;
+}
+
+	.biUpdOption input[type="radio"]
+	{
+		flex: 0 0 auto;
+		margin: 0px 8px 0px 0px;
+	}
+
+	.biUpdOption label
+	{
+		flex: 1 1 auto;
+		cursor: pointer;
+	}
+
+.biUpdVersion
+{
+	flex: 0 0 auto;
+	padding-left: 12px;
+	white-space: nowrap;
+}
+
+.biUpdPrevSelect
+{
+	flex: 0 0 auto;
+	margin-left: 12px;
+	max-width: 50%;
+}
+
+.biUpdRenewalMark
+{
+	color: var(--profile-pause-color);
+	padding-left: 6px;
+	cursor: help;
+}
+
+.biUpdNotes
+{
+	white-space: pre-wrap;
+	border: 1px solid var(--dialog-border-color);
+	background-color: rgba(255,255,255,0.06);
+	font-size: 0.85em;
+	padding: 5px 8px;
+	margin: 2px 0px 4px 24px;
+	max-height: 90px;
+	overflow-y: auto;
+}
+
+.biUpdChangelogRow
+{
+	margin-top: 12px;
+}
+
+	.biUpdChangelogRow .icon,
+	.biUpdLearnMore .icon
+	{
+		width: 16px;
+		height: 16px;
+		vertical-align: text-top;
+	}
+
+.biUpdUnsupportedNote
+{
+	margin: 4px 0px 10px 0px;
+}
+
+	.biUpdUnsupportedNote .biUpdLearnMore
+	{
+		margin-top: 8px;
+	}
+
+.biUpdRow
+{
+	margin: 8px 0px;
+}
+
+.biUpdMaintenance
+{
+	margin: 0px 0px 10px 2px;
+}
+
+	.biUpdMaintenance.expired
+	{
+		color: var(--profile-pause-color);
+	}
+
+.biUpdFooter
+{
+	display: flex;
+	align-items: center;
+	margin-top: 12px;
+}
+
+	.biUpdFooter .biUpdStatusText
+	{
+		flex: 1 1 auto;
+	}
+
+	.biUpdFooter input[type="button"]
+	{
+		margin-left: 10px;
+		margin-bottom: 2px;
+		min-width: 72px;
+		height: 28px;
+	}
+
 /* Persistent toast status */
 .multi_operation_status_wrapper
 {
