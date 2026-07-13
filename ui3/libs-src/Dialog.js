@@ -50,6 +50,7 @@ var $DialogDefaults = { theme: "light" };
 				, onRefresh: null
 				, theme: $DialogDefaults.theme
 				, includeCloseButton: true
+				, hotkeys: null // Map of lowercase character to callback, e.g. { y: fn }. While this dialog is topmost, pressing a mapped key (without modifier keys, and not while a text-entry element has focus) calls the callback and consumes the keydown event so no other handlers (e.g. UI3's hotkey system) receive it.
 			}, options);
 
 		var open = function ()
@@ -394,6 +395,42 @@ var $DialogDefaults = { theme: "light" };
 			return true;
 		}
 	};
+	var isTextEntryElement = function (ele)
+	{
+		if (!ele || !ele.tagName)
+			return false;
+		var tagName = ele.tagName.toUpperCase();
+		if (tagName === "TEXTAREA" || tagName === "SELECT")
+			return true;
+		if (tagName === "INPUT")
+		{
+			var type = (ele.getAttribute("type") || "text").toLowerCase();
+			return type !== "button" && type !== "checkbox" && type !== "radio"
+				&& type !== "submit" && type !== "reset" && type !== "range" && type !== "file";
+		}
+		return !!ele.isContentEditable;
+	};
+	// Dialog hotkeys (e.g. the underlined "Y" and "N" in confirm dialog buttons) are
+	// handled in the capture phase so that a handled keystroke is consumed before it
+	// can reach UI3's hotkey system, which uses bubbling keydown events.
+	document.addEventListener("keydown", function (e)
+	{
+		if (openDialogs.length === 0 || e.ctrlKey || e.altKey || e.metaKey)
+			return;
+		var dlg = window.dialogLibraryGetTopmost();
+		if (!dlg || !dlg.settings.hotkeys || isTextEntryElement(e.target))
+			return;
+		var charCode = e.which || e.keyCode;
+		if (!charCode)
+			return;
+		var handler = dlg.settings.hotkeys[String.fromCharCode(charCode).toLowerCase()];
+		if (typeof handler === "function")
+		{
+			e.preventDefault();
+			e.stopPropagation();
+			handler();
+		}
+	}, true);
 }(jQuery));
 var SimpleDialog = new function ()
 {
@@ -450,6 +487,26 @@ var SimpleDialog = new function ()
 		dlg = $root.modalDialog(options);
 		return dlg;
 	};
+	// Sets a button's label, underlining the first occurrence (case-insensitive) of
+	// the given hotkey character. Returns true if the character was found, so the
+	// caller knows whether to bind the hotkey (no underline means no visual cue, so
+	// no hotkey should be bound).
+	var SetButtonLabelWithHotkeyChar = function ($btn, label, hotkeyChar)
+	{
+		var idx = label.toLowerCase().indexOf(hotkeyChar.toLowerCase());
+		if (idx === -1)
+		{
+			$btn.text(label);
+			return false;
+		}
+		$btn.text("");
+		if (idx > 0)
+			$btn.append(document.createTextNode(label.substr(0, idx)));
+		$btn.append($('<u></u>').text(label.charAt(idx)));
+		if (idx + 1 < label.length)
+			$btn.append(document.createTextNode(label.substr(idx + 1)));
+		return true;
+	};
 	var GetConfirmOptions = function (options)
 	{
 		return $.extend(
@@ -468,15 +525,16 @@ var SimpleDialog = new function ()
 		var $dlg = $('<div style="padding: 10px;"></div>');
 		$dlg.append(questionEle);
 
-		var $yes = $('<input type="button" value="Yes" style="margin-right:15px;" />');
-		var $no = $('<input type="button" value="No" />');
-		if (options.yesText)
-			$yes.val(options.yesText);
-		if (options.noText)
-			$no.val(options.noText);
+		var $yes = $('<button type="button" style="margin-right:15px;"></button>');
+		var $no = $('<button type="button"></button>');
+		var hotkeys = {};
+		if (SetButtonLabelWithHotkeyChar($yes, options.yesText || "Yes", "y"))
+			hotkeys.y = function () { $yes.click(); };
+		if (SetButtonLabelWithHotkeyChar($no, options.noText || "No", "n"))
+			hotkeys.n = function () { $no.click(); };
 		$dlg.append($('<div style="margin-top: 20px; text-align: center;"></div>').append($yes).append($no));
 
-		var dlg = $dlg.modalDialog({ title: options.title });
+		var dlg = $dlg.modalDialog({ title: options.title, hotkeys: hotkeys });
 		$yes.click(function ()
 		{
 			dlg.close();

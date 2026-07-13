@@ -2827,7 +2827,7 @@ var defaultSettings =
 			, value: ""
 			, hotkey: true
 			, label: "Toggle Flag"
-			, hint: "Toggles the flagged status of the current clip or alert."
+			, hint: "Toggles the flagged status of the clips or alerts that are selected in the clip list, the same as flagging via the clip list's context menu."
 			, actionDown: BI_Hotkey_ToggleFlag
 			, category: "Hotkeys"
 		}
@@ -13989,6 +13989,33 @@ function ClipLoader(clipsBodySelector)
 			return;
 		}
 		self.ToggleClipFlag(clipData);
+	}
+	this.FlagSelectedClips = function ()
+	{
+		var allSelectedClipIDs = self.GetAllSelected().slice();
+		if (allSelectedClipIDs.length === 0)
+			return;
+		var flagEnable = false; // Turn all off, but if one is already off, then turn all on.
+		for (var i = 0; i < allSelectedClipIDs.length; i++)
+		{
+			var clipData = self.GetClipFromId(allSelectedClipIDs[i]);
+			if (clipData && !NumberHasFlags(clipData.flags, BIDBFLAG.FLAGGED))
+			{
+				flagEnable = true;
+				break;
+			}
+		}
+		if (allSelectedClipIDs.length <= 12)
+			self.Multi_Flag(allSelectedClipIDs, flagEnable);
+		else
+		{
+			var whatAction = (flagEnable ? "flag" : "unflag");
+			var whichKind = (DbViewIsAlerts(settings.ui3_current_dbView) ? "alerts" : "clips");
+			AskYesNo("Confirm " + whatAction + " of " + allSelectedClipIDs.length + " " + whichKind + "?", function ()
+			{
+				self.Multi_Flag(allSelectedClipIDs, flagEnable);
+			});
+		}
 	}
 	this.ExportCurrentClip = function ()
 	{
@@ -33040,7 +33067,7 @@ function BI_Hotkey_Delete()
 }
 function BI_Hotkey_ToggleFlag()
 {
-	clipLoader.FlagCurrentClip();
+	clipLoader.FlagSelectedClips();
 }
 function BI_Hotkey_ToggleReverse()
 {
