@@ -31086,6 +31086,30 @@ function BiUpdatesDialog()
 			return sessionResponse.data.version;
 		return "";
 	}
+	var GetSupportExpireFromSession = function ()
+	{
+		/// <summary>
+		/// The "login" command response carries the support &amp; maintenance expiration as a
+		/// string like "1/1/2030 [Priority]".  Returns the date portion as milliseconds since
+		/// 1970 (local midnight), or 0 if it is missing or unparsable.  This is a day-accurate
+		/// fallback for update check responses which omit "maintenance_expire", such as those
+		/// from the third-party service, which has no way to know the user's expiration date.
+		/// </summary>
+		var sessionResponse = sessionManager.GetLastResponse();
+		if (!sessionResponse || !sessionResponse.data || typeof sessionResponse.data.support !== "string")
+			return 0;
+		var m = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(sessionResponse.data.support);
+		if (!m)
+			return 0;
+		var month = parseInt(m[1], 10);
+		var day = parseInt(m[2], 10);
+		var year = parseInt(m[3], 10);
+		var date = new Date(year, month - 1, day, 0, 0, 0, 0);
+		// Reject values which rolled over into another month or year (e.g. "2/31/2030").
+		if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day)
+			return 0;
+		return date.getTime();
+	}
 	var FormatDateMs = function (ms)
 	{
 		if (!ms)
@@ -31131,6 +31155,14 @@ function BiUpdatesDialog()
 			return;
 		if (!data)
 			data = {};
+		if (!data.maintenance_expire)
+		{
+			// The update check response did not include the support & maintenance expiration
+			// date, so fall back to the day-accurate date from the login response.
+			var sessionExpire = GetSupportExpireFromSession();
+			if (sessionExpire)
+				data.maintenance_expire = sessionExpire;
+		}
 		$content.empty();
 
 		if (fromThirdParty)
@@ -31177,7 +31209,7 @@ function BiUpdatesDialog()
 		}
 		var GetPurchaseUrl = function ()
 		{
-			return data.maintenance_purchase_link;
+			return data.maintenance_purchase_link ? data.maintenance_purchase_link : defaultPurchaseUrl;
 		}
 		var AppendRenewalMark = function ($ele)
 		{
