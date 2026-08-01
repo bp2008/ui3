@@ -6175,6 +6175,64 @@ div::-webkit-scrollbar-corner
 		margin-top: 8px;
 	}
 
+.biUpdErrorNote
+{
+	color: var(--profile-pause-color);
+	margin: 8px 0px 0px 0px;
+}
+
+.biUpdThirdPartyNote
+{
+	border: 1px solid var(--dialog-border-color);
+	border-radius: 3px;
+	background-color: rgba(255,255,255,0.06);
+	font-size: 0.9em;
+	padding: 6px 10px;
+	margin: 0px 0px 10px 0px;
+}
+
+.biUpdCheckboxRow
+{
+	display: flex;
+	align-items: flex-start;
+	margin: 10px 0px 2px 0px;
+}
+
+	.biUpdCheckboxRow input[type="checkbox"]
+	{
+		flex: 0 0 auto;
+		margin: 2px 8px 0px 0px;
+	}
+
+	.biUpdCheckboxRow label
+	{
+		flex: 1 1 auto;
+		cursor: pointer;
+	}
+
+.biUpdManualRow
+{
+	display: flex;
+	align-items: center;
+	margin: 10px 0px 2px 0px;
+}
+
+	.biUpdManualRow .biUpdManualInput
+	{
+		flex: 0 1 160px;
+		min-width: 0;
+		margin-right: 10px;
+		height: 28px;
+		box-sizing: border-box;
+	}
+
+	.biUpdManualRow input[type="button"]
+	{
+		flex: 0 0 auto;
+		min-width: 72px;
+		height: 28px;
+	}
+
 .biUpdRow
 {
 	margin: 8px 0px;
