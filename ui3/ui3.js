@@ -28492,6 +28492,10 @@ function CameraProperties(camId)
 				+ url
 				+ '</a></div>');
 		}
+		if (cam.notes)
+		{
+			$infoSection.append(GetInfoHtml("Notes", HtmlEncodeAndLinkUris(cam.notes)));
+		}
 		$infoSection.append('<div class="dialogOption_item dialogOption_item_info"><a title="Opens a live H.264 stream in an efficient, cross-platform player. This method delays the stream by several seconds." href="javascript:hlsPlayer.OpenDialog(\'' + JavaScriptStringEncode(camId) + '\')">'
 			+ '<svg class="icon noflip"><use xlink:href="#svg_mio_ViewStream"></use></svg>'
 			+ ' Open HTTP Live Stream (HLS)</a></div>');
@@ -28521,6 +28525,14 @@ function CameraProperties(camId)
 	{
 		var $info = $('<div class="dialogOption_item dialogOption_item_info"></div>');
 		$info.text(label + ": " + value);
+		if (tooltip)
+			$info.attr("title", tooltip);
+		return $info;
+	}
+	var GetInfoHtml = function (label, value, tooltip)
+	{
+		var $info = $('<div class="dialogOption_item dialogOption_item_info"></div>');
+		$info.html(label + ": " + value);
 		if (tooltip)
 			$info.attr("title", tooltip);
 		return $info;
@@ -41934,4 +41946,29 @@ function arrayToMap(arr, keyFn)
 		map[keyFn(item)] = item;
 	}
 	return map;
+}
+function HtmlEncodeAndLinkUris(str) {
+  // --- HTML encode everything ---
+  const encoded = str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+  // --- URL regex (simple + safe for legacy sites) ---
+  const urlRegex = /\bhttps?:\/\/[^\s<]+/gi;
+
+  // --- Replace URLs with <a> tags ---
+  return encoded.replace(urlRegex, function (match) {
+    // match is HTML‑encoded; decode minimal entities so href is correct
+    const href = match
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+
+    return '<a href="' + href + '" target="_blank">' + match + "</a>";
+  });
 }
