@@ -28,7 +28,7 @@ catch (ex)
 	console.error(ex);
 }
 window.developerMode = false;
-window.simulateUpdateCheck = false;
+window.simulateUpdateCheck = false; // Feeds the News and Updates dialog sample data instead of contacting the server.  1: up to date.  2: update available.  3: update available, with news.  4: update available, some releases past the support expiration date.  true: same as 3.
 function developerLog()
 {
 	if (!developerMode) return;
@@ -722,6 +722,7 @@ var pcmPlayer = null;
 var diskUsageGUI = null;
 var serverControl = null;
 var biUpdatesDialog = null;
+var updateInstallWatcher = null;
 var cameraListDialog = null;
 var exportListDialog = null;
 var clipProperties = null;
@@ -4247,6 +4248,8 @@ $(function ()
 	serverControl = new ServerControl();
 
 	biUpdatesDialog = new BiUpdatesDialog();
+
+	updateInstallWatcher = new UpdateInstallWatcher();
 
 	cameraListDialog = new CameraListDialog();
 
@@ -16346,7 +16349,6 @@ function SessionManager()
 	this.HandleSuccessfulLogin = function (response, wasAutomatic)
 	{
 		lastResponse = response;
-		response.data.newversion = "6.0.9.17"; // Temporary hack to test the new version notice and related behaviors.
 		var user = response && response.data && response.data.user ? response.data.user : "";
 		loadingHelper.SetLoadedStatus("login");
 		self.SetAPISession(lastResponse.session);
@@ -30817,6 +30819,7 @@ function BiUpdatesDialog()
 	var dialog = null;
 	var $content = null;
 	var radioNameCounter = 0;
+	var dialogTitle = "Blue Iris News and Updates";
 	var defaultChangelogUrl = "https://blueirissoftware.com/changelog6.pdf";
 	var defaultPurchaseUrl = "https://blueirissoftware.com/#support";
 	var updateCheckWikiUrl = "https://github.com/bp2008/ui3/wiki/updatecheck-API-documentation";
@@ -30833,7 +30836,7 @@ function BiUpdatesDialog()
 		CloseDialog();
 		$content = $('<div class="biUpdatesDialog"></div>');
 		dialog = $content.dialog({
-			title: "Blue Iris News and Updates"
+			title: dialogTitle
 			, overlayOpacity: 0.3
 			, closeOnOverlayClick: true
 			, onRefresh: RefreshData
@@ -30864,7 +30867,7 @@ function BiUpdatesDialog()
 		ShowLoading("Checking for updates&hellip;");
 		if (simulateUpdateCheck)
 		{
-			Render(GetSampleUpdateCheckData(), false);
+			Render(GetSampleUpdateCheckData(simulateUpdateCheck), false);
 			ContentChanged();
 			return;
 		}
@@ -30905,6 +30908,8 @@ function BiUpdatesDialog()
 	{
 		if (!$content)
 			return;
+		SetDialogChrome(null);
+		$content.removeClass("biUpdModern");
 		$content.html('<div class="biUpdLoading">' + html + '</div>');
 		ContentChanged();
 	}
@@ -31067,9 +31072,10 @@ function BiUpdatesDialog()
 		/// <summary>
 		/// The "login" command response carries the support &amp; maintenance expiration as a
 		/// string like "1/1/2030 [Priority]".  Returns the date portion as milliseconds since
-		/// 1970 (local midnight), or 0 if it is missing or unparsable.  This is a day-accurate
-		/// fallback for update check responses which omit "maintenance_expire", such as those
-		/// from the third-party service, which has no way to know the user's expiration date.
+		/// 1970 (UTC midnight, matching how the updatecheck API reports its dates), or 0 if it
+		/// is missing or unparsable.  This is a day-accurate fallback for update check responses
+		/// which omit "maintenance_expire", such as those from the third-party service, which
+		/// has no way to know the user's expiration date.
 		/// </summary>
 		var sessionResponse = sessionManager.GetLastResponse();
 		if (!sessionResponse || !sessionResponse.data || typeof sessionResponse.data.support !== "string")
@@ -31080,51 +31086,175 @@ function BiUpdatesDialog()
 		var month = parseInt(m[1], 10);
 		var day = parseInt(m[2], 10);
 		var year = parseInt(m[3], 10);
-		var date = new Date(year, month - 1, day, 0, 0, 0, 0);
+		var date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 		// Reject values which rolled over into another month or year (e.g. "2/31/2030").
-		if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day)
+		if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day)
 			return 0;
 		return date.getTime();
 	}
+	/**
+	 * Formats an updatecheck API date in the user's own date format.  These arrive as UTC, typically midnight, so rendering them in local time would name the previous day for everyone west of Greenwich.
+	 */
 	var FormatDateMs = function (ms)
 	{
 		if (!ms)
 			return "";
-		return new Date(ms).toLocaleDateString();
+		try
+		{
+			return new Date(ms).toLocaleDateString(getPreferredLanguageCode(), { timeZone: "UTC" });
+		}
+		catch (ex)
+		{
+			// No support for locale options.  Shift the instant instead, so that rendering it
+			// in local time lands on the UTC calendar date.
+			return new Date(ms + new Date(ms).getTimezoneOffset() * 60000).toLocaleDateString();
+		}
 	}
-	var VersionAndDate = function (entry)
+	/**
+	 * Builds sample data for the simulateUpdateCheck testing flag.  Version numbers are
+	 * generated around the installed version and dates are relative to "now", so a sample
+	 * always exercises the GUI no matter which build the server is running.
+	 * @param {number|boolean} mode 1 for up to date, 2 for an update available, 3 to add news, 4 to put some releases past the support expiration date.  Anything else means 3.
+	 */
+	var GetSampleUpdateCheckData = function (mode)
 	{
-		var str = entry.version;
-		var dateStr = FormatDateMs(entry.date);
-		if (dateStr)
-			str += "  (" + dateStr + ")";
-		return str;
-	}
-	var GetSampleUpdateCheckData = function ()
-	{
-		// Sample data for the simulateUpdateCheck testing flag.  Dates are relative to "now" so
-		// the dialog always looks current regardless of when this is used.
 		var day = 86400000;
-		var now = Date.now();
-		return {
-			news: "(SAMPLE UPDATE CHECK DATA)\nBlue Iris 6 is here!  Visit blueirissoftware.com to learn about new features and pricing.",
-			maintenance_expire: now + 200 * day,
+		// Blue Iris reports dates as UTC midnight, so the sample does too.
+		var now = new Date();
+		now = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+		mode = parseInt(mode, 10);
+		if (!(mode >= 1 && mode <= 4))
+			mode = 3;
+
+		var parts = GetCurrentVersion().split(".");
+		if (parts.length !== 4)
+			parts = ["6", "0", "9", "16"];
+		var build = parseInt(parts[3], 10);
+		if (!(build >= 1))
+			build = 16;
+		/**
+		 * Returns a version number the given number of builds away from the installed one, or null if that would not be a plausible build number.
+		 */
+		var SampleVersion = function (buildOffset)
+		{
+			var b = build + buildOffset;
+			return b >= 1 ? parts[0] + "." + parts[1] + "." + parts[2] + "." + b : null;
+		}
+
+		// Each entry is a build offset from the installed version, an age in days, and the
+		// optional extras Blue Iris supplies for only some releases.
+		var samples = mode === 1
+			? [
+				{ offset: 0, days: 6, notes: "Move clips with confirmed alerts\nMP4 player improvements\nOther minor enhancements and bug fixes" }
+				, { offset: -2, days: 20, stable: true, notes: "Smoother timeline playback for UI3 and app\nOther minor enhancements and bug fixes" }
+				, { offset: -5, days: 34 }
+				, { offset: -9, days: 55 }
+				, { offset: -14, days: 78 }
+			]
+			: [
+				{ offset: 4, days: 1, notes: "Move clips with confirmed alerts\nMP4 player improvements\nZones camera settings tab\nDVR ONVIF event sharing\nAI PTZ auto-tracking improvements\nOther minor enhancements and bug fixes" }
+				, { offset: 3, days: 4 }
+				, { offset: 1, days: 11, stable: true, notes: "Fixes for A/V sync issues in direct-to-disk recording\nSmoother timeline playback for UI3 and app\nOther minor enhancements and bug fixes" }
+				, { offset: 0, days: 24 }
+				, { offset: -3, days: 38 }
+				, { offset: -7, days: 59 }
+				, { offset: -12, days: 81 }
+			];
+
+		var newversions = [];
+		for (var i = 0; i < samples.length; i++)
+		{
+			var version = SampleVersion(samples[i].offset);
+			if (!version)
+				continue;
+			var entry = { version: version, date: now - samples[i].days * day };
+			if (samples[i].stable)
+				entry.stable = true;
+			if (samples[i].notes)
+				entry.notes = samples[i].notes;
+			newversions.push(entry);
+		}
+
+		var data = {
+			// Mode 4 expires support between the two newest releases so that some, but not
+			// all, of the available updates fall past the expiration date.
+			maintenance_expire: mode === 4 ? now - 6 * day : now + 200 * day,
 			maintenance_purchase_link: "https://blueirissoftware.com/#support",
 			changelog_url: "https://blueirissoftware.com/changelog6.pdf",
-			newversions: [
-				{ version: "6.0.0.1", date: now - 207 * day },
-				{ version: "6.0.2.10", date: now - 131 * day },
-				{ version: "6.0.3.8", date: now - 124 * day },
-				{ version: "6.0.4.9", date: now - 72 * day },
-				{ version: "6.0.5.7", date: now - 55 * day },
-				{ version: "6.0.6.9", date: now - 41 * day },
-				{ version: "6.0.7.7", date: now - 22 * day, notes: "A/V sync improvements for direct-to-disk recording\nOther minor enhancements and bug fixes" },
-				{ version: "6.0.8.3", date: now - 13 * day },
-				{ version: "6.0.8.4", date: now - 12 * day, stable: true, notes: "Fixes for 6.0.7.7 A/V sync issues\nSmoother timeline playback for UI3 and app\nOther minor enhancements and bug fixes" },
-				{ version: "6.0.8.6", date: now - 5 * day, notes: "Smoother timeline playback for UI3 and app\nOther minor enhancements and bug fixes" }
-			]
+			newversions: newversions
 		};
+		if (mode === 3)
+			data.news = "(SAMPLE UPDATE CHECK DATA)\nBlue Iris 6.0.9 branch is now the default download.  Visit https://blueirissoftware.com to learn about new features and pricing.";
+		return data;
 	}
+	var IconHtml = function (iconId)
+	{
+		// UI3 stores its "svg_x5F_*" glyphs vertically flipped; "svg_mio_*" glyphs are not.
+		var classes = iconId.indexOf("_x5F_") === -1 ? "icon noflip" : "icon";
+		return '<svg class="' + classes + '"><use xlink:href="' + iconId + '"></use></svg>';
+	}
+	var GetPurchaseUrl = function (data)
+	{
+		return data && data.maintenance_purchase_link ? data.maintenance_purchase_link : defaultPurchaseUrl;
+	}
+	/**
+	 * Splits a version's change list into non-empty lines.  Blue Iris supplies these as one newline-separated string, and supplies them only for some versions.
+	 */
+	var ParseChangeList = function (notes)
+	{
+		var lines = [];
+		if (typeof notes === "string")
+		{
+			var raw = notes.split(/\r?\n/);
+			for (var i = 0; i < raw.length; i++)
+			{
+				var line = $.trim(raw[i]);
+				if (line.length > 0)
+					lines.push(line);
+			}
+		}
+		return lines;
+	}
+	/**
+	 * Switches the dialog frame between the neutral chrome and status-colored headline used by the update check GUI, and UI3's standard dialog chrome used by every other state of this dialog.
+	 * @param {object|null} status Null for standard chrome, otherwise { name, headline, icon } where name is "Ok", "Update", "Warn" or "Error" and icon is an icons.svg sprite id.
+	 */
+	var SetDialogChrome = function (status)
+	{
+		if (dialog == null)
+			return;
+		dialog.$dialog.removeClass("biUpdModernDialog biUpdStatusOk biUpdStatusUpdate biUpdStatusWarn biUpdStatusError");
+		if (status)
+		{
+			dialog.$dialog.addClass("biUpdModernDialog biUpdStatus" + status.name);
+			dialog.$title.empty()
+				.append(IconHtml(status.icon))
+				.append($('<span class="biUpdHeadline"></span>').text(status.headline));
+		}
+		else
+			dialog.$title.text(dialogTitle);
+	}
+	/**
+	 * Explains the third-party update check service and offers the automatic-fallback opt-in.  Reached from the "Learn more" link in the footer, which is the only place this GUI mentions the service.
+	 */
+	var ShowThirdPartyInfo = function ()
+	{
+		var $body = $('<div class="biUpdLearnMoreDialog"></div>');
+		$body.append($('<div></div>')
+			.text('This update information was proxied via ' + thirdPartyHost + thirdPartyNote + '.  It is not affiliated with Blue Iris, and your Blue Iris server did not provide it.'));
+		$body.append($('<div></div>')
+			.text('Until Blue Iris implements the "updatecheck" JSON API command, this service answers the same request.  It is expected to be retired once Blue Iris supports the command natively.'));
+		$body.append($('<div class="biUpdLearnMore"></div>')
+			.append($('<a target="_blank"></a>').attr("href", updateCheckWikiUrl)
+				.html('Learn more about the proposed <b>updatecheck</b> API ' + IconHtml("#svg_mio_launch"))));
+		$body.append(MakeAutoThirdPartyCheckbox());
+		$body.modalDialog({ title: "Third-party update check" });
+	}
+	/**
+	 * Renders the update check GUI: a status-colored headline in the title bar, one scrolling list of versions grouped by what installing them would mean, and a pinned footer.
+	 * @param {object} data The update check response data.
+	 * @param {boolean} fromThirdParty True if the data came from the third-party service rather than from Blue Iris.
+	 */
 	var Render = function (data, fromThirdParty)
 	{
 		if (!$content)
@@ -31139,18 +31269,10 @@ function BiUpdatesDialog()
 			if (sessionExpire)
 				data.maintenance_expire = sessionExpire;
 		}
-		$content.empty();
 
-		if (fromThirdParty)
-		{
-			var $tpNote = $('<div class="biUpdThirdPartyNote"></div>');
-			$tpNote.append($('<div></div>').text('This information was proxied via ' + thirdPartyHost + thirdPartyNote + '.  This service is not affiliated with Blue Iris.  Your Blue Iris server does not provide it.'));
-			$tpNote.append(MakeAutoThirdPartyCheckbox());
-			$content.append($tpNote);
-		}
-
-		var i;
+		var i, n;
 		var currentVersion = GetCurrentVersion();
+		var expire = data.maintenance_expire;
 
 		var versions = [];
 		if (data.newversions && data.newversions.length)
@@ -31159,6 +31281,8 @@ function BiUpdatesDialog()
 					versions.push(data.newversions[i]);
 		versions.sort(function (a, b) { return compareVersions(b.version, a.version); });
 
+		// The "Latest" and "Latest stable" badges describe what Blue Iris reported, so they are
+		// chosen before the installed version is injected below.
 		var latest = versions.length > 0 ? versions[0] : null;
 		var latestStable = null;
 		for (i = 0; i < versions.length; i++)
@@ -31167,171 +31291,225 @@ function BiUpdatesDialog()
 				latestStable = versions[i];
 				break;
 			}
-		var currentEntry = null;
-		for (i = 0; i < versions.length; i++)
-			if (versions[i].version === currentVersion)
-			{
-				currentEntry = versions[i];
-				break;
-			}
-		var previous = [];
-		for (i = 0; i < versions.length; i++)
-			if (versions[i] !== latest && versions[i] !== latestStable)
-				previous.push(versions[i]);
 
-		var RequiresRenewal = function (entry)
+		if (latest && currentVersion)
 		{
-			return !!(data.maintenance_expire && entry && entry.date && entry.date > data.maintenance_expire);
-		}
-		var GetPurchaseUrl = function ()
-		{
-			return data.maintenance_purchase_link ? data.maintenance_purchase_link : defaultPurchaseUrl;
-		}
-		var AppendRenewalMark = function ($ele)
-		{
-			$ele.append($('<span class="biUpdRenewalMark">&#9888;</span>')
-				.attr("title", "This version was released after your support & maintenance expiration and may require a license renewal to activate."));
-		}
-
-		if (typeof data.news === "string" && data.news.length > 0)
-		{
-			var $newsSection = $('<fieldset class="biUpdSection"><legend>News</legend></fieldset>');
-			$newsSection.append($('<div class="biUpdNews"></div>').text(data.news));
-			$content.append($newsSection);
-		}
-
-		var $section = $('<fieldset class="biUpdSection"><legend>Software updates</legend></fieldset>');
-
-		var radioName = "biUpdRadio" + (++radioNameCounter);
-		var selectedType = "remain";
-		var $previousSelect = null;
-
-		var FindPreviousEntry = function ()
-		{
-			if (!$previousSelect)
-				return null;
-			var v = $previousSelect.val();
-			for (var n = 0; n < previous.length; n++)
-				if (previous[n].version === v)
-					return previous[n];
-			return null;
-		}
-		var AddOption = function (type, labelText, entry, suppressChangeNotes)
-		{
-			var id = radioName + "_" + type;
-			var $row = $('<div class="biUpdOption"></div>');
-			var $radio = $('<input type="radio" />').attr("name", radioName).attr("id", id);
-			if (type === selectedType)
-				$radio.prop("checked", true);
-			$radio.on('change', function ()
-			{
-				if ($radio.is(":checked"))
-					selectedType = type;
-			});
-			$row.append($radio);
-			$row.append($('<label></label>').attr("for", id).text(labelText));
-			if (entry)
-			{
-				var $version = $('<div class="biUpdVersion"></div>').text(VersionAndDate(entry));
-				if (RequiresRenewal(entry))
-					AppendRenewalMark($version);
-				$row.append($version);
-			}
-			$section.append($row);
-			if (entry && entry.notes && !suppressChangeNotes)
-				$section.append($('<div class="biUpdNotes"></div>').text(entry.notes));
-			return $row;
-		}
-		var AddPreviousOption = function ()
-		{
-			var $row = AddOption("previous", "Another available previous update", null, false);
-			var $radio = $row.find('input[type="radio"]');
-			$previousSelect = $('<select class="biUpdPrevSelect"></select>');
-			for (var n = 0; n < previous.length; n++)
-				$previousSelect.append($('<option></option>').attr("value", previous[n].version).text(VersionAndDate(previous[n])));
-			var $mark = $('<div class="biUpdVersion"></div>');
-			var $notes = $('<div class="biUpdNotes"></div>').hide();
-			var SelectThisOption = function ()
-			{
-				if (!$radio.is(":checked"))
+			// Blue Iris does not always list the version which is already installed.  Inject it
+			// so that the "Installed" group is always present, with no release date because none
+			// was reported.  A response with no versions at all keeps its own empty message
+			// instead, so that the "Try again" link is not lost.
+			var installedListed = false;
+			for (i = 0; i < versions.length; i++)
+				if (versions[i].version === currentVersion)
 				{
-					$radio.prop("checked", true);
-					selectedType = "previous";
+					installedListed = true;
+					break;
 				}
-			}
-			var UpdateSelection = function ()
+			if (!installedListed)
 			{
-				var entry = FindPreviousEntry();
-				$mark.empty();
-				if (RequiresRenewal(entry))
-					AppendRenewalMark($mark);
-				if (entry && entry.notes)
-					$notes.text(entry.notes).show();
-				else
-					$notes.hide();
+				versions.push({ version: currentVersion });
+				versions.sort(function (a, b) { return compareVersions(b.version, a.version); });
 			}
-			$previousSelect.on('mousedown', SelectThisOption);
-			$previousSelect.on('change', function ()
-			{
-				SelectThisOption();
-				UpdateSelection();
-			});
-			$row.append($previousSelect);
-			$row.append($mark);
-			$section.append($notes);
-			UpdateSelection();
 		}
 
-		AddOption("remain", "Remain with your current version", currentEntry ? currentEntry : (currentVersion ? { version: currentVersion } : null), true);
-		if (latestStable)
-			AddOption("stable", "Install latest critical or highly-stable update", latestStable, false);
-		if (latest)
-			AddOption("latest", "Install latest update available", latest, false);
-		if (previous.length > 0)
-			AddPreviousOption();
-
-		$section.append(MakeChangelogRow(data.changelog_url ? data.changelog_url : defaultChangelogUrl));
-		$content.append($section);
-
-		if (data.maintenance_expire)
+		/**
+		 * True if this version was released after the user's support & maintenance expiration, meaning Blue Iris would show an evaluation warning if it were installed.
+		 */
+		var IsPastSupport = function (entry)
 		{
-			var expired = data.maintenance_expire < Date.now();
-			var $maint = $('<div class="biUpdMaintenance"></div>');
-			$maint.text("Support & maintenance " + (expired ? "expired" : "expires") + " " + FormatDateMs(data.maintenance_expire) + ".");
-			if (expired)
-			{
-				$maint.addClass("expired");
-				if (GetPurchaseUrl())
-				{
-					$maint.append(" ");
-					$maint.append($('<a target="_blank"></a>').attr("href", GetPurchaseUrl()).text("Renew support & maintenance"));
-				}
-			}
-			$content.append($maint);
+			return !!(expire && entry && entry.date && entry.date > expire);
+		}
+		/**
+		 * Returns -1 if this version is older than the installed one, 0 if it is the installed one, or 1 if it is newer.  Compares version numbers rather than release dates so that this works even when Blue Iris did not list the installed version.
+		 */
+		var CompareToInstalled = function (entry)
+		{
+			if (!currentVersion)
+				return 1; // The installed version is unknown, so nothing can be matched against it.
+			var c = compareVersions(entry.version, currentVersion);
+			return c < 0 ? -1 : (c > 0 ? 1 : 0);
 		}
 
-		var statusText;
-		if (!latest)
-			statusText = "No update information was provided by the " + (fromThirdParty ? "third-party service" : "server") + ".";
-		else if (currentVersion && compareVersions(latest.version, currentVersion) > 0)
-			statusText = "An update is available.";
-		else
-			statusText = "Blue Iris is up-to-date.";
-
-		AppendFooter(statusText, function ()
+		// Group order is fixed, and an empty group is omitted along with its heading.
+		var groups = [
+			{ heading: "Past your support date", cssClass: "biUpdGroupWarn", items: [] }
+			, { heading: "Newer than yours", cssClass: "biUpdGroupNewer", items: [] }
+			, { heading: "Installed", cssClass: "biUpdGroupInstalled", items: [] }
+			, { heading: "Older", cssClass: "", items: [] }
+		];
+		for (i = 0; i < versions.length; i++)
 		{
-			var entry = null;
-			if (selectedType === "stable")
-				entry = latestStable;
-			else if (selectedType === "latest")
-				entry = latest;
-			else if (selectedType === "previous")
-				entry = FindPreviousEntry();
-			if (entry)
-				BeginInstall(entry, data);
+			var rel = CompareToInstalled(versions[i]);
+			if (rel === 0)
+				groups[2].items.push(versions[i]);
+			else if (rel < 0)
+				groups[3].items.push(versions[i]);
+			else if (IsPastSupport(versions[i]))
+				groups[0].items.push(versions[i]);
 			else
-				CloseDialog();
+				groups[1].items.push(versions[i]);
+		}
+
+		var status;
+		if (!latest)
+			status = { name: "Error", headline: "Could not check for updates", icon: "#svg_mio_warning" };
+		else if (CompareToInstalled(latest) <= 0)
+			status = { name: "Ok", headline: "Blue Iris is up to date", icon: "#svg_x5F_OK" };
+		else if (groups[0].items.length > 0)
+			status = { name: "Warn", headline: latest.version + " is available, past support", icon: "#svg_mio_warning" };
+		else
+			status = { name: "Update", headline: latest.version + " is available", icon: "#svg_mio_update" };
+		SetDialogChrome(status);
+
+		$content.empty().addClass("biUpdModern");
+		var $layout = $('<div class="biUpdLayout"></div>');
+		var $list = $('<div class="biUpdList"></div>');
+		var $footer = $('<div class="biUpdFoot"></div>');
+		$layout.append($list).append($footer);
+
+		// Selecting a version only swaps colors and the primary button's label.  Nothing
+		// appears, disappears or resizes, so the list never shifts under the pointer.
+		var selected = null;
+		var blocks = [];
+		var $primary = $('<input type="button" class="biUpdBtn biUpdBtnPrimary" />');
+
+		var GetPrimaryLabel = function ()
+		{
+			// Selecting an older version says "Install" too, so that the button stays narrow
+			// enough to leave the footer's changelog link on one line.  The confirmation
+			// dialog is where a downgrade gets called what it is.
+			if (!selected || CompareToInstalled(selected) === 0)
+				return "Check again";
+			return "Install " + selected.version;
+		}
+		var SelectVersion = function (entry)
+		{
+			selected = entry;
+			for (var b = 0; b < blocks.length; b++)
+				blocks[b].$block.toggleClass("selected", blocks[b].entry === entry);
+			$primary.val(GetPrimaryLabel());
+		}
+		var MakeBlock = function (entry)
+		{
+			var relative = CompareToInstalled(entry);
+			var pastSupport = IsPastSupport(entry);
+			var $block = $('<div class="biUpdBlock"></div>');
+			if (pastSupport)
+				$block.addClass("biUpdBlockWarn");
+			else if (relative > 0)
+				$block.addClass("biUpdBlockNewer");
+			if (relative === 0)
+				$block.addClass("biUpdBlockInstalled");
+
+			var $row = $('<div class="biUpdBlockRow"></div>');
+			$row.append($('<div class="biUpdVer"></div>').text(entry.version));
+			$row.append($('<div class="biUpdDate"></div>').text(FormatDateMs(entry.date)));
+			var $spacer = $('<div class="biUpdRowSpacer"></div>');
+			if (relative === 0)
+				$spacer.append($('<span class="biUpdBadge biUpdBadgeInstalled"></span>').text("Installed"));
+			$row.append($spacer);
+			if (pastSupport)
+			{
+				var warning = entry.version + " was released after your support date of " + FormatDateMs(expire)
+					+ ".  Blue Iris will show an evaluation warning if you install it.";
+				var $warnBtn = $('<div class="biUpdWarnBtn"></div>').attr("title", warning).html(IconHtml("#svg_mio_warning"));
+				$warnBtn.on('click', function (e)
+				{
+					e.stopPropagation(); // Reading the warning must not change the selection.
+					toaster.Warning(htmlEncode(warning), 10000);
+				});
+				$row.append($warnBtn);
+			}
+			if (entry === latest)
+				$row.append($('<span class="biUpdBadge"></span>').text("Latest"));
+			if (entry === latestStable)
+				$row.append($('<span class="biUpdBadge biUpdBadgeStable"></span>').text("Latest stable"));
+			$block.append($row);
+
+			var changes = ParseChangeList(entry.notes);
+			if (changes.length > 0)
+			{
+				var $changes = $('<div class="biUpdChanges"></div>');
+				for (var c = 0; c < changes.length; c++)
+					$changes.append($('<div></div>').text(changes[c]));
+				$block.append($changes);
+			}
+			$block.on('click', function () { SelectVersion(entry); });
+			blocks.push({ entry: entry, $block: $block });
+			return $block;
+		}
+
+		if (typeof data.news === "string" && $.trim(data.news).length > 0)
+		{
+			// The news shares the version list's scroll region rather than getting a panel of
+			// its own, so a long news item cannot squeeze the version list.
+			$list.append($('<div class="biUpdGroup"></div>').text("News"));
+			$list.append($('<div class="biUpdNewsBody"></div>').html(HtmlEncodeAndLinkUris($.trim(data.news))));
+		}
+		for (i = 0; i < groups.length; i++)
+		{
+			if (groups[i].items.length === 0)
+				continue;
+			$list.append($('<div class="biUpdGroup"></div>').addClass(groups[i].cssClass).text(groups[i].heading));
+			for (n = 0; n < groups[i].items.length; n++)
+				$list.append(MakeBlock(groups[i].items[n]));
+		}
+		if (!latest)
+		{
+			var $empty = $('<div class="biUpdEmpty"></div>');
+			$empty.append(document.createTextNode("No version list.  "
+				+ (fromThirdParty ? "The " + thirdPartyHost + " service" : "Blue Iris")
+				+ " did not provide one."));
+			$empty.append("<br>");
+			$empty.append($('<a href="javascript:void(0)"></a>').text("Try again").on('click', RefreshData));
+			$list.append($empty);
+		}
+
+		$primary.on('click', function ()
+		{
+			if (selected && CompareToInstalled(selected) !== 0)
+				BeginInstall(selected, data);
+			else
+				RefreshData();
 		});
+		var $cancel = $('<input type="button" class="biUpdBtn" value="Cancel" />');
+		$cancel.on('click', function () { CloseDialog(); });
+		var $buttons = $('<div class="biUpdFootButtons"></div>');
+		$buttons.append($('<div class="biUpdFootButtonRow"></div>').append($primary).append($cancel));
+		if (sessionManager.HasPermission_InstallUpdate())
+		{
+			// A version which was not reported to us cannot be chosen from the list above, so the
+			// manual entry GUI stays reachable here, quietly, below the buttons.
+			$buttons.append($('<div class="biUpdManualLinkRow"></div>')
+				.append($('<a href="javascript:void(0)"></a>').text("Install a specific version")
+					.on('click', ShowManualInstallDialog)));
+		}
+		$footer.append($buttons);
+
+		var $notes = $('<div class="biUpdFootNotes"></div>');
+		$notes.append($('<div></div>').append($('<a class="biUpdChangelogLink" target="_blank"></a>')
+			.attr("href", data.changelog_url ? data.changelog_url : defaultChangelogUrl)
+			.append(document.createTextNode("Blue Iris changelog"))
+			.append(IconHtml("#svg_mio_launch"))));
+		if (expire)
+		{
+			var expired = expire < Date.now();
+			var $expiry = $('<div></div>').text("Support and maintenance " + (expired ? "expired" : "expires") + " " + FormatDateMs(expire) + ".");
+			if (expired)
+				$expiry.append(" ").append($('<a target="_blank"></a>').attr("href", GetPurchaseUrl(data)).text("Renew"));
+			$notes.append($expiry);
+		}
+		if (fromThirdParty)
+		{
+			var $proxy = $('<div></div>').text("Checked through " + thirdPartyHost + ".");
+			$proxy.append(" ").append($('<a href="javascript:void(0)"></a>').text("Learn more").on('click', ShowThirdPartyInfo));
+			$notes.append($proxy);
+		}
+		$footer.append($notes);
+
+		$content.append($layout);
+		// The newest row, which is the installed one whenever nothing newer was reported.
+		SelectVersion(versions.length > 0 ? versions[0] : null);
 	}
 	/**
 	 * Renders the limited GUI used when the "updatecheck" command is unavailable, or when a third-party service was attempted and failed.
@@ -31341,6 +31519,8 @@ function BiUpdatesDialog()
 	{
 		if (!$content)
 			return;
+		SetDialogChrome(null);
+		$content.removeClass("biUpdModern");
 		$content.empty();
 
 		var currentVersion = GetCurrentVersion();
@@ -31423,14 +31603,15 @@ function BiUpdatesDialog()
 		return $row;
 	}
 	/**
-	 * Builds the section which lets a user install a version number they already know, for when no update check service is reachable.  Returns null if the user may not install updates.
+	 * Builds the note, input and button which allow a user toinstall a version number they already know.  Returns null if the user may not install updates.
+	 * @param {function} onInstallBegun Optional.  Called once an install has actually been requested, so that a host dialog can close itself.
 	 */
-	function MakeManualInstallSection()
+	function MakeManualInstallBody(onInstallBegun)
 	{
 		if (!sessionManager.HasPermission_InstallUpdate())
 			return null;
-		var $section = $('<fieldset class="biUpdSection"><legend>Install a specific version</legend></fieldset>');
-		$section.append($('<div class="biUpdUnsupportedNote"></div>').text('If you know the version number you want, enter it here and Blue Iris will attempt to download and install it.'));
+		var $body = $('<div class="biUpdManualBody"></div>');
+		$body.append($('<div class="biUpdUnsupportedNote"></div>').text('If you know the version number you want, enter it here and Blue Iris will attempt to download and install it.'));
 		var $row = $('<div class="biUpdManualRow"></div>');
 		var $input = $('<input type="text" class="biUpdManualInput" />').attr({ placeholder: "6.0.0.0", maxlength: "23", spellcheck: "false", autocomplete: "off", autocorrect: "off", autocapitalize: "off" });
 		var $btn = $('<input type="button" value="Install" />');
@@ -31443,7 +31624,7 @@ function BiUpdatesDialog()
 				$input.focus();
 				return;
 			}
-			BeginInstall({ version: version }, null, true);
+			BeginInstall({ version: version }, null, true, onInstallBegun);
 		}
 		$input.on('keydown', function (e)
 		{
@@ -31455,8 +31636,36 @@ function BiUpdatesDialog()
 		});
 		$btn.on('click', DoManualInstall);
 		$row.append($input).append($btn);
-		$section.append($row);
-		return $section;
+		$body.append($row);
+		$body.FocusInput = function () { $input.focus(); };
+		return $body;
+	}
+	/**
+	 * Builds the section which lets a user install a version number they already know, for when no update check service is reachable.  Returns null if the user may not install updates.
+	 */
+	function MakeManualInstallSection()
+	{
+		var $body = MakeManualInstallBody(null);
+		if (!$body)
+			return null;
+		return $('<fieldset class="biUpdSection"><legend>Install a specific version</legend></fieldset>').append($body);
+	}
+	/**
+	 * Opens the manual version entry GUI in a dialog of its own, reached from a link in the update check GUI's footer.  The version list can only offer versions which were reported to us, so this remains the only way to install a version number you already know.
+	 */
+	var ShowManualInstallDialog = function ()
+	{
+		var manualDialog = null;
+		var $body = MakeManualInstallBody(function ()
+		{
+			if (manualDialog)
+				manualDialog.close();
+		});
+		if (!$body)
+			return;
+		var $root = $('<div class="biUpdManualDialog"></div>').append($body);
+		manualDialog = $root.modalDialog({ title: "Install a specific version", closeOnOverlayClick: true });
+		$body.FocusInput();
 	}
 	var MakeInfoRow = function (label, value)
 	{
@@ -31493,7 +31702,7 @@ function BiUpdatesDialog()
 		$footer.append($buttons);
 		$content.append($footer);
 	}
-	var BeginInstall = function (entry, data, manualEntry)
+	var BeginInstall = function (entry, data, manualEntry, onProceed)
 	{
 		var currentVersion = GetCurrentVersion();
 		var msg = [];
@@ -31504,7 +31713,7 @@ function BiUpdatesDialog()
 		else
 			msg.push("This function will cause Blue Iris to download and install version " + htmlEncode(entry.version) + ".");
 		if (currentVersion && compareVersions(entry.version, currentVersion) < 0)
-			msg.push("<b>Warning:</b> Version " + htmlEncode(entry.version) + " is older than the currently installed version (" + htmlEncode(currentVersion) + ").");
+			msg.push("<b>Warning:</b> This is a downgrade.  Version " + htmlEncode(entry.version) + " is older than the currently installed version (" + htmlEncode(currentVersion) + ").");
 		if (data && data.maintenance_expire && entry.date && entry.date > data.maintenance_expire)
 		{
 			var purchaseUrl = data.maintenance_purchase_link ? data.maintenance_purchase_link : defaultPurchaseUrl;
@@ -31516,13 +31725,153 @@ function BiUpdatesDialog()
 		msg.push("Do you wish to proceed?");
 		SimpleDialog.ConfirmHtml(msg.join("<br><br>"), function ()
 		{
-			toaster.Warning("Update Starting.  Blue Iris should restart soon.", 60000);
+			toaster.Warning("Update Starting.  Blue Iris should restart soon, and UI3 will tell you when it comes back.", 60000);
+			if (typeof onProceed === "function")
+				onProceed(); // Closes the manual entry dialog, which the main dialog does not own.
 			CloseDialog();
 			statusLoader.InstallUpdate(entry.version);
+			updateInstallWatcher.UpdateOrdered(entry.version);
 		}, function ()
 		{
 			toaster.Info("Update Canceled");
 		}, { yesText: "Begin Update", noText: "Cancel" });
+	}
+}
+///////////////////////////////////////////////////////////////
+// Update Install Watcher /////////////////////////////////////
+///////////////////////////////////////////////////////////////
+/**
+ * Watches for Blue Iris to come back up after UI3 orders it to install an update.  Blue Iris
+ * restarts to install an update but UI3 does not, so without this the page keeps running the
+ * old web interface code and reporting the old version number until it is manually refreshed.
+ * The restart expires the session, and UI3's own session recovery is the signal this watches for.
+ */
+function UpdateInstallWatcher()
+{
+	/** How long to keep watching after an update is ordered.  A download and install normally finishes in a couple of minutes; this leaves room for a slow connection or a lengthy shutdown. */
+	var watchDurationMs = 15 * 60000;
+	var watching = false;
+	var versionBefore = "";
+	var orderedVersion = "";
+	var giveUpTimeout = null;
+
+	// Installing an update makes Blue Iris restart, which expires the session.  UI3 notices that
+	// on its own and logs in again, so that login is the signal that the server is back, and the
+	// login response carries the version number it came back as.  The version is not part of the
+	// signal: reinstalling the version already running is a legitimate thing to order, and an
+	// update which failed to install is worth reporting too.
+	BI_CustomEvent.AddListener("Login Success", function (response)
+	{
+		if (!watching)
+			return;
+		StopWatching();
+		ServerRestartDetected(response && response.data && response.data.version ? response.data.version : versionBefore);
+	});
+
+	/**
+	 * Called when Blue Iris has just been told to install an update.
+	 * @param {String} version The version number which was ordered.
+	 */
+	this.UpdateOrdered = function (version)
+	{
+		versionBefore = GetKnownVersion();
+		if (!versionBefore)
+		{
+			console.error("UpdateInstallWatcher can't watch for an update because the currently installed Blue Iris version is unknown.");
+			return;
+		}
+		orderedVersion = version;
+		watching = true;
+		if (giveUpTimeout !== null)
+			clearTimeout(giveUpTimeout);
+		giveUpTimeout = setTimeout(GiveUp, watchDurationMs);
+	}
+	var GetKnownVersion = function ()
+	{
+		var response = sessionManager.GetLastResponse();
+		if (response && response.data && response.data.version)
+			return response.data.version;
+		return bi_version;
+	}
+	var StopWatching = function ()
+	{
+		watching = false;
+		if (giveUpTimeout !== null)
+		{
+			clearTimeout(giveUpTimeout);
+			giveUpTimeout = null;
+		}
+	}
+	var ServerRestartDetected = function (newVersion)
+	{
+		if (currentServer.isUsingRemoteServer)
+		{
+			// UI3's own files came from wherever this page was loaded, which is not the server
+			// that just updated, so there is no UI3 version to compare against.
+			AnnounceUpdate(newVersion, null);
+			return;
+		}
+		GetServerUi3Version(function (serverUi3Version)
+		{
+			AnnounceUpdate(newVersion, serverUi3Version);
+		});
+	}
+	/**
+	 * Learns the UI3 version the server would deliver right now by re-requesting this page's HTML.  A Blue Iris update carries a copy of UI3 with it, so this is how we find out whether the running web interface code is stale too.  Calls back with null if the version could not be determined.
+	 */
+	var GetServerUi3Version = function (callback)
+	{
+		// The session must be passed in the URL, not left to the cookie, which may be disabled
+		// or stripped by a proxy server.  Without a valid session Blue Iris serves the login
+		// page, which carries no UI3 version number.
+		$.ajax({
+			type: 'GET'
+			, url: location.pathname + "?_ui3VersionCheck=" + Date.now() + currentServer.GetLocalSessionArg("&", true)
+			, dataType: "text"
+			, cache: false
+			, timeout: 20000
+			, success: function (text)
+			{
+				var m = /var\s+ui_version\s*=\s*"([^"]*)"/.exec(text);
+				callback(m && m[1] ? m[1] : null);
+			}
+			, error: function ()
+			{
+				callback(null);
+			}
+		});
+	}
+	/**
+	 * Tells the user which version Blue Iris came back as, and offers the page reload which is the only way for UI3 to pick up new web interface files.
+	 * @param {String} newVersion The Blue Iris version now running.
+	 * @param {String} serverUi3Version The UI3 version the server would deliver now, or null if it is unknown or not applicable.
+	 */
+	var AnnounceUpdate = function (newVersion, serverUi3Version)
+	{
+		var msg = [];
+		if (newVersion === versionBefore)
+			msg.push("Blue Iris has restarted and is running version <b>" + htmlEncode(newVersion) + "</b>, the same version as before.");
+		else
+			msg.push("Blue Iris has restarted and is now running version <b>" + htmlEncode(newVersion) + "</b>, replacing version "
+				+ htmlEncode(versionBefore) + ".");
+		if (orderedVersion && newVersion !== orderedVersion)
+			msg.push("This is not the version which was ordered (" + htmlEncode(orderedVersion) + "), so the update may not have succeeded.");
+		if (serverUi3Version && serverUi3Version !== ui_version)
+			msg.push("UI3 was updated along with it, from version " + htmlEncode(ui_version) + " to <b>" + htmlEncode(serverUi3Version)
+				+ "</b>.  This page is still running the old version.");
+		else
+			msg.push("This page is still running the web interface code from before the update.");
+		msg.push("Reload UI3 now?");
+		SimpleDialog.ConfirmHtml(msg.join("<br><br>"), function ()
+		{
+			ReloadInterface();
+		}, null, { title: "Blue Iris Update Finished", yesText: "Reload UI3", noText: "Not Now" });
+	}
+	var GiveUp = function ()
+	{
+		StopWatching();
+		toaster.Info("UI3 gave up waiting for Blue Iris to restart after the update to " + htmlEncode(orderedVersion)
+			+ " was ordered.  Refresh UI3 to see which version is running now.", 20000);
 	}
 }
 ///////////////////////////////////////////////////////////////

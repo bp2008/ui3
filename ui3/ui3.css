@@ -58,6 +58,41 @@
 	--dialog-titlebar-bottom-border-color: hsl(245, 45%, 17%);
 	--dialog-titlebar-color: #c6c6c6;
 	--dialog-link-color: #889eff;
+	/* Blue Iris News and Updates dialog.  This dialog deliberately wears neutral gray
+	   chrome in every theme so that its status-colored title is the only color in the
+	   title bar. */
+	--biupd-chrome-bg-color: #26282C;
+	--biupd-chrome-border-color: #3A3D42;
+	--biupd-chrome-bottom-border-color: #15161A;
+	--biupd-list-border-color: #383E47;
+	--biupd-separator-color: #1c1f24;
+	--biupd-note-color: #9A9A9A;
+	--biupd-changes-color: #B6B6B6;
+	--biupd-status-ok-color: #77BEF7;
+	--biupd-status-update-color: var(--profile-active-color);
+	--biupd-status-warn-color: var(--profile-pause-color);
+	--biupd-status-error-color: #F09700;
+	--biupd-badge-bg-color: #20242A;
+	--biupd-badge-color: #EDEFF2;
+	--biupd-badge-latest-border-color: #C9CDD3;
+	--biupd-installed-badge-bg-color: hsl(245, 38%, 44%);
+	--biupd-installed-rule-color: hsl(245, 45%, 58%);
+	/* A version row is tinted by what installing it would mean.  Each group below is one
+	   base color plus the blends CSS cannot derive from it: the hover and selected-hover
+	   fills are opaque rather than translucent, because the selection outline is painted
+	   over the row it surrounds and must be able to use the very same value. */
+	--biupd-newer-color: var(--profile-active-color); /* #63C35B */
+	--biupd-newer-hover-color: #294627; /* 30% of the base over the list background */
+	--biupd-newer-selected-hover-color: #77CB70; /* the base under a 13% white wash */
+	--biupd-newer-tint-color: rgba(99,195,91,0.12);
+	--biupd-warn-color: var(--profile-pause-color); /* #E3D246 */
+	--biupd-warn-hover-color: #4F4A20;
+	--biupd-warn-selected-hover-color: #E7D85E;
+	--biupd-warn-tint-color: rgba(227,210,70,0.12);
+	--biupd-gray-color: hsl(214, 8%, 40%); /* #5E656E */
+	--biupd-gray-hover-color: #272A2C;
+	--biupd-gray-selected-hover-color: #737981;
+	--biupd-gray-tint-color: rgba(94,101,110,0.12);
 	/* Collapsible headings in dialogs */
 	--collapsible-heading-bg-color: var(--panel-bg-color);
 	--collapsible-heading-hover-bg-color: #333333;
@@ -6248,6 +6283,475 @@ div::-webkit-scrollbar-corner
 		min-width: 72px;
 		height: 28px;
 	}
+/* Blue Iris News and Updates dialog: the GUI shown when the "updatecheck" command
+   returned data.  The classes below only ever apply while ".biUpdModern" is present, so
+   the limited fallback GUI above is unaffected. */
+/* These chrome overrides carry ".darkTheme" only to outweigh the theme rules further
+   down this stylesheet; UI3 puts every dialog in the dark theme. */
+.dialog_wrapper.darkTheme.biUpdModernDialog
+{
+	border-color: var(--biupd-chrome-border-color);
+	background-color: var(--panel-bg-color);
+}
+
+	.dialog_wrapper.darkTheme.biUpdModernDialog .dialog_titlebar
+	{
+		display: flex;
+		align-items: center;
+		padding-right: 0px;
+		background-color: var(--biupd-chrome-bg-color);
+		border-bottom-color: var(--biupd-chrome-bottom-border-color);
+	}
+
+	/* The title bar buttons are absolutely positioned by the dialog library.  This
+	   dialog lays them out with flexbox instead so the title can shrink beside them. */
+	.dialog_wrapper.darkTheme.biUpdModernDialog .dialog_close,
+	.dialog_wrapper.darkTheme.biUpdModernDialog .dialog_refresh
+	{
+		position: static;
+		flex: 0 0 auto;
+		background-color: transparent;
+	}
+
+.biUpdModernDialog .dialog_title
+{
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 0px 6px;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+	.biUpdModernDialog .dialog_title svg.icon
+	{
+		flex: 0 0 auto;
+		width: 16px;
+		height: 16px;
+	}
+
+	.biUpdModernDialog .dialog_title .biUpdHeadline
+	{
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+.biUpdModernDialog.biUpdStatusOk .dialog_title
+{
+	color: var(--biupd-status-ok-color);
+}
+
+.biUpdModernDialog.biUpdStatusUpdate .dialog_title
+{
+	color: var(--biupd-status-update-color);
+}
+
+.biUpdModernDialog.biUpdStatusWarn .dialog_title
+{
+	color: var(--biupd-status-warn-color);
+}
+
+.biUpdModernDialog.biUpdStatusError .dialog_title
+{
+	color: var(--biupd-status-error-color);
+}
+
+.biUpdatesDialog.biUpdModern
+{
+	display: flex;
+	flex-direction: column;
+	width: 390px;
+	padding: 0px;
+	overflow: hidden;
+	font-size: 13px;
+}
+
+/* The list is the only scroll region in the dialog, so the footer never moves. */
+.biUpdLayout
+{
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	max-height: 2000px;
+}
+
+.biUpdList
+{
+	flex: 0 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 8px 8px 0px 8px;
+	border: 1px solid var(--biupd-list-border-color);
+	background-color: var(--cliplist-bg-color);
+}
+
+.biUpdGroup
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 7px 10px;
+	font-size: 11px;
+	font-size: 18.6px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: #FFFFFF;
+	background-color: var(--biupd-gray-color);
+	margin: 10px 0px;
+}
+
+	.biUpdGroup:first-child
+	{
+		margin-top: 0px;
+	}
+
+	.biUpdGroup.biUpdGroupWarn
+	{
+		background-color: var(--biupd-warn-color);
+		color: #000000;
+	}
+
+	.biUpdGroup.biUpdGroupNewer
+	{
+		background-color: var(--biupd-newer-color);
+		color: #000000;
+	}
+
+	.biUpdGroup.biUpdGroupInstalled
+	{
+		background-color: var(--biupd-installed-rule-color);
+		color: #000000;
+	}
+
+.biUpdNewsBody
+{
+	padding: 7px 12px 11px 12px;
+	line-height: 1.45;
+	color: var(--text-hover-color);
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	word-wrap: break-word;
+	border-bottom: 1px solid var(--biupd-separator-color);
+}
+
+/* One block is a version's header row plus its change list, selected and hovered as a
+   unit.  The trio of properties set here is what gives the block its status color. */
+.biUpdBlock
+{
+	--biupd-row-color: var(--biupd-gray-color);
+	--biupd-row-hover-color: var(--biupd-gray-hover-color);
+	--biupd-row-selected-hover-color: var(--biupd-gray-selected-hover-color);
+	--biupd-row-tint-color: var(--biupd-gray-tint-color);
+	cursor: pointer;
+	border-bottom: 1px solid var(--biupd-separator-color);
+	user-select: text;
+}
+
+	.biUpdBlock.biUpdBlockNewer
+	{
+		--biupd-row-color: var(--biupd-newer-color);
+		--biupd-row-hover-color: var(--biupd-newer-hover-color);
+		--biupd-row-selected-hover-color: var(--biupd-newer-selected-hover-color);
+		--biupd-row-tint-color: var(--biupd-newer-tint-color);
+	}
+
+	.biUpdBlock.biUpdBlockWarn
+	{
+		--biupd-row-color: var(--biupd-warn-color);
+		--biupd-row-hover-color: var(--biupd-warn-hover-color);
+		--biupd-row-selected-hover-color: var(--biupd-warn-selected-hover-color);
+		--biupd-row-tint-color: var(--biupd-warn-tint-color);
+	}
+
+	/* An outline rather than a border, so appearing and disappearing shifts nothing.  The
+	   outline is painted over the header row it surrounds, so it always carries that row's
+	   own fill color; anything brighter reads as a halo. */
+	.biUpdBlock:hover
+	{
+		outline: 2px solid var(--biupd-row-hover-color);
+		outline-offset: -2px;
+	}
+
+	.biUpdBlock.selected
+	{
+		outline: 2px solid var(--biupd-row-color);
+		outline-offset: -2px;
+	}
+
+		.biUpdBlock.selected:hover
+		{
+			outline-color: var(--biupd-row-selected-hover-color);
+		}
+
+.biUpdBlockRow
+{
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 0px 4px 0px 10px;
+	height: 44px;
+	color: #C2C2C2;
+}
+
+.biUpdBlockInstalled .biUpdBlockRow
+{
+	color: var(--pctext-color);
+}
+
+/* Hover brightens the header row and the outline; the change list stays dark always. */
+.biUpdBlock:hover .biUpdBlockRow
+{
+	background-color: var(--biupd-row-hover-color);
+}
+
+.biUpdBlock.selected .biUpdBlockRow
+{
+	background-color: var(--biupd-row-color);
+	color: #FFFFFF;
+}
+
+.biUpdBlock.selected:hover .biUpdBlockRow
+{
+	background-color: var(--biupd-row-selected-hover-color);
+}
+
+.biUpdBlockNewer.selected .biUpdBlockRow,
+.biUpdBlockWarn.selected .biUpdBlockRow
+{
+	color: var(--panel-bg-color);
+}
+
+.biUpdVer
+{
+	width: 74px;
+	flex: 0 0 auto;
+	font-size: 15px;
+}
+
+.biUpdDate
+{
+	width: 78px;
+	flex: 0 0 auto;
+	font-size: 12px;
+	color: #A0A0A0;
+}
+
+.biUpdBlockInstalled .biUpdDate
+{
+	color: #B4B4B4;
+}
+
+.biUpdBlock.selected .biUpdDate
+{
+	color: rgba(255,255,255,0.8);
+}
+
+.biUpdBlockNewer.selected .biUpdDate,
+.biUpdBlockWarn.selected .biUpdDate
+{
+	color: rgba(12,12,12,0.8);
+}
+
+.biUpdRowSpacer
+{
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+}
+
+.biUpdBadge
+{
+	display: inline-flex;
+	align-items: center;
+	box-sizing: border-box;
+	height: 17px;
+	padding: 0px 6px;
+	flex: 0 0 auto;
+	font-size: 11px;
+	white-space: nowrap;
+	background-color: var(--biupd-badge-bg-color);
+	color: var(--biupd-badge-color);
+	border: 1px solid var(--biupd-badge-latest-border-color);
+}
+
+	.biUpdBadge.biUpdBadgeStable
+	{
+		border-color: var(--biupd-status-update-color);
+	}
+
+	.biUpdBadge.biUpdBadgeInstalled
+	{
+		background-color: var(--biupd-installed-badge-bg-color);
+		color: #FFFFFF;
+		border: 0px none;
+	}
+
+.biUpdWarnBtn
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	flex: 0 0 auto;
+	cursor: pointer;
+	color: var(--biupd-status-warn-color);
+}
+
+	.biUpdWarnBtn:hover
+	{
+		background-color: var(--uicontrol-hover-bg-color);
+	}
+
+.biUpdBlockWarn.selected .biUpdWarnBtn
+{
+	color: var(--panel-bg-color);
+}
+
+.biUpdWarnBtn svg.icon
+{
+	width: 17px;
+	height: 17px;
+}
+
+.biUpdChanges
+{
+	padding: 7px 12px 11px 12px;
+	line-height: 1.7;
+	color: var(--biupd-changes-color);
+	background-color: var(--cliplist-bg-color);
+}
+
+.biUpdBlock.selected .biUpdChanges
+{
+	background-color: var(--panel-bg-color);
+	background-image: linear-gradient(var(--biupd-row-tint-color), var(--biupd-row-tint-color));
+}
+
+.biUpdEmpty
+{
+	padding: 26px 12px;
+	text-align: center;
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--biupd-note-color);
+}
+
+.biUpdFoot
+{
+	flex: 0 0 auto;
+	padding: 11px 10px 10px 10px;
+	overflow: hidden;
+}
+
+	.biUpdFoot .biUpdFootButtons
+	{
+		float: right;
+		margin: 0px 0px 0px 14px;
+	}
+
+	.biUpdFoot .biUpdFootButtonRow
+	{
+		display: flex;
+		gap: 8px;
+	}
+
+	.biUpdFoot .biUpdFootNotes
+	{
+		font-size: 11px;
+		line-height: 1.8;
+		color: var(--biupd-note-color);
+	}
+
+	.biUpdFoot .biUpdChangelogLink
+	{
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 12px;
+	}
+
+		.biUpdFoot .biUpdChangelogLink svg.icon
+		{
+			width: 12px;
+			height: 12px;
+		}
+
+	/* Sits inside the floated button container, below the buttons.  It is deliberately quiet;
+	   the version list is the way most users install an update. */
+	.biUpdFoot .biUpdManualLinkRow
+	{
+		text-align: right;
+		margin-top: 5px;
+		font-size: 11px;
+		line-height: 1.8;
+	}
+
+		.biUpdFoot .biUpdManualLinkRow a
+		{
+			color: var(--biupd-note-color);
+			text-decoration: underline;
+			cursor: pointer;
+		}
+
+			.biUpdFoot .biUpdManualLinkRow a:hover
+			{
+				color: var(--text-hover-color);
+			}
+
+.biUpdBtn
+{
+	padding: 6px 20px;
+	border: 1px solid var(--button-color);
+	background-color: transparent;
+	color: var(--text-hover-color);
+	font-family: inherit;
+	font-size: 14px;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+}
+
+	.biUpdBtn:hover
+	{
+		box-shadow: 0px 0px 1px 2px rgba(255,255,255,0.5);
+	}
+
+	.biUpdBtn.biUpdBtnPrimary
+	{
+		border-color: var(--dialog-link-color);
+		color: var(--text-active-color);
+	}
+/* Reached from the footer's "Learn more" link when the update check was proxied. */
+.biUpdLearnMoreDialog
+{
+	width: 460px;
+	max-width: 100%;
+	box-sizing: border-box;
+	padding: 10px;
+	font-size: 14px;
+}
+
+	.biUpdLearnMoreDialog > div
+	{
+		margin-bottom: 10px;
+	}
+
+/* Reached from the footer's "Install a specific version" link. */
+.biUpdManualDialog
+{
+	width: 420px;
+	max-width: 100%;
+	box-sizing: border-box;
+	padding: 10px;
+	font-size: 14px;
+}
 
 /* Persistent toast status */
 .multi_operation_status_wrapper
