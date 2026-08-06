@@ -955,7 +955,7 @@ div.icon, a.icon
 	content: 'UP';
 }
 
-.updateAvailable.full
+.updateAvailable.menuItem
 {
 	top: 0px;
 	bottom: 0px;
@@ -963,25 +963,6 @@ div.icon, a.icon
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-}
-
-	.updateAvailable.full:after
-	{
-		content: 'Update Available';
-		font-size: 14px;
-		position: static;
-		flex: 0 0;
-		text-align: center;
-	}
-
-.sizeMedium .updateAvailable.full:after
-{
-	font-size: 12px;
-}
-
-.sizeSmall .updateAvailable.full:after
-{
-	font-size: 10px;
 }
 /* Notification Counters */
 .notificationCounter

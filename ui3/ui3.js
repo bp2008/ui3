@@ -5882,6 +5882,13 @@ function DropdownListItem(options)
 		else
 			return "";
 	}
+	/** Returns false if this item has a visibleFn which says the item should be hidden right now. */
+	this.IsVisible = function ()
+	{
+		if (typeof self.visibleFn == "function")
+			return !!self.visibleFn(self);
+		return true;
+	}
 	$.extend(this, options);
 }
 function DropdownBoxes()
@@ -5992,7 +5999,8 @@ function DropdownBoxes()
 		, new DropdownListItem({ cmd: "full_camera_list", text: "Full Camera List", icon: "#svg_x5F_FullCameraList", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export Queue", icon: "#svg_mio_launch", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
-		, new DropdownListItem({ cmd: "server_control", text: "Server Control", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Control Blue Iris Server", updateAvailableFn: function () { return sessionManager.UpdateAvailable(); } })
+		, new DropdownListItem({ cmd: "server_control", text: "Server Control", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Control Blue Iris Server" })
+		, new DropdownListItem({ cmd: "bi_updates", text: "Blue Iris Updates", icon: "#svg_mio_update", cssClass: "blueLarger", tooltip: "Check for Blue Iris news and updates", visibleFn: function () { return sessionManager.IsAdministratorSession(); }, updateAvailableFn: function () { return sessionManager.UpdateAvailable(); } })
 		, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
 	];
@@ -6033,6 +6041,9 @@ function DropdownBoxes()
 						break;
 					case "server_control":
 						serverControl.open();
+						break;
+					case "bi_updates":
+						biUpdatesDialog.open();
 						break;
 					case "full_camera_list":
 						cameraListDialog.open();
@@ -6352,9 +6363,14 @@ function DropdownBoxes()
 		});
 
 		var selectedText = self.getLabelText(name);
+		var itemsRendered = 0;
 		for (var i = 0; i < listDef.items.length; i++)
-			AddDropdownListItem($ddl, listDef, i, selectedText);
-		if (listDef.items.length == 0)
+			if (listDef.items[i].IsVisible())
+			{
+				AddDropdownListItem($ddl, listDef, i, selectedText);
+				itemsRendered++;
+			}
+		if (itemsRendered == 0)
 			$ddl.append("<div>This list is empty!</div>");
 
 		$("body").append($ddl);
@@ -6446,7 +6462,8 @@ function DropdownBoxes()
 			if (updateAvailableValue)
 			{
 				$item.css("position", "relative");
-				var $upd = $('<div class="updateAvailable full" title="A Blue Iris update is available!"></div>');
+				var $upd = $('<div class="updateAvailable menuItem" title="A Blue Iris update is available!"><svg class="icon noflip"><use xlink:href="#svg_mio_update"></use></svg></div>');
+				// var $upd = $('<div class="updateAvailable full" title="A Blue Iris update is available!"></div>');
 				$item.append($upd);
 			}
 		}
@@ -6546,7 +6563,8 @@ function getSystemNameButtonOptions()
 	var mmItems = dropdownBoxes.listDefs["mainMenu"].items;
 	var opts = new Array();
 	for (var i = 0; i < mmItems.length; i++)
-		opts.push(mmItems[i].text);
+		if (mmItems[i].IsVisible())
+			opts.push(mmItems[i].text);
 	opts.push("Toggle Side Bar");
 	opts.push("Follow a Link");
 	opts.push("Do Nothing");
@@ -6556,7 +6574,7 @@ function systemNameButtonClick()
 {
 	var mmItems = dropdownBoxes.listDefs["mainMenu"].items;
 	for (var i = 0; i < mmItems.length; i++)
-		if (settings.ui3_system_name_button == mmItems[i].text)
+		if (settings.ui3_system_name_button == mmItems[i].text && mmItems[i].IsVisible())
 		{
 			dropdownBoxes.listDefs["mainMenu"].onItemClick(mmItems[i]);
 			return;
@@ -16328,6 +16346,7 @@ function SessionManager()
 	this.HandleSuccessfulLogin = function (response, wasAutomatic)
 	{
 		lastResponse = response;
+		response.data.newversion = "6.0.9.17";
 		var user = response && response.data && response.data.user ? response.data.user : "";
 		loadingHelper.SetLoadedStatus("login");
 		self.SetAPISession(lastResponse.session);
@@ -30680,7 +30699,6 @@ function ServerControl()
 				return;
 			$sysconfig.empty();
 			AddInstallUpdateButton($sysconfig);
-			AddCheckForUpdatesButton($sysconfig);
 			AddChangelogButton($sysconfig);
 			$sysconfig.append(GetCustomCheckbox('archive', "Clip Web Archival (FTP)", response.data.archive, SetSysConfig));
 			$sysconfig.append(GetCustomCheckbox('schedule', "Global Schedule", response.data.schedule, SetSysConfig));
@@ -30802,20 +30820,6 @@ function ServerControl()
 			$row.append(GetDialogOptionLabel('<a href="javascript:uiSettingsPanel.open(\'Update Available\')">Configure "Update Available Notice"</a>'));
 			$sysconfig.append($row);
 		}
-	}
-	var AddCheckForUpdatesButton = function ($sysconfig)
-	{
-		if (!sessionManager.IsAdministratorSession())
-			return;
-		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
-		var $input = $('<input type="button" value="Check" />');
-		$input.on('click', function ()
-		{
-			biUpdatesDialog.open();
-		});
-		$row.append($input);
-		$row.append(GetDialogOptionLabel("Check for Updates"));
-		$sysconfig.append($row);
 	}
 	var AddChangelogButton = function ($sysconfig)
 	{
@@ -31461,16 +31465,14 @@ function BiUpdatesDialog()
 	/**
 	 * Builds the section which lets a user install a version number they already know, for when no update check service is reachable.  Returns null if the user may not install updates.
 	 */
-	function MakeManualInstallSection ()
+	function MakeManualInstallSection()
 	{
 		if (!sessionManager.HasPermission_InstallUpdate())
 			return null;
 		var $section = $('<fieldset class="biUpdSection"><legend>Install a specific version</legend></fieldset>');
-		$section.append($('<div class="biUpdUnsupportedNote"></div>')
-			.text('If you know the version number you want, enter it here and Blue Iris will attempt to download and install it.'));
+		$section.append($('<div class="biUpdUnsupportedNote"></div>').text('If you know the version number you want, enter it here and Blue Iris will attempt to download and install it.'));
 		var $row = $('<div class="biUpdManualRow"></div>');
-		var $input = $('<input type="text" class="biUpdManualInput" />')
-			.attr({ placeholder: "6.0.0.0", maxlength: "23", spellcheck: "false", autocomplete: "off", autocorrect: "off", autocapitalize: "off" });
+		var $input = $('<input type="text" class="biUpdManualInput" />').attr({ placeholder: "6.0.0.0", maxlength: "23", spellcheck: "false", autocomplete: "off", autocorrect: "off", autocapitalize: "off" });
 		var $btn = $('<input type="button" value="Install" />');
 		var DoManualInstall = function ()
 		{
@@ -41947,28 +41949,30 @@ function arrayToMap(arr, keyFn)
 	}
 	return map;
 }
-function HtmlEncodeAndLinkUris(str) {
-  // --- HTML encode everything ---
-  const encoded = str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function HtmlEncodeAndLinkUris(str)
+{
+	// --- HTML encode everything ---
+	const encoded = str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
 
-  // --- URL regex (simple + safe for legacy sites) ---
-  const urlRegex = /\bhttps?:\/\/[^\s<]+/gi;
+	// --- URL regex (simple + safe for legacy sites) ---
+	const urlRegex = /\bhttps?:\/\/[^\s<]+/gi;
 
-  // --- Replace URLs with <a> tags ---
-  return encoded.replace(urlRegex, function (match) {
-    // match is HTML‑encoded; decode minimal entities so href is correct
-    const href = match
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+	// --- Replace URLs with <a> tags ---
+	return encoded.replace(urlRegex, function (match)
+	{
+		// match is HTML‑encoded; decode minimal entities so href is correct
+		const href = match
+			.replace(/&amp;/g, "&")
+			.replace(/&lt;/g, "<")
+			.replace(/&gt;/g, ">")
+			.replace(/&quot;/g, '"')
+			.replace(/&#39;/g, "'");
 
-    return '<a href="' + href + '" target="_blank">' + match + "</a>";
-  });
+		return '<a href="' + href + '" target="_blank">' + match + "</a>";
+	});
 }
