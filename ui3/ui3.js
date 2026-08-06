@@ -6000,7 +6000,7 @@ function DropdownBoxes()
 		, new DropdownListItem({ cmd: "export_list", text: "Convert/Export Queue", icon: "#svg_mio_launch", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "disk_usage", text: "Disk Usage", icon: "#svg_x5F_Information", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "server_control", text: "Server Control", icon: "#svg_x5F_SystemConfiguration", cssClass: "blueLarger", tooltip: "Control Blue Iris Server" })
-		, new DropdownListItem({ cmd: "bi_updates", text: "Blue Iris Updates", icon: "#svg_mio_update", cssClass: "blueLarger", tooltip: "Check for Blue Iris news and updates", visibleFn: function () { return sessionManager.IsAdministratorSession(); }, updateAvailableFn: function () { return sessionManager.UpdateAvailable(); } })
+		, new DropdownListItem({ cmd: "bi_updates", text: "Update Blue Iris", icon: "#svg_mio_update", cssClass: "blueLarger", tooltip: "Check for Blue Iris news and updates", visibleFn: function () { return sessionManager.IsAdministratorSession(); }, updateAvailableFn: function () { return sessionManager.UpdateAvailable(); } })
 		, new DropdownListItem({ cmd: "help", text: "Help", icon: "#svg_mio_help", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "logout", text: "Log Out", icon: "#svg_x5F_Logout", cssClass: "goldenLarger" })
 	];
@@ -16346,7 +16346,7 @@ function SessionManager()
 	this.HandleSuccessfulLogin = function (response, wasAutomatic)
 	{
 		lastResponse = response;
-		response.data.newversion = "6.0.9.17";
+		response.data.newversion = "6.0.9.17"; // Temporary hack to test the new version notice and related behaviors.
 		var user = response && response.data && response.data.user ? response.data.user : "";
 		loadingHelper.SetLoadedStatus("login");
 		self.SetAPISession(lastResponse.session);
@@ -30698,8 +30698,6 @@ function ServerControl()
 			if ($sysconfig.length == 0)
 				return;
 			$sysconfig.empty();
-			AddInstallUpdateButton($sysconfig);
-			AddChangelogButton($sysconfig);
 			$sysconfig.append(GetCustomCheckbox('archive', "Clip Web Archival (FTP)", response.data.archive, SetSysConfig));
 			$sysconfig.append(GetCustomCheckbox('schedule', "Global Schedule", response.data.schedule, SetSysConfig));
 			$sysconfig.append(UIFormField({
@@ -30787,44 +30785,6 @@ function ServerControl()
 		});
 		$row.append($input);
 		$row.append(GetDialogOptionLabel("Reboot Server Computer"));
-		$sysconfig.append($row);
-	}
-	var AddInstallUpdateButton = function ($sysconfig)
-	{
-		if (sessionManager.UpdateAvailable() && sessionManager.HasPermission_InstallUpdate())
-		{
-			var sessionResponse = sessionManager.GetLastResponse();
-			var version = sessionResponse.data.newversion;
-			var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
-			var $input = $('<input type="button" value="Update" />');
-			$input.on('click', function ()
-			{
-				SimpleDialog.ConfirmText("This function will cause Blue Iris to download and install version " + version + ".\n\nIt is recommended to have remote desktop access available in case the update fails and Blue Iris becomes unreachable.\n\nDo you wish to proceed?"
-					, function ()
-					{
-						toaster.Warning("Update Starting.  Blue Iris should restart soon.", 60000);
-						CloseSysConfigDialog();
-						statusLoader.InstallUpdate(version);
-					}
-					, function ()
-					{
-						toaster.Info("Update Canceled");
-					}
-					, { yesText: "Begin Update", noText: "Cancel" });
-			});
-			$row.append($input);
-			$row.append(GetDialogOptionLabel("Install Update " + version));
-			$sysconfig.append($row);
-
-			$row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
-			$row.append(GetDialogOptionLabel('<a href="javascript:uiSettingsPanel.open(\'Update Available\')">Configure "Update Available Notice"</a>'));
-			$sysconfig.append($row);
-		}
-	}
-	var AddChangelogButton = function ($sysconfig)
-	{
-		var $row = $('<div class="dialogOption_item dialogOption_item_info"></div>');
-		$row.append(GetDialogOptionLabel('<a href="https://blueirissoftware.com/changelog6.pdf" target="_blank">View Blue Iris changelog <svg class="icon noflip"><use xlink:href="#svg_mio_launch"></use></svg></a>'));
 		$sysconfig.append($row);
 	}
 }
