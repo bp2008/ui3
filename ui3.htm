@@ -141,7 +141,7 @@
 		}
 		var combined_version = ui_version + "-" + bi_version;
 		var cacheBust = false;
-		cacheBust = !!navigator.userAgent.match(/Claude/);
+		//cacheBust = !!navigator.userAgent.match(/ Android /);
 		if (cacheBust)
 			combined_version += "-" + Date.now();
 		var local_bi_session_arg_always = local_bi_session ? "&session=" + local_bi_session : "";
