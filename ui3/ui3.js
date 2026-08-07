@@ -31114,7 +31114,7 @@ function BiUpdatesDialog()
 	 * Builds sample data for the simulateUpdateCheck testing flag.  Version numbers are
 	 * generated around the installed version and dates are relative to "now", so a sample
 	 * always exercises the GUI no matter which build the server is running.
-	 * @param {number|boolean} mode 1 for up to date, 2 for an update available, 3 to add news, 4 to put some releases past the support expiration date.  Anything else means 3.
+	 * @param {number|boolean} mode 1 for up to date, 2 for an update available, 3 to add news, 4 to put some releases past the support expiration date, 5 to simulate failure to retrieve data.  Anything else means 3.
 	 */
 	var GetSampleUpdateCheckData = function (mode)
 	{
@@ -31123,8 +31123,11 @@ function BiUpdatesDialog()
 		var now = new Date();
 		now = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 		mode = parseInt(mode, 10);
-		if (!(mode >= 1 && mode <= 4))
+		if (!(mode >= 1 && mode <= 5))
 			mode = 3;
+
+		if (mode === 5)
+			return {};
 
 		var parts = GetCurrentVersion().split(".");
 		if (parts.length !== 4)
