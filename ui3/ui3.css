@@ -6080,13 +6080,16 @@ div::-webkit-scrollbar-corner
 	scrollbar-darkshadow-color: #2A8FCF;
 }*/
 /* Blue Iris News and Updates dialog */
+/* Only the loading message is laid out by this rule; every other state of the dialog
+   adds ".biUpdModern" further down.  The width matches so that finishing a check does
+   not resize the dialog. */
 .biUpdatesDialog
 {
-	width: 620px;
+	width: 390px;
 	max-width: 100%;
 	box-sizing: border-box;
 	padding: 10px;
-	font-size: 15px;
+	font-size: 13px;
 }
 
 	.biUpdatesDialog .biUpdLoading
@@ -6095,116 +6098,17 @@ div::-webkit-scrollbar-corner
 		padding: 20px;
 	}
 
-.biUpdSection
+.biUpdLearnMore .icon
 {
-	border: 1px solid var(--dialog-border-color);
-	border-radius: 3px;
-	min-width: 0;
-	margin: 0px 0px 10px 0px;
-	padding: 4px 10px 10px 10px;
+	width: 16px;
+	height: 16px;
+	vertical-align: text-top;
 }
-
-	.biUpdSection legend
-	{
-		padding: 0px 4px;
-	}
-
-.biUpdNews
-{
-	white-space: pre-wrap;
-	max-height: 120px;
-	overflow-y: auto;
-}
-
-.biUpdOption
-{
-	display: flex;
-	align-items: center;
-	margin: 8px 0px 4px 0px;
-}
-
-	.biUpdOption input[type="radio"]
-	{
-		flex: 0 0 auto;
-		margin: 0px 8px 0px 0px;
-	}
-
-	.biUpdOption label
-	{
-		flex: 1 1 auto;
-		cursor: pointer;
-	}
-
-.biUpdVersion
-{
-	flex: 0 0 auto;
-	padding-left: 12px;
-	white-space: nowrap;
-}
-
-.biUpdPrevSelect
-{
-	flex: 0 0 auto;
-	margin-left: 12px;
-	max-width: 50%;
-}
-
-.biUpdRenewalMark
-{
-	color: var(--profile-pause-color);
-	padding-left: 6px;
-	cursor: help;
-}
-
-.biUpdNotes
-{
-	white-space: pre-wrap;
-	border: 1px solid var(--dialog-border-color);
-	background-color: rgba(255,255,255,0.06);
-	font-size: 0.85em;
-	padding: 5px 8px;
-	margin: 2px 0px 4px 24px;
-	max-height: 90px;
-	overflow-y: auto;
-}
-
-.biUpdChangelogRow
-{
-	margin-top: 12px;
-}
-
-	.biUpdChangelogRow .icon,
-	.biUpdLearnMore .icon
-	{
-		width: 16px;
-		height: 16px;
-		vertical-align: text-top;
-	}
-
-.biUpdUnsupportedNote
-{
-	margin: 4px 0px 10px 0px;
-}
-
-	.biUpdUnsupportedNote .biUpdLearnMore
-	{
-		margin-top: 8px;
-	}
 
 .biUpdErrorNote
 {
 	color: var(--profile-pause-color);
 	margin: 8px 0px 0px 0px;
-}
-
-.biUpdThirdPartyNote
-{
-	border: 1px solid var(--dialog-border-color);
-	border-radius: 3px;
-	background-color: rgba(255,255,255,0.06);
-	font-size: 0.9em;
-	padding: 6px 10px;
-	margin: 0px 0px 10px 0px;
 }
 
 .biUpdCheckboxRow
@@ -6225,6 +6129,11 @@ div::-webkit-scrollbar-corner
 		flex: 1 1 auto;
 		cursor: pointer;
 	}
+
+.biUpdManualNote
+{
+	margin: 4px 0px 10px 0px;
+}
 
 .biUpdManualRow
 {
@@ -6249,43 +6158,9 @@ div::-webkit-scrollbar-corner
 		height: 28px;
 	}
 
-.biUpdRow
-{
-	margin: 8px 0px;
-}
-
-.biUpdMaintenance
-{
-	margin: 0px 0px 10px 2px;
-}
-
-	.biUpdMaintenance.expired
-	{
-		color: var(--profile-pause-color);
-	}
-
-.biUpdFooter
-{
-	display: flex;
-	align-items: center;
-	margin-top: 12px;
-}
-
-	.biUpdFooter .biUpdStatusText
-	{
-		flex: 1 1 auto;
-	}
-
-	.biUpdFooter input[type="button"]
-	{
-		margin-left: 10px;
-		margin-bottom: 2px;
-		min-width: 72px;
-		height: 28px;
-	}
-/* Blue Iris News and Updates dialog: the GUI shown when the "updatecheck" command
-   returned data.  The classes below only ever apply while ".biUpdModern" is present, so
-   the limited fallback GUI above is unaffected. */
+/* Blue Iris News and Updates dialog.  The classes below only ever apply while
+   ".biUpdModern" is present, which is every state of the dialog except the loading
+   message. */
 /* These chrome overrides carry ".darkTheme" only to outweigh the theme rules further
    down this stylesheet; UI3 puts every dialog in the dark theme. */
 .dialog_wrapper.darkTheme.biUpdModernDialog
@@ -6396,7 +6271,6 @@ div::-webkit-scrollbar-corner
 	justify-content: center;
 	gap: 8px;
 	padding: 7px 10px;
-	font-size: 11px;
 	font-size: 18.6px;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
@@ -6634,14 +6508,31 @@ div::-webkit-scrollbar-corner
 	background-image: linear-gradient(var(--biupd-row-tint-color), var(--biupd-row-tint-color));
 }
 
+/* Takes the place of the version list when no update check produced one.  It lives in
+   the list's scroll region so that the dialog keeps its shape either way. */
 .biUpdEmpty
 {
-	padding: 26px 12px;
-	text-align: center;
+	padding: 14px 12px;
 	font-size: 12px;
 	line-height: 1.6;
 	color: var(--biupd-note-color);
 }
+
+	.biUpdEmpty .biUpdEmptyVersion
+	{
+		margin-top: 10px;
+		font-size: 13px;
+		color: var(--text-hover-color);
+	}
+
+	/* With no version list, this is the only way to install anything, so the manual entry
+	   controls are embedded here rather than hidden behind the footer link. */
+	.biUpdEmpty .biUpdManualBody
+	{
+		margin-top: 14px;
+		padding-top: 12px;
+		border-top: 1px solid var(--biupd-separator-color);
+	}
 
 .biUpdFoot
 {

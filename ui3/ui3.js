@@ -1048,7 +1048,19 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_updateCheck_autoThirdParty" // If "1", the news and updates dialog silently falls back to the third-party update check service.
-			, value: "0"
+			, value: "1"
+			// Generation 2 turns this on for existing installs.  It began life as an opt-in, which
+			// meant most users saw an update dialog that could not check for updates.  The request
+			// is only ever made because the user asked this dialog for update information.
+			, Generation: 2
+		}
+		, {
+			key: "ui3_updateCheck_knownVersion" // The newest Blue Iris version number an update check reported.  See RememberLatestBiVersion.
+			, value: ""
+		}
+		, {
+			key: "ui3_updateCheck_knownVersionAt" // Date.now() when ui3_updateCheck_knownVersion was learned, or 0.
+			, value: 0
 		}
 		, {
 			key: "ui3_feature_enabled_volumeBar" // ui3_feature_enabled keys are tied to unique IDs in togglableUIFeatures
@@ -16833,9 +16845,12 @@ function SessionManager()
 	}
 	this.UpdateAvailable = function ()
 	{
-		return !!(lastResponse && lastResponse.data && lastResponse.data.newversion && lastResponse.data.version
-			&& lastResponse.data.version !== lastResponse.data.newversion
-			&& permission_installupdate);
+		if (!permission_installupdate || !lastResponse || !lastResponse.data || !lastResponse.data.version)
+			return false;
+		// The login response's "newversion" is not the only source; an update check performed in
+		// this browser recently may know of a newer one.  See GetLatestKnownBiVersionInfo.
+		var known = GetLatestKnownBiVersionInfo();
+		return !!(known && compareVersions(known.version, lastResponse.data.version) > 0);
 	}
 	this.HasPermission_ChangeProfile = function ()
 	{
@@ -30791,6 +30806,82 @@ function ServerControl()
 	}
 }
 ///////////////////////////////////////////////////////////////
+// Latest Known Blue Iris Version /////////////////////////////
+///////////////////////////////////////////////////////////////
+/// Blue Iris's login response carries a "newversion" field, but Blue Iris only refreshes it about
+/// once a day, so it is routinely empty or behind what an update check just told us.  UI3 therefore
+/// remembers the newest version number an update check reported and prefers it when it is newer.
+/// The memory is deliberately short-lived: it expires after 24 hours and any update install attempt
+/// clears it, so a version which gets pulled or was reported in error cannot nag indefinitely.
+var knownBiVersionLifetimeMs = 24 * 60 * 60000;
+/**
+ * Remembers a version number learned from an update check, if it is newer than what is already remembered.  Called only for real update check responses; simulated ones must not be remembered.
+ * @param {String} version A Blue Iris version number.
+ */
+function RememberLatestBiVersion(version)
+{
+	if (!settings || !IsBlueIrisVersionNumber(version))
+		return;
+	var known = GetRememberedBiVersion();
+	if (known && compareVersions(version, known) <= 0)
+		return;
+	settings.ui3_updateCheck_knownVersion = version;
+	settings.ui3_updateCheck_knownVersionAt = Date.now();
+	sessionManager.ProcessVersionAvailability();
+}
+/**
+ * Forgets the version number learned from an update check.  Called when an update install is ordered, because whatever happens next makes the remembered version stale or wrong.
+ */
+function ForgetLatestBiVersion()
+{
+	if (!settings)
+		return;
+	settings.ui3_updateCheck_knownVersion = "";
+	settings.ui3_updateCheck_knownVersionAt = 0;
+}
+/**
+ * Returns the version number remembered from an update check, or "" if there is none or it has expired.
+ */
+function GetRememberedBiVersion()
+{
+	if (!settings)
+		return "";
+	var version = settings.ui3_updateCheck_knownVersion;
+	if (!IsBlueIrisVersionNumber(version))
+		return "";
+	var at = parseInt(settings.ui3_updateCheck_knownVersionAt, 10);
+	// A clock which moved backwards (time zone change, NTP correction) counts as expired rather
+	// than as a memory which lasts forever.
+	if (!(at > 0) || Date.now() - at >= knownBiVersionLifetimeMs || Date.now() < at)
+	{
+		ForgetLatestBiVersion();
+		return "";
+	}
+	return version;
+}
+/**
+ * Returns the newest Blue Iris version known to be available, from whichever source knew of it, or null if no source named one.
+ * @returns {object} { version: "6.0.9.18", remembered: true } where "remembered" is true if this came from an update check rather than from the login response, or null.
+ */
+function GetLatestKnownBiVersionInfo()
+{
+	var response = sessionManager.GetLastResponse();
+	var loginVersion = response && response.data && response.data.newversion ? response.data.newversion : "";
+	var remembered = GetRememberedBiVersion();
+	if (remembered && (!loginVersion || compareVersions(remembered, loginVersion) > 0))
+		return { version: remembered, remembered: true };
+	if (loginVersion)
+		return { version: loginVersion, remembered: false };
+	return null;
+}
+/**
+ * Returns true if the string is shaped like a Blue Iris version number, such as "6.0.9.18".
+ */
+function IsBlueIrisVersionNumber(str)
+{
+	return typeof str === "string" && /^\d{1,5}(\.\d{1,5}){1,3}$/.test(str);
+}
+///////////////////////////////////////////////////////////////
 // Blue Iris News and Updates Dialog //////////////////////////
 ///////////////////////////////////////////////////////////////
 function BiUpdatesDialog()
@@ -30867,7 +30958,8 @@ function BiUpdatesDialog()
 		ShowLoading("Checking for updates&hellip;");
 		if (simulateUpdateCheck)
 		{
-			Render(GetSampleUpdateCheckData(simulateUpdateCheck), false);
+			// The failure reason is ignored unless the sample is the one with no version list.
+			Render(GetSampleUpdateCheckData(simulateUpdateCheck), false, "(SIMULATED) " + thirdPartyHost + " could not be reached");
 			ContentChanged();
 			return;
 		}
@@ -30876,7 +30968,7 @@ function BiUpdatesDialog()
 			if (!$content)
 				return; // The dialog was closed while the request was in progress.
 			if (response && response.result === "success")
-				Render(response.data ? response.data : {}, false);
+				Render(response.data ? response.data : {}, false, 'Blue Iris answered the "updatecheck" command but did not name any versions');
 			else if (IsInvalidSessionResponse(response))
 			{
 				CloseDialog();
@@ -30885,17 +30977,16 @@ function BiUpdatesDialog()
 			}
 			else if (IsAutoThirdPartyEnabled())
 			{
-				// The user has opted in to the third-party service handling this automatically.
-				BeginThirdPartyUpdateCheck(true);
+				BeginThirdPartyUpdateCheck();
 			}
 			else
 			{
 				// Any other failure (most commonly a Blue Iris version that does not yet
-				// recognize the "updatecheck" command) falls back to a limited GUI.  We do
-				// not use sessionManager.IsInvalidSession() here because, on Blue Iris older
-				// than 5.8.1.1, it treats every "fail" as an expired session, which would
-				// misroute this fallback into a login loop.
-				RenderUnsupported(null);
+				// recognize the "updatecheck" command) renders the no-data GUI.  We do not use
+				// sessionManager.IsInvalidSession() here because, on Blue Iris older than
+				// 5.8.1.1, it treats every "fail" as an expired session, which would misroute
+				// this fallback into a login loop.
+				Render({}, false, 'This Blue Iris server does not support the "updatecheck" JSON API command');
 			}
 			ContentChanged();
 		}, function (jqXHR, textStatus, errorThrown)
@@ -30930,7 +31021,7 @@ function BiUpdatesDialog()
 			catch (ex) { }
 		}
 	}
-	var BeginThirdPartyUpdateCheck = function (automatic)
+	var BeginThirdPartyUpdateCheck = function ()
 	{
 		if (!$content)
 			return;
@@ -30939,15 +31030,15 @@ function BiUpdatesDialog()
 		// The request body is informational only; the service does not require it.  "text/plain"
 		// keeps this a simple CORS request so no preflight is needed.
 		var body = JSON.stringify({ cmd: "updatecheck", version: GetCurrentVersion(), ui3: typeof ui_version === "undefined" ? "" : ui_version });
-		var Finish = function (data, errorMessage)
+		var Finish = function (data, failureReason)
 		{
 			thirdPartyRequest = null;
 			if (!$content)
 				return; // The dialog was closed while the request was in progress.
 			if (data)
-				Render(data, true);
+				Render(data, true, null);
 			else
-				RenderUnsupported({ automatic: automatic, message: errorMessage });
+				Render({}, false, failureReason); // Not "fromThirdParty"; nothing was learned from it.
 			ContentChanged();
 		}
 		thirdPartyRequest = $.ajax({
@@ -30963,7 +31054,7 @@ function BiUpdatesDialog()
 				if (data)
 					Finish(data, null);
 				else
-					Finish(null, 'The ' + thirdPartyHost + ' service responded, but the response was not valid update information.  The service may have been retired.');
+					Finish(null, thirdPartyHost + ' did not return valid update information');
 			}
 			, error: function (jqXHR, textStatus, errorThrown)
 			{
@@ -30971,11 +31062,11 @@ function BiUpdatesDialog()
 					return; // Aborted by AbortThirdPartyRequest / dialog close.
 				var msg;
 				if (textStatus === "timeout")
-					msg = 'The ' + thirdPartyHost + ' service did not respond in time.';
+					msg = thirdPartyHost + ' did not respond in time';
 				else if (!jqXHR || !jqXHR.status)
-					msg = 'The ' + thirdPartyHost + ' service could not be reached.  It may be offline, blocked by this network, or retired.';
+					msg = thirdPartyHost + ' could not be reached';
 				else
-					msg = 'The ' + thirdPartyHost + ' service responded with an error (' + jqXHR.status + ' ' + jqXHR.statusText + ').';
+					msg = thirdPartyHost + ' responded with an error (' + jqXHR.status + ' ' + jqXHR.statusText + ')';
 				console.error("Third-party update check failed.", textStatus, errorThrown);
 				Finish(null, msg);
 			}
@@ -31025,7 +31116,7 @@ function BiUpdatesDialog()
 			for (var i = 0; i < obj.newversions.length && clean.newversions.length < 250; i++)
 			{
 				var v = obj.newversions[i];
-				if (!v || typeof v !== "object" || !IsVersionNumber(v.version))
+				if (!v || typeof v !== "object" || !IsBlueIrisVersionNumber(v.version))
 					continue;
 				var entry = { version: v.version };
 				if (typeof v.date === "number" && isFinite(v.date) && v.date > 0)
@@ -31047,10 +31138,6 @@ function BiUpdatesDialog()
 		// Links from the third-party service end up in href attributes, so only ordinary web
 		// URLs are allowed through.
 		return typeof url === "string" && /^https?:\/\/[^\s]+$/i.test(url);
-	}
-	var IsVersionNumber = function (str)
-	{
-		return typeof str === "string" && /^\d{1,5}(\.\d{1,5}){1,3}$/.test(str);
 	}
 	var IsInvalidSessionResponse = function (response)
 	{
@@ -31254,11 +31341,12 @@ function BiUpdatesDialog()
 		$body.modalDialog({ title: "Third-party update check" });
 	}
 	/**
-	 * Renders the update check GUI: a status-colored headline in the title bar, one scrolling list of versions grouped by what installing them would mean, and a pinned footer.
-	 * @param {object} data The update check response data.
+	 * Renders the update check GUI: a status-colored headline in the title bar, one scrolling list of versions grouped by what installing them would mean, and a pinned footer.  This is also the GUI for a failed update check, which is the same layout with an explanation and the manual install controls where the version list would be.
+	 * @param {object} data The update check response data.  An empty object renders the no-data GUI.
 	 * @param {boolean} fromThirdParty True if the data came from the third-party service rather than from Blue Iris.
+	 * @param {string} failureReason Optional.  Why no update information was obtained, phrased as a clause ("X could not be reached").  Used only when the data contains no versions.
 	 */
-	var Render = function (data, fromThirdParty)
+	var Render = function (data, fromThirdParty, failureReason)
 	{
 		if (!$content)
 			return;
@@ -31294,6 +31382,11 @@ function BiUpdatesDialog()
 				latestStable = versions[i];
 				break;
 			}
+
+		// This check knows more than the login response's "newversion" field does, so the rest of
+		// UI3 gets to use it too.  Sample data must never be remembered.
+		if (latest && !simulateUpdateCheck)
+			RememberLatestBiVersion(latest.version);
 
 		if (latest && currentVersion)
 		{
@@ -31458,15 +31551,7 @@ function BiUpdatesDialog()
 				$list.append(MakeBlock(groups[i].items[n]));
 		}
 		if (!latest)
-		{
-			var $empty = $('<div class="biUpdEmpty"></div>');
-			$empty.append(document.createTextNode("No version list.  "
-				+ (fromThirdParty ? "The " + thirdPartyHost + " service" : "Blue Iris")
-				+ " did not provide one."));
-			$empty.append("<br>");
-			$empty.append($('<a href="javascript:void(0)"></a>').text("Try again").on('click', RefreshData));
-			$list.append($empty);
-		}
+			$list.append(MakeNoDataBody(failureReason));
 
 		$primary.on('click', function ()
 		{
@@ -31479,10 +31564,11 @@ function BiUpdatesDialog()
 		$cancel.on('click', function () { CloseDialog(); });
 		var $buttons = $('<div class="biUpdFootButtons"></div>');
 		$buttons.append($('<div class="biUpdFootButtonRow"></div>').append($primary).append($cancel));
-		if (sessionManager.HasPermission_InstallUpdate())
+		// A version which was not reported to us cannot be chosen from the list above, so the
+		// manual entry GUI stays reachable here, quietly, below the buttons.  With no list there
+		// is nothing to be quiet about, and the no-data GUI hosts those controls itself.
+		if (latest && sessionManager.HasPermission_InstallUpdate())
 		{
-			// A version which was not reported to us cannot be chosen from the list above, so the
-			// manual entry GUI stays reachable here, quietly, below the buttons.
 			$buttons.append($('<div class="biUpdManualLinkRow"></div>')
 				.append($('<a href="javascript:void(0)"></a>').text("Install a specific version")
 					.on('click', ShowManualInstallDialog)));
@@ -31508,6 +31594,16 @@ function BiUpdatesDialog()
 			$proxy.append(" ").append($('<a href="javascript:void(0)"></a>').text("Learn more").on('click', ShowThirdPartyInfo));
 			$notes.append($proxy);
 		}
+		else if (!latest && !IsAutoThirdPartyEnabled())
+		{
+			// This user turned the third-party service off, so the offer is a one-time check
+			// rather than something which changes the setting behind their back.  If it succeeds,
+			// the "Learn more" note above appears and can turn it back on.
+			var $offer = $('<div></div>').text("Third-party update checks are off.");
+			$offer.append(" ").append($('<a href="javascript:void(0)"></a>').text("Check anyway")
+				.on('click', function () { BeginThirdPartyUpdateCheck(); }));
+			$notes.append($offer);
+		}
 		$footer.append($notes);
 
 		$content.append($layout);
@@ -31515,80 +31611,36 @@ function BiUpdatesDialog()
 		SelectVersion(versions.length > 0 ? versions[0] : null);
 	}
 	/**
-	 * Renders the limited GUI used when the "updatecheck" command is unavailable, or when a third-party service was attempted and failed.
-	 * @param {object|null} thirdPartyError Null, or { automatic: bool, message: string } describing a failed attempt to use the third-party update check service.
+	 * Builds what goes where the version list would be when no update check produced one.  What is left is what UI3 can do without an update check: name the installed version, pass along whatever an earlier check or the login response knew about an available version, and install a version number the user already knows.
+	 * @param {string} failureReason Optional.  Why no update information was obtained, phrased as a clause so that it can carry the consequence.  The title bar already says the check failed, so this is the only place that explains it.
 	 */
-	function RenderUnsupported(thirdPartyError)
+	var MakeNoDataBody = function (failureReason)
 	{
-		if (!$content)
-			return;
-		SetDialogChrome(null);
-		$content.removeClass("biUpdModern");
-		$content.empty();
+		var $empty = $('<div class="biUpdEmpty"></div>');
+		$empty.append($('<div class="biUpdErrorNote"></div>').text(failureReason
+			? failureReason + ", so only limited functionality is available here."
+			: "The update check failed, so only limited functionality is available here."));
 
 		var currentVersion = GetCurrentVersion();
-		var sessionResponse = sessionManager.GetLastResponse();
-		var newVersion = sessionResponse && sessionResponse.data && sessionResponse.data.newversion ? sessionResponse.data.newversion : "";
-		var updateAvailable = !!(newVersion && currentVersion && newVersion !== currentVersion);
-
-		var $section = $('<fieldset class="biUpdSection"><legend>Software updates</legend></fieldset>');
-		var $note = $('<div class="biUpdUnsupportedNote"></div>');
-		$note.append($('<div></div>')
-			.text('This Blue Iris server does not support the "updatecheck" JSON API command, so news and detailed update information are unavailable, and information about an available update may be delayed by several hours.  A future Blue Iris update may add support for this command.'));
-		$note.append($('<div class="biUpdLearnMore"></div>')
-			.append($('<a target="_blank"></a>').attr("href", updateCheckWikiUrl)
-				.html('Learn more about the proposed <b>updatecheck</b> API <svg class="icon noflip"><use xlink:href="#svg_mio_launch"></use></svg>')));
-		$section.append($note);
 		if (currentVersion)
-			$section.append(MakeInfoRow("Installed version:", currentVersion));
-		if (updateAvailable)
-		{
-			$section.append(MakeInfoRow("Available version:", newVersion));
-			if (sessionManager.HasPermission_InstallUpdate())
-			{
-				var $row = $('<div class="biUpdRow"></div>');
-				var $install = $('<input type="button" />').val("Install " + newVersion);
-				$install.on('click', function ()
-				{
-					BeginInstall({ version: newVersion }, null, false);
-				});
-				$row.append($install);
-				$section.append($row);
-			}
-		}
-		$section.append(MakeChangelogRow(defaultChangelogUrl));
-		$content.append($section);
+			$empty.append($('<div class="biUpdEmptyVersion"></div>')
+				.append(document.createTextNode("Installed version: "))
+				.append($('<b></b>').text(currentVersion)));
 
-		$content.append(MakeThirdPartySection(thirdPartyError));
+		// Whatever version we last heard about is worth repeating here, even though it could not be
+		// confirmed just now, because it is the one the user most likely came here to install.
+		var known = GetLatestKnownBiVersionInfo();
+		var available = known && (!currentVersion || compareVersions(known.version, currentVersion) > 0) ? known : null;
+		if (available)
+			$empty.append($('<div class="biUpdEmptyVersion"></div>')
+				.append(document.createTextNode((available.remembered ? "An earlier update check" : "Blue Iris") + " reported that version "))
+				.append($('<b></b>').text(available.version))
+				.append(document.createTextNode(" is available.")));
 
-		var $manual = MakeManualInstallSection();
+		var $manual = MakeManualInstallBody(null, available ? available.version : "");
 		if ($manual)
-			$content.append($manual);
-
-		AppendFooter(updateAvailable ? "An update is available." : "Blue Iris is up-to-date (update info may be delayed by several hours).", null);
-	}
-	var MakeThirdPartySection = function (thirdPartyError)
-	{
-		var $section = $('<fieldset class="biUpdSection"><legend>Third-party update check</legend></fieldset>');
-		$section.append($('<div class="biUpdUnsupportedNote"></div>')
-			.text('Until Blue Iris implements the "updatecheck" command, you can check for updates via a proxy provided by ' + thirdPartyHost + thirdPartyNote + '.  This service is not supported by Blue Iris and is expected to be retired once Blue Iris supports the "updatecheck" command natively.'));
-		if (thirdPartyError)
-		{
-			var errText = thirdPartyError.message;
-			if (thirdPartyError.automatic)
-				errText += "  Automatic fallback is enabled; uncheck the box below to stop trying.";
-			$section.append($('<div class="biUpdErrorNote"></div>').text(errText));
-		}
-		var $row = $('<div class="biUpdRow"></div>');
-		var $btn = $('<input type="button" />').val(thirdPartyError ? "Try Again" : "Check Using Third-Party Service");
-		$btn.on('click', function ()
-		{
-			BeginThirdPartyUpdateCheck(false);
-		});
-		$row.append($btn);
-		$section.append($row);
-		$section.append(MakeAutoThirdPartyCheckbox());
-		return $section;
+			$empty.append($manual);
+		return $empty;
 	}
 	var MakeAutoThirdPartyCheckbox = function ()
 	{
@@ -31602,26 +31654,29 @@ function BiUpdatesDialog()
 		});
 		$row.append($cb);
 		$row.append($('<label></label>').attr("for", id)
-			.text('Automatically use ' + thirdPartyHost + ' when this server does not support the "updatecheck" command'));
+			.text('Use ' + thirdPartyHost + ' when this server does not support the "updatecheck" command'));
 		return $row;
 	}
 	/**
-	 * Builds the note, input and button which allow a user toinstall a version number they already know.  Returns null if the user may not install updates.
+	 * Builds the note, input and button which allow a user to install a version number they already know.  Returns null if the user may not install updates.
 	 * @param {function} onInstallBegun Optional.  Called once an install has actually been requested, so that a host dialog can close itself.
+	 * @param {string} defaultVersion Optional.  A version number to start the input with, such as one an update check reported before it stopped working.
 	 */
-	function MakeManualInstallBody(onInstallBegun)
+	function MakeManualInstallBody(onInstallBegun, defaultVersion)
 	{
 		if (!sessionManager.HasPermission_InstallUpdate())
 			return null;
 		var $body = $('<div class="biUpdManualBody"></div>');
-		$body.append($('<div class="biUpdUnsupportedNote"></div>').text('If you know the version number you want, enter it here and Blue Iris will attempt to download and install it.'));
+		$body.append($('<div class="biUpdManualNote"></div>').text('If you know the version number you want, enter it here and Blue Iris will attempt to download and install it.'));
 		var $row = $('<div class="biUpdManualRow"></div>');
 		var $input = $('<input type="text" class="biUpdManualInput" />').attr({ placeholder: "6.0.0.0", maxlength: "23", spellcheck: "false", autocomplete: "off", autocorrect: "off", autocapitalize: "off" });
+		if (IsBlueIrisVersionNumber(defaultVersion))
+			$input.val(defaultVersion);
 		var $btn = $('<input type="button" value="Install" />');
 		var DoManualInstall = function ()
 		{
 			var version = $.trim($input.val());
-			if (!IsVersionNumber(version))
+			if (!IsBlueIrisVersionNumber(version))
 			{
 				toaster.Warning('Please enter a Blue Iris version number, such as "6.0.0.0".', 5000);
 				$input.focus();
@@ -31644,16 +31699,6 @@ function BiUpdatesDialog()
 		return $body;
 	}
 	/**
-	 * Builds the section which lets a user install a version number they already know, for when no update check service is reachable.  Returns null if the user may not install updates.
-	 */
-	function MakeManualInstallSection()
-	{
-		var $body = MakeManualInstallBody(null);
-		if (!$body)
-			return null;
-		return $('<fieldset class="biUpdSection"><legend>Install a specific version</legend></fieldset>').append($body);
-	}
-	/**
 	 * Opens the manual version entry GUI in a dialog of its own, reached from a link in the update check GUI's footer.  The version list can only offer versions which were reported to us, so this remains the only way to install a version number you already know.
 	 */
 	var ShowManualInstallDialog = function ()
@@ -31669,41 +31714,6 @@ function BiUpdatesDialog()
 		var $root = $('<div class="biUpdManualDialog"></div>').append($body);
 		manualDialog = $root.modalDialog({ title: "Install a specific version", closeOnOverlayClick: true });
 		$body.FocusInput();
-	}
-	var MakeInfoRow = function (label, value)
-	{
-		var $row = $('<div class="biUpdRow"></div>');
-		$row.append($('<span></span>').text(label + " "));
-		$row.append($('<b></b>').text(value));
-		return $row;
-	}
-	var MakeChangelogRow = function (url)
-	{
-		return $('<div class="biUpdChangelogRow"></div>')
-			.append($('<a target="_blank"></a>').attr("href", url)
-				.html('View Blue Iris changelog <svg class="icon noflip"><use xlink:href="#svg_mio_launch"></use></svg>'));
-	}
-	var AppendFooter = function (statusText, onOK)
-	{
-		var $footer = $('<div class="biUpdFooter"></div>');
-		$footer.append($('<div class="biUpdStatusText"></div>').text(statusText));
-		var $buttons = $('<div class="biUpdButtons"></div>');
-		if (onOK)
-		{
-			var $ok = $('<input type="button" value="OK" />');
-			$ok.on('click', onOK);
-			var $cancel = $('<input type="button" value="Cancel" />');
-			$cancel.on('click', function () { CloseDialog(); });
-			$buttons.append($ok).append($cancel);
-		}
-		else
-		{
-			var $close = $('<input type="button" value="Close" />');
-			$close.on('click', function () { CloseDialog(); });
-			$buttons.append($close);
-		}
-		$footer.append($buttons);
-		$content.append($footer);
 	}
 	var BeginInstall = function (entry, data, manualEntry, onProceed)
 	{
@@ -31732,6 +31742,9 @@ function BiUpdatesDialog()
 			if (typeof onProceed === "function")
 				onProceed(); // Closes the manual entry dialog, which the main dialog does not own.
 			CloseDialog();
+			// Whatever an update check told us before is about to be stale or, if this install
+			// fails because the version was pulled, wrong.  The next check can learn it again.
+			ForgetLatestBiVersion();
 			statusLoader.InstallUpdate(entry.version);
 			updateInstallWatcher.UpdateOrdered(entry.version);
 		}, function ()
