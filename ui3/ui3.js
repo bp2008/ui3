@@ -15760,7 +15760,52 @@ function StatusLoader()
 		{
 			if (oldStatus.data.profile != newStatus.data.profile)
 				ProfileChanged(oldStatus.data.profile, newStatus.data.profile);
+			CheckForServerRestart(oldStatus.data.uptime, newStatus.data.uptime);
 		}
+	}
+	/**
+	 * Notices Blue Iris having restarted between two status responses.  A server which keeps
+	 * running only ever reports a higher uptime than it did before, so a lower one means we are
+	 * talking to a new process.  This is worth saying out loud even when nobody asked for a
+	 * restart: from a remote browser, Blue Iris crashing and coming back looks like video which
+	 * simply stopped working, with no explanation on offer.
+	 * @param {String} oldUptime The uptime reported by the previous status response.
+	 * @param {String} newUptime The uptime reported by the current status response.
+	 */
+	var CheckForServerRestart = function (oldUptime, newUptime)
+	{
+		var oldSec = ParseUptimeSeconds(oldUptime);
+		var newSec = ParseUptimeSeconds(newUptime);
+		if (oldSec < 0 || newSec < 0 || newSec >= oldSec)
+			return;
+		// Asked before the event is raised, because a watcher which handles the event stops
+		// watching as it does so, and this restart is the one it was waiting for.
+		var alreadyExpected = updateInstallWatcher.IsWatchingForRestart();
+		BI_CustomEvent.Invoke("Server Restarted", { uptimeSec: newSec });
+		if (!alreadyExpected)
+			toaster.Info("Blue Iris has restarted.");
+	}
+	/**
+	 * Parses Blue Iris's uptime string, which arrives as days:hours:minutes:seconds (e.g. "4:20:55:44"), into a number of seconds.  Returns -1 if it could not be parsed.
+	 * @param {String} uptimeStr The uptime field from a status response.
+	 */
+	var ParseUptimeSeconds = function (uptimeStr)
+	{
+		if (typeof uptimeStr !== "string")
+			return -1;
+		var parts = uptimeStr.split(':');
+		if (parts.length < 2 || parts.length > 4)
+			return -1;
+		var multipliers = [1, 60, 3600, 86400]; // Fields are read right to left, so seconds first.
+		var totalSec = 0;
+		for (var i = 0; i < parts.length; i++)
+		{
+			var n = parseInt(parts[parts.length - (i + 1)], 10);
+			if (isNaN(n) || n < 0)
+				return -1;
+			totalSec += n * multipliers[i];
+		}
+		return totalSec;
 	}
 	var ProfileChanged = function (oldProfileNum, newProfileNum)
 	{
@@ -31738,7 +31783,7 @@ function BiUpdatesDialog()
 		msg.push("Do you wish to proceed?");
 		SimpleDialog.ConfirmHtml(msg.join("<br><br>"), function ()
 		{
-			toaster.Warning("Update Starting.  Blue Iris should restart soon, and UI3 will tell you when it comes back.", 60000);
+			var startingToast = toaster.Warning("Update Starting.  Blue Iris should restart soon, and UI3 will tell you when it comes back.", 60000);
 			if (typeof onProceed === "function")
 				onProceed(); // Closes the manual entry dialog, which the main dialog does not own.
 			CloseDialog();
@@ -31746,7 +31791,9 @@ function BiUpdatesDialog()
 			// fails because the version was pulled, wrong.  The next check can learn it again.
 			ForgetLatestBiVersion();
 			statusLoader.InstallUpdate(entry.version);
-			updateInstallWatcher.UpdateOrdered(entry.version);
+			// The watcher is handed the toast because it is the one which knows when the promise
+			// the toast makes has been kept.
+			updateInstallWatcher.UpdateOrdered(entry.version, startingToast);
 		}, function ()
 		{
 			toaster.Info("Update Canceled");
@@ -31760,7 +31807,13 @@ function BiUpdatesDialog()
  * Watches for Blue Iris to come back up after UI3 orders it to install an update.  Blue Iris
  * restarts to install an update but UI3 does not, so without this the page keeps running the
  * old web interface code and reporting the old version number until it is manually refreshed.
- * The restart expires the session, and UI3's own session recovery is the signal this watches for.
+ *
+ * Two independent signals are watched, because neither one alone catches every restart:
+ *
+ * 1. The session being lost.  UI3 recovers from that on its own, so its own login is the signal.
+ * 2. The status loop reporting that Blue Iris restarted.  Blue Iris remembers one session string
+ *    per user (in the registry, under Blue Iris\server\users\<name>\session), so a session
+ *    sometimes survives the restart and no login ever happens.
  */
 function UpdateInstallWatcher()
 {
@@ -31770,9 +31823,13 @@ function UpdateInstallWatcher()
 	var versionBefore = "";
 	var orderedVersion = "";
 	var giveUpTimeout = null;
+	/** True when the watch ran out of time while the page was hidden, which means no verdict is owed until somebody looks at the page again. */
+	var settleWhenVisible = false;
+	/** The "Update Starting" toast, which stops being true the moment the update is announced as finished. */
+	var updateStartingToast = null;
 
-	// Installing an update makes Blue Iris restart, which expires the session.  UI3 notices that
-	// on its own and logs in again, so that login is the signal that the server is back, and the
+	// Installing an update makes Blue Iris restart, which usually expires the session.  UI3 notices
+	// that on its own and logs in again, so that login is a signal that the server is back, and the
 	// login response carries the version number it came back as.  The version is not part of the
 	// signal: reinstalling the version already running is a legitimate thing to order, and an
 	// update which failed to install is worth reporting too.
@@ -31784,11 +31841,37 @@ function UpdateInstallWatcher()
 		ServerRestartDetected(response && response.data && response.data.version ? response.data.version : versionBefore);
 	});
 
+	// The other signal, for the restarts which keep the session alive.  The status loop watches
+	// Blue Iris's uptime for its own reasons, so there is nothing here to poll for.
+	BI_CustomEvent.AddListener("Server Restarted", function ()
+	{
+		if (!watching)
+			return;
+		StopWatching();
+		LearnCurrentVersion(ServerRestartDetected);
+	});
+
+	// A hidden page's status loop may be suspended, so a watch which expires while hidden is not
+	// evidence of anything.  It is settled when the page is looked at again.
+	BI_CustomEvent.AddListener("VisibilityChanged", function (visibleNow)
+	{
+		if (visibleNow && settleWhenVisible)
+			SettleDeferredWatch();
+	});
+
+	/**
+	 * True while an update has been ordered and the restart it should cause has not been seen yet.  The status loop asks so that it does not announce a restart the user is about to hear about in more detail.
+	 */
+	this.IsWatchingForRestart = function ()
+	{
+		return watching;
+	}
 	/**
 	 * Called when Blue Iris has just been told to install an update.
 	 * @param {String} version The version number which was ordered.
+	 * @param {Object} startingToast The toast which promised the user that UI3 would say when Blue Iris came back, so that it can be taken down once that promise is kept.  Optional.
 	 */
-	this.UpdateOrdered = function (version)
+	this.UpdateOrdered = function (version, startingToast)
 	{
 		versionBefore = GetKnownVersion();
 		if (!versionBefore)
@@ -31797,10 +31880,12 @@ function UpdateInstallWatcher()
 			return;
 		}
 		orderedVersion = version;
+		updateStartingToast = startingToast;
 		watching = true;
+		settleWhenVisible = false;
 		if (giveUpTimeout !== null)
 			clearTimeout(giveUpTimeout);
-		giveUpTimeout = setTimeout(GiveUp, watchDurationMs);
+		giveUpTimeout = setTimeout(WatchExpired, watchDurationMs);
 	}
 	var GetKnownVersion = function ()
 	{
@@ -31812,11 +31897,45 @@ function UpdateInstallWatcher()
 	var StopWatching = function ()
 	{
 		watching = false;
+		settleWhenVisible = false;
 		if (giveUpTimeout !== null)
 		{
 			clearTimeout(giveUpTimeout);
 			giveUpTimeout = null;
 		}
+	}
+	/**
+	 * Takes down the "Update Starting" toast, which has stopped being the newest thing UI3 knows.  Harmless if it already timed out on its own.
+	 */
+	var DismissUpdateStartingToast = function ()
+	{
+		if (updateStartingToast && typeof updateStartingToast.remove === "function")
+			updateStartingToast.remove();
+		updateStartingToast = null;
+	}
+	/**
+	 * Learns which version Blue Iris is running right now.  The status command does not report a version number, and a restart which kept our session never produces a fresh login response either, so this asks the same way UI3's startup does.  Calls back with the version from before the update if the current one could not be learned.
+	 */
+	var LearnCurrentVersion = function (callback)
+	{
+		ExecJSON({ cmd: "login", session: sessionManager.GetAPISession() }, function (response)
+		{
+			if (response && response.result === "success" && response.data && response.data.version)
+			{
+				// Hand the response to the normal login path so the rest of UI3 stops believing
+				// the version number from before the update.  Reloading the page is the only way
+				// to pick up new UI3 files, but it should not be the only way to learn which Blue
+				// Iris is answering.  This is safe to call while watching has already stopped: it
+				// raises "Login Success", which is one of the signals this object listens for.
+				sessionManager.HandleSuccessfulLogin(response, true);
+				callback(response.data.version);
+			}
+			else
+				callback(versionBefore);
+		}, function (jqXHR, textStatus, errorThrown)
+		{
+			callback(versionBefore);
+		});
 	}
 	var ServerRestartDetected = function (newVersion)
 	{
@@ -31858,36 +31977,99 @@ function UpdateInstallWatcher()
 		});
 	}
 	/**
-	 * Tells the user which version Blue Iris came back as, and offers the page reload which is the only way for UI3 to pick up new web interface files.
+	 * Tells the user which version Blue Iris came back as.  This only ever runs in the one UI3
+	 * instance which ordered the update, so a dialog is not an imposition on anybody else, and the
+	 * person who ordered it is owed a definite answer either way.  A reload is offered for the one
+	 * thing a reload actually fixes: UI3's own files on the server being newer than the ones this
+	 * page is running.  Everything else UI3 has already caught up on by itself.
 	 * @param {String} newVersion The Blue Iris version now running.
 	 * @param {String} serverUi3Version The UI3 version the server would deliver now, or null if it is unknown or not applicable.
 	 */
 	var AnnounceUpdate = function (newVersion, serverUi3Version)
 	{
+		DismissUpdateStartingToast();
+		var ui3Changed = !!serverUi3Version && serverUi3Version !== ui_version;
+		var wrongVersion = !!orderedVersion && newVersion !== orderedVersion;
+		var title = wrongVersion ? "Blue Iris Update Result" : "Blue Iris Update Finished";
+
 		var msg = [];
 		if (newVersion === versionBefore)
 			msg.push("Blue Iris has restarted and is running version <b>" + htmlEncode(newVersion) + "</b>, the same version as before.");
 		else
 			msg.push("Blue Iris has restarted and is now running version <b>" + htmlEncode(newVersion) + "</b>, replacing version "
 				+ htmlEncode(versionBefore) + ".");
-		if (orderedVersion && newVersion !== orderedVersion)
+		if (wrongVersion)
 			msg.push("This is not the version which was ordered (" + htmlEncode(orderedVersion) + "), so the update may not have succeeded.");
-		if (serverUi3Version && serverUi3Version !== ui_version)
+
+		if (ui3Changed)
+		{
 			msg.push("UI3 was updated along with it, from version " + htmlEncode(ui_version) + " to <b>" + htmlEncode(serverUi3Version)
 				+ "</b>.  This page is still running the old version.");
+			msg.push("Reload UI3 now?");
+			SimpleDialog.ConfirmHtml(msg.join("<br><br>"), function ()
+			{
+				ReloadInterface();
+			}, null, { title: title, yesText: "Reload UI3", noText: "Not Now" });
+		}
 		else
-			msg.push("This page is still running the web interface code from before the update.");
-		msg.push("Reload UI3 now?");
-		SimpleDialog.ConfirmHtml(msg.join("<br><br>"), function ()
-		{
-			ReloadInterface();
-		}, null, { title: "Blue Iris Update Finished", yesText: "Reload UI3", noText: "Not Now" });
+			ShowInfoDialog(title, msg.join("<br><br>"));
 	}
-	var GiveUp = function ()
+	/**
+	 * Shows a dialog with a single OK button, for when the user has something to read but nothing to decide.  SimpleDialog only offers two-button confirmations.
+	 * @param {String} titleStr The dialog title.
+	 * @param {String} messageHtml The dialog body, as HTML.
+	 */
+	var ShowInfoDialog = function (titleStr, messageHtml)
 	{
+		var dlg = null;
+		var $root = $('<div style="padding: 10px;"></div>').html(messageHtml);
+		var $okBtn = $('<button type="button"></button>').text("OK");
+		$okBtn.on('click', function ()
+		{
+			if (dlg)
+				dlg.close();
+		});
+		$root.append($('<div style="margin-top: 20px; text-align: center;"></div>').append($okBtn));
+		dlg = $root.modalDialog({ title: titleStr });
+		return dlg;
+	}
+	var WatchExpired = function ()
+	{
+		giveUpTimeout = null;
+		if (documentIsHidden())
+		{
+			// The status loop is suspended along with the rest of the page, so it has had no chance
+			// to notice a restart.  Blue Iris has not failed to come back; nobody has looked.
+			settleWhenVisible = true;
+			return;
+		}
 		StopWatching();
+		DismissUpdateStartingToast();
 		toaster.Info("UI3 gave up waiting for Blue Iris to restart after the update to " + htmlEncode(orderedVersion)
 			+ " was ordered.  Refresh UI3 to see which version is running now.", 20000);
+	}
+	/**
+	 * Settles a watch which ran out of time while the page was hidden.  The status loop is only now
+	 * waking up, and waiting around for its next request to come back is no faster than asking
+	 * directly: one login request reports both whether the session survived and which version is
+	 * answering.  A version other than the one we started with is proof that Blue Iris restarted.
+	 */
+	var SettleDeferredWatch = function ()
+	{
+		// Claimed up front, so the login request below cannot report this restart a second time
+		// through the "Login Success" listener.
+		StopWatching();
+		LearnCurrentVersion(function (newVersion)
+		{
+			if (newVersion === versionBefore)
+			{
+				DismissUpdateStartingToast();
+				toaster.Info("UI3 stopped waiting for Blue Iris to restart after the update to " + htmlEncode(orderedVersion)
+					+ " was ordered.  Blue Iris is still running version " + htmlEncode(versionBefore) + ".", 20000);
+			}
+			else
+				ServerRestartDetected(newVersion);
+		});
 	}
 }
 ///////////////////////////////////////////////////////////////
