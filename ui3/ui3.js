@@ -1063,6 +1063,18 @@ var defaultSettings =
 			, value: 0
 		}
 		, {
+			key: "ui3_updateCheck_installFlag_downloadOnly"
+			, value: "0"
+		}
+		, {
+			key: "ui3_updateCheck_installFlag_keepInstaller"
+			, value: "0"
+		}
+		, {
+			key: "ui3_updateCheck_installFlag_keepCurrentExe"
+			, value: "0"
+		}
+		, {
 			key: "ui3_feature_enabled_volumeBar" // ui3_feature_enabled keys are tied to unique IDs in togglableUIFeatures
 			, value: "1"
 		}
@@ -15595,10 +15607,15 @@ function StatusLoader()
 		else
 			toaster.Error("Cannot set Shield state: " + signal);
 	}
-	this.InstallUpdate = function (version)
+	/**
+	 * Orders Blue Iris to download and install a specific version.
+	 * @param {string} version Version number to install, e.g. "6.1.0.2".
+	 * @param {number} flags Optional bit flags: 1 (download only), 2 (retain a copy of the installer package), 4 (retain a copy of the current BlueIris.exe), 8 (run the updater in the Console if it is open, so that the Console is reopened afterward).  Blue Iris versions older than 6.1.0.1 ignore flag 8.
+	 */
+	this.InstallUpdate = function (version, flags)
 	{
 		if (version)
-			loadStatusInternal({ installVersion: version });
+			loadStatusInternal({ installVersion: version, installFlags: flags });
 	}
 	var loadStatusInternal = function (statusArgs)
 	{
@@ -15642,7 +15659,7 @@ function StatusLoader()
 			if (typeof statusArgs.installVersion != "undefined" && statusArgs.installVersion != null)
 			{
 				if (sessionManager.HasPermission_InstallUpdate())
-					args.update = ConvertVersionNumberToInsaneInt(statusArgs.installVersion) + ", 0";
+					args.update = ConvertVersionNumberToInsaneInt(statusArgs.installVersion) + ", " + (parseInt(statusArgs.installFlags, 10) || 0);
 				else
 					openLoginDialog(function () { loadStatusInternal(statusArgs); });
 			}
@@ -31780,24 +31797,115 @@ function BiUpdatesDialog()
 				+ '), so it may fail to activate unless you <a href="' + htmlEncode(purchaseUrl) + '" target="_blank">renew your license</a>.');
 		}
 		msg.push("It is recommended to have remote desktop access available in case the update fails and Blue Iris becomes unreachable.");
+		msg.push('<div class="biUpdInstallOptionsHost"></div>');
 		msg.push("Do you wish to proceed?");
-		SimpleDialog.ConfirmHtml(msg.join("<br><br>"), function ()
+		var dlg = SimpleDialog.ConfirmHtml(msg.join("<br><br>"), function ()
 		{
-			var startingToast = toaster.Warning("Update Starting.  Blue Iris should restart soon, and UI3 will tell you when it comes back.", 60000);
+			var flags = GetInstallFlags();
+			var downloadOnly = (flags & 1) > 0;
+			var startingToast;
+			if (downloadOnly)
+				startingToast = toaster.Info("Download Starting.  Blue Iris was asked to download version " + htmlEncode(entry.version) + " without installing it.", 15000);
+			else
+				startingToast = toaster.Warning("Update Starting.  Blue Iris should restart soon, and UI3 will tell you when it comes back.", 60000);
 			if (typeof onProceed === "function")
 				onProceed(); // Closes the manual entry dialog, which the main dialog does not own.
 			CloseDialog();
-			// Whatever an update check told us before is about to be stale or, if this install
-			// fails because the version was pulled, wrong.  The next check can learn it again.
-			ForgetLatestBiVersion();
-			statusLoader.InstallUpdate(entry.version);
-			// The watcher is handed the toast because it is the one which knows when the promise
-			// the toast makes has been kept.
-			updateInstallWatcher.UpdateOrdered(entry.version, startingToast);
+			if (!downloadOnly)
+			{
+				// Whatever an update check told us before is about to be stale or, if this install
+				// fails because the version was pulled, wrong.  The next check can learn it again.
+				// A download-only request installs nothing, so it leaves that knowledge accurate.
+				ForgetLatestBiVersion();
+			}
+			statusLoader.InstallUpdate(entry.version, flags);
+			// A download-only request does not restart Blue Iris, so there is nothing to watch for.
+			// Otherwise the watcher is handed the toast because it is the one which knows when the
+			// promise the toast makes has been kept.
+			if (!downloadOnly)
+				updateInstallWatcher.UpdateOrdered(entry.version, startingToast);
 		}, function ()
 		{
 			toaster.Info("Update Canceled");
 		}, { yesText: "Begin Update", noText: "Cancel" });
+		// The confirmation is built from an HTML string, but these checkboxes need event handlers,
+		// so they are attached to a placeholder within the message after the dialog exists.
+		dlg.$dialog.find(".biUpdInstallOptionsHost").append(MakeInstallOptionsBody());
+		dlg.contentChanged(true);
+	}
+	/**
+	 * Builds the checkboxes which choose the optional flags of the install command.  Each box writes its setting as soon as it is clicked, so the choices are remembered for next time.
+	 */
+	var MakeInstallOptionsBody = function ()
+	{
+		var $body = $('<div class="biUpdInstallOptions"></div>');
+		$body.append($('<div class="biUpdInstallOptionsLabel"></div>').text("Options:"));
+		$body.append(MakeInstallOptionCheckbox("ui3_updateCheck_installFlag_downloadOnly", "Download only.  Blue Iris does not install anything and does not restart."));
+		$body.append(MakeInstallOptionCheckbox("ui3_updateCheck_installFlag_keepInstaller", "Retain a copy of the installer package"
+			, "Retain a copy of the installer package"
+			, 'Blue Iris keeps the installer package it downloads in the "Updates" subfolder within the Blue Iris installation\'s root folder.'));
+		$body.append(MakeInstallOptionCheckbox("ui3_updateCheck_installFlag_keepCurrentExe", "Retain a copy of the current BlueIris.exe"
+			, "Retain a copy of the current BlueIris.exe"
+			, "Blue Iris renames the BlueIris.exe which is running now and keeps it in the Blue Iris installation's root folder, alongside the regular BlueIris.exe which the update replaces."));
+		return $body;
+	}
+	/**
+	 * Builds one of the install option checkboxes.
+	 * @param {string} settingKey The setting which remembers this option.
+	 * @param {string} labelText The checkbox label.
+	 * @param {string} infoTitle Optional.  Title of the dialog opened by the "[?]" link.  Without it, no link is added.
+	 * @param {string} infoText Optional.  What that dialog says.
+	 */
+	var MakeInstallOptionCheckbox = function (settingKey, labelText, infoTitle, infoText)
+	{
+		var id = "biUpdInstallOption" + (++radioNameCounter);
+		var $row = $('<div class="biUpdCheckboxRow"></div>');
+		var $cb = $('<input type="checkbox" />').attr("id", id);
+		$cb.prop("checked", settings[settingKey] === "1");
+		$cb.on('change', function ()
+		{
+			settings[settingKey] = $cb.is(":checked") ? "1" : "0";
+		});
+		var $label = $('<label></label>').attr("for", id).text(labelText);
+		if (infoTitle)
+		{
+			// The link lives inside the label so that it follows the last line of a label which
+			// wrapped.  That means a click here would also toggle the checkbox, which is what the
+			// default action is prevented for.
+			$label.append(document.createTextNode(" "));
+			$label.append($('<a class="biUpdHelpLink" href="javascript:void(0)"></a>').text("[?]")
+				.on('click', function (e)
+				{
+					e.preventDefault();
+					e.stopPropagation();
+					ShowInstallOptionInfo(infoTitle, infoText);
+				}));
+		}
+		$row.append($cb);
+		$row.append($label);
+		return $row;
+	}
+	/**
+	 * Explains one of the install options, on top of the confirmation dialog which offers it.
+	 */
+	var ShowInstallOptionInfo = function (title, text)
+	{
+		$('<div class="biUpdLearnMoreDialog"></div>').append($('<div></div>').text(text))
+			.modalDialog({ title: title, closeOnOverlayClick: true });
+	}
+	/**
+	 * Returns the flags argument for the install command, built from the user's saved choices.  Flag 8 (run the updater in the Console if it is open, so that the Console is reopened afterward) is always set; it is new in Blue Iris 6.1.0.1 and older versions ignore it.
+	 */
+	var GetInstallFlags = function ()
+	{
+		var flags = 8; // run the updater in the Console if it's open so that it will be reopened
+		if (settings.ui3_updateCheck_installFlag_downloadOnly === "1")
+			flags |= 1;
+		if (settings.ui3_updateCheck_installFlag_keepInstaller === "1")
+			flags |= 2;
+		if (settings.ui3_updateCheck_installFlag_keepCurrentExe === "1")
+			flags |= 4;
+		return flags;
 	}
 }
 ///////////////////////////////////////////////////////////////

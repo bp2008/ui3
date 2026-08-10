@@ -6130,6 +6130,23 @@ div::-webkit-scrollbar-corner
 		cursor: pointer;
 	}
 
+/* Install options within the update confirmation dialog, which is a generic confirm box and not part of the update dialog. */
+.biUpdInstallOptions
+{
+	max-width: 500px;
+}
+
+	.biUpdInstallOptions .biUpdInstallOptionsLabel
+	{
+		font-weight: bold;
+	}
+
+	.biUpdInstallOptions .biUpdHelpLink
+	{
+		white-space: nowrap;
+		text-decoration: none;
+	}
+
 .biUpdManualNote
 {
 	margin: 4px 0px 10px 0px;
