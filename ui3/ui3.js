@@ -9129,7 +9129,7 @@ function ClipTimeline()
 				return {
 					errorHtml: "",
 					/** Number that increases linearly to control zoom */
-					zoomScaler: Clamp(parseInt(settings.ui3_timelineZoomScaler), minSavedZoomScaler, maxSavedZoomScaler),
+					zoomScaler: Clamp(parseFloat(settings.ui3_timelineZoomScaler), minSavedZoomScaler, maxSavedZoomScaler),
 					pinchZoomState: { startingZoomScaler: 0 },
 					/** Width of the timeline canvas area in pixels. */
 					timelineWidth: 0,
@@ -9143,6 +9143,8 @@ function ClipTimeline()
 					lastSetTime: GetUtcNow(),
 					/** Number that can be incremented to force the component to recompute the currentTime property. */
 					recomputeCurrentTime: 0,
+					/** Number that can be incremented to force the component to recompute the shouldShowAlertThumbnails property. */
+					recomputeShouldShowAlertThumbnails: 0,
 					dragState: { isMouseDown: false, isDragging: false, startX: 0, lastClickAt: -9999, doubleClickTime: 400 },
 					mouseHoverX: -10000,
 					wheelPanState: { isActive: false, timeout: null },
@@ -9800,6 +9802,7 @@ function ClipTimeline()
 				onOpenVideo: function ()
 				{
 					this.isLive = videoPlayer.Loading().image.isLive;
+					this.recomputeShouldShowAlertThumbnails++; // The camera or group being loaded may have changed.
 					this.newTimelineParameters();
 				},
 				onVideoPlay: function ()
@@ -10006,10 +10009,13 @@ function ClipTimeline()
 				},
 				shouldShowAlertThumbnails: function ()
 				{
+					if (this.recomputeShouldShowAlertThumbnails) { } // Reactively recompute when the loaded camera or a related setting changes, since neither of those are reactive.
+
 					if (this.zoomScaler <= parseFloat(settings.ui3_timeline_alertThumbnailsAppearAtZoomLevel))
 					{
 						var l = videoPlayer.Loading().image;
-						var isSingleCamera = !l.cams || l.cams.length === 1;
+						// [cams] is null until group layout metadata arrives with the video stream, so [isGroup] is the authoritative check here.
+						var isSingleCamera = l.cams ? l.cams.length === 1 : !l.isGroup;
 						if (isSingleCamera || settings.ui3_timeline_alertThumbnailsAppearForGroups === "1")
 							return true;
 					}
@@ -10405,6 +10411,14 @@ function ClipTimeline()
 	{
 		if (timeline)
 			timeline.drawCanvas();
+	}
+	/**
+	 * Call this after changing a setting which affects whether alert thumbnails should be drawn, so the timeline recomputes it.
+	 */
+	this.recomputeShouldShowAlertThumbnails = function ()
+	{
+		if (timeline)
+			timeline.recomputeShouldShowAlertThumbnails++;
 	}
 	this.pointInsideTimeline = function (x, y)
 	{
@@ -39985,10 +39999,12 @@ function OnChange_ui3_timeline_alertThumbnailsAppearAtZoomLevel()
 {
 	if (currentPrimaryTab !== "timeline")
 		$("#topbar_tab_timeline").click();
+	clipTimeline.recomputeShouldShowAlertThumbnails();
 	clipTimeline.setZoomScaler(parseFloat(settings.ui3_timeline_alertThumbnailsAppearAtZoomLevel));
 }
 function OnChange_ui3_timeline_alertThumbnailsAppearForGroups()
 {
+	clipTimeline.recomputeShouldShowAlertThumbnails();
 	clipTimeline.redrawCanvas();
 }
 function OnChange_ui3_uiStatusSounds()
