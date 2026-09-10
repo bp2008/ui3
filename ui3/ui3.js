@@ -13403,8 +13403,7 @@ function ClipLoader(clipsBodySelector)
 	this.GetClipFromId = function (recId)
 	{
 		// The clip list cache is preferred over startupClipData because startupClipData is built from a
-		// "clipstats" response, which carries less metadata than a "cliplist"/"alertlist" item (notably,
-		// Blue Iris does not populate the "date" field of a clipstats response for clip records).
+		// "clipstats" response, which can carry less/different metadata than a "cliplist"/"alertlist" item.
 		var clipData = clipListIdCache[recId];
 		if (clipData)
 			return clipData;
@@ -13530,9 +13529,7 @@ function ClipLoader(clipsBodySelector)
 		clipData.hasLoadedClipStats = true;
 		clipData.msec = stats.msec;
 		clipData.fileSize = GetClipFileSize(stats.filesize);
-		// Blue Iris does not populate the "date" field of a clipstats response when the requested path is a
-		// clip (as opposed to an alert), so a missing date must not be allowed to clobber the date we have.
-		// In that case, derive the clip's start date from this item's own date minus its offset into the clip.
+		// Some Blue Iris versions (6.1.1.4) do not populate the "date" field of a clipstats response when the requested path is a clip (as opposed to an alert), so a missing date must not be allowed to clobber the date we have. In that case, derive the clip's start date from this item's own date minus its offset into the clip.
 		if (stats.date)
 			clipData.clipStartDate = new Date((stats.date * 1000) + GetServerTimeOffset());
 		else
