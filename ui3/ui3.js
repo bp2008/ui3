@@ -13402,9 +13402,15 @@ function ClipLoader(clipsBodySelector)
 	 */
 	this.GetClipFromId = function (recId)
 	{
+		// The clip list cache is preferred over startupClipData because startupClipData is built from a
+		// "clipstats" response, which carries less metadata than a "cliplist"/"alertlist" item (notably,
+		// Blue Iris does not populate the "date" field of a clipstats response for clip records).
+		var clipData = clipListIdCache[recId];
+		if (clipData)
+			return clipData;
 		if (startupClipData && startupClipData.recId === recId)
 			return startupClipData;
-		return clipListIdCache[recId];
+		return undefined;
 	}
 	/**
 	 * Returns the array containing all loaded clip IDs.
@@ -13524,7 +13530,13 @@ function ClipLoader(clipsBodySelector)
 		clipData.hasLoadedClipStats = true;
 		clipData.msec = stats.msec;
 		clipData.fileSize = GetClipFileSize(stats.filesize);
-		clipData.clipStartDate = new Date((stats.date * 1000) + GetServerTimeOffset());
+		// Blue Iris does not populate the "date" field of a clipstats response when the requested path is a
+		// clip (as opposed to an alert), so a missing date must not be allowed to clobber the date we have.
+		// In that case, derive the clip's start date from this item's own date minus its offset into the clip.
+		if (stats.date)
+			clipData.clipStartDate = new Date((stats.date * 1000) + GetServerTimeOffset());
+		else
+			clipData.clipStartDate = new Date(clipData.displayDate.getTime() - clipData.offsetMs);
 		clipData.clipCoverMs = GetClipLengthMs(GetClipLengthFromFileSize(stats.filesize));
 		clipData.rawClipData = stats;
 		return true;
@@ -42606,4 +42618,87 @@ function HtmlEncodeAndLinkUris(str)
 
 		return '<a href="' + href + '" target="_blank">' + match + "</a>";
 	});
+}
+
+/**
+ * Builds the URL fragment that hands the currently open clip to BVR-Player-Web.
+ *
+ * Paste the returned string onto the end of whatever BVR-Player URL you are
+ * working with, e.g.
+ *
+ *     http://localhost:81/bvrplayer/#u=...&f=...&t=...
+ *
+ * From the browser console, `copy(GetBvrPlayerFragment())` puts it straight on
+ * the clipboard.
+ *
+ * The fragment carries the clip's own URL, including the Blue Iris session
+ * argument, because that is what authenticates the byte-range requests the
+ * player makes. A fragment never leaves the browser -- it is not sent to any
+ * server and does not appear in any log -- and BVR-Player strips the session
+ * token out of it on arrival, keeping it in sessionStorage so that it does not
+ * end up in that page's address bar, a bookmark, or a link shared onward. It is
+ * still a credential while it sits on your clipboard: treat the fragment as you
+ * would the clip URL itself.
+ *
+ * Returns "" when the current view is live, a timeline, or nothing at all.
+ *
+ * @param {Boolean} [includePosition] Pass false to always start at the
+ *                                    beginning instead of at the current
+ *                                    playback position.
+ * @returns {String} A fragment beginning with "#", or "" if no clip is open.
+ */
+function GetBvrPlayerFragment(includePosition)
+{
+	if (typeof videoPlayer === "undefined" || !videoPlayer.Loading)
+		return "";
+	var loading = videoPlayer.Loading().image;
+	if (!loading || loading.isLive || loading.isTimeline() || !loading.path)
+		return "";
+
+	// The same URL the "Download clip" link uses, which is the raw .bvr rather
+	// than the transcoded stream the UI3 player is fed. Falling back to building
+	// it by hand covers a clip that has scrolled out of the loaded clip list.
+	var href = "";
+	var name = "";
+	var clipData = clipLoader.GetClipFromId(loading.uniqueId);
+	if (clipData)
+	{
+		var info = clipLoader.GetDownloadClipInfo(clipData);
+		href = info.href;
+		name = info.download;
+	}
+	else
+	{
+		href = currentServer.remoteBaseURL + "clips/" + loading.path;
+		name = loading.path;
+	}
+	if (href.indexOf("session=") < 0)
+		href += currentServer.GetAPISessionArg(href.indexOf("?") > -1 ? "&" : "?", true);
+
+	// remoteBaseURL is a path when UI3 is served by the same Blue Iris instance,
+	// so this has to be made absolute -- the BVR player is typically on another
+	// origin, where a relative path would resolve against the wrong host.
+	var absolute = href;
+	try
+	{
+		absolute = new URL(href, location.href).href;
+	}
+	catch (ex) { }
+
+	var parts = ["u=" + encodeURIComponent(absolute)];
+	if (name)
+		parts.push("f=" + encodeURIComponent(name));
+
+	if (includePosition !== false)
+	{
+		var ms = videoPlayer.GetClipPlaybackPositionMs();
+		if (ms > 0)
+		{
+			// Seconds, to the millisecond, without the trailing zeros -- the
+			// same shape BVR-Player writes when it maintains the fragment itself.
+			parts.push("t=" + (ms / 1000).toFixed(3).replace(/\.?0+$/, ""));
+		}
+	}
+
+	return "#" + parts.join("&");
 }
