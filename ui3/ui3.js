@@ -26281,9 +26281,11 @@ function GenericQualityHelper()
 			self.profiles = defaultProfiles;
 		if (settings.ui3_didAdd8kProfiles === "1")
 		{
+			// Allow the 8K profiles to be restored as well.  If the camera list is not loaded yet, the listener registered here performs the work once it is.
 			settings.ui3_didAdd8kProfiles = "0";
-			BI_CustomEvent.AddListener("CameraListLoaded", onCameraListLoaded);
-			self.add8KProfilesIfNeeded();
+			Register8KProfileListener();
+			if (self.add8KProfilesIfNeeded())
+				Unregister8KProfileListener();
 		}
 		self.SaveProfiles();
 	}
@@ -26307,6 +26309,7 @@ function GenericQualityHelper()
 		}
 	}
 	var isInSavingProfilesFunc = false;
+	var didWarnAboutProfileSaveFailure = false;
 	this.SaveProfiles = function ()
 	{
 		try
@@ -26335,7 +26338,21 @@ function GenericQualityHelper()
 				toaster.Error("Error assigning legacy Quality properties for backwards compatibility: " + ex.message);
 			}
 
-			settings.ui3_streamingProfileArray = JSON.stringify(self.profiles);
+			try
+			{
+				settings.ui3_streamingProfileArray = JSON.stringify(self.profiles);
+			}
+			catch (ex)
+			{
+				// Most likely Local Storage is full.  Do not let this abort the caller, because callers
+				// which persist state about the profile list would then be left in an inconsistent state.
+				console.error("Unable to save Streaming Quality profiles.", ex);
+				if (!didWarnAboutProfileSaveFailure)
+				{
+					didWarnAboutProfileSaveFailure = true;
+					toaster.Error("Unable to save your Streaming Quality profiles. Local Storage may be full. " + ex.message, 15000);
+				}
+			}
 
 			if (isInSavingProfilesFunc)
 				return; // Prevent infinitely looping here in case the default profiles don't have anything compatible.
@@ -26373,10 +26390,43 @@ function GenericQualityHelper()
 		}
 		return false;
 	}
+	/**
+	 * Returns true if both 4320p (8K) profiles are present in the streaming profile array which is currently in
+	 * persistent storage.  The in-memory profile list is deliberately not consulted here; this is what makes it
+	 * safe to remember that the one-time 8K profile creation has been completed.
+	 */
+	var Are8KProfilesPersisted = function ()
+	{
+		try
+		{
+			var stored = JSON.parse(settings.ui3_streamingProfileArray);
+			var found4320pVBR = false;
+			var found4320p = false;
+			for (var i = 0; i < stored.length; i++)
+			{
+				if (!stored[i])
+					continue;
+				if (stored[i].name === "4320p VBR^")
+					found4320pVBR = true;
+				else if (stored[i].name === "4320p^")
+					found4320p = true;
+			}
+			return found4320pVBR && found4320p;
+		}
+		catch (ex)
+		{
+			return false;
+		}
+	}
+	/**
+	 * Creates the 4320p (8K) streaming profiles if any known stream is natively larger than 3840px.
+	 * @returns {Boolean} True if the check is complete and does not need to be repeated during this page load.
+	 *   False if it should be attempted again the next time the camera list loads.
+	 */
 	this.add8KProfilesIfNeeded = function ()
 	{
 		if (!cameraListLoader)
-			return;
+			return false;
 		var cams = cameraListLoader.GetAllStreamObjects();
 		for (var i = 0; i < cams.length; i++)
 		{
@@ -26385,7 +26435,6 @@ function GenericQualityHelper()
 			{
 				// At least one stream exists that is natively larger than 3840px.
 				// Add 8K streaming profiles, then exit this function.
-				var madeChanges = false;
 				var added4320pVBR = hasProfileWithName("4320p VBR^");
 				var added4320p = hasProfileWithName("4320p^");
 				for (var p = 0; p < self.profiles.length; p++)
@@ -26397,7 +26446,7 @@ function GenericQualityHelper()
 						))
 					{
 						self.profiles.splice(p, 0, Create_4320p_VBR());
-						added4320pVBR = madeChanges = true;
+						added4320pVBR = true;
 					}
 					else if (!added4320p &&
 						(
@@ -26408,36 +26457,61 @@ function GenericQualityHelper()
 						))
 					{
 						self.profiles.splice(p, 0, Create_4320p());
-						added4320p = madeChanges = true;
+						added4320p = true;
 					}
 				}
 				if (!added4320p)
 				{
 					self.profiles.splice(0, 0, Create_4320p());
-					added4320p = madeChanges = true;
+					added4320p = true;
 				}
 				if (!added4320pVBR)
 				{
-					self.profiles.splice(0, 0, Create_4320p());
-					added4320pVBR = madeChanges = true;
+					self.profiles.splice(0, 0, Create_4320p_VBR());
+					added4320pVBR = true;
 				}
-				if (madeChanges)
+				// Save unconditionally, even if this call added nothing.  A previous call may have added the
+				// profiles to the in-memory list without successfully persisting them, in which case this is
+				// the only opportunity to write them out.
+				self.SaveProfiles();
+				if (!Are8KProfilesPersisted())
 				{
-					self.SaveProfiles();
+					// The profiles exist in memory but did not reach persistent storage.  Do not set the flag,
+					// or the 8K profiles would silently disappear at the next page load and never be recreated.
+					console.error("4320p (8K) streaming profiles could not be saved. UI3 will try again.");
+					return false;
 				}
 				settings.ui3_didAdd8kProfiles = "1";
 				console.log("A camera or group with native resolution above 3840px has been detected. 4320p (8K) streaming profiles have been added to UI3.");
-				break;
+				return true;
 			}
 		}
+		return true;
 	}
+	/** Number of times [onCameraListLoaded] may retry the 8K profile creation before giving up until the next page load. */
+	var max8KProfileAttempts = 5;
+	var is8KProfileListenerRegistered = false;
+	var Register8KProfileListener = function ()
+	{
+		if (is8KProfileListenerRegistered)
+			return;
+		is8KProfileListenerRegistered = true;
+		BI_CustomEvent.AddListener("CameraListLoaded", onCameraListLoaded);
+	};
+	var Unregister8KProfileListener = function ()
+	{
+		if (!is8KProfileListenerRegistered)
+			return;
+		is8KProfileListenerRegistered = false;
+		BI_CustomEvent.RemoveListener("CameraListLoaded", onCameraListLoaded);
+	};
 	var onCameraListLoaded = function ()
 	{
-		BI_CustomEvent.RemoveListener("CameraListLoaded", onCameraListLoaded);
-		self.add8KProfilesIfNeeded();
+		if (self.add8KProfilesIfNeeded() || --max8KProfileAttempts <= 0)
+			Unregister8KProfileListener();
 	};
 	if (settings.ui3_didAdd8kProfiles !== "1")
-		BI_CustomEvent.AddListener("CameraListLoaded", onCameraListLoaded);
+		Register8KProfileListener();
 
 	self.LoadProfiles();
 	if (!self.profiles || self.profiles.length === 0)
@@ -35008,22 +35082,30 @@ var BI_CustomEvent =
 	{
 		if (typeof this.customEventRegistry[eventName] != "undefined")
 			for (var i = 0; i < this.customEventRegistry[eventName].length; i++)
+			{
+				var handler = this.customEventRegistry[eventName][i];
 				try
 				{
-					var handler = this.customEventRegistry[eventName][i];
 					handler.isExecutingEventHandlerNow = true;
 					handler(args);
-					handler.isExecutingEventHandlerNow = false;
-					if (handler.removeEventHandlerWhenFinished)
-					{
-						this.customEventRegistry[eventName].splice(i, 1);
-						i--;
-					}
 				}
 				catch (ex)
 				{
 					toaster.Error(ex);
 				}
+				finally
+				{
+					// This must happen even if the handler threw an exception, otherwise the handler would be
+					// stuck in the "executing" state forever and RemoveListener could never actually remove it.
+					handler.isExecutingEventHandlerNow = false;
+					if (handler.removeEventHandlerWhenFinished)
+					{
+						handler.removeEventHandlerWhenFinished = false;
+						this.customEventRegistry[eventName].splice(i, 1);
+						i--;
+					}
+				}
+			}
 	}
 };
 ///////////////////////////////////////////////////////////////
