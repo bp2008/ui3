@@ -2471,12 +2471,20 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_ptz_controls_type"
-			, value: "Classic"
+			, value: "Automatic"
 			, inputType: "select"
-			, options: ["Classic", "Virtual Joystick"]
+			, options: ["Automatic", "Classic", "Virtual Joystick"]
 			, label: 'PTZ Controls'
-			, hint: '"Classic" is the traditional PTZ button pad.\n\n"Virtual Joystick" replaces the button pad with a touchscreen-friendly analog stick, plus a row of Zoom Out, Zoom In, Focus Near, Focus Far, and Stop buttons.\n\nThe virtual joystick emulates the stick of a gamepad, so it is compatible with the Experimental Joystick API option.'
+			, hint: '"Automatic" selects "Virtual Joystick" if the browser reports that the primary pointing device is a touchscreen, otherwise "Classic".  This is decided once each time UI3 loads.\n\n"Classic" is the traditional PTZ button pad.\n\n"Virtual Joystick" replaces the button pad with a touchscreen-friendly analog stick, plus a row of Zoom Out, Zoom In, Focus Near, Focus Far, and Stop buttons.\n\nThe virtual joystick emulates the stick of a gamepad, so it is compatible with the Experimental Joystick API option.'
 			, onChange: OnChange_ui3_ptz_controls_type
+			, category: "PTZ"
+		}
+		, {
+			key: "ui3_comment_ptz_controls_type"
+			, value: ""
+			, inputType: "comment"
+			, comment: GenerateCurrentPtzControlsComment
+			, preconditionFunc: Precondition_ui3_ptz_controls_type_is_automatic
 			, category: "PTZ"
 		}
 		, {
@@ -7893,11 +7901,11 @@ function PtzButtons()
 		return ptzButtonsVue;
 	}
 	/**
-	 * Shows either the classic PTZ button pad or the virtual joystick, according to the ui3_ptz_controls_type setting.
+	 * Shows either the classic PTZ button pad or the virtual joystick, according to the ui3_ptz_controls_type setting (see GetEffectivePtzControlsType).
 	 */
 	this.SetControlsType = function ()
 	{
-		var useVirtualJoystick = settings.ui3_ptz_controls_type === "Virtual Joystick";
+		var useVirtualJoystick = GetEffectivePtzControlsType() === "Virtual Joystick";
 		$ptzControlsBox.toggleClass("ptzVirtualJoystickMode", useVirtualJoystick);
 		virtualJoystick.Release();
 		onHoverLeave();
@@ -38771,6 +38779,44 @@ function OnChange_ui3_ptzPresetShowCount(newValue)
 function OnChange_ui3_ptz_controls_type()
 {
 	ptzButtons.SetControlsType();
+	uiSettingsPanel.Refresh(); // Shows or hides the comment that reveals the "Automatic" choice.
+}
+var ptzAutoUsesVirtualJoystick = null; // Resolved once per page load by GetEffectivePtzControlsType, so the PTZ controls never change type mid-session.
+/**
+ * Returns "Classic" or "Virtual Joystick" according to the ui3_ptz_controls_type setting.
+ * When the setting is "Automatic", the Virtual Joystick is chosen if the browser reports that the device's primary pointing device is a touchscreen (a "coarse" pointer).
+ * This is a device capability query, not a reaction to mouse or touch input events, and it is evaluated only once per page load.
+ */
+function GetEffectivePtzControlsType()
+{
+	if (settings.ui3_ptz_controls_type !== "Automatic")
+		return settings.ui3_ptz_controls_type;
+	if (ptzAutoUsesVirtualJoystick === null)
+	{
+		try
+		{
+			if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches)
+				ptzAutoUsesVirtualJoystick = true;
+			else if (window.matchMedia && window.matchMedia("(pointer: fine), (pointer: none)").matches)
+				ptzAutoUsesVirtualJoystick = false; // The browser supports the pointer media feature and reports a mouse-like primary pointer (or none at all).
+			else
+				ptzAutoUsesVirtualJoystick = BrowserIsIOS() || BrowserIsAndroid(); // The browser does not support the pointer media feature, so fall back to platform detection.
+		}
+		catch (ex)
+		{
+			console.error("Failed to detect the primary pointer type. Classic PTZ controls will be used.", ex);
+			ptzAutoUsesVirtualJoystick = false;
+		}
+	}
+	return ptzAutoUsesVirtualJoystick ? "Virtual Joystick" : "Classic";
+}
+function GenerateCurrentPtzControlsComment()
+{
+	return '<div class="currentPtzControlsComment">"Automatic" has selected: ' + GetEffectivePtzControlsType() + '</div>';
+}
+function Precondition_ui3_ptz_controls_type_is_automatic()
+{
+	return settings.ui3_ptz_controls_type === "Automatic";
 }
 function GetPreferredContextMenuTrigger()
 {

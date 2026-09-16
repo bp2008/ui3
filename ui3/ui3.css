@@ -7525,7 +7525,8 @@ ul.extraSpacing li
 	color: #FF8800;
 }
 
-.currentH264PlayerComment
+.currentH264PlayerComment,
+.currentPtzControlsComment
 {
 	text-align: center;
 	font-weight: bold;
