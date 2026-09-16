@@ -365,6 +365,9 @@
 						<p>UI3 offers several methods of controlling Pan-Tilt-Zoom (PTZ) cameras.  For correct behavior, each camera must have the appropriate PTZ control profile chosen in Blue Iris.  Not all cameras support all functions that are shown in the user interface.</p>
 						<h3>Standard PTZ Controls</h3>
 						<p>The primary method of PTZ input is via the PTZ button pad on the Live View tab, where buttons are available to pan, tilt, zoom, or adjust camera focus.  Mouse over each button for a description of what each button does.  The button at the center of the button pad is to "Stop" the camera, which is unnecessary in most cases but may be helpful if your camera is stuck in a moving state and the other buttons cannot stop it.</p>
+						<h3>Virtual Joystick</h3>
+						<p>If the button pad is difficult to use on a touchscreen, open UI Settings &gt; PTZ and change the "PTZ Controls" option from "Classic" to "Virtual Joystick".  The button pad is replaced by a virtual analog stick.  Drag the stick in any direction to pan and tilt the camera, and release it to stop.  Buttons for Zoom Out, Zoom In, Focus Near, Focus Far, and Stop are located below the stick.</p>
+						<p>The virtual joystick emulates the stick of a gamepad.  Normally, the stick acts like the 8 directional buttons of the classic button pad.  If the "Experimental Joystick API" option is enabled (found in the PTZ section of UI Settings, below the gamepad settings), the camera moves faster the further the stick is pushed from center, provided that the camera's PTZ profile in Blue Iris supports variable speed.</p>
 						<h3>Preset Positions</h3>
 						<p>Below the PTZ button pad, there are buttons for loading and setting PTZ presets.</p>
 						<h4>Goto Preset</h4>

@@ -2470,6 +2470,16 @@ var defaultSettings =
 			, category: "PTZ"
 		}
 		, {
+			key: "ui3_ptz_controls_type"
+			, value: "Classic"
+			, inputType: "select"
+			, options: ["Classic", "Virtual Joystick"]
+			, label: 'PTZ Controls'
+			, hint: '"Classic" is the traditional PTZ button pad.\n\n"Virtual Joystick" replaces the button pad with a touchscreen-friendly analog stick, plus a row of Zoom Out, Zoom In, Focus Near, Focus Far, and Stop buttons.\n\nThe virtual joystick emulates the stick of a gamepad, so it is compatible with the Experimental Joystick API option.'
+			, onChange: OnChange_ui3_ptz_controls_type
+			, category: "PTZ"
+		}
+		, {
 			key: "ui3_ptzPresetShowCount"
 			, value: "20"
 			, inputType: "select"
@@ -6744,7 +6754,9 @@ function PtzButtons()
 	var $ptzGraphicContainers = $("#ptzGraphicWrapper .ptzGraphicContainer");
 	var $ptzPresets = $("#ptzPresetsContent .ptzpreset");
 	var $ptzButtons = $("#ptzButtonsMain");
-	var $ptzControlsContainers = $("#ptzPresetsContent,#ptzButtonsMain");
+	var $ptzControlsContainers = $("#ptzPresetsContent,#ptzButtonsMain,#ptzVirtualJoystickMain,#ptzVirtualJoystickButtons");
+	var $ptzControlsBox = $("#ptzControlsBox");
+	var $ptzVirtualJoystickButtons = $("#ptzVirtualJoystickButtons");
 	var $ptzExtraDropdowns = $("#ptzIrBrightnessContrast .dropdownTrigger");
 	var $ptzHome = $("#ptzHome");
 	var $irButtonText = $("#irButtonText");
@@ -6900,11 +6912,12 @@ function PtzButtons()
 		return svgid;
 	}
 
-	BI_CustomEvent.AddListener("afterResize", function ()
+	var UpdateSavedBounds = function ()
 	{
 		var o = $ptzGraphicWrapper.offset();
 		$ptzGraphicWrapper.get(0).savedBounds = { x: o ? o.left : 0, y: o ? o.top : 0, w: $ptzGraphicWrapper.width(), h: $ptzGraphicWrapper.height() };
-	});
+	}
+	BI_CustomEvent.AddListener("afterResize", UpdateSavedBounds);
 	// PTZ button input events //
 
 	// onHoverEnter called whenever a mouse pointer begins hovering over any button.
@@ -7089,6 +7102,7 @@ function PtzButtons()
 			setColor($ptzBackgroundGraphics, ptzpadDisabledColor);
 		}
 		self.vue().resetGuiButtonState();
+		virtualJoystick.SetEnabled(ptzControlsEnabled);
 		var currentCam = cameraListLoader.GetCameraWithId(videoPlayer.Loading().image.id);
 		if (videoPlayer.Loading().image.isLive && currentCam && currentCam.ptzdirect && ptzControlsEnabled)
 		{
@@ -7493,6 +7507,7 @@ function PtzButtons()
 				hotkeyState: CreateBIPtzState(),
 				guiButtonState: CreateBIPtzState(),
 				joystickState: CreateBIPtzState(),
+				virtualJoystickState: CreateBIPtzState(),
 				oneTimeActionQueue: new Queue(),
 				allPtzStates: [],
 				unsafe_currentPtzCmd: null, // The button number which is currently activating or activated via the "unsafe"/"updown" method.  This will be "number" type or null.
@@ -7507,6 +7522,7 @@ function PtzButtons()
 			this.allPtzStates.push(this.hotkeyState);
 			this.allPtzStates.push(this.guiButtonState);
 			this.allPtzStates.push(this.joystickState);
+			this.allPtzStates.push(this.virtualJoystickState);
 			ptzButtonsVue = this;
 			BI_CustomEvent.AddListener("OpenVideo", function (loading)
 			{
@@ -7524,19 +7540,21 @@ function PtzButtons()
 		{
 			mergedState: function ()
 			{
-				// Merge the hotkeyState, guiButtonState, joystickState
+				// Merge the hotkeyState, guiButtonState, joystickState, virtualJoystickState
 				console.log("mergedState computed");
 				var state = CreateBIPtzState();
-				var jsExp = settings.ui3_experimental_joystick_api === "1";
+				var jsExp = IsExperimentalJoystickApiEnabled();
 				for (var key in state)
 				{
 					if (Object.prototype.hasOwnProperty.call(state, key))
 					{
-						var jsState = this.joystickState[key]; // If we don't read this when jsExp is true, reactivity is broken when jsExp switches back to false.
+						// The joystick states must be read even when jsExp is true, otherwise reactivity is broken when jsExp switches back to false.
+						var jsState = this.joystickState[key];
+						var vjState = this.virtualJoystickState[key];
 						if (jsExp)
-							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key]);
+							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key]); // Joystick inputs are sent via the Experimental Joystick API instead.
 						else
-							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key], jsState);
+							state[key] = Math.max(this.hotkeyState[key], this.guiButtonState[key], jsState, vjState);
 					}
 				}
 				return state;
@@ -7754,6 +7772,8 @@ function PtzButtons()
 			},
 			applySvgButtonColors: function ()
 			{
+				if (virtualJoystick)
+					virtualJoystick.ApplyInputState(this);
 				var visibleGraphicContainer = GetVisibleGraphicContainer();
 				if (!visibleGraphicContainer)
 					return;
@@ -7789,6 +7809,8 @@ function PtzButtons()
 			},
 			resetAllButtonState: function ()
 			{
+				if (virtualJoystick)
+					virtualJoystick.Release();
 				for (var i = 0; i < this.allPtzStates.length; i++)
 				{
 					var state = this.allPtzStates[i];
@@ -7870,6 +7892,411 @@ function PtzButtons()
 	{
 		return ptzButtonsVue;
 	}
+	/**
+	 * Shows either the classic PTZ button pad or the virtual joystick, according to the ui3_ptz_controls_type setting.
+	 */
+	this.SetControlsType = function ()
+	{
+		var useVirtualJoystick = settings.ui3_ptz_controls_type === "Virtual Joystick";
+		$ptzControlsBox.toggleClass("ptzVirtualJoystickMode", useVirtualJoystick);
+		virtualJoystick.Release();
+		onHoverLeave();
+		ptzButtonsVue.resetGuiButtonState();
+		UpdateSavedBounds();
+	}
+	/**
+	 * If the Experimental Joystick API is enabled, sends the combined input of all physical gamepads and the virtual joystick to Blue Iris as a joystick command.
+	 * This is called by the gamepad polling loop and by the virtual joystick whenever its position changes.
+	 */
+	this.SendJoystickApiInput = function ()
+	{
+		if (!IsExperimentalJoystickApiEnabled())
+			return;
+		var s = ptzButtonsVue.joystickState;
+		var X = s.left >= s.right ? -s.left : s.right;
+		var Y = s.up >= s.down ? -s.up : s.down;
+		var axes = virtualJoystick.GetAxes();
+		if (Math.abs(axes.x) > Math.abs(X))
+			X = axes.x;
+		if (Math.abs(axes.y) > Math.abs(Y))
+			Y = axes.y;
+		PTZ_Joystick_Input(X, Y, s.zin, s.zout);
+		ptzButtonsVue.applySvgButtonColors();
+	}
+	///////////////////////////////////////////////////////////////
+	// Virtual Joystick ///////////////////////////////////////////
+	///////////////////////////////////////////////////////////////
+	/**
+	 * Touchscreen-friendly PTZ input which emulates the analog stick of a gamepad, accompanied by a row of zoom/focus/stop buttons.
+	 * The stick's 8-way direction state is written to ptzButtonsVue.virtualJoystickState, where it is merged with the other input sources to drive the classic start/stop PTZ commands.
+	 * The stick's analog position is available via GetAxes() for use with the Experimental Joystick API.
+	 * The buttons below the stick behave exactly like the corresponding buttons at the center of the classic PTZ pad.
+	 */
+	function PtzVirtualJoystick()
+	{
+		var vj = this;
+		var analogDeadzone = 0.12; // Fraction of the stick's travel radius within which the analog output is zero.
+		var directionEngageDistance = 0.28; // Fraction of the stick's travel radius at which an 8-way direction becomes active.
+		var directionReleaseDistance = 0.2; // Fraction of the stick's travel radius at which the active 8-way direction is released.  Lower than the engage distance to provide hysteresis.
+		var sectorHysteresisDeg = 5; // Number of degrees the stick must travel past a sector boundary before the 8-way direction changes.
+		var sectorStateKeys = [["right"], ["right", "down"], ["down"], ["down", "left"], ["left"], ["left", "up"], ["up"], ["up", "right"]]; // Sector 0 is right, proceeding clockwise in 45 degree steps.
+		var directionalStateKeys = ["up", "down", "left", "right"];
+
+		var $base = $("#ptzVirtualJoystick");
+		var base = $base.get(0);
+		var knob = $base.find(".vjoyKnob").get(0);
+		var indicators = [
+			{ svgid: "PTZcardinalUp", $ele: $base.find(".vjoyArrowUp") }
+			, { svgid: "PTZcardinalRight", $ele: $base.find(".vjoyArrowRight") }
+			, { svgid: "PTZcardinalDown", $ele: $base.find(".vjoyArrowDown") }
+			, { svgid: "PTZcardinalLeft", $ele: $base.find(".vjoyArrowLeft") }
+			, { svgid: "PTZordinalNE", $ele: $base.find(".vjoyDotNE") }
+			, { svgid: "PTZordinalNW", $ele: $base.find(".vjoyDotNW") }
+			, { svgid: "PTZordinalSW", $ele: $base.find(".vjoyDotSW") }
+			, { svgid: "PTZordinalSE", $ele: $base.find(".vjoyDotSE") }
+		];
+		var $buttons = $ptzVirtualJoystickButtons.find(".vjoyButton");
+		var supportsPointerEvents = !!window.PointerEvent;
+
+		var enabled = false;
+		var activePointerId = null; // Identifier of the pointer (or touch) currently holding the stick, or null.
+		var baseRect = null; // Bounding rect of the joystick base, captured when the stick is grabbed.
+		var travelRadius = 1; // Maximum distance in px that the center of the knob may travel from the center of the base.
+		var axisX = 0; // Analog stick position from -1 (left) to 1 (right), with deadzone applied.
+		var axisY = 0; // Analog stick position from -1 (up) to 1 (down), with deadzone applied.
+		var currentSector = -1; // -1 while the stick is near center, otherwise 0-7 (see sectorStateKeys).
+
+		// Stick input //
+		var Grab = function (pointerId, clientX, clientY)
+		{
+			if (!enabled || activePointerId !== null)
+				return false;
+			baseRect = base.getBoundingClientRect();
+			travelRadius = Math.max(1, (baseRect.width - knob.offsetWidth) / 2);
+			activePointerId = pointerId;
+			$base.removeClass("returning").addClass("active");
+			$.hideAllContextMenus();
+			Move(clientX, clientY);
+			return true;
+		}
+		var Move = function (clientX, clientY)
+		{
+			var dx = clientX - (baseRect.left + baseRect.width / 2);
+			var dy = clientY - (baseRect.top + baseRect.height / 2);
+			var dist = Math.sqrt(dx * dx + dy * dy);
+			var knobX = dx;
+			var knobY = dy;
+			if (dist > travelRadius)
+			{
+				knobX = dx / dist * travelRadius;
+				knobY = dy / dist * travelRadius;
+			}
+			knob.style.transform = "translate(-50%, -50%) translate(" + knobX.toFixed(1) + "px, " + knobY.toFixed(1) + "px)";
+
+			var magnitude = Math.min(dist / travelRadius, 1);
+			if (dist === 0 || magnitude <= analogDeadzone)
+				axisX = axisY = 0;
+			else
+			{
+				var scaled = (magnitude - analogDeadzone) / (1 - analogDeadzone);
+				axisX = (dx / dist) * scaled;
+				axisY = (dy / dist) * scaled;
+			}
+
+			var sector = ComputeSector(dx, dy, magnitude);
+			if (sector !== currentSector)
+			{
+				currentSector = sector;
+				ApplySectorState();
+			}
+			self.SendJoystickApiInput();
+		}
+		var ComputeSector = function (dx, dy, magnitude)
+		{
+			if (magnitude < (currentSector === -1 ? directionEngageDistance : directionReleaseDistance))
+				return -1;
+			var angle = Math.atan2(dy, dx) * 180 / Math.PI; // 0 is right, 90 is down
+			if (angle < 0)
+				angle += 360;
+			var nearest = Math.round(angle / 45) % 8;
+			if (currentSector === -1 || nearest === currentSector)
+				return nearest;
+			// Require the stick to travel a little way past the sector boundary before changing direction, so the direction does not flicker at the boundary.
+			var diff = angle - (currentSector * 45);
+			if (diff > 180)
+				diff -= 360;
+			else if (diff < -180)
+				diff += 360;
+			if (Math.abs(diff) <= 22.5 + sectorHysteresisDeg)
+				return currentSector;
+			return nearest;
+		}
+		var ApplySectorState = function ()
+		{
+			var state = ptzButtonsVue.virtualJoystickState;
+			var keys = currentSector === -1 ? [] : sectorStateKeys[currentSector];
+			for (var i = 0; i < directionalStateKeys.length; i++)
+			{
+				var key = directionalStateKeys[i];
+				state[key] = keys.indexOf(key) === -1 ? 0 : 1;
+			}
+			ptzButtonsVue.applySvgButtonColors();
+		}
+		/**
+		 * Releases the stick, returning it to center and clearing all of its input state.  Safe to call at any time.
+		 */
+		this.Release = function ()
+		{
+			if (activePointerId === null)
+				return;
+			activePointerId = null;
+			axisX = axisY = 0;
+			$base.removeClass("active").addClass("returning");
+			knob.style.transform = "";
+			if (currentSector !== -1)
+			{
+				currentSector = -1;
+				ApplySectorState();
+			}
+			self.SendJoystickApiInput();
+		}
+		/**
+		 * Returns the analog position of the stick as { x, y } where each axis ranges from -1 to 1 (positive x is right, positive y is down).  Both are 0 while the stick is idle.
+		 */
+		this.GetAxes = function ()
+		{
+			return { x: axisX, y: axisY };
+		}
+		var FindActiveTouch = function (e)
+		{
+			if (activePointerId === null || !e.changedTouches)
+				return null;
+			for (var i = 0; i < e.changedTouches.length; i++)
+				if (e.changedTouches[i].identifier === activePointerId)
+					return e.changedTouches[i];
+			return null;
+		}
+		if (supportsPointerEvents)
+		{
+			base.addEventListener("pointerdown", function (e)
+			{
+				if (e.pointerType === "mouse" && e.button !== 0)
+					return;
+				if (Grab(e.pointerId, e.clientX, e.clientY))
+				{
+					try { base.setPointerCapture(e.pointerId); } catch (ex) { }
+					e.preventDefault();
+				}
+			});
+			base.addEventListener("pointermove", function (e)
+			{
+				if (activePointerId === e.pointerId)
+				{
+					Move(e.clientX, e.clientY);
+					e.preventDefault();
+				}
+			});
+			var onPointerEnd = function (e)
+			{
+				if (activePointerId === e.pointerId)
+					vj.Release();
+			};
+			base.addEventListener("pointerup", onPointerEnd);
+			base.addEventListener("pointercancel", onPointerEnd);
+			base.addEventListener("lostpointercapture", onPointerEnd);
+		}
+		else
+		{
+			// Fallback for browsers without Pointer Events.  Touch events are always delivered to the element where the touch began, so they are bound to the base.
+			base.addEventListener("mousedown", function (e)
+			{
+				if (e.button === 0 && Grab("mouse", e.clientX, e.clientY))
+					e.preventDefault();
+			});
+			document.addEventListener("mousemove", function (e)
+			{
+				if (activePointerId === "mouse")
+					Move(e.clientX, e.clientY);
+			});
+			document.addEventListener("mouseup", function (e)
+			{
+				if (activePointerId === "mouse")
+					vj.Release();
+			});
+			base.addEventListener("touchstart", function (e)
+			{
+				var t = e.changedTouches[0];
+				if (t && Grab(t.identifier, t.clientX, t.clientY))
+					e.preventDefault();
+			}, { passive: false });
+			base.addEventListener("touchmove", function (e)
+			{
+				var t = FindActiveTouch(e);
+				if (t)
+				{
+					Move(t.clientX, t.clientY);
+					e.preventDefault();
+				}
+			}, { passive: false });
+			var onTouchEnd = function (e)
+			{
+				if (FindActiveTouch(e))
+					vj.Release();
+			};
+			base.addEventListener("touchend", onTouchEnd);
+			base.addEventListener("touchcancel", onTouchEnd);
+		}
+		base.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+		// If the current camera changes while the stick is held, immediately re-evaluate the stick's input against the new camera (which stops the previous camera) rather than waiting for the next pointer movement.
+		BI_CustomEvent.AddListener("OpenVideo", function ()
+		{
+			if (activePointerId !== null)
+			{
+				setTimeout(function ()
+				{
+					ptzButtonsVue.ptzChangeRespond();
+					self.SendJoystickApiInput();
+				}, 0);
+			}
+		});
+
+		// Zoom / focus / stop buttons //
+		$buttons.each(function (idx, ele)
+		{
+			var $ele = $(ele);
+			ele.svgid = $ele.attr("svgid");
+			ele.$ele = $ele;
+			var stateKeys = ptzStateKeys[ele.svgid];
+			if (stateKeys.length)
+			{
+				// This button starts a persistent PTZ movement which continues while the button is held (e.g. zoom in).
+				var heldPointerId = null;
+				var SetHeld = function (pointerId)
+				{
+					heldPointerId = pointerId;
+					var value = pointerId === null ? 0 : 1;
+					for (var i = 0; i < stateKeys.length; i++)
+						ptzButtonsVue.guiButtonState[stateKeys[i]] = value;
+				}
+				var Press = function (pointerId)
+				{
+					if (!enabled)
+						return false;
+					$.hideAllContextMenus();
+					SetHeld(pointerId);
+					return true;
+				}
+				if (supportsPointerEvents)
+				{
+					ele.addEventListener("pointerdown", function (e)
+					{
+						if (e.pointerType === "mouse" && e.button !== 0)
+							return;
+						if (Press(e.pointerId))
+						{
+							try { ele.setPointerCapture(e.pointerId); } catch (ex) { }
+							e.preventDefault();
+						}
+					});
+					var onPointerEnd = function (e)
+					{
+						if (heldPointerId === e.pointerId)
+							SetHeld(null);
+					};
+					ele.addEventListener("pointerup", onPointerEnd);
+					ele.addEventListener("pointercancel", onPointerEnd);
+					ele.addEventListener("lostpointercapture", onPointerEnd);
+				}
+				else
+				{
+					ele.addEventListener("mousedown", function (e)
+					{
+						if (e.button === 0 && Press("mouse"))
+							e.preventDefault();
+					});
+					document.addEventListener("mouseup", function (e)
+					{
+						if (heldPointerId === "mouse")
+							SetHeld(null);
+					});
+					ele.addEventListener("touchstart", function (e)
+					{
+						var t = e.changedTouches[0];
+						if (t && Press(t.identifier))
+							e.preventDefault();
+					}, { passive: false });
+					var onTouchEnd = function (e)
+					{
+						for (var i = 0; i < e.changedTouches.length; i++)
+							if (e.changedTouches[i].identifier === heldPointerId)
+								SetHeld(null);
+					};
+					ele.addEventListener("touchend", onTouchEnd);
+					ele.addEventListener("touchcancel", onTouchEnd);
+				}
+			}
+			else
+			{
+				// This button performs a one-time action (e.g. stop).
+				$ele.on("click", function ()
+				{
+					if (!enabled)
+						return;
+					ptzButtonsVue.enqueuePtzAction(videoPlayer.Loading().image.id, ptzCmds[ele.svgid]);
+				});
+			}
+			ele.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+		});
+
+		// Display state //
+		/**
+		 * Enables or disables the virtual joystick and its buttons.  Disabling releases the stick if it is currently held.
+		 */
+		this.SetEnabled = function (enable)
+		{
+			enabled = !!enable;
+			if (!enabled)
+				vj.Release();
+			$base.toggleClass("disabled", !enabled);
+			$buttons.toggleClass("disabled", !enabled);
+			if (enabled)
+			{
+				$base.attr("title", "Drag the stick to pan and tilt the camera.");
+				$buttons.each(function (idx, ele) { ele.$ele.attr("title", ptzTitles[ele.svgid]); });
+			}
+			else
+			{
+				$base.removeAttr("title");
+				$buttons.removeAttr("title");
+			}
+		}
+		var lastIndicatorState = {};
+		var SetIndicatorActive = function (svgid, $ele, active)
+		{
+			active = !!active;
+			if (lastIndicatorState[svgid] === active)
+				return;
+			lastIndicatorState[svgid] = active;
+			$ele.toggleClass("active", active);
+		}
+		/**
+		 * Updates the joystick's direction indicators and buttons to reflect the current PTZ input state from all sources (stick, buttons, hotkeys, gamepads).
+		 * @param {Object} vue The ptzButtonsVue instance.
+		 */
+		this.ApplyInputState = function (vue)
+		{
+			if (!$ptzControlsBox.hasClass("ptzVirtualJoystickMode"))
+				return;
+			for (var i = 0; i < indicators.length; i++)
+				SetIndicatorActive(indicators[i].svgid, indicators[i].$ele, vue.shouldSvgBeActive(indicators[i].svgid));
+			$buttons.each(function (idx, ele)
+			{
+				SetIndicatorActive(ele.svgid, ele.$ele, vue.shouldSvgBeActive(ele.svgid));
+			});
+		}
+	}
+	var virtualJoystick = new PtzVirtualJoystick();
+	self.SetControlsType();
 }
 ///////////////////////////////////////////////////////////////
 // Relative PTZ GUI ///////////////////////////////////////////
@@ -8386,21 +8813,7 @@ function GamepadPtzController()
 					state.nextCamera = !!ReadBinding(settings.ui3_gamepad_binding_next_camera);
 					state.restartCamera = !!ReadBinding(settings.ui3_gamepad_binding_restart_camera);
 
-					if (settings.ui3_experimental_joystick_api === "1")
-					{
-						var X = 0;
-						if (state.left >= state.right)
-							X = -state.left;
-						else
-							X = state.right;
-						var Y = 0;
-						if (state.up >= state.down)
-							Y = -state.up;
-						else
-							Y = state.down;
-						PTZ_Joystick_Input(X, Y, state.zin, state.zout);
-						ptzButtons.vue().applySvgButtonColors();
-					}
+					ptzButtons.SendJoystickApiInput();
 				}
 			}
 		}
@@ -8425,11 +8838,7 @@ function GamepadPtzController()
 		state.nextCamera = false;
 		state.restartCamera = false;
 
-		if (settings.ui3_experimental_joystick_api === "1")
-		{
-			PTZ_Joystick_Input(0, 0, 0, 0);
-			ptzButtons.vue().applySvgButtonColors();
-		}
+		ptzButtons.SendJoystickApiInput();
 	}
 	function ReadBinding(binding)
 	{
@@ -8775,8 +9184,11 @@ function TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOu
 	return bitmask;
 }
 var joystickDebug = false;
-var lastJoystickValue = null;
+var lastJoystickValue = null; // The joystick bitmask most recently sent to Blue Iris.
+var lastJoystickCamId = null; // The camera ID that lastJoystickValue was sent to.
 var isSendingJoystickCommand = false;
+var joystickPendingInput = null; // The most recent joystick input which has not yet been processed, or null.
+var joystickRetryTimeout = null;
 var joystickDebugToast = null;
 function reverseBits(num)
 {
@@ -8785,29 +9197,55 @@ function reverseBits(num)
 	reversed = padding.repeat(16 - reversed.length) + reversed;
 	return parseInt(reversed.split('').reverse().join(''), 2);
 }
+/**
+ * Accepts joystick-style PTZ input (analog axis values from -1 to 1) and sends it to Blue Iris as a joystick command when appropriate.
+ * Only one joystick command is in flight at a time.  If new input arrives while a command is in flight, the newest input is processed once the current command completes, so the final position of the stick is never lost.
+ */
 function PTZ_Joystick_Input(axisX, axisY, axisZoomIn, axisZoomOut)
 {
-	if (isSendingJoystickCommand)
+	joystickPendingInput = { x: axisX, y: axisY, zin: axisZoomIn, zout: axisZoomOut };
+	PTZ_Joystick_ProcessPendingInput();
+}
+function PTZ_Joystick_ProcessPendingInput()
+{
+	if (isSendingJoystickCommand || !joystickPendingInput)
 		return;
 	var loading = videoPlayer.Loading();
-	if (loading.image.ptz && loading.image.isLive)
+	var camId = (loading.image.ptz && loading.image.isLive) ? loading.image.id : null;
+	if (lastJoystickValue && lastJoystickCamId && lastJoystickCamId !== camId)
 	{
-		var jsVal = TranslateJoystickInputsIntoBitmask(axisX, axisY, axisZoomIn, axisZoomOut);
-		if (jsVal != lastJoystickValue)
-		{
-			var args = { cmd: "ptz", camera: loading.image.id, joystick: jsVal };
-			console.log("Sending PTZ joystick # " + dec2bin(jsVal).padLeft(16, "0"));
-			isSendingJoystickCommand = true;
-			ExecJSON(args, function (response)
-			{
-				isSendingJoystickCommand = false;
-				lastJoystickValue = jsVal;
-			}, function ()
-			{
-				isSendingJoystickCommand = false;
-			});
-		}
+		// The current camera changed while the previous camera was still moving.  Stop the previous camera before doing anything else.
+		// joystickPendingInput is retained and will be processed after the stop command completes.
+		PTZ_Joystick_SendCommand(lastJoystickCamId, 0, null);
+		return;
 	}
+	var input = joystickPendingInput;
+	joystickPendingInput = null;
+	if (!camId)
+		return;
+	var jsVal = TranslateJoystickInputsIntoBitmask(input.x, input.y, input.zin, input.zout);
+	if (jsVal !== lastJoystickValue || (camId !== lastJoystickCamId && jsVal !== 0))
+		PTZ_Joystick_SendCommand(camId, jsVal, input);
+}
+function PTZ_Joystick_SendCommand(camId, jsVal, inputForRetry)
+{
+	var args = { cmd: "ptz", camera: camId, joystick: jsVal };
+	console.log("Sending PTZ joystick # " + dec2bin(jsVal).padLeft(16, "0"));
+	isSendingJoystickCommand = true;
+	ExecJSON(args, function (response)
+	{
+		isSendingJoystickCommand = false;
+		lastJoystickValue = jsVal;
+		lastJoystickCamId = camId;
+		PTZ_Joystick_ProcessPendingInput();
+	}, function ()
+	{
+		isSendingJoystickCommand = false;
+		if (inputForRetry && !joystickPendingInput)
+			joystickPendingInput = inputForRetry;
+		clearTimeout(joystickRetryTimeout);
+		joystickRetryTimeout = setTimeout(PTZ_Joystick_ProcessPendingInput, 100);
+	});
 }
 
 ///////////////////////////////////////////////////////////////
@@ -38330,6 +38768,10 @@ function OnChange_ui3_ptzPresetShowCount(newValue)
 {
 	ReloadToTakeEffectToast(settings.ui3_ptzPresetShowCount + " PTZ presets will be shown.");
 }
+function OnChange_ui3_ptz_controls_type()
+{
+	ptzButtons.SetControlsType();
+}
 function GetPreferredContextMenuTrigger()
 {
 	if (settings.ui3_contextMenus_trigger === "Long-Press")
@@ -38594,6 +39036,13 @@ function OnChange_ui3_gamepad_ptz_enabled()
 function Precondition_ui3_gamepad_ptz_enabled()
 {
 	return settings.ui3_gamepad_ptz_enabled === "1"
+}
+/**
+ * Returns true if the Experimental Joystick API should be used for variable-speed PTZ control.  Requires gamepad controls to be enabled, because the option is only offered in the UI when they are.
+ */
+function IsExperimentalJoystickApiEnabled()
+{
+	return settings.ui3_gamepad_ptz_enabled === "1" && settings.ui3_experimental_joystick_api === "1";
 }
 function OnChange_ui3_video_loading_overlay()
 {

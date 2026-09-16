@@ -128,7 +128,7 @@
 		function isUrlPathBad(b) { const c = /^[A-Za-z0-9=_-]+$/; try { const a = (new URL(b)).pathname.slice(1); return 20 < a.length && c.test(a) } catch (a) { return !1 } };
 	</script>
 	<script type="text/javascript">
-		var ui_version = "339";
+		var ui_version = "340-b1";
 		var bi_version = "%%VERSION%%";
 		var appPath_raw = "%%VIRTDIR%%";
 		var local_bi_session = "%%SESSION%%";
@@ -338,6 +338,26 @@
 											<div class="ptzGraphic" layoutR="90 90 4 4" svgid="PTZordinalSE"></div>
 										</div>
 									</div>
+								</div>
+								<div id="ptzVirtualJoystickMain" class="leftBarInvertBox">
+									<div id="ptzVirtualJoystick">
+										<div class="vjoyArrow vjoyArrowUp"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalUp"></use></svg></div>
+										<div class="vjoyArrow vjoyArrowRight"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalUp"></use></svg></div>
+										<div class="vjoyArrow vjoyArrowDown"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalUp"></use></svg></div>
+										<div class="vjoyArrow vjoyArrowLeft"><svg class="icon"><use xlink:href="#svg_x5F_PTZcardinalUp"></use></svg></div>
+										<div class="vjoyDot vjoyDotNE"></div>
+										<div class="vjoyDot vjoyDotNW"></div>
+										<div class="vjoyDot vjoyDotSW"></div>
+										<div class="vjoyDot vjoyDotSE"></div>
+										<div class="vjoyKnob"><div class="vjoyKnobInner"></div></div>
+									</div>
+								</div>
+								<div id="ptzVirtualJoystickButtons" class="fiveByOneButtonSet leftBarInvertBox">
+									<div class="squareButton vjoyButton" svgid="PTZzoomOut"><svg class="icon"><use xlink:href="#svg_x5F_PTZminus"></use></svg></div>
+									<div class="squareButton vjoyButton" svgid="PTZzoomIn"><svg class="icon"><use xlink:href="#svg_x5F_PTZplus"></use></svg></div>
+									<div class="squareButton vjoyButton" svgid="PTZfocusLarge"><svg class="icon"><use xlink:href="#svg_x5F_PTZfocusEyeLarge"></use></svg></div>
+									<div class="squareButton vjoyButton" svgid="PTZfocusSmall"><svg class="icon"><use xlink:href="#svg_x5F_PTZfocusEyeSmall"></use></svg></div>
+									<div class="squareButton vjoyButton" svgid="PTZstop"><svg class="icon"><use xlink:href="#svg_x5F_PTZsquare"></use></svg></div>
 								</div>
 								<div id="ptzRelativeToggleSection" class="leftBarInvertBox standardLeftBarBoxSize">
 									<input type="button" id="ptzRelativeToggle" class="simpleTextButton btnTransparent" value="Toggle 3D Positioning" onclick="relativePTZ.toggle3dPositioning()">

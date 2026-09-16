@@ -1604,6 +1604,244 @@ div.invisibleLabel
 {
 	display: block;
 }
+/* PTZ Virtual Joystick */
+#ptzVirtualJoystickMain,
+#ptzVirtualJoystickButtons
+{
+	display: none;
+	break-inside: avoid;
+}
+
+.ptzVirtualJoystickMode #ptzButtonsMain
+{
+	display: none;
+}
+
+.ptzVirtualJoystickMode #ptzVirtualJoystickMain,
+.ptzVirtualJoystickMode #ptzVirtualJoystickButtons
+{
+	display: block;
+}
+
+#ptzVirtualJoystick
+{
+	position: relative;
+	width: 190px;
+	height: 190px;
+	border-radius: 50%;
+	background-color: var(--ptzpad-color);
+	background-image: radial-gradient(circle at 50% 50%, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.18) 52%, rgba(0,0,0,0.05) 74%, rgba(255,255,255,0.08) 100%);
+	box-shadow: inset 0 0 0 2px rgba(255,255,255,0.1), inset 0 5px 14px rgba(0,0,0,0.5);
+	cursor: grab;
+	touch-action: none;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.sizeMedium #ptzVirtualJoystick
+{
+	width: 155px;
+	height: 155px;
+}
+
+.sizeSmall #ptzVirtualJoystick
+{
+	width: 125px;
+	height: 125px;
+}
+
+#ptzVirtualJoystick.active
+{
+	cursor: grabbing;
+}
+
+#ptzVirtualJoystick.disabled
+{
+	background-color: var(--ptzpad-disabled-color);
+	cursor: not-allowed;
+}
+
+.vjoyArrow
+{
+	position: absolute;
+	width: 13%;
+	height: 13%;
+	color: var(--panel-bg-color);
+	transition: color 0.1s;
+}
+
+.vjoyArrowUp
+{
+	top: 4.5%;
+	left: 50%;
+	margin-left: -6.5%;
+}
+
+.vjoyArrowDown
+{
+	bottom: 4.5%;
+	left: 50%;
+	margin-left: -6.5%;
+}
+
+.vjoyArrowLeft
+{
+	left: 4.5%;
+	top: 50%;
+	margin-top: -6.5%;
+}
+
+.vjoyArrowRight
+{
+	right: 4.5%;
+	top: 50%;
+	margin-top: -6.5%;
+}
+
+	.vjoyArrowRight svg.icon
+	{
+		transform: rotate(90deg) scaleY(-1);
+	}
+
+	.vjoyArrowDown svg.icon
+	{
+		transform: rotate(180deg) scaleY(-1);
+	}
+
+	.vjoyArrowLeft svg.icon
+	{
+		transform: rotate(-90deg) scaleY(-1);
+	}
+
+.vjoyDot
+{
+	position: absolute;
+	width: 4.5%;
+	height: 4.5%;
+	border-radius: 50%;
+	background-color: var(--panel-bg-color);
+	transform: translate(-50%, -50%);
+	transition: background-color 0.1s;
+}
+
+.vjoyDotNE
+{
+	left: 78.5%;
+	top: 21.5%;
+}
+
+.vjoyDotNW
+{
+	left: 21.5%;
+	top: 21.5%;
+}
+
+.vjoyDotSW
+{
+	left: 21.5%;
+	top: 78.5%;
+}
+
+.vjoyDotSE
+{
+	left: 78.5%;
+	top: 78.5%;
+}
+
+#ptzVirtualJoystick .vjoyArrow.active
+{
+	color: var(--text-active-color);
+	filter: drop-shadow(0 0 3px rgba(255,255,255,0.6));
+}
+
+#ptzVirtualJoystick .vjoyDot.active
+{
+	background-color: var(--text-active-color);
+	box-shadow: 0 0 4px rgba(255,255,255,0.7);
+}
+
+#ptzVirtualJoystick.disabled .vjoyArrow,
+#ptzVirtualJoystick.disabled .vjoyDot
+{
+	opacity: 0.5;
+}
+
+.vjoyKnob
+{
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 42%;
+	height: 42%;
+	border-radius: 50%;
+	transform: translate(-50%, -50%);
+	background-color: var(--button-color);
+	background-image: radial-gradient(circle at 36% 30%, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.1) 40%, rgba(0,0,0,0.22) 100%);
+	box-shadow: 0 3px 8px rgba(0,0,0,0.55), inset 0 -2px 5px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.18);
+	pointer-events: none;
+	will-change: transform;
+}
+
+#ptzVirtualJoystick.returning .vjoyKnob
+{
+	transition: transform 0.16s ease-out;
+}
+
+#ptzVirtualJoystick.active .vjoyKnob
+{
+	background-color: var(--text-hover-color);
+	box-shadow: 0 6px 14px rgba(0,0,0,0.6), 0 0 0 3px rgba(255,255,255,0.22), inset 0 -2px 5px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.25);
+}
+
+#ptzVirtualJoystick.disabled .vjoyKnob
+{
+	opacity: 0.35;
+	box-shadow: none;
+}
+
+.vjoyKnobInner
+{
+	position: absolute;
+	left: 22%;
+	top: 22%;
+	width: 56%;
+	height: 56%;
+	border-radius: 50%;
+	box-sizing: border-box;
+	border: 2px solid rgba(0,0,0,0.15);
+	box-shadow: inset 0 1px 2px rgba(255,255,255,0.35);
+}
+
+#ptzVirtualJoystickButtons .vjoyButton
+{
+	touch-action: none;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+	#ptzVirtualJoystickButtons .vjoyButton svg.icon
+	{
+		display: block;
+		width: 76%;
+		height: 76%;
+		margin: 12% auto;
+	}
+
+	#ptzVirtualJoystickButtons .vjoyButton.active
+	{
+		color: var(--text-active-color);
+		background-color: var(--uicontrol-active-bg-color);
+		border-color: var(--text-active-color);
+	}
+
 /* PTZ Presets */
 #ptzControlsBox
 {
