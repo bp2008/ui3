@@ -7,7 +7,7 @@
 	<div id="loading">Loading UI3 Storage Info</div>
 	<div id="root" style="display: none;">
 		<h2>UI3 Storage Info</h2>
-		<p>UI3 stores its settings in your browser using <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>.</p>
+		<p>UI3 stores its settings in your browser using <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>. Larger items such as camera list thumbnails are stored using <a href="https://www.google.com/search?q=IndexedDB+Web+API" target="_blank">IndexedDB</a>, which has a much larger quota.</p>
 		<p>This page provides information about your browser's Storage usage for origin: <span class="origin" title="this field is censored for your privacy in case you want to screenshot the page">{{origin}}</span>.</p>
 		<div class="message">
 			<template v-for="storage in allStorage">
@@ -23,23 +23,34 @@
 					</div>
 				</div>
 			</template>
+			<div>
+				<h3>IndexedDB Storage: {{idbHeading}}</h3>
+				<template v-if="idbStorage && idbStorage.enabled">
+					<div v-if="storageEstimateFullness !== null" :title="storageEstimateDescription">
+						<meter :value="storageEstimateFullness"></meter> {{parseInt(storageEstimateFullness*100)}}% full
+					</div>
+					<p>{{storageEstimateDescription}}</p>
+				</template>
+				<p v-else-if="idbStorage">IndexedDB is not available in this browser, so UI3 stores camera list thumbnails in Local Storage instead.</p>
+			</div>
 		</div>
 		<p v-if="wasCached">
-			Storage capacity values above assume that your browser enforces a <span title="in mebibytes (1 mebibyte is equal to 1048576 bytes)">5 MiB</span> quota per storage container, which was common as of 2023.  <a role="button" ttabindex="0" v-on:click="recalculateStorageCapacity" v-on:keypress.enter.prevent="recalculateStorageCapacity" title="Storage fullness shown above depends on assumed capacity values. Click to recompute values specific to your browser.">recompute storage capacity</a>
+			Local Storage capacity values above assume that your browser enforces a <span title="in mebibytes (1 mebibyte is equal to 1048576 bytes)">5 MiB</span> quota per storage container, which was common as of 2023.  <a role="button" tabindex="0" v-on:click="recalculateStorageCapacity" v-on:keypress.enter.prevent="recalculateStorageCapacity" title="Storage fullness shown above depends on assumed capacity values. Click to recompute values specific to your browser.">recompute storage capacity</a>
 		</p>
 		<p v-else-if="isComputingCapacity">
-			Storage capacity values are being recomputed now...
+			Local Storage capacity values are being recomputed now...
 		</p>
 		<p v-else>
-			Storage capacity values above were validated during this browser session.
+			Local Storage capacity values above were validated during this browser session.
 		</p>
 		<template v-if="localStorageObject">
-			<h2>Local Storage Usage Breakdown</h2>
+			<h2>Storage Usage Breakdown</h2>
 			<table class="localStorageUsageBreakdown">
 				<thead>
 					<tr>
 						<th>Usage</th>
-						<th>Bytes</th>
+						<th title="Size in characters">Local Storage</th>
+						<th title="Size in characters">IndexedDB</th>
 						<th>View</th>
 						<th>Download</th>
 						<th title="Export this section in a format that can be imported later">Export</th>
@@ -47,9 +58,10 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-for="category in localStorageCategories()" :title="category.hint">
+					<tr v-for="category in storageCategories()" :title="category.hint">
 						<td>{{category.name}}</td>
-						<td>{{category.bytes}}</td>
+						<td>{{category.localBytes}}</td>
+						<td>{{category.idbBytesText}}</td>
 						<td><input v-if="category.bytes" type="button" value="view" @click="onViewIndividual(category)" /></td>
 						<td><input v-if="category.download && category.bytes" type="button" :value="category.downloadButton" @click="onDownloadIndividual(category)" /></td>
 						<td title="Export this section in a format that can be imported later"><input v-if="category.bytes" type="button" value="export" @click="onExportIndividual(category)" /></td>
@@ -57,23 +69,23 @@
 					</tr>
 				</tbody>
 			</table>
-			<h2>Local Storage Export</h2>
-			<p><input type="button" value="Export All Local Storage" @click="onExportAll()" /></p>
-			<h2>Local Storage Import</h2>
-			<p>Drag and drop or select a .json file that was previously exported from this page. The content of the file will be merged with existing data in Local Storage.</p>
+			<h2>Export</h2>
+			<p><input type="button" value="Export All Storage" @click="onExportAll()" /></p>
+			<h2>Import</h2>
+			<p>Drag and drop or select a .json file that was previously exported from this page. The content of the file will be merged with existing data. Camera list thumbnails are imported into IndexedDB if it is available, and everything else is imported into Local Storage.</p>
 			<div id="dropTarget" :class="dropTargetClasses" @dragover.prevent="onFileDragOver" @dragenter="onFileDragEnter" @dragleave="onFileDragLeave" @drop.prevent="onFileDrop">
 				<input type="file" @change="onImportInputChange" />
 			</div>
 			<p><input type="button" value="Import" :disabled="!selectedImportFile" @click="importSelectedFile" /> {{selectedImportFileDescription}}</p>
-			<h2>Local Storage Erase</h2>
+			<h2>Erase</h2>
 			<p>This will "factory reset" UI3 in this web browser.</p>
-			<p><input type="button" value="Erase All Local Storage Data" @click="onEraseAllLocalStorage()" /></p>
+			<p><input type="button" value="Erase All Storage Data" @click="onEraseAllStorage()" /></p>
 		</template>
 		<p>&nbsp;</p>
 		<p><a href="../ui3.htm">Go to UI3</a></p>
 	</div>
 	<script>
-		var si_version = "1";
+		var si_version = "2";
 		var bi_version = "%%VERSION%%";
 		var local_bi_session = "%%SESSION%%";
 		if (!local_bi_session || (local_bi_session.length === 11 && local_bi_session.indexOf("%") === 0 && local_bi_session.indexOf("SESSION") === 2))
@@ -236,6 +248,8 @@
 				{
 					return {
 						allStorage: null,
+						idbStorage: null,
+						storageEstimate: null,
 						wasCached: true,
 						isComputingCapacity: false,
 						origin: location.origin.trim(),
@@ -246,7 +260,32 @@
 				},
 				created: function ()
 				{
+					var self = this;
 					this.allStorage = serializeAllStorage();
+					loadIdbStorage().then(function (idbStorage)
+					{
+						self.idbStorage = idbStorage;
+					});
+					try
+					{
+						// navigator.storage is only available in secure contexts (e.g. https)
+						if (navigator.storage && typeof navigator.storage.estimate === "function")
+						{
+							navigator.storage.estimate()
+								.then(function (estimate)
+								{
+									self.storageEstimate = estimate;
+								})
+								.catch(function (ex)
+								{
+									console.error(ex);
+								});
+						}
+					}
+					catch (ex)
+					{
+						console.error(ex);
+					}
 					document.getElementById("root").style.display = "block";
 					document.getElementById("loading").style.display = "none";
 				},
@@ -269,6 +308,28 @@
 							if (this.allStorage[i].name === "Local")
 								return this.allStorage[i];
 						return null;
+					},
+					idbHeading: function ()
+					{
+						if (!this.idbStorage)
+							return "Loading...";
+						if (this.idbStorage.error)
+							return "Error: " + this.idbStorage.error;
+						if (!this.idbStorage.enabled)
+							return "Unavailable";
+						return this.idbStorage.size + " chars in " + this.idbStorage.count + " items";
+					},
+					storageEstimateFullness: function ()
+					{
+						if (this.storageEstimate && this.storageEstimate.quota)
+							return (this.storageEstimate.usage || 0) / this.storageEstimate.quota;
+						return null;
+					},
+					storageEstimateDescription: function ()
+					{
+						if (this.storageEstimateFullness !== null)
+							return "Your browser reports that this origin is using " + formatBytes2(this.storageEstimate.usage || 0) + " of its " + formatBytes2(this.storageEstimate.quota) + " storage quota.";
+						return "IndexedDB's quota is determined by your browser and is typically much larger than Local Storage's quota.";
 					}
 				},
 				methods:
@@ -317,39 +378,50 @@
 						storageDef.capacity = cachedCapacity;
 						storageDef.fullness = storageDef.size / storageDef.capacity;
 					},
-					localStorageCategories: function ()
+					storageCategories: function ()
 					{
 						var categories = [];
-						categories.push(this.newLocalStorageCategory("ui3_settings", "UI3 Settings"));
-						categories.push(this.newLocalStorageCategory("ui3_streamingProfileArray", "UI3 Streaming Quality Profiles"));
-						categories.push(this.newLocalStorageCategory("camlist_thumbs_ui3", "Saved Thumbnails for UI3's Full Camera List", { download: "jpg" }));
-						categories.push(this.newLocalStorageCategory("ui2_settings", "Old UI2 Settings"));
-						categories.push(this.newLocalStorageCategory("camlist_thumbs_ui2", "Old Saved Thumbnails for UI2's Full Camera List", { download: "jpg" }));
-						categories.push(this.newLocalStorageCategory("ui2_preset_thumbs", "Old Saved Thumbnails for UI2's PTZ Preset Buttons", { download: "jpg" }));
-						categories.push(this.newLocalStorageCategory("other", "Other", {
+						categories.push(this.newStorageCategory("ui3_settings", "UI3 Settings"));
+						categories.push(this.newStorageCategory("ui3_streamingProfileArray", "UI3 Streaming Quality Profiles"));
+						categories.push(this.newStorageCategory("camlist_thumbs_ui3", "Saved Thumbnails for UI3's Full Camera List", { download: "jpg" }));
+						categories.push(this.newStorageCategory("ui2_settings", "Old UI2 Settings"));
+						categories.push(this.newStorageCategory("camlist_thumbs_ui2", "Old Saved Thumbnails for UI2's Full Camera List", { download: "jpg" }));
+						categories.push(this.newStorageCategory("ui2_preset_thumbs", "Old Saved Thumbnails for UI2's PTZ Preset Buttons", { download: "jpg" }));
+						categories.push(this.newStorageCategory("other", "Other", {
 							hint: 'The "Other" category includes:\n'
-								+ '\u2022 saved credentials' + '\n'
-								+ '\u2022 items saved by other applications hosted by the same web origin' + '\n'
-								+ '\u2022 settings for other Blue Iris servers, if you have used UI2 as a client app for other servers (very advanced use, not supported by UI3)'
+								+ '• saved credentials' + '\n'
+								+ '• items saved by other applications hosted by the same web origin' + '\n'
+								+ '• settings for other Blue Iris servers, if you have used UI2 as a client app for other servers (very advanced use, not supported by UI3)'
 						}));
 						return categories;
 					},
-					newLocalStorageCategory: function (key, name, options)
+					newStorageCategory: function (key, name, options)
 					{
 						options = $.extend({
 							hint: null,
 							download: false
 						}, options);
-						var bytes = this.localStorageObject.sizes[key];
-						if (!bytes)
-							bytes = 0;
+						var localBytes = 0;
+						if (this.localStorageObject && this.localStorageObject.sizes && this.localStorageObject.sizes[key])
+							localBytes = this.localStorageObject.sizes[key];
+						var idbBytes = 0;
+						var idbBytesText = "...";
+						if (this.idbStorage)
+						{
+							if (this.idbStorage.enabled)
+								idbBytesText = idbBytes = this.idbStorage.sizes[key] || 0;
+							else
+								idbBytesText = "n/a";
+						}
 						var downloadButton = "download";
 						if (options.download === "jpg")
 							downloadButton = ".zip";
 						return {
 							name: name,
 							key: key,
-							bytes: bytes,
+							localBytes: localBytes,
+							idbBytesText: idbBytesText,
+							bytes: localBytes + idbBytes,
 							hint: options.hint,
 							download: options.download,
 							downloadButton: downloadButton
@@ -360,13 +432,18 @@
 					{
 						if (confirm(category.name + ' will be cleared. Continue?'))
 						{
-							ClearIndividualSettingCategory(category);
-							location.reload();
+							ClearIndividualSettingCategory(category)
+								.then(function (errors)
+								{
+									if (errors.length)
+										alert(errors.join("\n\n"));
+									location.reload();
+								});
 						}
 					},
-					onEraseAllLocalStorage: function ()
+					onEraseAllStorage: function ()
 					{
-						EraseAllLocalStorage();
+						EraseAllStorage();
 					},
 					// VIEW
 					onViewIndividual: function (category)
@@ -377,11 +454,7 @@
 						}
 						else
 						{
-							var result = ViewAllItemsInIndividualSettingCategory_json(category);
-							if (result === -1)
-								alert("Failed to create json file.");
-							else if (result > 0)
-								alert(result + " items failed to be added to the json file.");
+							ViewAllItemsInIndividualSettingCategory_json(category);
 						}
 					},
 					// DOWNLOAD
@@ -389,31 +462,31 @@
 					{
 						if (category.download === "jpg")
 						{
-							var result = DownloadAllItemsInIndividualSettingCategory_jpg(category);
-							if (result === -1)
-								alert("Failed to create zip file.");
-							else if (result > 0)
-								alert(result + " items failed to be added to the zip file.");
+							DownloadAllItemsInIndividualSettingCategory_jpg(category)
+								.then(function (result)
+								{
+									if (result === -1)
+										alert("Failed to create zip file.");
+									else if (result > 0)
+										alert(result + " items failed to be added to the zip file.");
+								});
 						}
 						else
-							this.onExportIndividual(category, category);
+							this.onExportIndividual(category);
 					},
 					// EXPORT
 					onExportIndividual: function (category)
 					{
-						var result = DownloadAllItemsInIndividualSettingCategory_json(category);
-						if (result === -1)
-							alert("Failed to create json file.");
-						else if (result > 0)
-							alert(result + " items failed to be added to the json file.");
+						DownloadAllItemsInIndividualSettingCategory_json(category)
+							.then(function (result)
+							{
+								if (result === -1)
+									alert("Failed to create json file.");
+							});
 					},
 					onExportAll: function ()
 					{
-						var result = DownloadAllItemsInIndividualSettingCategory_json(this.newLocalStorageCategory("All", "All"));
-						if (result === -1)
-							alert("Failed to create json file.");
-						else if (result > 0)
-							alert(result + " items failed to be added to the json file.");
+						this.onExportIndividual(this.newStorageCategory("All", "All"));
 					},
 					// IMPORT
 					onImportInputChange: function (e)
@@ -458,28 +531,350 @@
 				}
 			});
 		});
+		///////////////////////////////////////////////////////////////
+		// IndexedDB //////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////
+		// UI3 stores large items such as camera list thumbnails in IndexedDB.  See LargeItemStorage in ui3.js.
+		// Each item is a string value stored under the same key it would have in Local Storage.
+		// If an item exists in both Local Storage and IndexedDB, the Local Storage copy is newer.
+		var idbName = "ui3";
+		var idbStoreName = "largeItems";
+		/**
+		 * Export files are flat JSON objects mapping keys to string values, which every version of this page can import.
+		 * An export file containing items that belong in IndexedDB also contains this key, whose value is a JSON string such as {"indexedDB":["key1","key2"]}.
+		 * The list allows those items to be imported into IndexedDB even by versions of this page that do not otherwise know they belong there.
+		 * Older versions of this page import this key into Local Storage, where UI3 deletes it during startup.
+		 */
+		var exportManifestKey = "ui3_export_manifest";
+		/**
+		 * Returns true if UI3 stores the specified key in IndexedDB (see LargeItemStorage.IsLargeItemKey in ui3.js).
+		 */
+		function IsLargeItemKey(key)
+		{
+			return categorizeSetting(key) === "camlist_thumbs_ui3";
+		}
+		var idbPromise = null;
+		/**
+		 * Returns a promise that resolves with the open database, or null if IndexedDB is unavailable.  The promise does not reject.
+		 */
+		function getIdb()
+		{
+			if (!idbPromise)
+				idbPromise = openIdb();
+			return idbPromise;
+		}
+		/**
+		 * Returns a promise that resolves with the open database, or null if IndexedDB is unavailable.  The promise does not reject.
+		 * @param {Number} version (optional) Database version to request.  Omit to open the current version, which lets this code keep working if a future UI3 version upgrades the database.
+		 */
+		function openIdb(version)
+		{
+			return new Promise(function (resolve)
+			{
+				var finished = false;
+				var finish = function (db, error)
+				{
+					if (finished)
+						return;
+					finished = true;
+					clearTimeout(timeout);
+					if (error)
+						console.error("IndexedDB is unavailable.", error);
+					resolve(db);
+				};
+				// Some browser versions have been known to never finish opening IndexedDB.
+				var timeout = setTimeout(function ()
+				{
+					finish(null, new Error("Timed out opening IndexedDB database."));
+				}, 10000);
+				try
+				{
+					var request = version ? indexedDB.open(idbName, version) : indexedDB.open(idbName);
+					request.onupgradeneeded = function ()
+					{
+						if (!request.result.objectStoreNames.contains(idbStoreName))
+							request.result.createObjectStore(idbStoreName);
+					};
+					request.onsuccess = function ()
+					{
+						var db = request.result;
+						if (finished)
+						{
+							db.close();
+							return;
+						}
+						if (!db.objectStoreNames.contains(idbStoreName))
+						{
+							// The database exists without the object store we need, so it must be upgraded to a new version that has the object store.
+							var newVersion = db.version + 1;
+							db.close();
+							finished = true;
+							clearTimeout(timeout);
+							openIdb(newVersion).then(resolve);
+							return;
+						}
+						db.onversionchange = function ()
+						{
+							// Another page wants to upgrade or delete the database.  Close our connection so we don't block it.
+							db.close();
+							idbPromise = null;
+						};
+						db.onclose = function ()
+						{
+							idbPromise = null;
+						};
+						finish(db);
+					};
+					request.onerror = function ()
+					{
+						finish(null, request.error);
+					};
+					request.onblocked = function ()
+					{
+						console.log("Opening IndexedDB is blocked by a connection in another browser tab.");
+					};
+				}
+				catch (ex)
+				{
+					// IndexedDB may be unsupported or disabled by browser settings.
+					finish(null, ex);
+				}
+			});
+		}
+		/**
+		 * Returns a promise that resolves with an object mapping keys to values of all items in IndexedDB, or null if IndexedDB is unavailable.
+		 */
+		function idbReadAll()
+		{
+			return getIdb().then(function (db)
+			{
+				if (!db)
+					return null;
+				return new Promise(function (resolve, reject)
+				{
+					var items = {};
+					var request = db.transaction(idbStoreName, "readonly").objectStore(idbStoreName).openCursor();
+					request.onsuccess = function ()
+					{
+						var cursor = request.result;
+						if (cursor)
+						{
+							if (typeof cursor.key === "string" && typeof cursor.value === "string")
+								items[cursor.key] = cursor.value;
+							else
+								console.warn("Ignoring IndexedDB item that is not a string key/value pair.", cursor.key, cursor.value);
+							cursor.continue();
+						}
+						else
+							resolve(items);
+					};
+					request.onerror = function ()
+					{
+						reject(request.error);
+					};
+				});
+			});
+		}
+		/**
+		 * Writes and/or deletes items in one IndexedDB transaction, returning a promise that resolves when the transaction is complete.
+		 * @param {Object} putItems (optional) Object mapping keys to string values to write.
+		 * @param {Array} deleteKeys (optional) Array of keys to delete.
+		 */
+		function idbWrite(putItems, deleteKeys)
+		{
+			return getIdb().then(function (db)
+			{
+				if (!db)
+					throw new Error("IndexedDB is unavailable.");
+				return new Promise(function (resolve, reject)
+				{
+					var tx = db.transaction(idbStoreName, "readwrite");
+					tx.oncomplete = function ()
+					{
+						resolve();
+					};
+					tx.onerror = tx.onabort = function (e)
+					{
+						// For error events, the target is the failed request.  For abort events, the target is the transaction.
+						reject((e && e.target && e.target.error) || tx.error || new Error("IndexedDB transaction failed."));
+					};
+					var store = tx.objectStore(idbStoreName);
+					for (var key in putItems)
+						if (Object.prototype.hasOwnProperty.call(putItems, key))
+							store.put(putItems[key], key);
+					if (deleteKeys)
+						for (var i = 0; i < deleteKeys.length; i++)
+							store.delete(deleteKeys[i]);
+				});
+			});
+		}
+		/**
+		 * Returns a promise that resolves when UI3's IndexedDB database has been deleted (or if IndexedDB is unavailable).
+		 */
+		function idbDeleteDatabase()
+		{
+			return getIdb().then(function (db)
+			{
+				if (!db)
+					return;
+				db.close();
+				idbPromise = null;
+				return new Promise(function (resolve, reject)
+				{
+					var request = indexedDB.deleteDatabase(idbName);
+					request.onsuccess = function ()
+					{
+						resolve();
+					};
+					request.onerror = function ()
+					{
+						reject(request.error);
+					};
+					request.onblocked = function ()
+					{
+						reject(new Error("The database is in use by another browser tab. Close other UI3 tabs and try again."));
+					};
+				});
+			});
+		}
+		/**
+		 * Returns a promise that resolves with an object describing IndexedDB usage.  The promise does not reject.
+		 */
+		function loadIdbStorage()
+		{
+			return idbReadAll()
+				.then(function (items)
+				{
+					var obj = {
+						name: "IndexedDB",
+						enabled: !!items,
+						error: null,
+						size: 0,
+						count: 0,
+						sizes: {}
+					};
+					for (var key in items)
+					{
+						if (!Object.prototype.hasOwnProperty.call(items, key))
+							continue;
+						var itemSize = key.length + items[key].length;
+						obj.size += itemSize;
+						obj.count++;
+						var thisCategory = categorizeSetting(key);
+						if (!obj.sizes[thisCategory])
+							obj.sizes[thisCategory] = 0;
+						obj.sizes[thisCategory] += itemSize;
+					}
+					return obj;
+				})
+				.catch(function (ex)
+				{
+					console.error(ex);
+					return { name: "IndexedDB", enabled: false, error: String(ex), size: 0, count: 0, sizes: {} };
+				});
+		}
+		///////////////////////////////////////////////////////////////
+		// Categories /////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////
+		function IsKeyInCategory(key, category)
+		{
+			return category.key === "All" || category.key === categorizeSetting(key);
+		}
+		/**
+		 * Returns a promise that resolves with the category's items from Local Storage and IndexedDB, in the form:
+		 * { items: { key: value }, idbKeys: [keys of items that belong in IndexedDB] }
+		 * The promise rejects if Local Storage or IndexedDB could not be read.
+		 */
+		function GetAllItemsInIndividualSettingCategory(category)
+		{
+			return idbReadAll().then(function (idbItems)
+			{
+				var items = {};
+				var idbKeySet = {};
+				for (var key in idbItems)
+				{
+					if (Object.prototype.hasOwnProperty.call(idbItems, key) && IsKeyInCategory(key, category))
+					{
+						items[key] = idbItems[key];
+						idbKeySet[key] = true;
+					}
+				}
+				// Local Storage items are added last so they replace any IndexedDB items with the same key, because they are newer.
+				var storageObj = getLocalStorage();
+				if (storageObj)
+				{
+					try
+					{
+						for (var key in storageObj)
+						{
+							if (!storageObj.hasOwnProperty(key))
+								continue;
+							if (IsKeyInCategory(key, category))
+							{
+								items[key] = storageObj[key];
+								if (IsLargeItemKey(key))
+									idbKeySet[key] = true;
+							}
+						}
+					}
+					catch (ex)
+					{
+						console.error(ex);
+						throw new Error("Failed to iterate across localStorage.");
+					}
+				}
+				var idbKeys = [];
+				for (var key in idbKeySet)
+					if (Object.prototype.hasOwnProperty.call(idbKeySet, key))
+						idbKeys.push(key);
+				idbKeys.sort();
+				return { items: items, idbKeys: idbKeys };
+			});
+		}
 		function ClearIndividualSettingCategory(category)
 		{
+			var errors = [];
 			var storageObj = getLocalStorage();
 			if (storageObj)
 			{
 				try
 				{
+					var keys = [];
 					for (var key in storageObj)
 					{
 						if (!storageObj.hasOwnProperty(key))
 							continue;
-						var thisCategoryKey = categorizeSetting(key);
-						if (category.key === "All" || category.key === thisCategoryKey)
-							storageObj.removeItem(key);
-					};
+						if (IsKeyInCategory(key, category))
+							keys.push(key);
+					}
+					for (var i = 0; i < keys.length; i++)
+						storageObj.removeItem(keys[i]);
 				}
 				catch (ex)
 				{
 					console.error(ex);
-					alert("Failed to iterate across localStorage.");
+					errors.push("Failed to delete items from Local Storage. " + ex);
 				}
 			}
+			return idbReadAll()
+				.then(function (idbItems)
+				{
+					var keys = [];
+					for (var key in idbItems)
+						if (Object.prototype.hasOwnProperty.call(idbItems, key) && IsKeyInCategory(key, category))
+							keys.push(key);
+					if (keys.length)
+						return idbWrite(null, keys);
+				})
+				.catch(function (ex)
+				{
+					console.error(ex);
+					errors.push("Failed to delete items from IndexedDB. " + ex);
+				})
+				.then(function ()
+				{
+					return errors;
+				});
 		}
 		function GetDownloadFileNameNoExt(category)
 		{
@@ -488,62 +883,44 @@
 			fileNameNoExt = FormatFileName(fileNameNoExt);
 			return fileNameNoExt;
 		}
+		/**
+		 * Returns a promise that resolves with 0 if the category was downloaded as a .json file, or -1 if it failed.
+		 */
 		function DownloadAllItemsInIndividualSettingCategory_json(category)
 		{
-			var jsonStr = GetAllItemsInIndividualSettingCategory_json(category);
-			if (jsonStr)
-			{
-				try
+			return GetAllItemsInIndividualSettingCategory(category)
+				.then(function (result)
 				{
-					downloadDataUri(textToDataUri(jsonStr), GetDownloadFileNameNoExt(category) + ".json");
-				}
-				catch (ex)
+					delete result.items[exportManifestKey];
+					if (result.idbKeys.length)
+						result.items[exportManifestKey] = JSON.stringify({ indexedDB: result.idbKeys });
+					var jsonStr = ItemsToSortedJson(result.items);
+					downloadBlob(new Blob([jsonStr], { type: "application/json" }), GetDownloadFileNameNoExt(category) + ".json");
+					return 0;
+				})
+				.catch(function (ex)
 				{
 					console.error(ex);
 					return -1;
-				}
-			}
-			return 0;
+				});
 		}
 		function ViewAllItemsInIndividualSettingCategory_json(category)
 		{
-			var jsonStr = GetAllItemsInIndividualSettingCategory_json(category);
-			VisualizeObject(jsonStr, category.name);
-		}
-		function GetAllItemsInIndividualSettingCategory_json(category)
-		{
-			var keep = {};
-			var storageObj = getLocalStorage();
-			if (storageObj)
-			{
-				try
+			GetAllItemsInIndividualSettingCategory(category)
+				.then(function (result)
 				{
-					for (var key in storageObj)
-					{
-						if (!storageObj.hasOwnProperty(key))
-							continue;
-						var thisCategoryKey = categorizeSetting(key);
-						if (category.key === "All" || category.key === thisCategoryKey)
-							keep[key] = storageObj[key];
-					}
-				}
-				catch (ex)
+					VisualizeObject(ItemsToSortedJson(result.items), category.name);
+				})
+				.catch(function (ex)
 				{
 					console.error(ex);
-					alert("Failed to iterate across localStorage.");
-					return null;
-				}
-			}
-			try
-			{
-				var jsonStr = JSON.stringify(keep, null, 2);
-				return sortJsonProps(jsonStr);
-			}
-			catch (ex)
-			{
-				console.error(ex);
-			}
-			return null;
+					alert("Failed to read items. " + ex);
+				});
+		}
+		function ItemsToSortedJson(items)
+		{
+			var jsonStr = JSON.stringify(items, null, 2);
+			return sortJsonProps(jsonStr);
 		}
 		function sortJsonProps(jsonFlat)
 		{
@@ -592,119 +969,99 @@
 				return jsonFlat;
 			}
 		}
-		function textToDataUri(text)
-		{
-			return 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
-		}
+		/**
+		 * Returns a promise that resolves with the number of images that could not be added to the zip file, or -1 if the zip file could not be created.
+		 */
 		function DownloadAllItemsInIndividualSettingCategory_jpg(category)
 		{
-			var images = GetAllItemsInIndividualSettingCategory_jpg(category);
-			if (!images)
-				return -1;
-			var files = [];
-			var errors = 0;
-			for (var i = 0; i < images.length; i++)
-			{
-				var image = images[i];
-				try
+			return GetAllItemsInIndividualSettingCategory(category)
+				.then(function (result)
 				{
-					files.push({ name: image.name, input: dataURItoBlob(image.dataUri) });
-				}
-				catch (ex)
-				{
-					errors++;
-					console.error(image.name, ex);
-				}
-			};
-			try
-			{
-				clientZip.downloadZip(files)
-					.blob()
-					.then(function (content)
+					var images = GetImagesFromItems(result.items);
+					var files = [];
+					var errors = 0;
+					for (var i = 0; i < images.length; i++)
 					{
-						var objectUrl = URL.createObjectURL(content);
+						var image = images[i];
 						try
 						{
-							downloadDataUri(objectUrl, GetDownloadFileNameNoExt(category) + ".zip");
+							files.push({ name: image.name, input: dataURItoBlob(image.dataUri) });
 						}
-						finally
+						catch (ex)
 						{
-							URL.revokeObjectURL(objectUrl);
+							errors++;
+							console.error(image.name, ex);
 						}
-					});
-			}
-			catch (ex)
-			{
-				console.error(ex);
-				return -1;
-			}
-			return errors;
+					}
+					return clientZip.downloadZip(files)
+						.blob()
+						.then(function (content)
+						{
+							downloadBlob(content, GetDownloadFileNameNoExt(category) + ".zip");
+							return errors;
+						});
+				})
+				.catch(function (ex)
+				{
+					console.error(ex);
+					return -1;
+				});
 		}
 		function ViewAllItemsInIndividualSettingCategory_jpg(category)
 		{
-			var images = GetAllItemsInIndividualSettingCategory_jpg(category);
-			VisualizeImages(images, category.name);
-		}
-		function GetAllItemsInIndividualSettingCategory_jpg(category)
-		{
-			var errors = 0;
-			var storageObj = getLocalStorage();
-			if (storageObj)
-			{
-				var images = [];
-				try
+			GetAllItemsInIndividualSettingCategory(category)
+				.then(function (result)
 				{
-					var keys = [];
-					for (var key in storageObj)
-					{
-						if (!storageObj.hasOwnProperty(key))
-							continue;
-						var thisCategoryKey = categorizeSetting(key);
-						if (category.key === "All" || category.key === thisCategoryKey)
-							keys.push(key);
-					}
-					var allTimestamps = {};
-					for (var i = 0; i < keys.length; i++)
-					{
-						var key = keys[i];
-						if (/_date$/.test(key))
-						{
-							var baseKey = key.substr(0, key.length - "_date".length);
-							var timestamp = parseInt(storageObj[key]);
-							if (timestamp && !isNaN(timestamp))
-								allTimestamps[baseKey] = timestamp;
-						}
-					}
-					for (var i = 0; i < keys.length; i++)
-					{
-						var key = keys[i];
-						if (allTimestamps[key] || !(/_date$/.test(key)))
-						{
-							var timestamp = allTimestamps[key];
-							if (!timestamp)
-								timestamp = Date.now();
-							var dateStr = TimestampToDateFileNameString(timestamp);
-							images.push({
-								dataUri: storageObj[key],
-								name: key + "_" + dateStr + ".jpg",
-								key: key,
-								dateStr: dateStr
-							});
-						}
-					}
-				}
-				catch (ex)
+					VisualizeImages(GetImagesFromItems(result.items), category.name);
+				})
+				.catch(function (ex)
 				{
 					console.error(ex);
-					alert("Failed to iterate across localStorage.");
-					return null;
+					alert("Failed to read items. " + ex);
+				});
+		}
+		/**
+		 * Returns an array of images from the items, pairing each image with its "_date" item if one exists.
+		 * @param {Object} items Object mapping keys to image data URIs and "_date" keys to timestamps.
+		 */
+		function GetImagesFromItems(items)
+		{
+			var images = [];
+			var keys = [];
+			for (var key in items)
+				if (Object.prototype.hasOwnProperty.call(items, key))
+					keys.push(key);
+			keys.sort();
+			var allTimestamps = {};
+			for (var i = 0; i < keys.length; i++)
+			{
+				var key = keys[i];
+				if (/_date$/.test(key))
+				{
+					var baseKey = key.substr(0, key.length - "_date".length);
+					var timestamp = parseInt(items[key]);
+					if (timestamp && !isNaN(timestamp))
+						allTimestamps[baseKey] = timestamp;
 				}
-				return images;
 			}
-			return {
-				imageCollection: imageCollection,
-				errors: errors
-			};
+			for (var i = 0; i < keys.length; i++)
+			{
+				var key = keys[i];
+				if (allTimestamps[key] || !(/_date$/.test(key)))
+				{
+					var timestamp = allTimestamps[key];
+					if (!timestamp)
+						timestamp = Date.now();
+					var dateStr = TimestampToDateFileNameString(timestamp);
+					images.push({
+						dataUri: items[key],
+						name: key + "_" + dateStr + ".jpg",
+						key: key,
+						dateStr: dateStr
+					});
+				}
+			}
+			return images;
 		}
 		function dataURItoBlob(dataURI)
 		{
@@ -863,11 +1220,10 @@
 		{
 			try // May throw exception if local storage is disabled by browser settings!
 			{
-				if (typeof Storage === "undefined")
+				if (typeof Storage === "undefined" || !window.localStorage)
 					return null;
-				var key = "local_storage_test_item";
-				localStorage.setItem(key, key);
-				localStorage.removeItem(key);
+				// Access is tested with a read because a write test would fail when Local Storage is full.
+				localStorage.getItem("local_storage_test_item");
 				return localStorage;
 			}
 			catch (e)
@@ -947,6 +1303,15 @@
 			link.click();
 			link.remove();
 		}
+		function downloadBlob(blob, fileName)
+		{
+			var objectUrl = URL.createObjectURL(blob);
+			downloadDataUri(objectUrl, fileName);
+			setTimeout(function ()
+			{
+				URL.revokeObjectURL(objectUrl);
+			}, 60000);
+		}
 		function htmlAttributeEncode(value)
 		{
 			if (typeof value !== "string" && typeof value !== "undefined" && typeof value.toString === "function")
@@ -979,77 +1344,147 @@
 			}
 			return sb.ToString();
 		}
-		function EraseAllLocalStorage()
+		function EraseAllStorage()
 		{
-			if (getLocalStorage())
+			if (!confirm("All Local Storage data for the origin \"" + location.origin + "\" will be lost, along with UI3's IndexedDB data.  Continue?"))
+				return;
+			var errors = [];
+			var storageObj = getLocalStorage();
+			if (storageObj)
 			{
-				if (confirm("All Local Storage data for the origin \"" + location.origin + "\" will be lost.  Continue?"))
+				try
 				{
-					try
-					{
-						localStorage.clear();
-						location.reload();
-					}
-					catch (ex)
-					{
-						alert("An error occurred. Local Storage could not be cleared!\n\n" + ex);
-						return;
-					}
-					alert("Local Storage has been cleared.");
+					storageObj.clear();
+				}
+				catch (ex)
+				{
+					errors.push("Local Storage could not be cleared!\n\n" + ex);
 				}
 			}
-			else
-			{
-				alert("Local Storage is not available. Unable to clear Local Storage.");
-			}
+			idbDeleteDatabase()
+				.catch(function (ex)
+				{
+					errors.push("IndexedDB could not be cleared!\n\n" + ex);
+				})
+				.then(function ()
+				{
+					if (errors.length)
+						alert("An error occurred.\n\n" + errors.join("\n\n"));
+					else
+						alert("All storage has been cleared.");
+					location.reload();
+				});
 		}
 		function readImportFile(file)
 		{
-			if (getLocalStorage())
+			var reader = new FileReader();
+			reader.onload = function (e)
 			{
-				var reader = new FileReader();
-				reader.onload = function (e)
+				var obj = null;
+				try
 				{
-					var obj = null;
-					try
+					var text = e.target.result;
+					obj = JSON.parse(text);
+					if (!obj || typeof obj !== "object" || $.isArray(obj))
+						throw new Error("The file does not contain a JSON object.");
+				}
+				catch (ex)
+				{
+					console.error(ex);
+					alert("Failed to import. The file was not in expected JSON format.");
+					return;
+				}
+				ImportItems(obj)
+					.then(function (errors)
 					{
-						var text = e.target.result;
-						obj = JSON.parse(text);
+						if (errors > 0)
+							alert("Failed to import " + errors + " keys.");
+						else
+							alert("Import completed successfully.");
+						location.reload();
+					});
+			};
+			reader.readAsText(file);
+		}
+		/**
+		 * Imports the items into IndexedDB or Local Storage, returning a promise that resolves with the number of items that failed to import.
+		 * @param {Object} obj Object mapping keys to string values, parsed from an export file.
+		 */
+		function ImportItems(obj)
+		{
+			var manifestIdbKeys = {};
+			try
+			{
+				if (typeof obj[exportManifestKey] === "string")
+				{
+					var manifestIdbKeyList = JSON.parse(obj[exportManifestKey]).indexedDB;
+					if ($.isArray(manifestIdbKeyList))
+						for (var i = 0; i < manifestIdbKeyList.length; i++)
+							manifestIdbKeys[manifestIdbKeyList[i]] = true;
+				}
+			}
+			catch (ex)
+			{
+				console.error("Unable to read " + exportManifestKey, ex);
+			}
+			return getIdb().then(function (db)
+			{
+				var errors = 0;
+				var storageObj = getLocalStorage();
+				var idbItems = {};
+				var idbKeys = [];
+				for (var key in obj)
+				{
+					if (!Object.prototype.hasOwnProperty.call(obj, key) || key === exportManifestKey)
+						continue;
+					if (db && (manifestIdbKeys[key] || IsLargeItemKey(key)))
+					{
+						idbItems[key] = String(obj[key]);
+						idbKeys.push(key);
 					}
-					catch (ex)
+					else
 					{
-						console.error(ex);
-						alert("Failed to import. The file was not in expected JSON format.");
-						return;
-					}
-					var errors = 0;
-					for (var key in obj)
-					{
-						if (obj.hasOwnProperty(key))
+						try
 						{
-							try
-							{
-								localStorage.setItem(key, obj[key]);
-							}
-							catch (ex)
-							{
-								console.log("Failed to import key", key, "value", obj[key], ex);
-								errors++;
-							}
+							if (!storageObj)
+								throw new Error("Local Storage is not available.");
+							storageObj.setItem(key, obj[key]);
+						}
+						catch (ex)
+						{
+							console.log("Failed to import key", key, "value", obj[key], ex);
+							errors++;
 						}
 					}
-					if (errors > 0)
-						alert("Failed to import " + errors + " keys.");
-					else
-						alert("Import completed successfully.");
-					location.reload();
-				};
-				reader.readAsText(file);
-			}
-			else
-			{
-				alert("Local Storage is not available. Unable to import data into Local Storage.");
-			}
+				}
+				if (!idbKeys.length)
+					return errors;
+				return idbWrite(idbItems, null)
+					.then(function ()
+					{
+						// Remove any copies of these items from Local Storage, because UI3 would consider them to be newer than the imported items.
+						if (storageObj)
+						{
+							for (var i = 0; i < idbKeys.length; i++)
+							{
+								try
+								{
+									storageObj.removeItem(idbKeys[i]);
+								}
+								catch (ex)
+								{
+									console.error(ex);
+								}
+							}
+						}
+						return errors;
+					}
+						, function (ex)
+						{
+							console.error("Failed to import " + idbKeys.length + " keys into IndexedDB.", ex);
+							return errors + idbKeys.length;
+						});
+			});
 		}
 		function formatBytes2(bytes, decimals)
 		{

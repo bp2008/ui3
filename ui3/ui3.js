@@ -714,6 +714,7 @@ var toaster = new Toaster();
 var ajaxHistoryManager;
 var loadingHelper = new LoadingHelper();
 var touchEvents = new TouchEventHelper();
+var largeItemStorage = new LargeItemStorage();
 var ui3CamSettings = null;
 var clipboardHelper;
 var uiSizeHelper = null;
@@ -4108,6 +4109,9 @@ $(function ()
 	$("#ui_version_label").text(ui_version);
 	$("#bi_version_label").text(bi_version);
 
+	// Start this before anything that writes to Local Storage, because if Local Storage is full, those writes could throw and abort the rest of the loading process.
+	largeItemStorage.MigrateFromLocalStorage();
+
 	LoadDefaultSettings();
 
 	try
@@ -4164,6 +4168,11 @@ $(function ()
 					settings.ui3_maxDynamicGroupImageMegapixels = Math.ceil(d * d / 100000) / 10; // Round up to nearest tenth.
 				}
 				delete localStorage.ui3_maxDynamicGroupImageDimension;
+			}
+			if (typeof localStorage.ui3_export_manifest !== "undefined")
+			{
+				// storageinfo.htm export files may contain this key, which older versions of storageinfo.htm will import into Local Storage where it serves no purpose.
+				delete localStorage.ui3_export_manifest;
 			}
 		}
 	}
@@ -28764,43 +28773,55 @@ function CameraListDialog()
 		{
 			var $ele = $(ele);
 			var camId = $ele.attr("camId");
-			var settingsKey = "ui3_camlistthumb_" + camId;
-			var imgData = settings.getItem(settingsKey);
-			if (imgData != null && imgData.length > 0)
+			var storageKey = "ui3_camlistthumb_" + camId;
+			var setImgDate = function ()
 			{
-				$ele.attr("src", imgData);
-				$ele.css("display", "block");
-				$ele.parent().parent().find(".camlist_thumb_aligner").css("height", "120px");
-			}
-			else
-			{
-				$ele.next('span').show();
-			}
-			if ($ele.attr('isEnabled') == '1')
-			{
-				var imgDate = parseInt(settings.getItem(settingsKey + "_date"));
-				if (!imgDate)
-					imgDate = 0;
-				if (imgDate + timeBetweenCameraListThumbUpdates < new Date().getTime() || overrideImgDate)
-				{
-					var sizeArg = "&w=160";
-					if (parseFloat($ele.attr("aspectratio")) < (160 / 120))
-						sizeArg = "&h=120";
-					var tmpImgSrc = currentServer.remoteBaseURL + "image/" + camId + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetAPISessionArg("&", true);
-					PersistImageFromUrl(settingsKey, tmpImgSrc, function (imgAsDataURL)
+				largeItemStorage.setItem(storageKey + "_date", new Date().getTime())
+					.catch(function (ex)
 					{
-						settings.setItem(settingsKey + "_date", new Date().getTime())
-						$ele.next('span').hide();
-						$ele.attr("src", imgAsDataURL);
+						console.error("Unable to save camera list thumbnail date for " + camId, ex);
+					});
+			};
+			Promise.all([largeItemStorage.getItem(storageKey), largeItemStorage.getItem(storageKey + "_date")])
+				.then(function (values)
+				{
+					var imgData = values[0];
+					if (imgData != null && imgData.length > 0)
+					{
+						$ele.attr("src", imgData);
 						$ele.css("display", "block");
 						$ele.parent().parent().find(".camlist_thumb_aligner").css("height", "120px");
 					}
-						, function (message)
+					else
+					{
+						$ele.next('span').show();
+					}
+					if ($ele.attr('isEnabled') == '1')
+					{
+						var imgDate = parseInt(values[1]);
+						if (!imgDate)
+							imgDate = 0;
+						if (imgDate + timeBetweenCameraListThumbUpdates < new Date().getTime() || overrideImgDate)
 						{
-							settings.setItem(settingsKey + "_date", new Date().getTime())
-						});
-				}
-			}
+							var sizeArg = "&w=160";
+							if (parseFloat($ele.attr("aspectratio")) < (160 / 120))
+								sizeArg = "&h=120";
+							var tmpImgSrc = currentServer.remoteBaseURL + "image/" + camId + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetAPISessionArg("&", true);
+							PersistImageFromUrl(storageKey, tmpImgSrc, function (imgAsDataURL)
+							{
+								setImgDate();
+								$ele.next('span').hide();
+								$ele.attr("src", imgAsDataURL);
+								$ele.css("display", "block");
+								$ele.parent().parent().find(".camlist_thumb_aligner").css("height", "120px");
+							}
+								, function (message)
+								{
+									setImgDate();
+								});
+						}
+					}
+				});
 		});
 	}
 }
@@ -35820,7 +35841,322 @@ function ArrayToHtmlTable(a)
 	return $table;
 }
 ///////////////////////////////////////////////////////////////
-// Save Images to Local Storage ///////////////////////////////
+// Large Item Storage (IndexedDB) /////////////////////////////
+///////////////////////////////////////////////////////////////
+/**
+ * Stores large items, such as camera list thumbnails, in IndexedDB which has a much larger quota than Local Storage (5 MiB).
+ * Each item is a string value stored under the same key it would have in Local Storage, so that storageinfo.htm can export items from both storage types in one format that older versions of storageinfo.htm can still import.
+ * If IndexedDB is unavailable, items are stored in Local Storage instead.
+ *
+ * A large item that exists in Local Storage is always considered newer than the copy in IndexedDB, because this class deletes the Local Storage copy after writing to IndexedDB.  Large items can arrive in Local Storage from older UI3 versions, from imports performed by older versions of storageinfo.htm, or from sessions where IndexedDB was unavailable.  They are moved to IndexedDB by MigrateFromLocalStorage.
+ *
+ * The database name and object store name are duplicated in storageinfo.htm and reset.htm.
+ */
+function LargeItemStorage()
+{
+	var self = this;
+	var dbName = "ui3";
+	var storeName = "largeItems";
+	var openTimeoutMs = 10000;
+	var dbPromise = null;
+
+	/**
+	 * Returns true if the specified key identifies an item that belongs in large item storage.  Keep this in sync with storageinfo.htm.
+	 * @param {String} key Item key.
+	 */
+	this.IsLargeItemKey = function (key)
+	{
+		return typeof key === "string" && key.indexOf("ui3_camlistthumb_") === 0;
+	}
+	/**
+	 * Returns a promise that resolves with the item's string value, or null if the item does not exist or could not be read.  The promise does not reject.
+	 * @param {String} key Item key.
+	 */
+	this.getItem = function (key)
+	{
+		var localStorageValue = getLocalStorageNoTest().getItem(key);
+		if (typeof localStorageValue === "string")
+			return Promise.resolve(localStorageValue);
+		return getDb()
+			.then(function (db)
+			{
+				if (!db)
+					return null;
+				return new Promise(function (resolve, reject)
+				{
+					var request = db.transaction(storeName, "readonly").objectStore(storeName).get(key);
+					request.onsuccess = function ()
+					{
+						resolve(typeof request.result === "string" ? request.result : null);
+					};
+					request.onerror = function ()
+					{
+						reject(request.error);
+					};
+				});
+			})
+			.catch(function (ex)
+			{
+				console.error("Unable to read \"" + key + "\" from IndexedDB.", ex);
+				return null;
+			});
+	}
+	/**
+	 * Saves the item, returning a promise that resolves when the item is saved, or rejects if the item could not be saved.
+	 * @param {String} key Item key.
+	 * @param {any} value Item value, which will be converted to a string (like Local Storage does).
+	 */
+	this.setItem = function (key, value)
+	{
+		value = String(value);
+		return getDb()
+			.then(function (db)
+			{
+				if (!db)
+				{
+					getLocalStorageNoTest().setItem(key, value); // Throws if Local Storage is full, rejecting the promise.
+					return;
+				}
+				var items = {};
+				items[key] = value;
+				return putItems(db, items)
+					.then(function ()
+					{
+						removeFromLocalStorage(key);
+					});
+			});
+	}
+	/**
+	 * Returns a promise that resolves with an object mapping keys to values of all items in IndexedDB, or an empty object if IndexedDB is unavailable.  Rejects if IndexedDB could not be read.
+	 * Large items that are in Local Storage are not included.
+	 */
+	this.GetAllIndexedDBItems = function ()
+	{
+		return getDb()
+			.then(function (db)
+			{
+				if (!db)
+					return {};
+				return new Promise(function (resolve, reject)
+				{
+					var items = {};
+					var request = db.transaction(storeName, "readonly").objectStore(storeName).openCursor();
+					request.onsuccess = function ()
+					{
+						var cursor = request.result;
+						if (cursor)
+						{
+							if (typeof cursor.key === "string" && typeof cursor.value === "string")
+								items[cursor.key] = cursor.value;
+							cursor.continue();
+						}
+						else
+							resolve(items);
+					};
+					request.onerror = function ()
+					{
+						reject(request.error);
+					};
+				});
+			});
+	}
+	/**
+	 * Moves all large items from Local Storage into IndexedDB, if IndexedDB is available.  Call this once during startup.
+	 */
+	this.MigrateFromLocalStorage = function ()
+	{
+		// Do not use isLocalStorageEnabled() here, because it returns false when Local Storage is full.
+		var ls = getLocalStorageNoTest();
+		if (ls === GetDummyLocalStorage())
+			return;
+		var items = {};
+		var keys = [];
+		var chars = 0;
+		try
+		{
+			for (var i = 0; i < ls.length; i++)
+			{
+				var key = ls.key(i);
+				if (self.IsLargeItemKey(key))
+				{
+					keys.push(key);
+					items[key] = ls.getItem(key);
+					chars += key.length + items[key].length;
+				}
+			}
+		}
+		catch (ex)
+		{
+			console.error("Unable to read large items from Local Storage.", ex);
+			return;
+		}
+		if (keys.length === 0)
+			return;
+		getDb()
+			.then(function (db)
+			{
+				if (!db)
+					return; // IndexedDB is unavailable, so the items will remain in Local Storage.
+				return putItems(db, items)
+					.then(function ()
+					{
+						for (var i = 0; i < keys.length; i++)
+						{
+							// If the value changed during the migration, it is newer than the migrated value and must be left in Local Storage.
+							if (ls.getItem(keys[i]) === items[keys[i]])
+								removeFromLocalStorage(keys[i]);
+						}
+						console.log("Moved " + keys.length + " items (" + chars + " characters) from Local Storage to IndexedDB.");
+					});
+			})
+			.catch(function (ex)
+			{
+				console.error("Unable to move large items from Local Storage to IndexedDB.", ex);
+			});
+	}
+	/**
+	 * Writes all the items in one transaction, returning a promise that resolves when the transaction is complete.
+	 * @param {IDBDatabase} db Database.
+	 * @param {Object} items Object mapping keys to string values.
+	 */
+	var putItems = function (db, items)
+	{
+		return new Promise(function (resolve, reject)
+		{
+			var tx = db.transaction(storeName, "readwrite");
+			tx.oncomplete = function ()
+			{
+				resolve();
+			};
+			tx.onerror = tx.onabort = function (e)
+			{
+				// For error events, the target is the failed request.  For abort events, the target is the transaction.
+				reject((e && e.target && e.target.error) || tx.error || new Error("IndexedDB transaction failed."));
+			};
+			var store = tx.objectStore(storeName);
+			for (var key in items)
+				if (Object.prototype.hasOwnProperty.call(items, key))
+					store.put(items[key], key);
+		});
+	}
+	/**
+	 * Returns localStorage if it is accessible (even if it is full), otherwise a dummy object which provides getItem and setItem.
+	 */
+	var getLocalStorageNoTest = function ()
+	{
+		try
+		{
+			if (window.localStorage)
+				return window.localStorage;
+		}
+		catch (ex) { }
+		return GetDummyLocalStorage();
+	}
+	var removeFromLocalStorage = function (key)
+	{
+		var ls = getLocalStorageNoTest();
+		if (typeof ls.removeItem !== "function")
+			return;
+		try
+		{
+			ls.removeItem(key);
+		}
+		catch (ex)
+		{
+			console.error("Unable to remove \"" + key + "\" from Local Storage.", ex);
+		}
+	}
+	/**
+	 * Returns a promise that resolves with the open database, or null if IndexedDB is unavailable.  The promise does not reject.
+	 */
+	var getDb = function ()
+	{
+		if (!dbPromise)
+			dbPromise = openDb();
+		return dbPromise;
+	}
+	/**
+	 * Returns a promise that resolves with the open database, or null if IndexedDB is unavailable.  The promise does not reject.
+	 * @param {Number} version (optional) Database version to request.  Omit to open the current version, which lets this code keep working if a future UI3 version upgrades the database.
+	 */
+	var openDb = function (version)
+	{
+		return new Promise(function (resolve)
+		{
+			var finished = false;
+			var finish = function (db, error)
+			{
+				if (finished)
+					return;
+				finished = true;
+				clearTimeout(timeout);
+				if (error)
+					console.error("IndexedDB is unavailable. Large items such as camera list thumbnails will be stored in Local Storage instead.", error);
+				resolve(db);
+			};
+			// Some browser versions have been known to never finish opening IndexedDB.
+			var timeout = setTimeout(function ()
+			{
+				finish(null, new Error("Timed out opening IndexedDB database."));
+			}, openTimeoutMs);
+			try
+			{
+				var request = version ? indexedDB.open(dbName, version) : indexedDB.open(dbName);
+				request.onupgradeneeded = function ()
+				{
+					if (!request.result.objectStoreNames.contains(storeName))
+						request.result.createObjectStore(storeName);
+				};
+				request.onsuccess = function ()
+				{
+					var db = request.result;
+					if (finished)
+					{
+						db.close();
+						return;
+					}
+					if (!db.objectStoreNames.contains(storeName))
+					{
+						// The database exists without the object store we need, so it must be upgraded to a new version that has the object store.
+						var newVersion = db.version + 1;
+						db.close();
+						finished = true;
+						clearTimeout(timeout);
+						openDb(newVersion).then(resolve);
+						return;
+					}
+					db.onversionchange = function ()
+					{
+						// Another page wants to upgrade or delete the database.  Close our connection so we don't block it.  The next operation will reopen the database.
+						db.close();
+						dbPromise = null;
+					};
+					db.onclose = function ()
+					{
+						// The browser closed the connection unexpectedly (e.g. because site data was cleared).
+						dbPromise = null;
+					};
+					finish(db);
+				};
+				request.onerror = function ()
+				{
+					finish(null, request.error);
+				};
+				request.onblocked = function ()
+				{
+					console.log("Opening IndexedDB is blocked by a connection in another browser tab.");
+				};
+			}
+			catch (ex)
+			{
+				// IndexedDB may be unsupported or disabled by browser settings.
+				finish(null, ex);
+			}
+		});
+	}
+}
+///////////////////////////////////////////////////////////////
+// Save Images to Storage /////////////////////////////////////
 ///////////////////////////////////////////////////////////////
 function ImageToDataUrl(imgEle, contentType)
 {
@@ -35861,7 +36197,14 @@ function GetSnapshotDataUri(ele, contentType)
 	}
 	return imgCanvas.toDataURL(contentType);
 }
-function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
+/**
+ * Loads an image from the specified URL and saves it as a jpeg data URI in largeItemStorage.
+ * @param {String} storageKey largeItemStorage key to save the image with.
+ * @param {String} url URL of the image.
+ * @param {Function} onSuccess Called with the image data URI after the image has been saved.
+ * @param {Function} onFail Called with an error message if the image could not be loaded or saved.
+ */
+function PersistImageFromUrl(storageKey, url, onSuccess, onFail)
 {
 	if (!isCanvasSupported())
 	{
@@ -35895,21 +36238,18 @@ function PersistImageFromUrl(settingsKey, url, onSuccess, onFail)
 
 			$tmpImg.remove();
 
-			// Save image into settings
-			try
-			{
-				settings.setItem(settingsKey, imgAsDataURL);
-			}
-			catch (e)
-			{
-				// either the settings object does not exist or it is full
-				if (onFail)
-					onFail("Local Storage may be full!");
-				return;
-			}
-
-			if (onSuccess)
-				onSuccess(imgAsDataURL);
+			largeItemStorage.setItem(storageKey, imgAsDataURL)
+				.then(function ()
+				{
+					if (onSuccess)
+						onSuccess(imgAsDataURL);
+				}
+					, function (ex)
+					{
+						console.error("Unable to save image \"" + storageKey + "\". Storage may be full.", ex);
+						if (onFail)
+							onFail("Unable to save image. Storage may be full!");
+					});
 		}
 	});
 	$tmpImg.error(function ()
@@ -38316,13 +38656,46 @@ function UISettingsPanel()
 
 		var $row = $('<div id="exportAllSettingsBtn" class="uiSettingsRow dialogOption_item dialogOption_item_info"></div>');
 		var $input = $('<a class="input" href="javascript:void(0)" download="ui3-settings-export-' + date + '.json">Export</a>');
+
+		// Items in IndexedDB can only be read asynchronously, but the clipboard copy and download must happen synchronously during the click event.
+		// So IndexedDB is read when the pointer or focus arrives at the button, which almost always finishes before the click.
+		var largeItems = null;
+		var largeItemsError = null;
+		var loadLargeItems = function ()
+		{
+			return largeItemStorage.GetAllIndexedDBItems()
+				.then(function (items)
+				{
+					largeItems = items;
+					largeItemsError = null;
+				}
+					, function (ex)
+					{
+						console.error("Unable to read items from IndexedDB for export.", ex);
+						largeItems = {};
+						largeItemsError = ex;
+					});
+		};
+		$input.on('mouseenter touchstart focus', loadLargeItems);
+
 		$input.on('click', function ()
 		{
-			var text = self.ExportAllSettingsToJson();
+			if (!largeItems)
+			{
+				// The click came too soon.  Click again after IndexedDB has been read.  The clipboard copy may fail in some browsers because it will no longer be within a click event.
+				loadLargeItems().then(function ()
+				{
+					$input.get(0).click();
+				});
+				return false;
+			}
+			var text = self.ExportAllSettingsToJson(largeItems);
 			if (text)
 			{
 				clipboardHelper.CopyText(text);
 				toaster.Success("Copied all settings to clipboard. Please import into a different UI3 instance.");
+				if (largeItemsError)
+					toaster.Warning("Camera list thumbnails could not be read from IndexedDB, so they were not exported. " + largeItemsError, 15000);
 			}
 			else
 			{
@@ -38330,9 +38703,12 @@ function UISettingsPanel()
 				return false;
 			}
 
+			// A Blob URL is used because Chrome will not download data URIs larger than 2 MB.
+			var objectUrl = URL.createObjectURL(new Blob([text], { type: "application/json" }));
 			$input.attr('download', 'ui3-settings-export-' + date + '.json');
-			$input.attr('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+			$input.attr('href', objectUrl);
 			setTimeout(function () { $input.attr('href', 'javascript:void(0)'); }, 0);
+			setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
 			return true;
 		});
 		$row.append($input);
@@ -38390,12 +38766,41 @@ function UISettingsPanel()
 			return false;
 		}
 	}
-	this.ExportAllSettingsToJson = function ()
+	/**
+	 * Returns a JSON string containing all items from Local Storage and the specified items from IndexedDB, in the same format as storageinfo.htm export files.
+	 * @param {Object} largeItems Object mapping keys to values of all items in IndexedDB (from largeItemStorage.GetAllIndexedDBItems).
+	 */
+	this.ExportAllSettingsToJson = function (largeItems)
 	{
 		try
 		{
 			if (isLocalStorageEnabled())
-				return JSON.stringify(localStorage);
+			{
+				var items = {};
+				var idbKeySet = {};
+				for (var key in largeItems)
+				{
+					if (Object.prototype.hasOwnProperty.call(largeItems, key))
+					{
+						items[key] = largeItems[key];
+						idbKeySet[key] = true;
+					}
+				}
+				// Local Storage items are added last so they replace IndexedDB items with the same key, because they are newer (see LargeItemStorage).
+				for (var i = 0; i < localStorage.length; i++)
+				{
+					var key = localStorage.key(i);
+					items[key] = localStorage.getItem(key);
+					if (largeItemStorage.IsLargeItemKey(key))
+						idbKeySet[key] = true;
+				}
+				// Like storageinfo.htm, list the keys that belong in IndexedDB so storageinfo.htm can import them there even if it does not otherwise recognize them.
+				delete items.ui3_export_manifest;
+				var idbKeys = Object.keys(idbKeySet);
+				if (idbKeys.length)
+					items.ui3_export_manifest = JSON.stringify({ indexedDB: idbKeys.sort() });
+				return JSON.stringify(items);
+			}
 			else
 			{
 				toaster.Error("Local Storage is not enabled in this browser, so you have no persistent settings.");

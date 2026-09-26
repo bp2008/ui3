@@ -11,47 +11,74 @@
 </head>
 <body>
 	<h2>Reset UI3 Settings</h2>
-	<p>UI3 stores its settings in your browser using <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>.</p>
-	<p>The button below will clear all items in Local Storage for the origin "<span id="domain">[ERROR]</span>":</p>
+	<p>UI3 stores its settings in your browser using <a href="https://www.google.com/search?q=local+storage+Web+API" target="_blank">Local Storage</a>, and larger items such as camera list thumbnails using <a href="https://www.google.com/search?q=IndexedDB+Web+API" target="_blank">IndexedDB</a>.</p>
+	<p>The button below will clear all items in Local Storage for the origin "<span id="domain">[ERROR]</span>", as well as UI3's IndexedDB database:</p>
 	<p><input type="button" onclick="resetAllUi3Settings_Click()" value="Reset UI3 to Factory Defaults" /></p>
 	<p>This affects only the web browser you are currently accessing this page with.</p>
 	<p>For more information and advanced storage management, including the ability to import and export your settings, visit <a href="storageinfo.htm">storageinfo.htm</a>.</p>
 	<p><a href="../ui3.htm">Go to UI3</a></p>
 	<script type="text/javascript">
-		function isLocalStorageEnabled()
+		/**
+		 * Deletes UI3's IndexedDB database (see LargeItemStorage in ui3.js), then calls the callback with an error message, or null if successful.
+		 */
+		function deleteUi3IndexedDB(callback)
 		{
-			try // May throw exception if local storage is disabled by browser settings!
+			var done = false;
+			var finish = function (error)
 			{
-				var key = "local_storage_test_item";
-				localStorage.setItem(key, key);
-				localStorage.removeItem(key);
-				return true;
-			} catch (e)
+				if (!done)
+				{
+					done = true;
+					callback(error);
+				}
+			};
+			try
 			{
-				return false;
+				if (typeof indexedDB === "undefined" || !indexedDB)
+				{
+					finish(null);
+					return;
+				}
+				var request = indexedDB.deleteDatabase("ui3");
+				request.onsuccess = function () { finish(null); };
+				request.onerror = function () { finish(String(request.error)); };
+				request.onblocked = function () { finish("The database is in use by another browser tab. Close other UI3 tabs and try again."); };
+			}
+			catch (ex)
+			{
+				finish(String(ex));
 			}
 		}
 		function resetAllUi3Settings_Click()
 		{
-			if (isLocalStorageEnabled())
+			if (confirm("All of UI3's settings will be cleared on this device, including saved credentials. Continue?"))
 			{
-				if (confirm("All of UI3's settings will be cleared on this device, including saved credentials. Continue?"))
+				var ls = null;
+				try
+				{
+					// Throws if local storage is disabled by browser settings. Do not test Local Storage with a write because that would fail when Local Storage is full.
+					ls = window.localStorage;
+				}
+				catch (ex) { }
+				if (ls)
 				{
 					try
 					{
-						localStorage.clear();
+						ls.clear();
 					}
 					catch (ex)
 					{
 						alert("An error occurred. Settings could not be cleared!\n\n" + ex);
 						return;
 					}
-					alert("All settings have been cleared.");
 				}
-			}
-			else
-			{
-				alert("Local Storage is not available. Unable to clear settings (there probably were not any to start with).");
+				deleteUi3IndexedDB(function (error)
+				{
+					if (error)
+						alert("Settings have been cleared, but an error occurred while clearing camera list thumbnails from IndexedDB.\n\n" + error);
+					else
+						alert("All settings have been cleared.");
+				});
 			}
 		}
 		try
