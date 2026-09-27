@@ -412,6 +412,13 @@
 			font-weight: bold;
 		}
 
+		.stAdvice
+		{
+			margin-top: 8px;
+			font-size: 12.5px;
+			color: #555555;
+		}
+
 		.stStatusDetail
 		{
 			margin-top: 8px;
@@ -2368,27 +2375,51 @@
 				return new KVStoreClientLegacy(kvStoreBaseUrl, { timeout: requestTimeoutMs, keyDerivation: "fast" });
 			};
 			/**
-			 * Returns a user-friendly description of an error from the KVStore client.
+			 * Returns advice for when the transfer service may be gone or incompatible.  UI3 installations are self-hosted and can outlive the service, or a change to it, so every failure that could have that cause should mention the alternatives.
+			 * @param {Boolean} isImport True if the advice is for the device that imports settings.
 			 */
-			var DescribeError = function (err)
+			var GetFallbackAdvice = function (isImport)
 			{
-				var code = err ? err.code : "";
+				return "Try updating UI3 on both devices, or transfer your settings with a file instead: use \"Export All Storage\" "
+					+ (isImport ? "on the other device's UI3 Storage Info page, then \"Import\" on this page." : "on this page, then \"Import\" on the other device's UI3 Storage Info page.");
+			};
+			/**
+			 * Returns a user-friendly description of an error from the KVStore client, as { text, advice }, where advice is null or suggests what to do if the error persists.
+			 * @param {Object} err The error.
+			 * @param {Boolean} isImport True if the error occurred while importing.
+			 */
+			var DescribeError = function (err, isImport)
+			{
+				var code = err && err.code ? String(err.code) : "";
+				var mayBeGone = "If this keeps happening, the transfer service may no longer be available. " + GetFallbackAdvice(isImport);
 				if (code === "network_error" || code === "timeout" || code === "xdr_failed" || code === "xdr_scheme_mismatch" || code === "no_transport")
-					return "Unable to reach the transfer service (" + kvStoreHost + "). Please check this device's internet connection, then try again.";
+					return { text: "Unable to reach the transfer service (" + kvStoreHost + "). Please check this device's internet connection, then try again.", advice: mayBeGone };
 				if (code === "rate_limited")
 				{
 					var wait = "later";
 					if (err.retryAfter > 0)
 						wait = "in " + (err.retryAfter < 120 ? err.retryAfter + " seconds" : Math.ceil(err.retryAfter / 60) + " minutes");
-					return "The transfer service has received too many requests from your network. Please try again " + wait + ".";
+					return { text: "The transfer service has received too many requests from your network. Please try again " + wait + ".", advice: null };
 				}
 				if (code === "too_large")
-					return "Your settings are too large for the transfer service.";
-				if (code === "storage_full" || code === "bucket_disabled" || (err && err.status >= 500))
-					return "The transfer service is temporarily unavailable. Please try again later.";
+					return { text: "Your settings are too large for the transfer service.", advice: null };
 				if (code === "decrypt_failed")
-					return "The settings could not be decrypted. Please check that the key phrase was entered correctly.";
-				return "The transfer service reported an error. " + (err && err.message ? err.message : String(err));
+					return { text: "The settings could not be decrypted. Please check that the key phrase was entered correctly.", advice: "If it was, the two devices may be running incompatible versions of UI3. " + GetFallbackAdvice(isImport) };
+				if (code === "storage_full" || code === "bucket_disabled" || code === "internal_error" || (err && err.status >= 500))
+					return { text: "The transfer service (" + kvStoreHost + ") is not available right now. Please try again later.", advice: mayBeGone };
+				// Anything else, such as an unknown operation, an unexpected error code, or a response that is not from a KVStore server at all, suggests that the service has changed or is gone.
+				var detail = code || (err && err.message ? err.message : String(err));
+				return {
+					text: "The transfer service (" + kvStoreHost + ") gave an unexpected response (" + detail + "). It may no longer be available, or it may have changed in a way that this version of UI3 does not support."
+					, advice: GetFallbackAdvice(isImport)
+				};
+			};
+			/**
+			 * Returns HTML for an error description from DescribeError.
+			 */
+			var ErrorDescriptionHtml = function (description)
+			{
+				return htmlEncode(description.text) + (description.advice ? '<div class="stAdvice">' + htmlEncode(description.advice) + '</div>' : "");
 			};
 			///////////////////////////////////////////////////////////////
 			// Export / Import Choice /////////////////////////////////////
@@ -2573,10 +2604,12 @@
 					{
 						if (myViewId !== viewId)
 							return;
+						if (!err && (typeof phrase !== "string" || KVStoreClientLegacy.normalizePhrase(phrase).split("-").length < phraseWordCount))
+							err = { code: "invalid_phrase", message: "The key phrase from the server is not valid." };
 						if (err)
 						{
 							console.error("Settings Transfer failed to get a key phrase.", err);
-							RenderExportFailure(htmlEncode(DescribeError(err)), retry);
+							RenderExportFailure(ErrorDescriptionHtml(DescribeError(err, false)), retry);
 							return;
 						}
 						SetBusyStatus($view, "Encrypting&hellip;", 0);
@@ -2589,7 +2622,7 @@
 							else if (err2)
 							{
 								console.error("Settings Transfer failed to upload settings.", err2);
-								RenderExportFailure(htmlEncode(DescribeError(err2)), retry);
+								RenderExportFailure(ErrorDescriptionHtml(DescribeError(err2, false)), retry);
 							}
 							else
 								RenderExportResult(phrase, result, DescribeContents(exp.settingsCount, exp.thumbnailCount) + " (" + formatBytes2(sizeBytes, 1) + ")");
@@ -2799,24 +2832,32 @@
 			/**
 			 * Renders the Import view.
 			 * @param {String} phrase Text to put in the key phrase field.
-			 * @param {String} errorMessage Error message to show, or null.
+			 * @param {any} error Error message string, or { text, advice } from DescribeError, or null.
 			 */
-			var RenderImport = function (phrase, errorMessage)
+			var RenderImport = function (phrase, error)
 			{
 				var $view = $('<div>'
 					+ '<div class="stIntro">Scan the QR code shown on the other device using this device\'s camera app, or copy the key phrase from the other device and enter it here.</div>'
 					+ '<label class="stLabel">Key phrase<input type="text" class="stPhraseInput" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="word-word-word-word-word-word" /></label>'
 					+ '<div class="stError stErrorColor"></div>'
+					+ '<div class="stAdvice"></div>'
 					+ '<div class="stNote">Imported settings replace this browser\'s UI3 settings. Saved login credentials are kept.</div>'
 					+ '<div class="stButtons"></div>'
 					+ '</div>');
 				var $input = $view.find(".stPhraseInput");
 				$input.val(phrase || "");
+				if (typeof error === "string")
+					error = { text: error, advice: null };
 				var $error = $view.find(".stError");
-				if (errorMessage)
-					$error.text(errorMessage);
+				var $advice = $view.find(".stAdvice");
+				if (error)
+					$error.text(error.text);
 				else
 					$error.hide();
+				if (error && error.advice)
+					$advice.text(error.advice);
+				else
+					$advice.hide();
 				var doImport = function ()
 				{
 					BeginImport($input.val());
@@ -2832,7 +2873,7 @@
 				var $importBtn = MakeButton("Import", true, doImport);
 				$view.find(".stButtons").append(MakeButton("Back", false, RenderChoice)).append($importBtn);
 				SetView($view);
-				if (phrase && !errorMessage)
+				if (phrase && !error)
 					$importBtn.focus();
 				else if (!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches))
 					$input.focus(); // Not on touchscreens, where the on-screen keyboard would open even though the user may intend to scan a QR code.
@@ -2884,12 +2925,15 @@
 					if (err)
 					{
 						console.error("Settings Transfer failed to download settings.", err);
-						RenderImport(input, DescribeError(err));
+						RenderImport(input, DescribeError(err, true));
 						return;
 					}
 					if (text === null)
 					{
-						RenderImport(input, "No settings were found for this key phrase. Please check that it was entered correctly. Key phrases expire one hour after they are created.");
+						RenderImport(input, {
+							text: "No settings were found for this key phrase. Please check that it was entered correctly. Key phrases expire one hour after they are created."
+							, advice: "If the key phrase is correct and less than an hour old, the two devices may be running incompatible versions of UI3. " + GetFallbackAdvice(true)
+						});
 						return;
 					}
 					var items;
@@ -2900,7 +2944,7 @@
 					catch (ex)
 					{
 						console.error(ex);
-						RenderImport(input, ex.message || String(ex));
+						RenderImport(input, { text: ex.message || String(ex), advice: ex.advice || null });
 						return;
 					}
 					SetBusyStatus($view, "Saving settings&hellip;", null);
@@ -2950,20 +2994,29 @@
 				});
 			};
 			/**
-			 * Returns the settings to import from the downloaded text, or throws an Error describing why it is not a valid Settings Transfer export.
+			 * Returns the settings to import from the downloaded text, or throws an Error describing why it is not a valid Settings Transfer export.  The Error's advice property suggests what to do.
 			 */
 			var ParseImportPayload = function (text)
 			{
 				var payload = null;
+				var error = null;
 				try
 				{
 					payload = JSON.parse(text);
 				}
 				catch (ex) { }
 				if (!payload || typeof payload !== "object" || payload.format !== payloadFormat || !payload.items || typeof payload.items !== "object")
-					throw new Error("The data stored under this key phrase is not a UI3 Settings Transfer export.");
+				{
+					error = new Error("The data stored under this key phrase is not a UI3 Settings Transfer export.");
+					error.advice = "The two devices may be running incompatible versions of UI3. " + GetFallbackAdvice(true);
+					throw error;
+				}
 				if (payload.version > payloadVersion)
-					throw new Error("These settings were exported by a newer version of this page, in a format that this version does not understand.");
+				{
+					error = new Error("These settings were exported by a newer version of UI3, in a format that this version does not understand.");
+					error.advice = GetFallbackAdvice(true);
+					throw error;
+				}
 				var items = {};
 				for (var key in payload.items)
 				{
