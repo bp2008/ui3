@@ -2,6 +2,7 @@
 <html>
 <head>
 	<title>UI3 Storage Info</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body>
 	<div id="loading">Loading UI3 Storage Info</div>
@@ -45,30 +46,32 @@
 		</p>
 		<template v-if="localStorageObject">
 			<h2>Storage Usage Breakdown</h2>
-			<table class="localStorageUsageBreakdown">
-				<thead>
-					<tr>
-						<th>Usage</th>
-						<th title="Size in characters">Local Storage</th>
-						<th title="Size in characters">IndexedDB</th>
-						<th>View</th>
-						<th>Download</th>
-						<th title="Export this section in a format that can be imported later">Export</th>
-						<th>Delete</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="category in storageCategories()" :title="category.hint">
-						<td>{{category.name}}</td>
-						<td>{{category.localBytes}}</td>
-						<td>{{category.idbBytesText}}</td>
-						<td><input v-if="category.bytes" type="button" value="view" @click="onViewIndividual(category)" /></td>
-						<td><input v-if="category.download && category.bytes" type="button" :value="category.downloadButton" @click="onDownloadIndividual(category)" /></td>
-						<td title="Export this section in a format that can be imported later"><input v-if="category.bytes" type="button" value="export" @click="onExportIndividual(category)" /></td>
-						<td><input v-if="category.bytes" type="button" value="delete" @click="onClearIndividual(category)" /></td>
-					</tr>
-				</tbody>
-			</table>
+			<div class="localStorageUsageBreakdownScroller">
+				<table class="localStorageUsageBreakdown">
+					<thead>
+						<tr>
+							<th>Usage</th>
+							<th title="Size in characters">Local Storage</th>
+							<th title="Size in characters">IndexedDB</th>
+							<th>View</th>
+							<th>Download</th>
+							<th title="Export this section in a format that can be imported later">Export</th>
+							<th>Delete</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="category in storageCategories()" :title="category.hint">
+							<td>{{category.name}}</td>
+							<td>{{category.localBytes}}</td>
+							<td>{{category.idbBytesText}}</td>
+							<td><input v-if="category.bytes" type="button" value="view" @click="onViewIndividual(category)" /></td>
+							<td><input v-if="category.download && category.bytes" type="button" :value="category.downloadButton" @click="onDownloadIndividual(category)" /></td>
+							<td title="Export this section in a format that can be imported later"><input v-if="category.bytes" type="button" value="export" @click="onExportIndividual(category)" /></td>
+							<td><input v-if="category.bytes" type="button" value="delete" @click="onClearIndividual(category)" /></td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 			<h2>Export</h2>
 			<p><input type="button" value="Export All Storage" @click="onExportAll()" /></p>
 			<h2>Import</h2>
@@ -77,6 +80,9 @@
 				<input type="file" @change="onImportInputChange" />
 			</div>
 			<p><input type="button" value="Import" :disabled="!selectedImportFile" @click="importSelectedFile" /> {{selectedImportFileDescription}}</p>
+			<h2>Settings Transfer</h2>
+			<p>Copy UI3's settings between devices or web browsers using a QR code or key phrase, without handling any files. Saved login credentials are not included.</p>
+			<p><input type="button" value="Settings Transfer" @click="onSettingsTransfer()" /></p>
 			<h2>Erase</h2>
 			<p>This will "factory reset" UI3 in this web browser.</p>
 			<p><input type="button" value="Erase All Storage Data" @click="onEraseAllStorage()" /></p>
@@ -85,7 +91,7 @@
 		<p><a href="../ui3.htm">Go to UI3</a></p>
 	</div>
 	<script>
-		var si_version = "2";
+		var si_version = "3";
 		var bi_version = "%%VERSION%%";
 		var local_bi_session = "%%SESSION%%";
 		if (!local_bi_session || (local_bi_session.length === 11 && local_bi_session.indexOf("%") === 0 && local_bi_session.indexOf("SESSION") === 2))
@@ -98,7 +104,7 @@
 		var local_bi_session_arg = navigator.cookieEnabled ? "" : local_bi_session_arg_always;
 		document.write('<link href="libs-ui3.css?v=' + combined_version + local_bi_session_arg + '" rel="stylesheet" />');
 		document.write('<script src="libs-ui3.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
-		document.write('<script src="libs-src/vue.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
+		//document.write('<script src="libs-src/vue.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 		document.write('<script src="storageinfo-libs.js?v=' + combined_version + local_bi_session_arg + '"><\/script>');
 	</script>
 	<style type="text/css">
@@ -124,6 +130,12 @@
 			color: #0000EE;
 			cursor: pointer;
 			text-decoration: underline;
+		}
+
+		.localStorageUsageBreakdownScroller
+		{
+			max-width: 100%;
+			overflow-x: auto;
 		}
 
 		.localStorageUsageBreakdown
@@ -236,6 +248,523 @@
 			{
 				background: var(--dialog-bg-color);
 			}
+		/* Settings Transfer dialog */
+		.settingsTransferDialog
+		{
+			width: 380px;
+			max-width: 90vw;
+			box-sizing: border-box;
+			padding: 14px 16px 16px 16px;
+			background-color: #FFFFFF;
+			color: #222222;
+			font-family: Arial, Sans-Serif;
+			font-size: 14px;
+			line-height: 1.4;
+		}
+
+			.settingsTransferDialog a,
+			.settingsTransferDialog a:visited
+			{
+				color: #0645AD;
+			}
+
+			.settingsTransferDialog svg.stIcon
+			{
+				display: block;
+				width: 100%;
+				height: 100%;
+				fill: currentColor;
+			}
+
+		.stIntro
+		{
+			margin-bottom: 14px;
+		}
+
+		.stNote
+		{
+			margin-top: 14px;
+			font-size: 12px;
+			color: #666666;
+		}
+
+		.stChoices
+		{
+			display: flex;
+			gap: 10px;
+		}
+
+		.stChoice
+		{
+			flex: 1 1 0px;
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			padding: 16px 10px 14px 10px;
+			border: 1px solid #C9D3DF;
+			border-radius: 8px;
+			background-color: #F5F8FB;
+			color: inherit;
+			font: inherit;
+			text-align: center;
+			cursor: pointer;
+		}
+
+			.stChoice:hover
+			{
+				border-color: #3E5F8A;
+				background-color: #E8EFF7;
+			}
+
+			.stChoice:active
+			{
+				background-color: #DCE6F2;
+			}
+
+			.stChoice:focus-visible
+			{
+				outline: 2px solid #3E5F8A;
+				outline-offset: 2px;
+			}
+
+			.stChoice .stChoiceIcon
+			{
+				display: block;
+				width: 40px;
+				height: 40px;
+				margin-bottom: 8px;
+				color: #3E5F8A;
+			}
+
+			.stChoice .stChoiceTitle
+			{
+				display: block;
+				font-size: 17px;
+				font-weight: bold;
+			}
+
+			.stChoice .stChoiceDesc
+			{
+				display: block;
+				margin-top: 4px;
+				font-size: 12.5px;
+				color: #555555;
+			}
+
+		.stStatusView
+		{
+			text-align: center;
+			padding: 14px 4px 4px 4px;
+		}
+
+		.stSpinner
+		{
+			box-sizing: border-box;
+			width: 40px;
+			height: 40px;
+			margin: 0px auto 14px auto;
+			border: 4px solid #D6DEE8;
+			border-top-color: #3E5F8A;
+			border-radius: 50%;
+			animation: stSpin 0.9s linear infinite;
+		}
+
+		@keyframes stSpin
+		{
+			100%
+			{
+				transform: rotate(360deg);
+			}
+		}
+
+		.stProgress
+		{
+			width: 220px;
+			max-width: 100%;
+			height: 6px;
+			margin: 12px auto 4px auto;
+			border-radius: 3px;
+			overflow: hidden;
+			background-color: #E3E8EE;
+		}
+
+			.stProgress .stProgressBar
+			{
+				width: 0%;
+				height: 100%;
+				background-color: #3E5F8A;
+			}
+
+		.stStatusIcon
+		{
+			display: block;
+			width: 44px;
+			height: 44px;
+			margin: 0px auto 10px auto;
+			color: #3E5F8A;
+		}
+
+		.stStatusTitle
+		{
+			margin-bottom: 6px;
+			font-size: 17px;
+			font-weight: bold;
+		}
+
+		.stStatusDetail
+		{
+			margin-top: 8px;
+			font-size: 12.5px;
+		}
+
+		.settingsTransferDialog .stErrorColor
+		{
+			color: #C62828;
+		}
+
+		.settingsTransferDialog .stSuccessColor
+		{
+			color: #2E7D32;
+		}
+
+		.stButtons
+		{
+			display: flex;
+			justify-content: space-between;
+			gap: 10px;
+			margin-top: 16px;
+		}
+
+			.stButtons.stButtonsCenter
+			{
+				justify-content: center;
+			}
+
+		.stBtn
+		{
+			box-sizing: border-box;
+			height: 32px;
+			min-width: 84px;
+			margin: 0px;
+			padding: 0px 14px;
+			border: 1px solid #B8C2CE;
+			border-radius: 4px;
+			background-color: #F3F5F8;
+			color: #222222;
+			font: inherit;
+			font-size: 14px;
+			white-space: nowrap;
+			cursor: pointer;
+		}
+
+			.stBtn:hover
+			{
+				background-color: #E6EAF0;
+			}
+
+			.stBtn:active
+			{
+				background-color: #D9DFE7;
+			}
+
+			.stBtn:focus-visible
+			{
+				outline: 2px solid #3E5F8A;
+				outline-offset: 1px;
+			}
+
+			.stBtn.stPrimary
+			{
+				border-color: #3E5F8A;
+				background-color: #3E5F8A;
+				color: #FFFFFF;
+			}
+
+				.stBtn.stPrimary:hover
+				{
+					background-color: #4A6FA0;
+				}
+
+				.stBtn.stPrimary:active
+				{
+					background-color: #34506F;
+				}
+
+		.stReadyHeading
+		{
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			margin-bottom: 12px;
+			font-size: 16px;
+			font-weight: bold;
+			color: #2E7D32;
+		}
+
+			.stReadyHeading .stHeadingIcon
+			{
+				flex: 0 0 auto;
+				width: 22px;
+				height: 22px;
+			}
+
+		.stContents
+		{
+			margin: -6px 0px 12px 0px;
+			font-size: 12.5px;
+			color: #555555;
+			text-align: center;
+		}
+
+		.stCheckRow
+		{
+			display: flex;
+			align-items: flex-start;
+			gap: 10px;
+			padding: 10px 12px;
+			border: 1px solid #C9D3DF;
+			border-radius: 6px;
+			background-color: #F5F8FB;
+			cursor: pointer;
+		}
+
+			.stCheckRow:hover
+			{
+				border-color: #3E5F8A;
+			}
+
+			.stCheckRow input[type="checkbox"]
+			{
+				flex: 0 0 auto;
+				width: 18px;
+				height: 18px;
+				margin: 1px 0px 0px 0px;
+				cursor: pointer;
+			}
+
+			.stCheckRow .stCheckTitle
+			{
+				display: block;
+				font-weight: bold;
+			}
+
+			.stCheckRow .stCheckDesc
+			{
+				display: block;
+				margin-top: 3px;
+				font-size: 12.5px;
+				color: #555555;
+			}
+
+		.stWarning
+		{
+			display: flex;
+			gap: 8px;
+			margin-bottom: 12px;
+			padding: 8px 10px;
+			border: 1px solid #E0B000;
+			border-radius: 4px;
+			background-color: #FFF8E1;
+			color: #5C4600;
+			font-size: 12.5px;
+		}
+
+			.stWarning .stWarningIcon
+			{
+				flex: 0 0 auto;
+				width: 18px;
+				height: 18px;
+				color: #B58900;
+			}
+
+		.stQrBox
+		{
+			text-align: center;
+		}
+
+			.stQrBox .stQr
+			{
+				display: inline-block;
+				border: 1px solid #DDDDDD;
+				border-radius: 6px;
+				overflow: hidden;
+				line-height: 0;
+			}
+
+				.stQrBox .stQr svg
+				{
+					display: block;
+					width: 100%;
+					height: 100%;
+					shape-rendering: crispEdges;
+				}
+
+			.stQrBox .stQrCaption
+			{
+				margin-top: 6px;
+				font-size: 13px;
+				color: #444444;
+			}
+
+			.stQrBox .stQrError
+			{
+				padding: 12px;
+				color: #C62828;
+				line-height: 1.4;
+			}
+
+		.stOr
+		{
+			display: flex;
+			align-items: center;
+			margin: 16px 0px 8px 0px;
+			font-size: 12.5px;
+			color: #555555;
+			text-align: center;
+		}
+
+			.stOr::before,
+			.stOr::after
+			{
+				content: "";
+				flex: 1 1 0px;
+				border-top: 1px solid #DDDDDD;
+			}
+
+			.stOr span
+			{
+				flex: 0 1 auto;
+				padding: 0px 10px;
+			}
+
+		.stCopyRow
+		{
+			display: flex;
+			align-items: stretch;
+		}
+
+			.stCopyRow .stCopyValue
+			{
+				flex: 1 1 auto;
+				min-width: 0;
+				padding: 6px 9px;
+				border: 1px solid #C9D3DF;
+				border-right: none;
+				border-radius: 4px 0px 0px 4px;
+				background-color: #F7F9FB;
+				font-family: Consolas, "Courier New", monospace;
+				font-size: 13px;
+				word-break: break-all;
+			}
+
+			.stCopyRow .stPhrase
+			{
+				font-size: 15px;
+				font-weight: bold;
+				color: #111111;
+				word-break: normal;
+				overflow-wrap: anywhere; /* Wraps after hyphens, keeping words whole. */
+			}
+
+			.stCopyRow .stCopyBtn
+			{
+				flex: 0 0 auto;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 5px;
+				height: auto;
+				min-height: 32px;
+				min-width: 86px;
+				border-radius: 0px 4px 4px 0px;
+			}
+
+				.stCopyRow .stCopyBtn .stCopyIcon
+				{
+					flex: 0 0 auto;
+					width: 14px;
+					height: 14px;
+				}
+
+				.stCopyRow .stCopyBtn.stCopied
+				{
+					color: #2E7D32;
+				}
+
+		.stCopyFailed
+		{
+			margin-top: 4px;
+			font-size: 12px;
+			color: #C62828;
+		}
+
+		.stHint
+		{
+			margin-top: 5px;
+			font-size: 12px;
+			color: #666666;
+			text-align: center;
+		}
+
+		.stFooter
+		{
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			margin-top: 16px;
+		}
+
+		.stExpires
+		{
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 13px;
+			color: #444444;
+			font-variant-numeric: tabular-nums;
+		}
+
+			.stExpires .stExpiresIcon
+			{
+				flex: 0 0 auto;
+				width: 16px;
+				height: 16px;
+			}
+
+		.stLabel
+		{
+			display: block;
+			font-weight: bold;
+		}
+
+		.stPhraseInput
+		{
+			display: block;
+			width: 100%;
+			box-sizing: border-box;
+			height: 38px;
+			margin-top: 5px;
+			padding: 4px 10px;
+			border: 1px solid #B8C2CE;
+			border-radius: 4px;
+			font-family: Consolas, "Courier New", monospace;
+			font-size: 16px; /* 16px or more prevents iOS from zooming in when the field is focused */
+		}
+
+			.stPhraseInput:focus
+			{
+				border-color: #3E5F8A;
+				outline: 2px solid #3E5F8A;
+				outline-offset: 0px;
+			}
+
+		.stError
+		{
+			margin-top: 8px;
+		}
 	</style>
 	<script type="text/javascript">
 		$(function ()
@@ -527,9 +1056,17 @@
 							readImportFile(this.selectedImportFile);
 						else
 							alert("No file was selected for import.");
+					},
+					// SETTINGS TRANSFER
+					onSettingsTransfer: function ()
+					{
+						settingsTransfer.Open();
 					}
 				}
 			});
+			// A Settings Transfer link opens this page with a key phrase in the URL's hash.
+			settingsTransfer.HandleUrlHash();
+			$(window).on("hashchange", settingsTransfer.HandleUrlHash);
 		});
 		///////////////////////////////////////////////////////////////
 		// IndexedDB //////////////////////////////////////////////////
@@ -1553,6 +2090,892 @@
 			{
 				dialog.contentChanged(true, true);
 			}, 0);
+		}
+		///////////////////////////////////////////////////////////////
+		// Settings Transfer //////////////////////////////////////////
+		///////////////////////////////////////////////////////////////
+		/**
+		 * Copies UI3's settings from one browser to another through KVStore (https://kv.bp2008.org), a public, short-lived key/value store.
+		 * Export uploads this browser's settings (and optionally its camera list thumbnails), encrypted with a key derived from a random 6-word key phrase, then shows the key phrase along with a link and a QR code that open this page's Import function on another device.
+		 * The link carries the key phrase in the URL's hash ("#settingsImport=..."), which browsers do not send to web servers.
+		 * The KVStore client and the QR code generator are loaded when the dialog opens.  Their unminified sources are in libs-src.
+		 */
+		var settingsTransfer = new (function SettingsTransfer()
+		{
+			var self = this;
+			var kvStoreBaseUrl = "https://kv.bp2008.org";
+			var kvStoreHost = "kv.bp2008.org";
+			var phraseWordCount = 6;
+			var transferTtlSeconds = 3600; // The KVStore server's default bucket keeps items for at most 1 hour.
+			var requestTimeoutMs = 30000;
+			var payloadFormat = "ui3-settings-transfer";
+			var payloadVersion = 1;
+			/**
+			 * Matches Local Storage keys that are never transferred: saved login credentials and login state, the MQTT Instance ID (which must be unique to each UI3 instance), and the export manifest.  The optional prefix matches keys stored for remote servers.
+			 */
+			var excludedKeyRx = /(^|_)(bi_rememberMe|bi_username|bi_password|bi_lastunload|bi_override_disable_auto_login_once|ui3_mqttInstanceId|ui3_export_manifest)$/;
+			var scripts = {
+				kvStore: { url: "kvstore-client-legacy.min.js", globalName: "KVStoreClientLegacy", state: 0, callbacks: [] }
+				, qrCode: { url: "qrcode-generator.min.js", globalName: "qrcode", state: 0, callbacks: [] }
+			};
+			// Material Design icons (Apache License 2.0), as used in UI3's icons.svg.
+			var icons = {
+				upload: { viewBox: "0 0 24 24", path: "M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" }
+				, download: { viewBox: "3 3 18 18", path: "M5,20h14v-2H5V20z M19,9h-4V3H9v6H5l7,7L19,9z" }
+				, copy: { viewBox: "1 1 22 22", path: "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" }
+				, warning: { viewBox: "1 1 22 22", path: "M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" }
+				, clock: { viewBox: "2 2 20 20", path: "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zM12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z" }
+				, checkCircle: { viewBox: "2 2 20 20", path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" }
+			};
+			var dialog = null;
+			var $content = null;
+			var viewId = 0; // Incremented whenever the view changes or the dialog closes, so that callbacks from abandoned operations know to do nothing.
+			var countdownInterval = null;
+			var reloadPageOnClose = false;
+
+			/**
+			 * Opens the dialog at the Export / Import choice.
+			 */
+			this.Open = function ()
+			{
+				OpenDialog(RenderChoice);
+			};
+			/**
+			 * If the URL's hash contains a key phrase ("#settingsImport=..."), removes it from the URL and opens the dialog at Import with the key phrase filled in.
+			 */
+			this.HandleUrlHash = function ()
+			{
+				if (!/[#&]settingsImport=/i.test(location.hash))
+					return;
+				var phrase = "";
+				var keptParams = [];
+				var params = location.hash.replace(/^#/, "").split("&");
+				for (var i = 0; i < params.length; i++)
+				{
+					var idxEquals = params[i].indexOf("=");
+					if (idxEquals > -1 && params[i].substr(0, idxEquals).toLowerCase() === "settingsimport")
+					{
+						try
+						{
+							phrase = decodeURIComponent(params[i].substr(idxEquals + 1));
+						}
+						catch (ex)
+						{
+							phrase = params[i].substr(idxEquals + 1);
+						}
+					}
+					else if (params[i])
+						keptParams.push(params[i]);
+				}
+				try
+				{
+					history.replaceState(history.state, "", location.pathname + location.search + (keptParams.length ? "#" + keptParams.join("&") : ""));
+				}
+				catch (ex)
+				{
+					console.error("Unable to remove the key phrase from the URL.", ex);
+				}
+				OpenDialog(function () { RenderImport(phrase, null); });
+			};
+			var OpenDialog = function (renderFirstView)
+			{
+				if (dialog)
+					dialog.close();
+				$content = $('<div class="settingsTransferDialog"></div>');
+				dialog = $content.dialog({
+					title: "Settings Transfer"
+					, overlayOpacity: 0.3
+					, onClosing: function ()
+					{
+						viewId++;
+						StopCountdown();
+						dialog = null;
+						$content = null;
+						if (reloadPageOnClose)
+							location.reload(); // Refresh this page's storage usage information after an import.
+					}
+				});
+				LoadScriptsThenRender(renderFirstView);
+			};
+			var CloseDialog = function ()
+			{
+				if (dialog)
+					dialog.close();
+			};
+			/**
+			 * Replaces the dialog's content, returning the new view's ID.
+			 * @param {any} content HTML markup or a jQuery object.
+			 */
+			var SetView = function (content)
+			{
+				viewId++;
+				StopCountdown();
+				if ($content)
+				{
+					$content.empty().append(content);
+					dialog.contentChanged(true);
+				}
+				return viewId;
+			};
+			var GetIconHtml = function (name, cssClass)
+			{
+				var icon = icons[name];
+				return '<span class="' + cssClass + '"><svg class="stIcon" viewBox="' + icon.viewBox + '" aria-hidden="true"><path d="' + icon.path + '"/></svg></span>';
+			};
+			/**
+			 * Returns a view with a loading animation, a status message, and an optional progress bar.
+			 */
+			var MakeBusyView = function (statusHtml, progress)
+			{
+				var $view = $('<div class="stStatusView"><div class="stSpinner"></div><div class="stBusyText"></div><div class="stProgress"><div class="stProgressBar"></div></div></div>');
+				SetBusyStatus($view, statusHtml, progress);
+				return $view;
+			};
+			/**
+			 * Updates a view created by MakeBusyView.
+			 * @param {Object} $view The view.
+			 * @param {String} statusHtml Status message HTML.
+			 * @param {Number} progress Progress from 0 to 1, or null to hide the progress bar.
+			 */
+			var SetBusyStatus = function ($view, statusHtml, progress)
+			{
+				$view.find(".stBusyText").html(statusHtml);
+				var $progress = $view.find(".stProgress");
+				if (typeof progress === "number")
+				{
+					$progress.css("visibility", "visible");
+					$progress.find(".stProgressBar").css("width", (Math.min(1, Math.max(0, progress)) * 100).toFixed(1) + "%");
+				}
+				else
+					$progress.css("visibility", "hidden");
+			};
+			/**
+			 * Returns a view with an icon, a title, a message, and buttons.
+			 * @param {String} iconHtml Icon markup.
+			 * @param {String} titleHtml Title HTML.
+			 * @param {String} messageHtml Message HTML.
+			 * @param {Array} buttons Array of { text, primary, onClick }.
+			 */
+			var MakeStatusView = function (iconHtml, titleHtml, messageHtml, buttons)
+			{
+				var $view = $('<div class="stStatusView">'
+					+ iconHtml
+					+ '<div class="stStatusTitle">' + titleHtml + '</div>'
+					+ '<div class="stStatusText">' + messageHtml + '</div>'
+					+ '</div>');
+				if (buttons && buttons.length)
+				{
+					var $buttons = $('<div class="stButtons stButtonsCenter"></div>');
+					for (var i = 0; i < buttons.length; i++)
+						$buttons.append(MakeButton(buttons[i].text, buttons[i].primary, buttons[i].onClick));
+					$view.append($buttons);
+				}
+				return $view;
+			};
+			var MakeButton = function (text, primary, onClick)
+			{
+				var $btn = $('<button type="button" class="stBtn"></button>');
+				$btn.text(text);
+				if (primary)
+					$btn.addClass("stPrimary");
+				$btn.on("click", onClick);
+				return $btn;
+			};
+			///////////////////////////////////////////////////////////////
+			// Script Loading /////////////////////////////////////////////
+			///////////////////////////////////////////////////////////////
+			/**
+			 * Shows a loading animation while the scripts load, then calls renderView, or shows an error.
+			 */
+			var LoadScriptsThenRender = function (renderView)
+			{
+				var myViewId = SetView(MakeBusyView("Loading&hellip;", null));
+				var pending = 2;
+				var errors = [];
+				var onScriptLoaded = function (errorMessage)
+				{
+					if (errorMessage)
+						errors.push(errorMessage);
+					if (--pending > 0 || myViewId !== viewId)
+						return;
+					if (errors.length)
+					{
+						var detailsHtml = "";
+						for (var i = 0; i < errors.length; i++)
+							detailsHtml += '<div class="stErrorColor stStatusDetail">' + htmlEncode(errors[i]) + '</div>';
+						SetView(MakeStatusView(GetIconHtml("warning", "stStatusIcon stErrorColor")
+							, "Settings Transfer is unavailable"
+							, "A script that Settings Transfer needs could not be loaded." + detailsHtml
+							, [{ text: "Try Again", primary: true, onClick: function () { LoadScriptsThenRender(renderView); } }]));
+					}
+					else
+						renderView();
+				};
+				LoadScript(scripts.kvStore, onScriptLoaded);
+				LoadScript(scripts.qrCode, onScriptLoaded);
+			};
+			/**
+			 * Loads the script if it is not already loaded, then calls callback(errorMessage), where errorMessage is null if the script loaded successfully.
+			 */
+			var LoadScript = function (script, callback)
+			{
+				if (script.state === 2)
+				{
+					setTimeout(function () { callback(null); }, 0);
+					return;
+				}
+				script.callbacks.push(callback);
+				if (script.state === 1)
+					return;
+				script.state = 1;
+				var finish = function (errorMessage)
+				{
+					script.state = errorMessage ? 0 : 2; // After a failure, the next attempt starts over.
+					var callbacks = script.callbacks;
+					script.callbacks = [];
+					for (var i = 0; i < callbacks.length; i++)
+						callbacks[i](errorMessage);
+				};
+				$.ajax({
+					url: script.url + "?v=" + combined_version + local_bi_session_arg
+					, dataType: "script"
+					, cache: true
+					, timeout: requestTimeoutMs
+				})
+					.done(function ()
+					{
+						if (typeof window[script.globalName] === "function")
+							finish(null);
+						else
+							finish(script.url + " loaded, but it did not define " + script.globalName + ".");
+					})
+					.fail(function (jqXHR, textStatus, errorThrown)
+					{
+						console.error("Unable to load " + script.url, textStatus, errorThrown);
+						if (textStatus === "timeout")
+							finish("The request for " + script.url + " timed out.");
+						else if (textStatus === "parsererror")
+							finish(script.url + " could not be run. " + errorThrown);
+						else if (jqXHR && jqXHR.status)
+							finish("The server responded to the request for " + script.url + " with " + jqXHR.status + " " + jqXHR.statusText + ".");
+						else
+							finish("The server did not respond to the request for " + script.url + ".");
+					});
+			};
+			var NewClient = function ()
+			{
+				// "fast" key derivation (10,000 PBKDF2 iterations instead of 600,000) is safe here because every phrase is randomly generated with 6 words.  Export and import must use the same mode, because the modes derive different keys.
+				return new KVStoreClientLegacy(kvStoreBaseUrl, { timeout: requestTimeoutMs, keyDerivation: "fast" });
+			};
+			/**
+			 * Returns a user-friendly description of an error from the KVStore client.
+			 */
+			var DescribeError = function (err)
+			{
+				var code = err ? err.code : "";
+				if (code === "network_error" || code === "timeout" || code === "xdr_failed" || code === "xdr_scheme_mismatch" || code === "no_transport")
+					return "Unable to reach the transfer service (" + kvStoreHost + "). Please check this device's internet connection, then try again.";
+				if (code === "rate_limited")
+				{
+					var wait = "later";
+					if (err.retryAfter > 0)
+						wait = "in " + (err.retryAfter < 120 ? err.retryAfter + " seconds" : Math.ceil(err.retryAfter / 60) + " minutes");
+					return "The transfer service has received too many requests from your network. Please try again " + wait + ".";
+				}
+				if (code === "too_large")
+					return "Your settings are too large for the transfer service.";
+				if (code === "storage_full" || code === "bucket_disabled" || (err && err.status >= 500))
+					return "The transfer service is temporarily unavailable. Please try again later.";
+				if (code === "decrypt_failed")
+					return "The settings could not be decrypted. Please check that the key phrase was entered correctly.";
+				return "The transfer service reported an error. " + (err && err.message ? err.message : String(err));
+			};
+			///////////////////////////////////////////////////////////////
+			// Export / Import Choice /////////////////////////////////////
+			///////////////////////////////////////////////////////////////
+			var RenderChoice = function ()
+			{
+				var $view = $('<div>'
+					+ '<div class="stIntro">Copy your UI3 settings to another device or web browser.</div>'
+					+ '<div class="stChoices">'
+					+ '<button type="button" class="stChoice" data-choice="export">'
+					+ GetIconHtml("upload", "stChoiceIcon")
+					+ '<span class="stChoiceTitle">Export</span>'
+					+ '<span class="stChoiceDesc">Send this browser\'s settings to another device</span>'
+					+ '</button>'
+					+ '<button type="button" class="stChoice" data-choice="import">'
+					+ GetIconHtml("download", "stChoiceIcon")
+					+ '<span class="stChoiceTitle">Import</span>'
+					+ '<span class="stChoiceDesc">Receive settings from another device</span>'
+					+ '</button>'
+					+ '</div>'
+					+ '<div class="stNote">Settings are encrypted, then kept for up to one hour by ' + kvStoreHost + ', a service operated by the UI3 developer. Saved login credentials are never included.</div>'
+					+ '</div>');
+				$view.find('[data-choice="export"]').on("click", BeginExport);
+				$view.find('[data-choice="import"]').on("click", function () { RenderImport("", null); });
+				SetView($view);
+			};
+			///////////////////////////////////////////////////////////////
+			// Export /////////////////////////////////////////////////////
+			///////////////////////////////////////////////////////////////
+			var IsTransferableKey = function (key)
+			{
+				return typeof key === "string" && !excludedKeyRx.test(key);
+			};
+			/**
+			 * Returns true if the key is a camera list thumbnail image, as opposed to the "_date" item that accompanies each one.
+			 */
+			var IsThumbnailImageKey = function (key)
+			{
+				return IsLargeItemKey(key) && !/_date$/.test(key);
+			};
+			/**
+			 * Returns a promise that resolves with the transferable items from Local Storage and IndexedDB, along with the number and total size of the camera list thumbnails among them: { items, thumbnailCount, thumbnailBytes }.
+			 */
+			var ReadExportableItems = function ()
+			{
+				if (!getLocalStorage())
+					return Promise.reject(new Error("Local Storage is disabled or unavailable in this browser, so there are no saved settings to export."));
+				return GetAllItemsInIndividualSettingCategory({ key: "All" }).then(function (result)
+				{
+					var data = { items: {}, thumbnailCount: 0, thumbnailBytes: 0 };
+					for (var key in result.items)
+					{
+						if (!Object.prototype.hasOwnProperty.call(result.items, key) || !IsTransferableKey(key))
+							continue;
+						data.items[key] = result.items[key];
+						if (IsLargeItemKey(key))
+						{
+							data.thumbnailBytes += key.length + result.items[key].length;
+							if (IsThumbnailImageKey(key))
+								data.thumbnailCount++;
+						}
+					}
+					return data;
+				});
+			};
+			/**
+			 * Returns { json, settingsCount, thumbnailCount } for the export.
+			 * @param {Object} data From ReadExportableItems.
+			 * @param {Boolean} includeThumbnails If true, camera list thumbnails are included.
+			 */
+			var BuildExport = function (data, includeThumbnails)
+			{
+				var items = {};
+				var settingsCount = 0;
+				var thumbnailCount = 0;
+				for (var key in data.items)
+				{
+					if (!Object.prototype.hasOwnProperty.call(data.items, key))
+						continue;
+					if (!IsLargeItemKey(key))
+						settingsCount++;
+					else if (!includeThumbnails)
+						continue;
+					else if (IsThumbnailImageKey(key))
+						thumbnailCount++;
+					items[key] = data.items[key];
+				}
+				return {
+					json: JSON.stringify({ format: payloadFormat, version: payloadVersion, created: Date.now(), items: items })
+					, settingsCount: settingsCount
+					, thumbnailCount: thumbnailCount
+				};
+			};
+			/**
+			 * Returns a description such as "370 settings and 12 camera list thumbnails".
+			 */
+			var DescribeContents = function (settingsCount, thumbnailCount)
+			{
+				var s = settingsCount + (settingsCount === 1 ? " setting" : " settings");
+				if (thumbnailCount)
+					s += " and " + thumbnailCount + (thumbnailCount === 1 ? " camera list thumbnail" : " camera list thumbnails");
+				return s;
+			};
+			/**
+			 * Returns the URL of this page with the key phrase in the hash, which opens the Import function.
+			 */
+			var GetImportUrl = function (phrase)
+			{
+				return location.origin + location.pathname + "#settingsImport=" + encodeURIComponent(phrase);
+			};
+			/**
+			 * Returns true if the host name only works on this device (e.g. "localhost" or "127.0.0.1").
+			 */
+			var IsLoopbackHost = function (hostname)
+			{
+				hostname = String(hostname).toLowerCase().replace(/^\[|\]$/g, "");
+				return hostname === "localhost" || /\.localhost$/.test(hostname) || /^127\./.test(hostname) || hostname === "::1";
+			};
+			/**
+			 * Reads the items to export, then offers to include camera list thumbnails if there are any, or starts the export.
+			 */
+			var BeginExport = function ()
+			{
+				var myViewId = SetView(MakeBusyView("Reading settings&hellip;", null));
+				ReadExportableItems()
+					.then(function (data)
+					{
+						if (myViewId !== viewId)
+							return;
+						if (data.thumbnailCount > 0)
+							RenderExportOptions(data);
+						else
+							StartExport(data, false);
+					}, function (ex)
+					{
+						if (myViewId !== viewId)
+							return;
+						console.error(ex);
+						RenderExportFailure(htmlEncode(ex.message || String(ex)), { text: "Try Again", onClick: BeginExport });
+					});
+			};
+			var RenderExportOptions = function (data)
+			{
+				var $view = $('<div>'
+					+ '<div class="stIntro">Your settings will be exported. You can also include the camera list thumbnails saved in this browser.</div>'
+					+ '<label class="stCheckRow"><input type="checkbox" class="stIncludeThumbnails" checked="checked" />'
+					+ '<span><span class="stCheckTitle">Include camera list thumbnails</span><span class="stCheckDesc"></span></span></label>'
+					+ '<div class="stButtons"></div>'
+					+ '</div>');
+				$view.find(".stCheckDesc").text(data.thumbnailCount + (data.thumbnailCount === 1 ? " image, " : " images, ") + formatBytes2(data.thumbnailBytes, 1)
+					+ ". UI3 downloads new thumbnails of enabled cameras by itself when the Full Camera List is opened, so these matter mostly for disabled cameras.");
+				var $checkbox = $view.find(".stIncludeThumbnails");
+				$view.find(".stButtons")
+					.append(MakeButton("Back", false, RenderChoice))
+					.append(MakeButton("Export", true, function () { StartExport(data, $checkbox.is(":checked")); }));
+				SetView($view);
+			};
+			/**
+			 * Exports the items.
+			 * @param {Object} data From ReadExportableItems.
+			 * @param {Boolean} includeThumbnails If true, camera list thumbnails are included.
+			 */
+			var StartExport = function (data, includeThumbnails)
+			{
+				var exp = BuildExport(data, includeThumbnails);
+				var sizeBytes = exp.json.length; // Nearly all of the content is ASCII, so this is very close to the UTF-8 size.
+				var retry = { text: "Try Again", onClick: function () { StartExport(data, includeThumbnails); } };
+				var renderTooLarge = function (limitBytes)
+				{
+					var messageHtml = htmlEncode("The export is " + formatBytes2(sizeBytes, 1) + ", which is more than the transfer service allows"
+						+ (limitBytes ? " (" + formatBytes2(limitBytes, 1) + ")" : "") + "."
+						+ (includeThumbnails ? " Try exporting without camera list thumbnails." : ""));
+					RenderExportFailure(messageHtml, includeThumbnails ? { text: "Export Without Thumbnails", onClick: function () { StartExport(data, false); } } : null);
+				};
+				var $view = MakeBusyView("Preparing&hellip;", null);
+				var myViewId = SetView($view);
+				var kv = NewClient();
+				var upload = function ()
+				{
+					SetBusyStatus($view, "Getting a key phrase&hellip;", null);
+					kv.phrase(phraseWordCount, function (err, phrase)
+					{
+						if (myViewId !== viewId)
+							return;
+						if (err)
+						{
+							console.error("Settings Transfer failed to get a key phrase.", err);
+							RenderExportFailure(htmlEncode(DescribeError(err)), retry);
+							return;
+						}
+						SetBusyStatus($view, "Encrypting&hellip;", 0);
+						kv.putEncrypted(phrase, exp.json, transferTtlSeconds, function (err2, result)
+						{
+							if (myViewId !== viewId)
+								return;
+							if (err2 && err2.code === "too_large")
+								renderTooLarge(0);
+							else if (err2)
+							{
+								console.error("Settings Transfer failed to upload settings.", err2);
+								RenderExportFailure(htmlEncode(DescribeError(err2)), retry);
+							}
+							else
+								RenderExportResult(phrase, result, DescribeContents(exp.settingsCount, exp.thumbnailCount) + " (" + formatBytes2(sizeBytes, 1) + ")");
+						}, function (fraction)
+						{
+							if (myViewId !== viewId)
+								return;
+							if (fraction >= 1)
+								SetBusyStatus($view, "Uploading " + formatBytes2(sizeBytes, 1) + "&hellip;", null);
+							else
+								SetBusyStatus($view, "Encrypting&hellip;", fraction);
+						});
+					});
+				};
+				if (sizeBytes < 1048576)
+				{
+					upload();
+					return;
+				}
+				// Check a large export against the server's limit first, rather than uploading megabytes only to have them rejected.
+				kv.buckets(function (err, info)
+				{
+					if (myViewId !== viewId)
+						return;
+					var limitBytes = 0;
+					if (!err && info && info.buckets)
+					{
+						for (var i = 0; i < info.buckets.length; i++)
+							if (info.buckets[i].name === info.defaultBucket)
+								limitBytes = info.buckets[i].maxItemSizeBytes;
+					}
+					if (limitBytes && sizeBytes + 28 > limitBytes) // Encryption adds a 12-byte IV and a 16-byte tag.
+						renderTooLarge(limitBytes);
+					else
+						upload(); // If the limit is unknown, the server will reject an upload that is too large.
+				});
+			};
+			/**
+			 * Renders an export error with a Back button and an optional second button.
+			 * @param {String} messageHtml Error message HTML.
+			 * @param {Object} button { text, onClick } or null.
+			 */
+			var RenderExportFailure = function (messageHtml, button)
+			{
+				var buttons = [{ text: "Back", onClick: RenderChoice }];
+				if (button)
+					buttons.push({ text: button.text, primary: true, onClick: button.onClick });
+				SetView(MakeStatusView(GetIconHtml("warning", "stStatusIcon stErrorColor"), "Export failed", messageHtml, buttons));
+			};
+			/**
+			 * Returns markup for a QR code containing the text, sized so that each module is a whole number of device pixels, which keeps its edges sharp.
+			 */
+			var MakeQrCodeHtml = function (text)
+			{
+				qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
+				var qr = qrcode(0, "M"); // 0 selects the smallest QR code version that fits the text.
+				qr.addData(text, "Byte");
+				qr.make();
+				var border = 4; // The QR code specification calls for a light border at least 4 modules wide.
+				var modules = qr.getModuleCount() + border * 2;
+				var dpr = window.devicePixelRatio || 1;
+				var cssPx = Math.max(1, Math.floor(200 * dpr / modules)) * modules / dpr;
+				return '<div class="stQr" role="img" aria-label="QR code" style="width: ' + cssPx + 'px; height: ' + cssPx + 'px;">'
+					+ qr.createSvgTag({ cellSize: 1, margin: border, scalable: true })
+					+ '</div>';
+			};
+			/**
+			 * Renders the QR code, link, and key phrase for an export.
+			 * @param {String} phrase Key phrase.
+			 * @param {Object} result Result of putEncrypted.
+			 * @param {String} contentsText Description of the export's contents.
+			 */
+			var RenderExportResult = function (phrase, result, contentsText)
+			{
+				var url = GetImportUrl(phrase);
+				var ttlSeconds = result && result.ttl > 0 ? result.ttl : transferTtlSeconds;
+				var expiresAt = Date.now() + ttlSeconds * 1000;
+
+				var qrHtml;
+				try
+				{
+					qrHtml = MakeQrCodeHtml(url);
+				}
+				catch (ex)
+				{
+					console.error("Unable to create a QR code for the Settings Transfer link.", ex);
+					qrHtml = '<div class="stQr stQrError">The QR code could not be created. ' + htmlEncode(ex.message || String(ex)) + '</div>';
+				}
+
+				var warningHtml = "";
+				if (IsLoopbackHost(location.hostname))
+					warningHtml = '<div class="stWarning">' + GetIconHtml("warning", "stWarningIcon")
+						+ '<div>This page was opened at <b>' + htmlEncode(location.host) + '</b>, which other devices can not reach, so the QR code and link will not work there. Enter the key phrase on the other device instead.</div></div>';
+
+				var $view = $('<div>'
+					+ '<div class="stReadyHeading">' + GetIconHtml("checkCircle", "stHeadingIcon") + '<span>Your settings are ready to transfer</span></div>'
+					+ '<div class="stContents"></div>'
+					+ warningHtml
+					+ '<div class="stQrBox">' + qrHtml
+					+ '<div class="stQrCaption">Scan this with the other device\'s camera app</div></div>'
+					+ '<div class="stOr"><span>or open this link on the other device</span></div>'
+					+ '<div class="stCopyRow"><a class="stCopyValue stUrl" target="_blank" rel="noopener noreferrer"></a></div>'
+					+ '<div class="stOr"><span>or enter this key phrase on the other device</span></div>'
+					+ '<div class="stCopyRow"><span class="stCopyValue stPhrase"></span></div>'
+					+ '<div class="stHint">in Settings Transfer &rsaquo; Import on its UI3 Storage Info page (ui3/storageinfo.htm)</div>'
+					+ '<div class="stFooter"><div class="stExpires">' + GetIconHtml("clock", "stExpiresIcon") + '<span class="stExpiresText"></span></div></div>'
+					+ '<div class="stNote">Until then, anyone with this QR code, link, or key phrase can read these settings. Saved login credentials are not included.</div>'
+					+ '</div>');
+				var $url = $view.find(".stUrl");
+				$url.attr("href", url).text(url);
+				var $phrase = $view.find(".stPhrase");
+				$phrase.text(phrase);
+				$view.find(".stContents").text("Contains " + contentsText);
+				AddCopyButton($url, url);
+				AddCopyButton($phrase, phrase);
+				$view.find(".stFooter").append(MakeButton("Done", true, CloseDialog));
+				SetView($view);
+				StartCountdown($view.find(".stExpiresText"), expiresAt);
+			};
+			/**
+			 * Adds a Copy button after the element, which copies the text to the clipboard.
+			 */
+			var AddCopyButton = function ($valueEle, text)
+			{
+				var $btn = $('<button type="button" class="stBtn stCopyBtn">' + GetIconHtml("copy", "stCopyIcon") + '<span class="stCopyLabel">Copy</span></button>');
+				var $failed = $('<div class="stCopyFailed" style="display: none;">Your browser did not allow copying. The text is selected so you can copy it yourself.</div>');
+				var resetTimeout = null;
+				$btn.on("click", function ()
+				{
+					clearTimeout(resetTimeout);
+					if (CopyToClipboard(text))
+					{
+						$failed.hide();
+						$btn.addClass("stCopied").find(".stCopyLabel").text("Copied");
+						resetTimeout = setTimeout(function () { $btn.removeClass("stCopied").find(".stCopyLabel").text("Copy"); }, 2000);
+					}
+					else
+					{
+						$failed.show();
+						try
+						{
+							var range = document.createRange();
+							range.selectNodeContents($valueEle.get(0));
+							var selection = window.getSelection();
+							selection.removeAllRanges();
+							selection.addRange(range);
+						}
+						catch (ex)
+						{
+							console.error(ex);
+						}
+					}
+					$btn.focus();
+				});
+				$valueEle.after($btn);
+				$valueEle.parent().after($failed);
+			};
+			/**
+			 * Copies the text to the clipboard using clipboard.js (from libs-ui3.js), returning true if the browser reported success.  Must be called while handling a click.
+			 */
+			var CopyToClipboard = function (text)
+			{
+				var succeeded = false;
+				var $trigger = $('<div style="display: none;"></div>').appendTo("body");
+				var clipboard = new Clipboard($trigger.get(0), { text: function () { return text; } });
+				clipboard.on("success", function () { succeeded = true; });
+				$trigger.click();
+				clipboard.destroy();
+				$trigger.remove();
+				return succeeded;
+			};
+			var StartCountdown = function ($text, expiresAt)
+			{
+				StopCountdown();
+				var tick = function ()
+				{
+					var remainingSeconds = Math.ceil((expiresAt - Date.now()) / 1000);
+					if (remainingSeconds <= 0)
+					{
+						RenderExportExpired();
+						return;
+					}
+					$text.text("Expires in " + Math.floor(remainingSeconds / 60) + ":" + ("0" + (remainingSeconds % 60)).slice(-2));
+				};
+				tick();
+				countdownInterval = setInterval(tick, 1000);
+			};
+			var StopCountdown = function ()
+			{
+				if (countdownInterval)
+				{
+					clearInterval(countdownInterval);
+					countdownInterval = null;
+				}
+			};
+			var RenderExportExpired = function ()
+			{
+				SetView(MakeStatusView(GetIconHtml("clock", "stStatusIcon")
+					, "This transfer has expired"
+					, "Its QR code, link, and key phrase no longer work. Export again to get new ones."
+					, [{ text: "Back", onClick: RenderChoice }
+						, { text: "Export Again", primary: true, onClick: BeginExport }]));
+			};
+			///////////////////////////////////////////////////////////////
+			// Import /////////////////////////////////////////////////////
+			///////////////////////////////////////////////////////////////
+			/**
+			 * Renders the Import view.
+			 * @param {String} phrase Text to put in the key phrase field.
+			 * @param {String} errorMessage Error message to show, or null.
+			 */
+			var RenderImport = function (phrase, errorMessage)
+			{
+				var $view = $('<div>'
+					+ '<div class="stIntro">Scan the QR code shown on the other device using this device\'s camera app, or copy the key phrase from the other device and enter it here.</div>'
+					+ '<label class="stLabel">Key phrase<input type="text" class="stPhraseInput" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="word-word-word-word-word-word" /></label>'
+					+ '<div class="stError stErrorColor"></div>'
+					+ '<div class="stNote">Imported settings replace this browser\'s UI3 settings. Saved login credentials are kept.</div>'
+					+ '<div class="stButtons"></div>'
+					+ '</div>');
+				var $input = $view.find(".stPhraseInput");
+				$input.val(phrase || "");
+				var $error = $view.find(".stError");
+				if (errorMessage)
+					$error.text(errorMessage);
+				else
+					$error.hide();
+				var doImport = function ()
+				{
+					BeginImport($input.val());
+				};
+				$input.on("keydown", function (e)
+				{
+					if (e.which === 13)
+					{
+						e.preventDefault();
+						doImport();
+					}
+				});
+				var $importBtn = MakeButton("Import", true, doImport);
+				$view.find(".stButtons").append(MakeButton("Back", false, RenderChoice)).append($importBtn);
+				SetView($view);
+				if (phrase && !errorMessage)
+					$importBtn.focus();
+				else if (!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches))
+					$input.focus(); // Not on touchscreens, where the on-screen keyboard would open even though the user may intend to scan a QR code.
+			};
+			/**
+			 * Returns the normalized key phrase from user input, which may also be a Settings Transfer link.
+			 */
+			var NormalizeImportPhrase = function (input)
+			{
+				input = String(input || "");
+				var m = /[#&?]settingsImport=([^&#\s]*)/i.exec(input);
+				if (m)
+				{
+					try
+					{
+						input = decodeURIComponent(m[1]);
+					}
+					catch (ex)
+					{
+						input = m[1];
+					}
+				}
+				return KVStoreClientLegacy.normalizePhrase(input);
+			};
+			var BeginImport = function (input)
+			{
+				var phrase = NormalizeImportPhrase(input);
+				if (!phrase)
+				{
+					RenderImport(input, "Please enter the key phrase shown on the other device.");
+					return;
+				}
+				if (phrase.split("-").length < phraseWordCount)
+				{
+					RenderImport(input, "The key phrase should have " + phraseWordCount + " words. Please check that it was entered correctly.");
+					return;
+				}
+				if (!getLocalStorage())
+				{
+					RenderImport(input, "Local Storage is disabled or unavailable in this browser, so settings can not be imported.");
+					return;
+				}
+				var $view = MakeBusyView("Preparing&hellip;", 0);
+				var myViewId = SetView($view);
+				NewClient().getEncryptedText(phrase, function (err, text)
+				{
+					if (myViewId !== viewId)
+						return;
+					if (err)
+					{
+						console.error("Settings Transfer failed to download settings.", err);
+						RenderImport(input, DescribeError(err));
+						return;
+					}
+					if (text === null)
+					{
+						RenderImport(input, "No settings were found for this key phrase. Please check that it was entered correctly. Key phrases expire one hour after they are created.");
+						return;
+					}
+					var items;
+					try
+					{
+						items = ParseImportPayload(text);
+					}
+					catch (ex)
+					{
+						console.error(ex);
+						RenderImport(input, ex.message || String(ex));
+						return;
+					}
+					SetBusyStatus($view, "Saving settings&hellip;", null);
+					ImportItems(items)
+						.then(function (errors)
+						{
+							reloadPageOnClose = true;
+							if (myViewId !== viewId)
+								return;
+							var count = 0;
+							var settingsCount = 0;
+							var thumbnailCount = 0;
+							for (var key in items)
+							{
+								if (!Object.prototype.hasOwnProperty.call(items, key))
+									continue;
+								count++;
+								if (!IsLargeItemKey(key))
+									settingsCount++;
+								else if (IsThumbnailImageKey(key))
+									thumbnailCount++;
+							}
+							if (errors > 0)
+							{
+								SetView(MakeStatusView(GetIconHtml("warning", "stStatusIcon stErrorColor")
+									, "Import incomplete"
+									, htmlEncode(errors + " of " + count + " items could not be saved. Storage may be full.")
+									, [{ text: "Close", onClick: CloseDialog }]));
+							}
+							else
+							{
+								SetView(MakeStatusView(GetIconHtml("checkCircle", "stStatusIcon stSuccessColor")
+									, "Settings imported"
+									, htmlEncode(DescribeContents(settingsCount, thumbnailCount) + " were imported into this browser.")
+									, [{ text: "Close", onClick: CloseDialog }
+										, { text: "Open UI3", primary: true, onClick: function () { location.href = "../ui3.htm"; } }]));
+							}
+						});
+				}, function (fraction)
+				{
+					if (myViewId !== viewId)
+						return;
+					if (fraction >= 1)
+						SetBusyStatus($view, "Downloading settings&hellip;", null);
+					else
+						SetBusyStatus($view, "Preparing&hellip;", fraction);
+				});
+			};
+			/**
+			 * Returns the settings to import from the downloaded text, or throws an Error describing why it is not a valid Settings Transfer export.
+			 */
+			var ParseImportPayload = function (text)
+			{
+				var payload = null;
+				try
+				{
+					payload = JSON.parse(text);
+				}
+				catch (ex) { }
+				if (!payload || typeof payload !== "object" || payload.format !== payloadFormat || !payload.items || typeof payload.items !== "object")
+					throw new Error("The data stored under this key phrase is not a UI3 Settings Transfer export.");
+				if (payload.version > payloadVersion)
+					throw new Error("These settings were exported by a newer version of this page, in a format that this version does not understand.");
+				var items = {};
+				for (var key in payload.items)
+				{
+					if (Object.prototype.hasOwnProperty.call(payload.items, key) && typeof payload.items[key] === "string" && IsTransferableKey(key))
+						items[key] = payload.items[key];
+				}
+				return items;
+			};
+		})();
+		function htmlEncode(value)
+		{
+			return $('<div/>').text(value).html();
 		}
 	</script>
 </body>

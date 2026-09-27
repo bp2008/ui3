@@ -136,7 +136,7 @@ var $DialogDefaults = { theme: "light" };
 
 			positionCentered();
 
-			$(window).bind("resize.dialog" + myId + " orientationchange.dialog" + myId + " scroll.dialog" + myId, onResize);
+			$(window).bind("resize.dialog" + myId + " orientationchange.dialog" + myId, onResize);
 
 			onResize();
 		};
@@ -191,11 +191,11 @@ var $DialogDefaults = { theme: "light" };
 			}
 			else
 			{
-				var offset = self.$dialog.offset();
-				var coords = keepOnScreen(offset.left, offset.top, setFullyOnScreen);
-				if (offset.left !== coords.X)
+				var pos = self.$dialog.position();
+				var coords = keepOnScreen(pos.left, pos.top, setFullyOnScreen);
+				if (pos.left !== coords.X)
 					self.$dialog.css("left", coords.X + "px");
-				if (offset.top !== coords.Y)
+				if (pos.top !== coords.Y)
 					self.$dialog.css("top", coords.Y + "px");
 				limitContentHeight(coords.Y);
 			}
@@ -215,11 +215,11 @@ var $DialogDefaults = { theme: "light" };
 			var w = self.$dialog.width();
 			var h = self.$dialog.height();
 
-			var left = $(window).scrollLeft() + ((windowW - w) / 2);
+			var left = (windowW - w) / 2;
 			if (left < 0)
 				left = 0;
 
-			var top = $(window).scrollTop() + ((windowH - h) / 2);
+			var top = (windowH - h) / 2;
 			if (top < 0)
 				top = 0;
 
@@ -231,15 +231,13 @@ var $DialogDefaults = { theme: "light" };
 		{
 			if (!isOpen)
 				return;
-			var offset = self.$dialog.offset();
-			var coords = keepOnScreen(offset.left, offset.top, false);
-			if (offset.left !== coords.X)
+			var pos = self.$dialog.position();
+			var coords = keepOnScreen(pos.left, pos.top, false);
+			if (pos.left !== coords.X)
 				self.$dialog.css("left", coords.X + "px");
-			if (offset.top !== coords.Y)
+			if (pos.top !== coords.Y)
 				self.$dialog.css("top", coords.Y + "px");
 			limitContentHeight(coords.Y);
-
-			self.$overlay.css('width', $(document).width()).css('height', $(document).height());
 		};
 		var focusSelf = function (e)
 		{
@@ -289,25 +287,21 @@ var $DialogDefaults = { theme: "light" };
 		{
 			var windowW = $(window).width();
 			var windowH = $(window).height();
-			var topOfWindow = $(window).scrollTop();
-			var leftOfWindow = $(window).scrollLeft();
-			var bottomOfWindow = (topOfWindow + windowH);
-			var rightOfWindow = (leftOfWindow + windowW);
 
 			var w = self.$dialog.outerWidth(true);
 			var h = self.$dialog.outerHeight(true);
 
 			if (keepFullyOnScreen)
 			{
-				if (newX < leftOfWindow)
-					newX = leftOfWindow;
-				else if (newX + w > rightOfWindow)
-					newX = rightOfWindow - w;
+				if (newX < 0)
+					newX = 0;
+				else if (newX + w > windowW)
+					newX = windowW - w;
 
-				if (newY < topOfWindow)
-					newY = topOfWindow;
-				else if (newY > bottomOfWindow - h)
-					newY = bottomOfWindow - h;
+				if (newY < 0)
+					newY = 0;
+				else if (newY > windowH - h)
+					newY = windowH - h;
 			}
 			else
 			{
@@ -315,15 +309,15 @@ var $DialogDefaults = { theme: "light" };
 				var w09 = w * 0.9;
 				if (w >= 100 && w - w09 < 100)
 					w09 = w - 100;
-				if (newX + w09 < leftOfWindow)
-					newX = leftOfWindow - w09;
-				else if (newX + w01 > rightOfWindow)
-					newX = rightOfWindow - w01;
+				if (newX + w09 < 0)
+					newX = -w09;
+				else if (newX + w01 > windowW)
+					newX = windowW - w01;
 
-				if (newY < topOfWindow)
-					newY = topOfWindow;
-				else if (newY > bottomOfWindow - 24)
-					newY = bottomOfWindow - 24;
+				if (newY < 0)
+					newY = 0;
+				else if (newY > windowH - 24)
+					newY = windowH - 24;
 			}
 
 			return { X: newX, Y: newY };
@@ -341,17 +335,17 @@ var $DialogDefaults = { theme: "light" };
 			}
 			, fix: function (e)
 			{
-				if (typeof e.pageX === "undefined")
+				if (typeof e.clientX === "undefined")
 				{
 					if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 0)
 					{
-						mouseCoordFixer.last.x = e.mouseX = e.originalEvent.touches[0].pageX;
-						mouseCoordFixer.last.y = e.mouseY = e.originalEvent.touches[0].pageY;
+						mouseCoordFixer.last.x = e.mouseX = e.originalEvent.touches[0].clientX;
+						mouseCoordFixer.last.y = e.mouseY = e.originalEvent.touches[0].clientY;
 					}
 					else if (e.touches && e.touches.length > 0)
 					{
-						mouseCoordFixer.last.x = e.mouseX = e.touches[0].pageX;
-						mouseCoordFixer.last.y = e.mouseY = e.touches[0].pageY;
+						mouseCoordFixer.last.x = e.mouseX = e.touches[0].clientX;
+						mouseCoordFixer.last.y = e.mouseY = e.touches[0].clientY;
 					}
 					else
 					{
@@ -361,8 +355,8 @@ var $DialogDefaults = { theme: "light" };
 				}
 				else
 				{
-					mouseCoordFixer.last.x = e.mouseX = e.pageX;
-					mouseCoordFixer.last.y = e.mouseY = e.pageY;
+					mouseCoordFixer.last.x = e.mouseX = e.clientX;
+					mouseCoordFixer.last.y = e.mouseY = e.clientY;
 				}
 			}
 		};
