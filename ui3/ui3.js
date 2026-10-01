@@ -988,7 +988,7 @@ var defaultSettings =
 			, value: "1"
 		}
 		, {
-			key: "ui3_clip_export_format"
+			key: "ui3_clip_export_format2"
 			, value: 1
 		}
 		, {
@@ -997,11 +997,15 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_clip_export_substream"
-			, value: "0"
+			, value: 0
 		}
 		, {
 			key: "ui3_clip_export_withAudio"
 			, value: "1"
+		}
+		, {
+			key: "ui3_clip_export_gain"
+			, value: 0
 		}
 		, {
 			key: "ui3_clip_export_reencode"
@@ -1009,6 +1013,10 @@ var defaultSettings =
 		}
 		, {
 			key: "ui3_clip_export_overlay"
+			, value: "0"
+		}
+		, {
+			key: "ui3_clip_export_motion"
 			, value: "0"
 		}
 		, {
@@ -4168,6 +4176,16 @@ $(function ()
 					settings.ui3_maxDynamicGroupImageMegapixels = Math.ceil(d * d / 100000) / 10; // Round up to nearest tenth.
 				}
 				delete localStorage.ui3_maxDynamicGroupImageDimension;
+			}
+			if (typeof localStorage.ui3_clip_export_format !== "undefined")
+			{
+				// Output format index 3 was "UI3 AVI (in-browser)" until "BVR (clipboard reference only)" took its place to match Blue Iris's format numbering.
+				var oldExportFormat = parseInt(localStorage.ui3_clip_export_format);
+				if (oldExportFormat === 3)
+					settings.ui3_clip_export_format2 = 4;
+				else if (oldExportFormat >= 0 && oldExportFormat <= 2)
+					settings.ui3_clip_export_format2 = oldExportFormat;
+				delete localStorage.ui3_clip_export_format;
 			}
 			if (typeof localStorage.ui3_export_manifest !== "undefined")
 			{
@@ -12714,6 +12732,21 @@ function ExportControls()
 		else
 			enableOnClipsTab(recIdOrGroupOrCameraName);
 	}
+	/**
+	 * Opens the clip in the video player if it is not already open, then enables the export controls for it.
+	 * @param {ClipData} clipData The clip or alert to export.
+	 */
+	this.EnableForClip = function (clipData)
+	{
+		if (videoPlayer.Loading().image.uniqueId !== clipData.recId)
+		{
+			// Open the clip paused.  Pausing it after it starts loading would stop the stream before its first frame is rendered.
+			videoPlayer.LoadClip(clipData, false, true);
+			if (videoPlayer.Loading().image.uniqueId !== clipData.recId)
+				return; // The clip was not opened (e.g. the user is being asked how to open an MP4 file).
+		}
+		self.Enable(clipData.recId);
+	}
 	var enableOnTimelineTab = function (groupOrCameraId)
 	{
 		if (currentPrimaryTab !== "timeline")
@@ -14598,6 +14631,25 @@ function ClipLoader(clipsBodySelector)
 	{
 		return newAlertTimes;
 	}
+	/**
+	 * Adds the output format and encoding arguments from exportOptions to the arguments of an export command.
+	 */
+	var AddExportEncodingArgs = function (args, exportOptions)
+	{
+		args.format = exportOptions.format;
+		if (exportOptions.format === ExportFormat.ClipboardReference)
+			return; // No new video file is created, so encoding options do not apply.
+		args.profile = exportOptions.profile;
+		args.substream = exportOptions.substream;
+		args.audio = exportOptions.audio;
+		if (exportOptions.audio && exportOptions.gain)
+			args.gain = Math.round(exportOptions.gain * 10); // Blue Iris expects tenths of a dB (not dB as documented), and ignores non-integer values.
+		args.reencode = exportOptions.reencode;
+		args.overlay = exportOptions.overlay;
+		args.motion = exportOptions.motion;
+		if (exportOptions.timelapse && exportOptions.timelapseMultiplier && exportOptions.timelapseFps)
+			args.timelapse = exportOptions.timelapseMultiplier + "@" + exportOptions.timelapseFps;
+	}
 	this.QueueExportViaAPI = function (clipData, exportOptions, options, onSuccess, onFailure)
 	{
 		var args = { cmd: "export", path: clipData.path };
@@ -14627,14 +14679,7 @@ function ClipLoader(clipsBodySelector)
 		}
 		args.startms = parseInt(args.startms);
 		args.msec = parseInt(args.msec);
-		args.format = exportOptions.format;
-		args.profile = exportOptions.profile;
-		args.substream = exportOptions.substream;
-		args.audio = exportOptions.audio;
-		args.reencode = exportOptions.reencode;
-		args.overlay = exportOptions.overlay;
-		if (exportOptions.timelapse && exportOptions.timelapseMultiplier && exportOptions.timelapseFps)
-			args.timelapse = exportOptions.timelapseMultiplier + "@" + exportOptions.timelapseFps;
+		AddExportEncodingArgs(args, exportOptions);
 
 		var failCallback = function (msg)
 		{
@@ -14692,16 +14737,10 @@ function ClipLoader(clipsBodySelector)
 			cmd: "export",
 			path: camPath,
 			startms: Math.floor(exportOptions.startTimeMs),
-			msec: Math.floor(durationMs),
-			format: exportOptions.format,
-			profile: exportOptions.profile,
-			substream: exportOptions.substream,
-			audio: exportOptions.audio,
-			reencode: exportOptions.reencode,
-			overlay: exportOptions.overlay
+			msec: Math.floor(durationMs)
 		};
-		if (exportOptions.timelapse && exportOptions.timelapseMultiplier && exportOptions.timelapseFps)
-			args.timelapse = exportOptions.timelapseMultiplier + "@" + exportOptions.timelapseFps;
+		AddExportEncodingArgs(args, exportOptions);
+		delete args.gain; // The panel does not offer gain for timeline export, because Blue Iris 6.1.3.5 ignores it.
 
 		var failCallback = function (msg)
 		{
@@ -14716,7 +14755,7 @@ function ClipLoader(clipsBodySelector)
 			{
 				if (typeof onSuccess === "function")
 				{
-					onSuccess(response.data);
+					onSuccess({ history: [response.data] }); // Same shape as the multi-operation options passed by Multi_Export.
 				}
 			}
 			else
@@ -18703,7 +18742,13 @@ function VideoPlayerController()
 
 		mediaSessionController.setMediaMetadata(CleanUpGroupName(clc.optionDisplay));
 	}
-	this.LoadClip = function (clipData, bypassMp4Check)
+	/**
+	 * Opens a clip or alert in the video player.
+	 * @param {ClipData} clipData The clip or alert.
+	 * @param {Boolean} bypassMp4Check If true, MP4 files are opened in UI3 regardless of the setting that controls how MP4 files are opened.
+	 * @param {Boolean} startPaused If true, the clip opens paused and only its first frame is rendered.
+	 */
+	this.LoadClip = function (clipData, bypassMp4Check, startPaused)
 	{
 		var fileTypeInfo = clipLoader.GetClipFileTypeInfo(clipData);
 		if (NumberHasFlags(clipData.flags, BIDBFLAG.RECORDING) && !fileTypeInfo.isBVR)
@@ -18765,7 +18810,7 @@ function VideoPlayerController()
 
 			videoOverlayHelper.ShowLoadingOverlay(true);
 			if (playerModule)
-				playerModule.OpenVideo(cli, -1, false);
+				playerModule.OpenVideo(cli, -1, !!startPaused);
 
 			mediaSessionController.setMediaMetadata(clipLoader.GetClipDisplayName(clipData));
 		}
@@ -28176,8 +28221,8 @@ function ClipListContextMenu()
 						{
 							var $ele = $("#c" + clipData.recId);
 							if ($ele.length > 0)
-								clipLoader.OpenClip($ele.get(0), clipData.recId, true);
-							exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+								clipLoader.OpenClip($ele.get(0), clipData.recId, false); // Marks the clip as opened.  EnableForClip loads it.
+							exportControls.EnableForClip(clipData);
 						}
 					}
 					else
@@ -29653,8 +29698,7 @@ function ClipProperties()
 				var $exportBtn = $('<a href="javascript:void(0)">Export a section of the clip.</a>');
 				$exportBtn.on('click', function ()
 				{
-					videoPlayer.LoadClip(clipData);
-					exportControls.Enable(videoPlayer.Loading().image.uniqueId);
+					exportControls.EnableForClip(clipData);
 					dialog.close();
 				});
 				$camprop.append(GetInfoEleValue("Convert/export", $exportBtn));
@@ -29755,6 +29799,15 @@ function ClipDownloadDialog()
 // Clip Export (API + Local) Configuration Panel //////////////
 ///////////////////////////////////////////////////////////////
 /**
+ * Values of the "format" argument of the export API command.
+ */
+var ExportFormat = {
+	AVI: 0,
+	MP4: 1,
+	WMV: 2,
+	ClipboardReference: 3 // BVR clipboard reference only.  No new video file is created.
+};
+/**
  * A panel providing clip export options.  Overlaps the clip list in the side bar.
  */
 function ClipExportPanel()
@@ -29763,7 +29816,7 @@ function ClipExportPanel()
 
 	var exportOptions;
 
-	var state = { recIdArray: [], fileSizeBytes: 0, onPanelClosing: null, timelineMode: false, camPath: null };
+	var state = { recIdArray: [], fileSizeBytes: 0, statusText: "", statusSizeText: "", onPanelClosing: null, timelineMode: false, camPath: null };
 	var isOpen = false;
 	var isModalMode = false;
 	var $modalDialog = null;
@@ -29821,20 +29874,12 @@ function ClipExportPanel()
 		state.recIdArray = recIdArray;
 		state.onPanelClosing = onPanelClosing;
 		state.fileSizeBytes = 0;
+		state.statusText = state.statusSizeText = "";
 		state.timelineMode = false;
 		state.camPath = null;
 
-		exportOptions = {
-			format: parseInt(settings.ui3_clip_export_format),
-			profile: parseInt(settings.ui3_clip_export_profile),
-			substream: settings.ui3_clip_export_substream === "1",
-			audio: settings.ui3_clip_export_withAudio === "1",
-			reencode: settings.ui3_clip_export_reencode === "1",
-			overlay: settings.ui3_clip_export_overlay === "1",
-			timelapse: settings.ui3_clip_export_timelapse === "1",
-			timelapseMultiplier: parseFloat(settings.ui3_clip_export_timelapseMultiplier),
-			timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps)
-		};
+		exportOptions = GetExportOptionsFromSettings();
+		exportOptions.format = parseInt(settings.ui3_clip_export_format2);
 
 		InternalOpen();
 	}
@@ -29853,22 +29898,31 @@ function ClipExportPanel()
 		state.timelineMode = true;
 		state.onPanelClosing = onPanelClosing;
 		state.fileSizeBytes = 0;
+		state.statusText = state.statusSizeText = "";
 
-		exportOptions = {
-			format: 1, // MP4 is always required for timeline export
-			profile: parseInt(settings.ui3_clip_export_profile),
-			substream: settings.ui3_clip_export_substream === "1",
-			audio: settings.ui3_clip_export_withAudio === "1",
-			reencode: true, // re-encode is always required for timeline export
-			overlay: settings.ui3_clip_export_overlay === "1",
-			timelapse: settings.ui3_clip_export_timelapse === "1",
-			timelapseMultiplier: parseFloat(settings.ui3_clip_export_timelapseMultiplier),
-			timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps),
-			startTimeMs: startUtc,
-			endTimeMs: endUtc
-		};
+		exportOptions = GetExportOptionsFromSettings();
+		exportOptions.format = ExportFormat.MP4; // MP4 is always required for timeline export
+		exportOptions.reencode = true; // re-encode is always required for timeline export
+		exportOptions.startTimeMs = startUtc;
+		exportOptions.endTimeMs = endUtc;
 
 		InternalOpen();
+	}
+
+	var GetExportOptionsFromSettings = function ()
+	{
+		return {
+			profile: parseInt(settings.ui3_clip_export_profile),
+			substream: Clamp(parseInt(settings.ui3_clip_export_substream), 0, 2),
+			audio: settings.ui3_clip_export_withAudio === "1",
+			gain: Clamp(parseFloat(settings.ui3_clip_export_gain) || 0, -12.8, 12.7),
+			reencode: settings.ui3_clip_export_reencode === "1",
+			overlay: settings.ui3_clip_export_overlay === "1",
+			motion: settings.ui3_clip_export_motion === "1",
+			timelapse: settings.ui3_clip_export_timelapse === "1",
+			timelapseMultiplier: parseFloat(settings.ui3_clip_export_timelapseMultiplier),
+			timelapseFps: parseFloat(settings.ui3_clip_export_timelapseFps)
+		};
 	}
 
 	/**
@@ -29920,8 +29974,28 @@ function ClipExportPanel()
 			return;
 		exportOptions.startTimeMs = startUtc;
 		exportOptions.endTimeMs = endUtc;
-		if ($status)
-			$status.text(msToTime(Math.abs(endUtc - startUtc)));
+		SetStatusText("Duration: " + msToTime(Math.abs(endUtc - startUtc)));
+	}
+
+	/**
+	 * Sets the text of the status line, which is remembered so it survives ReRender.
+	 * @param {String} text Status text.
+	 * @param {String} sizeText Optional estimated output size, which is appended in parentheses when it is relevant.
+	 */
+	var SetStatusText = function (text, sizeText)
+	{
+		state.statusText = text;
+		state.statusSizeText = sizeText || "";
+		RenderStatusText();
+	}
+	var RenderStatusText = function ()
+	{
+		if (!$status)
+			return;
+		var text = state.statusText;
+		if (state.statusSizeText && exportOptions.format !== ExportFormat.ClipboardReference) // A clipboard reference is not a new file.
+			text += " (" + state.statusSizeText + ")";
+		$status.text(text);
 	}
 
 	var ReRender = function ()
@@ -29933,7 +30007,7 @@ function ClipExportPanel()
 			$status = $('<div class="dialogOption_item clipprop_item_info"></div>');
 			$content.append($status);
 			if (state.timelineMode)
-				$status.text("Duration: " + msToTime(Math.abs(exportOptions.endTimeMs - exportOptions.startTimeMs)));
+				state.statusText = "Duration: " + msToTime(Math.abs(exportOptions.endTimeMs - exportOptions.startTimeMs));
 		}
 		else
 		{
@@ -29955,7 +30029,12 @@ function ClipExportPanel()
 
 		var AddEditorField = MakeAddEditorFieldFn("Convert/export", $content, exportOptions, { compact: true });
 
-		var formatOptions = ["AVI", "MP4 (H.264, H.265, MPEG4 only)", "Windows Media"];
+		// These are recalculated for each render, as they depend on the clip(s) being exported.
+		classic_ui3_idx = -1;
+		limitedFormatOptions = false;
+
+		// Indexes of these options must match the ExportFormat values.
+		var formatOptions = ["AVI", "MP4 (H.264, H.265, MPEG4 only)", "Windows Media", "BVR (clipboard reference only)"];
 
 		if (!state.timelineMode && state.recIdArray.length === 1)
 		{
@@ -29982,13 +30061,16 @@ function ClipExportPanel()
 				formatOptions.push("UI3 AVI (in-browser)");
 			}
 			if (exportOptions.format >= formatOptions.length)
-				exportOptions.format = 1;
+				exportOptions.format = ExportFormat.MP4;
 			if (exportOptions.format >= formatOptions.length)
 				exportOptions.format = 0;
 		}
+		else if (exportOptions.format >= formatOptions.length)
+			exportOptions.format = ExportFormat.MP4; // The remembered format may be UI3 AVI, which is only available when exporting a single clip.
 
 		if (state.timelineMode)
 		{
+			// Blue Iris ignores the BVR format for timeline export, producing an MP4 file instead.
 			limitedFormatOptions = true;
 			exportOptions.reencode = true;
 			var $formatRow = $('<div class="profileEditorRow"></div>');
@@ -30000,15 +30082,23 @@ function ClipExportPanel()
 		{
 			AddEditorField("Output format", "format", { type: "select", options: formatOptions, onChange: ReRender });
 		}
-		if (exportOptions.format != classic_ui3_idx)
-			AddEditorField("Encoder profile", "profile", { type: "select", options: ["export 0", "export 1", "export 2", "export 3"] });
-		AddEditorField("Use sub stream if available", "substream", { type: "boolean", onChange: ReRender });
-		AddEditorField("Include audio track", "audio", { type: "boolean", onChange: ReRender });
-		if (exportOptions.format != classic_ui3_idx)
+
+		if (exportOptions.format === classic_ui3_idx)
+			AddEditorField("Include audio track", "audio", { type: "boolean" });
+		else if (exportOptions.format === ExportFormat.ClipboardReference)
+			AddEditorField("Instead of creating a new video file, Blue Iris will add a reference to the original recording in Clips > Clipboard.", null, { type: "commentText" });
+		else
 		{
-			if (!state.timelineMode)
+			AddEditorField("Encoder profile", "profile", { type: "select", options: ["export 0", "export 1", "export 2", "export 3"] });
+			AddEditorField("Stream select", "substream", { type: "select", options: ["Auto main/sub stream", "Sub stream", "Main stream"], hint: "Sub stream is used only if the recording contains one." });
+			AddEditorField("Include audio track", "audio", { type: "boolean", onChange: ReRender });
+			if (!state.timelineMode) // Blue Iris 6.1.3.5 ignores gain for timeline export.
+			{
+				AddEditorField("Audio gain", "gain", { type: "range", min: -12.8, max: 12.7, step: 0.1, unitLabel: " dB", defaultValue: 0, disabled: !exportOptions.audio });
 				AddEditorField("Re-encode video to H.264", "reencode", { type: "boolean", onChange: ReRender });
+			}
 			AddEditorField("Add the camera's current text and graphic overlay", "overlay", { type: "boolean", disabled: !exportOptions.reencode });
+			AddEditorField("Add motion overlays", "motion", { type: "boolean", disabled: !exportOptions.reencode });
 			AddEditorField("Time-lapse", "timelapse", { type: "boolean", onChange: ReRender, disabled: !exportOptions.reencode || exportOptions.audio });
 			if (exportOptions.timelapse)
 			{
@@ -30023,6 +30113,8 @@ function ClipExportPanel()
 		$cancelBtn.on('click', self.Close);
 		$content.append($('<div class="dialogOption_item_info" style="text-align: center;"></div>').append($cancelBtn));
 
+		RenderStatusText();
+
 		if (isModalMode && $modalDialog)
 			$modalDialog.contentChanged(true);
 	}
@@ -30030,12 +30122,15 @@ function ClipExportPanel()
 	var Ok_Click = function ()
 	{
 		if (!limitedFormatOptions)
-			settings.ui3_clip_export_format = exportOptions.format;
+			settings.ui3_clip_export_format2 = exportOptions.format;
 		settings.ui3_clip_export_profile = exportOptions.profile;
-		settings.ui3_clip_export_substream = exportOptions.substream ? "1" : "0";
+		settings.ui3_clip_export_substream = exportOptions.substream;
 		settings.ui3_clip_export_withAudio = exportOptions.audio ? "1" : "0";
-		settings.ui3_clip_export_reencode = exportOptions.reencode ? "1" : "0";
+		settings.ui3_clip_export_gain = exportOptions.gain;
+		if (!state.timelineMode) // Timeline export always re-encodes, which is not the user's choice.
+			settings.ui3_clip_export_reencode = exportOptions.reencode ? "1" : "0";
 		settings.ui3_clip_export_overlay = exportOptions.overlay ? "1" : "0";
+		settings.ui3_clip_export_motion = exportOptions.motion ? "1" : "0";
 		settings.ui3_clip_export_timelapse = exportOptions.timelapse ? "1" : "0";
 		settings.ui3_clip_export_timelapseMultiplier = exportOptions.timelapseMultiplier;
 		settings.ui3_clip_export_timelapseFps = exportOptions.timelapseFps;
@@ -30061,6 +30156,7 @@ function ClipExportPanel()
 		}
 
 		// Validate start and end times
+		var fileDuration = Math.max(videoPlayer.Loading().image.msec, 2);
 		if (state.recIdArray.length === 1)
 		{
 			var durationMs = exportOptions.endTimeMs - exportOptions.startTimeMs;
@@ -30085,7 +30181,6 @@ function ClipExportPanel()
 		{
 			// Use classic in-browser export method
 			var clipData = clipLoader.GetClipFromId(state.recIdArray[0]);
-			var fileDuration = Math.max(videoPlayer.Loading().image.msec, 2);
 			if (!state.fileSizeBytes)
 				state.fileSizeBytes = getBytesFromBISizeStr(clipData.fileSize);
 			var durationMs = exportOptions.endTimeMs - exportOptions.startTimeMs;
@@ -30114,7 +30209,18 @@ function ClipExportPanel()
 
 		self.Close();
 
-		clipLoader.Multi_Export(state.recIdArray, exportOptions, exportAPIStatusDialog.show);
+		clipLoader.Multi_Export(state.recIdArray, exportOptions, exportOptions.format === ExportFormat.ClipboardReference ? ClipboardReferencesCreated : exportAPIStatusDialog.show);
+	}
+
+	var ClipboardReferencesCreated = function (multi_operation_options)
+	{
+		// There is no file to download, and Blue Iris creates clipboard references immediately, so the Export Status dialog is not useful here.
+		var count = multi_operation_options.clips.length - multi_operation_options.errorCount;
+		if (count > 0)
+			toaster.Success("Created " + count + " clipboard reference" + (count === 1 ? "" : "s") + ".<br>Click here to open Clips &gt; Clipboard.", 15000, false, function ()
+			{
+				clipLoader.LoadView("new.clipboard");
+			});
 	}
 
 	this.UpdateRangeSelection = function (percentStart, percentEnd)
@@ -30138,7 +30244,8 @@ function ClipExportPanel()
 			exportOptions.startTimeMs = percentStart * fileDuration;
 			exportOptions.endTimeMs = percentEnd * fileDuration;
 
-			$status.text(msToTime(durationMs) + ' (' + formatBytes2(estimatedSize, 1) + ')');
+			// The file size is unknown for some items, such as clipboard references.
+			SetStatusText(msToTime(durationMs), state.fileSizeBytes > 0 ? formatBytes2(estimatedSize, 1) : "");
 		}
 	}
 }
@@ -30155,10 +30262,13 @@ function ExportAPIStatusDialog()
 	var $progressBar = null;
 	var $activeItem = null;
 	var $itemsQueued = null;
+	var $cancelLink = null;
 	var $finished = null;
 	var $allDone = null;
 	var updateTimeout = null;
-	var items = [];
+	var items = []; // Export records which have not finished yet.
+	var totalCount = 0; // Number of export records being tracked, excluding any that were canceled.
+	var queuedPaths = []; // Paths of tracked export records which are waiting in the queue and can therefore be canceled.
 
 	this.show = function (multi_operation_options)
 	{
@@ -30168,6 +30278,9 @@ function ExportAPIStatusDialog()
 		if (multi_operation_options && multi_operation_options.history)
 			for (var i = 0; i < multi_operation_options.history.length; i++)
 				items.push(multi_operation_options.history[i]);
+		totalCount = items.length;
+		if (totalCount === 0)
+			return; // Nothing was queued.  Failures were already reported.
 
 		isActive = true;
 
@@ -30178,97 +30291,18 @@ function ExportAPIStatusDialog()
 		clearTimeout(updateTimeout);
 		if (!isActive)
 			return;
-		ExecJSON({ cmd: "export", summary: true }
+		ExecJSON({ cmd: "export" }
 			, function (response)
 			{
 				if (!isActive)
 					return;
 				if (response.result === "success")
 				{
-					if (response.data)
+					if (response.data && typeof response.data.length === "number")
 					{
 						if (!dialog)
-						{
-							$body = $('<div class="exportStatus">'
-								+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
-								+ '<div class="active_item"></div>'
-								+ '<div><span class="items_queued"></span></div>'
-								+ '</div>');
-
-							$progressBar = $body.find(".multi_operation_status_bar");
-							$activeItem = $body.find(".active_item");
-							$itemsQueued = $body.find(".items_queued");
-
-							var $fullDialogLink = $('<a role="button" tabindex="0">Open Convert/Export Queue</a>');
-							$fullDialogLink.on('click', exportListDialog.open);
-							$body.append($('<div class="fullDialogLink"></div>').append($fullDialogLink));
-
-							var $cbDownloadAutomatically = $('<input type="checkbox" />');
-							$cbDownloadAutomatically.on('change', function ()
-							{
-								settings.ui3_download_exports_automatically = $cbDownloadAutomatically.is(':checked') ? "1" : "0";
-							});
-							if (settings.ui3_download_exports_automatically === "1")
-								$cbDownloadAutomatically.attr("checked", "checked");
-
-							var $lblAroundCb = $('<label></label>');
-							$lblAroundCb.append($cbDownloadAutomatically);
-							$lblAroundCb.append('<span>Download Exports Automatically</span>');
-							$body.append($('<div class="downloadAutomaticallyOption"></div>').append($lblAroundCb));
-
-							$finished = $('<div class="items_done"></div>');
-							$body.append($finished);
-
-							$allDone = $('<div class="exportStatus_allDone" style="display: none;">Finished!</div>');
-							$body.append($allDone);
-
-							dialog = $body.dialog({
-								title: "Export Status"
-								, onClosing: DialogClosing
-							});
-						}
-
-						var queued = parseInt(response.data.queued);
-						var activeArr = response.data.active;
-
-						var unfinished = queued + activeArr.length;
-						while (unfinished >= 0 && items.length > unfinished)
-						{
-							var last = items[0];
-							items.splice(0, 1);
-							AddDownloadLink(last);
-						}
-
-						if (queued === 0 && (!activeArr || !activeArr.length))
-						{
-							$progressBar.parent().hide();
-							$activeItem.hide();
-							$itemsQueued.hide();
-							$allDone.show();
-						}
-						else
-						{
-							$progressBar.parent().show();
-							$activeItem.show();
-							$itemsQueued.show();
-							$allDone.hide();
-
-							var progressPercent = 0;
-							var fileName = "";
-							if (activeArr && activeArr.length > 0)
-							{
-								progressPercent = Clamp(parseFloat(activeArr[0].progress), 0, 100);
-								fileName = GetFilenameFromPath(activeArr[0].uri);
-							}
-
-							$progressBar.css("width", progressPercent + "%");
-							$activeItem.text(fileName);
-							if (queued > 0)
-								$itemsQueued.text(queued + " job" + (queued == 1 ? "" : "s") + " queued");
-							else
-								$itemsQueued.text("");
-						}
-						updateTimeout = setTimeout(update, 2000);
+							CreateDialog();
+						QueueLoaded(response.data);
 					}
 					else
 						error("Export status response was missing the data field.");
@@ -30291,6 +30325,105 @@ function ExportAPIStatusDialog()
 				error(jqXHR.ErrorMessageHtml);
 			});
 	}
+	var CreateDialog = function ()
+	{
+		$body = $('<div class="exportStatus">'
+			+ '<div class="multi_operation_status_wrapper"><div class="multi_operation_status_bar"></div></div>'
+			+ '<div class="active_item"></div>'
+			+ '<div><span class="items_queued"></span></div>'
+			+ '</div>');
+
+		$progressBar = $body.find(".multi_operation_status_bar");
+		$activeItem = $body.find(".active_item");
+		$itemsQueued = $body.find(".items_queued");
+
+		$cancelLink = $('<a role="button" tabindex="0">Cancel Queued Exports</a>');
+		$cancelLink.on('click', CancelQueued);
+		$body.append($('<div class="cancelLink"></div>').append($cancelLink));
+
+		var $fullDialogLink = $('<a role="button" tabindex="0">Open Convert/Export Queue</a>');
+		$fullDialogLink.on('click', exportListDialog.open);
+		$body.append($('<div class="fullDialogLink"></div>').append($fullDialogLink));
+
+		var $cbDownloadAutomatically = $('<input type="checkbox" />');
+		$cbDownloadAutomatically.on('change', function ()
+		{
+			settings.ui3_download_exports_automatically = $cbDownloadAutomatically.is(':checked') ? "1" : "0";
+		});
+		if (settings.ui3_download_exports_automatically === "1")
+			$cbDownloadAutomatically.attr("checked", "checked");
+
+		var $lblAroundCb = $('<label></label>');
+		$lblAroundCb.append($cbDownloadAutomatically);
+		$lblAroundCb.append('<span>Download Exports Automatically</span>');
+		$body.append($('<div class="downloadAutomaticallyOption"></div>').append($lblAroundCb));
+
+		$finished = $('<div class="items_done"></div>');
+		$body.append($finished);
+
+		$allDone = $('<div class="exportStatus_allDone" style="display: none;"></div>');
+		$body.append($allDone);
+
+		dialog = $body.dialog({
+			title: "Export Status"
+			, onClosing: DialogClosing
+		});
+	}
+	/**
+	 * Handles the export queue, which is an array of export records.
+	 * Blue Iris removes a record from the queue when the export finishes, and does not necessarily process the queue in order.
+	 * Some Blue Iris versions (e.g. 6.1.3.4) report every unfinished record as "queued", never "active" with progress.
+	 */
+	var QueueLoaded = function (queue)
+	{
+		var queueMap = {};
+		var active = null;
+		for (var i = 0; i < queue.length; i++)
+		{
+			queueMap[queue[i].path] = queue[i];
+			if (!active && queue[i].status === "active")
+				active = queue[i];
+		}
+
+		var activeIsTracked = false;
+		queuedPaths = [];
+		for (var i = 0; i < items.length; i++)
+		{
+			var queueItem = queueMap[items[i].path];
+			if (queueItem && queueItem.status === "error")
+				AddErrorMessage(items[i], queueItem.error);
+			else if (!queueItem || queueItem.status === "done")
+				AddDownloadLink(items[i]);
+			else
+			{
+				if (queueItem === active)
+					activeIsTracked = true;
+				else if (queueItem.status === "queued")
+					queuedPaths.push(queueItem.path);
+				continue;
+			}
+			items.splice(i--, 1);
+		}
+		$cancelLink.parent().toggle(queuedPaths.length > 0);
+
+		if (items.length === 0)
+		{
+			$progressBar.parent().hide();
+			$activeItem.hide();
+			$itemsQueued.hide();
+			$allDone.text(totalCount > 0 ? "Finished!" : "Canceled.");
+			$allDone.show();
+			isActive = false; // Nothing left to wait for.
+			return;
+		}
+
+		var finishedCount = totalCount - items.length;
+		var activeProgress = activeIsTracked ? Clamp(parseFloat(active.progress), 0, 100) / 100 : 0;
+		$progressBar.css("width", ((finishedCount + activeProgress) / totalCount * 100) + "%");
+		$activeItem.text(activeIsTracked ? GetFilenameFromPath(active.uri) : "");
+		$itemsQueued.text(finishedCount + " of " + totalCount + " export" + (totalCount === 1 ? "" : "s") + " finished");
+		updateTimeout = setTimeout(update, 2000);
+	}
 	var error = function (errMsgHtml)
 	{
 		stop();
@@ -30301,13 +30434,14 @@ function ExportAPIStatusDialog()
 		if (item && item.uri)
 		{
 			var exported_clip_url = currentServer.remoteBaseURL + 'clips/' + item.uri + '?dl=1' + currentServer.GetAPISessionArg("&");
+			var fileName = GetFilenameFromPath(item.uri);
 			if (settings.ui3_download_exports_automatically === "1")
 			{
 				$body.append('<iframe width="1" height="1" frameborder="0" src="' + htmlAttributeEncode(exported_clip_url) + '" style="display:none"></iframe>');
 			}
 			else
 			{
-				var $link = $('<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(item.uri) + '">' + htmlEncode(GetFilenameFromPath(item.uri)) + '</a>');
+				var $link = $('<a href="' + htmlAttributeEncode(exported_clip_url) + '" download="' + htmlAttributeEncode(fileName) + '">' + htmlEncode(fileName) + '</a>');
 				$link.on('click', function ()
 				{
 					setTimeout(function ()
@@ -30319,6 +30453,22 @@ function ExportAPIStatusDialog()
 			}
 		}
 	}
+	var AddErrorMessage = function (item, errorText)
+	{
+		$finished.append($('<div class="exportError"></div>').text(GetFilenameFromPath(item.uri) + " failed to export: " + errorText));
+	}
+	var CancelQueued = function ()
+	{
+		// Blue Iris does not stop an export that is already in progress, so only queued exports can be canceled.
+		var paths = queuedPaths.slice();
+		if (paths.length === 0)
+			return;
+		SimpleDialog.ConfirmText("Are you sure you want to cancel " + (paths.length === 1 ? "the queued export" : ("the " + paths.length + " queued exports")) + "?", function ()
+		{
+			for (var i = 0; i < paths.length; i++)
+				DeleteItemFromConvertExportQueue(paths[i]);
+		});
+	}
 	this.notifyDeletingItem = function (path)
 	{
 		for (var i = 0; i < items.length; i++)
@@ -30326,6 +30476,7 @@ function ExportAPIStatusDialog()
 			if (items[i].path === path)
 			{
 				items.splice(i, 1);
+				totalCount--;
 				return;
 			}
 		}
@@ -30338,12 +30489,16 @@ function ExportAPIStatusDialog()
 		$progressBar = null;
 		$activeItem = null;
 		$itemsQueued = null;
+		$cancelLink = null;
 		$finished = null;
+		$allDone = null;
 	}
 	var stop = function ()
 	{
 		if (dialog)
 			dialog.close();
+		isActive = false;
+		clearTimeout(updateTimeout);
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -30357,6 +30512,7 @@ function ExportListDialog()
 	var $body = null;
 	var $content = null;
 	var itemMap = new FasterObjectMap();
+	var deletingPaths = new FasterObjectMap(); // Blue Iris may list deleted items for a moment longer, and they should not reappear.
 	var loadedOnce = false;
 	var refreshTimeout = null;
 	var asyncThumbnailDownloader = null;
@@ -30385,6 +30541,9 @@ function ExportListDialog()
 	}
 	this.notifyDeletingItem = function (pathDeleting)
 	{
+		deletingPaths[pathDeleting] = true;
+		if (!dialog)
+			return;
 		var queuedItemCount = 0;
 		for (var path in itemMap)
 		{
@@ -30430,10 +30589,16 @@ function ExportListDialog()
 		if (!dialog)
 			return;
 		var seenItems = new FasterObjectMap();
+		var stillDeleting = new FasterObjectMap();
 		var queuedItemCount = 0;
 		for (var i = itemArray.length - 1; i > -1; i--)
 		{
 			var newItem = itemArray[i];
+			if (deletingPaths[newItem.path])
+			{
+				stillDeleting[newItem.path] = true;
+				continue;
+			}
 			if (newItem.status === "queued")
 				queuedItemCount++;
 			seenItems[newItem.path] = newItem;
@@ -30473,6 +30638,7 @@ function ExportListDialog()
 				delete itemMap[path];
 			}
 		}
+		deletingPaths = stillDeleting;
 
 		$body.find("img.thumb").each(function (idx, ele)
 		{
@@ -30529,11 +30695,14 @@ function ExportListDialog()
 		}
 		else if (item.status === "error")
 		{
-			// This may not be able to appear anymore because Blue Iris does not show "done" status anymore.
+			// Blue Iris 6.1.3 was not seen reporting errors, even for exports with invalid arguments, but older versions did.
 			labelUpper = "Error<br><br>Click for Details";
 			onClick = function ()
 			{
-				SimpleDialog.Text('This clip failed to export due to an error:\\n\\n' + item.error)
+				SimpleDialog.ConfirmText("This clip failed to export due to an error:\n\n" + item.error + "\n\nRemove it from the Convert/Export Queue?", function ()
+				{
+					DeleteItemFromConvertExportQueue(item.path);
+				});
 			};
 			spinnerHtml = '';
 			addClasses.push("error");
@@ -30542,7 +30711,7 @@ function ExportListDialog()
 		if (labelLower)
 			labelLower = '<div class="noLinkOverlay lower">' + labelLower + '</div>';
 
-		noLinkOverlay = spinnerHtml + labelUpper + labelLower;
+		noLinkOverlay = spinnerHtml + labelUpper + (labelLower || '');
 
 		var $newBox = $('<div class="exportlist_item camlist_thumbbox">'
 			+ link
@@ -39895,7 +40064,7 @@ function MakeAddEditorFieldFn(title, $content, obj, o)
 
 		if (valueType === "number")
 		{
-			if (value < 0)
+			if (value < 0 && !(options.min < 0)) // Negative numbers mean "no value", unless the field allows negative numbers.
 			{
 				obj[key] = -1;
 				value = "";
@@ -39919,6 +40088,11 @@ function MakeAddEditorFieldFn(title, $content, obj, o)
 			, disabled: !!options.disabled
 			, compact: o.compact
 		};
+		if (typeof options.defaultValue !== "undefined" && !options.disabled)
+		{
+			fieldArgs.defaultValue = options.defaultValue; // Adds a "reset to default" button.
+			$row.addClass('withDefaultBtn');
+		}
 		if (type === "boolean")
 		{
 			fieldArgs.inputType = "checkbox";
@@ -39938,12 +40112,14 @@ function MakeAddEditorFieldFn(title, $content, obj, o)
 			if (fieldArgs.value.length === 6)
 				fieldArgs.value = "#" + fieldArgs.value;
 		}
-		else if (type === "number")
+		else if (type === "number" || type === "range")
 		{
-			fieldArgs.inputType = "number";
+			fieldArgs.inputType = type;
 			fieldArgs.onChange = NumberChanged;
 			fieldArgs.minValue = options.min;
 			fieldArgs.maxValue = options.max;
+			fieldArgs.step = options.step;
+			fieldArgs.unitLabel = options.unitLabel;
 		}
 		else if (type === "select")
 		{

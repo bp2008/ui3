@@ -7022,12 +7022,18 @@ div::-webkit-scrollbar-corner
 	display: initial;
 }
 
+.exportStatus .cancelLink,
 .exportStatus .fullDialogLink,
 .exportStatus .downloadAutomaticallyOption,
 .exportStatus .items_done div
 {
 	margin: 5px 0px;
 }
+
+	.exportStatus .items_done .exportError
+	{
+		color: #FF6666;
+	}
 
 /* Export Dialog */
 .activeExportDialog
@@ -7436,19 +7442,22 @@ div::-webkit-scrollbar-corner
 	cursor: pointer;
 }*/
 
-	.uiSettingsRow.withDefaultBtn
+	.uiSettingsRow.withDefaultBtn,
+	.profileEditorRow.withDefaultBtn
 	{
 		display: flex;
 		align-items: center;
 	}
 
-		.uiSettingsRow.withDefaultBtn > *
+		.uiSettingsRow.withDefaultBtn > *,
+		.profileEditorRow.withDefaultBtn > *
 		{
 			width: 100%;
 			flex: 1 1 auto;
 		}
 
-		.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn
+		.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn,
+		.profileEditorRow.withDefaultBtn > .uiFormFieldDefaultBtn
 		{
 			flex: 0 0 auto;
 			padding: 10px 4px 10px 2px;
@@ -7458,12 +7467,14 @@ div::-webkit-scrollbar-corner
 			color: var(--text-color);
 		}
 
-			.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn:hover
+			.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn:hover,
+			.profileEditorRow.withDefaultBtn > .uiFormFieldDefaultBtn:hover
 			{
 				color: var(--text-hover-color);
 			}
 
-			.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn:active
+			.uiSettingsRow.withDefaultBtn > .uiFormFieldDefaultBtn:active,
+			.profileEditorRow.withDefaultBtn > .uiFormFieldDefaultBtn:active
 			{
 				color: var(--text-active-color);
 			}
