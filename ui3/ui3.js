@@ -1635,6 +1635,13 @@ var defaultSettings =
 			, category: "Video Player (Advanced)"
 		}
 		, {
+			key: "ui3_contextMenus_enableDisableCamera"
+			, value: "0"
+			, inputType: "checkbox"
+			, label: 'Context Menu: Enable/Disable Camera<div class="settingDesc">Adds an item to the live video context menu which enables or disables the camera.</div>'
+			, category: "Video Player (Advanced)"
+		}
+		, {
 			key: "ui3_playback_skipDeadAir"
 			, value: 0
 			, inputType: "threeState"
@@ -27348,10 +27355,18 @@ function CanvasContextMenu()
 		else
 			$("#submenu_trigger_groupSettings").closest('.b-m-item,.b-m-ifocus').hide();
 
+		// The Enable/Disable item is hidden along with the split line after it, so the menu looks unchanged when the setting is off.
+		var $enableDisable = $("#contextMenuEnableDisable").closest('.b-m-item,.b-m-ifocus,.b-m-idisable');
+		$enableDisable = $enableDisable.add($enableDisable.next('.b-m-split'));
+		if (settings.ui3_contextMenus_enableDisableCamera === "1")
+			$enableDisable.show();
+		else
+			$enableDisable.hide();
+
 		var itemsToDisable = ["cameraname"];
 		if (lastContextMenuSelectedCamera == null || !cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
 		{
-			itemsToDisable = itemsToDisable.concat(["trigger", "record", "snapshot", "maximize", "restart", "properties"]);
+			itemsToDisable = itemsToDisable.concat(["trigger", "record", "snapshot", "maximize", "restart", "enabledisable", "properties"]);
 		}
 		else
 		{
@@ -27387,6 +27402,9 @@ function CanvasContextMenu()
 		if (camData != null)
 		{
 			LoadDynamicManualRecordingButtonState(camData);
+			var camObj = cameraListLoader.GetCameraWithId(camData.optionValue);
+			var enable = !!camObj && !camObj.isEnabled;
+			$("#contextMenuEnableDisable").text(enable ? "Enable Camera" : "Disable Camera").attr("enable", enable ? "1" : "0");
 			var camName = CleanUpGroupName(camData.optionDisplay);
 			$("#contextMenuCameraName").text(camName);
 			$("#contextMenuCameraName").closest("div.b-m-item,div.b-m-idisable").attr("title", "The buttons below are specific to the camera: " + camName);
@@ -27431,6 +27449,12 @@ function CanvasContextMenu()
 					toaster.Warning("You cannot restart cameras that are part of an auto-cycle.");
 				else
 					ResetCamera(lastContextMenuSelectedCamera.optionValue);
+				break;
+			case "enabledisable":
+				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
+					toaster.Warning("You cannot enable or disable cameras that are part of an auto-cycle.");
+				else
+					SetCameraEnabled(lastContextMenuSelectedCamera.optionValue, $("#contextMenuEnableDisable").attr("enable") === "1");
 				break;
 			case "properties":
 				if (!cameraListLoader.CameraIsAlone(lastContextMenuSelectedCamera))
@@ -27482,6 +27506,8 @@ function CanvasContextMenu()
 				, { text: "Restart Camera", icon: "#svg_x5F_Restart", iconClass: "iconBlue", alias: "restart", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Stats for nerds", icon: "#svg_x5F_Info", alias: "statsfornerds", action: onLiveContextMenuAction }
+				, { type: "splitLine" }
+				, { text: "<span id=\"contextMenuEnableDisable\">Disable Camera</span>", icon: "#svg_x5F_Logout", iconClass: "iconBlue", alias: "enabledisable", action: onLiveContextMenuAction }
 				, { type: "splitLine" }
 				, { text: "Properties", icon: "#svg_x5F_Viewdetails", alias: "properties", action: onLiveContextMenuAction }
 			]
@@ -29045,6 +29071,10 @@ function CameraProperties(camId)
 						var collapsible = new CollapsibleSection('mgmt', "Camera Management", modal_cameraPropDialog);
 						$camprop.append(collapsible.$heading);
 						var $mgmtSection = collapsible.$section;
+						$mgmtSection.append(GetCamPropCheckbox("contextMenuEnableDisable", "Show Enable/Disable in the live video context menu", settings.ui3_contextMenus_enableDisableCamera === "1", function (tag, checked)
+						{
+							settings.ui3_contextMenus_enableDisableCamera = checked ? "1" : "0";
+						}).attr("title", "This UI3 setting affects all cameras. It can also be found in UI Settings > Video Player (Advanced)."));
 						var $btnSet2 = $('<div class="dialogOption_item dialogOption_item_center"></div>');
 						$btnSet2.append($btnPause = GetCameraPropertyButton("Pause", "pause", "largeBtnYellow", camId, "Open a menu of Pause options. Pausing a camera is equivalent to setting the Shield icon red, but for one camera only."));
 						$btnSet2.append($btnDisable = GetCameraPropertyButton("Disable", "disable", "largeBtnRed", camId, "Disable this camera instance in Blue Iris."));
@@ -31236,6 +31266,20 @@ function RebootCamera(camId)
 	}, function ()
 	{
 		toaster.Error("Camera " + camName + " hard-reboot command could not be sent");
+	});
+}
+///////////////////////////////////////////////////////////////
+// Enable / Disable Camera ////////////////////////////////////
+///////////////////////////////////////////////////////////////
+function SetCameraEnabled(camId, enable)
+{
+	var camName = htmlEncode(cameraListLoader.GetCameraName(camId));
+	cameraConfig.set(camId, "enable", enable, function (response)
+	{
+		toaster.Success("Camera " + camName + " is " + (enable ? "enabled" : "disabled"));
+	}, function ()
+	{
+		toaster.Error("Camera " + camName + " could not be " + (enable ? "enabled" : "disabled"));
 	});
 }
 ///////////////////////////////////////////////////////////////
