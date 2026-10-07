@@ -28660,6 +28660,10 @@ function CameraListDialog()
 	var modal_cameralistdialog = null;
 	var timeBetweenCameraListThumbUpdates = 1000 * 60 * 60 * 24; // 1 day
 	var loadedOnce = false;
+	// Camera boxes are created once and updated in place when the camera list reloads, so the panel doesn't flicker or lose its scroll position.
+	var $camItems = null;
+	var $camTotals = null;
+	var camItemMap = {};
 	this.open = function ()
 	{
 		CloseCameraListDialog();
@@ -28690,24 +28694,48 @@ function CameraListDialog()
 		if ($cameralistcontent.length == 0 || modal_cameralistdialog == null)
 			return;
 		modal_cameralistdialog.setLoadingState(false);
-		$cameralistcontent.empty();
 		var lastCameraListResponse = cameraListLoader.GetLastResponse();
 		if (!lastCameraListResponse || !lastCameraListResponse.data || lastCameraListResponse.data.length == 0)
 		{
+			ResetCameraItems();
 			$cameralistcontent.html("The camera list is empty! Please try reloading the page.");
 			return;
 		}
-		// Add camera boxes
+		if (!$camItems)
+		{
+			$camItems = $('<div></div>');
+			$camTotals = $('<div></div>');
+			$cameralistcontent.empty().append($camItems).append($camTotals).append('<div><br></div>'
+				+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="resetNewAlertCounters()" value="reset new alert counters" title="Resets the new alert counters for all cameras" /></div>'
+				+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.UpdateCameraThumbnails(true)" value="force refresh thumbnails" title="Thumbnails otherwise update only once per day" /></div>'
+				+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.ShowRawCameraList()" value="view raw data" /></div>');
+		}
+		// Add, update, and reorder camera boxes
+		var camItemsEle = $camItems.get(0);
+		var nextItemEle = camItemsEle.firstChild;
+		var newCamItemMap = {};
 		for (var i = 0; i < lastCameraListResponse.data.length; i++)
 		{
 			var cam = lastCameraListResponse.data[i];
 			if (!cameraListLoader.CameraIsGroupOrCycle(cam))
 			{
-				$cameralistcontent.append('<div class="camlist_item">'
-					+ GetCameraListLabel(cam)
-					+ '</div>');
+				var $item = UpdateCameraListItem(camItemMap[cam.optionValue], cam);
+				newCamItemMap[cam.optionValue] = $item;
+				var itemEle = $item.get(0);
+				if (itemEle === nextItemEle)
+					nextItemEle = nextItemEle.nextSibling;
+				else
+					camItemsEle.insertBefore(itemEle, nextItemEle);
 			}
 		}
+		// Remove boxes of cameras that are no longer in the list
+		while (nextItemEle)
+		{
+			var staleItemEle = nextItemEle;
+			nextItemEle = nextItemEle.nextSibling;
+			$(staleItemEle).remove();
+		}
+		camItemMap = newCamItemMap;
 		// Add bit rate totals, MP/s, etc.
 		var totalMainBps = 0;
 		var totalSubBps = 0;
@@ -28739,7 +28767,7 @@ function CameraListDialog()
 					totalMpps += mainMpps;
 			}
 		}
-		$cameralistcontent.append(''
+		var totalsHtml = ''
 			+ '<div class="camlist_item_center" style="user-select: all;">'
 			+ '<div style="text-align: left; display: inline-block;">'
 			+ '<div class="camlist_item_heading">'
@@ -28774,13 +28802,10 @@ function CameraListDialog()
 			+ '<div class="camlist_item_heading">'
 			+ '<a href="javascript:UIHelp.LearnMore(\'Camera List Totals\')">(learn more)</a>'
 			+ '</div>'
-			+ '</div>');
+			+ '</div>';
+		if ($camTotals.data("html") !== totalsHtml)
+			$camTotals.html(totalsHtml).data("html", totalsHtml);
 		// Finish up
-		$cameralistcontent.append('<div><br></div>'
-			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="resetNewAlertCounters()" value="reset new alert counters" title="Resets the new alert counters for all cameras" /></div>'
-			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.UpdateCameraThumbnails(true)" value="force refresh thumbnails" title="Thumbnails otherwise update only once per day" /></div>'
-			+ '<div class="camlist_item_center"><input type="button" class="simpleTextButton btnTransparent" onclick="cameraListDialog.ShowRawCameraList()" value="view raw data" /></div>'
-			+ '');
 		self.UpdateCameraThumbnails();
 		modal_cameralistdialog.contentChanged(!loadedOnce);
 		loadedOnce = true;
@@ -28790,6 +28815,12 @@ function CameraListDialog()
 		BI_CustomEvent.RemoveListener("CameraListLoaded", CameraListLoaded);
 		loadedOnce = false;
 		modal_cameralistdialog = null;
+		ResetCameraItems();
+	}
+	var ResetCameraItems = function ()
+	{
+		$camItems = $camTotals = null;
+		camItemMap = {};
 	}
 	var CloseCameraListDialog = function ()
 	{
@@ -28800,10 +28831,42 @@ function CameraListDialog()
 	{
 		$('<div class="cameralistcontent selectable"></div>').append(ArrayToHtmlTable(cameraListLoader.GetLastResponse().data)).dialog({ title: "Raw Camera List" });
 	}
-	var GetCameraListLabel = function (cam)
+	/**
+	 * Creates a camera box (if [$item] is null) or updates an existing one to match [cam], leaving its thumbnail untouched.
+	 * @param {jQuery} $item An existing camera box, or null.
+	 * @param {Object} cam Camera object from the camera list.
+	 * @returns {jQuery} The camera box.
+	 */
+	var UpdateCameraListItem = function ($item, cam)
+	{
+		if (!$item)
+		{
+			$item = $('<div class="camlist_item">'
+				+ '<div class="camlist_thumbbox" onclick="cameraListDialog.camListThumbClick(\'' + cam.optionValue + '\')">'
+				+ '<div class="camlist_thumb">'
+				+ '<div class="camlist_thumb_aligner"></div>'
+				+ '<div class="camlist_thumb_helper"><img src="" alt="" class="camlist_thumb_img" camid="' + cam.optionValue + '" />'
+				+ '<span style="display:none;">No Image</span></div></div>'
+				+ '<div class="camlist_label"></div>'
+				+ '</div>'
+				+ '</div>');
+		}
+		var colorHex = BlueIrisColorToCssColor(cam.color);
+		var labelHtml = GetCameraListLabel(cam, colorHex);
+		if ($item.data("labelHtml") !== labelHtml)
+		{
+			$item.data("labelHtml", labelHtml);
+			$item.children(".camlist_thumbbox").css("background-color", "#" + colorHex);
+			$item.find(".camlist_label").replaceWith(labelHtml);
+		}
+		$item.find("img.camlist_thumb_img")
+			.attr("isEnabled", cam.isEnabled && cam.webcast ? '1' : '0')
+			.attr("aspectratio", cam.width / cam.height);
+		return $item;
+	}
+	var GetCameraListLabel = function (cam, colorHex)
 	{
 		var labelText = cam.optionDisplay + " (" + cam.optionValue + ")";
-		var colorHex = BlueIrisColorToCssColor(cam.color);
 		var nameColorHex = GetReadableTextColorHexForBackgroundColorHex(colorHex);
 
 		var floatingBadges = '';
@@ -28826,13 +28889,7 @@ function CameraListDialog()
 		if (floatingBadges != '')
 			floatingBadges = '<div class="floatingBadges">' + floatingBadges + '</div>';
 
-		return '<div class="camlist_thumbbox" onclick="cameraListDialog.camListThumbClick(\'' + cam.optionValue + '\')" style="background-color: #' + colorHex + ';">'
-			+ '<div class="camlist_thumb">'
-			+ '<div class="camlist_thumb_aligner"></div>'
-			+ '<div class="camlist_thumb_helper"><img src="" alt="" class="camlist_thumb_img" camid="' + cam.optionValue + '" isEnabled="' + (cam.isEnabled && cam.webcast ? '1' : '0') + '" aspectratio="' + (cam.width / cam.height) + '" />'
-			+ '<span style="display:none;">No Image</span></div></div>'
-			+ '<div class="camlist_label" style="background-color: #' + colorHex + '; color: #' + nameColorHex + ';">' + floatingBadges + htmlEncode(labelText) + '</div>'
-			+ '</div>';
+		return '<div class="camlist_label" style="background-color: #' + colorHex + '; color: #' + nameColorHex + ';">' + floatingBadges + htmlEncode(labelText) + '</div>';
 	}
 	this.camListThumbClick = function (camId)
 	{
@@ -28843,55 +28900,67 @@ function CameraListDialog()
 		$("#cameralistcontent").find("img.camlist_thumb_img").each(function (idx, ele)
 		{
 			var $ele = $(ele);
+			if ($ele.data("thumbBusy"))
+				return; // This thumbnail is still being read from storage or downloaded.
 			var camId = $ele.attr("camId");
 			var storageKey = "ui3_camlistthumb_" + camId;
-			var setImgDate = function ()
+			var showImg = function (imgData)
 			{
-				largeItemStorage.setItem(storageKey + "_date", new Date().getTime())
-					.catch(function (ex)
+				$ele.next('span').hide();
+				$ele.attr("src", imgData);
+				$ele.css("display", "block");
+				$ele.parent().parent().find(".camlist_thumb_aligner").css("height", "120px");
+			};
+			var downloadIfStale = function ()
+			{
+				if ($ele.attr('isEnabled') != '1')
+					return;
+				if ($ele.data("thumbDate") + timeBetweenCameraListThumbUpdates >= new Date().getTime() && !overrideImgDate)
+					return;
+				$ele.data("thumbBusy", true);
+				var setImgDate = function ()
+				{
+					var imgDate = new Date().getTime();
+					$ele.data("thumbDate", imgDate);
+					$ele.data("thumbBusy", false);
+					largeItemStorage.setItem(storageKey + "_date", imgDate)
+						.catch(function (ex)
+						{
+							console.error("Unable to save camera list thumbnail date for " + camId, ex);
+						});
+				};
+				var sizeArg = "&w=160";
+				if (parseFloat($ele.attr("aspectratio")) < (160 / 120))
+					sizeArg = "&h=120";
+				var tmpImgSrc = currentServer.remoteBaseURL + "image/" + camId + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetAPISessionArg("&", true);
+				PersistImageFromUrl(storageKey, tmpImgSrc, function (imgAsDataURL)
+				{
+					setImgDate();
+					showImg(imgAsDataURL);
+				}
+					, function (message)
 					{
-						console.error("Unable to save camera list thumbnail date for " + camId, ex);
+						setImgDate();
 					});
 			};
+			if (typeof $ele.data("thumbDate") === "number")
+			{
+				downloadIfStale();
+				return;
+			}
+			// This camera box is new, so show its saved thumbnail first.
+			$ele.data("thumbBusy", true);
 			Promise.all([largeItemStorage.getItem(storageKey), largeItemStorage.getItem(storageKey + "_date")])
 				.then(function (values)
 				{
 					var imgData = values[0];
 					if (imgData != null && imgData.length > 0)
-					{
-						$ele.attr("src", imgData);
-						$ele.css("display", "block");
-						$ele.parent().parent().find(".camlist_thumb_aligner").css("height", "120px");
-					}
+						showImg(imgData);
 					else
-					{
 						$ele.next('span').show();
-					}
-					if ($ele.attr('isEnabled') == '1')
-					{
-						var imgDate = parseInt(values[1]);
-						if (!imgDate)
-							imgDate = 0;
-						if (imgDate + timeBetweenCameraListThumbUpdates < new Date().getTime() || overrideImgDate)
-						{
-							var sizeArg = "&w=160";
-							if (parseFloat($ele.attr("aspectratio")) < (160 / 120))
-								sizeArg = "&h=120";
-							var tmpImgSrc = currentServer.remoteBaseURL + "image/" + camId + '?time=' + new Date().getTime() + sizeArg + "&q=50" + currentServer.GetAPISessionArg("&", true);
-							PersistImageFromUrl(storageKey, tmpImgSrc, function (imgAsDataURL)
-							{
-								setImgDate();
-								$ele.next('span').hide();
-								$ele.attr("src", imgAsDataURL);
-								$ele.css("display", "block");
-								$ele.parent().parent().find(".camlist_thumb_aligner").css("height", "120px");
-							}
-								, function (message)
-								{
-									setImgDate();
-								});
-						}
-					}
+					$ele.data("thumbDate", parseInt(values[1]) || 0);
+					$ele.data("thumbBusy", false);
+					downloadIfStale();
 				});
 		});
 	}
