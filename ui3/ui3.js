@@ -931,6 +931,12 @@ var Mp4OpenOptions = {
 	OpenInUI3: "Open in UI3",
 	OpenInBrowser: "Open in Browser Tab"
 };
+var VideoClickActions = {
+	None: "None",
+	MaximizeCamera: "Maximize/Unmaximize Camera",
+	PlayPause: "Play/Pause",
+	Fullscreen: "Fullscreen"
+};
 var settings = null;
 var settingsCategoryList = ["General Settings", "Video Player", "Video Player (Advanced)", "Timeline", "UI Status Sounds", "Top Bar", "Side Bar", "Status Area", "Clips / Alerts", "Clip / Alert Icons", "Event-Triggered Icons", "Event-Triggered Sounds", "PTZ", "Hotkeys", "UI3 Camera Labels", "Digital Zoom", "MQTT Remote Control", "Extra"]; // Create corresponding "ui3_cps_uiSettings_category_" default when adding a category here.
 var defaultSettings =
@@ -1360,14 +1366,6 @@ var defaultSettings =
 			, category: "Video Player"
 		}
 		, {
-			key: "ui3_doubleClick_behavior"
-			, value: "Recordings"
-			, inputType: "select"
-			, options: ["None", "Live View", "Recordings", "Both"]
-			, label: 'Double-Click to Fullscreen<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Double-Click to Fullscreen\')">(learn more)</a></div>'
-			, category: "Video Player"
-		}
-		, {
 			key: "ui3_pause_when_hidden"
 			, value: "1"
 			, inputType: "checkbox"
@@ -1639,6 +1637,99 @@ var defaultSettings =
 			, value: "0"
 			, inputType: "checkbox"
 			, label: 'Context Menu: Enable/Disable Camera<div class="settingDesc">Adds an item to the live video context menu which enables or disables the camera.</div>'
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_comment_click_live"
+			, value: ""
+			, inputType: "comment"
+			, comment: '<div class="videoClickHeading">Live Player Click Handling</div>'
+			, hint: "Mouse click actions for live video on the Live View and Clips tabs."
+			, keywords: "mouse click double-click fullscreen"
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_singleClick_live"
+			, value: VideoClickActions.MaximizeCamera
+			, inputType: "select"
+			, options: [VideoClickActions.None, VideoClickActions.MaximizeCamera, VideoClickActions.PlayPause, VideoClickActions.Fullscreen]
+			, label: 'Single Click'
+			, hint: "Action to perform when you click live video on the Live View and Clips tabs."
+			, keywords: "mouse click double-click fullscreen"
+			, class: "videoClickSetting"
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_doubleClick_live"
+			, value: VideoClickActions.None
+			, inputType: "select"
+			, options: [VideoClickActions.None, VideoClickActions.MaximizeCamera, VideoClickActions.PlayPause, VideoClickActions.Fullscreen]
+			, label: 'Double Click<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Video Click Actions\')">(learn more)</a></div>'
+			, hint: "Action to perform when you double-click live video on the Live View and Clips tabs.\n\nAny choice other than \"None\" causes a short delay before the Single Click action."
+			, keywords: "mouse click double-click fullscreen"
+			, class: "videoClickSetting"
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_comment_click_clips"
+			, value: ""
+			, inputType: "comment"
+			, comment: '<div class="videoClickHeading">Clip Player Click Handling</div>'
+			, hint: "Mouse click actions for clips and alerts."
+			, keywords: "mouse click double-click fullscreen recordings alerts"
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_singleClick_clips"
+			, value: VideoClickActions.PlayPause
+			, inputType: "select"
+			, options: [VideoClickActions.None, VideoClickActions.PlayPause, VideoClickActions.Fullscreen]
+			, label: 'Single Click'
+			, hint: "Action to perform when you click a clip or alert that is playing."
+			, keywords: "mouse click double-click fullscreen recordings alerts"
+			, class: "videoClickSetting"
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_doubleClick_clips"
+			, value: VideoClickActions.Fullscreen
+			, inputType: "select"
+			, options: [VideoClickActions.None, VideoClickActions.PlayPause, VideoClickActions.Fullscreen]
+			, label: 'Double Click<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Video Click Actions\')">(learn more)</a></div>'
+			, hint: "Action to perform when you double-click a clip or alert that is playing.\n\nAny choice other than \"None\" causes a short delay before the Single Click action."
+			, keywords: "mouse click double-click fullscreen recordings alerts"
+			, class: "videoClickSetting"
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_comment_click_timeline"
+			, value: ""
+			, inputType: "comment"
+			, comment: '<div class="videoClickHeading">Timeline Player Click Handling</div>'
+			, hint: "Mouse click actions for video on the Timeline tab."
+			, keywords: "mouse click double-click fullscreen"
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_singleClick_timeline"
+			, value: VideoClickActions.MaximizeCamera
+			, inputType: "select"
+			, options: [VideoClickActions.None, VideoClickActions.MaximizeCamera, VideoClickActions.PlayPause, VideoClickActions.Fullscreen]
+			, label: 'Single Click'
+			, hint: "Action to perform when you click the video on the Timeline tab."
+			, keywords: "mouse click double-click fullscreen"
+			, class: "videoClickSetting"
+			, category: "Video Player (Advanced)"
+		}
+		, {
+			key: "ui3_doubleClick_timeline"
+			, value: VideoClickActions.None
+			, inputType: "select"
+			, options: [VideoClickActions.None, VideoClickActions.MaximizeCamera, VideoClickActions.PlayPause, VideoClickActions.Fullscreen]
+			, label: 'Double Click<div class="settingDesc"><a href="javascript:UIHelp.LearnMore(\'Video Click Actions\')">(learn more)</a></div>'
+			, hint: "Action to perform when you double-click the video on the Timeline tab.\n\nAny choice other than \"None\" causes a short delay before the Single Click action."
+			, keywords: "mouse click double-click fullscreen"
+			, class: "videoClickSetting"
 			, category: "Video Player (Advanced)"
 		}
 		, {
@@ -4193,6 +4284,17 @@ $(function ()
 				else if (oldExportFormat >= 0 && oldExportFormat <= 2)
 					settings.ui3_clip_export_format2 = oldExportFormat;
 				delete localStorage.ui3_clip_export_format;
+			}
+			if (typeof localStorage.ui3_doubleClick_behavior !== "undefined")
+			{
+				// "Double-Click to Fullscreen" (None, Live View, Recordings, Both) was replaced by separate Single Click and Double Click actions for Live View, Clips, and Timeline.  The old "Live View" choice also applied to the timeline.
+				var oldDoubleClickBehavior = localStorage.ui3_doubleClick_behavior;
+				var liveDoubleClick = oldDoubleClickBehavior === "Live View" || oldDoubleClickBehavior === "Both" ? VideoClickActions.Fullscreen : VideoClickActions.None;
+				var clipsDoubleClick = oldDoubleClickBehavior === "Recordings" || oldDoubleClickBehavior === "Both" ? VideoClickActions.Fullscreen : VideoClickActions.None;
+				settings.ui3_doubleClick_live = liveDoubleClick;
+				settings.ui3_doubleClick_timeline = liveDoubleClick;
+				settings.ui3_doubleClick_clips = clipsDoubleClick;
+				delete localStorage.ui3_doubleClick_behavior;
 			}
 			if (typeof localStorage.ui3_export_manifest !== "undefined")
 			{
@@ -18258,50 +18360,30 @@ function VideoPlayerController()
 			, function (e, confirmed) // Single Click
 			{
 				videoOverlayHelper.HideFalseLoadingOverlay();
-				if (currentlyLoadingImage.isLive || currentlyLoadingImage.isTimeline())
+				var actions = GetVideoClickActions();
+				// If a double-click action is assigned, the single-click action waits until the click is confirmed to not be part of a double-click.
+				var waitForConfirmation = actions.doubleClick !== VideoClickActions.None;
+				if (!confirmed)
 				{
-					// Live View or Timeline
-					if (IsDoubleClickFullscreenEnabled())
-					{
-						if (confirmed)
-							ImgClick(e);
-						else
-							self.DoThingIfImgClickEligible(e, videoOverlayHelper.ShowFalseLoadingOverlay);
-					}
-					else if (!confirmed)
-						ImgClick(e);
+					// Give immediate feedback even if the action must wait.
+					if (actions.singleClick === VideoClickActions.PlayPause)
+						ShowTemporaryPlayPauseIcon();
+					else if (actions.singleClick === VideoClickActions.MaximizeCamera && waitForConfirmation)
+						self.DoThingIfImgClickEligible(e, videoOverlayHelper.ShowFalseLoadingOverlay);
 				}
-				else
-				{
-					// Recording
-					if (!confirmed)
-					{
-						if (self.Playback_IsPaused())
-							videoOverlayHelper.ShowTemporaryPlayIcon();
-						else
-							videoOverlayHelper.ShowTemporaryPauseIcon();
-					}
-					var dblClickEnabled = IsDoubleClickFullscreenEnabled();
-					if ((confirmed && dblClickEnabled) || (!confirmed && !dblClickEnabled))
-					{
-						self.Playback_PlayPause();
-					}
-				}
+				if (confirmed === waitForConfirmation)
+					DoVideoClickAction(actions.singleClick, e);
 			}
 			, function (e) // Double Click
 			{
-				if (!IsDoubleClickFullscreenEnabled())
+				var actions = GetVideoClickActions();
+				if (actions.doubleClick === VideoClickActions.None)
 					return;
 				videoOverlayHelper.HideFalseLoadingOverlay();
-				if (currentlyLoadingImage.isLive || currentlyLoadingImage.isTimeline())
-				{
-					fullScreenModeController.toggleFullScreen();
-				}
-				else
-				{
-					videoOverlayHelper.HideTemporaryIcons();
-					fullScreenModeController.toggleFullScreen();
-				}
+				videoOverlayHelper.HideTemporaryIcons();
+				if (actions.doubleClick === VideoClickActions.PlayPause)
+					ShowTemporaryPlayPauseIcon();
+				DoVideoClickAction(actions.doubleClick, e);
 			}
 			, imageRenderer.CamImgDragStart
 			, imageRenderer.CamImgDragMove
@@ -18412,14 +18494,34 @@ function VideoPlayerController()
 		}
 		return currentCameraData;
 	}
-	var IsDoubleClickFullscreenEnabled = function ()
+	/**
+	 * Returns the single-click and double-click actions configured for the video that is currently loading.
+	 * Live video on the Timeline tab uses the Timeline actions so that clicking behaves the same way before and after the timeline reaches live.
+	 */
+	var GetVideoClickActions = function ()
 	{
-		if (settings.ui3_doubleClick_behavior === "Both")
-			return true;
-		if (currentlyLoadingImage.isLive || currentlyLoadingImage.isTimeline())
-			return settings.ui3_doubleClick_behavior === "Live View";
+		if (currentlyLoadingImage.isTimeline() || (currentlyLoadingImage.isLive && currentPrimaryTab === "timeline"))
+			return { singleClick: settings.ui3_singleClick_timeline, doubleClick: settings.ui3_doubleClick_timeline };
+		else if (currentlyLoadingImage.isLive)
+			return { singleClick: settings.ui3_singleClick_live, doubleClick: settings.ui3_doubleClick_live };
 		else
-			return settings.ui3_doubleClick_behavior === "Recordings";
+			return { singleClick: settings.ui3_singleClick_clips, doubleClick: settings.ui3_doubleClick_clips };
+	}
+	var DoVideoClickAction = function (action, e)
+	{
+		if (action === VideoClickActions.MaximizeCamera)
+			ImgClick(e);
+		else if (action === VideoClickActions.PlayPause)
+			self.Playback_PlayPause();
+		else if (action === VideoClickActions.Fullscreen)
+			fullScreenModeController.toggleFullScreen();
+	}
+	var ShowTemporaryPlayPauseIcon = function ()
+	{
+		if (self.Playback_IsPaused())
+			videoOverlayHelper.ShowTemporaryPlayIcon();
+		else
+			videoOverlayHelper.ShowTemporaryPauseIcon();
 	}
 	// Methods for querying what is currently playing
 	this.Loading = function ()
@@ -40369,8 +40471,8 @@ function UIHelpTool()
 	{
 		switch (topic)
 		{
-			case 'Double-Click to Fullscreen':
-				Double_Click_to_Fullscreen();
+			case 'Video Click Actions':
+				Video_Click_Actions();
 				break;
 			case 'Context Menu Trigger':
 				Context_Menu_Trigger();
@@ -40433,23 +40535,30 @@ function UIHelpTool()
 			+ '</div>')
 			.modalDialog({ title: "Context Menu Trigger", closeOnOverlayClick: true });
 	}
-	var Double_Click_to_Fullscreen = function ()
+	var Video_Click_Actions = function ()
 	{
+		var delayMs = videoPlayer.getDoubleClickTime();
+		var describe = function (name, singleClick, doubleClick)
+		{
+			var delayed = singleClick !== VideoClickActions.None && doubleClick !== VideoClickActions.None;
+			return '<br><br><b>' + name + '</b>'
+				+ '<br><span style="margin-left:15px;">Single Click: ' + htmlEncode(singleClick) + '</span>'
+				+ (delayed
+					? '<span style="color:#ff4700;font-weight:bold;"> (delayed by ' + delayMs + ' milliseconds)</span>'
+					: '')
+				+ '<br><span style="margin-left:15px;">Double Click: ' + htmlEncode(doubleClick) + '</span>';
+		};
 		$('<div class="UIHelp" style="max-width:500px;">'
-			+ 'This setting controls whether or not double-clicking the video area triggers fullscreen mode.<br><br>'
-			+ 'When double-clicking is enabled, single-click actions on the same area will be delayed by ' + videoPlayer.getDoubleClickTime()
-			+ ' milliseconds.  This is to allow the browser time to determine if you intended a single-click or a double-click.<br><br>'
-			+ 'In live view, single-clicking a camera selects the camera.'
-			+ (settings.ui3_doubleClick_behavior == "Both" || settings.ui3_doubleClick_behavior == "Live View"
-				? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
-				: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
-			+ '<br><br>'
-			+ 'When a recording is open, single-clicking the video invokes Play/Pause.'
-			+ (settings.ui3_doubleClick_behavior == "Both" || settings.ui3_doubleClick_behavior == "Recordings"
-				? '<br><span style="color:#ff4700;font-weight:bold;margin-left:15px;">The current setting will delay this behavior by ' + videoPlayer.getDoubleClickTime() + ' milliseconds.</span>'
-				: '<br><span style="color:#26cb26;font-weight:bold;margin-left:15px;">The current setting will not delay this behavior.</span>')
+			+ 'These settings control what happens when you click or double-click the video.<br><br>'
+			+ '"Live View" applies to live video on the Live View and Clips tabs. "Clips" applies while a clip or alert is open. "Timeline" applies to the Timeline tab, including when it is showing live video.<br><br>'
+			+ 'When a Double Click action is assigned, the Single Click action will be delayed by ' + delayMs
+			+ ' milliseconds.  This is to allow the browser time to determine if you intended a single-click or a double-click.  Choose "None" for Double Click if you want single-clicks to respond instantly.'
+			+ '<br><br>Current settings:'
+			+ describe("Live View", settings.ui3_singleClick_live, settings.ui3_doubleClick_live)
+			+ describe("Clips", settings.ui3_singleClick_clips, settings.ui3_doubleClick_clips)
+			+ describe("Timeline", settings.ui3_singleClick_timeline, settings.ui3_doubleClick_timeline)
 			+ '</div>')
-			.modalDialog({ title: "Double-Click to Fullscreen", closeOnOverlayClick: true });
+			.modalDialog({ title: "Video Click Actions", closeOnOverlayClick: true });
 	}
 	var Camera_Group_Webcasting = function ()
 	{

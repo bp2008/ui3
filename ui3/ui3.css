@@ -7549,6 +7549,17 @@ ul.extraSpacing li
 	text-align: center;
 	font-weight: bold;
 }
+
+.videoClickHeading
+{
+	font-weight: bold;
+	padding-left: 26px;
+}
+
+.dialogOption_item.videoClickSetting > .dialogOption_label
+{
+	padding-left: 30px;
+}
 /* Audio Visualizer */
 #ui3AudioVisualizerPanel
 {
