@@ -5701,7 +5701,7 @@ function StatusAreaApi()
 
 	Vue.component('status-bar-fps', {
 		template: ''
-			+ '<status-bar :tiny="tiny" label="FPS" :percent="percent" :color="color" :textValue="value.fps.toString()" tooltipText="Frame rate of video being played by UI3"></status-bar>',
+			+ '<status-bar :tiny="tiny" label="FPS" :percent="percent" :color="color" :textValue="value.fps.toString()" tooltipText="Frame rate of video being played by UI3" :clickable="true" @click="onClick"></status-bar>',
 		props:
 		{
 			value: { type: Object, default: function () { return { fps: 0, maxFps: 10 }; } },
@@ -5724,12 +5724,19 @@ function StatusAreaApi()
 				else
 					return "#CC0000";
 			}
+		},
+		methods:
+		{
+			onClick: function (e)
+			{
+				nerdStats.Open();
+			}
 		}
 	});
 
 	Vue.component('status-bar-stream-delay', {
 		template: ''
-			+ '<status-bar :tiny="tiny" label="DLY" :percent="percent" :color="color" :textValue="totalDelayString" tooltipText="Total video streaming delay in milliseconds"></status-bar>',
+			+ '<status-bar :tiny="tiny" label="DLY" :percent="percent" :color="color" :textValue="totalDelayString" tooltipText="Total video streaming delay in milliseconds" :clickable="true" @click="onClick"></status-bar>',
 		props:
 		{
 			value: { type: Object, default: function () { return { netDelay: 0, playerDelay: 0 }; } },
@@ -5769,12 +5776,19 @@ function StatusAreaApi()
 				else
 					return "#CC0000";
 			}
+		},
+		methods:
+		{
+			onClick: function (e)
+			{
+				nerdStats.Open();
+			}
 		}
 	});
 
 	Vue.component('status-bar-audio-buffer', {
 		template: ''
-			+ '<status-bar :tiny="tiny" label="ABUF" :percent="percent" :color="color" :textValue="totalBufferString" tooltipText="Audio buffer contains this many milliseconds"></status-bar>',
+			+ '<status-bar :tiny="tiny" label="ABUF" :percent="percent" :color="color" :textValue="totalBufferString" tooltipText="Audio buffer contains this many milliseconds" :clickable="true" @click="onClick"></status-bar>',
 		props:
 		{
 			value: { type: Number, default: 0 },
@@ -5801,6 +5815,13 @@ function StatusAreaApi()
 					return null;
 				else
 					return "#CCAA00";
+			}
+		},
+		methods:
+		{
+			onClick: function (e)
+			{
+				nerdStats.Open();
 			}
 		}
 	});
@@ -5832,7 +5853,7 @@ function StatusAreaApi()
 
 	Vue.component('status-bar-stream-bit-rate', {
 		template: ''
-			+ '<status-bar :tiny="tiny" label="MBPS" :percent="percent" :color="color" :textValue="textValue" tooltipText="Total video + audio bit rate"></status-bar>',
+			+ '<status-bar :tiny="tiny" label="MBPS" :percent="percent" :color="color" :textValue="textValue" tooltipText="Total video + audio bit rate" :clickable="true" @click="onClick"></status-bar>',
 		props:
 		{
 			value: { type: Object, default: { video: 0, audio: 0 } },
@@ -5866,6 +5887,13 @@ function StatusAreaApi()
 			color: function ()
 			{
 				return this.percent > 1.1 ? "#CCAA00" : undefined;
+			}
+		},
+		methods:
+		{
+			onClick: function (e)
+			{
+				nerdStats.Open();
 			}
 		}
 	});
