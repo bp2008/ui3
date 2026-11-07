@@ -43,10 +43,12 @@ When the password challenge step includes `uuid`, Blue Iris links the challenge'
 
 - **From any address:** it works from client addresses other than the one that logged in (tested from 4 source addresses).
 - **Unregistering doesn't remove the link:** it still works after the device is deleted with `token: ""`, and after its registry record is gone.
+- **Deleting the device in Settings > Mobile devices doesn't remove it either.** Tested with a control device kept alongside, both sessions kept active.
 - **`logout` does remove the link:** after logout, the uuid-only login gets the password challenge. But the logged-out session string itself still works, because `logout` doesn't end sessions. That's a separate, older problem.
+- **It ends when the session expires.** An idle link still worked after 1 minute and was gone after 2. An open UI3 keeps its session active, though, so the link lasts as long as UI3 is open.
 - **A uuid sent only alongside an already-valid session is never linked.** It still gets the password challenge.
 
-So the uuid works like the session ID, from any address, until logout. Anyone who learns a device's uuid can take over its live session. Uuids are visible to administrators in Settings > Mobile devices and stored in the registry. This may be intended for the mobile apps. In UI3 it showed up as a phase-1 login that answered "success" instead of the password challenge.
+So the uuid works like the session ID, from any address, until logout or session expiry. Anyone who learns a device's uuid can take over its live session. Uuids are visible to administrators in Settings > Mobile devices and stored in the registry. This may be intended for the mobile apps. In UI3 it showed up as a phase-1 login that answered "success" instead of the password challenge.
 
 UI3 no longer sends `uuid` in password logins.
 
