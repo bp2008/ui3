@@ -1,5 +1,7 @@
 # Plan: Web Push notifications for UI3 in Blue Iris
 
+> **Note (2026-11-05):** This plan was not followed entirely. It is kept as a historical record. Blue Iris implemented push through the JSON `login` command (`uuid`, `devicetype: "UI3"`, `devicename`, `token`) instead of the `webpush_*` commands proposed below, and has no status or test command yet. See `ui3-push-blueiris-requests.md` for what was actually implemented and the follow-up requests.
+
 **Audience:** the Blue Iris developers (and their AI coding agent).
 **From:** bp2008 (UI3 author).
 **Status:** UI3's side is built as a prototype and has been verified end to end in Chrome against a stand-in server that does everything this plan asks Blue Iris to do. Blue Iris is the missing piece.

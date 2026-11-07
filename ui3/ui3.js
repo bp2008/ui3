@@ -66,11 +66,28 @@ if (navigator.cookieEnabled)
  */
 var ui3InstanceId = getRandomAlphanumericStr(16);
 
+var ui3ServiceWorkerRegistrationPromise = null;
+/**
+ * Registers UI3's service worker (which also receives push notifications).  Returns a promise that resolves with the
+ * ServiceWorkerRegistration.  Repeated calls share one registration attempt unless it failed.
+ */
+function RegisterUi3ServiceWorker()
+{
+	if (!ui3ServiceWorkerRegistrationPromise)
+	{
+		ui3ServiceWorkerRegistrationPromise = navigator.serviceWorker.register('ui3serviceworker.js?v=' + combined_version + local_bi_session_arg);
+		ui3ServiceWorkerRegistrationPromise["catch"](function ()
+		{
+			ui3ServiceWorkerRegistrationPromise = null;
+		});
+	}
+	return ui3ServiceWorkerRegistrationPromise;
+}
 if ('serviceWorker' in navigator && typeof navigator.serviceWorker === "object" && typeof navigator.serviceWorker.register === "function")
 {
 	window.addEventListener('load', function ()
 	{
-		navigator.serviceWorker.register('ui3serviceworker.js?v=' + combined_version + local_bi_session_arg)
+		RegisterUi3ServiceWorker()
 			.then(function (registration)
 			{
 				console.log('UI3 Service Worker registration successful with scope: ', registration.scope);
@@ -419,6 +436,11 @@ function DoUIFeatureDetection()
 				{
 					ul_root.append('<li>Gamepads/Joysticks are not supported.</li>');
 				}
+				var pushSupport = GetPushNotificationSupport();
+				if (!pushSupport.supported)
+				{
+					ul_root.append($('<li></li>').text('Push notifications are not supported.  ' + pushSupport.reason));
+				}
 				if (ul_root.children().length > 0)
 				{
 					var $opt = $('#optionalFeaturesNotSupported');
@@ -726,6 +748,7 @@ var biUpdatesDialog = null;
 var updateInstallWatcher = null;
 var cameraListDialog = null;
 var exportListDialog = null;
+var pushNotifications = null;
 var clipProperties = null;
 var clipDownloadDialog = null;
 var statusAreaApi = null;
@@ -4433,6 +4456,8 @@ $(function ()
 
 	exportListDialog = new ExportListDialog;
 
+	pushNotifications = new PushNotifications();
+
 	clipProperties = new ClipProperties();
 
 	clipDownloadDialog = new ClipDownloadDialog();
@@ -6202,6 +6227,7 @@ function DropdownBoxes()
 		, new DropdownListItem({ cmd: "about_this_ui", text: "About This UI", icon: "#svg_x5F_About", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "streaming_profiles", text: "Streaming Profiles", icon: "#svg_mio_VideoFilter", cssClass: "goldenLarger" })
 		, new DropdownListItem({ cmd: "copy_current_url", text: "Copy Current URL", icon: "#svg_mio_copy", cssClass: "goldenLarger" })
+		, new DropdownListItem({ cmd: "push_notifications", text: "Push Notifications", icon: "#svg_x5F_Alert", cssClass: "goldenLarger", tooltip: "Receive Blue Iris notifications in this browser", visibleFn: function () { return pushNotifications.IsAvailable(); }, statusFn: function () { return pushNotifications.GetMenuStatus(); } })
 		, new DropdownListItem({ cmd: "system_log", text: "System Log", icon: "#svg_x5F_SystemLog", cssClass: "blueLarger", notificationCounter: function () { return Math.min(99999, statusLoader.getNotificationCounterValue("warnings")); } })
 		, new DropdownListItem({ cmd: "user_list", text: "User List", icon: "#svg_x5F_User", cssClass: "blueLarger" })
 		, new DropdownListItem({ cmd: "device_list", text: "Device List", icon: "#svg_mio_deviceInfo", cssClass: "blueLarger" })
@@ -6238,6 +6264,9 @@ function DropdownBoxes()
 						break;
 					case "copy_current_url":
 						clipboardHelper.CopyText(UpdateCurrentURL());
+						break;
+					case "push_notifications":
+						pushNotifications.OpenDialog();
 						break;
 					case "system_log":
 						systemLog.open();
@@ -6675,6 +6704,13 @@ function DropdownBoxes()
 				// var $upd = $('<div class="updateAvailable full" title="A Blue Iris update is available!"></div>');
 				$item.append($upd);
 			}
+		}
+		if (typeof item.statusFn === "function")
+		{
+			// A short status label shown at the end of the item, e.g. { text: "On", cssClass: "on" }.
+			var status = item.statusFn();
+			if (status && status.text)
+				$item.append($('<span class="menuItemStatus"></span>').addClass(status.cssClass || "").text(status.text));
 		}
 		$item.click(function ()
 		{
@@ -7713,7 +7749,6 @@ function PtzButtons()
 			mergedState: function ()
 			{
 				// Merge the hotkeyState, guiButtonState, joystickState, virtualJoystickState
-				console.log("mergedState computed");
 				var state = CreateBIPtzState();
 				var jsExp = IsExperimentalJoystickApiEnabled();
 				for (var key in state)
@@ -16967,7 +17002,7 @@ function SessionManager()
 				loadingHelper.SetErrorStatus("login", "Blue Iris did not provide the expected session data. This version of UI3 requires Blue Iris 4.8.2.3 or newer.", false);
 				return;
 			}
-			ExecJSON({ cmd: "login", session: oldSession }, function (response)
+			ExecJSON(AddPushLoginArgs({ cmd: "login", session: oldSession }), function (response)
 			{
 				lastResponse = response;
 				if (response.result)
@@ -17094,6 +17129,8 @@ function SessionManager()
 			serverTimeZoneOffsetMs = parseInt(parseFloat(lastResponse.data.tzone) * -60000);
 
 		isAdministratorSession = !!lastResponse.data.admin;
+
+		pushNotifications.HandleLoginResponse(lastResponse.data);
 
 		permission_changeprofile = getBoolMaybe(lastResponse.data.changeprofile, isAdministratorSession);
 		permission_ptz = getBoolMaybe(lastResponse.data.ptz, true);
@@ -33002,7 +33039,7 @@ function UpdateInstallWatcher()
 	 */
 	var LearnCurrentVersion = function (callback)
 	{
-		ExecJSON({ cmd: "login", session: sessionManager.GetAPISession() }, function (response)
+		ExecJSON(AddPushLoginArgs({ cmd: "login", session: sessionManager.GetAPISession() }), function (response)
 		{
 			if (response && response.result === "success" && response.data && response.data.version)
 			{
@@ -33333,6 +33370,908 @@ var deviceList = new ListDialog({
 			+ '</tr>';
 	}
 });
+///////////////////////////////////////////////////////////////
+// Push Notifications /////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+// Web Push notifications from Blue Iris (6.1.4.16 or newer) to this browser, which arrive even while UI3 is closed.
+//
+// Subscribing happens in one of two ways:
+//   direct: In a secure context (HTTPS with a trusted certificate, or localhost), UI3's service worker
+//           (ui3serviceworker.js) holds the subscription and shows the notifications.
+//   relay:  Elsewhere, browsers don't allow push, so UI3 opens the relay site (PUSH_RELAY_URL, a static GitHub Pages
+//           site from the repo bp2008/ui3-push-service) in a popup.  It subscribes on its own secure origin and hands
+//           the subscription back by postMessage, or by navigating back to UI3 with the result in the URL fragment.
+//
+// Blue Iris API (measured with Blue Iris 6.1.4.17 built 2026-11-06 1:58 PM; earlier builds behave differently).
+// Everything goes through the JSON "login" command, with the current session (no password needed):
+//   uuid + devicetype "UI3"  The response's data includes vapidPublicKey (base64url P-256 point), which is how UI3
+//                            knows Blue Iris supports this.  Any user gets it.  It also includes pushenabled:
+//                              true     this browser's device exists and has Push turned on
+//                              false    the device exists, but Push is turned off for it in Settings > Mobile devices
+//                              missing  Blue Iris has no device for this browser
+//                            Without a token, nothing changes, except that a devicename renames an existing device.
+//   + devicename + token { endpoint, keys: { p256dh, auth }, url, mode }
+//                            Registers or updates this browser in Settings > Mobile devices as type UI3.  A new device
+//                            gets Push turned on only if an administrator registered it; otherwise an administrator
+//                            must turn it on.  Updating an existing device keeps its Push setting.  Blue Iris rejects
+//                            endpoints that aren't on a known push service (deleting the device if it existed), and
+//                            still answers "success", but without pushenabled.
+//   token ""                 Unregisters: deletes the device.
+// Blue Iris also deletes the device when the push service answers 404/410, and an administrator can delete it.  UI3
+// shows that as "Removed from Blue Iris" and doesn't register again on its own.
+// Sending uuid without devicetype creates an empty device of type "Other", so always send both.
+// NEVER send uuid in a login without a valid session (the password challenge and response steps).  Blue Iris then
+// remembers the uuid as a login credential: a later sessionless login with only that uuid is logged in as that user,
+// from any address, even after logging out or unregistering.  (A login with a valid session and the uuid doesn't do this.)
+var PUSH_RELAY_URL = "https://ui3-push.bp2008.org/index.html";
+var PUSH_HELP_URL = "https://blueirissoftware.com/BlueIris.PDF";
+/** The relay site's result if it navigated back to UI3 with one in the URL fragment.  Captured and removed from the address bar while ui3.js loads. */
+var pushRelayRedirectResult = (function ()
+{
+	try
+	{
+		var match = location.hash.match(/[#&]ui3push=([A-Za-z0-9_-]+)/);
+		if (!match)
+			return null;
+		var newHash = location.hash.replace(/[#&]ui3push=[A-Za-z0-9_-]+/, "").replace(/^#?&/, "#");
+		history.replaceState(history.state, "", location.pathname + location.search + (newHash.length > 1 ? newHash : ""));
+		return match[1];
+	}
+	catch (ex)
+	{
+		console.error(ex);
+		return null;
+	}
+})();
+/**
+ * Returns { supported: Boolean, secure: Boolean, reason: String } describing whether this browser can receive push notifications from UI3.
+ */
+function GetPushNotificationSupport()
+{
+	if (BrowserIsIOS())
+		return { supported: false, secure: !!window.isSecureContext, reason: "On iOS and iPadOS, Apple only allows web push notifications in web apps that have been added to the Home Screen, which UI3 does not support yet." };
+	if (window.isSecureContext)
+	{
+		if (!("serviceWorker" in navigator) || !navigator.serviceWorker)
+			return { supported: false, secure: true, reason: "This browser does not provide service workers here, so it can't receive push notifications.  Service workers may be disabled, for example in a private browsing window." };
+		if (!("PushManager" in window))
+			return { supported: false, secure: true, reason: "This browser does not support the Push API." };
+		if (!("Notification" in window))
+			return { supported: false, secure: true, reason: "This browser does not support the Notifications API." };
+		return { supported: true, secure: true, reason: "" };
+	}
+	// In an insecure context, browsers hide the push APIs entirely, so support can't be detected here.  The relay site reports it if push turns out to be unsupported.
+	if (BrowserIsIE() || BrowserIsEdgeLegacy() || typeof window.fetch !== "function" || typeof window.TextDecoder !== "function" || typeof window.URL !== "function" || !window.crypto || !window.crypto.getRandomValues)
+		return { supported: false, secure: false, reason: "This browser is too old." };
+	return { supported: true, secure: false, reason: "" };
+}
+/** Returns this browser's stable device id for Blue Iris ("ui3-" + 32 hex digits), creating it the first time. */
+function GetPushDeviceUuid()
+{
+	var id = "";
+	try { id = localStorage.getItem("ui3push_uuid") || ""; }
+	catch (ex) { }
+	if (!/^ui3-[0-9a-f]{32}$/.test(id))
+	{
+		var bytes = new Uint8Array(16);
+		window.crypto.getRandomValues(bytes);
+		id = "ui3-";
+		for (var i = 0; i < bytes.length; i++)
+			id += ("0" + bytes[i].toString(16)).slice(-2);
+		try { localStorage.setItem("ui3push_uuid", id); }
+		catch (ex) { }
+	}
+	return id;
+}
+/**
+ * Adds the arguments that make Blue Iris's "login" response include its push notification key and this browser's
+ * device status, if this browser can use push notifications.  Only for a login that carries a valid session, never
+ * for the password challenge and response steps (see the comment above).  Returns the same args object.
+ * @param {Object} args Arguments for a "login" command.
+ */
+function AddPushLoginArgs(args)
+{
+	if (args.session && !args.response && GetPushNotificationSupport().supported)
+	{
+		args.uuid = GetPushDeviceUuid();
+		args.devicetype = "UI3";
+	}
+	return args;
+}
+function PushNotifications()
+{
+	var self = this;
+	var LS_STATE = "ui3push_state";
+	var LS_NAME = "ui3push_name";
+	var LS_PENDING = "ui3push_pending";
+	var PENDING_MAX_AGE_MS = 60 * 60 * 1000;
+	/** Blue Iris's VAPID public key, or null if Blue Iris does not support push notifications for UI3. */
+	var vapidPublicKey = null;
+	/** This browser's device in Blue Iris, from the latest login response: "on", "off" (Push turned off in Blue Iris), "missing", or null if not known yet. */
+	var deviceStatus = null;
+	var loginResponseCounter = 0;
+	var serverName = "";
+	var startupDone = false;
+	var dialog = null;
+	var $dlgRoot = null;
+	var status = null;
+	var refreshCounter = 0;
+	var popupWatchInterval = null;
+
+	var Initialize = function ()
+	{
+		// Relay result delivered by postMessage from the relay popup.
+		window.addEventListener("message", OnWindowMessage);
+		// In direct mode, the service worker focuses an open UI3 window and sends it the clicked notification's URL.
+		if (window.isSecureContext && navigator.serviceWorker && typeof navigator.serviceWorker.addEventListener === "function")
+		{
+			navigator.serviceWorker.addEventListener("message", function (e)
+			{
+				if (e.data && e.data.type === "ui3push-click")
+					HandleNotificationClick(e.data.url);
+			});
+			try { navigator.serviceWorker.startMessages(); }
+			catch (ex) { }
+		}
+	}
+	/**
+	 * Called with the data from every successful login response.
+	 * @param {Object} data The login response's data object.
+	 */
+	this.HandleLoginResponse = function (data)
+	{
+		if (!GetPushNotificationSupport().supported)
+			return;
+		if (data && data["system name"])
+			serverName = data["system name"];
+		var myCounter = ++loginResponseCounter;
+		if (data && typeof data.vapidPublicKey === "string" && data.vapidPublicKey)
+		{
+			ApplyLoginData(data);
+			return;
+		}
+		// Password logins don't carry the push arguments (see AddPushLoginArgs), so ask again with the new session.
+		// With a Blue Iris that doesn't support push, this answer lacks the key too.
+		ExecJSONPromise(AddPushLoginArgs({ cmd: "login", session: sessionManager.GetAPISession() }))
+			.then(function (response)
+			{
+				return response && response.result === "success" ? response.data : null;
+			}, function (err)
+			{
+				console.error("Unable to learn the push notification status", err);
+				return null;
+			})
+			.then(function (data2)
+			{
+				if (myCounter === loginResponseCounter)
+					ApplyLoginData(data2);
+			});
+	}
+	/** Applies the push notification key and device status from a login response that carried the push arguments. */
+	var ApplyLoginData = function (data)
+	{
+		vapidPublicKey = data && typeof data.vapidPublicKey === "string" && data.vapidPublicKey ? data.vapidPublicKey : null;
+		if (vapidPublicKey)
+			RecordDeviceStatus(data, true);
+		if (!startupDone)
+		{
+			startupDone = true;
+			if (pushRelayRedirectResult)
+				HandleRedirectResult();
+			else
+				Startup();
+		}
+	}
+	/** Reads this browser's device status from a login response's data: "on", "off" or "missing". */
+	var ReadDeviceStatus = function (data)
+	{
+		if (data && data.pushenabled === true)
+			return "on";
+		if (data && data.pushenabled === false)
+			return "off";
+		return "missing";
+	}
+	/**
+	 * Remembers the device status from a login response.  While this browser is subscribed, the status is also saved with
+	 * the subscription, so a change made in Blue Iris since UI3 last saw it can be reported once.
+	 * @param {Object} data The login response's data object.
+	 * @param {Boolean} reportChange True to show a toast about a change (the dialog shows the status itself).
+	 */
+	var RecordDeviceStatus = function (data, reportChange)
+	{
+		deviceStatus = ReadDeviceStatus(data);
+		var state = GetState();
+		if (!state || state.biStatus === deviceStatus)
+			return;
+		var previous = state.biStatus;
+		state.biStatus = deviceStatus;
+		SetState(state);
+		if (!reportChange)
+			return;
+		if (previous === "on")
+			WarnDeviceStatus();
+		else if (previous === "off" && deviceStatus === "on")
+			toaster.Success("Push was turned on for this browser in Blue Iris, so it will now receive push notifications.", 15000);
+	}
+	/** Shows a toast saying why Blue Iris won't send notifications to this browser, if it won't. */
+	var WarnDeviceStatus = function ()
+	{
+		if (deviceStatus === "off")
+			toaster.Warning("Push is turned off for this browser (\"" + htmlEncode(GetDeviceName()) + "\") in Blue Iris's Settings &gt; Mobile devices, so it won't receive push notifications.", 30000);
+		else if (deviceStatus === "missing")
+			toaster.Warning("Blue Iris no longer has this browser registered, so it won't receive push notifications.  You can register it again from Push Notifications in the main menu.", 30000);
+	}
+	/** Returns true if push notifications can be used with this browser and Blue Iris. */
+	this.IsAvailable = function ()
+	{
+		return GetPushNotificationSupport().supported && !!vapidPublicKey;
+	}
+	/** Returns the main menu item's status label. */
+	this.GetMenuStatus = function ()
+	{
+		if (!self.IsAvailable())
+			return null;
+		var state = GetState();
+		if (!state)
+			return { text: "Off", cssClass: "off" };
+		var bi = deviceStatus || state.biStatus;
+		if (bi === "off")
+			return { text: "Disabled", cssClass: "warning" };
+		if (bi === "missing")
+			return { text: "Removed", cssClass: "warning" };
+		return { text: "On", cssClass: "on" };
+	}
+	///////////////////////////////////////////////////////////////
+	// Storage
+	///////////////////////////////////////////////////////////////
+	var lsGet = function (key)
+	{
+		try { return localStorage.getItem(key) || ""; }
+		catch (ex) { return ""; }
+	}
+	var lsSet = function (key, value)
+	{
+		try
+		{
+			if (value === null || value === undefined || value === "")
+				localStorage.removeItem(key);
+			else
+				localStorage.setItem(key, value);
+		}
+		catch (ex) { console.error(ex); }
+	}
+	var lsGetJson = function (key)
+	{
+		try { return JSON.parse(lsGet(key)) || null; }
+		catch (ex) { return null; }
+	}
+	/**
+	 * Returns this browser's subscription record { mode, vapidKey, subscription: { endpoint, keys }, created, biStatus }, or null.
+	 * biStatus is the device status ("on", "off" or "missing") from the last login response UI3 saw while subscribed.
+	 */
+	var GetState = function ()
+	{
+		var state = lsGetJson(LS_STATE);
+		return state && state.subscription && state.subscription.endpoint && state.subscription.keys ? state : null;
+	}
+	var SetState = function (state)
+	{
+		lsSet(LS_STATE, state ? JSON.stringify(state) : null);
+	}
+	var GetDeviceName = function ()
+	{
+		return lsGet(LS_NAME).trim().substr(0, 100) || GetDefaultDeviceName();
+	}
+	var GetDefaultDeviceName = function ()
+	{
+		var ua = navigator.userAgent;
+		var browser = "Web browser";
+		if (/ Edg\//.test(ua)) browser = "Edge";
+		else if (/ OPR\//.test(ua)) browser = "Opera";
+		else if (/SamsungBrowser\//.test(ua)) browser = "Samsung Internet";
+		else if (/Firefox\//.test(ua)) browser = "Firefox";
+		else if (/Chrome\//.test(ua)) browser = "Chrome";
+		else if (/Safari\//.test(ua)) browser = "Safari";
+		var os = "";
+		if (/Android/.test(ua)) os = "Android";
+		else if (/Windows/.test(ua)) os = "Windows";
+		else if (/CrOS/.test(ua)) os = "ChromeOS";
+		else if (/Macintosh|Mac OS X/.test(ua)) os = "macOS";
+		else if (/Linux/.test(ua)) os = "Linux";
+		return os ? browser + " on " + os : browser;
+	}
+	/** The URL that notifications open when clicked. */
+	var GetUi3Url = function ()
+	{
+		return location.origin + location.pathname;
+	}
+	/** Returns "direct" or "relay", the way this page subscribes. */
+	var GetMode = function ()
+	{
+		return GetPushNotificationSupport().secure ? "direct" : "relay";
+	}
+	///////////////////////////////////////////////////////////////
+	// Blue Iris
+	///////////////////////////////////////////////////////////////
+	/**
+	 * Sends Blue Iris a "login" command for the current session.  Returns a promise that resolves with the response's data,
+	 * after recording the device status from it.
+	 * @param {Object} extraArgs Additional arguments (devicename, token).
+	 */
+	var BiLogin = function (extraArgs)
+	{
+		var args = $.extend(AddPushLoginArgs({ cmd: "login", session: sessionManager.GetAPISession() }), extraArgs);
+		return ExecJSONPromise(args)
+			.then(function (response)
+			{
+				if (!response || response.result !== "success")
+					throw new Error((response && response.data && response.data.reason) || "Blue Iris rejected the request.");
+				var data = response.data || {};
+				if (typeof data.vapidPublicKey === "string" && data.vapidPublicKey)
+					vapidPublicKey = data.vapidPublicKey;
+				RecordDeviceStatus(data, false);
+				return data;
+			}, function (errorHtml)
+			{
+				throw new Error("Blue Iris did not respond: " + $("<div></div>").html(errorHtml).text());
+			});
+	}
+	var MakeToken = function (subscriptionJson, mode)
+	{
+		return {
+			endpoint: subscriptionJson.endpoint
+			, keys: { p256dh: subscriptionJson.keys.p256dh, auth: subscriptionJson.keys.auth }
+			, url: GetUi3Url()
+			, mode: mode
+		};
+	}
+	/** Registers the subscription with Blue Iris and remembers it as this browser's subscription. */
+	var RegisterWithBlueIris = function (subscriptionJson, mode, vapidKey)
+	{
+		var previous = GetState();
+		return BiLogin({ devicename: GetDeviceName(), token: MakeToken(subscriptionJson, mode) })
+			.then(function (data)
+			{
+				if (vapidPublicKey && vapidPublicKey !== vapidKey)
+					throw new Error("Blue Iris's push notification key changed while subscribing.  Please try again.");
+				if (deviceStatus === "missing")
+					throw new Error("Blue Iris did not accept this browser's push subscription.  Blue Iris's log may say why.");
+				SetState({
+					mode: mode
+					, vapidKey: vapidKey
+					, subscription: { endpoint: subscriptionJson.endpoint, keys: { p256dh: subscriptionJson.keys.p256dh, auth: subscriptionJson.keys.auth } }
+					, created: previous ? previous.created : Date.now()
+					, biStatus: deviceStatus
+				});
+			});
+	}
+	/** Shows the success message after enabling. */
+	var NotifyEnabled = function ()
+	{
+		if (deviceStatus === "off")
+			toaster.Success("This browser is registered with Blue Iris.  " + (sessionManager.IsAdministratorSession() ? "Turn" : "An administrator must turn") + " on Push for \"" + htmlEncode(GetDeviceName()) + "\" in Blue Iris's Settings &gt; Mobile devices before notifications arrive.", 30000);
+		else
+			toaster.Success("Push notifications are enabled in this browser.");
+	}
+	var UnregisterFromBlueIris = function ()
+	{
+		return BiLogin({ token: "" });
+	}
+	/** Resolves with this browser's current subscription as JSON, or null if it no longer has one. */
+	var GetLocalSubscription = function (state)
+	{
+		if (state.mode !== "direct")
+			return Promise.resolve(state.subscription); // The relay site's subscription can't be inspected from here.
+		return GetDirectSubscription().then(function (subscription)
+		{
+			return subscription ? subscription.toJSON() : null;
+		});
+	}
+	/**
+	 * Runs after the first login.  Checks that the browser still has the stored subscription for the current key, and
+	 * updates Blue Iris if it changed.  A device that Blue Iris no longer has is left alone, for the user to register again.
+	 */
+	var Startup = function ()
+	{
+		if (!vapidPublicKey)
+			return;
+		var state = GetState();
+		if (!state)
+		{
+			// Left over from turning off while Blue Iris couldn't be told.  It can't receive anything without the subscription.
+			if (deviceStatus && deviceStatus !== "missing")
+				UnregisterFromBlueIris()["catch"](function (err) { console.error(err); });
+			return;
+		}
+		GetLocalSubscription(state)
+			.then(function (subscription)
+			{
+				if (!subscription)
+				{
+					// For example, notification permission was revoked.
+					SetState(null);
+					return UnregisterFromBlueIris();
+				}
+				if (state.vapidKey !== vapidPublicKey)
+				{
+					// Push services reject messages signed with a different key than the subscription was made for.
+					SetState(null);
+					toaster.Warning("Blue Iris's push notification key changed, so push notifications in this browser were turned off.  You can turn them on again from the main menu.", 30000);
+					return UnregisterFromBlueIris();
+				}
+				if (state.mode === "direct" && subscription.endpoint !== state.subscription.endpoint && deviceStatus !== "missing")
+					return RegisterWithBlueIris(subscription, state.mode, state.vapidKey);
+			})
+			["catch"](function (err)
+			{
+				console.error("Push notifications startup check failed", err);
+			});
+	}
+	///////////////////////////////////////////////////////////////
+	// Direct Subscription (secure context)
+	///////////////////////////////////////////////////////////////
+	var RequestPermission = function ()
+	{
+		return new Promise(function (resolve)
+		{
+			// Older Safari versions only support the callback form.
+			var p = Notification.requestPermission(resolve);
+			if (p && typeof p.then === "function")
+				p.then(resolve);
+		});
+	}
+	var WaitForActive = function (registration)
+	{
+		if (registration.active)
+			return Promise.resolve(registration);
+		return new Promise(function (resolve, reject)
+		{
+			var worker = registration.installing || registration.waiting;
+			if (!worker)
+				return reject(new Error("The service worker registration has no worker."));
+			worker.addEventListener("statechange", function ()
+			{
+				if (worker.state === "activated")
+					resolve(registration);
+				else if (worker.state === "redundant")
+					reject(new Error("The service worker failed to install."));
+			});
+		});
+	}
+	var GetDirectSubscription = function ()
+	{
+		if (!GetPushNotificationSupport().secure || !navigator.serviceWorker)
+			return Promise.resolve(null);
+		return navigator.serviceWorker.getRegistration().then(function (registration)
+		{
+			return registration ? registration.pushManager.getSubscription() : null;
+		});
+	}
+	var BytesEqual = function (a, b)
+	{
+		if (!a || !b)
+			return false;
+		a = new Uint8Array(a);
+		b = new Uint8Array(b);
+		if (a.length !== b.length)
+			return false;
+		for (var i = 0; i < a.length; i++)
+			if (a[i] !== b[i])
+				return false;
+		return true;
+	}
+	var Base64UrlDecode = function (str)
+	{
+		var b64 = String(str).replace(/-/g, "+").replace(/_/g, "/");
+		while (b64.length % 4)
+			b64 += "=";
+		var bin = atob(b64);
+		var bytes = new Uint8Array(bin.length);
+		for (var i = 0; i < bin.length; i++)
+			bytes[i] = bin.charCodeAt(i);
+		return bytes;
+	}
+	var EnableDirect = function (vapidKey)
+	{
+		// Request permission before doing anything asynchronous, so the browser still considers it a response to the click.
+		var permissionPromise = RequestPermission();
+		var keyBytes = Base64UrlDecode(vapidKey);
+		SetBusy("Waiting for notification permission…");
+		permissionPromise
+			.then(function (permission)
+			{
+				if (permission === "denied")
+					throw new Error("Notifications are blocked for this site.  Allow them in your browser's site settings, then try again.");
+				if (permission !== "granted")
+					throw new Error("Notification permission was not granted.");
+				SetBusy("Subscribing…");
+				return RegisterUi3ServiceWorker();
+			})
+			.then(WaitForActive)
+			.then(function (registration)
+			{
+				return registration.pushManager.getSubscription().then(function (existing)
+				{
+					if (existing && existing.options && BytesEqual(existing.options.applicationServerKey, keyBytes))
+						return existing;
+					return (existing ? existing.unsubscribe() : Promise.resolve()).then(function ()
+					{
+						return registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes });
+					});
+				});
+			})
+			.then(function (subscription)
+			{
+				SetBusy("Registering with Blue Iris…");
+				return RegisterWithBlueIris(subscription.toJSON(), "direct", vapidKey);
+			})
+			.then(NotifyEnabled)
+			["catch"](function (err)
+			{
+				console.error(err);
+				toaster.Error("Push notifications were not enabled: " + htmlEncode(ErrorText(err)), 15000);
+			})
+			.then(Refresh);
+	}
+	///////////////////////////////////////////////////////////////
+	// Relay Subscription (insecure context)
+	///////////////////////////////////////////////////////////////
+	var GetRelayOrigin = function ()
+	{
+		return new URL(PUSH_RELAY_URL).origin;
+	}
+	var EnableRelay = function (vapidKey)
+	{
+		var nonce = getRandomAlphanumericStr(24);
+		lsSet(LS_PENDING, JSON.stringify({ nonce: nonce, vapidKey: vapidKey, time: Date.now() }));
+		var url = PUSH_RELAY_URL
+			+ "#k=" + encodeURIComponent(vapidKey)
+			+ "&r=" + encodeURIComponent(GetUi3Url())
+			+ "&n=" + encodeURIComponent(serverName)
+			+ "&o=" + encodeURIComponent(nonce);
+		var popup = null;
+		try { popup = window.open(url, "ui3push_relay", "popup,width=540,height=680"); }
+		catch (ex) { console.error(ex); }
+		if (!popup)
+		{
+			// Popup blocked.  Go there in this tab; the relay site will navigate back with the result.
+			location.href = url;
+			return;
+		}
+		SetBusy("Waiting for the relay site.  Finish in the window that just opened.");
+		clearInterval(popupWatchInterval);
+		popupWatchInterval = setInterval(function ()
+		{
+			if (popup.closed)
+			{
+				clearInterval(popupWatchInterval);
+				if (status && status.busy)
+					Refresh();
+			}
+		}, 750);
+	}
+	/** Returns the pending relay request if the nonce matches it, and clears it.  Otherwise returns null. */
+	var ConsumePending = function (nonce)
+	{
+		var pending = lsGetJson(LS_PENDING);
+		if (!pending || !nonce || pending.nonce !== nonce || !(Date.now() - pending.time < PENDING_MAX_AGE_MS))
+			return null;
+		lsSet(LS_PENDING, null);
+		return pending;
+	}
+	var OnWindowMessage = function (e)
+	{
+		var data = e.data;
+		if (!data || data.type !== "ui3push-relay-result" || e.origin !== GetRelayOrigin())
+			return;
+		var pending = ConsumePending(data.nonce);
+		if (!pending)
+			return;
+		try { e.source.postMessage({ type: "ui3push-relay-ack", nonce: data.nonce }, e.origin); }
+		catch (ex) { console.error(ex); }
+		HandleRelayResult(data, pending);
+	}
+	var HandleRedirectResult = function ()
+	{
+		try
+		{
+			var result = JSON.parse(new TextDecoder().decode(Base64UrlDecode(pushRelayRedirectResult)));
+			pushRelayRedirectResult = null;
+			var pending = result && result.type === "ui3push-relay-result" ? ConsumePending(result.nonce) : null;
+			if (pending)
+				HandleRelayResult(result, pending);
+		}
+		catch (ex)
+		{
+			console.error("Unable to read the push notification relay result", ex);
+		}
+	}
+	var HandleRelayResult = function (result, pending)
+	{
+		clearInterval(popupWatchInterval);
+		if (!result.ok)
+		{
+			if (result.error !== "cancelled")
+				toaster.Warning("Push notifications were not enabled: " + htmlEncode(result.message || result.error || "Unknown error"), 15000);
+			Refresh();
+			return;
+		}
+		SetBusy("Registering with Blue Iris…");
+		RegisterWithBlueIris(result.subscription, "relay", pending.vapidKey)
+			.then(NotifyEnabled)
+			["catch"](function (err)
+			{
+				console.error(err);
+				toaster.Error("Push notifications were not enabled: " + htmlEncode(ErrorText(err)), 15000);
+			})
+			.then(Refresh);
+	}
+	///////////////////////////////////////////////////////////////
+	// Turning Off
+	///////////////////////////////////////////////////////////////
+	var Disable = function ()
+	{
+		SetBusy("Turning off push notifications…");
+		var biError = null;
+		UnregisterFromBlueIris()
+			["catch"](function (err)
+			{
+				biError = err;
+			})
+			.then(function ()
+			{
+				// Remove the browser's own subscription too (but not UI3's service worker, which has other jobs).  A relay
+				// subscription belongs to the relay site, where UI3 can't reach it, but once Blue Iris forgets it, nothing can use it.
+				return GetDirectSubscription().then(function (subscription)
+				{
+					return subscription ? subscription.unsubscribe() : null;
+				});
+			})
+			.then(function ()
+			{
+				SetState(null);
+				if (biError)
+					toaster.Warning("Push notifications were turned off in this browser, but Blue Iris could not be told: " + htmlEncode(biError.message), 15000);
+				else
+					toaster.Success("Push notifications are turned off in this browser.");
+			})
+			["catch"](function (err)
+			{
+				console.error(err);
+				toaster.Error("Unable to turn off push notifications: " + htmlEncode(ErrorText(err)), 15000);
+			})
+			.then(Refresh);
+	}
+	///////////////////////////////////////////////////////////////
+	// Notification Clicks (direct mode)
+	///////////////////////////////////////////////////////////////
+	var HandleNotificationClick = function (url)
+	{
+		console.log("Push notification clicked: " + url);
+		if (!url)
+			return;
+		var params;
+		try { params = new URL(url).searchParams; }
+		catch (ex) { return; }
+		var recId = params.get("rec") || params.get("r");
+		var camId = params.get("cam") || params.get("c");
+		if (recId)
+		{
+			var offset = 0;
+			var idxHyphen = recId.lastIndexOf('-');
+			if (idxHyphen > 0)
+			{
+				offset = parseInt(recId.substr(idxHyphen + 1));
+				if (isNaN(offset))
+					offset = 0;
+				recId = recId.substr(0, idxHyphen);
+			}
+			recId = "@" + recId.replace(/^@+/, "");
+			clipStatsLoader.LoadClipStats(recId, null, false, function (stats)
+			{
+				if (!stats)
+				{
+					toaster.Warning("The recording from the notification could not be opened.");
+					return;
+				}
+				if (offset > 0 && offset < stats.msec)
+					stats.offset = offset;
+				OpenClipFromStats(stats);
+			});
+		}
+		else if (camId)
+		{
+			var cam = cameraListLoader.GetCameraWithId(camId);
+			if (cam)
+				videoPlayer.LoadLiveCamera(cam);
+		}
+	}
+	///////////////////////////////////////////////////////////////
+	// Dialog
+	///////////////////////////////////////////////////////////////
+	this.OpenDialog = function ()
+	{
+		CloseDialog();
+		$dlgRoot = $('<div class="pushNotificationsDialog"></div>');
+		status = { loading: true };
+		Render();
+		dialog = $dlgRoot.modalDialog(
+			{
+				title: "Push Notifications"
+				, closeOnOverlayClick: true
+				, onClosing: function ()
+				{
+					dialog = null;
+					$dlgRoot = null;
+				}
+			});
+		Refresh();
+	}
+	var CloseDialog = function ()
+	{
+		if (dialog)
+		{
+			dialog.close();
+			dialog = null;
+			$dlgRoot = null;
+		}
+	}
+	var SetBusy = function (message)
+	{
+		if (!status)
+			status = {};
+		status.busy = message;
+		Render();
+	}
+	/** Reloads status from the browser and Blue Iris, then re-renders the dialog. */
+	var Refresh = function ()
+	{
+		var myCounter = ++refreshCounter;
+		var state = GetState();
+		var s = { loading: true, state: state, mode: state ? state.mode : GetMode() };
+		status = s;
+		Render();
+		if (!self.IsAvailable())
+		{
+			s.loading = false;
+			Render();
+			return;
+		}
+		(state ? GetLocalSubscription(state) : Promise.resolve(null))
+			.then(function (subscription)
+			{
+				if (state && !subscription)
+				{
+					// The browser lost the subscription (e.g. notification permission was revoked).
+					SetState(null);
+					s.state = state = null;
+					return UnregisterFromBlueIris();
+				}
+				if (state)
+					return BiLogin({}); // Learn the current device status.
+			})
+			.then(function ()
+			{
+				s.subscribed = !!state;
+			})
+			["catch"](function (err)
+			{
+				console.error(err);
+				s.error = ErrorText(err);
+			})
+			.then(function ()
+			{
+				s.loading = false;
+				if (myCounter === refreshCounter)
+					Render();
+			});
+	}
+	var Render = function ()
+	{
+		if (!$dlgRoot)
+			return;
+		var s = status || {};
+		var support = GetPushNotificationSupport();
+		var mode = s.mode || GetMode();
+		var html = [];
+		var pill;
+		if (!self.IsAvailable())
+			pill = ["unavailable", "Unavailable"];
+		else if (s.loading)
+			pill = ["loading", "Checking…"];
+		else if (s.error)
+			pill = ["warning", "Problem"];
+		else if (s.subscribed && deviceStatus === "off")
+			pill = ["warning", "Turned off in Blue Iris"];
+		else if (s.subscribed && deviceStatus === "missing")
+			pill = ["warning", "Removed from Blue Iris"];
+		else if (s.subscribed)
+			pill = ["on", "On in this browser"];
+		else
+			pill = ["off", "Off in this browser"];
+		var removed = s.subscribed && deviceStatus === "missing";
+		html.push('<div class="pushStatusPill pushStatus_' + pill[0] + '"><span class="pushStatusDot"></span>' + htmlEncode(pill[1]) + '</div>');
+
+		if (!support.supported)
+			html.push('<p>' + htmlEncode(support.reason) + '</p>');
+		else if (!vapidPublicKey)
+			html.push('<p>This version of Blue Iris does not support push notifications for UI3.</p>');
+		else
+		{
+			html.push('<p>Blue Iris can notify this browser about alerts, even while UI3 is closed.</p>');
+			html.push('<label class="pushDeviceName">Name for this browser<input type="text" spellcheck="false" maxlength="100" placeholder="' + htmlEncode(GetDefaultDeviceName()) + '" value="' + htmlEncode(lsGet(LS_NAME)) + '" /></label>');
+			if (s.error)
+				html.push('<p class="pushError">' + htmlEncode(s.error) + '</p>');
+			if (s.subscribed && !s.error && deviceStatus === "off")
+				html.push('<p class="pushWarning">This browser is registered, but Push is turned off for "' + htmlEncode(GetDeviceName()) + '" in Blue Iris\'s Settings &gt; Mobile devices.  '
+					+ (sessionManager.IsAdministratorSession() ? 'Turn it on there to receive notifications.' : 'Ask an administrator to turn it on.  (Blue Iris only turns it on automatically for browsers registered by an administrator.)') + '</p>');
+			if (removed && !s.error)
+				html.push('<p class="pushWarning">Blue Iris no longer has this browser registered, so it won\'t send notifications here.  Someone may have deleted it in Settings &gt; Mobile devices, or Blue Iris removed it after the push service rejected a notification.</p>');
+			if (mode === "direct" && window.Notification && Notification.permission === "denied")
+				html.push('<p class="pushWarning">Notifications are blocked for this site.  Allow them in your browser\'s site settings to use this feature.</p>');
+
+			html.push('<div class="pushButtons">');
+			if (s.busy)
+				html.push('<div class="pushBusy">' + htmlEncode(s.busy) + '</div>');
+			else if (!s.loading)
+			{
+				if (removed && !s.error)
+					html.push('<input type="button" class="simpleTextButton btnGreen pushBtnEnable" value="Register again" />');
+				if (s.subscribed)
+					html.push('<input type="button" class="simpleTextButton btnTransparent pushBtnDisable" value="Turn off" />');
+				else if (!s.error)
+					html.push('<input type="button" class="simpleTextButton btnGreen pushBtnEnable" value="Enable notifications" />');
+				if (s.error)
+					html.push('<input type="button" class="simpleTextButton btnTransparent pushBtnRetry" value="Retry" />');
+			}
+			html.push('</div>');
+
+			html.push('<p class="pushHint pushSetupReminder">You may still need to configure push notifications in Blue Iris: alerts only send notifications through a <b>Push notification</b> alert action, to devices with Push enabled in Settings &gt; Mobile devices, for users allowed to receive them.  '
+				+ 'The <a href="' + PUSH_HELP_URL + '" target="_blank">Blue Iris help</a> explains this under "Push notification" and "Mobile devices".</p>');
+		}
+
+		$dlgRoot.html(html.join(""));
+
+		$dlgRoot.find(".pushBtnEnable").on("click", function ()
+		{
+			if (!vapidPublicKey)
+				return;
+			if (GetMode() === "direct")
+				EnableDirect(vapidPublicKey);
+			else
+				EnableRelay(vapidPublicKey);
+		});
+		$dlgRoot.find(".pushBtnDisable").on("click", Disable);
+		$dlgRoot.find(".pushBtnRetry").on("click", Refresh);
+		$dlgRoot.find(".pushDeviceName input").on("change", function ()
+		{
+			lsSet(LS_NAME, $(this).val().trim());
+			if (!GetState() || deviceStatus === "missing")
+				return;
+			// Rename the device in Blue Iris right away.  Without a token, this can't re-create a device that was removed.
+			BiLogin({ devicename: GetDeviceName() })
+				.then(function ()
+				{
+					if (deviceStatus === "missing")
+						Refresh();
+					else
+						toaster.Success("Blue Iris now lists this browser as " + htmlEncode(GetDeviceName()) + ".");
+				})
+				["catch"](function (err)
+				{
+					toaster.Error("Unable to rename this browser in Blue Iris: " + htmlEncode(ErrorText(err)));
+				});
+		});
+
+		if (dialog)
+			dialog.contentChanged(true);
+	}
+	var ErrorText = function (err)
+	{
+		return err && err.message ? err.message : String(err);
+	}
+	Initialize();
+}
 ///////////////////////////////////////////////////////////////
 // Save Snapshot in Blue Iris /////////////////////////////////
 ///////////////////////////////////////////////////////////////

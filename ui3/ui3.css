@@ -999,6 +999,31 @@ div.icon, a.icon
 	align-items: center;
 	justify-content: flex-end;
 }
+/* Short status label at the end of a dropdown list item (e.g. Push Notifications On/Off) */
+.menuItemStatus
+{
+	display: inline-block;
+	margin-left: 10px;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 0.7em;
+	font-weight: bold;
+	vertical-align: middle;
+	background-color: rgba(127,127,127,0.25);
+	color: var(--text-color);
+}
+
+	.menuItemStatus.on
+	{
+		background-color: #2f9e4f;
+		color: #FFFFFF;
+	}
+
+	.menuItemStatus.warning
+	{
+		background-color: #b07a1c;
+		color: #FFFFFF;
+	}
 /* Notification Counters */
 .notificationCounter
 {
@@ -6897,6 +6922,137 @@ div::-webkit-scrollbar-corner
 	box-sizing: border-box;
 	padding: 10px;
 	font-size: 14px;
+}
+/* Push Notifications Dialog */
+.pushNotificationsDialog
+{
+	width: 440px;
+	max-width: 100%;
+	box-sizing: border-box;
+	padding: 14px 16px 16px 16px;
+	font-size: 14px;
+	line-height: 1.45;
+}
+
+	.pushNotificationsDialog p
+	{
+		margin: 0px 0px 10px 0px;
+	}
+
+.pushStatusPill
+{
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 12px;
+	padding: 4px 12px 4px 10px;
+	border-radius: 999px;
+	font-weight: bold;
+	background-color: rgba(127,127,127,0.15);
+}
+
+	.pushStatusPill .pushStatusDot
+	{
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
+		background-color: #8a8f98;
+	}
+
+	.pushStatusPill.pushStatus_on .pushStatusDot
+	{
+		background-color: #3fbf5f;
+		box-shadow: 0px 0px 6px #3fbf5f;
+	}
+
+	.pushStatusPill.pushStatus_warning .pushStatusDot
+	{
+		background-color: #e0a030;
+	}
+
+	.pushStatusPill.pushStatus_unavailable .pushStatusDot
+	{
+		background-color: #d05050;
+	}
+
+	.pushStatusPill.pushStatus_loading .pushStatusDot
+	{
+		animation: pushStatusPulse 1s ease-in-out infinite alternate;
+	}
+
+@keyframes pushStatusPulse
+{
+	from
+	{
+		opacity: 0.25;
+	}
+
+	to
+	{
+		opacity: 1;
+	}
+}
+
+.pushDeviceName
+{
+	display: block;
+	margin: 4px 0px 14px 0px;
+}
+
+	.pushDeviceName input[type="text"]
+	{
+		display: block;
+		width: 100%;
+		box-sizing: border-box;
+		margin-top: 3px;
+		padding: 5px 6px;
+		font-size: 14px;
+	}
+
+.pushNotificationsDialog .pushHint
+{
+	font-size: 12px;
+	opacity: 0.75;
+	margin-top: 3px;
+	margin-bottom: 12px;
+}
+
+.pushNotificationsDialog .pushSetupReminder
+{
+	margin: 16px 0px 0px 0px;
+	padding-top: 10px;
+	border-top: 1px solid rgba(127,127,127,0.35);
+}
+
+.pushError
+{
+	color: #ff7b7b;
+}
+
+.pushWarning
+{
+	color: #e8b75a;
+}
+
+.pushButtons
+{
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	min-height: 28px;
+}
+
+	.pushButtons .simpleTextButton
+	{
+		padding: 6px 14px;
+		font-size: 14px;
+	}
+
+.pushBusy
+{
+	align-self: center;
+	opacity: 0.85;
+	font-style: italic;
 }
 
 /* Persistent toast status */
