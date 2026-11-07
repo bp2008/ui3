@@ -33350,26 +33350,280 @@ var userList = new ListDialog({
 ///////////////////////////////////////////////////////////////
 // Devices List ///////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-var deviceList = new ListDialog({
-	title: "Device List"
-	, json_command: "devices"
-	, headers: ["#", "Last Connected", "Name", "Type", "Inside", "Push"]
-	, get_row: function (data)
+var deviceList = new DeviceListDialog();
+/**
+ * The mobile devices Blue Iris knows (Settings > Mobile devices), from the administrator-only "devices" command.
+ * Measured with Blue Iris 6.1.4.17:
+ *   { cmd: "devices" }                              Returns the list: [{ date, count, id, name, type, push, inside }].
+ *                                                   date is the last login (UTC seconds, 0 if never).  count is the
+ *                                                   number of logins since statistics were reset (absent if none).
+ *                                                   push is 0 (off), 1 (on), or -N (paused for N more seconds).
+ *                                                   inside is "inside", "outside" or "-" (geofence state).
+ *   { cmd: "devices", device: id, push: n }         Sets one device's push value (n must be a number; a string means 0),
+ *                                                   and returns the whole list.  An unknown id is silently ignored.
+ *   { cmd: "devices", reset: true }                 Documented as resetting the statistics on the Mobile Devices page.
+ */
+function DeviceListDialog()
+{
+	var self = this;
+	var dialog = null;
+	var $root = null;
+	var devices = null;
+	var fetchedAt = 0;
+	var busyId = null;
+	var tickInterval = null;
+	var PAUSE_CHOICES = [[900, "15 minutes"], [3600, "1 hour"], [4 * 3600, "4 hours"], [8 * 3600, "8 hours"], [86400, "1 day"], [7 * 86400, "1 week"]];
+
+	this.open = function ()
 	{
-		var date = GetServerDate(new Date(data.date * 1000));
-		var dateStr = data.date == 0 ? "never" : GetDateStr(date);
-		var level = GetLevelImageMarkup(data.level);
-		var count = typeof data.count == "undefined" ? "" : parseInt(data.count);
-		return '<tr>'
-			+ '<td class="centercolumn" style="font-weight: bold;">' + count + '</td>'
-			+ '<td>' + dateStr + '</td>'
-			+ '<td title="ID: ' + htmlEncode(data.id) + '">' + data.name + '</td>'
-			+ '<td>' + data.type + '</td>'
-			+ '<td>' + data.inside + '</td>'
-			+ '<td>' + (data.push == 0 ? "" : "Enabled") + '</td>'
-			+ '</tr>';
+		CloseDialog();
+		$root = $('<div class="deviceListDialog"><div class="deviceListEmpty">Loading…</div></div>');
+		dialog = $root.dialog({
+			title: "Device List"
+			, onRefresh: function () { Load(); }
+			, onClosing: function ()
+			{
+				dialog = null;
+				$root = null;
+				devices = null;
+				clearInterval(tickInterval);
+			}
+		});
+		$root.on("change", ".deviceListPush select", OnPushChange);
+		$root.on("click", ".deviceListReset", ConfirmReset);
+		clearInterval(tickInterval);
+		tickInterval = setInterval(Tick, 15000);
+		Load();
 	}
-});
+	var CloseDialog = function ()
+	{
+		if (dialog)
+			dialog.close();
+	}
+	/**
+	 * Runs a "devices" command and shows the list it returns.
+	 * @param {Object} extraArgs Additional arguments, e.g. { device, push } to change a device first.
+	 * @param {String} failMessage Message for a failure, or null when only loading the list.
+	 */
+	var Load = function (extraArgs, failMessage)
+	{
+		if (!dialog)
+			return;
+		dialog.setLoadingState(true);
+		ExecJSON($.extend({ cmd: "devices" }, extraArgs), function (response)
+		{
+			busyId = null;
+			if (!dialog)
+				return;
+			dialog.setLoadingState(false);
+			if (!response || typeof response.result === "undefined")
+			{
+				toaster.Error("Unexpected response when requesting the Device List from Blue Iris.");
+				Render();
+				return;
+			}
+			if (response.result === "fail")
+			{
+				CloseDialog();
+				openLoginDialog(self.open);
+				return;
+			}
+			devices = response.data || [];
+			fetchedAt = Date.now();
+			Render();
+		}, function ()
+		{
+			busyId = null;
+			if (!dialog)
+				return;
+			dialog.setLoadingState(false);
+			toaster.Error(failMessage || "Unable to contact Blue Iris server.", 5000);
+			if (devices)
+				Render();
+			else
+				CloseDialog();
+		});
+	}
+	/** Seconds of pause remaining for a device (0 if it isn't paused), accounting for time since the list was loaded. */
+	var PauseRemaining = function (d)
+	{
+		var push = parseInt(d.push);
+		if (!(push < 0))
+			return 0;
+		return Math.max(0, -push - (Date.now() - fetchedAt) / 1000);
+	}
+	var GetPushState = function (d)
+	{
+		var push = parseInt(d.push);
+		if (push > 0)
+			return "on";
+		if (push < 0 && PauseRemaining(d) > 0)
+			return "paused";
+		return push < 0 ? "on" : "off"; // A pause that has run out resumes.
+	}
+	var FormatDuration = function (seconds)
+	{
+		var m = Math.max(1, Math.round(seconds / 60)); // Blue Iris lists a pause one second longer than requested.
+		if (m < 60)
+			return m + "m";
+		var h = Math.floor(m / 60);
+		if (h < 24)
+			return h + "h" + (m % 60 ? " " + (m % 60) + "m" : "");
+		var days = Math.floor(h / 24);
+		return days + "d" + (h % 24 ? " " + (h % 24) + "h" : "");
+	}
+	var FormatAge = function (unixSeconds)
+	{
+		var s = Date.now() / 1000 - unixSeconds;
+		if (s < 60)
+			return "just now";
+		var units = [[31536000, "year"], [2592000, "month"], [604800, "week"], [86400, "day"], [3600, "hour"], [60, "minute"]];
+		for (var i = 0; i < units.length; i++)
+		{
+			if (s >= units[i][0])
+			{
+				var n = Math.floor(s / units[i][0]);
+				return n + " " + units[i][1] + (n === 1 ? "" : "s") + " ago";
+			}
+		}
+		return "just now";
+	}
+	/** Returns { kind, label } for a device type such as "Android", "iOS", "Win8" or "UI3". */
+	var GetTypeInfo = function (type)
+	{
+		var t = String(type || "");
+		if (/^ui3$/i.test(t))
+			return { kind: "web", label: "UI3" };
+		if (/android/i.test(t))
+			return { kind: "android", label: "Android" };
+		if (/ios|iphone|ipad|apple/i.test(t))
+			return { kind: "apple", label: t };
+		if (/^win/i.test(t))
+			return { kind: "windows", label: t };
+		return { kind: "other", label: t || "Unknown" };
+	}
+	var GetTypeIcon = function (kind)
+	{
+		var body;
+		if (kind === "android" || kind === "apple")
+			body = '<rect x="7" y="2.5" width="10" height="19" rx="2.3"/><path d="M11 18.3h2"/>';
+		else if (kind === "web")
+			body = '<rect x="2.5" y="4" width="19" height="16" rx="2.3"/><path d="M2.5 8.5h19M5.5 6.3h.01M8 6.3h.01"/>';
+		else if (kind === "windows")
+			body = '<rect x="2.5" y="4" width="19" height="12.5" rx="1.8"/><path d="M9 20.5h6M12 16.5v4"/>';
+		else
+			body = '<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="12" cy="12" r="3"/>';
+		return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>';
+	}
+	var GetThisBrowserUuid = function ()
+	{
+		try { return localStorage.getItem("ui3push_uuid") || ""; }
+		catch (ex) { return ""; }
+	}
+	var BuildPushControl = function (d)
+	{
+		var state = GetPushState(d);
+		var label = state === "on" ? "Push on" : state === "off" ? "Push off" : "Paused " + FormatDuration(PauseRemaining(d));
+		var options = [];
+		if (state === "paused")
+			options.push('<option value="paused" selected>Paused, ' + FormatDuration(PauseRemaining(d)) + ' left</option>');
+		options.push('<option value="1"' + (state === "on" ? " selected" : "") + '>' + (state === "paused" ? "Resume now" : "Push on") + '</option>');
+		options.push('<option value="0"' + (state === "off" ? " selected" : "") + '>Push off</option>');
+		options.push('<optgroup label="Pause for">');
+		for (var i = 0; i < PAUSE_CHOICES.length; i++)
+			options.push('<option value="' + -PAUSE_CHOICES[i][0] + '">' + PAUSE_CHOICES[i][1] + '</option>');
+		options.push('</optgroup>');
+		return '<label class="deviceListPush deviceListPush_' + state + (busyId === d.id ? " busy" : "") + '" title="Push notifications for this device">'
+			+ '<span class="deviceListPushDot"></span><span class="deviceListPushLabel">' + htmlEncode(label) + '</span>'
+			+ '<svg class="deviceListPushChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10l5 5 5-5"/></svg>'
+			+ '<select aria-label="Push notifications for ' + htmlEncode(d.name) + '"' + (busyId ? " disabled" : "") + '>' + options.join("") + '</select>'
+			+ '</label>';
+	}
+	var Render = function ()
+	{
+		if (!$root)
+			return;
+		if (!devices)
+		{
+			$root.html('<div class="deviceListEmpty">Loading…</div>');
+			return;
+		}
+		var list = devices.slice(0);
+		list.sort(function (a, b) { return (parseInt(b.date) || 0) - (parseInt(a.date) || 0); });
+		var thisBrowser = GetThisBrowserUuid();
+		var pushCount = 0;
+		var html = [];
+		for (var i = 0; i < list.length; i++)
+		{
+			var d = list[i];
+			if (GetPushState(d) === "on")
+				pushCount++;
+			var typeInfo = GetTypeInfo(d.type);
+			var date = parseInt(d.date) || 0;
+			var meta = ['<span>' + htmlEncode(typeInfo.label) + '</span>'];
+			meta.push(date ? '<span title="Last connected ' + htmlEncode(GetDateStr(GetServerDate(new Date(date * 1000)))) + '">' + htmlEncode(FormatAge(date)) + '</span>' : '<span>never connected</span>');
+			var count = parseInt(d.count);
+			if (count > 0)
+				meta.push('<span title="Logins since statistics were reset">' + count + (count === 1 ? " login" : " logins") + '</span>');
+			var chips = [];
+			if (thisBrowser && d.id === thisBrowser)
+				chips.push('<span class="deviceListChip deviceListChip_self">This browser</span>');
+			if (d.inside === "inside" || d.inside === "outside")
+				chips.push('<span class="deviceListChip deviceListChip_' + d.inside + '" title="Geofence">' + (d.inside === "inside" ? "Inside fence" : "Outside fence") + '</span>');
+			html.push('<div class="deviceListItem" data-id="' + htmlEncode(d.id) + '">'
+				+ '<div class="deviceListIcon deviceListIcon_' + typeInfo.kind + '">' + GetTypeIcon(typeInfo.kind) + '</div>'
+				+ '<div class="deviceListText">'
+				+ '<div class="deviceListName"><span title="ID: ' + htmlEncode(d.id) + '">' + htmlEncode(d.name || "No device name") + '</span>' + chips.join("") + '</div>'
+				+ '<div class="deviceListMeta">' + meta.join(' <span class="deviceListSep">·</span> ') + '</div>'
+				+ '</div>'
+				+ BuildPushControl(d)
+				+ '</div>');
+		}
+		var summary = list.length + (list.length === 1 ? " device" : " devices") + ' <span class="deviceListSep">·</span> ' + pushCount + " receiving push";
+		$root.html('<div class="deviceListHeader"><div class="deviceListSummary">' + summary + '</div>'
+			+ '<input type="button" class="simpleTextButton btnTransparent deviceListReset" value="Reset statistics" title="Reset login statistics for all devices" /></div>'
+			+ (list.length ? '<div class="deviceListItems">' + html.join("") + '</div>' : '<div class="deviceListEmpty">Blue Iris doesn\'t have any mobile devices yet.  A device appears here after it connects with a Blue Iris app or registers for push notifications.</div>'));
+		if (dialog)
+			dialog.contentChanged(true);
+	}
+	var OnPushChange = function ()
+	{
+		var value = $(this).val();
+		var id = $(this).closest(".deviceListItem").attr("data-id");
+		if (value === "paused" || busyId)
+			return;
+		var d = null;
+		for (var i = 0; devices && i < devices.length; i++)
+			if (devices[i].id === id)
+				d = devices[i];
+		if (!d)
+			return;
+		busyId = id;
+		Render();
+		Load({ device: id, push: parseInt(value) }, "Unable to change push notifications for " + htmlEncode(d.name) + ".");
+	}
+	var ConfirmReset = function ()
+	{
+		AskYesNo("Reset the login statistics for all mobile devices in Blue Iris?", function ()
+		{
+			Load({ reset: true }, "Unable to reset the device statistics.");
+		}, null, null, "Reset", "Cancel", "Reset statistics");
+	}
+	/** Keeps pause countdowns current, and reloads when a pause runs out so the list shows what Blue Iris did. */
+	var Tick = function ()
+	{
+		if (!dialog || !devices || busyId)
+			return;
+		var expired = false;
+		for (var i = 0; i < devices.length; i++)
+			if (parseInt(devices[i].push) < 0 && PauseRemaining(devices[i]) <= 0)
+				expired = true;
+		if (expired)
+			Load();
+		else if (!$root.find("select").is(document.activeElement))
+			Render(); // Not while a menu is open, because re-rendering would close it.
+	}
+}
 ///////////////////////////////////////////////////////////////
 // Push Notifications /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////

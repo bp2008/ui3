@@ -5613,6 +5613,288 @@ div.warningSymbol.button
 	text-align: center;
 }
 
+/* Device List */
+.deviceListDialog
+{
+	width: 560px;
+	max-width: 90vw; /* The dialog wrapper's own limit */
+	box-sizing: border-box;
+	padding: 4px 12px 12px 12px;
+}
+
+.deviceListHeader
+{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 2px 8px 2px;
+}
+
+.deviceListSummary
+{
+	font-size: 13px;
+	opacity: 0.8;
+}
+
+.deviceListHeader .deviceListReset
+{
+	font-size: 12px;
+	padding: 3px 8px;
+}
+
+.deviceListItems
+{
+	border: 1px solid rgba(255,255,255,0.08);
+	border-radius: 10px;
+	overflow: hidden;
+}
+
+.deviceListItem
+{
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	padding: 9px 10px;
+	background-color: rgba(255,255,255,0.025);
+}
+
+	.deviceListItem + .deviceListItem
+	{
+		border-top: 1px solid rgba(255,255,255,0.07);
+	}
+
+	.deviceListItem:hover
+	{
+		background-color: rgba(255,255,255,0.055);
+	}
+
+.deviceListIcon
+{
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 9px;
+	color: #9aa3ad;
+	background-color: rgba(154,163,173,0.14);
+}
+
+	.deviceListIcon svg
+	{
+		width: 20px;
+		height: 20px;
+	}
+
+.deviceListIcon_android
+{
+	color: #5fd38d;
+	background-color: rgba(95,211,141,0.13);
+}
+
+.deviceListIcon_apple
+{
+	color: #c9b3ff;
+	background-color: rgba(201,179,255,0.13);
+}
+
+.deviceListIcon_windows
+{
+	color: #5fb8f0;
+	background-color: rgba(95,184,240,0.13);
+}
+
+.deviceListIcon_web
+{
+	color: #9d97ff;
+	background-color: rgba(127,118,255,0.16);
+}
+
+.deviceListText
+{
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.deviceListName
+{
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 2px 6px;
+	color: var(--text-active-color);
+	font-weight: bold;
+	font-size: 14px;
+	line-height: 19px;
+	overflow-wrap: anywhere;
+}
+
+.deviceListMeta
+{
+	margin-top: 1px;
+	font-size: 12px;
+	line-height: 16px;
+	opacity: 0.72;
+}
+
+	.deviceListMeta > span
+	{
+		white-space: nowrap;
+	}
+
+.deviceListSep
+{
+	margin: 0px 1px;
+	opacity: 0.6;
+}
+
+.deviceListChip
+{
+	display: inline-block;
+	padding: 0px 7px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: bold;
+	line-height: 17px;
+	white-space: nowrap;
+}
+
+.deviceListChip_self
+{
+	color: #c9c5ff;
+	background-color: rgba(127,118,255,0.25);
+}
+
+.deviceListChip_inside
+{
+	color: #8be0a8;
+	background-color: rgba(95,211,141,0.16);
+}
+
+.deviceListChip_outside
+{
+	color: #8ccaf2;
+	background-color: rgba(95,184,240,0.16);
+}
+
+.deviceListEmpty
+{
+	padding: 24px 12px;
+	text-align: center;
+	opacity: 0.8;
+}
+
+/* The push control is a styled label with a transparent native select on top, so every platform gets its own menu. */
+.deviceListPush
+{
+	position: relative;
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px 4px 10px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: bold;
+	white-space: nowrap;
+	color: #b9bec5;
+	background-color: rgba(255,255,255,0.08);
+	cursor: pointer;
+}
+
+	.deviceListPush:hover
+	{
+		background-color: rgba(255,255,255,0.14);
+	}
+
+	.deviceListPush select
+	{
+		position: absolute;
+		left: 0px;
+		top: 0px;
+		width: 100%;
+		height: 100%;
+		margin: 0px;
+		opacity: 0;
+		cursor: pointer;
+		font-size: 16px; /* Prevents iOS from zooming in when the menu opens. */
+	}
+
+	.deviceListPush.busy
+	{
+		opacity: 0.5;
+	}
+
+.deviceListPushDot
+{
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background-color: #7c838c;
+}
+
+.deviceListPushChevron
+{
+	width: 14px;
+	height: 14px;
+	opacity: 0.7;
+}
+
+.deviceListPush_on
+{
+	color: #8be0a8;
+	background-color: rgba(63,191,95,0.16);
+}
+
+	.deviceListPush_on:hover
+	{
+		background-color: rgba(63,191,95,0.25);
+	}
+
+	.deviceListPush_on .deviceListPushDot
+	{
+		background-color: #3fbf5f;
+		box-shadow: 0px 0px 5px #3fbf5f;
+	}
+
+.deviceListPush_paused
+{
+	color: #f0c674;
+	background-color: rgba(232,183,90,0.16);
+}
+
+	.deviceListPush_paused:hover
+	{
+		background-color: rgba(232,183,90,0.25);
+	}
+
+	.deviceListPush_paused .deviceListPushDot
+	{
+		background-color: #e0a030;
+	}
+
+@media (max-width: 420px)
+{
+	.deviceListDialog
+	{
+		padding: 2px 6px 8px 6px;
+	}
+
+	.deviceListItem
+	{
+		gap: 9px;
+		padding: 8px 8px;
+	}
+
+	.deviceListIcon
+	{
+		width: 30px;
+		height: 30px;
+	}
+}
+
 /* Camera Properties / Camera List / Clip Properties / Convert/Export Queue */
 
 #cameralistdialog, #convertexportlistdialog
