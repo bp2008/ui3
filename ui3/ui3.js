@@ -5441,6 +5441,7 @@ function StatusAreaApi()
 	}
 
 	this.setStatusBarRegistration("Server CPU", "status-bar-cpu", 0.0);
+	this.setStatusBarRegistration("Server GPU", "status-bar-gpu", 0.0);
 	this.setStatusBarRegistration("Server Memory", "status-bar-mem", { bi: 0, memPhys: 1024, load: 0.0 });
 	this.setStatusBarRegistration("Server Disk", "status-bar-disk", { fullness: 0.0, tooltip: "", error: false });
 	this.setStatusBarRegistration("Server Uptime", "status-area-uptime", { uptime: "unknown" });
@@ -5724,39 +5725,48 @@ function StatusAreaApi()
 		}
 	});
 
-	Vue.component('status-bar-cpu', {
-		template: ''
-			+ '<status-bar :tiny="tiny" label="CPU" :percent="value" :color="color" :textValue="textValue" :tooltipText="tooltipText"></status-bar>',
-		props:
-		{
-			value: { type: Number, default: 0.0 },
-			tiny: { type: Boolean, default: false }
-		},
-		computed:
-		{
-			color: function ()
+	/**
+	 * Returns a vue component definition for a processor utilization status bar (CPU or GPU).
+	 * @param {String} label Short label shown on the bar, e.g. "CPU".
+	 */
+	function MakeProcessorStatusBarComponent(label)
+	{
+		return {
+			template: ''
+				+ '<status-bar :tiny="tiny" label="' + label + '" :percent="value" :color="color" :textValue="textValue" :tooltipText="tooltipText"></status-bar>',
+			props:
 			{
-				if (this.value < 0.7)
-					return null;
-				else if (this.value < 0.8)
-					return "#CCCC00";
-				else if (this.value < 0.87)
-					return "#CCAA00";
-				else if (this.value < 0.95)
-					return "#CC3300";
-				else
-					return "#CC0000";
+				value: { type: Number, default: 0.0 },
+				tiny: { type: Boolean, default: false }
 			},
-			textValue: function ()
+			computed:
 			{
-				return Math.round(this.value * 100) + "%";
-			},
-			tooltipText: function ()
-			{
-				return "Total CPU usage on server: " + Math.round(this.value * 100) + "%";
+				color: function ()
+				{
+					if (this.value < 0.7)
+						return null;
+					else if (this.value < 0.8)
+						return "#CCCC00";
+					else if (this.value < 0.87)
+						return "#CCAA00";
+					else if (this.value < 0.95)
+						return "#CC3300";
+					else
+						return "#CC0000";
+				},
+				textValue: function ()
+				{
+					return Math.round(this.value * 100) + "%";
+				},
+				tooltipText: function ()
+				{
+					return "Total " + label + " usage on server: " + Math.round(this.value * 100) + "%";
+				}
 			}
-		}
-	});
+		};
+	}
+	Vue.component('status-bar-cpu', MakeProcessorStatusBarComponent("CPU"));
+	Vue.component('status-bar-gpu', MakeProcessorStatusBarComponent("GPU"));
 
 	Vue.component('status-bar-mem', {
 		template: ''
@@ -16373,6 +16383,7 @@ function StatusLoader()
 				// {"signal":"1", "cxns":23, "cpu":9, "gpu":0, "ram":"3418931200", "bits":28, "mem":"3.18G", "memphys":"31.9G", "memload":"27%", "folders":[...], "disks":[...], "profile":1, "lock":"0", "schedule":"Default", "dio":[...], "uptime":"4:20:55:44", "clips":"Clips: 123 items, 1.23T/1.23T; D: +108.6G, E: +69.7G", "time":"1685468503006", "tmessage":"1685468502981", "clipprocess":"", "warnings":"4", "alerts":"5854", "tzone":"-360"}
 				statusAreaApi.setStoplightSignal(parseInt(lastResponse.data.signal));
 				statusAreaApi.setValue("Server CPU", Clamp(parseFloat(response.data.cpu) / 100, 0, 1));
+				statusAreaApi.setValue("Server GPU", Clamp(parseFloat(response.data.gpu) / 100, 0, 1));
 				var memObj = {
 					bi: response.data.ram && parseInt(response.data.ram)
 						? parseInt(response.data.ram)
