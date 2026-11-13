@@ -2352,6 +2352,169 @@ div.invisibleLabel
 		column-count: 4;
 	}
 }
+/* Compact Status Bars (more than 4 status bars). Each bar is stacked: label and amount on one line, with a thin bar below. */
+#statusArea.compactStatusBars .statusBarsMain
+{
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	column-gap: 14px;
+	column-count: auto;
+}
+
+.sizeMedium #statusArea.compactStatusBars .statusBarsMain
+{
+	column-gap: 10px;
+}
+
+.sizeSmall #statusArea.compactStatusBars .statusBarsMain
+{
+	column-gap: 6px;
+}
+
+.landscape.tabTimeline #statusArea.compactStatusBars .statusBarsMain
+{
+	grid-template-columns: repeat(var(--status-timeline-cols, 2), minmax(0, 1fr));
+	column-gap: 8px;
+}
+
+/* --status-portrait-cols is computed by script to balance the rows. */
+.portrait #statusArea.compactStatusBars .statusBarsMain
+{
+	grid-template-columns: repeat(var(--status-portrait-cols, 2), minmax(0, 1fr));
+	column-gap: 20px;
+}
+
+.sizeMedium.portrait #statusArea.compactStatusBars .statusBarsMain
+{
+	column-gap: 16px;
+}
+
+.sizeSmall.portrait #statusArea.compactStatusBars .statusBarsMain
+{
+	column-gap: 12px;
+}
+
+#statusArea.compactStatusBars .statusBarsMain .statusBar
+{
+	display: flex;
+	flex-wrap: wrap;
+	min-width: 0;
+	padding-bottom: 6px;
+	font-size: 13px;
+	line-height: 13px;
+}
+
+.sizeMedium #statusArea.compactStatusBars .statusBarsMain .statusBar
+{
+	padding-bottom: 4px;
+	font-size: 11px;
+	line-height: 11px;
+}
+
+.sizeSmall #statusArea.compactStatusBars .statusBarsMain .statusBar
+{
+	padding-bottom: 3px;
+	font-size: 10px;
+	line-height: 10px;
+}
+
+.landscape.tabTimeline #statusArea.compactStatusBars .statusBarsMain .statusBar
+{
+	padding-bottom: 4px;
+	font-size: 10px;
+	line-height: 10px;
+}
+
+#statusArea.compactStatusBars .statusBarsMain .statusBarLabel
+{
+	order: 1;
+	flex: 1 1 auto;
+	width: auto;
+	min-width: 0;
+	white-space: nowrap;
+}
+
+#statusArea.compactStatusBars .statusBarsMain .statusBarAmount
+{
+	order: 2;
+	flex: 0 0 auto;
+	padding-left: 3px;
+	white-space: nowrap;
+}
+
+#statusArea.compactStatusBars .statusBarsMain .progressBarOuter
+{
+	order: 3;
+	width: 100%;
+	height: 5px;
+	margin-top: 3px;
+}
+
+.sizeMedium #statusArea.compactStatusBars .statusBarsMain .progressBarOuter
+{
+	height: 4px;
+	margin-top: 2px;
+}
+
+.sizeSmall #statusArea.compactStatusBars .statusBarsMain .progressBarOuter
+{
+	height: 3px;
+	margin-top: 2px;
+}
+
+.landscape.tabTimeline #statusArea.compactStatusBars .statusBarsMain .progressBarOuter
+{
+	height: 4px;
+	margin-top: 2px;
+}
+/* Text-only status bars (e.g. uptime) wrap the amount onto the second line, in place of the bar, if it doesn't fit beside the label. */
+#statusArea.compactStatusBars .statusBarsMain .statusBar.textOnly .statusBarLabel
+{
+	flex: 1 0 auto;
+	width: auto;
+}
+
+#statusArea.compactStatusBars .statusBarsMain .statusBar.textOnly .statusBarAmount
+{
+	flex: 0 1 auto;
+	width: auto;
+	margin-left: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#statusArea.compactStatusBars .statusBarsMain .statusBar.textOnly .progressBarOuter
+{
+	width: 0px;
+	height: 0px;
+	margin: 0px;
+}
+/* Collapsed status area icon: tiny bars in multiple columns. */
+#statusArea.compactStatusBars .serverStatusSmallIcon
+{
+	display: inline-grid;
+	grid-template-columns: repeat(var(--status-tiny-cols, 2), minmax(0, 1fr));
+	column-gap: 2px;
+	align-content: start;
+	width: calc(var(--status-tiny-cols, 2) * 10px);
+}
+
+.sizeMedium #statusArea.compactStatusBars .serverStatusSmallIcon
+{
+	width: calc(var(--status-tiny-cols, 2) * 9px);
+}
+
+.sizeSmall #statusArea.compactStatusBars .serverStatusSmallIcon,
+.landscape.tabTimeline #statusArea.compactStatusBars .serverStatusSmallIcon
+{
+	width: calc(var(--status-tiny-cols, 2) * 8px);
+	height: 12px;
+}
+/* The landscape Timeline tab has a short status area, so more columns are needed when there are many status bars. */
+.landscape.tabTimeline.statusAreaWideTimeline #layoutleft
+{
+	width: 216px;
+}
 
 .clickableStatusBar
 {
@@ -7916,6 +8079,188 @@ div::-webkit-scrollbar-corner
 			{
 				color: var(--text-active-color);
 			}
+
+	.uiSettingsRow.withDefaultBtn:has(> .dialogOption_item_sortableList)
+	{
+		align-items: flex-start;
+	}
+/* Sortable List Control */
+.visuallyHidden
+{
+	position: absolute !important;
+	width: 1px !important;
+	height: 1px !important;
+	padding: 0 !important;
+	margin: -1px !important;
+	overflow: hidden !important;
+	clip: rect(0, 0, 0, 0) !important;
+	white-space: nowrap !important;
+	border: 0 !important;
+}
+
+.dialogOption_item_sortableList > .dialogOption_label
+{
+	display: block;
+}
+
+.sortableList
+{
+	position: relative;
+	margin: 4px 10px 0px 10px;
+}
+
+.sortableListItems
+{
+	position: relative;
+	border: 1px solid var(--progress-bar-outer-color);
+}
+
+.sortableListItem
+{
+	display: flex;
+	align-items: center;
+	position: relative;
+	height: 32px;
+	background-color: var(--dialog-bg-color);
+	border-bottom: 1px solid var(--progress-bar-outer-color);
+	font-size: 14px;
+}
+
+	.sortableListItem:last-child
+	{
+		border-bottom: none;
+	}
+
+	.sortableListItem.sortableListItemNotShown .sortableListLabel,
+	.sortableListItem.sortableListItemNotShown .sortableListHandle
+	{
+		opacity: 0.5;
+	}
+
+	.sortableListItem.sortableListItemPressing
+	{
+		background-color: var(--uicontrol-hover-bg-color);
+	}
+
+	.sortableListItem.sortableListItemDragging
+	{
+		z-index: 2;
+		background-color: var(--dialog-bg-color);
+		outline: 2px solid var(--dialog-link-color);
+		box-shadow: 0px 4px 12px rgba(0,0,0,0.7);
+	}
+
+		.sortableListItem.sortableListItemDragging .sortableListLabel,
+		.sortableListItem.sortableListItemDragging .sortableListHandle
+		{
+			opacity: 1;
+		}
+
+.sortableListDragActive,
+.sortableListDragActive *
+{
+	cursor: grabbing !important;
+}
+/* Drag handle: a grid of dots.  Touch scrolling is deliberately allowed (no touch-action: none); touch users hold briefly to pick up an item. */
+.sortableListHandle
+{
+	flex: 0 0 auto;
+	align-self: stretch;
+	width: 28px;
+	cursor: grab;
+	color: var(--text-color);
+	background-image: radial-gradient(circle, currentColor 1.5px, transparent 2px);
+	background-size: 6px 6px;
+	background-repeat: repeat;
+	background-position: center;
+	background-clip: content-box;
+	padding: 8px 8px 8px 8px;
+	box-sizing: border-box;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+	.sortableListHandle:hover
+	{
+		color: var(--text-hover-color);
+	}
+
+.sortableListNumber
+{
+	flex: 0 0 auto;
+	width: 18px;
+	text-align: right;
+	padding-right: 8px;
+	color: var(--text-color);
+	font-size: 12px;
+}
+
+.sortableListLabel
+{
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sortableListMoveBtn
+{
+	flex: 0 0 auto;
+	width: 30px;
+	height: 30px;
+	padding: 6px;
+	margin: 0px;
+	border: none;
+	background-color: transparent;
+	color: var(--text-color);
+	cursor: pointer;
+}
+
+	.sortableListMoveBtn .icon
+	{
+		width: 18px !important;
+		height: 18px !important;
+		vertical-align: middle !important;
+	}
+
+	.sortableListMoveBtn:hover
+	{
+		color: var(--text-hover-color);
+		background-color: var(--uicontrol-hover-bg-color);
+	}
+
+	.sortableListMoveBtn:active
+	{
+		color: var(--text-active-color);
+		background-color: var(--uicontrol-active-bg-color);
+	}
+
+	.sortableListMoveBtn:disabled
+	{
+		opacity: 0.2;
+		cursor: default;
+		background-color: transparent;
+	}
+
+	.sortableListMoveBtn:focus-visible
+	{
+		outline: 2px solid var(--dialog-link-color);
+		outline-offset: -2px;
+	}
+/* Separator between shown and not shown items */
+.sortableListSeparator
+{
+	display: flex;
+	align-items: center;
+	padding: 3px 8px;
+	font-size: 12px;
+	color: var(--dialog-link-color);
+	background-color: var(--zebra-stripe-bg-color);
+	border-top: 2px dashed var(--dialog-link-color);
+	border-bottom: 1px solid var(--progress-bar-outer-color);
+}
 
 #volumeBar.audioTemporarilyUnavailable,
 #volumeBar.audioNoPermission,
