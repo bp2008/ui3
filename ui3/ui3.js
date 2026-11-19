@@ -32103,6 +32103,11 @@ function BiUpdatesDialog()
 	/// 	]
 	/// }
 	///
+	/// Blue Iris's own implementation differs from this in two ways which UI3 tolerates (see
+	/// MergeVersionList): its dates are midnight in the server's time zone rather than UTC, and a
+	/// release which is both the latest and the latest stable is listed twice, once with each
+	/// "stable" value.
+	///
 	/// Until Blue Iris implements the command, an optional third-party service can answer the
 	/// same request.  See ThirdPartyUpdateCheck below.
 	var self = this;
@@ -32358,7 +32363,7 @@ function BiUpdatesDialog()
 		/// <summary>
 		/// The "login" command response carries the support &amp; maintenance expiration as a
 		/// string like "1/1/2030 [Priority]".  Returns the date portion as milliseconds since
-		/// 1970 (UTC midnight, matching how the updatecheck API reports its dates), or 0 if it
+		/// 1970 (UTC midnight, matching how UI3 normalizes updatecheck dates), or 0 if it
 		/// is missing or unparsable.  This is a day-accurate fallback for update check responses
 		/// which omit "maintenance_expire", such as those from the third-party service, which
 		/// has no way to know the user's expiration date.
@@ -32379,7 +32384,48 @@ function BiUpdatesDialog()
 		return date.getTime();
 	}
 	/**
-	 * Formats an updatecheck API date in the user's own date format.  These arrive as UTC, typically midnight, so rendering them in local time would name the previous day for everyone west of Greenwich.
+	 * Returns the UTC midnight nearest to the given time, or the given value unchanged if it is not a positive number.  Blue Iris reports updatecheck dates as midnight in the server's time zone, not UTC midnight, while the third-party service and the login response's support date use UTC midnight.  Rounding any of these to the nearest UTC midnight yields the intended calendar day for any server within 12 hours of UTC, so UI3 can treat every updatecheck date as UTC midnight.
+	 */
+	var RoundToUtcMidnight = function (ms)
+	{
+		if (typeof ms !== "number" || !isFinite(ms) || ms <= 0)
+			return ms;
+		var day = 86400000;
+		return Math.floor((ms + day / 2) / day) * day;
+	}
+	/**
+	 * Returns a new array of version entries copied from an updatecheck "newversions" list, with dates rounded to UTC midnight and with no version number listed twice.  Blue Iris lists a release once more for each role it plays, so a release which is both the latest and the latest stable arrives as two entries which differ only in their "stable" flag.  Duplicates are merged into one entry which is stable if any of them was, and which keeps the first date and notes found among them.
+	 * @param {Array} newversions The "newversions" array from the update check response.  Anything else yields an empty array.
+	 */
+	var MergeVersionList = function (newversions)
+	{
+		var merged = [];
+		var byVersion = {};
+		if (!$.isArray(newversions))
+			return merged;
+		for (var i = 0; i < newversions.length; i++)
+		{
+			var v = newversions[i];
+			if (!v || typeof v.version !== "string")
+				continue;
+			var entry = byVersion.hasOwnProperty(v.version) ? byVersion[v.version] : null;
+			if (!entry)
+			{
+				entry = { version: v.version };
+				byVersion[v.version] = entry;
+				merged.push(entry);
+			}
+			if (!entry.date && v.date)
+				entry.date = RoundToUtcMidnight(v.date);
+			if (v.stable === true)
+				entry.stable = true;
+			if (typeof entry.notes !== "string" && typeof v.notes === "string")
+				entry.notes = v.notes;
+		}
+		return merged;
+	}
+	/**
+	 * Formats an updatecheck API date in the user's own date format.  Render rounds these to UTC midnight first (see RoundToUtcMidnight), so they are rendered in UTC; rendering them in local time would name the previous day for everyone west of Greenwich.
 	 */
 	var FormatDateMs = function (ms)
 	{
@@ -32405,7 +32451,7 @@ function BiUpdatesDialog()
 	var GetSampleUpdateCheckData = function (mode)
 	{
 		var day = 86400000;
-		// Blue Iris reports dates as UTC midnight, so the sample does too.
+		// The sample uses UTC midnight, which is what Render normalizes every date to.
 		var now = new Date();
 		now = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 		mode = parseInt(mode, 10);
@@ -32551,7 +32597,9 @@ function BiUpdatesDialog()
 			return;
 		if (!data)
 			data = {};
-		if (!data.maintenance_expire)
+		if (data.maintenance_expire)
+			data.maintenance_expire = RoundToUtcMidnight(data.maintenance_expire);
+		else
 		{
 			// The update check response did not include the support & maintenance expiration
 			// date, so fall back to the day-accurate date from the login response.
@@ -32564,11 +32612,7 @@ function BiUpdatesDialog()
 		var currentVersion = GetCurrentVersion();
 		var expire = data.maintenance_expire;
 
-		var versions = [];
-		if (data.newversions && data.newversions.length)
-			for (i = 0; i < data.newversions.length; i++)
-				if (data.newversions[i] && typeof data.newversions[i].version === "string")
-					versions.push(data.newversions[i]);
+		var versions = MergeVersionList(data.newversions);
 		versions.sort(function (a, b) { return compareVersions(b.version, a.version); });
 
 		// The "Latest" and "Latest stable" badges describe what Blue Iris reported, so they are
