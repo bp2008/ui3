@@ -1388,6 +1388,7 @@ var defaultSettings =
 			, label: '<span style="color:#FF0000;font-weight:bold">Enable H.264 Player</span><div class="settingDesc">This browser has known compatiblity issues. <a href="javascript:UIHelp.LearnMore(\'Edge Fetch Bug\')">(learn more)</a></div>'
 			, onChange: OnChange_ui3_edge_fetch_bug_h264_enable
 			, preconditionFunc: Precondition_ui3_edge_fetch_bug_h264_enable
+			, keywords: "H.264 / H.265 Player" // So that links which filter UI Settings to the player choice also show this.
 			, category: "Video Player"
 		}
 		, {
@@ -1406,6 +1407,7 @@ var defaultSettings =
 			, inputType: "comment"
 			, comment: '<div style="text-align: center"><a href="javascript:ReloadInterface()">Click to apply H.264 Player change</a></div>'
 			, preconditionFunc: Precondition_ui3_h264_choice_requires_restart
+			, keywords: "H.264 / H.265 Player" // So that links which filter UI Settings to the player choice also show this.
 			, category: "Video Player"
 		}
 		, {
@@ -19007,6 +19009,7 @@ function VideoPlayerController()
 		cli.fullSizeFromRecording = false;
 		cli.path = clc.optionValue;
 		cli.uniqueId = clc.optionValue;
+		videoDecodeErrorNotice.NotifyVideoSourceLoading(cli.uniqueId);
 		cli.isLive = typeof timelineArgs.timelineMs !== "number";
 		cli.timelineStart = timelineArgs.timelineMs;
 		cli.timelineJump = timelineArgs.timelineJump;
@@ -19092,6 +19095,7 @@ function VideoPlayerController()
 			}
 			cli.path = clipData.path;
 			cli.uniqueId = clipData.recId;
+			videoDecodeErrorNotice.NotifyVideoSourceLoading(cli.uniqueId);
 			cli.isLive = false;
 			cli.timelineStart = false;
 			cli.ptz = false;
@@ -19381,6 +19385,9 @@ function VideoPlayerController()
 			return;
 		}
 		jpegPreviewModule.Hide();
+
+		if (!properties.isSeekPreview && !properties.isEarlyFrame)
+			videoDecodeErrorNotice.Hide(); // A video frame was successfully rendered.
 
 		var imageSizeIsChanging = currentlyLoadingImage.actualwidth !== properties.w || currentlyLoadingImage.actualheight !== properties.h;
 
@@ -20606,6 +20613,11 @@ function FetchH264VideoModule()
 	var framesSinceLastKeyframe = 0;
 	var audioCodec = "";
 	var currentStreamBitmapInfo = null;
+	var lastDecodedFrameAt = -1; // performance.now() when the last frame was rendered that had actually been decoded.
+	var decodeErrorCheck = null; // { timeout, errorText, errorAt, uniqueId } for a decode error that may become a notice.
+	var lastRequestedD2W = null; // 1 if the current stream URL requested Direct-to-wire, 0 if it disabled Direct-to-wire, null if it did not specify.
+	var lastAcceptedCodec = ""; // Codec of the last video frame given to the player.
+	var lastAcceptedCodecDetails = ""; // Codec details (profile, level) from the last SPS given to the player.
 
 	var loading = new BICameraData();
 
@@ -20636,7 +20648,7 @@ function FetchH264VideoModule()
 		currentH264Player = h264PlayerChoice;
 
 		if (webcodecs_h264_player_supported && h264PlayerChoice === H264PlayerOptions.WebCodecs)
-			h264_player = window.webcodec_player_instance = new WebCodec_Player(FrameRendered, PlaybackReachedNaturalEnd);
+			h264_player = window.webcodec_player_instance = new WebCodec_Player(FrameRendered, PlaybackReachedNaturalEnd, DecodeErrorOccurred);
 		else if (mse_mp4_h264_supported &&
 			(h264PlayerChoice === H264PlayerOptions.HTML5
 				|| (h264PlayerChoice === H264PlayerOptions.WebCodecs && !webcodecs_h264_player_supported)))
@@ -20647,7 +20659,7 @@ function FetchH264VideoModule()
 				|| h264PlayerChoice === H264PlayerOptions.NaCl_HWVA_Yes))
 			h264_player = new Pnacl_Player(FrameRendered, PlaybackReachedNaturalEnd);
 		else if (h264_js_player_supported && h264PlayerChoice === H264PlayerOptions.JavaScript)
-			h264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd);
+			h264_player = new OpenH264_Player(FrameRendered, PlaybackReachedNaturalEnd, DecodeErrorOccurred);
 		else
 		{
 			// This is the automatic player selection algorithm:
@@ -20994,6 +21006,11 @@ function FetchH264VideoModule()
 			fetchOptions.timestampScale = speed / 100;
 			videoUrl = currentServer.remoteBaseURL + "file/clips/" + path + currentServer.GetAPISessionArg("?", true) + posArg + "&speed=" + speed + audioArg + profileArgs + "&extend=2" + offsetArg + overlayArgs + playbackControls.GetSpeedBasedSubstreamArgument();
 		}
+		CancelDecodeErrorCheck();
+		var d2wMatch = videoUrl.match(/[?&]d2w=(\d)/);
+		lastRequestedD2W = d2wMatch ? (d2wMatch[1] === "1" ? 1 : 0) : null;
+		lastAcceptedCodec = "";
+		lastAcceptedCodecDetails = "";
 		videoOverlayHelper.ShowLoadingOverlay(true);
 		reconnectDelayedToast.hide();
 		if (startPaused)
@@ -21086,6 +21103,9 @@ function FetchH264VideoModule()
 					DecodingCantProceed("The " + self.GetPlayerName() + " video player on this system can not decode H.265 streams.", 10000);
 					return;
 				}
+				lastAcceptedCodec = frame.codec;
+				if (frame.meta.formatData && frame.meta.formatData.codecDetails)
+					lastAcceptedCodecDetails = String(frame.meta.formatData.codecDetails).trim();
 				h264_player.AcceptFrame(frame);
 			}
 		}
@@ -21306,7 +21326,10 @@ function FetchH264VideoModule()
 
 		currentSeekPositionPercent = frame.rawtime / loading.msec;
 
-		videoPlayer.ImageRendered({ id: loading.uniqueId, w: frame.width, h: frame.height, loadingTime: frame.actualInterframe, utc: frame.utc, isFirstFrame: lastStreamBeganAt === lastFrameAt });
+		if (!frame.isEarlyFrame)
+			lastDecodedFrameAt = timeNow;
+
+		videoPlayer.ImageRendered({ id: loading.uniqueId, w: frame.width, h: frame.height, loadingTime: frame.actualInterframe, utc: frame.utc, isFirstFrame: lastStreamBeganAt === lastFrameAt, isEarlyFrame: !!frame.isEarlyFrame });
 		if (loading.isLive || loading.isTimeline())
 			playbackControls.FrameTimestampUpdated(false);
 		else
@@ -21318,11 +21341,65 @@ function FetchH264VideoModule()
 			StopStreaming();
 		}
 	}
-	var playerErrorCb = function (message)
+	/**
+	 * Called by the HTML5 player when it encounters an error. The player can not continue after this.
+	 * @param {String} message Error message (HTML).
+	 * @param {Boolean} isDecodeError If true, the error is a video decoding error and [message] is plain text.
+	 */
+	var playerErrorCb = function (message, isDecodeError)
 	{
 		StopStreaming();
-		if (message !== "INPUT REQUIRED")
+		if (isDecodeError)
+			ShowDecodeErrorNotice(message);
+		else if (message !== "INPUT REQUIRED")
 			toaster.Error(message, 15000);
+	}
+	/**
+	 * Called by the WebCodecs and OpenH264 players when a frame can't be decoded. These players may recover at the next keyframe, so the notice is only shown if no frame is rendered for a short time after the error.
+	 * @param {String} errorText Error description.
+	 */
+	var DecodeErrorOccurred = function (errorText)
+	{
+		var timeNow = performance.now();
+		if (decodeErrorCheck)
+		{
+			decodeErrorCheck.errorText = errorText; // A check is already scheduled.
+			return;
+		}
+		decodeErrorCheck = { errorText: errorText, errorAt: timeNow, uniqueId: loading.uniqueId };
+		decodeErrorCheck.timeout = setTimeout(function ()
+		{
+			var check = decodeErrorCheck;
+			decodeErrorCheck = null;
+			if (!isCurrentlyActive || check.uniqueId !== loading.uniqueId)
+				return; // Video source changed.
+			if (lastDecodedFrameAt > check.errorAt)
+				return; // Decoding recovered.
+			ShowDecodeErrorNotice(check.errorText);
+		}, 1000);
+	}
+	var CancelDecodeErrorCheck = function ()
+	{
+		if (decodeErrorCheck)
+		{
+			clearTimeout(decodeErrorCheck.timeout);
+			decodeErrorCheck = null;
+		}
+	}
+	var ShowDecodeErrorNotice = function (errorText)
+	{
+		videoDecodeErrorNotice.Show({
+			uniqueId: loading.uniqueId,
+			cameraId: loading.id,
+			isClip: !loading.isLive && !loading.isTimeline(),
+			player: h264_player ? h264_player.GetPlayerName() : "",
+			error: errorText,
+			codec: lastAcceptedCodec,
+			codecDetails: lastAcceptedCodecDetails,
+			streamSize: currentStreamBitmapInfo ? (currentStreamBitmapInfo.biWidth + "x" + currentStreamBitmapInfo.biHeight) : "",
+			requestedSize: lastRequestedSize ? lastRequestedSize.toString() : "",
+			d2w: lastRequestedD2W
+		});
 	}
 	var StreamEnded = function (message, wasJpeg, wasAppTriggered, videoFinishedStreaming, responseError, isSessionLoss)
 	{
@@ -21561,7 +21638,7 @@ function FetchH264VideoModule()
 				if (perf_warning_cpu_ticks++ > 0)
 				{
 					if (showCommonWarnings)
-						perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which may indicate a compatibility issue with the browser you are using. Please try a different browser, or <a href="javascript:uiSettingsPanel.open(\'H.264 Player\')">open UI Settings and change the H.264 player to a different option</a>. ' + uiSettingsDelayLinkout, 10000);
+						perf_warning_cpu = toaster.Warning('This stream is becoming very delayed, which may indicate a compatibility issue with the browser you are using. Please try a different browser, or <a href="javascript:uiSettingsPanel.open(\'H.264 / H.265 Player\')">open UI Settings and change the H.264 / H.265 player to a different option</a>. ' + uiSettingsDelayLinkout, 10000);
 				}
 			}
 			else
@@ -21625,7 +21702,12 @@ function SetCodecStatsExpansion(expand)
 ///////////////////////////////////////////////////////////////
 // openh264_player ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
+/**
+ * @param {Function} frameRendered Called when a frame is rendered.
+ * @param {Function} PlaybackReachedNaturalEndCB Called when playback reaches the end of the stream.
+ * @param {Function} decodeErrorCb (Optional) Called with an error string when a frame fails to decode. If not provided, a toast is shown instead.
+ */
+function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB, decodeErrorCb)
 {
 	var self = this;
 	var $canvas;
@@ -21723,6 +21805,11 @@ function OpenH264_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var frameError = function (badFrame)
 	{
 		console.log("Frame Error", badFrame);
+		if (typeof decodeErrorCb === "function")
+		{
+			decodeErrorCb("OpenH264 frame decode status " + (badFrame ? badFrame.status : "unknown"));
+			return;
+		}
 		var timeNow = performance.now();
 		if (timeNow - lastFrameWarning > 3000)
 		{
@@ -22456,7 +22543,12 @@ function Pnacl_Player(frameRendered, PlaybackReachedNaturalEndCB)
 ///////////////////////////////////////////////////////////////
 // WebCodec Player ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
+/**
+ * @param {Function} frameRendered Called when a frame is rendered.
+ * @param {Function} PlaybackReachedNaturalEndCB Called when playback reaches the end of the stream.
+ * @param {Function} decodeErrorCb (Optional) Called with an error string when the decoder reports an error. If not provided, a toast is shown instead.
+ */
+function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB, decodeErrorCb)
 {
 	var self = this;
 	var videoDecoder;
@@ -22491,6 +22583,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 	var lastFrameWarning = performance.now() - 60000;
 	var nonKeyframeDropper = new NonKeyframeDropper();
 	var configuredCodec = null;
+	var lastChunkTimestamp = -1; // Microsecond timestamp of the last EncodedVideoChunk submitted to the decoder.
 
 	var frameDecoded = function (nativeFrame)
 	{
@@ -22574,6 +22667,11 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 			return;
 		}
 		console.log("Frame Error", error);
+		if (typeof decodeErrorCb === "function")
+		{
+			decodeErrorCb(error.name + ": " + error.message);
+			return;
+		}
 		var timeNow = performance.now();
 		if (timeNow - lastFrameWarning > 3000)
 		{
@@ -22692,6 +22790,7 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 		firstFrameRenderedAt = timeNow;
 		lastFrameRenderedAt = timeNow;
 		lastFrameDecodedTimestamp = -1;
+		lastChunkTimestamp = -1;
 		allFramesAccepted = false;
 		frameCache = {};
 	}
@@ -22720,6 +22819,10 @@ function WebCodec_Player(frameRendered, PlaybackReachedNaturalEndCB)
 				duration: 0,
 				data: frame.frameData.buffer
 			};
+			// Direct-to-wire streams have been observed to give the first two frames the same timestamp. Timestamps are used as keys in frameCache, so they must be unique or else one frame's metadata would overwrite another's (the overwritten frame would then be rendered with the wrong metadata, and the other frame would be discarded).
+			if (chunkArgs.timestamp <= lastChunkTimestamp)
+				chunkArgs.timestamp = lastChunkTimestamp + 1;
+			lastChunkTimestamp = chunkArgs.timestamp;
 			frameCache[chunkArgs.timestamp] = frame;
 			var chunk = new EncodedVideoChunk(chunkArgs);
 			try
@@ -22944,8 +23047,13 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			return; // Happens sometimes if the video stream ends very quickly. Some clips may do this if you seek to the very end while they are playing.
 		if (!inputRequiredOverlay.IsActive())
 		{
-			var clickForHelp = '<br><br><a href="javascript:UIHelp.LearnMore(\'Video Player Error\')" class="videoPlayerTroubleshootLink">Click for Help</a>';
 			var errCode = player.error && typeof player.error.code === "number" ? player.error.code : -1;
+			if (errCode === 3) // MEDIA_ERR_DECODE
+			{
+				playerErrorHandler(errMsg + ": " + GetMediaErrorMessage(errCode), true);
+				return;
+			}
+			var clickForHelp = '<br><br><a href="javascript:UIHelp.LearnMore(\'Video Player Error\')" class="videoPlayerTroubleshootLink">Click for Help</a>';
 			playerErrorHandler(htmlEncode(errMsg) + ": " + GetMediaErrorMessage(errCode) + clickForHelp);
 		}
 	}
@@ -23225,6 +23333,9 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			if (lastFrame)
 			{
 				lastFrameDuration = frame.time - lastFrame.time;
+				// jmuxer silently drops samples with a duration <= 0. Direct-to-wire streams have been observed to give the first two frames (keyframe and the first delta frame) the same timestamp. Dropping the keyframe means nothing can be shown until the next keyframe arrives, which may be many seconds later (or never, when loading a single frame while paused).
+				if (lastFrameDuration < 1)
+					lastFrameDuration = 1;
 				jmuxer.feed({
 					video: lastFrame.frameData,
 					duration: lastFrameDuration,
@@ -23238,6 +23349,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 					startMeta.width = currentStreamBitmapInfo.biWidth;
 					startMeta.height = currentStreamBitmapInfo.biHeight;
 					startMeta.timestamp = startMeta.time;
+					startMeta.isEarlyFrame = true; // This frame has not actually been decoded yet.
 					frameRendered(startMeta);
 				}
 				fedFrameCount++;
@@ -23278,6 +23390,17 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 	this.ClearDrawingSurface = function ()
 	{
 		videoModulesShared.ClearFrontCanvas();
+		// The <video> element keeps displaying the last frame it decoded even after jmuxer is destroyed, and it would show that stale frame until the next stream begins playing. Detach the media so it shows nothing.
+		if (jmuxer)
+		{
+			jmuxer.destroy();
+			jmuxer = null;
+		}
+		mseReady = false;
+		hasToldPlayerToPlay = false;
+		player.pause();
+		player.removeAttribute("src");
+		player.load();
 	}
 	this.DrawFullCameraAsThumb = function (cameraId, groupId)
 	{
@@ -23330,6 +23453,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 					startMeta.width = currentStreamBitmapInfo.biWidth;
 					startMeta.height = currentStreamBitmapInfo.biHeight;
 					startMeta.timestamp = startMeta.time;
+					startMeta.isEarlyFrame = true; // This frame has not actually been decoded yet.
 					frameRendered(startMeta);
 				}
 			}
@@ -23365,7 +23489,7 @@ function HTML5_MSE_Player(frameRendered, PlaybackReachedNaturalEndCB, playerErro
 			{
 				// Turn on canvas rendering
 				// Copy current video frame, if possible.
-				if (aFrameWasOnceRendered)
+				if (aFrameWasOnceRendered && player.readyState >= 2) // 2: HAVE_CURRENT_DATA
 					videoModulesShared.RenderVideoFrame(player);
 				$("#videoElement_wrapper").addClass('deactivated'); // Hide <video>				
 				videoModulesShared.Get$Canvas().removeClass('deactivated'); // Show <canvas>
@@ -23838,16 +23962,18 @@ function CopyVideoFrameToCanvas(videoEle, canvas)
 }
 function ClearCanvas(canvas)
 {
+	// getContext returns null when the canvas already has a context of a different type, so each type must be tried in turn.
 	var context2d = canvas.getContext("2d");
 	if (context2d != null)
 	{
 		context2d.clearRect(0, 0, canvas.width, canvas.height);
+		return;
 	}
-	else
+	var contextGl = canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+	if (contextGl != null)
 	{
-		var contextGl = canvas.getContext("webgl");
-		if (contextGl != null)
-			contextGl.clear(contextGl.COLOR_BUFFER_BIT);
+		contextGl.clearColor(0, 0, 0, 0);
+		contextGl.clear(contextGl.COLOR_BUFFER_BIT);
 	}
 }
 function ImageRenderer()
@@ -36792,7 +36918,7 @@ function Toaster()
 			"hideMethod": "fadeOut",
 			"target": "#toast-wrapper"
 		}
-	var showToastInternal = function (type, message, showTime, closeButton, onClick, extendedTimeOut)
+	var showToastInternal = function (type, message, showTime, closeButton, onClick, extendedTimeOut, extraOptions)
 	{
 		if (typeof message === "object" && typeof message.message === "string" && typeof message.stack === "string")
 		{
@@ -36830,6 +36956,9 @@ function Toaster()
 		if (typeof onClick == "function")
 			overrideOptions.onclick = onClick;
 
+		if (extraOptions)
+			$.extend(overrideOptions, extraOptions);
+
 		var myToast = toastr[type](message, null, overrideOptions);
 
 		return myToast;
@@ -36850,9 +36979,14 @@ function Toaster()
 	{
 		return showToastInternal('error', message, showTime, closeButton, onClick, extendedTimeOut);
 	}
-	this.Show = function (type, message, showTime, closeButton, onClick, extendedTimeOut)
+	/**
+	 * Shows a toast of the specified type.
+	 * @param {String} type "success", "info", "warning", or "error".
+	 * @param {Object} extraOptions (Optional) toastr options object which overrides all other options.
+	 */
+	this.Show = function (type, message, showTime, closeButton, onClick, extendedTimeOut, extraOptions)
 	{
-		return showToastInternal(type, message, showTime, closeButton, onClick, extendedTimeOut);
+		return showToastInternal(type, message, showTime, closeButton, onClick, extendedTimeOut, extraOptions);
 	}
 	this.ErrorResponse = function (responseObject)
 	{
@@ -37048,7 +37182,15 @@ function AddOrUpdateWarningToast(toast, elementId, html)
 ///////////////////////////////////////////////////////////////
 // Persistent Toast ///////////////////////////////////////////
 ///////////////////////////////////////////////////////////////
-function PersistentToast(elementId, type, closeButton, onClose)
+/**
+ * A toast that stays visible until hidden programmatically (or closed by the user, if allowed).
+ * @param {String} elementId ID of the element that will be created inside the toast to hold its content.
+ * @param {String} type "ERROR", "WARNING", "INFO", or "SUCCESS".
+ * @param {Boolean} closeButton If true, the toast has a close button.
+ * @param {Function} onClose (Optional) Called when the user closes the toast.
+ * @param {Boolean} notDismissable If true, the user can not close the toast (closeButton and onClose are ignored).
+ */
+function PersistentToast(elementId, type, closeButton, onClose, notDismissable)
 {
 	var self = this;
 	var toast = null;
@@ -37066,6 +37208,11 @@ function PersistentToast(elementId, type, closeButton, onClose)
 	{
 		if (!toast)
 		{
+			if (notDismissable)
+			{
+				toast = toaster.Show(type.toLowerCase(), '<div id="' + elementId + '"></div>', 99999999, false, null, 99999999, { tapToDismiss: false });
+				return;
+			}
 			var fn = toaster.Error;
 			if (type.toUpperCase() === "WARNING")
 				fn = toaster.Warning;
@@ -37092,6 +37239,63 @@ function PersistentToast(elementId, type, closeButton, onClose)
 	this.isShowing = function ()
 	{
 		return !!toast;
+	}
+}
+///////////////////////////////////////////////////////////////
+// Video Decode Error Notice //////////////////////////////////
+///////////////////////////////////////////////////////////////
+var videoDecodeErrorNotice = new VideoDecodeErrorNotice();
+/**
+ * Shows a persistent, non-dismissable notice when a video stream can not be decoded.
+ * The notice is hidden when a video frame is successfully rendered or when a different video source is loaded.
+ * The most common cause of undecodable streams is Direct-to-wire, where Blue Iris sends the camera's own video stream without transcoding it, so the notice points at that.
+ */
+function VideoDecodeErrorNotice()
+{
+	var self = this;
+	var toast = new PersistentToast("videoDecodeErrorNotice", "ERROR", false, null, true);
+	/** Details of the most recent error, or null if the notice is not showing. */
+	var details = null;
+	/**
+	 * Shows the notice.
+	 * @param {Object} errorDetails Object describing the error. Fields: uniqueId (required), cameraId, isClip, player, error, codec, codecDetails, streamSize, requestedSize, d2w (1 if Direct-to-wire was requested in the stream URL, 0 if it was explicitly disabled, null if not specified).
+	 */
+	this.Show = function (errorDetails)
+	{
+		details = errorDetails;
+		var html = '<b>Unable to decode this video.</b><br>';
+		if (details.d2w === 1)
+			html += 'Direct-to-wire streaming was requested, and the camera\'s own video encoding may not be compatible with this browser.';
+		else if (details.d2w === 0)
+			html += 'The video encoding may not be compatible with this browser.';
+		else
+			html += 'This is often caused by Direct-to-wire streaming, when the camera\'s own video encoding is not compatible with this browser.';
+		html += '<br><a href="javascript:UIHelp.LearnMore(\'Video Decoding Error\')" class="videoPlayerTroubleshootLink">Details</a>';
+		toast.showHtml(html);
+	}
+	/** Hides the notice. Call this when a video frame is successfully rendered. */
+	this.Hide = function ()
+	{
+		details = null;
+		toast.hide();
+	}
+	/**
+	 * Hides the notice if the given video source is different from the one which had the error.
+	 * @param {String} uniqueId Unique ID of the video source that is being loaded.
+	 */
+	this.NotifyVideoSourceLoading = function (uniqueId)
+	{
+		if (details && details.uniqueId !== uniqueId)
+			self.Hide();
+	}
+	this.IsShowing = function ()
+	{
+		return toast.isShowing();
+	}
+	/** Returns the details of the most recent error, or null if the notice is not showing. */
+	this.GetDetails = function ()
+	{
+		return details;
 	}
 }
 ///////////////////////////////////////////////////////////////
@@ -42311,6 +42515,9 @@ function UIHelpTool()
 			case "Video Player Error":
 				UI3_Video_Player_Error();
 				break;
+			case "Video Decoding Error":
+				UI3_Video_Decoding_Error();
+				break;
 			case "Camera List Totals":
 				UI3_Camera_List_Totals();
 				break;
@@ -42493,16 +42700,67 @@ function UIHelpTool()
 			+ "<p>It looks like there was an error with the <b>" + currentH264Player + "</b> video player.</p>"
 			+ "<p>UI3 offers a choice of video player modules to help you work around compatibility problems.</p>"
 			+ "<p>Consider trying a different video player module via:</p>"
-			+ "<p> &nbsp; <a role=\"button\" class=\"h264PlayerSettingsLink\">UI Settings &gt; Video Player &gt; H.264 Player</a></p>"
+			+ "<p> &nbsp; <a role=\"button\" class=\"h264PlayerSettingsLink\">UI Settings &gt; Video Player &gt; H.264 / H.265 Player</a></p>"
 			+ '</div>');
 		var dlg = null;
 		$ele.find('.h264PlayerSettingsLink').on('click', function ()
 		{
-			uiSettingsPanel.open("H.264 Player");
+			uiSettingsPanel.open("H.264 / H.265 Player");
 			//if (dlg)
 			//	dlg.close();
 		});
 		dlg = $ele.modalDialog({ title: 'Troubleshooting Video Player Errors', closeOnOverlayClick: true });
+	}
+	var UI3_Video_Decoding_Error = function ()
+	{
+		var d = videoDecodeErrorNotice.GetDetails() || {};
+		var sourceName = d.cameraId ? cameraListLoader.GetCameraName(d.cameraId) : "this camera";
+		var detailRow = function (label, value)
+		{
+			if (value === null || typeof value === "undefined" || value === "")
+				return "";
+			return "<li>" + htmlEncode(label) + ": " + htmlEncode(String(value)) + "</li>";
+		};
+		var d2wText = d.d2w === 1 ? "Requested by UI3's streaming profile"
+			: d.d2w === 0 ? "Disabled by UI3's streaming profile"
+				: "Not specified by UI3 (may be enabled in Blue Iris)";
+		var codecText = d.codec ? (d.codec + (d.codecDetails ? " " + d.codecDetails : "")) : "";
+
+		var html = '<div class="UIHelp" style="max-width:600px;">'
+			+ "<p>UI3's <b>" + htmlEncode(d.player || currentH264Player) + "</b> video player could not decode the video " + (d.isClip ? "recording" : "stream") + " from <b>" + htmlEncode(sourceName) + "</b>.</p>";
+		if (d.d2w !== 0)
+		{
+			html += "<p><b>Likely cause: Direct-to-wire</b></p>"
+				+ "<p>Normally, Blue Iris re-encodes (transcodes) video before sending it to UI3, which produces a format that browsers can play. "
+				+ "With <b>Direct-to-wire</b>, Blue Iris sends the camera's own video stream without re-encoding it. "
+				+ "That saves CPU on the Blue Iris server, but cameras encode video in many different ways, and some of them can't be decoded by some browsers or devices. "
+				+ "A stream that plays in Blue Iris or another app can still be unplayable in a web browser.</p>"
+				+ "<p>Direct-to-wire may be enabled in Blue Iris's camera settings (Webcast tab), in Blue Iris's web server streaming profiles, or in UI3's <a role=\"button\" class=\"streamingProfilesLink\">Streaming Profiles</a>.</p>";
+		}
+		html += "<p><b>To fix it</b>, try one of these:</p><ul>";
+		if (d.d2w !== 0)
+			html += "<li>Disable Direct-to-wire for this camera, or in the streaming profile you are using, so that Blue Iris transcodes the video.</li>";
+		html += "<li>Try a different video player via <a role=\"button\" class=\"h264PlayerSettingsLink\">UI Settings &gt; Video Player &gt; H.264 / H.265 Player</a>. Each player uses a different decoder.</li>"
+			+ "<li>Change the camera's video encoding settings. For example, use H.264 instead of H.265, or disable proprietary &quot;smart codec&quot; features.</li>"
+			+ "</ul>"
+			+ "<p><b>Technical details</b></p><ul>"
+			+ detailRow("Error", d.error)
+			+ detailRow("Codec", codecText)
+			+ detailRow("Stream resolution", d.streamSize)
+			+ detailRow("Requested resolution", d.requestedSize)
+			+ detailRow("Direct-to-wire", d2wText)
+			+ "</ul>"
+			+ "</div>";
+		var $ele = $(html);
+		$ele.find('.h264PlayerSettingsLink').on('click', function ()
+		{
+			uiSettingsPanel.open("H.264 / H.265 Player");
+		});
+		$ele.find('.streamingProfilesLink').on('click', function ()
+		{
+			streamingProfileUI.open();
+		});
+		$ele.modalDialog({ title: 'Video Decoding Error', closeOnOverlayClick: true });
 	}
 	var UI3_Camera_List_Totals = function ()
 	{

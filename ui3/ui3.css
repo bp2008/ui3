@@ -4207,6 +4207,12 @@ div.invisibleLabel
 	height: 100%;
 }
 
+#videoElement_wrapper video
+{
+	/* Browsers default to "contain" for <video>, which would preserve the stream's own aspect ratio. UI3 must stretch the video to the native resolution from the video source metadata, the same way it does with <canvas> rendering, because the stream is not always at the native aspect ratio (e.g. a Direct-to-wire stream that switches to an anamorphic sub stream). */
+	object-fit: fill;
+}
+
 	#camimg_store .videoCanvas,
 	#camimg_store #videoElement_wrapper,
 	.videoCanvas.deactivated,
