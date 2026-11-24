@@ -18561,8 +18561,10 @@ function VideoPlayerController()
 		currentlyLoadingCamera = GetUpdatedCameraData(currentlyLoadingCamera);
 		currentlyLoadedCamera = GetUpdatedCameraData(currentlyLoadedCamera);
 
-		if (currentlyLoadingCamera.width != currentlyLoadingImage.fullwidth
-			|| currentlyLoadingCamera.height != currentlyLoadingImage.fullheight)
+		// When a recording's native size came from its own metadata ("res"), the camera's current size must not replace it. The camera may have been reconfigured or replaced since the recording was made, and the stream we are playing was requested based on the recording's size.
+		if (!currentlyLoadingImage.fullSizeFromRecording
+			&& (currentlyLoadingCamera.width != currentlyLoadingImage.fullwidth
+				|| currentlyLoadingCamera.height != currentlyLoadingImage.fullheight))
 		{
 			currentlyLoadingImage.fullwidth = currentlyLoadingCamera.width;
 			currentlyLoadingImage.fullheight = currentlyLoadingCamera.height;
@@ -19002,6 +19004,7 @@ function VideoPlayerController()
 		cli.id = clc.optionValue;
 		cli.fullwidth = cli.actualwidth = clc.width;
 		cli.fullheight = cli.actualheight = clc.height;
+		cli.fullSizeFromRecording = false;
 		cli.path = clc.optionValue;
 		cli.uniqueId = clc.optionValue;
 		cli.isLive = typeof timelineArgs.timelineMs !== "number";
@@ -19081,6 +19084,7 @@ function VideoPlayerController()
 			cli.fullwidth = cli.actualwidth = clc.width;
 			cli.fullheight = cli.actualheight = clc.height;
 			var clipRes = new ClipRes(clipData.res);
+			cli.fullSizeFromRecording = clipRes.valid;
 			if (clipRes.valid)
 			{
 				cli.fullwidth = clipRes.width;
@@ -19624,6 +19628,8 @@ function BICameraData()
 	this.fullwidth = 1280;
 	/** Native height of image.  Used when calculating with group rects and as a base for digital zoom. */
 	this.fullheight = 720;
+	/** True if [fullwidth] and [fullheight] came from a recording's own metadata rather than from the camera list. If true, camera list updates must not overwrite them. */
+	this.fullSizeFromRecording = false;
 	/** Actual width of image (can be smaller than fullwidth) */
 	this.actualwidth = 1280;
 	/** Actual width of image (can be smaller than fullheight) */
@@ -19679,6 +19685,7 @@ function BICameraData()
 		self.id = other.id;
 		self.fullwidth = other.fullwidth;
 		self.fullheight = other.fullheight;
+		self.fullSizeFromRecording = other.fullSizeFromRecording;
 		self.actualwidth = other.actualwidth;
 		self.actualheight = other.actualheight;
 		self.dynamicNativeW = other.dynamicNativeW;
